@@ -20,8 +20,10 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result to
 // public/research.html, after research-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
-import { fetchWithProgress } from "./memory-panel-viz.mjs";
+import { fetchWithProgress, loadProgressLine, factTripleParts } from "./memory-panel-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
+import { loadWinkVendor } from "./viz-boot.mjs";
+import { cloneMemoryPayload } from "../adapters/memory/core.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — research";
 
@@ -61,35 +63,6 @@ export function sourceLabelFor(source) {
   if (key === "other") return { label: "derived / other", tone: "seed" };
   const band = (source && source.band) || "";
   return { label: (BANDS[band] || band || "seed") + " (seed corpus)", tone: "seed" };
-}
-
-/** One learned fact as its three canonical cells plus a source tone, for the
- *  highlights and history lists. Pure, `.toString()`-splice safe. */
-export function factTripleParts(fact) {
-  return {
-    subject: String((fact && fact.subject) || ""),
-    predicate: String((fact && fact.predicate) || ""),
-    object: String((fact && fact.object) || ""),
-    source: String((fact && fact.source) || ""),
-  };
-}
-
-/** The boot statusline while the big assets stream in — the same aggregator
- *  ingest-viz.mjs's own loadProgressLine is. `parts` is an array of
- *  { loaded, total } byte counts. Self-contained, `.toString()`-splice safe. */
-export function loadProgressLine(parts) {
-  const mb = (n) => (n / 1048576).toFixed(1);
-  let loaded = 0;
-  let total = 0;
-  let totalKnown = true;
-  for (const p of parts || []) {
-    loaded += (p && p.loaded) || 0;
-    if (p && p.total > 0) total += p.total;
-    else totalKnown = false;
-  }
-  return totalKnown && total > 0
-    ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
-    : "loading the engine… " + mb(loaded) + " MB";
 }
 
 /** The self-contained research page. Pure — the same output for the same
@@ -382,6 +355,8 @@ ${DASH_DARK_CHROME_CSS}
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
+  const loadWinkVendor = ${loadWinkVendor.toString()};
+  const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
   const el = (id) => document.getElementById(id);
   // The digest sentence-structure bank, pre-parsed at build time — the browser
   // has no TOML parser, so the page carries the table the client-side digest
@@ -410,7 +385,6 @@ ${DASH_DARK_CHROME_CSS}
   const checkedSources = new Set(); // source keys currently checked for the ask
 
   // ---- boot --------------------------------------------------------------
-  const WINK_LOAD_TIMEOUT_MS = 8000;
   const progressParts = {};
   let progressActive = true;
   function noteProgress(key, loaded, total) {
@@ -418,20 +392,7 @@ ${DASH_DARK_CHROME_CSS}
     if (progressActive) statEngineEl.textContent = loadProgressLine(Object.values(progressParts));
   }
 
-  async function tryLoadWink() {
-    let settled = false;
-    const timeout = new Promise((_, reject) => setTimeout(() => { if (!settled) reject(new Error("wink load stalled")); }, WINK_LOAD_TIMEOUT_MS));
-    try {
-      const mod = await Promise.race([import("./vendor/wink.js"), timeout]);
-      settled = true;
-      window.tmctResearch.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
-      return "loaded";
-    } catch (err) {
-      settled = true;
-      console.warn("tmct research: the wink vendor asset failed to load", err);
-      return "unavailable";
-    }
-  }
+  const loadWink = loadWinkVendor({ register: (factory) => window.tmctResearch.registerWinkModel(factory) });
 
   let seedPayload = null;
   let seedFacts = 0;
@@ -445,12 +406,8 @@ ${DASH_DARK_CHROME_CSS}
       console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
     }
   }
-  const cloneSeed = () => {
-    if (!seedPayload) return null;
-    try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
-  };
   function newSession() {
-    return window.tmctResearch.createResearchSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
+    return window.tmctResearch.createResearchSession({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
   }
 
   // The curated reference pack provider, same fetch seam chat.html registers,
@@ -482,7 +439,7 @@ ${DASH_DARK_CHROME_CSS}
       statEngineEl.textContent = "unavailable";
       return;
     }
-    const [winkStatus] = await Promise.all([tryLoadWink(), fetchSeed()]);
+    const [winkStatus] = await Promise.all([loadWink(), fetchSeed()]);
     progressActive = false;
     window.tmctResearch.registerReferencePackProvider(fetchPackProvider);
     session = newSession();

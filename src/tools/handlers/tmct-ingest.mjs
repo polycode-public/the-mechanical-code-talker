@@ -16,6 +16,7 @@
 
 import { dirname } from "node:path";
 import { openConfiguredMemoryBackend } from "../../adapters/memory/core.mjs";
+import { toolResult } from "./kit.mjs";
 
 export async function tmct_ingest(args, { config, ingest }) {
   const text = String(args?.text ?? "");
@@ -31,7 +32,10 @@ export async function tmct_ingest(args, { config, ingest }) {
     const header = `${result.sentences} sentence(s), ${result.recognized} recognized`
       + (optimistic ? `, ${result.optimistic.length} optimistic candidate(s)` : "")
       + `, ${result.skipped} skipped — ${grounded} fact(s) grounded.`;
-    return grounded ? `${header}\n${result.canonical.join("\n")}` : header;
+    return toolResult({
+      content: grounded ? `${header}\n${result.canonical.join("\n")}` : header,
+      data: { ...result, grounded },
+    });
   } finally {
     await close();
   }

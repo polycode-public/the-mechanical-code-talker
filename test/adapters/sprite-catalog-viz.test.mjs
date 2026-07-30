@@ -161,6 +161,34 @@ test("a class with facing variants renders a left and a right swatch, each a rea
   assert.notEqual(right.svg, left.svg);
 });
 
+test("a mood a match-free template already offers is listed once, so a facing variant carrying the same six moods never repeats them", () => {
+  for (const cls of ["bear", "cat", "dog", "king"]) {
+    const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
+    const labels = swatches.map((s) => s.label);
+    assert.equal(new Set(labels).size, labels.length, `${cls}: every swatch label must be unique`);
+    const rendered = swatches.map((s) => s.svg);
+    assert.equal(new Set(rendered).size, rendered.length, `${cls}: every swatch must be a distinct render, so no gradient id is emitted twice`);
+    const happy = swatches.filter((s) => s.label === "happy");
+    assert.equal(happy.length, 1, `${cls}: exactly one happy swatch`);
+    assert.ok(happy[0].svg.includes(`${cls}-with-emotion-fill`), `${cls}: the mood swatch comes from the front-facing template`);
+  }
+});
+
+test("a facing variant's own parameter value is rendered with BOTH facts and labeled for the pair when no match-free template offers it", () => {
+  const facingWithMood = {
+    classes: ["gremlin"],
+    svg: "<svg>left-profile{{FACE}}</svg>",
+    match: { property: "mgx:faces", value: "left" },
+    face: { cx: 7, cy: 9, scale: 3 },
+    parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE" } } },
+  };
+  const swatches = tierSwatchesFor("gremlin", [facingWithMood], SPRITE_REGISTRY, "large");
+  const pair = swatches.find((s) => s.label === "left + happy");
+  assert.ok(pair, `expected a "left + happy" swatch, saw: ${swatches.map((s) => s.label).join(", ")}`);
+  assert.equal(pair.property, "mgx:feels");
+  assert.equal(pair.svg, "<svg>left-profileHAPPY-FACE</svg>", "the profile art renders with the mood filled in, not the front view");
+});
+
 test("a swatch born from a property fact carries that property as a data attribute the page's cycle script can select on", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /data-property="mgx:faces"/, "direction swatches are selectable by property");

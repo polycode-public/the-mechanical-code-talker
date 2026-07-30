@@ -139,6 +139,35 @@ test("waving twice in the same tick re-asserts one fact with a second, later tag
   );
 });
 
+test("a recast session seeds its epoch marker, so a peer's leftover snapshots from the old run fold as history", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
+  assert.equal((await session.snapshot()).state.epoch, 0, "an unrecast boot writes no marker and stays on epoch 0");
+
+  const recast = await createMudSession(worldPayload, { characters: ["mole-1"], epoch: 2 });
+  const opening = await recast.snapshot();
+  assert.equal(opening.state.epoch, 2, "the marker travels as an ordinary world row");
+  assert.equal(opening.state.turnCount, 0, "the new run has played nothing yet");
+  const marker = opening.rows.find((r) => r.predicate === "mgx:world-epoch");
+  assert.equal(marker.object, "2");
+  assert.match(marker.provenance, /^world:mud-garden/, "seeded with the world's own tag, so the state fold reads it");
+
+  // The convergence case a rebind creates: a peer that never recast syncs its
+  // old run's snapshots into this store. They merge (facts are add-only) but
+  // can no longer outrank the fresh seed.
+  const { appendFacts } = await import("../../src/adapters/memory/core.mjs");
+  await appendFacts(recast.memoryDir, [
+    { subject: "mole-1@turn9", predicate: "mgx:currently-in", object: "burrow-1", provenance: "world:mud-garden:turn9" },
+  ]);
+  const merged = await recast.snapshot();
+  assert.equal(merged.state.placements.get("mole-1").object, "garden",
+    "the old run's turn-9 move stays in the graph but never reads as current");
+
+  const result = await recast.windows["mole-1"].autoplayTick(1);
+  assert.ok(result.room, "the new run plays on");
+  const stamped = (await recast.snapshot()).rows.some((r) => r.subject.includes("@epoch2@turn"));
+  assert.ok(stamped, "and its own writes carry the epoch, so they outrank the old run everywhere they merge");
+});
+
 test("a claim is one add-only fact per animal, and two claims on one animal both stand", async () => {
   const session = await createMudSession(worldPayload, { characters: ["mole-1", "badger-2"] });
   assert.equal(await session.claimCharacters(["mole-1", "badger-2"], "alpha"), 2);

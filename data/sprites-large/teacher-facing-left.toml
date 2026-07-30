@@ -1,0 +1,71 @@
+# teacher-facing-left — teacher-with-emotion.toml's glasses-and-book figure
+# turned to a left profile, following king-facing-left.toml's own head turn:
+# the head circle is the exact same cx=12 cy=6.6 r=3.3 in both classes'
+# plain front views, so the same -0.6 head shift, nose wedge and forward-eye
+# numbers apply unchanged. The book, tie and body silhouette keep
+# teacher-with-emotion.toml's own geometry — a held book reads the same
+# turned side-on. Only the glasses change shape: the front pair of lens
+# rings becomes the single ring a profile can actually show, circling the
+# forward eye, with a short temple arm running back toward the ear.
+# Selected only when the instance's own mgx:faces fact says "left"; it also
+# carries the shared face-fragment mechanism, so a teacher taught both
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood.
+classes = ["teacher"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="teacher-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#teacher-facing-left-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#teacher-facing-left-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#teacher-facing-left-fill)"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9 15.4 L12 14.6 L12 19.8 L9 20.4 Z" fill="url(#teacher-facing-left-fill)" opacity="0.95"/>
+  <path d="M15 15.4 L12 14.6 L12 19.8 L15 20.4 Z" fill="url(#teacher-facing-left-fill)" opacity="0.85"/>
+  <path d="M12 14.6 L12 19.8" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <circle cx="9.7" cy="6.1" r="0.95" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.5"/>
+  <circle cx="9.7" cy="6.1" r="0.85" fill="none" stroke="#1c1c1c" stroke-width="0.3" opacity="0.85"/>
+  <path d="M10.55 6.1 L11.7 6.35" stroke="#1c1c1c" stroke-width="0.3" opacity="0.85"/>
+  <path d="M9.0 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Reused verbatim from king-facing-left.toml: the head circle here is the
+# exact same cx=12 cy=6.6 r=3.3 teacher-with-emotion.toml's own front view
+# declares, so the same -0.6 head shift, nose wedge and forward-eye position
+# apply unchanged, and the face anchor lands in the same place.
+[face]
+cx = 10.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

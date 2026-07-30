@@ -1,0 +1,80 @@
+# sheep-facing-left — sheep-with-emotion.toml's own wool-and-face sheep
+# turned to a left profile: the dark face ellipse moves to the leading
+# (left) edge, the two ears go asymmetric (a larger near ear held forward,
+# a smaller far ear tucked behind, closer to the wool), the five wool
+# circles cluster toward the trailing (right) side with a small wool tail
+# nub breaking the right edge, and the four legs split into a near pair
+# under the leading wool and a far pair under the trailing wool. A
+# hand-authored [match] variant (the bear-facing-left.toml precedent),
+# selected only when the instance's own mgx:faces fact says "left". It also
+# carries the shared face-fragment mechanism, so a sheep taught BOTH
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood.
+classes = ["sheep"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="sheep-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#3a352f" stroke-width="1.5" stroke-linecap="round">
+    <line x1="9.4" y1="18.2" x2="9.4" y2="21.4"/>
+    <line x1="11.6" y1="18.8" x2="11.6" y2="22"/>
+    <line x1="16" y1="18.4" x2="16" y2="21.6"/>
+    <line x1="18.2" y1="17.8" x2="18.2" y2="21"/>
+  </g>
+  <g fill="url(#sheep-facing-left-fill)">
+    <circle cx="11.2" cy="12.6" r="3.4"/>
+    <circle cx="15" cy="11" r="3.8"/>
+    <circle cx="18.5" cy="12.4" r="3"/>
+    <circle cx="12.8" cy="15.4" r="3.6"/>
+    <circle cx="17" cy="15.4" r="3.2"/>
+    <circle cx="21" cy="13.6" r="1.2"/>
+  </g>
+  <g stroke="color-mix(in srgb, currentColor 40%, black)" stroke-width="0.4" opacity="0.35" fill="none" stroke-linecap="round">
+    <path d="M12 10.4 C12.6 9.8 13.4 9.8 14 10.2"/>
+    <path d="M16 9 C16.6 8.6 17.4 8.7 17.9 9.2"/>
+    <path d="M18.6 11 C19.1 10.6 19.8 10.7 20.2 11.2"/>
+  </g>
+  <ellipse cx="5.8" cy="9.4" rx="0.75" ry="1.05" fill="#3a352f" transform="rotate(15 5.8 9.4)"/>
+  <ellipse cx="2.2" cy="9.8" rx="1.1" ry="1.5" fill="#3a352f" transform="rotate(-20 2.2 9.8)"/>
+  <ellipse cx="4" cy="13" rx="2.6" ry="2.2" fill="#3a352f"/>
+  <ellipse cx="15" cy="9.2" rx="2.3" ry="1.4" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# sheep-with-emotion.toml's front-facing anchor (cx=5.4 cy=14.4 scale=2.4):
+# the profile keeps the same dark face-ellipse size sheep-with-emotion.toml
+# draws (rx=2.6 ry=2.2, average radius 2.4) but moved to cx=4 cy=13, the
+# leading edge of the turned wool mass. scale is 0.65 * that 2.4 average
+# radius = 1.56 — the bear-facing-left.toml ratio (profile scale ≈ 0.65 *
+# the profile face-ellipse's own average radius) applied to sheep's own
+# face size instead of bear's head circle. cx/cy anchor directly on the
+# drawn ellipse's own centre, since sheep's face fragment draws its own pair
+# of eyes standalone rather than needing to land on a separately-drawn eye
+# mark the way bear's profile eye did.
+[face]
+cx = 4
+cy = 13
+scale = 1.56
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

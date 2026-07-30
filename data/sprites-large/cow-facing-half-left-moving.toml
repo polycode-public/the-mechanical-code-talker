@@ -1,0 +1,70 @@
+# cow-facing-half-left-moving — cow-facing-half-left.toml's three-quarter
+# turn caught mid-stride. The head, horns, ears, muzzle and both eyes stay
+# exactly as that file draws them. What moves: the four legs swing into a
+# diagonal trot the same way cow-facing-left-moving.toml's do, and the
+# body dips down slightly under the stride.
+classes = ["cow"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="cow-facing-half-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="15" cy="15.2" rx="6.8" ry="4.6" fill="url(#cow-facing-half-left-moving-fill)"/>
+  <path d="M6.6 6 L5.6 3.6" stroke="currentColor" stroke-width="1.4"/>
+  <path d="M4.4 6.3 L3.8 4.5" stroke="currentColor" stroke-width="1.1" opacity="0.7"/>
+  <circle cx="5.6" cy="9.4" r="4.05" fill="url(#cow-facing-half-left-moving-fill)"/>
+  <ellipse cx="2.6" cy="11" rx="2.1" ry="1.6" fill="#e7c9c2"/>
+  <circle cx="1.9" cy="10.7" r="0.42" fill="#1c1c1c"/>
+  <circle cx="4.4" cy="8.5" r="0.42" fill="#1c1c1c"/>
+  <ellipse cx="7" cy="8" rx="0.28" ry="0.35" fill="#1c1c1c"/>
+  <g fill="#f4f1ea">
+    <ellipse cx="17.4" cy="12.5" rx="2.4" ry="1.8"/>
+    <ellipse cx="12.4" cy="16.9" rx="1.8" ry="1.4"/>
+    <ellipse cx="19.8" cy="16.5" rx="1.6" ry="1.3"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+    <line x1="10.4" y1="18.9" x2="8.4" y2="20.5"/>
+    <line x1="13.8" y1="19.5" x2="12.2" y2="21.3"/>
+    <line x1="17.8" y1="19.3" x2="19.2" y2="22.7"/>
+    <line x1="21" y1="18.7" x2="22.6" y2="22.1"/>
+  </g>
+  <g fill="#1c1c1c">
+    <ellipse cx="8.3" cy="20.8" rx="0.8" ry="0.45"/>
+    <ellipse cx="12.1" cy="21.6" rx="0.8" ry="0.45"/>
+    <ellipse cx="19.3" cy="23" rx="0.8" ry="0.45"/>
+    <ellipse cx="22.7" cy="22.4" rx="0.8" ry="0.45"/>
+  </g>
+  <ellipse cx="6" cy="7.7" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="12.8" cy="13.4" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 5.74
+cy = 9.0
+scale = 3.34
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

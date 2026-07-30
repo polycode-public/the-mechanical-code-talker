@@ -1,0 +1,68 @@
+# horse-facing-half-right-moving — horse-facing-half-left-moving.toml's
+# mid-gallop three-quarter turn mirrored across the canvas midline (every
+# shape wrapped in one translate-then-flip group), so the two directions
+# stay geometrically identical twins.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored.
+classes = ["horse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="horse-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="13.8" cy="15" rx="7" ry="4.1" fill="url(#horse-facing-half-right-moving-fill)"/>
+    <path d="M12.8 12.5 C12.4 8.7 11.2 5.7 9.5 4.6 C10.3 6.7 10.5 8.9 10.1 11 C9.4 12 9.4 13.5 10.5 14.3 C11.8 13.4 12.5 13 12.8 12.5 Z" fill="url(#horse-facing-half-right-moving-fill)"/>
+    <path d="M8 6 C8.8 6.5 9.4 7.4 9.6 8.5" fill="none" stroke="#000000" stroke-width="0.7" opacity="0.3" stroke-linecap="round"/>
+    <path d="M11 9 C10.8 10.2 10.9 11.4 11.2 12.3" fill="none" stroke="color-mix(in srgb, currentColor 35%, black)" stroke-width="0.5" opacity="0.45" stroke-linecap="round"/>
+    <path d="M11 7.4 C11.6 8.4 11.7 9.6 11.3 10.6" fill="none" stroke="color-mix(in srgb, currentColor 35%, black)" stroke-width="0.4" opacity="0.4" stroke-linecap="round"/>
+    <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="8.8" y1="17.6" x2="6.8" y2="21.4"/>
+      <line x1="11.8" y1="18.2" x2="10.2" y2="22.4"/>
+      <line x1="17.6" y1="18.2" x2="20.4" y2="21.8"/>
+      <line x1="20.8" y1="17.4" x2="23" y2="21"/>
+    </g>
+    <g fill="#2b2118">
+      <ellipse cx="6.7" cy="21.7" rx="0.7" ry="0.4"/>
+      <ellipse cx="10.1" cy="22.7" rx="0.7" ry="0.4"/>
+      <ellipse cx="20.5" cy="22.1" rx="0.7" ry="0.4"/>
+      <ellipse cx="23.1" cy="21.3" rx="0.7" ry="0.4"/>
+    </g>
+    <path d="M16.4 16.4 C19.2 15.2 20.4 17.4 18.2 18.2 C17 17.6 16.4 16.9 16.4 16.4 Z" fill="url(#horse-facing-half-right-moving-fill)"/>
+    <circle cx="9" cy="6.2" r="0.38" fill="#1c1c1c"/>
+    <ellipse cx="11.4" cy="12.8" rx="2.8" ry="1.5" fill="#ffffff" opacity="0.28"/>
+    <ellipse cx="9.6" cy="6.5" rx="2.2" ry="2" fill="#ffffff" opacity="0.22"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 13.91
+cy = 6.61
+scale = 2.72
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

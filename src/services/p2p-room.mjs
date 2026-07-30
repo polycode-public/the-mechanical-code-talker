@@ -164,6 +164,19 @@ export function createP2pRoom({
   const seenProvenanceById = new Map();
   let cachedRows = [];
 
+  // Store-touching work runs one job at a time, in arrival order. Every path
+  // that reads or writes memoryDir/seenProvenanceById/cachedRows crosses at
+  // least one await, so without this a rebind could swap the store while a
+  // merge is half-written into the old one — the merged rows would then
+  // baseline against the wrong store, or vanish. Jobs queued behind a rebind
+  // land on the store the rebind installed.
+  let storeChain = Promise.resolve();
+  function withStore(job) {
+    const run = storeChain.then(job);
+    storeChain = run.then(() => {}, () => {});
+    return run;
+  }
+
   const factsListeners = new Set();
   const stateListeners = new Set();
   const peersListeners = new Set();
@@ -246,8 +259,8 @@ export function createP2pRoom({
 
   /** Diff the store against what this room last saw, relabel each changed
    *  fact's provenance for the wire, and broadcast the batch. The page calls
-   *  this once after every local turn or action. */
-  async function afterLocalChange() {
+   *  this (as `afterLocalChange`) once after every local turn or action. */
+  async function flushLocalChange() {
     await ensureStarted();
     await refreshRows();
     const changed = [];
@@ -270,7 +283,7 @@ export function createP2pRoom({
     if (!accepted.length) return { merged: 0 };
     // Flush first: a local fact still waiting to be diffed would otherwise be
     // recorded as merged below and never leave this browser.
-    await afterLocalChange();
+    await flushLocalChange();
     const { ids } = await appendFacts(memoryDir, accepted.map((f) => ({
       subject: f.subject,
       predicate: f.predicate,
@@ -357,9 +370,11 @@ export function createP2pRoom({
         return;
       }
       case "sync-request": {
-        await refreshRows();
-        const timestamp = now();
-        const facts = syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, displayName, timestamp));
+        const facts = await withStore(async () => {
+          await refreshRows();
+          const timestamp = now();
+          return syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, displayName, timestamp));
+        });
         send(transport, syncResponseMessage({ facts }));
         return;
       }
@@ -368,7 +383,7 @@ export function createP2pRoom({
       // between them needs no sequencing.
       case "sync-response":
       case "op":
-        await mergeIncomingFacts(message.facts);
+        await withStore(() => mergeIncomingFacts(message.facts));
     }
   }
 
@@ -413,7 +428,7 @@ export function createP2pRoom({
   /** Mint a fresh invite blob. One blob completes exactly one connection, so
    *  each call replaces whatever earlier invite was still waiting for a reply. */
   async function startSharing() {
-    await ensureStarted();
+    await withStore(ensureStarted);
     const transport = attachTransport(transportFactory());
     pendingShare = transport;
     lastError = null;
@@ -425,7 +440,7 @@ export function createP2pRoom({
   /** Decode someone's invite and answer it. Returns the reply blob to send
    *  back, or a named problem the page can show beside the box it came from. */
   async function acceptInvite(blobString) {
-    await ensureStarted();
+    await withStore(ensureStarted);
     const decoded = decodeInviteBlob(blobString);
     if (decoded.error) {
       lastError = problem("invite", decoded.error);
@@ -453,7 +468,7 @@ export function createP2pRoom({
   /** Feed the joiner's reply back into the invite it answers, completing the
    *  connection. */
   async function completeInvite(replyBlob) {
-    await ensureStarted();
+    await withStore(ensureStarted);
     if (!pendingShare) {
       lastError = problem("reply", "no-pending-invite");
       return lastError;
@@ -482,20 +497,24 @@ export function createP2pRoom({
   }
 
   async function setMyDisplayName(name) {
-    await ensureStarted();
-    displayName = name;
-    await appendFacts(memoryDir, [nodeNameFact(myPeerId, name, now())]);
-    await sortFactIndividualsById();
-    return afterLocalChange();
+    return withStore(async () => {
+      await ensureStarted();
+      displayName = name;
+      await appendFacts(memoryDir, [nodeNameFact(myPeerId, name, now())]);
+      await sortFactIndividualsById();
+      return flushLocalChange();
+    });
   }
 
   /** Wave as `subjectId`, in `roomId` when there is one. chat.html's presence
    *  wave passes null and lands on PRESENCE_SCOPE instead. */
   async function wave(subjectId, roomId = null) {
-    await ensureStarted();
-    await appendFacts(memoryDir, [waveFact(subjectId, roomId || PRESENCE_SCOPE, now())]);
-    await sortFactIndividualsById();
-    return afterLocalChange();
+    return withStore(async () => {
+      await ensureStarted();
+      await appendFacts(memoryDir, [waveFact(subjectId, roomId || PRESENCE_SCOPE, now())]);
+      await sortFactIndividualsById();
+      return flushLocalChange();
+    });
   }
 
   /** Whether `subjectId` is waving right now, read from the cached rows so a
@@ -517,6 +536,53 @@ export function createP2pRoom({
     return peers.get(peerId)?.displayName || String(peerId).slice(0, 8);
   }
 
+  /** Re-bind this room to a fresh store — the recast path. The peer
+   *  connections are the point of keeping the room alive, so nothing about
+   *  the transports or the peer map is touched. In order: flush whatever the
+   *  OLD store still had undiffed (a turn landed just before the recast must
+   *  not vanish silently), swap the store reference, rebuild the diff
+   *  baseline against the new store, write the identity facts into it, then
+   *  push the new store's syncable facts to every open channel as an
+   *  ordinary op and ask each peer for its own view with an ordinary
+   *  sync-request — the exact machinery a freshly opened channel uses, no
+   *  new message type. Runs on the store chain, so a merge in flight when
+   *  the recast happens finishes against the store it started on, and
+   *  everything behind it lands on the new one. */
+  async function rebind({ memoryDir: nextMemoryDir, worldName: nextWorldName, myDisplayName: nextDisplayName } = {}) {
+    if (!nextMemoryDir) throw new Error("rebind needs the store to bind to");
+    return withStore(async () => {
+      if (closed) throw new Error("this room is closed");
+      if (started) await flushLocalChange();
+      memoryDir = nextMemoryDir;
+      if (nextWorldName) worldName = nextWorldName;
+      if (nextDisplayName) displayName = nextDisplayName;
+      started = true;
+      seenProvenanceById.clear();
+      cachedRows = [];
+      const timestamp = now();
+      const identity = [];
+      if (worldId && worldName) identity.push(worldNameFact(worldId, worldName, timestamp));
+      if (myPeerId && displayName) identity.push(nodeNameFact(myPeerId, displayName, timestamp));
+      if (identity.length) {
+        await appendFacts(memoryDir, identity);
+        await sortFactIndividualsById();
+      }
+      await refreshRows();
+      for (const row of cachedRows) seenProvenanceById.set(row.id, row.provenance);
+      const targets = connectedPeers();
+      let pushed = 0;
+      if (targets.length) {
+        const wireTimestamp = now();
+        const facts = syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, displayName, wireTimestamp));
+        pushed = facts.length;
+        if (facts.length) broadcast(opMessage({ from: myPeerId, facts }));
+        broadcast(syncRequestMessage());
+      }
+      emit(factsListeners, { merged: 0, rows: cachedRows });
+      return { pushed, peers: targets.length };
+    });
+  }
+
   function close() {
     closed = true;
     for (const peer of peers.values()) peer.transport.close();
@@ -534,23 +600,24 @@ export function createP2pRoom({
   return {
     peerId: myPeerId,
     worldId,
-    worldName,
+    get worldName() { return worldName; },
     get displayName() { return displayName; },
     get state() { return state; },
     get lastError() { return lastError; },
     get droppedMessages() { return droppedMessages; },
     peers: peerList,
     displayNameFor,
-    start: ensureStarted,
+    start: () => withStore(ensureStarted),
     startSharing,
     acceptInvite,
     completeInvite,
-    afterLocalChange,
+    afterLocalChange: () => withStore(flushLocalChange),
     setMyDisplayName,
     wave,
     isWaving,
+    rebind,
     factRows: () => cachedRows,
-    refresh: refreshRows,
+    refresh: () => withStore(refreshRows),
     onFactsChanged: subscribe(factsListeners),
     onStateChanged: subscribe(stateListeners),
     onPeersChanged: subscribe(peersListeners),

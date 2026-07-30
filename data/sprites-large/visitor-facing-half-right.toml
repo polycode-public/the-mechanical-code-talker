@@ -1,0 +1,55 @@
+# visitor-facing-half-right — visitor-facing-half-left.toml's three-quarter
+# turn mirrored across the canvas midline. {{FACE}} sits outside the flip
+# group so a resolved expression never reads back-to-front.
+classes = ["visitor"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="visitor-facing-half-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#visitor-facing-half-right-fill)">
+      <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+      <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+      <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+      <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+    </g>
+    <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+    <circle cx="11.7" cy="6.6" r="3.3" fill="url(#visitor-facing-half-right-fill)"/>
+    <path d="M8.6 6.1 Q7.9 7.4 8.6 8.1 Z" fill="url(#visitor-facing-half-right-fill)"/>
+    <ellipse cx="10" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+    <ellipse cx="14" cy="6.05" rx="0.18" ry="0.22" fill="#1c1c1c"/>
+    <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <path d="M9.3 4.2 C10.0 3.6 10.8 3.4 11.7 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-right"
+
+# visitor-facing-half-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 11.08); cy and scale are the mirror's own invariants.
+[face]
+cx = 12.92
+cy = 6.51
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

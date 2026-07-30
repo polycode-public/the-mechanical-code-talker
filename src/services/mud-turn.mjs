@@ -50,10 +50,12 @@ import { fnv1a32 } from "../domain/hash.mjs";
 import { bfsLevels } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG, mudMassDrainPerTurn } from "../domain/game-config.mjs";
+import { predatorSubjects } from "../domain/mud-facts.mjs";
 import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
   recordMassDrain, personKnowledgeLines, objectClassChain, diggableDirections,
   isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase, massDrainPerTurnOf,
+  parseSnapshotSubject,
 } from "./adventure.mjs";
 
 const FOOD_CLASS = "food";
@@ -61,7 +63,6 @@ const LATERAL_DIRECTIONS = ["north", "south", "east", "west"];
 // Deep enough to cross a whole burrow without letting one character's
 // pathfinder walk a whole grown world every tick.
 const WALK_SEARCH_DEPTH = 8;
-const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
 
 const EXIT_TOWARD_FOOD_CHANCE = 0.5;
 const EDGE_FOLLOW_DIG_CHANCE = 0.25;
@@ -208,8 +209,8 @@ function roomsStoodIn(rows, character) {
   const visited = new Set();
   for (const row of worldActionRows(rows)) {
     if (row.predicate !== "mgx:currently-in") continue;
-    const snapshot = SNAPSHOT_RE.exec(row.subject);
-    if ((snapshot ? snapshot[1] : row.subject) !== character) continue;
+    const snapshot = parseSnapshotSubject(row.subject);
+    if ((snapshot ? snapshot.base : row.subject) !== character) continue;
     visited.add(row.object);
   }
   return visited;
@@ -220,9 +221,8 @@ function roomsStoodIn(rows, character) {
  *  funnel straight to the den, since the unvisited room nearest the burrow is
  *  exactly where the fox lives. The den stays reachable by the food gamble
  *  below, which is a gamble and is meant to be. */
-const predatorRooms = (rows, state) => new Set((rows || [])
-  .filter((r) => r.predicate === "mgx:is-predator" && r.object === "true")
-  .map((r) => state.placements.get(r.subject)?.object)
+const predatorRooms = (rows, state) => new Set(predatorSubjects(rows)
+  .map((subject) => state.placements.get(subject)?.object)
   .filter(Boolean));
 
 /**

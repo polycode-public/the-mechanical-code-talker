@@ -26,10 +26,9 @@
 // Gitignored, Pages-demo-site-only output — scripts/build-demo-site.mjs builds
 // it fresh on every deploy, never committed, the same posture the chat/ingest
 // bundles document for their own output.
-import { runTurn, vocabExampleHint, factAnswer, factReadBack } from "../../services/chat.mjs";
+import { vocabExampleHint, factAnswer, factReadBack } from "../../services/chat.mjs";
 import { clampResearchConfig } from "../../services/research.mjs";
-import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, removeFacts } from "../../adapters/memory/core.mjs";
-import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
+import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, removeFacts, applySeedPayload } from "../../adapters/memory/core.mjs";
 import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -39,6 +38,8 @@ import { registerLiveReferenceProvider, registerResearchProvider } from "../../a
 import { groundTextToFacts } from "./ingest-browser-entry.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
 import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
+import { createTurnSession } from "./turn-session.mjs";
+import { exportFactsJsonl } from "./memory-stats.mjs";
 
 // The Fact individual's first-write-wins timestamp, read straight off the
 // stored attribute (mgx:createdAt) so a "recently learned" ordering never
@@ -205,22 +206,16 @@ export async function researchSnapshot(memoryDir, sessionIds = {}, { recentCap =
  */
 export function createResearchSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
   const memoryDir = createInMemoryStore();
-  if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+  applySeedPayload(memoryDir, seedPayload);
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
   const vocabHint = vocabExampleHint(vocabSeeded);
-  const chatSessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
   // A DISTINCT id so an ingested fact's teach tag is told apart from a typed
   // teach turn's by session id alone — the whole reason the two growth paths
   // stay separable in the source panel.
   const ingestSessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now() + 1);
-  const sessionIds = { chatSessionId, ingestSessionId };
 
-  let focus = null;
-  let last = null;
-  let planState = null;
-  let researchState = null;
   const normLive = (v) => (v === "always" ? "always" : v === "supplement" ? "supplement" : Boolean(v));
   let liveReferenceOn = normLive(liveReference);
   let synthesisBudgetOn = Number.isFinite(synthesisBudget) ? synthesisBudget : 12;
@@ -229,6 +224,26 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
   // to the NEXT run started; a run already going keeps the knobs it captured
   // (they ride its persisted state), so its queue stays internally consistent.
   let researchConfig = clampResearchConfig();
+
+  // The chat-engine turn (research/teach/ask), threading focus/last/planState/
+  // researchState across calls the way every browser chat dock does. A throw
+  // never kills the session — the page has no other chance to show this
+  // turn's answer.
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, vocabHint,
+    sessionId: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+    buildExtraOptions: () => ({
+      researchConfig, liveReference: liveReferenceOn, onLiveLookup,
+      uiContext: "browser", synthesisBudget: synthesisBudgetOn,
+    }),
+    captureExtraState: (result) => {
+      if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") {
+        liveReferenceOn = result.liveReference;
+      }
+    },
+  });
+  const chatSessionId = turnSession.sessionId;
+  const sessionIds = { chatSessionId, ingestSessionId };
 
   return {
     memoryDir,
@@ -245,28 +260,7 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
      *  unset keys keep their current value. */
     setResearchConfig(partial) { researchConfig = clampResearchConfig({ ...researchConfig, ...(partial || {}) }); },
 
-    /** One chat-engine turn (research/teach/ask). A throw never kills the
-     *  session — the page has no other chance to show this turn's answer. */
-    async turn(line) {
-      let result;
-      try {
-        result = await runTurn(line, {
-          config: null, source: null, graph, focus, last, memoryDir, sessionId: chatSessionId,
-          env: {}, lexicon, vocabHint, planState, researchState, researchConfig,
-          liveReference: liveReferenceOn, onLiveLookup,
-          uiContext: "browser", synthesisBudget: synthesisBudgetOn,
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong with that (${message}). Try rephrasing.`, end: false, record: null, plan: null, research: undefined };
-      }
-      focus = result.focus;
-      last = result.last;
-      if ("planState" in result) planState = result.planState;
-      if ("researchState" in result) researchState = result.researchState;
-      if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") liveReferenceOn = result.liveReference;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null, research: result.research };
-    },
+    turn: (line) => turnSession.turn(line),
 
     /** Ingest a document into the SAME store, under the ingest session id so
      *  its facts carry the "ingest" source rather than "taught". */
@@ -331,15 +325,6 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
       catch { return null; }
     },
   };
-}
-
-/**
- * The session's whole triple store as JSONL — the same
- * { subject, predicate, object, provenance } shape `tmct extract` and
- * `tmct memory --export` emit, offered to the page as the canonical download.
- */
-export async function exportFactsJsonl(memoryDir) {
-  return serializeFactsJsonl(await loadMemory(memoryDir));
 }
 
 globalThis.tmctResearch = {

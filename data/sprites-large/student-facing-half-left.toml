@@ -1,0 +1,62 @@
+# student-facing-half-left — student turned three-quarters from the full
+# left profile toward the front. The head and mortarboard sit at the
+# half-left position between the two views with a shallower tilt, the
+# nose wedge projects only half as far past the head's edge and dips down
+# instead of pointing straight out, and a second, smaller far eye appears
+# near the head's right edge so both eyes read. The robe and arms keep
+# student.toml's own geometry, the same as the full profile.
+classes = ["student"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="student-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#student-facing-half-left-fill)">
+    <path d="M9.4 13.4 C7.6 13.5 5.9 15 5.6 17.7 C5.5 19.1 6.2 20 7.2 19.5 C7.3 17.4 7.9 15.4 9.7 14.5 Z"/>
+    <path d="M14.6 13.4 C16.4 13.5 18.1 15 18.4 17.7 C18.5 19.1 17.8 20 16.8 19.5 C16.7 17.4 16.1 15.4 14.3 14.5 Z"/>
+    <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z"/>
+    <path d="M10.75 11.3 L13.25 11.3 L13.05 13.3 L10.95 13.3 Z"/>
+  </g>
+  <g transform="rotate(-10 11.72 5.3)">
+    <path d="M8.92 4.9 C8.92 3.2 10.12 2 11.72 2 C13.32 2 14.52 3.2 14.52 4.9 L14.52 5.4 L8.92 5.4 Z" fill="url(#student-facing-half-left-fill)" opacity="0.92"/>
+    <rect x="6.32" y="4.6" width="10.8" height="1.4" rx="0.2" fill="url(#student-facing-half-left-fill)"/>
+  </g>
+  <path d="M16.72 5.4 L17.32 8.6" stroke="currentColor" stroke-width="0.6" opacity="0.6" stroke-linecap="round"/>
+  <circle cx="17.32" cy="8.8" r="0.6" fill="#d4a72c"/>
+  <circle cx="11.72" cy="8.6" r="3.1" fill="url(#student-facing-half-left-fill)"/>
+  <path d="M8.81 8.14 Q8.16 9.34 8.81 10 Z" fill="url(#student-facing-half-left-fill)"/>
+  <ellipse cx="10.12" cy="8.13" rx="0.26" ry="0.31" fill="#1c1c1c"/>
+  <ellipse cx="13.88" cy="8.08" rx="0.17" ry="0.21" fill="#1c1c1c"/>
+  <path d="M9.3 13.9 C8 14.8 7.1 16.3 6.9 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.9 C16 14.8 16.9 16.3 17.1 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# The head sits at cx=11.72 cy=8.6 r=3.1, so scale is 0.825*3.1 = 2.56. The
+# near eye this file draws sits at (10.12, 8.13). cx = 10.12 + 0.4*2.56 =
+# 11.14 and cy = 8.13 + 0.15*2.56 = 8.51.
+[face]
+cx = 11.14
+cy = 8.51
+scale = 2.56
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

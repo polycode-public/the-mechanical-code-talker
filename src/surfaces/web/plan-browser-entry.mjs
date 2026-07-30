@@ -24,7 +24,6 @@
 // engine. `maxDepth` is overridable PER CALL (not just at session creation)
 // so the page's own max-search-depth control can re-run "solve it" on the
 // CURRENT board without tearing down and re-teaching the whole puzzle.
-import { runTurn } from "../../services/chat.mjs";
 import { createInMemoryStore } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -32,6 +31,7 @@ import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { hanoiLessonSentences } from "../../domain/hanoi-lesson.mjs";
 import { computeBlocksLayout, planToPageData, renderInputsFromPlan } from "../../services/plan-viz.mjs";
 import { planToPddl } from "../../services/plan-pddl.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 // Re-exported so the page can register a CDN-loaded wink-nlp pair before the
 // first teach, the same seam chat-browser-entry.mjs exposes as
 // tmctChat.registerWinkModel — see wink-model.mjs's own header. The hanoi
@@ -57,52 +57,34 @@ export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  const planHolder = { state: null };
-  let focus = null;
-  let last = null;
 
-  /** One dispatched chat turn — the SAME runTurn the CLI and every other
-   *  viz page's own chat dock run, over this session's own memoryDir. A
-   *  throwing runTurn must never kill the session — the page has no other
-   *  chance to show this turn's answer. `maxDepth` overrides the session's
-   *  own default for just this one call (the page's own max-search-depth
-   *  control threads it on every call, including a plain typed "solve
-   *  it"), so raising or lowering it never requires re-teaching the board.
-   *  A returned `plan` carries `becauseText` folded in from the session's
-   *  own plan slot — the plan-lane contract's returned object never carries
-   *  it itself (only planHolder.state does), and the PDDL panel's own
-   *  "because —" line needs it. */
-  async function turn(line, { maxDepth: maxDepthOverride } = {}) {
-    const gameConfig = {
-      ...DEFAULT_GAME_CONFIG,
-      planning: { ...DEFAULT_GAME_CONFIG.planning, maxDepth: maxDepthOverride ?? maxDepth },
-    };
-    let result;
-    try {
-      result = await runTurn(line, {
-        config: null, source: null, graph, focus, last, memoryDir, sessionId,
-        env: {}, lexicon, vocabHint: "", planState: planHolder.state, gameConfig,
-      });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
-    }
-    focus = result.focus;
-    last = result.last;
-    if ("planState" in result) planHolder.state = result.planState;
-    const plan = result.plan
-      ? { ...result.plan, becauseText: planHolder.state?.becauseText ?? null }
-      : null;
-    return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan };
-  }
+  // `maxDepth` overrides the session's own default for just this one call
+  // (the page's own max-search-depth control threads it on every call,
+  // including a plain typed "solve it"), so raising or lowering it never
+  // requires re-teaching the board. `captureExtraState` folds `becauseText`
+  // onto the returned `plan` from the session's own plan slot — the
+  // plan-lane contract's returned object never carries it itself (only
+  // planState does), and the PDDL panel's own "because —" line needs it.
+  const session = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint: "",
+    buildExtraOptions: (state, callArgs) => ({
+      gameConfig: {
+        ...DEFAULT_GAME_CONFIG,
+        planning: { ...DEFAULT_GAME_CONFIG.planning, maxDepth: callArgs?.maxDepth ?? maxDepth },
+      },
+    }),
+    captureExtraState: (result, state) => {
+      if (result.plan) result.plan = { ...result.plan, becauseText: state.planState?.becauseText ?? null };
+    },
+  });
 
   let plan = null;
   for (const sentence of hanoiLessonSentences(diskCount)) {
-    const r = await turn(sentence);
+    const r = await session.turn(sentence);
     if (r.plan) plan = r.plan;
   }
 
-  return { memoryDir, sessionId, diskCount, maxDepth, plan, turn };
+  return { memoryDir, sessionId, diskCount, maxDepth, plan, turn: session.turn };
 }
 
 // Re-exported so the page's own rendering script (plan-viz.mjs's inlined

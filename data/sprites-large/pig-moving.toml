@@ -1,0 +1,69 @@
+# pig-moving — pig-with-emotion.toml's own front-facing pig caught
+# mid-trot, matched on mgx:pose = "moving" alone with no facing constraint
+# at all: the first sprite-large template in this class family (bear/cat/
+# dog/king have no such front-facing moving variant yet) selected purely by
+# pose. The body, ears, snout, nostrils, tail and highlight all stay exactly
+# as pig-with-emotion.toml draws them, since none of those change shape
+# mid-stride; the body only dips down slightly under the stride. The four
+# legs move into a diagonal trot: since a front view has no near/far side to
+# read off, the trot reads as alternating corners — the two outer legs lift
+# and swing forward while the two inner legs stay planted and trail, which
+# is the anatomical judgment call this file makes for a front-on gait.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="14.7" rx="8" ry="5.4" fill="url(#pig-moving-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="7.4" y1="18" x2="6.4" y2="20.4"/>
+    <line x1="10.4" y1="19.6" x2="10.6" y2="22.2"/>
+    <line x1="13.6" y1="18" x2="14.6" y2="20.4"/>
+    <line x1="17.6" y1="19.6" x2="17.4" y2="22.2"/>
+  </g>
+  <g fill="#5c4438">
+    <ellipse cx="6.4" cy="20.6" rx="0.7" ry="0.4"/>
+    <ellipse cx="10.6" cy="22.4" rx="0.7" ry="0.4"/>
+    <ellipse cx="14.6" cy="20.6" rx="0.7" ry="0.4"/>
+    <ellipse cx="17.4" cy="22.4" rx="0.7" ry="0.4"/>
+  </g>
+  <path d="M6.4 9.4 L4 6.6 L7.6 6.8 Z" fill="url(#pig-moving-fill)"/>
+  <path d="M14 8.8 L14.6 5.6 L17 8 Z" fill="url(#pig-moving-fill)"/>
+  <ellipse cx="6.4" cy="14" rx="3" ry="2.4" fill="url(#pig-moving-fill)"/>
+  <circle cx="5.4" cy="14" r="0.5" fill="#5c4438"/>
+  <circle cx="7.2" cy="14" r="0.5" fill="#5c4438"/>
+  <path d="M20 12.6 C22.6 11.6 22.4 14 20.6 14.4 C20.6 13.6 20.2 13 20 12.6 Z" fill="url(#pig-moving-fill)"/>
+  <ellipse cx="14.6" cy="11.6" rx="3.4" ry="2" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# Reuses pig-with-emotion.toml's own front-facing anchor unchanged — the
+# body/head silhouette and its clear gap next to the snout are identical to
+# that file, so the same cx/cy/scale still land the face fragment in the
+# same clear spot.
+[face]
+cx = 12
+cy = 12
+scale = 4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

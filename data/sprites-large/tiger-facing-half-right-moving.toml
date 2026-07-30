@@ -1,0 +1,75 @@
+# tiger-facing-half-right-moving — tiger-facing-half-left-moving.toml's
+# mid-run three-quarter turn mirrored across the canvas midline. {{FACE}}
+# sits outside the flip group.
+classes = ["tiger"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="tiger-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="13" cy="15.3" rx="6.6" ry="4.4" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="7.2" y1="17.8" x2="6.6" y2="20.4"/>
+      <line x1="10.8" y1="19" x2="10.4" y2="22.4"/>
+      <line x1="15.4" y1="17.6" x2="16.2" y2="20.2"/>
+      <line x1="18.2" y1="18.6" x2="19" y2="21.8"/>
+    </g>
+    <g fill="url(#tiger-facing-half-right-moving-fill)">
+      <ellipse cx="6.6" cy="20.7" rx="0.9" ry="0.55"/>
+      <ellipse cx="10.4" cy="22.7" rx="0.9" ry="0.55"/>
+      <ellipse cx="16.2" cy="20.5" rx="0.9" ry="0.55"/>
+      <ellipse cx="19" cy="22.1" rx="0.9" ry="0.55"/>
+    </g>
+    <circle cx="6.65" cy="9" r="3.8" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <path d="M3.85 6.4 L2.85 3 L6.05 5 Z" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <path d="M9.05 6 L9.65 2.6 L12.05 5.2 Z" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <ellipse cx="5.25" cy="10.6" rx="1" ry="0.8" fill="#f4ede0"/>
+    <ellipse cx="7.95" cy="10.6" rx="1" ry="0.8" fill="#f4ede0"/>
+    <path d="M3.4 8.65 Q3.0 9.15 3.4 9.65 Z" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <ellipse cx="4.7" cy="8.65" rx="0.32" ry="0.38" fill="#1c1c1c"/>
+    <ellipse cx="8.0" cy="8.55" rx="0.2" ry="0.24" fill="#1c1c1c"/>
+    <g stroke="#000000" stroke-width="1.5" stroke-linecap="round" opacity="0.8">
+      <path d="M8.6 12 L12 10.6"/>
+      <path d="M9 14.8 L13 14"/>
+      <path d="M9.4 17.6 L13 17.4"/>
+      <path d="M15.2 11.6 L18.2 11"/>
+      <path d="M15.8 14.8 L19 15"/>
+      <path d="M15.6 17.8 L18.6 18.2"/>
+    </g>
+    <path d="M19 12.6 C22.2 11.8 22.8 14.8 20.2 15.8 Z" fill="url(#tiger-facing-half-right-moving-fill)"/>
+    <ellipse cx="9.6" cy="12.2" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+    <ellipse cx="6.65" cy="9" rx="3.3" ry="2.9" fill="#ffffff" opacity="0.22"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 18.06
+cy = 9.12
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

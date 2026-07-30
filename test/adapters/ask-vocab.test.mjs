@@ -3,7 +3,7 @@
 // grammar, not just exist in the table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../../src/domain/ask-vocab.mjs";
+import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS, phraseForRelation } from "../../src/domain/ask-vocab.mjs";
 import { parseQuery, normalizeQuery } from "../../src/domain/ask.mjs";
 
 // The aggregate/list TRIGGER words are grammar vocabulary too (parseAggregate/parseList
@@ -33,6 +33,32 @@ test("every relation in RELATIONS carries at least one verb phrase (no empty/dea
   for (const [kind, { verbs }] of Object.entries(RELATIONS)) {
     assert.ok(verbs.length > 0, `relation "${kind}" has no verb phrases`);
   }
+});
+
+test("phraseForRelation derives the third-person verb phrase from RELATIONS' own bare form", () => {
+  assert.equal(phraseForRelation("imports"), "imports");
+  assert.equal(phraseForRelation("calls"), "calls");
+  assert.equal(phraseForRelation("contains"), "contains");
+  assert.equal(phraseForRelation("defines"), "defines");
+  assert.equal(phraseForRelation("inherits"), "inherits from");
+  assert.equal(phraseForRelation("tests"), "tests");
+  assert.equal(phraseForRelation("touches"), "touches");
+  assert.equal(phraseForRelation("cochange"), "co-changes with");
+  assert.equal(phraseForRelation("reexports"), "re-exports");
+  assert.equal(phraseForRelation("uses"), "uses");
+  assert.equal(phraseForRelation("serves"), "serves");
+  assert.equal(phraseForRelation("denotes"), "denotes");
+});
+
+test("phraseForRelation: a symbol-grain kind reads its coarse sibling's phrase", () => {
+  assert.equal(phraseForRelation("callsSymbol"), "calls");
+  assert.equal(phraseForRelation("touchesSymbol"), "touches");
+});
+
+test("phraseForRelation: an unrecognized kind falls back to a plain camelCase split, never a thrown error", () => {
+  assert.equal(phraseForRelation("someWeirdKind"), "some weird kind");
+  assert.equal(phraseForRelation(""), "");
+  assert.equal(phraseForRelation(undefined), "");
 });
 
 test("ENTITY_TO_TYPE / MODIFIER_TO_KIND still export the fixed small tables ask.mjs expects", () => {

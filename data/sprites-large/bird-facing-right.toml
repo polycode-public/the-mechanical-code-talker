@@ -1,0 +1,57 @@
+# bird-facing-right — bird-facing-left.toml's profile mirrored across the
+# canvas midline (every shape wrapped in one translate-then-flip group), so
+# the two directions stay geometrically identical twins.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the bird turned around.
+classes = ["bird"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bird-facing-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="12.6" cy="13.6" rx="6.4" ry="5" fill="url(#bird-facing-right-fill)"/>
+    <path d="M17.6 12.4 C21 11.6 21.6 14.6 18.4 15.6 C16.6 16.2 15.6 14.4 17.6 12.4 Z" fill="color-mix(in srgb, currentColor 78%, black)"/>
+    <path d="M15.4 11.4 C13.4 10.6 11 11.4 10.4 14 C10 16.2 11.6 17.8 13.6 17.4 C15.4 17 16.6 13.4 15.4 11.4 Z" fill="#c1552e"/>
+    <circle cx="7.6" cy="8.4" r="3.13" fill="url(#bird-facing-right-fill)"/>
+    <path d="M4.6 8.2 L1.6 7.4 L4.2 9.6 Z" fill="#e8a23a"/>
+    <ellipse cx="6" cy="7.4" rx="0.5" ry="0.6" fill="#1c1c1c"/>
+    <ellipse cx="6.6" cy="6.8" rx="1" ry="0.7" fill="#ffffff" opacity="0.3"/>
+    <ellipse cx="14.6" cy="10.6" rx="2.2" ry="1.3" fill="#ffffff" opacity="0.3"/>
+    <g stroke="#e8a23a" stroke-width="1.3" stroke-linecap="round">
+      <line x1="14.6" y1="18" x2="15.6" y2="21"/>
+      <line x1="11.6" y1="18.2" x2="11" y2="21"/>
+    </g>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "right"
+
+# bird-facing-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 6.8); cy and scale are the mirror's own invariants.
+[face]
+cx = 17.2
+cy = 7.7
+scale = 2.0
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

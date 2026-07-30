@@ -26,10 +26,18 @@ const TRACKED_SITE_FILES = ["index.html", "demo-ui.mjs", "demo-templates.mjs", "
  * site instead (see static-server.mjs's serveDirectory), so there is nothing
  * local to build. Returns undefined; callers already guard the temp-dir
  * cleanup on a truthy siteDir.
+ *
+ * `outDir` (optional) rebuilds into an already-existing directory in place
+ * instead of minting a new one — a second call against the first call's own
+ * `siteDir` simulates a redeploy served from the same path, which is what a
+ * cache-busting test needs. `versionOverride` (optional) drives the build's
+ * own TMCT_DEMO_VERSION_OVERRIDE (see build-demo-site.mjs's siteVersion),
+ * so two builds can differ in the version they stamp and the service
+ * worker's cache name embeds without touching the repo's package.json.
  */
-export function buildDemoSiteSnapshot() {
+export function buildDemoSiteSnapshot({ outDir, versionOverride } = {}) {
   if (process.env.TMCT_E2E_BASE_URL) return undefined;
-  const siteDir = mkdtempSync(path.join(tmpdir(), "tmct-site-"));
+  const siteDir = outDir ?? mkdtempSync(path.join(tmpdir(), "tmct-site-"));
   for (const entry of TRACKED_SITE_FILES) {
     cpSync(path.join(repoRoot, "public", entry), path.join(siteDir, entry), { recursive: true });
   }
@@ -38,7 +46,12 @@ export function buildDemoSiteSnapshot() {
   // costs real seconds per build across every e2e file that builds one.
   execFileSync("npm", ["run", "demo:build"], {
     cwd: repoRoot,
-    env: { ...process.env, TMCT_DEMO_SITE_OUT: siteDir, TMCT_DEMO_PRECOMPRESS: "0" },
+    env: {
+      ...process.env,
+      TMCT_DEMO_SITE_OUT: siteDir,
+      TMCT_DEMO_PRECOMPRESS: "0",
+      ...(versionOverride ? { TMCT_DEMO_VERSION_OVERRIDE: versionOverride } : {}),
+    },
     encoding: "utf8",
     timeout: 300_000,
   });

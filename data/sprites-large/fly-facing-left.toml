@@ -1,0 +1,62 @@
+# fly-facing-left — the same head-and-abdomen fly as fly.toml, turned to a
+# left profile. The head and abdomen shift left together as one compact
+# unit, the antenna and a single dark eye now break the silhouette's left
+# edge, the near wing sweeps back larger and visible, and only a thin
+# sliver of the far wing shows past it. A hand-authored [match] variant,
+# selected only when the instance's own mgx:faces fact says "left". It
+# also carries the shared face-fragment mechanism, so a fly taught both
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood; taught only the facing, {{FACE}} resolves to nothing
+# and the profile keeps the single eye it draws itself.
+classes = ["fly"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="fly-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="currentColor">
+    <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z" opacity="0.5"/>
+    <path d="M10.5 10 C12 8 12.5 7 12 6 C11 6.5 10.3 8 10.5 10 Z" opacity="0.25"/>
+  </g>
+  <path d="M6 6.4 C5.4 5 5.6 3.6 6.4 3" stroke="#5a4636" stroke-width="0.3" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="9" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-facing-left-fill)"/>
+  <ellipse cx="8.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <circle cx="9" cy="7" r="2.48" fill="url(#fly-facing-left-fill)"/>
+  <ellipse cx="7.7" cy="6.2" rx="0.4" ry="0.45" fill="#1c1c1c"/>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <path d="M6.6 17 L4.4 19.4"/>
+    <path d="M11.4 17 L13.6 19.4"/>
+  </g>
+  <ellipse cx="7.8" cy="10.6" rx="1.6" ry="1" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# fly's own head radius is 2.7 (fly-with-emotion.toml); this profile
+# redraws it at 0.92*2.7 = 2.484, rounded to 2.48. scale is 0.65 of that =
+# 1.6146, rounded to 1.6. The eye this file draws sits at (7.7, 6.2), so
+# cx = 7.7 + 0.4*1.6 = 8.34 and cy = 6.2 + 0.15*1.6 = 6.44.
+[face]
+cx = 8.34
+cy = 6.44
+scale = 1.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -89,6 +89,15 @@ test("the ledger rows render from the embedded demo code graph, focused on a rea
     const stats = await page.locator("#stats").innerText();
     assert.match(stats, /\d+ individuals/, "the stats strip reports a real individual count");
     assert.match(stats, /\d+ edges/, "the stats strip reports a real edge count");
+
+    // The general-knowledge seed loads lazily and can land before this check
+    // runs, so the pill is the graph's own edges PLUS whatever seed count (if
+    // any) the status line already shows — never less than the edges alone.
+    const edgeCount = Number((stats.match(/(\d+) edges/) || [])[1]);
+    const seedStatus = await page.locator("#seed-status").innerText();
+    const seedFactsSoFar = Number((seedStatus.match(/general knowledge: (\d+) facts/) || [])[1]) || 0;
+    const factTotal = Number((await page.locator("#fact-total-value").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(factTotal, edgeCount + seedFactsSoFar, "the fact-total pill is exactly the graph's edges plus whatever seed count has landed so far");
   } finally {
     await context.close();
   }
@@ -166,11 +175,19 @@ test("the shell fills the viewport: the document itself never scrolls, in either
 test("the general-knowledge seed loads with a visible status, and one session answers a seeded question beside a graph question", async () => {
   const { context, page } = await openCodePage();
   try {
+    await page.locator("#ledger .row").first().waitFor({ state: "visible" });
+    const stats = await page.locator("#stats").innerText();
+    const edgeCount = Number((stats.match(/(\d+) edges/) || [])[1]);
+
     await page.waitForFunction(
       () => /general knowledge: \d+ facts/.test(document.getElementById("seed-status")?.textContent || ""),
       null,
       { timeout: 60_000 },
     );
+    const seedStatus = await page.locator("#seed-status").innerText();
+    const seedFacts = Number((seedStatus.match(/general knowledge: (\d+) facts/) || [])[1]);
+    const factTotal = Number((await page.locator("#fact-total-value").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(factTotal, edgeCount + seedFacts, "once the seed lands, the fact-total pill adds the seed's own count to the graph's edges");
 
     await page.fill("#chat-input", "what is a dog");
     await page.press("#chat-input", "Enter");

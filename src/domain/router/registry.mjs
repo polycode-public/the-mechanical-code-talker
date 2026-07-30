@@ -26,15 +26,24 @@ export const VOCAB = Object.freeze({
 
 // Parameter entity-KINDS — the seon/mgx classes a slot ranges over. `Query` and
 // `Kind`/`Package` are free-text / enum slots (no graph resolution); the rest
-// name a graph entity the resolver must prove RESOLVES before the call fires.
+// name a graph entity the resolver must prove RESOLVES before the call fires —
+// code-graph kinds through resolveObject (ask.mjs), MemoryTerm through
+// resolveMemoryTerm (resolver.mjs), the conversational-memory sibling oracle.
 export const KINDS = Object.freeze({
   Symbol: "seon:CodeEntity", // any code symbol: function/method/class/module/attribute
   Module: "mgx:Module", // SEON has no JS-module class (its nearest are Namespace/main:File); owned
   Class: "seon:ClassType", // SEON's real class for a class definition
+  MemoryTerm: "mgx:MemoryTerm", // owned: a conversational-memory term (a minted skos:Concept or a world-fact subject/object) — binds in the memory graph, never the code graph
   Query: "cap:FreeText", // lexical search string — no resolution precondition
   Kind: "cap:KindFilter", // enum: function|class|method|… (search filter)
   Package: "cap:PackageName", // optional architecture-scope filter
 });
+
+// The kinds that bind in the conversational-memory graph (resolveMemoryTerm)
+// rather than the code graph (resolveObject). A consumer that walks KINDS for
+// code-graph-resolvable classes (e.g. the synthbench enumerator's focus
+// classes) must exclude these — a memory term is never a code-graph focus.
+export const MEMORY_KINDS = Object.freeze([KINDS.MemoryTerm]);
 
 // Precondition PREDICATE tags (the small closed vocabulary a precondition uses).
 export const PRECOND = Object.freeze({
@@ -187,8 +196,8 @@ const CAPABILITIES = Object.freeze([
   }),
   capability({
     name: "tmct_related", label: "related", question: "a term's synonyms and related concepts (the SKOS view over the conversational-memory graph)",
-    params: [param("term", KINDS.Query, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
-    preconditions: [memoryFacts()],
+    params: [param("term", KINDS.MemoryTerm, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
+    preconditions: [memoryFacts(), resolves("term", KINDS.MemoryTerm)],
     add: [knows("related", "term")],
   }),
 ]);

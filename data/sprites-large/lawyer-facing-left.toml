@@ -1,0 +1,76 @@
+# lawyer-facing-left — lawyer.toml's briefcase-carrying figure turned to a
+# left profile: the head shifts toward the left shoulder, a nose wedge
+# breaks the head's left silhouette, a single forward eye replaces the
+# front-facing blank head, and the hair-highlight arc follows the head's
+# own shift. The briefcase, its handle strap and the two collar tabs keep
+# lawyer.toml's own geometry — they hang from the hand and collar, not the
+# head, so a profile reads them the same as the front view. Selected only
+# when the instance's own mgx:faces fact says "left". It also carries the
+# shared face-fragment mechanism, so a lawyer taught BOTH mgx:faces = left
+# and one of the 6 mgx:feels words renders this profile wearing that mood;
+# taught only the facing, {{FACE}} resolves to nothing and the profile
+# keeps the single forward eye it draws itself.
+classes = ["lawyer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="lawyer-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="lawyer-facing-left-briefcase" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#a9713f"/>
+      <stop offset="100%" stop-color="#6b4423"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#lawyer-facing-left-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <path d="M17.4 15.4 C17.4 14.4 18 13.8 18.8 13.8 C19.6 13.8 20.2 14.4 20.2 15.4" fill="none" stroke="#6b4423" stroke-width="0.8" opacity="0.8" stroke-linecap="round"/>
+  <rect x="16.4" y="15.4" width="4.8" height="4.4" rx="0.5" fill="url(#lawyer-facing-left-briefcase)"/>
+  <rect x="18.2" y="16.8" width="1.2" height="0.9" rx="0.2" fill="#d9a635"/>
+  <rect x="10.6" y="13" width="0.9" height="1.5" rx="0.12" fill="#f4f1ea"/>
+  <rect x="12.5" y="13" width="0.9" height="1.5" rx="0.12" fill="#f4f1ea"/>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#lawyer-facing-left-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#lawyer-facing-left-fill)"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9.0 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# lawyer-with-emotion.toml's front-facing anchor (cx=12 cy=6.6 scale=3.3):
+# the head shifts left to cx=11.4 cy=6.6 r=3.3 here, and the forward eye
+# this file already draws sits at (9.7, 6.1). scale is ~0.65 of the head
+# radius, and cx/cy place the fragment so its own forward eye lands on the
+# drawn one at (9.7, 6.1), clear of the nose wedge and the hair highlight.
+[face]
+cx = 10.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

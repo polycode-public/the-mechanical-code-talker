@@ -83,6 +83,15 @@ test("planToPddl: one (:action ...) block per plan step, uniquely named", () => 
   assert.equal(new Set(names).size, 7, "every action name is unique");
 });
 
+test("planToPddl: the action-sequence header pluralizes the move count through the shared countLabel helper", () => {
+  const pddl = planToPddl(HANOI_PLAN);
+  assert.match(pddl, /;; action sequence — findActionPath's own shortest path \(7 moves\)/);
+
+  const singleMove = { ...HANOI_PLAN, actions: HANOI_PLAN.actions.slice(0, 1), states: HANOI_PLAN.states.slice(0, 2) };
+  const singlePddl = planToPddl(singleMove);
+  assert.match(singlePddl, /;; action sequence — findActionPath's own shortest path \(1 move\)/);
+});
+
 test("planToPddl: the first action's precondition/effect is exactly the diff between states[0] and states[1]", () => {
   const pddl = planToPddl(HANOI_PLAN);
   const block = pddl.split("(:action move-onto-step1")[1].split(")\n\n(:action")[0];

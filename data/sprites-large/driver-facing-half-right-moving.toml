@@ -1,0 +1,69 @@
+# driver-facing-half-right-moving — driver-facing-half-left-moving.toml
+# mirrored across the canvas midline, the same flip-group pattern the
+# standing pair uses. {{FACE}} sits outside the flip group.
+classes = ["driver"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="driver-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="driver-facing-half-right-moving-cap" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#5c6b7a"/>
+      <stop offset="100%" stop-color="#3c4653"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#driver-facing-half-right-moving-fill)">
+      <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+      <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+      <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+      <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+    </g>
+    <circle cx="11.7" cy="6.6" r="3.3" fill="url(#driver-facing-half-right-moving-fill)"/>
+    <path d="M8.6 6.1 Q7.9 7.4 8.6 8.1 Z" fill="url(#driver-facing-half-right-moving-fill)"/>
+    <ellipse cx="10" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+    <ellipse cx="14" cy="6.05" rx="0.18" ry="0.22" fill="#1c1c1c"/>
+    <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <circle cx="12" cy="17.6" r="3" fill="none" stroke="url(#driver-facing-half-right-moving-fill)" stroke-width="1.3"/>
+    <line x1="12" y1="14.6" x2="12" y2="17.6" stroke="url(#driver-facing-half-right-moving-fill)" stroke-width="1.1"/>
+    <line x1="9.4" y1="19.1" x2="12" y2="17.6" stroke="url(#driver-facing-half-right-moving-fill)" stroke-width="1.1"/>
+    <line x1="14.6" y1="19.1" x2="12" y2="17.6" stroke="url(#driver-facing-half-right-moving-fill)" stroke-width="1.1"/>
+    <circle cx="12" cy="17.6" r="0.7" fill="url(#driver-facing-half-right-moving-fill)"/>
+    <path d="M8.6 4.5 C8.4 2.7 9.7 1.4 11.7 1.4 C13.7 1.4 15 2.7 14.8 4.5 C14.76 4.7 14.6 4.8 14.4 4.8 L9 4.8 C8.8 4.8 8.64 4.7 8.6 4.5 Z" fill="url(#driver-facing-half-right-moving-cap)"/>
+    <path d="M8.6 4.5 C8 4.5 7.4 4.7 7 4.9 C6.8 5 6.8 5.3 7.1 5.35 L9 5.2 L9 4.5 Z" fill="url(#driver-facing-half-right-moving-cap)"/>
+    <circle cx="11.7" cy="1.7" r="0.35" fill="#2b323b"/>
+    <ellipse cx="9.8" cy="2.6" rx="1.2" ry="0.4" fill="#ffffff" opacity="0.25"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 12.92
+cy = 6.51
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

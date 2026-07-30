@@ -3,7 +3,11 @@
 # and dark nose break the silhouette's left edge, one ear reads in front
 # with the far ear peeking behind, and a tail nub breaks the right. A
 # hand-authored [match] variant (the portrait-round.toml precedent),
-# selected only when the instance's own mgx:faces fact says "left".
+# selected only when the instance's own mgx:faces fact says "left". It also
+# carries the shared face-fragment mechanism, so a bear taught BOTH
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood; taught only the facing, {{FACE}} resolves to nothing and
+# the profile keeps the single forward eye it draws itself.
 classes = ["bear"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -30,9 +34,35 @@ svg = """
   <ellipse cx="6" cy="7.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
   <ellipse cx="8.4" cy="6.4" rx="1.4" ry="1" fill="#ffffff" opacity="0.3"/>
   <ellipse cx="10.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
 </svg>
 """
 
 [match]
 property = "mgx:faces"
 value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# bear-with-emotion.toml's front-facing anchor (cx=12 cy=9 scale=5): the
+# profile head circle is cx=7.4 cy=8.8 r=4.6, and the forward eye this file
+# already draws sits at (6, 7.8). scale is ~0.65 of the head radius, which
+# pulls the fragment's two eyes closer together than a front view — the read
+# of a head turned three-quarters away — and cx/cy then place the fragment so
+# its own forward eye lands exactly on the drawn one at (6, 7.8), with the
+# mouth curve falling between the eyes and the tan muzzle.
+[face]
+cx = 7.2
+cy = 8.25
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -12,11 +12,14 @@
 // point is "change what this world is made of" has to speak the vocabulary the
 // world is actually written in, and neither table is a superset of the other.
 //
-// No imports: every export here is `.toString()`-splice-safe, the same discipline
-// adventure-editor.mjs and the *-viz render-glue functions hold — mud-viz.mjs
-// splices these straight into mud.html's inline script, which captures a
-// function's own source text and nothing it closes over. A splice-safe function
-// carries its whole dependency graph inside its own body.
+// Every export here but wordBeforeCursor is written locally, and is
+// `.toString()`-splice-safe, the same discipline adventure-editor.mjs and the
+// *-viz render-glue functions hold — mud-viz.mjs splices these straight into
+// mud.html's inline script, which captures a function's own source text and
+// nothing it closes over. A splice-safe function carries its whole dependency
+// graph inside its own body. wordBeforeCursor is a re-export of viz-theme.mjs's
+// shared implementation, itself self-contained and splice-safe the same way —
+// this module no longer keeps its own copy of it.
 //
 // Two predicate families sync differently, for the reason adventure-editor.mjs's
 // own header sets out:
@@ -33,6 +36,8 @@
 //     only applies its removals when the whole document parsed cleanly: a line
 //     that fails to parse this keystroke must never be read as "this fact is
 //     gone".
+
+export { wordBeforeCursor } from "./viz-theme.mjs";
 
 const PLACEMENT_KIND = "placement";
 const OPENNESS_KIND = "openness";
@@ -300,14 +305,4 @@ export function planMudEditorSync(rows, state, triples) {
     if (!newOtherKeys.has(key)) toRemoveIds.push(id);
   }
   return { toAppend, toRemoveIds };
-}
-
-/** The word immediately before `cursorPos` in `text` — a run of letters, digits
- *  and hyphens, the shape this vocabulary's own terms take ("underground-space",
- *  "mole-1"). Empty when the cursor sits after whitespace or punctuation with no
- *  word directly behind it. Pure. */
-export function wordBeforeCursor(text, cursorPos) {
-  const head = String(text || "").slice(0, cursorPos);
-  const m = head.match(/[A-Za-z][A-Za-z0-9-]*$/);
-  return m ? m[0].toLowerCase() : "";
 }

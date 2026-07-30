@@ -18,7 +18,7 @@
 // inline script degrades honestly when that sibling script is absent or
 // fails to load — the live controls disable themselves rather than pretend
 // to work.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, countLabel } from "./viz-theme.mjs";
 import { planToPddl } from "./plan-pddl.mjs";
 
 const BOARD_W = 640;
@@ -285,7 +285,7 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
   const pageData = planToPageData({ plan, rendersAs, sizeOrder });
   const embedded = embedJson(pageData);
   const pddlText = planToPddl(plan);
-  const pageTitle = title || `tmct plan — ${actions.length} move${actions.length === 1 ? "" : "s"}`;
+  const pageTitle = title || `tmct plan — ${countLabel(actions.length, "move")}`;
 
   return `<!doctype html>
 <!-- data-theme is pinned to dark on purpose: this page reads as a track/
@@ -483,6 +483,7 @@ const PLAN = ${embedded};
 (function () {
   "use strict";
   const escapeHtml = ${escapeHtml.toString()};
+  const countLabel = ${countLabel.toString()};
   // Best-effort: a copy of this page opened without the sibling worker file
   // (a tmct --render plan --output file, a file:// open) just swallows the
   // registration failure and works exactly as before.
@@ -759,7 +760,7 @@ const PLAN = ${embedded};
       session = await tmctPlan.createPlanSession({ diskCount: n, maxDepth: d });
       if (session.plan) {
         applyPlan(session.plan);
-        liveStatusEl.textContent = "live — " + n + " disk" + (n === 1 ? "" : "s") + ", max depth " + d + ".";
+        liveStatusEl.textContent = "live — " + countLabel(n, "disk", "disks") + ", max depth " + d + ".";
       } else {
         liveStatusEl.textContent = "no plan found within " + d + " moves — raise max search depth and try again.";
         liveStatusEl.classList.add("isError");

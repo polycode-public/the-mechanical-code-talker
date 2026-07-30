@@ -57,33 +57,40 @@
 // The burrow survey is ONE svg routine (burrowSvg over burrowGraph) drawn
 // twice: the omniscient board in the top row, and each pane's own
 // visited-only "known ground". Same layout, same treatment, one code path —
-// adapted from adventure-viz.mjs's own roomMapSvg/visitedRoomGraph pair, with
-// a cell-collision nudge burrowGraph needs and that page does not (a mud
-// character can dig down AND south out of one room, and both land on the
-// same grid cell otherwise).
+// burrowGraph/burrowSvg are thin wrappers over viz-room-graph.mjs's shared
+// directedGridLayout/roomGraphSvg (the same pair adventure-viz.mjs draws its
+// own manor board from), passing the `root`/`nudgeCollisions`/`turf` options a
+// burrow needs and a manor does not (a mud character can dig down AND south
+// out of one room, and both land on the same grid cell otherwise).
 //
 // ONE ticker instance per pane (viz-ticker.mjs's createTicker), so
 // each can play/step independently, plus the deck's own "play" control that
 // calls .play()/.pause() on both pane tickers at once. Nothing plays until
 // that control is clicked. Every tick, from ANY pane, is funneled through one
-// shared async queue (serializeTick, spliced below) so two characters' turns
-// can never interleave their reads/writes of the one shared memoryDir —
-// mud-browser-entry.mjs's own header names this as the caller's
-// responsibility, and this is where that responsibility is discharged. The
-// queue is also what makes the deck's GLOBAL turn counter well-defined: it
-// increments in the exact order turns actually executed, never a race
-// between panes.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel } from "./viz-theme.mjs";
-import { createTicker } from "./viz-ticker.mjs";
+// shared async queue (serializeTick, wrapping viz-ticker.mjs's own
+// createSerialQueue) so two characters' turns can never interleave their
+// reads/writes of the one shared memoryDir — mud-browser-entry.mjs's own
+// header names this as the caller's responsibility, and this is where that
+// responsibility is discharged. The queue is also what makes the deck's
+// GLOBAL turn counter well-defined: it increments in the exact order turns
+// actually executed, never a race between panes.
+import {
+  THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
+  wordBeforeCursor, rowsForWorld, appendLogLine,
+} from "./viz-theme.mjs";
+import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
+import { directedGridLayout, roomGraphSvg, levelsOf, EXIT_DELTA } from "./viz-room-graph.mjs";
 import {
   roomSceneObjects, scenePlacement, spriteClassForObject, spriteAncestryRows, factsForSubject,
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
-import { renderMudEditorText, wordBeforeCursor } from "./mud-editor.mjs";
+import { renderMudEditorText } from "./mud-editor.mjs";
 import {
   wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom,
 } from "./chat-page-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { fnv1a32 } from "../domain/hash.mjs";
+import { predatorSubjects } from "../domain/mud-facts.mjs";
 
 const DEFAULT_TITLE = "tmct — the mud";
 // No display-face embedding pipeline exists anywhere in this project yet
@@ -150,22 +157,9 @@ export function carriedItemsFor(rows, state, character) {
  *  keeps the level unchanged — what tells the survey where the turf line
  *  falls. A room unreachable from `root` (should not happen — every dug room
  *  writes a two-way exit back) is simply absent from the map rather than
- *  guessed at. Pure, self-contained. */
-export function levelsOf(state, root = "garden") {
-  const levels = new Map([[root, 0]]);
-  const queue = [root];
-  while (queue.length) {
-    const room = queue.shift();
-    const level = levels.get(room);
-    for (const [direction, target] of state.exits.get(room) ?? []) {
-      if (levels.has(target)) continue;
-      const delta = direction === "down" ? -1 : direction === "up" ? 1 : 0;
-      levels.set(target, level + delta);
-      queue.push(target);
-    }
-  }
-  return levels;
-}
+ *  guessed at. Re-exported from viz-room-graph.mjs's shared implementation,
+ *  which this module also splices into its own inline page script. */
+export { levelsOf };
 
 /** Which characters currently stand in `room` — the survey's own per-room
  *  roster, both for the omniscient board and a pane's own visited-only one.
@@ -176,62 +170,14 @@ export function charactersInRoom(state, room, characters) {
 
 /** The rooms in `roomIds` laid out on an integer grid FROM the world's own
  *  has-exit-* directions — never a force-directed guess, so a room north of
- *  another sits one row above it and a room dug DOWN sits one row below.
- *  Adapted from adventure-viz.mjs's `visitedRoomGraph`, with two differences
- *  a burrow needs and a manor does not: a cell already taken nudges right
- *  rather than stacking two rooms on one square (dig down and dig south from
- *  the same room otherwise collide), and every node carries its own `level`
- *  so the renderer can draw the turf line between the surface and the soil.
- *  An edge is drawn only between two rooms BOTH in `roomIds`; `hints` names
- *  every exit from an included room toward one that is not — the direction
- *  only, never the excluded room's own name, so a fog-of-war caller can draw
- *  "there's a way on" and nothing more. Pure. */
+ *  another sits one row above it and a room dug DOWN sits one row below. A
+ *  thin wrapper over viz-room-graph.mjs's shared `directedGridLayout`, always
+ *  passing `nudgeCollisions: true` — the one thing a burrow needs that a
+ *  manor does not: a cell already taken nudges right rather than stacking two
+ *  rooms on one square (dig down and dig south from the same room otherwise
+ *  collide). Pure. */
 export function burrowGraph(state, roomIds, root = "garden") {
-  const DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
-  const known = new Set(roomIds || []);
-  const positions = new Map();
-  const taken = new Set();
-  const edges = [];
-  const edgeKeys = new Set();
-  const hints = [];
-  const place = (room, x, y) => {
-    let px = x;
-    for (let guard = 0; taken.has(px + "," + y) && guard < 64; guard += 1) px += 1;
-    positions.set(room, { x: px, y });
-    taken.add(px + "," + y);
-  };
-  let offsetX = 0;
-  for (const start of [root, ...[...known].sort()]) {
-    if (!known.has(start) || positions.has(start)) continue;
-    place(start, offsetX, 0);
-    const queue = [start];
-    while (queue.length) {
-      const room = queue.shift();
-      const pos = positions.get(room);
-      const dirs = state.exits.get(room);
-      for (const direction of [...(dirs?.keys() ?? [])].sort()) {
-        const target = dirs.get(direction);
-        if (!known.has(target)) { hints.push({ from: room, direction }); continue; }
-        const key = [room, target].sort().join("\0");
-        if (!edgeKeys.has(key)) { edgeKeys.add(key); edges.push({ from: room, to: target, direction }); }
-        if (positions.has(target)) continue;
-        const d = DELTA[direction] ?? [0, 0];
-        place(target, pos.x + d[0], pos.y + d[1]);
-        queue.push(target);
-      }
-    }
-    offsetX = Math.max(...[...positions.values()].map((p) => p.x)) + 2;
-  }
-  const levels = levelsOf(state, root);
-  const xs = [...positions.values()].map((p) => p.x);
-  const ys = [...positions.values()].map((p) => p.y);
-  const minX = Math.min(0, ...xs);
-  const minY = Math.min(0, ...ys);
-  const nodes = [...known].filter((room) => positions.has(room)).sort().map((room) => {
-    const p = positions.get(room);
-    return { id: room, x: p.x - minX, y: p.y - minY, level: levels.has(room) ? levels.get(room) : null };
-  });
-  return { nodes, edges, hints };
+  return directedGridLayout(state, roomIds, { root, nudgeCollisions: true });
 }
 
 /** The directions `here` can still be dug in: every direction the room's kind
@@ -1217,12 +1163,24 @@ function pageScript() {
   "use strict";
   const DATA = MUD_PAGE_DATA;
   const createTicker = ${createTicker.toString()};
+  const createSerialQueue = ${createSerialQueue.toString()};
   const escapeHtml = ${escapeHtml.toString()};
   const esc = escapeHtml;
+  const rowsForWorld = ${rowsForWorld.toString()};
+  const appendLogLine = ${appendLogLine.toString()};
+  const fnv1a32 = ${fnv1a32.toString()};
+  const predatorSubjects = ${predatorSubjects.toString()};
   const paneMarkup = ${paneMarkup.toString()};
   const speciesOfCharacter = ${speciesOfCharacter.toString()};
   const mudRoomSceneObjects = ${mudRoomSceneObjects.toString()};
   const carriedItemsFor = ${carriedItemsFor.toString()};
+  // EXIT_DELTA is data, not a function — directedGridLayout/roomGraphSvg both
+  // close over it as a module-level const, which a \`.toString()\` splice never
+  // carries (a spliced function's source text is its own body only), so it
+  // travels here as JSON instead.
+  const EXIT_DELTA = ${JSON.stringify(EXIT_DELTA)};
+  const directedGridLayout = ${directedGridLayout.toString()};
+  const roomGraphSvg = ${roomGraphSvg.toString()};
   const levelsOf = ${levelsOf.toString()};
   const charactersInRoom = ${charactersInRoom.toString()};
   const burrowGraph = ${burrowGraph.toString()};
@@ -1282,12 +1240,8 @@ function pageScript() {
   // directly, so two characters' turns can never interleave their reads and
   // writes of the one shared memoryDir, and the global turn counter always
   // increments in real execution order.
-  let tickChain = Promise.resolve();
-  function serializeTick(fn) {
-    const run = tickChain.then(fn, fn);
-    tickChain = run.catch(function () {});
-    return run;
-  }
+  let tickQueue = createSerialQueue();
+  function serializeTick(fn) { return tickQueue.run(fn); }
 
   let session = null;
   let cast = [];
@@ -1390,12 +1344,10 @@ function pageScript() {
   }
 
   // Whichever individual the WORLD marks dangerous, never a species this page
-  // hardcodes — the same fact adventure.mjs's own predator check reads.
+  // hardcodes — the same domain/mud-facts.mjs reader mud-turn.mjs's own
+  // predator check reads server-side.
   function predatorInRows(rows) {
-    for (const row of rows) {
-      if (row.predicate === "mgx:is-predator" && row.object === "true") return row.subject;
-    }
-    return null;
+    return predatorSubjects(rows)[0] || null;
   }
 
   // The pane holds on the den for the length of one pounce before it grays out.
@@ -1478,23 +1430,7 @@ function pageScript() {
   // thing stays readable through the popup, and stays in the DOM for anything
   // reading the log.
   function appendChat(character, cls, text) {
-    const log = el(paneIdFor(character) + "-chatlog");
-    const d = document.createElement("div");
-    d.className = cls;
-    d.textContent = text;
-    log.appendChild(d);
-    // A line-clamped box reports scrollHeight EQUAL to its clamped height, so
-    // the overflow has to be read against the same box with the clamp lifted.
-    d.classList.add("unclamped");
-    const wholeHeight = d.scrollHeight;
-    d.classList.remove("unclamped");
-    if (wholeHeight - d.clientHeight > 2) {
-      d.classList.add("clipped");
-      d.setAttribute("role", "button");
-      d.setAttribute("tabindex", "0");
-      d.setAttribute("title", "read the whole line");
-    }
-    log.scrollTop = log.scrollHeight;
+    appendLogLine(el(paneIdFor(character) + "-chatlog"), cls, text, { clip: true });
   }
 
   function openLogPopup(slot, text) {
@@ -1616,9 +1552,7 @@ function pageScript() {
 
   // ---- room-view rendering -------------------------------------------------
   function hashOf(text) {
-    let h = 0;
-    for (let i = 0; i < String(text).length; i += 1) h = (h * 31 + String(text).charCodeAt(i)) % 100000;
-    return h;
+    return fnv1a32(String(text));
   }
 
   function spriteSvgFor(species, rows, instanceKey) {
@@ -1912,75 +1846,12 @@ function pageScript() {
   // ---- the burrow survey ---------------------------------------------------
   // One routine, drawn twice: the omniscient board in the top row (every room
   // the world has) and each pane's own known ground (only what that character
-  // has dug or walked, with a fading stub where it knows a way carries on).
+  // has dug or walked, with a fading stub where it knows a way carries on). A
+  // thin wrapper over the shared roomGraphSvg, fixed to the burrow's own
+  // "turf" treatment (ground line, tunnels/shafts, per-room occupant dots)
+  // and its own "burrow" wrapper class.
   function burrowSvg(graph, options) {
-    if (!graph.nodes.length) return "";
-    const opts = options || {};
-    const compact = !!opts.compact;
-    const cellX = compact ? 44 : 76, cellY = compact ? 26 : 54;
-    const roomW = compact ? 34 : 62, roomH = compact ? 14 : 26;
-    const maxX = Math.max.apply(null, graph.nodes.map(function (n) { return n.x; }));
-    const maxY = Math.max.apply(null, graph.nodes.map(function (n) { return n.y; }));
-    const w = (maxX + 1) * cellX, h = (maxY + 1) * cellY;
-    const byRoom = {};
-    for (const n of graph.nodes) byRoom[n.id] = n;
-    const cx = function (n) { return (n.x + 0.5) * cellX; };
-    const cy = function (n) { return (n.y + 0.5) * cellY; };
-
-    // The turf band is only drawn when the layout genuinely separates the
-    // surface from the soil — a lateral dig can push a surface room onto a
-    // lower row, and a ground line above it would say something false. The
-    // room fills carry the same information either way, which is all the
-    // thumbnail-sized copy has room for.
-    const surfaceRows = graph.nodes.filter(function (n) { return n.level === 0; }).map(function (n) { return n.y; });
-    const soilRows = graph.nodes.filter(function (n) { return n.level !== 0; }).map(function (n) { return n.y; });
-    let turf = "";
-    if (!compact && surfaceRows.length && soilRows.length && Math.max.apply(null, surfaceRows) < Math.min.apply(null, soilRows)) {
-      const groundY = (Math.max.apply(null, surfaceRows) + 0.5) * cellY + roomH / 2 + (compact ? 3 : 7);
-      turf = '<rect class="turf" x="0" y="0" width="' + w + '" height="' + groundY + '"></rect>'
-        + '<line class="ground-line" x1="0" y1="' + groundY + '" x2="' + w + '" y2="' + groundY + '"></line>';
-    }
-
-    const tunnels = graph.edges.map(function (e) {
-      const a = byRoom[e.from], b = byRoom[e.to];
-      if (!a || !b) return "";
-      const shaft = e.direction === "up" || e.direction === "down" ? " shaft" : "";
-      return '<line class="tunnel' + shaft + '" x1="' + cx(a) + '" y1="' + cy(a) + '" x2="' + cx(b) + '" y2="' + cy(b) + '"></line>';
-    }).join("");
-
-    const HINT_DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
-    const hints = graph.hints.map(function (hi) {
-      const from = byRoom[hi.from];
-      if (!from) return "";
-      const d = HINT_DELTA[hi.direction] || [0, 0];
-      return '<circle class="hint" cx="' + (cx(from) + d[0] * cellX * 0.36) + '" cy="' + (cy(from) + d[1] * cellY * 0.36) + '" r="' + (compact ? 2 : 3.2) + '"></circle>';
-    }).join("");
-
-    const occupants = opts.occupants || {};
-    const rooms = graph.nodes.map(function (n) {
-      const here = opts.here === n.id ? " here" : "";
-      const fresh = opts.fresh === n.id ? " freshly-dug" : "";
-      const surface = n.level === 0 ? " surface" : "";
-      const label = esc(n.id);
-      const fit = label.length * (compact ? 3.6 : 4.3) > roomW - 6
-        ? ' textLength="' + (roomW - 6) + '" lengthAdjust="spacingAndGlyphs"' : "";
-      const cast = occupants[n.id] || [];
-      // The room's own width is the budget: a dozen animals down one hole must
-      // still read as a dozen dots inside that room rather than a line running
-      // out of it, so the gap closes as the crowd grows.
-      const step = Math.min(compact ? 6 : 9, (roomW - 6) / Math.max(1, cast.length));
-      const dots = cast.map(function (c, i) {
-        const spread = (i - (cast.length - 1) / 2) * step;
-        return '<circle class="occupant" cx="' + (cx(n) + spread) + '" cy="' + (cy(n) + roomH / 2) + '" r="' + (compact ? 2.4 : 3.6)
-          + '" fill="' + c.color + '"><title>' + esc(c.character) + "</title></circle>";
-      }).join("");
-      return '<g class="room' + surface + here + fresh + '" data-room="' + label + '"><rect x="' + (cx(n) - roomW / 2) + '" y="' + (cy(n) - roomH / 2)
-        + '" width="' + roomW + '" height="' + roomH + '" rx="3"></rect><text x="' + cx(n) + '" y="' + (cy(n) + (compact ? 2 : 2.5))
-        + '"' + fit + ">" + label + "</text>" + dots + "</g>";
-    }).join("");
-
-    return '<div class="burrow"><svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="'
-      + esc(opts.label || "the burrow") + '">' + turf + tunnels + hints + rooms + "</svg></div>";
+    return roomGraphSvg(graph, Object.assign({ turf: true, wrapClass: "burrow" }, options || {}));
   }
 
   function renderMinimap(character, rows, state, here) {
@@ -2117,10 +1988,7 @@ function pageScript() {
   let editing = false;
 
   function worldOnlyRows(rows) {
-    const prefix = "world:" + scenario().worldPayload.name;
-    return (rows || []).filter(function (r) {
-      return typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0;
-    });
+    return rowsForWorld(rows, scenario().worldPayload.name);
   }
 
   function renderEditMap() {
@@ -2824,7 +2692,7 @@ function pageScript() {
         const wasEditing = editing;
         if (wasEditing) await exitEditMode();
         scenarioIndex = picked;
-        await boot("a different burrow opened \\u2014 share again to link up.");
+        await boot("a different burrow opened \\u2014 still linked.");
         if (wasEditing) await enterEditMode();
       });
     }
@@ -2891,13 +2759,20 @@ function pageScript() {
   async function openWorld(note) {
     const seq = bootSeq += 1;
     autoOn = false;
-    // A room is bound to the store it was opened over, and recasting mints a
-    // brand new one — so a burrow that restarts leaves the link behind rather
-    // than quietly syncing a world nobody else is in. Saying so is the whole
-    // handling; sharing again opens a fresh link over the new world. Picking a
-    // different burrow is the same drop for the same reason, and says so in
-    // its own words.
-    dropRoom(note || "the burrow restarted \\u2014 share again to link up.");
+    // A live link survives a recast: once the new burrow's store is open the
+    // room re-binds to it (below), pushing the fresh world to every connected
+    // node instead of quietly abandoning them. The recast moves the world one
+    // epoch forward, read from the store the peers have all converged on, so
+    // nobody's leftover snapshots from the old run can outrank the new one.
+    const liveRoom = room;
+    let nextEpoch = 0;
+    if (liveRoom && session) {
+      try {
+        nextEpoch = (await session.snapshot()).state.epoch + 1;
+      } catch (err) {
+        nextEpoch = 1;
+      }
+    }
     claimedElsewhere = {};
     wavingNow = [];
     const playBtn = el("autoToggle");
@@ -2909,7 +2784,7 @@ function pageScript() {
     freshlyDugRoom = null;
     lastSnapshot = null;
     speechBubbles.clear();
-    tickChain = Promise.resolve();
+    tickQueue = createSerialQueue();
     // Rebuilt rather than pruned: a character that had a pane last boot can be
     // an npc in this one, and a stale seat would send its ending to a pane now
     // showing somebody else.
@@ -2936,9 +2811,23 @@ function pageScript() {
     showPlayerCount(cast.length);
     showNpcCount(npcs.length);
     renderStage();
-    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone() });
+    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
     if (seq !== bootSeq) return;
     session = opened;
+    if (liveRoom) {
+      try {
+        await liveRoom.rebind({ memoryDir: opened.memoryDir, worldName: worldName, myDisplayName: myDisplayName });
+        renderWire();
+        renderNodes();
+        // After renderWire, the same way dropRoom writes its own reason: the
+        // render restates the state's stock note, and WHY this recast kept
+        // the link is the thing worth saying over it.
+        el("wireStateNote").textContent = note || "the burrow recast \\u2014 still linked.";
+        await claimMyAnimals();
+      } catch (err) {
+        dropRoom("the link didn't survive the recast \\u2014 share again to link up.");
+      }
+    }
     for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     bindPanes();
     for (const character of cast) {

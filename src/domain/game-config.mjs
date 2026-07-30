@@ -143,6 +143,17 @@ export function mudMassDrainPerTurn(mudConfig, characterId) {
   return Number.isFinite(drain) ? drain : 0;
 }
 
+/** The mass denominator a spider-and-fly class's HUD bar and sprite
+ *  expression both scale against — "how full" reads the same on either. `cls`
+ *  is "spider" or "fly"; any other class (an egg, or a class this world adds
+ *  later) has no denominator and gets null, never a guessed number. `config`
+ *  is the page's own `{ maxSpiderMass, maxFlyMass }` pair. Pure. */
+export function massScaleFor(cls, config) {
+  if (cls === "spider") return config?.maxSpiderMass ?? null;
+  if (cls === "fly") return config?.maxFlyMass ?? null;
+  return null;
+}
+
 /**
  * Fold a normalized tmct.toml's `games`/`planning` tables (the raw sparse
  * pass-through src/adapters/toml-config.mjs's normalizeConfig produces —

@@ -1,0 +1,65 @@
+# audience-facing-left — audience-with-emotion.toml's three-bust composite
+# with its center, frontmost bust turned to a left profile: only that
+# bust's own head circle, a small nose wedge and a single forward eye move
+# to the profile position (the king-facing-left.toml precedent, scaled to
+# the center bust's own smaller head r=2.6). The two flanking busts and the
+# ground line are other audience members in the background, not the subject
+# turning, so they keep audience-with-emotion's own exact coordinates,
+# unchanged. The center bust's own shoulder path likewise stays fixed — a
+# shoulder line reads the same from the side.
+classes = ["audience"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="audience-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.6">
+    <circle cx="5" cy="12" r="2.3" fill="url(#audience-facing-left-fill)"/>
+    <path d="M1.6 21 C1.6 17.6 3 16.1 5 16.1 C7 16.1 8.4 17.6 8.4 21 Z" fill="url(#audience-facing-left-fill)"/>
+    <path d="M3.9 16.2 L5 17.1 L6.1 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <g opacity="0.6">
+    <circle cx="19" cy="12" r="2.3" fill="url(#audience-facing-left-fill)"/>
+    <path d="M15.6 21 C15.6 17.6 17 16.1 19 16.1 C21 16.1 22.4 17.6 22.4 21 Z" fill="url(#audience-facing-left-fill)"/>
+    <path d="M20.1 16.2 L19 17.1 L17.9 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <path d="M8.2 21 C8.2 17 9.8 15.2 12 15.2 C14.2 15.2 15.8 17 15.8 21 Z" fill="url(#audience-facing-left-fill)"/>
+  <circle cx="11.53" cy="9.4" r="2.6" fill="url(#audience-facing-left-fill)"/>
+  <path d="M9.1 8.9 Q8.1 9.7 9.1 10.5 Z" fill="url(#audience-facing-left-fill)"/>
+  <ellipse cx="10.2" cy="9.0" rx="0.22" ry="0.27" fill="#1c1c1c"/>
+  <path d="M1.6 21 L22.4 21" stroke="currentColor" stroke-width="0.7" opacity="0.3" stroke-linecap="round"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# audience-with-emotion.toml's front-facing anchor (cx=12 cy=9.4 scale=2.6):
+# the center bust's head shifts left to cx=11.53 (delta -0.47, proportional
+# to king's own -0.6 delta scaled by this bust's r=2.6 vs king's r=3.3), and
+# the forward eye this file already draws sits at (10.2, 9.0). scale is
+# ~0.65 of the head radius (1.7): cx = 10.2 + 0.4*1.7 = 10.88,
+# cy = 9.0 + 0.15*1.7 = 9.26.
+[face]
+cx = 10.88
+cy = 9.26
+scale = 1.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

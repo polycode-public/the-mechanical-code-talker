@@ -1,0 +1,62 @@
+# engineer-moving — the plain front-facing hard-hatted engineer caught
+# mid-stride: the head and hard hat keep engineer-with-emotion.toml's own
+# front position exactly, and the arm-and-leg redraw is the same walking
+# stride engineer-facing-left-moving.toml carries, reused here without a
+# facing constraint — a figure with no mgx:faces fact on record is still
+# read as the front view, walking straight at the viewer.
+classes = ["engineer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="engineer-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="engineer-moving-hat" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#f7c65a"/>
+      <stop offset="100%" stop-color="#d99a1f"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#engineer-moving-fill)">
+    <path d="M9.4 13.4 C7.8 12.8 6.3 13.8 5.8 16.4 C5.6 17.8 6.2 18.8 7.3 18.5 C7.4 16.5 7.9 14.8 9.6 13.9 Z"/>
+    <path d="M14.6 13.4 C16.7 13.8 18.7 15.6 19 18.5 C19.1 19.8 18.3 20.6 17.2 20 C17 17.7 16.3 15.4 14.3 14.5 Z"/>
+    <path d="M6.3 21 C6.1 15.7 8.7 13.2 11.7 13.2 C15.1 13.2 17.6 15 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.75 11.3 L13.25 11.3 L13.05 13.3 L10.95 13.3 Z"/>
+  </g>
+  <circle cx="12" cy="8.6" r="3.1" fill="url(#engineer-moving-fill)"/>
+  <path d="M10.4 12.9 L12 14.2 L13.6 12.9" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M9.3 13.9 C8 14.8 7.1 16.3 6.9 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.9 C16 14.8 16.9 16.3 17.1 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M8.7 5.4 C8.7 3.2 10.2 1.7 12 1.7 C13.8 1.7 15.3 3.2 15.3 5.4 L15.3 5.9 L8.7 5.9 Z" fill="url(#engineer-moving-hat)"/>
+  <ellipse cx="12" cy="6.1" rx="5" ry="0.85" fill="url(#engineer-moving-hat)"/>
+  <path d="M12 1.9 L12 5.9" stroke="#b9800f" stroke-width="0.3" opacity="0.45"/>
+  <ellipse cx="9.7" cy="3.4" rx="1.3" ry="0.45" fill="#ffffff" opacity="0.35"/>
+  <g transform="rotate(25 16.4 16.8)">
+    <rect x="15.6" y="15.6" width="1.6" height="5.4" rx="0.5" fill="#7d8894"/>
+    <path d="M15.1 14.6 C15.1 13.6 15.7 13 16.4 13 C17.1 13 17.7 13.6 17.7 14.6 C17.7 15.3 17.3 15.8 16.7 15.9 L16.1 15.9 C15.5 15.8 15.1 15.3 15.1 14.6 Z" fill="none" stroke="#7d8894" stroke-width="0.7"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 12
+cy = 8.6
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
