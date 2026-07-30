@@ -1,0 +1,72 @@
+# spider-facing-left — the spider turned to a left profile: the
+# cephalothorax (the smaller segment the 8 legs radiate from) leads at the
+# canvas's left edge, the abdomen trails behind it to the right, and the
+# legs split asymmetrically across the turn — 4 legs on the near side splay
+# forward and read long and clear, while the 4 legs on the far side stay
+# bunched close against the body, drawn first so the cephalothorax and
+# abdomen cover their base and only their tips peek out (the
+# bear-facing-left.toml far-ear precedent). A hand-authored [match] variant,
+# selected only when the instance's own mgx:faces fact says "left". It also
+# carries the shared face-fragment mechanism, so a spider taught BOTH
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood; taught only the facing, {{FACE}} resolves to nothing.
+classes = ["spider"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="spider-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g stroke="currentColor" stroke-width="0.9" fill="none" stroke-linecap="round">
+    <path d="M8.64 10.36 L6.8 7.6"/>
+    <path d="M10.36 11.96 L8.8 9.2"/>
+    <path d="M12.09 13.56 L10.8 11"/>
+    <path d="M13.81 15.16 L12.8 13"/>
+  </g>
+  <ellipse cx="14.5" cy="15.8" rx="5" ry="4.6" fill="url(#spider-facing-left-fill)"/>
+  <ellipse cx="12.8" cy="14.1" rx="1.7" ry="1.3" fill="#000000" opacity="0.2"/>
+  <path d="M14.5 12.6 L16.7 15.4 L14.5 15.8 L12.3 15.4 Z" fill="color-mix(in srgb, currentColor 80%, black)" opacity="0.55"/>
+  <ellipse cx="19.3" cy="16.6" rx="0.85" ry="0.65" fill="#1c1c1c"/>
+  <circle cx="7.6" cy="9.4" r="2.9" fill="url(#spider-facing-left-fill)"/>
+  <ellipse cx="6.7" cy="8.5" rx="1.05" ry="0.8" fill="#ffffff" opacity="0.32"/>
+  <g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round">
+    <path d="M8.64 10.36 L3.5 15"/>
+    <path d="M10.36 11.96 L5.5 19"/>
+    <path d="M12.09 13.56 L9.5 21.5"/>
+    <path d="M13.81 15.16 L14 22.5"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Anchored directly on this file's own cephalothorax circle (cx=7.6,
+# cy=9.4) — the same convention spider-with-emotion.toml uses for the front
+# view, where [face] just copies the circle's own cx/cy/r. scale is
+# 0.65 * this profile's own cephalothorax radius (2.9) = 1.885, rounded to
+# 1.9 — bear-facing-left.toml's own ratio (scale 3 over head radius 4.6)
+# applied to spider's own body segment instead of a borrowed number, since a
+# full side profile foreshortens the face fragment by the same amount
+# regardless of anatomy.
+[face]
+cx = 7.6
+cy = 9.4
+scale = 1.9
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -1,0 +1,71 @@
+# pig-facing-half-left — the pig turned three-quarters, halfway between
+# pig-facing-left.toml's full profile and pig-with-emotion.toml's front
+# view. The fused body/head ellipse sits at the midpoint position, the
+# snout projects only half as far past the leading edge, and the far ear
+# reads noticeably bigger than it does in the full profile — the cue that
+# reads as a turned head rather than a flat profile, standing in for the
+# "small far eye now visible" cue bear's own half-turn uses (pig draws no
+# default eye of its own, so the far ear is what carries that read here).
+# The legs and tail keep the profile file's own geometry, shifted right by
+# the same amount the head moved.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="15.6" cy="14.8" rx="7.2" ry="4.6" fill="url(#pig-facing-half-left-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="11.6" y1="18.6" x2="11.3" y2="21.8"/>
+    <line x1="14.8" y1="19.2" x2="14.8" y2="22"/>
+    <line x1="18.2" y1="19.2" x2="18.2" y2="22"/>
+    <line x1="21.2" y1="18.6" x2="21.4" y2="21.8"/>
+  </g>
+  <g fill="#5c4438">
+    <ellipse cx="11.3" cy="22" rx="0.7" ry="0.4"/>
+    <ellipse cx="14.8" cy="22.2" rx="0.7" ry="0.4"/>
+    <ellipse cx="18.2" cy="22.2" rx="0.7" ry="0.4"/>
+    <ellipse cx="21.4" cy="22" rx="0.7" ry="0.4"/>
+  </g>
+  <path d="M12 10.4 L9.4 6.2 L13.4 7.6 Z" fill="url(#pig-facing-half-left-fill)"/>
+  <path d="M16.6 9.8 L17.2 6.6 L19.8 9.4 Z" fill="url(#pig-facing-half-left-fill)"/>
+  <ellipse cx="8.3" cy="14.9" rx="2.5" ry="1.9" fill="url(#pig-facing-half-left-fill)"/>
+  <circle cx="6.3" cy="14.3" r="0.42" fill="#5c4438"/>
+  <circle cx="6.3" cy="15.5" r="0.42" fill="#5c4438"/>
+  <path d="M21.6 12 C23.9 11.2 23.8 13.5 22.2 13.9 C22.2 13.1 21.8 12.4 21.6 12 Z" fill="url(#pig-facing-half-left-fill)"/>
+  <ellipse cx="18" cy="11.2" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Half scale is 0.825 * this file's own fused-ellipse radius (ry=4.6) =
+# 3.795, rounded to 3.8 — the table's own halfway point between the front
+# view's 1.0*r (pig-with-emotion.toml's scale=4 against its own body) and
+# the profile's 0.65*r (pig-facing-left.toml's scale=3). cx/cy shift right
+# by the same +2.2 the head/ears moved from the profile file, landing the
+# fragment in the same clear gap between the ear bases and the snout's top
+# edge.
+[face]
+cx = 11.7
+cy = 11.3
+scale = 3.8
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

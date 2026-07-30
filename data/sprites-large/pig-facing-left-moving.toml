@@ -1,0 +1,65 @@
+# pig-facing-left-moving — pig-facing-left.toml's own profile caught
+# mid-stride. The head, ears, snout, nostrils and tail stay exactly as that
+# file draws them, since a head does not change shape mid-stride. What
+# moves: the body dips down slightly under the stride, and the four legs
+# spread into a diagonal trotting gait — the near pair (front and back, both
+# closer to the leading edge) swings forward and lifts, the far pair trails
+# low and back, planted.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-facing-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.4" cy="15.2" rx="7.2" ry="4.6" fill="url(#pig-facing-left-moving-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="9.8" y1="17.8" x2="8.4" y2="20.6"/>
+    <line x1="12.2" y1="19.6" x2="13.6" y2="22.4"/>
+    <line x1="15.6" y1="18.4" x2="14.6" y2="21"/>
+    <line x1="19.4" y1="19.8" x2="20.6" y2="22.6"/>
+  </g>
+  <g fill="#5c4438">
+    <ellipse cx="8.4" cy="20.8" rx="0.7" ry="0.4"/>
+    <ellipse cx="13.6" cy="22.6" rx="0.7" ry="0.4"/>
+    <ellipse cx="14.6" cy="21.2" rx="0.7" ry="0.4"/>
+    <ellipse cx="20.6" cy="22.8" rx="0.7" ry="0.4"/>
+  </g>
+  <path d="M9.8 10 L6.8 5.8 L11.2 7.2 Z" fill="url(#pig-facing-left-moving-fill)"/>
+  <path d="M14.6 9.6 L15.3 7 L17.4 9.2 Z" fill="url(#pig-facing-left-moving-fill)"/>
+  <ellipse cx="4" cy="14.8" rx="3.2" ry="2.3" fill="url(#pig-facing-left-moving-fill)"/>
+  <circle cx="2.4" cy="14.1" r="0.48" fill="#5c4438"/>
+  <circle cx="2.4" cy="15.5" r="0.48" fill="#5c4438"/>
+  <path d="M20.8 12 C23.6 11 23.4 13.6 21.6 14 C21.6 13.2 21.2 12.4 20.8 12 Z" fill="url(#pig-facing-left-moving-fill)"/>
+  <ellipse cx="15.8" cy="11.2" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 9.5
+cy = 11.3
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

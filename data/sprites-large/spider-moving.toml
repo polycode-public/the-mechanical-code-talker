@@ -1,0 +1,66 @@
+# spider-moving — spider-with-emotion.toml's own front-facing spider caught
+# mid-scuttle, selected purely on mgx:pose = moving with no facing constraint
+# at all (there is no existing bear/cat/dog/king precedent for a centre-
+# facing moving variant, since none of those classes has one yet — this is
+# the first, using the same [[match]]/[face]/[parameters.emotion] authoring
+# conventions every other variant here already uses). The cephalothorax,
+# abdomen and markings, and the [face] anchor, are copied unchanged from
+# spider-with-emotion.toml, since the body segments do not change shape
+# mid-stride. What moves: the 8 legs break the resting radial symmetry —
+# the left-side legs and the right-side legs bend to opposite phases of the
+# same alternating gait, one side's legs extended and reaching while the
+# other side's are pulled in tight, so the two sides no longer mirror each
+# other the way the resting pose does.
+classes = ["spider"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="spider-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round">
+    <path d="M9.4 8 L1.2 3.2"/>
+    <path d="M9 10.2 L0.6 12"/>
+    <path d="M9.2 12.6 L3.6 17.8"/>
+    <path d="M10 15.4 L5.5 21.8"/>
+    <path d="M14.6 8 L17.8 15.2"/>
+    <path d="M15 10.2 L19.5 18.5"/>
+    <path d="M14.8 12.6 L22.8 13.2"/>
+    <path d="M14 15.4 L23.4 18.5"/>
+  </g>
+  <ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="url(#spider-moving-fill)"/>
+  <ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="#000000" opacity="0.2"/>
+  <path d="M12 12.4 L14.2 15.4 L12 15.8 L9.8 15.4 Z" fill="color-mix(in srgb, currentColor 80%, black)" opacity="0.55"/>
+  <ellipse cx="12" cy="20.2" rx="0.9" ry="0.7" fill="#1c1c1c"/>
+  <circle cx="12" cy="9.6" r="3.2" fill="url(#spider-moving-fill)"/>
+  <ellipse cx="10.6" cy="8.6" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.32"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# Unchanged from spider-with-emotion.toml — the same cx/cy/r the front
+# view's own cephalothorax circle declares. A moving pose changes the legs,
+# never the body segments a head-on view anchors the face fragment to.
+[face]
+cx = 12
+cy = 9.6
+scale = 3.2
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

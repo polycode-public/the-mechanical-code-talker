@@ -1,0 +1,70 @@
+# spider-facing-half-left — the spider turned three-quarters, halfway
+# between spider-facing-left.toml's full profile and
+# spider-with-emotion.toml's front view. The cephalothorax sits at the
+# midpoint position between the profile's and the front view's cx, the
+# abdomen trails behind it at the same relative offset the profile draws,
+# and the far-side legs read more visible here than in the full profile
+# (less foreshortened, reaching further out) while the near-side legs pull
+# in slightly — the three-quarter-turn cue, the same one
+# bear-facing-half-left.toml's far eye gives a turned head.
+classes = ["spider"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="spider-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round">
+    <path d="M10.7 10.46 L8 6"/>
+    <path d="M12.2 12.06 L10.5 7.8"/>
+    <path d="M13.7 13.66 L13 9.5"/>
+    <path d="M15.2 15.26 L15.5 11.5"/>
+  </g>
+  <ellipse cx="15.8" cy="15.9" rx="5" ry="4.6" fill="url(#spider-facing-half-left-fill)"/>
+  <ellipse cx="14.1" cy="14.2" rx="1.7" ry="1.3" fill="#000000" opacity="0.2"/>
+  <path d="M15.8 12.7 L18 15.5 L15.8 15.9 L13.6 15.5 Z" fill="color-mix(in srgb, currentColor 80%, black)" opacity="0.55"/>
+  <ellipse cx="20.6" cy="16.7" rx="0.85" ry="0.65" fill="#1c1c1c"/>
+  <circle cx="9.8" cy="9.5" r="2.9" fill="url(#spider-facing-half-left-fill)"/>
+  <ellipse cx="8.9" cy="8.6" rx="1.05" ry="0.8" fill="#ffffff" opacity="0.32"/>
+  <g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round">
+    <path d="M10.7 10.46 L6.5 14"/>
+    <path d="M12.2 12.06 L8.5 17.5"/>
+    <path d="M13.7 13.66 L11.5 19.5"/>
+    <path d="M15.2 15.26 L15 20.5"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Same cephalothorax radius as the full profile (2.9, unchanged — only its
+# position moves, the bear-facing-half-left.toml precedent of keeping the
+# head circle's own radius fixed between profile and half). cx/cy are the
+# arithmetic midpoint between the profile's cephalothorax (7.6, 9.4) and the
+# front view's own cephalothorax (12, 9.6): (7.6+12)/2 = 9.8,
+# (9.4+9.6)/2 = 9.5. [face] copies that cx/cy directly, the same convention
+# spider-with-emotion.toml and spider-facing-left.toml both use. scale is
+# 0.825 * 2.9 = 2.3925, rounded to 2.4 — bear's own half-turn ratio (scale
+# 3.8 over head radius 4.6) applied to spider's own cephalothorax instead.
+[face]
+cx = 9.8
+cy = 9.5
+scale = 2.4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

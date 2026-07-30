@@ -1,0 +1,67 @@
+# pig-facing-half-right-moving — pig-facing-half-left-moving.toml's
+# mid-stride three-quarter turn mirrored across the canvas midline (every
+# shape wrapped in one translate-then-flip group), the same twin
+# relationship pig-facing-half-right holds with pig-facing-half-left.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="15.6" cy="15.2" rx="7.2" ry="4.6" fill="url(#pig-facing-half-right-moving-fill)"/>
+    <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <line x1="12" y1="17.8" x2="10.6" y2="20.6"/>
+      <line x1="14.4" y1="19.6" x2="15.8" y2="22.4"/>
+      <line x1="18.4" y1="18.4" x2="17.4" y2="21"/>
+      <line x1="21.6" y1="19.8" x2="22.6" y2="22.6"/>
+    </g>
+    <g fill="#5c4438">
+      <ellipse cx="10.6" cy="20.8" rx="0.7" ry="0.4"/>
+      <ellipse cx="15.8" cy="22.6" rx="0.7" ry="0.4"/>
+      <ellipse cx="17.4" cy="21.2" rx="0.7" ry="0.4"/>
+      <ellipse cx="22.6" cy="22.8" rx="0.7" ry="0.4"/>
+    </g>
+    <path d="M12 10.4 L9.4 6.2 L13.4 7.6 Z" fill="url(#pig-facing-half-right-moving-fill)"/>
+    <path d="M16.6 9.8 L17.2 6.6 L19.8 9.4 Z" fill="url(#pig-facing-half-right-moving-fill)"/>
+    <ellipse cx="8.3" cy="14.9" rx="2.5" ry="1.9" fill="url(#pig-facing-half-right-moving-fill)"/>
+    <circle cx="6.3" cy="14.3" r="0.42" fill="#5c4438"/>
+    <circle cx="6.3" cy="15.5" r="0.42" fill="#5c4438"/>
+    <path d="M21.6 12 C23.9 11.2 23.8 13.5 22.2 13.9 C22.2 13.1 21.8 12.4 21.6 12 Z" fill="url(#pig-facing-half-right-moving-fill)"/>
+    <ellipse cx="18" cy="11.2" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.28"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 12.3
+cy = 11.3
+scale = 3.8
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
