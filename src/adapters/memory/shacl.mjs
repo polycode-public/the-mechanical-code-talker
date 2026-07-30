@@ -39,6 +39,22 @@ const RULE_SLOT_PROPS = {
 // abbreviation or a version ("v1.2", "core.mjs") stays a legal term.
 const SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
 
+// A Fact record's id: the content-addressed group key, then the Source key this
+// one assertion is filed under, then — only on a record its own source has since
+// superseded — the version that demoted it. Checked only for the two SUFFIXES,
+// never for the group part: a hand-built individual with a short opaque id is a
+// legitimate sparse write, and rejecting it is exactly the false positive this
+// gate must never produce. The source suffix is matched loosely on purpose — a
+// Source id legitimately carries colons, spaces and an `@revid` of its own
+// ("src:reference:simplewiki:Polar bear@912").
+const FACT_RECORD_ID_RE = /^[^@]+@(.+?)(#v[1-9][0-9]*)?$/;
+const looksLikeFactRecordId = (id) => id.includes("@") || /#v\d/.test(id);
+
+// mgx:supersedes / mgx:supersededBy hold a space-joined id LIST, not a single
+// value: one logical source can have two live replicas that each supersede the
+// same prior record before they ever sync, so a fork is real data, not a bug.
+const SUPERSESSION_LINK_PROPS = ["mgx:supersedes", "mgx:supersededBy"];
+
 function attrValue(ind, prop) {
   const a = (ind?.attributes || []).find((x) => x?.prop === prop);
   return a ? String(a.value ?? "") : undefined;
@@ -70,6 +86,28 @@ function checkFact(ind, violations) {
   }
   const prov = attrValue(ind, "mgx:factProvenance");
   if (prov !== undefined && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
+
+  const id = typeof ind?.id === "string" ? ind.id : "";
+  if (looksLikeFactRecordId(id) && !FACT_RECORD_ID_RE.test(id)) {
+    violations.push(`a Fact record id must read <groupId>@<sourceId>, optionally suffixed #v<n> once superseded (got ${JSON.stringify(id)})`);
+  }
+  const sourceId = attrValue(ind, "mgx:sourceId");
+  if (sourceId !== undefined && !nonEmpty(sourceId)) {
+    violations.push("mgx:sourceId, when present, must be non-empty (every assertion record has a key, src:none included)");
+  }
+  const observedAt = attrValue(ind, "mgx:observedAt");
+  if (observedAt !== undefined && !Number.isFinite(Date.parse(observedAt))) {
+    violations.push(`mgx:observedAt, when present, must be a parseable instant (got ${JSON.stringify(observedAt)})`);
+  }
+  for (const prop of SUPERSESSION_LINK_PROPS) {
+    const links = attrValue(ind, prop);
+    if (links === undefined) continue; // absent, never empty, until a chain's first supersession
+    const ids = links.split(" ").filter(Boolean);
+    if (!ids.length) violations.push(`${prop}, when present, must name at least one record id`);
+    for (const linked of ids) {
+      if (!FACT_RECORD_ID_RE.test(linked)) violations.push(`${prop} must name Fact record ids (got ${JSON.stringify(linked)})`);
+    }
+  }
 }
 
 /** RuleShape (mgx:RuleShape): a non-empty name; a kind from the closed
