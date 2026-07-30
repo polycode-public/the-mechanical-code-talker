@@ -88,6 +88,11 @@ import { renderMudEditorText } from "./mud-editor.mjs";
 import {
   wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom,
 } from "./chat-page-viz.mjs";
+import {
+  SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
+  shareMessageFor, replyMessageFor, whatsAppShareUrl, isProbablyMobile, copyTextToClipboard, flashCopyTip,
+} from "./share-overlay-viz.mjs";
+export { offerBlobIn, peerTerm };
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { predatorSubjects } from "../domain/mud-facts.mjs";
@@ -122,6 +127,22 @@ const MUD_NOTE_LINES = [
   `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
   "Share the burrow and a second digger joins from another machine, browser to browser, with no server in the middle. Each animal is claimed by one node, one hand on one lemming, and everything either of you digs, eats or learns lands in the same graph.",
 ];
+
+// The shared sharing overlay, in this page's own words — same markup, same
+// ids, same ladder as chat.html's; only the vocabulary is a burrow's.
+const MUD_SHARE_COPY = {
+  thing: "burrow",
+  lede: "This burrow lives in your browser and nowhere else. Sharing it opens a direct line (WebRTC) to one other browser: you send an invite, they send a reply, you paste it in. No account, no server, no copy anywhere in between.",
+  worldLabel: "the burrow you are sharing",
+  nodeLabel: "your node name",
+  namesNote: "both names are facts in the burrow, not settings.",
+  invitedEyebrow: "you have been invited to dig in",
+  joinBody: "Nothing runs until you press the button. It makes one reply for you to send back the way the invite reached you.",
+  dismiss: "dig on your own instead",
+  rosterTitle: "who digs this burrow",
+  nodeEmpty: "nobody else is digging here yet.",
+  idleNote: "this browser holds the only copy of this burrow.",
+};
 
 /** A character id's species — "mole-1" -> "mole", "groundhog-1" ->
  *  "groundhog" — mirroring spider-fly-viz.mjs's own classOfAgentId. Self-
@@ -242,15 +263,6 @@ export function provenanceStamps(provenance) {
   return stamps;
 }
 
-/** A peer id as the fact store actually holds it. `appendFacts` normalizes a
- *  term by stripping its CURIE prefix and lowercasing, so the `peer:<id>` a
- *  claim is written with reads back as the bare id — a comparison against a
- *  raw peer id has to normalize the same way or it never matches. Pure,
- *  self-contained. */
-export function peerTerm(peerId) {
-  return String(peerId || "").replace(/^[a-z][\w.-]*:/i, "").toLowerCase();
-}
-
 /** Which peer plays `character`, or null when nobody has claimed it. Claims are
  *  add-only and never retracted, so two peers claiming the same animal both
  *  write and every page settles it the same way: the OLDEST claim wins, with
@@ -288,19 +300,6 @@ export function wavingCharacters(rows, nowMs, windowMs = 8000) {
     if (waving.indexOf(row.subject) === -1) waving.push(row.subject);
   }
   return waving;
-}
-
-/** The offer blob inside whatever somebody actually pasted: the `offer`
- *  parameter of a whole invite link, or the bare blob when that is what
- *  arrived. Both are what people really paste, and telling them apart by
- *  looking is cheaper than asking them to. Pure, self-contained. */
-export function offerBlobIn(pasted) {
-  const text = String(pasted || "").trim();
-  const marker = text.indexOf("offer=");
-  if (marker === -1) return text;
-  const rest = text.slice(marker + "offer=".length);
-  const end = rest.search(/[&#\s]/);
-  return decodeURIComponent(end === -1 ? rest : rest.slice(0, end));
 }
 
 /** The name a peer chose for its node, from its latest `mgx:nodeName` fact,
@@ -386,11 +385,23 @@ ${engineBundleJs ? "" : `<link rel="icon" href="./favicon.svg" type="image/svg+x
 <style>
 ${THEME_TOKENS_CSS}
 ${MUD_STYLE}
+${SHARE_OVERLAY_CSS}
+${MUD_SHARE_SKIN}
 </style>
 </head>
 <body>
 <main>
-  <h1 class="eyebrow">tmct &middot; mud</h1>
+  <header class="mud-topbar">
+    <h1 class="eyebrow">tmct &middot; mud</h1>
+    <div class="mud-topbar-actions">
+      <button type="button" class="state-pill" id="statePill" aria-expanded="false" aria-controls="netPanel"
+              title="whether this burrow is shared with anyone"><i class="state-dot"></i><span id="statePillWord">not shared</span></button>
+      <button type="button" id="shareBtn">share</button>
+      <button type="button" id="joinOpenBtn">join</button>
+      <a class="mud-topbar-help" href="./help.html#sharing" target="_blank" rel="noopener"
+         title="how sharing works, in a new tab" aria-label="how sharing works, opens in a new tab">?</a>
+    </div>
+  </header>
   <div class="deck-row">
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
@@ -400,10 +411,6 @@ ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-sel
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
-        <button type="button" id="shareBtn">share</button>
-        <button type="button" id="joinOpenBtn">join</button>
-        <button type="button" class="state-pill" id="statePill" aria-expanded="false" aria-controls="netPanel"
-                title="whether this burrow is shared with anyone"><i class="state-dot"></i><span id="statePillWord">not shared</span></button>
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
@@ -448,61 +455,7 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
       <div class="world-map-key" id="worldMapKey"></div>
     </section>
   </div>
-  <section class="net-panel" id="netPanel" aria-label="the shared burrow" hidden>
-    <div class="net-head">
-      <span class="net-title">the shared burrow</span>
-      <span class="net-state" id="wireState" data-tone="idle"><b id="wireStateWord">not shared</b><span id="wireStateNote">this browser holds the only copy of this burrow.</span></span>
-      <button type="button" class="net-close" id="netPanelClose" aria-label="close">&times;</button>
-    </div>
-    <div class="net-fields">
-      <label class="net-field">this node
-        <input type="text" id="nodeNameInput" spellcheck="false" aria-label="the name this node goes by">
-      </label>
-      <label class="net-field">this burrow
-        <input type="text" id="worldNameInput" spellcheck="false" aria-label="the name of the shared burrow">
-      </label>
-    </div>
-    <div class="net-block" id="sharePanel" hidden>
-      <p class="net-hint">Each link invites one person. Share again for the next.</p>
-      <textarea id="shareLink" readonly rows="2" aria-label="the invite link"></textarea>
-    </div>
-    <div class="net-block" id="invitePanel" hidden>
-      <label class="net-label" for="inviteBox">paste the invite you were sent</label>
-      <textarea id="inviteBox" rows="2" spellcheck="false"></textarea>
-      <button type="button" id="inviteBtn">make my reply</button>
-      <p class="net-problem" id="inviteProblem" role="alert" hidden></p>
-    </div>
-    <div class="net-block" id="replyPanel">
-      <label class="net-label" for="replyBox">paste their reply here</label>
-      <textarea id="replyBox" rows="2" spellcheck="false"></textarea>
-      <button type="button" id="replyBtn">connect</button>
-      <p class="net-problem" id="replyProblem" role="alert" hidden></p>
-    </div>
-    <div class="net-block" id="answerPanel" hidden>
-      <label class="net-label" for="replyOut">send this back the same way the invite reached you</label>
-      <textarea id="replyOut" readonly rows="2"></textarea>
-      <button type="button" id="copyReplyBtn">copy the reply</button>
-    </div>
-    <div class="net-block">
-      <div class="net-label">nodes <span class="mono" id="nodeCount"></span></div>
-      <ul class="node-list" id="nodeList"></ul>
-      <p class="net-hint" id="nodeEmpty">Nobody else is digging here yet.</p>
-    </div>
-  </section>
-  <div class="join-card" id="joinCard" hidden>
-    <div class="join-inner" role="dialog" aria-label="an invitation to a shared burrow">
-      <p class="join-eyebrow" id="joinEyebrow">you have been invited to dig in</p>
-      <h2 class="join-world" id="joinWorld">a shared burrow</h2>
-      <p class="join-body" id="joinBody">Nothing runs until you press the button. It makes one reply for you to send back the way the invite reached you.</p>
-      <button type="button" id="joinBtn">create my reply</button>
-      <p class="net-problem" id="joinProblem" role="alert" hidden></p>
-      <div class="join-reply" id="joinReplyWrap" hidden>
-        <textarea id="joinReply" readonly rows="2" aria-label="your reply"></textarea>
-        <button type="button" id="joinCopyBtn">copy the reply</button>
-      </div>
-      <button type="button" class="join-dismiss" id="joinDismiss">dig on your own instead</button>
-    </div>
-  </div>
+${shareOverlayHtml({ copy: MUD_SHARE_COPY })}
   <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
   </div>
@@ -633,6 +586,22 @@ const MUD_STYLE = `
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1280px; margin: 0 auto; padding: 1.1rem 1.2rem 2.4rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--parchment); opacity: .9; margin: 0 0 .8rem; }
+
+  /* ---- the header: brand on the left, the sharing chrome on the right ----
+     The same arrangement chat.html's topbar holds — sharing is page chrome,
+     not a simulation control, so it lives above the deck rather than in it. */
+  .mud-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: 0 0 .8rem; }
+  .mud-topbar .eyebrow { margin: 0; }
+  .mud-topbar-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .mud-topbar-actions button:not(.state-pill), .mud-topbar-help {
+    background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 3px;
+    padding: .32rem .7rem; box-shadow: 0 1px 0 rgba(0, 0, 0, .12); text-decoration: none; font-size: .82rem;
+  }
+  .mud-topbar-actions button:not(.state-pill):hover, .mud-topbar-help:hover { background: var(--lem-face-hi); border-color: var(--burrow-glow); }
+  .mud-topbar-help { padding: .32rem .55rem; line-height: 1.2; }
+  /* the pill wears the deck's lit-readout idiom: this is the one word that
+     says whether the burrow is shared, and it reads like an instrument. */
+  .mud-topbar-actions .state-pill { background: var(--lem-readout-bg); color: var(--lem-readout); border: 1px solid #000; border-radius: 2px; padding: .3rem .6rem; cursor: pointer; }
   h2 { font-family: ${DISPLAY_STACK}; font-size: 1rem; margin: 0; text-transform: capitalize; }
   h3 { font-family: ${MONO_STACK}; font-size: .58rem; margin: 0 0 .3rem; text-transform: uppercase; letter-spacing: .12em; color: var(--soil-mid); }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
@@ -1039,16 +1008,15 @@ const MUD_STYLE = `
   }
   .deck-slider, .deck h3 { color: var(--lem-chalk); }
   .deck-slider input[type="range"] { accent-color: var(--burrow-glow); }
-  .deck button, .pane-controls button, .net-panel button, .join-inner button {
+  .deck button, .pane-controls button {
     background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 3px;
     padding: .32rem .7rem; box-shadow: 0 1px 0 rgba(0,0,0,.12);
   }
-  .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled),
-  .net-panel button:hover:not(:disabled), .join-inner button:hover:not(:disabled) {
+  .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled) {
     background: var(--lem-face-hi); border-color: var(--burrow-glow);
   }
   .deck button:active:not(:disabled), .pane-controls button:active:not(:disabled),
-  .net-panel button:active:not(:disabled), .join-inner button:active:not(:disabled) {
+  .mud-topbar-actions button:active:not(:disabled) {
     background: var(--lem-face-lo); box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
   }
   .deck-play { background: var(--lem-go) !important; color: var(--parchment) !important; border-color: var(--lem-go) !important; }
@@ -1069,69 +1037,6 @@ const MUD_STYLE = `
   .state-pill[data-tone="live"] .state-dot { background: var(--lem-go); }
   .state-pill[data-tone="failed"] .state-dot { background: var(--lem-alert); }
 
-  .net-panel {
-    background: var(--soil-deep); color: var(--parchment);
-    border: 1px solid var(--burrow-glow); border-radius: 3px;
-    box-shadow: 0 2px 0 rgba(0,0,0,.3);
-    padding: .7rem .8rem; margin-bottom: 1rem;
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .6rem .9rem; align-items: start;
-  }
-  .net-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
-  .net-title { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em; opacity: .85; }
-  .net-state { font-size: .74rem; display: flex; gap: .4rem; flex-wrap: wrap; align-items: baseline; }
-  .net-state b { font-family: ${MONO_STACK}; font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; }
-  .net-state[data-tone="live"] b { color: var(--lem-go-hi); }
-  .net-state[data-tone="failed"] b { color: #FF8C70; }
-  .net-state[data-tone="waiting"] b, .net-state[data-tone="working"] b { color: #F0C070; }
-  .net-state span { opacity: .8; }
-  .net-close { margin-left: auto; }
-  .net-fields, .net-block { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
-  .net-fields { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: .8rem; }
-  .net-field, .net-label { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; opacity: .85; }
-  .net-field { display: flex; flex-direction: column; gap: .2rem; }
-  .net-panel input[type="text"], .net-panel textarea {
-    font-family: ${MONO_STACK}; font-size: .68rem; color: var(--lem-readout); background: var(--lem-readout-bg);
-    border: 1px solid #000; border-radius: 2px; padding: .26rem .4rem; width: 100%; box-sizing: border-box;
-    resize: vertical; overflow-wrap: anywhere;
-  }
-  .net-panel input[readonly], .net-panel textarea[readonly] { opacity: .85; }
-  .net-panel button { align-self: flex-start; font-family: ${MONO_STACK}; font-size: .66rem;
-    text-transform: uppercase; letter-spacing: .08em; }
-  .net-hint { margin: 0; font-size: .7rem; opacity: .75; }
-  .net-problem { margin: 0; font-size: .72rem; color: #FFB4A0; }
-  .node-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .22rem; }
-  .node-row { display: flex; align-items: center; gap: .4rem; font-size: .74rem; }
-  .node-row[data-away="true"] { opacity: .55; }
-  .node-avatar { width: 1.25rem; height: 1.25rem; border-radius: 50%; background: var(--lem-face);
-    color: #16162A; font-family: ${MONO_STACK}; font-size: .52rem; display: inline-flex;
-    align-items: center; justify-content: center; flex: 0 0 auto; }
-  .node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .node-self { font-family: ${MONO_STACK}; font-size: .54rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
-  .node-hand { opacity: 0; }
-  .node-row[data-waving="true"] .node-hand { opacity: 1; animation: hand-wave .8s ease-in-out infinite; }
-  .node-when { margin-left: auto; font-family: ${MONO_STACK}; font-size: .58rem; opacity: .6; }
-
-  .join-card { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
-    background: rgba(8,8,42,.86); padding: 1rem; }
-  /* Setting display at all outranks the browser's own [hidden] rule, so every
-     block here that is hidden by attribute has to say so a second time. */
-  .join-card[hidden], .net-panel[hidden], .net-block[hidden], .join-reply[hidden] { display: none; }
-  .join-inner { background: var(--soil-deep);
-    color: var(--parchment); border: 1px solid var(--burrow-glow); border-radius: 3px;
-    box-shadow: 0 10px 26px rgba(0,0,0,.5);
-    padding: 1.1rem 1.2rem; max-width: 32rem; width: 100%; display: flex; flex-direction: column; gap: .55rem; }
-  .join-eyebrow { margin: 0; font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
-  .join-world { font-family: ${DISPLAY_STACK}; font-size: 1.4rem; margin: 0; }
-  .join-body { margin: 0; font-size: .8rem; opacity: .9; max-width: 52ch; }
-  .join-reply { display: flex; flex-direction: column; gap: .3rem; }
-  .join-inner textarea { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--lem-readout);
-    background: var(--lem-readout-bg); border: 1px solid #000; border-radius: 2px; padding: .3rem .4rem;
-    width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
-  .join-inner button { align-self: flex-start; font-family: ${MONO_STACK}; font-size: .68rem;
-    text-transform: uppercase; letter-spacing: .08em; }
-  .join-dismiss { background: transparent !important; box-shadow: none !important; color: #C6C6E8 !important;
-    text-decoration: underline; padding-left: 0 !important; }
-
   /* ---- a wave, and the node a character is played from ---- */
   .pill-strip { display: flex; align-items: flex-start; gap: .22rem; min-width: 0; }
   .pill-strip .chatpills { flex: 1 1 auto; min-width: 0; }
@@ -1150,7 +1055,30 @@ const MUD_STYLE = `
   .mud-window.remote .pane-controls button { display: none; }
   .mud-window.remote .room-view { box-shadow: inset 0 0 0 2px rgba(60,60,180,.35); }
   @media (prefers-reduced-motion: reduce) {
-    .wave-hand, .node-row[data-waving="true"] .node-hand { animation: none; }
+    .wave-hand { animation: none; }
+  }
+`;
+
+// The shared overlay, re-pointed at the burrow's own palette: soil-deep card,
+// parchment ink, the burrow-glow as the working accent, moss as the live one.
+// Only variables change — every rule stays the component's.
+const MUD_SHARE_SKIN = `
+  .shareOverlay {
+    --so-scrim: rgba(10, 6, 2, .74);
+    --so-card: var(--soil-deep);
+    --so-ink: var(--parchment);
+    --so-muted: var(--chalk);
+    --so-line: var(--soil-light);
+    --so-accent: var(--burrow-glow);
+    --so-good: #9DB36A;
+    --so-warn: var(--burrow-glow);
+    --so-alert: #FF9C82;
+    --so-good-soft: rgba(157, 179, 106, .18);
+    --so-accent-soft: rgba(232, 163, 61, .14);
+    --so-alert-soft: rgba(255, 156, 130, .14);
+    --so-display: ${DISPLAY_STACK};
+    --so-body: ${SANS_STACK};
+    --so-mono: ${MONO_STACK};
   }
 `;
 
@@ -1208,6 +1136,14 @@ function pageScript() {
   const nodeInitials = ${nodeInitials.toString()};
   const inviteLinkFor = ${inviteLinkFor.toString()};
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
+  const shareStepStates = ${shareStepStates.toString()};
+  const activeWaves = ${activeWaves.toString()};
+  const shareMessageFor = ${shareMessageFor.toString()};
+  const replyMessageFor = ${replyMessageFor.toString()};
+  const whatsAppShareUrl = ${whatsAppShareUrl.toString()};
+  const isProbablyMobile = ${isProbablyMobile.toString()};
+  const copyText = ${copyTextToClipboard.toString()};
+  const flashTip = ${flashCopyTip.toString()};
 
   const el = (id) => document.getElementById(id);
   // Which of the shipped burrows is loaded. Every read of the world — the
@@ -2217,6 +2153,19 @@ function pageScript() {
   let worldId = "";
   let worldName = "";
   let nodeClockTimer = null;
+  let mintedBlob = "";
+  let nodeWaveTimer = null;
+
+  // Which seat this page occupies in the handshake — "idle" until something
+  // happens, "sponsor" once an invite is minted here, "joiner" once an invite
+  // is opened here. The overlay's CSS reads it to decide which calls to
+  // action stand at each step; entry distinguishes an invite that arrived as
+  // a link (the hero card owns the reply) from one pasted in as text.
+  function setOverlayRole(role, entry) {
+    const overlay = el("netPanel");
+    overlay.dataset.role = role;
+    overlay.dataset.entry = entry || "";
+  }
 
   function loadP2p() {
     if (!p2pLoad) p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
@@ -2275,10 +2224,14 @@ function pageScript() {
       syncableFacts: function (rows) { return mod.mudSyncableFacts(rows, isState, extraPredicates); },
     });
     room.onStateChanged(function (state) {
-      // The join card exists to produce one reply. Once the channel is open it
-      // has done its job, and a full-screen card over a live burrow is just
-      // something in the way.
-      if (state === "connected") el("joinCard").hidden = true;
+      // The overlay exists to make one connection. The moment the channel is
+      // open its work is done — the lights come back up, and the pill in the
+      // header is the way back in.
+      if (state === "connected") {
+        el("joinCard").hidden = true;
+        closeNetPanel();
+        flashTip(el("statePill"), "connected \\u2014 you're digging together");
+      }
       renderWire();
     });
     room.onPeersChanged(function () { renderNodes(); renderWire(); });
@@ -2326,6 +2279,8 @@ function pageScript() {
     el("shareLink").value = "";
     el("replyOut").value = "";
     el("worldNameInput").readOnly = false;
+    mintedBlob = "";
+    setOverlayRole("idle", "");
     renderWire();
     renderNodes();
     // Last, not first: renderWire restates the note for the state it has just
@@ -2356,10 +2311,29 @@ function pageScript() {
     pill.dataset.tone = label.tone;
     el("statePillWord").textContent = label.pill;
     pill.title = note;
-    el("sharePanel").hidden = !el("shareLink").value;
-    // Once the channel is open the reply has been used; leaving "send this
-    // back" on screen would be asking for something already done.
-    el("answerPanel").hidden = !el("replyOut").value || (room && room.state === "connected");
+    el("netPanel").dataset.tone = label.tone;
+    renderSteps();
+  }
+
+  function renderSteps() {
+    const states = shareStepStates({
+      role: el("netPanel").dataset.role,
+      state: room ? room.state : "idle",
+      hasReply: Boolean(el("replyOut").value),
+    });
+    for (const step of states) {
+      const item = el("step-" + step.key);
+      if (item) item.dataset.status = step.status;
+    }
+  }
+
+  // The scene's two browser cards: this one wears the node's own name, the
+  // far one wears the first peer's the moment there is one to name.
+  function renderScene() {
+    el("sceneYouName").textContent = myDisplayName || "you";
+    const peers = room ? room.peers() : [];
+    const first = peers.find(function (p) { return p.connected; }) || peers[0];
+    el("sceneThemName").textContent = first ? room.displayNameFor(first.peerId) : "your friend";
   }
 
   function relativeWhen(at, nowMs) {
@@ -2372,12 +2346,27 @@ function pageScript() {
     return Math.round(seconds / 86400) + "d";
   }
 
+  // A node is marked waving whether the wave came from one of its claimed
+  // animals (a pane's own wave button) or from the node itself (the roster's
+  // peer-scoped wave) — one hand, two ways to raise it.
+  function wavingPeerTerms(nowMs) {
+    const rows = room.factRows();
+    const terms = new Set();
+    for (const wave of activeWaves(rows, nowMs)) terms.add(wave.waver);
+    for (const character of wavingCharacters(rows, nowMs)) {
+      const owner = claimantOf(rows, character);
+      if (owner !== null) terms.add(peerTerm(owner));
+    }
+    return terms;
+  }
+
   function renderNodes() {
     const listEl = el("nodeList");
     if (!room || !p2p) {
       el("nodeCount").textContent = "";
       listEl.textContent = "";
       el("nodeEmpty").hidden = false;
+      renderScene();
       return;
     }
     const rows = nodeRowsFor({
@@ -2389,7 +2378,7 @@ function pageScript() {
       latestTimestampOf: p2p.latestProvenanceTimestamp,
     });
     const nowMs = Date.now();
-    const waving = wavingCharacters(room.factRows(), nowMs);
+    const waving = wavingPeerTerms(nowMs);
     el("nodeCount").textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
     listEl.textContent = "";
     for (const entry of rows) {
@@ -2398,86 +2387,182 @@ function pageScript() {
       item.dataset.self = String(entry.isSelf);
       item.dataset.away = String(!entry.connected);
       item.dataset.peer = entry.peerId;
-      item.dataset.waving = String(waving.some(function (character) {
-        const owner = claimantOf(room.factRows(), character);
-        return owner !== null && peerTerm(owner) === peerTerm(entry.peerId);
-      }));
+      item.dataset.waving = String(waving.has(peerTerm(entry.peerId)));
       const avatar = document.createElement("span");
       avatar.className = "node-avatar";
       avatar.textContent = nodeInitials(entry.name);
       avatar.title = entry.connected
         ? "connected"
         : "away \\u2014 closed the tab or dropped offline; everything it dug stays";
-      const name = document.createElement("span");
-      name.className = "node-name";
-      name.textContent = entry.name;
+      const dot = document.createElement("i");
+      dot.className = "node-dot";
+      avatar.appendChild(dot);
       const hand = document.createElement("span");
       hand.className = "node-hand";
       hand.textContent = "\\u{1F44B}";
+      avatar.appendChild(hand);
+      const name = document.createElement("span");
+      name.className = "node-name";
+      name.textContent = entry.name;
       const when = document.createElement("span");
       when.className = "node-when";
       when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
+      const fact = document.createElement("span");
+      fact.className = "node-fact";
+      if (entry.lastFact) {
+        const line = entry.lastFact.subject + " " + String(entry.lastFact.predicate || "").replace(/^[a-z0-9_-]+:/i, "") + " " + entry.lastFact.object;
+        fact.textContent = line;
+        fact.title = "last shared: " + line;
+      } else {
+        fact.textContent = "nothing shared yet";
+      }
+      const waveOne = document.createElement("button");
+      waveOne.type = "button";
+      waveOne.className = "node-wave-btn";
+      waveOne.textContent = "\\u{1F44B}";
+      waveOne.title = entry.isSelf ? "wave at everyone" : "wave at " + entry.name + " \\u2014 they see it as a fact arriving";
+      waveOne.setAttribute("aria-label", waveOne.title);
+      waveOne.addEventListener("click", function () { waveAtNode(entry.isSelf ? null : entry.peerId, waveOne); });
       item.appendChild(avatar);
       item.appendChild(name);
-      if (entry.isSelf) {
-        const self = document.createElement("span");
-        self.className = "node-self";
-        self.textContent = "you";
-        item.appendChild(self);
-      }
-      item.appendChild(hand);
       item.appendChild(when);
+      item.appendChild(waveOne);
+      item.appendChild(fact);
       listEl.appendChild(item);
     }
     el("nodeEmpty").hidden = rows.length > 1;
+    renderScene();
+    clearTimeout(nodeWaveTimer);
+    if (waving.size) nodeWaveTimer = setTimeout(renderNodes, 1000);
   }
 
-  async function copyText(text) {
+  // A node's own wave, distinct from an animal's: the fact's subject is the
+  // peer, and its object names the audience — everyone, or one node.
+  async function waveAtNode(targetPeerId, anchor) {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch { /* fall through — the box on the page still holds the text */ }
-    return false;
+      const active = await ensureRoom();
+      await active.wave("peer:" + myPeerId, targetPeerId ? "peer:" + targetPeerId : null);
+      const audience = targetPeerId ? (active.displayNameFor(targetPeerId) || "one node") : "everyone";
+      renderNodes();
+      if (anchor) flashTip(anchor, "you waved at " + audience);
+    } catch (err) {
+      el("wireStateNote").textContent = "couldn't wave (" + (err && err.message ? err.message : err) + ").";
+    }
   }
 
   const openNetPanel = function () {
-    el("netPanel").hidden = false;
+    const overlay = el("netPanel");
+    overlay.hidden = false;
     el("statePill").setAttribute("aria-expanded", "true");
+    const card = overlay.querySelector(".so-card");
+    if (card) card.focus({ preventScroll: true });
   };
   const closeNetPanel = function () {
     el("netPanel").hidden = true;
     el("statePill").setAttribute("aria-expanded", "false");
   };
 
+  function renderInviteShare() {
+    const facts = room ? room.factRows().length : 0;
+    const factsPart = facts ? " \\u00b7 " + facts + (facts === 1 ? " fact travels" : " facts travel") + " when they join" : "";
+    el("inviteSummary").textContent = "invites one person into \\u201c" + worldName + "\\u201d" + factsPart;
+    const message = shareMessageFor({ worldName: worldName, link: el("shareLink").value, thing: "burrow" });
+    el("waShareBtn").href = whatsAppShareUrl(message);
+    el("webShareBtn").hidden = !navigator.share;
+  }
+
+  function renderReplyShare() {
+    const message = replyMessageFor({ worldName: worldName, blob: el("replyOut").value });
+    el("replyWaBtn").href = whatsAppShareUrl(message);
+    el("joinWaBtn").href = whatsAppShareUrl(message);
+    el("replyShareBtn").hidden = !navigator.share;
+    el("joinShareBtn").hidden = !navigator.share;
+  }
+
+  async function mintInvite(anchor) {
+    try {
+      const active = await ensureRoom();
+      const minted = await active.startSharing();
+      mintedBlob = minted.blob;
+      el("shareLink").value = inviteLinkFor(window.location.href, {
+        blob: minted.blob, world: worldId, worldName: worldName,
+      });
+      setOverlayRole("sponsor", "");
+      renderInviteShare();
+      el("replyProblem").hidden = true;
+      openNetPanel();
+      renderWire();
+      await copyText(el("shareLink").value);
+      flashTip(anchor, "link copied \\u2014 send it to one person");
+    } catch (err) {
+      el("replyProblem").textContent = "couldn't create an invite (" + (err && err.message ? err.message : err) + ").";
+      el("replyProblem").hidden = false;
+      openNetPanel();
+    }
+  }
+
   function wireNetPanel() {
     el("netPanelClose").addEventListener("click", closeNetPanel);
+    el("netPanel").addEventListener("click", function (e) {
+      if (e.target === el("netPanel")) closeNetPanel();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !el("netPanel").hidden) closeNetPanel();
+    });
     el("statePill").addEventListener("click", function () {
       if (el("netPanel").hidden) openNetPanel(); else closeNetPanel();
     });
+    if (isProbablyMobile()) el("netPanel").classList.add("so-mobile");
+    // The blobs are made to be copied whole — a click selects everything, so
+    // a manual copy can never take half a code.
+    for (const boxId of ["shareLink", "replyOut", "joinReply"]) {
+      el(boxId).addEventListener("focus", function (e) { e.target.select(); });
+    }
 
     el("shareBtn").addEventListener("click", async function () {
       const shareBtn = el("shareBtn");
       shareBtn.disabled = true;
       try {
-        const active = await ensureRoom();
-        const minted = await active.startSharing();
-        el("shareLink").value = inviteLinkFor(window.location.href, {
-          blob: minted.blob, world: worldId, worldName: worldName,
-        });
-        el("replyProblem").hidden = true;
-        openNetPanel();
-        renderWire();
-        await copyText(el("shareLink").value);
-      } catch (err) {
-        el("replyProblem").textContent = "couldn't create an invite (" + (err && err.message ? err.message : err) + ").";
-        el("replyProblem").hidden = false;
-        openNetPanel();
+        await mintInvite(shareBtn);
       } finally {
         shareBtn.disabled = false;
       }
     });
+    for (const mintId of ["mintInviteBtn", "remintBtn"]) {
+      el(mintId).addEventListener("click", async function () {
+        const btn = el(mintId);
+        btn.disabled = true;
+        try {
+          await mintInvite(btn);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    el("copyLinkBtn").addEventListener("click", async function () {
+      await copyText(el("shareLink").value);
+      flashTip(el("copyLinkBtn"), "link copied \\u2014 send it to one person");
+    });
+    el("copyCodeBtn").addEventListener("click", async function () {
+      await copyText(mintedBlob);
+      flashTip(el("copyCodeBtn"), "code copied \\u2014 they paste it under step 3 on their page");
+    });
+    el("webShareBtn").addEventListener("click", function () {
+      navigator.share({
+        title: "join \\u201c" + worldName + "\\u201d",
+        text: shareMessageFor({ worldName: worldName, link: el("shareLink").value, thing: "burrow" }),
+      }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+    });
+    const shareReplyViaSheet = function () {
+      navigator.share({
+        title: "my reply to \\u201c" + worldName + "\\u201d",
+        text: replyMessageFor({ worldName: worldName, blob: el("replyOut").value }),
+      }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+    };
+    el("replyShareBtn").addEventListener("click", shareReplyViaSheet);
+    el("joinShareBtn").addEventListener("click", shareReplyViaSheet);
+    el("waveAllBtn").addEventListener("click", function () { waveAtNode(null, el("waveAllBtn")); });
 
     // The inviter's page has exactly one paste target, so there is no wrong box
     // to choose. A rejected paste keeps its text so the copy can be fixed.
@@ -2497,15 +2582,18 @@ function pageScript() {
       renderWire();
     });
 
-    el("copyReplyBtn").addEventListener("click", function () { copyText(el("replyOut").value); });
+    el("copyReplyBtn").addEventListener("click", async function () {
+      await copyText(el("replyOut").value);
+      flashTip(el("copyReplyBtn"), "reply copied \\u2014 send it back the same way");
+    });
 
     // The link flow lands somebody on the join card before they have dug
     // anything. This is the other case: a burrow already open, an invite that
     // arrived in a message, and no reason to throw the burrow away to take it.
     el("joinOpenBtn").addEventListener("click", function () {
-      el("invitePanel").hidden = false;
       openNetPanel();
-      el("inviteBox").focus();
+      const box = el("inviteBox");
+      if (box.offsetParent !== null) box.focus();
     });
 
     el("inviteBtn").addEventListener("click", async function () {
@@ -2552,8 +2640,11 @@ function pageScript() {
         problem.hidden = true;
         el("inviteBox").value = "";
         el("replyOut").value = outcome.blob;
+        setOverlayRole("joiner", "paste");
+        renderReplyShare();
         renderWire();
         await copyText(outcome.blob);
+        flashTip(el("copyReplyBtn"), "reply copied \\u2014 send it back the same way");
       } catch (err) {
         problem.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
         problem.hidden = false;
@@ -2595,26 +2686,31 @@ function pageScript() {
         el("joinReplyWrap").hidden = false;
         joinBtn.textContent = "reply created";
         el("joinDismiss").textContent = "close this and start digging";
+        renderReplyShare();
         renderWire();
         await copyText(outcome.blob);
+        flashTip(el("joinCopyBtn"), "reply copied \\u2014 send it back the same way");
       } catch (err) {
         el("joinProblem").textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
         el("joinProblem").hidden = false;
         joinBtn.disabled = false;
       }
     });
-    el("joinCopyBtn").addEventListener("click", function () { copyText(el("joinReply").value); });
-    el("joinDismiss").addEventListener("click", function () {
-      el("joinCard").hidden = true;
-      if (el("replyOut").value) openNetPanel();
+    el("joinCopyBtn").addEventListener("click", async function () {
+      await copyText(el("joinReply").value);
+      flashTip(el("joinCopyBtn"), "reply copied \\u2014 send it back the same way");
     });
+    el("joinDismiss").addEventListener("click", closeNetPanel);
   }
 
   // A link that lost part of itself on the way reads as a mangled link, never
   // as no invite at all.
   async function prepareJoinCard() {
+    setOverlayRole("joiner", "link");
     el("joinCard").hidden = false;
     el("joinWorld").textContent = invite.worldName || "a shared burrow";
+    renderSteps();
+    openNetPanel();
     el("joinBtn").focus();
     const mod = await loadP2p();
     const decoded = mod.decodeInviteBlob(invite.offer);
@@ -2870,7 +2966,7 @@ function pageScript() {
   // Off the boot path on purpose: this fetches the shared P2P asset so the
   // panel can show a real node name and burrow name before anyone clicks
   // anything. A failure here costs sharing, never the digging.
-  ensureIdentity().catch(function () { /* sharing stays unavailable; the burrow does not */ });
+  ensureIdentity().then(renderNodes).catch(function () { /* sharing stays unavailable; the burrow does not */ });
   if (invite) {
     prepareJoinCard().catch(function (err) {
       el("joinProblem").textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";

@@ -173,6 +173,25 @@ test("this node's own row reads its local teach tags, never the relabelled copie
   assert.equal(rows[0].lastActiveAt, Date.parse("2026-07-20T11:00:00.000Z"));
 });
 
+test("a row's last shared fact is the newest real fact — bookkeeping rows count as activity but never show", () => {
+  const rows = nodeRowsFor({
+    peers: [{ peerId: "p2", connected: true }],
+    factRows: [
+      { subject: "zorbnug", predicate: "rdf:type", object: "dog", provenance: "teach:peer:mossy-acorn@2026-07-20T10:00:00.000Z" },
+      { subject: "b2a15260-2d01", predicate: "mgx:waved", object: "presence", provenance: "teach:peer:mossy-acorn@2026-07-20T12:00:00.000Z" },
+    ],
+    myPeerId: "p1",
+    myDisplayName: "striker-ballpark",
+    nameFor,
+    latestTimestampOf: latestProvenanceTimestamp,
+  });
+  const peer = rows.find((r) => r.name === "mossy-acorn");
+  assert.deepEqual(peer.lastFact, { subject: "zorbnug", predicate: "rdf:type", object: "dog" },
+    "the fresher wave counts as activity but the fact shown is the real one");
+  assert.equal(peer.lastActiveAt, Date.parse("2026-07-20T12:00:00.000Z"), "activity still reads the newest tag of all");
+  assert.equal(rows.find((r) => r.isSelf).lastFact, null, "a node with no real fact yet shows none rather than an id-keyed row");
+});
+
 test("a node's monogram takes one letter from each word of its name, and never comes back empty", () => {
   assert.equal(nodeInitials("mossy-acorn"), "ma");
   assert.equal(nodeInitials("striker-ballpark"), "sb");
@@ -217,26 +236,28 @@ test("an address with no offer carries no invite", () => {
   );
 });
 
-test("the page carries the network rail, the join card and the wave, and links to the help page", () => {
+test("the page carries the sharing overlay, the join hero, the wave, and links to the help page", () => {
   const html = renderChatHtml();
   for (const id of [
     "netPanel", "nodeNameInput", "worldNameInput", "wireState", "statePill",
-    "shareBtn", "shareLink", "replyBox", "replyBtn", "replyProblem",
-    "nodeList", "tape", "tapeMeter", "waveBtn", "waveBurst",
+    "shareBtn", "shareLink", "copyLinkBtn", "copyCodeBtn", "webShareBtn", "waShareBtn",
+    "inviteBox", "inviteBtn", "replyBox", "replyBtn", "replyProblem",
+    "nodeList", "waveAllBtn", "tape", "tapeMeter", "waveBtn", "waveBurst",
     "joinCard", "joinWorld", "joinBtn", "joinReply",
+    "step-invite", "step-send", "step-reply", "step-return", "step-connect",
   ]) {
     assert.ok(html.includes(`id="${id}"`), `the page carries #${id}`);
   }
   assert.ok(html.includes('href="./help.html#chat"'), "the chrome's ? deep-links to the chat section of the help page");
-  assert.ok(html.includes('href="./help.html#sharing"'), "the invite controls deep-link to the sharing section");
+  assert.ok(html.includes('href="./help.html#sharing"'), "the overlay deep-links to the sharing section");
 });
 
-test("the inviter's page offers exactly one box to paste a reply into", () => {
+test("the page offers exactly two paste boxes: one for an invite, one for a reply", () => {
   const html = renderChatHtml();
   const pasteTargets = [...html.matchAll(/<textarea[^>]*id="([^"]+)"/g)]
     .map((m) => m[1])
     .filter((id) => !/^(shareLink|replyOut|joinReply)$/.test(id));
-  assert.deepEqual(pasteTargets, ["replyBox"], "every other box on the page is read-only output");
+  assert.deepEqual(pasteTargets.sort(), ["inviteBox", "replyBox"], "every other box on the page is read-only output");
 });
 
 test("the page loads the shared P2P asset rather than bundling networking into itself", () => {

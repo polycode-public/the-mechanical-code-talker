@@ -75,6 +75,9 @@ export const answerText = (row) => row.locator(".bubble").innerText();
  *  somebody has already used. */
 export async function mintInvite(page) {
   const previous = await page.inputValue("#shareLink");
+  // The invite button lives in the page chrome, under the sharing overlay
+  // whenever that is open — close the lights-down first, as a person would.
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#shareBtn");
   await page.waitForFunction(
     (was) => {
