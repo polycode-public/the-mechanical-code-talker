@@ -50,7 +50,11 @@ sub-agents landed this in eleven merges, most needing a hand-reconciled conflict
 `test/adapters/sprite-large-template-files.test.mjs` (several independently discovered and
 worked around the same "does this class have its own centre-moving file" question under different
 names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation). The sprite content
-wave is done; the turning-character demo UI and `tmct_sprite` tool (below) are what's left.
+wave is done, and so is the demo UI for it: `sprites.html` now animates three axes per card at a
+shared 800ms frame delay — the pre-existing mood cycle (top-left, unchanged), a new 5-angle turning
+sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swatch's slot, using the
+`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite` (below)
+is what's left.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -79,35 +83,26 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
-  `ask`, once Gap A's caller wiring (below) lands. The design fork is already decided in the doc's
-  own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
+  `ask`. Gap A is fully landed, so nothing blocks this. The design fork is already decided in the
+  doc's own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 8** — the `tmct_sprite` tool. Mood is a fact (phase 7, landed)
   and the multi-constraint resolver exists (this session's sprite work); still needs the capability
   record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
   property — see the doc's Theme 2 section).
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
   sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
-  `resolveObject`. Needs Gap A's caller wiring.
+  `resolveObject`. Gap A is fully landed, so nothing blocks this.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
-  `session`) replacing the eleven per-page global bags. Needs phases 3 (done), 5's caller wiring,
-  and 8 to exist first.
+  `session`) replacing the eleven per-page global bags. Needs phases 3 and 5 (both done) and 8 to
+  exist first.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
   script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
   remaining holdout (chat's four helpers already converted this session).
-- [ ] **Gap A's caller wiring** — the router half landed this session (`KINDS.MemoryTerm`,
-  `resolver.mjs`, a memory-only `buildCapabilityPlanCtx`), but the eight browser entries
-  (`adventure`/`chat`/`ledger`/`mud`/`plan`/`research`/`spider-fly`/`sprites`) still pass an empty
-  code graph instead of `memoryDir`, and `chat.mjs` still refuses `/plan` outright with "no graph
-  loaded." Blocks phases 6 and 9 above.
 - [ ] **`chat.mjs` still parses the `---tmct_ask---` delimiter** instead of reading
   `dispatchToolStructured`'s `data` directly (Gap B landed the contract this session, but
   `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path
   and the split converge on one variable). `src/services/index.mjs` also only re-exports
   `dispatchTool`, not the structured sibling, for any external consumer that wants it.
-- [ ] **sprites.html turning-character demo**: an animated swatch cycling the five turntable angles
-  next to the existing static emoting character. The page's own variant cycle only steps
-  `mgx:faces`/`mgx:feels` today, so a combined facing-and-pose swatch sits outside it. The full
-  catalog is landed, so this is unblocked and ready to build.
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
