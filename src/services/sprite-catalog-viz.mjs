@@ -51,7 +51,7 @@ import { spriteFactRows } from "../domain/sprite-facts.mjs";
 import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../adapters/corpus/conceptnet.mjs";
 import { join } from "node:path";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
@@ -626,18 +626,27 @@ function sectionHtml(group, entries, { clusterBy = null } = {}) {
  *  `spritesBundleAvailable: true` (ledger-viz.mjs's own ledgerBundleAvailable
  *  idiom) is what adds the two interactive panels at all: the page then embeds
  *  the sprite-facts rows (src/domain/sprite-facts.mjs, derived purely from the
- *  same two template sets) and references the sibling
- *  ./sprites-browser.bundle.js scripts/build-demo-site.mjs builds alongside
- *  it. Both panels need that bundle — the dock for its chat session, the scene
+ *  same two template sets) and references the sprites-browser bundle. Both
+ *  panels need that bundle — the dock for its chat session, the scene
  *  composer for the resolver its parser asks. Left false, the page is the
  *  catalog alone: no dock, no composer, no bundle reference, nothing extra to
- *  404 — including the favicon links, since the CLI's standalone export (also
- *  `spritesBundleAvailable: false`) can't carry a dangling relative
- *  ./favicon.svg either. Both the dock's fact rows and the composer's class
- *  index are always built from the WHOLE catalog, never just `groupId`'s own
- *  slice — a visitor on one group's page can still ask about, or compose,
- *  any real class from any other group. */
-export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, groupId = null } = {}) {
+ *  404 — including the favicon links.
+ *
+ *  `engineBundleJs` (the built sprites-browser bundle's own text, spider-fly-
+ *  viz.mjs's own idiom) inlines that bundle into the page instead of
+ *  referencing it as the sibling `./sprites-browser.bundle.js`
+ *  scripts/build-demo-site.mjs writes alongside the deployed pages — for the
+ *  CLI's standalone export, one downloadable file that runs from file://
+ *  with no sibling assets. Default empty keeps the site build's sibling-file
+ *  arrangement byte-identical, favicon links included; the standalone export
+ *  drops those too, since a relative ./favicon.svg would be a dangling
+ *  external reference the "no sibling assets" export can't carry.
+ *
+ *  Both the dock's fact rows and the composer's class index are always built
+ *  from the WHOLE catalog, never just `groupId`'s own slice — a visitor on
+ *  one group's page can still ask about, or compose, any real class from any
+ *  other group. */
+export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, groupId = null, engineBundleJs = "" } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const clusterBy = {
@@ -657,7 +666,7 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
   const footerEntries = groupId ? entries.filter((e) => e.group === groupId) : entries;
   const footerSwatches = footerEntries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   return renderSpriteCatalogPage({
-    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable,
+    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs,
     footerClassCount: footerEntries.length, footerSwatchCount: footerSwatches,
   });
 }
@@ -690,7 +699,7 @@ function crossPageNavHtml(entries, { currentGroupId = null, includeOverviewLink 
  *  always the WHOLE catalog (never filtered to one group), because the
  *  composer's class index and the dock's fact rows must resolve any real
  *  catalog class regardless of which cards this particular page shows. */
-function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, footerClassCount, footerSwatchCount }) {
+function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs = "", footerClassCount, footerSwatchCount }) {
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
   const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
@@ -742,7 +751,15 @@ function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTempla
   // The bundle carries the scene composer's parser as well as the dock's
   // session, and the catalog script below calls it directly, so it loads ahead
   // of that script rather than beside the dock's own wiring at the end.
-  const spriteBundleScript = !spritesBundleAvailable ? "" : `<script src="./sprites-browser.bundle.js"></script>`;
+  // `engineBundleJs` present means the CLI's standalone export: inline the
+  // bundle text instead of the sibling `<script src>` the deployed site uses,
+  // the same choice spider-fly-viz.mjs/adventure-viz.mjs make for their own
+  // engine bundles.
+  const spriteBundleScript = !spritesBundleAvailable
+    ? ""
+    : engineBundleJs
+      ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>`
+      : `<script src="./sprites-browser.bundle.js"></script>`;
 
   // The composer resolves a typed class name through the real resolver, which
   // reaches the page in that bundle. Without it there is nothing to type into,
@@ -863,7 +880,7 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-${spritesBundleAvailable ? `<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+${spritesBundleAvailable && !engineBundleJs ? `<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="icon" href="./favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">` : ""}
 <style>
