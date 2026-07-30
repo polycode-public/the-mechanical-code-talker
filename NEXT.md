@@ -122,7 +122,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Driving all 5 open items below plus `PLAN_FACT.md`'s landing-order steps 1-2 concurrently, each in
 its own worktree, file-ownership-disjoint. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`.
 
-- [ ] A3 (NEXT #5, mud epoch fold for knows-about): worktree dispatched, Opus. Status: started.
 - [ ] A4 (NEXT #1 + #2 sprites slice, CLI sprites bundle + tmct.ask sprites projection): worktree
   dispatched, Sonnet. Status: started.
 - [ ] A5 (PLAN_FACT step 1, SQL projection columns + read perf guard): worktree dispatched, Opus.
@@ -155,9 +154,6 @@ new open item below once A4 lands.
   These four are genuine page-lifecycle/persistence-timestamp state the engine surface contract
   doesn't model; a `tmct.ready`-style member would need to be added to `tmct-surface.mjs`'s
   contract, not just renamed. Not a bug, just undecided whether it's worth doing.
-- [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
-  claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
-  a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
 
 
 ## Discipline
