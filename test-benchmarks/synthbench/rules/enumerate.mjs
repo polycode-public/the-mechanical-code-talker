@@ -51,17 +51,20 @@
 // keeps the plan's own C(15,<=3) formula, which is far larger, tractable at
 // all). See test/synth-rules.test.mjs's stage-2 test for the exact count.
 
-import { capabilities, effectsOf, KINDS } from "../../../src/domain/router/registry.mjs";
+import { capabilities, effectsOf, KINDS, MEMORY_KINDS } from "../../../src/domain/router/registry.mjs";
 import { backwardChain } from "../../../src/domain/router/resolver.mjs";
 
-// The resolvable entity-kind names registry.mjs's KINDS declares — the ones
-// backed by a real graph class (a seon: ontology class or an mgx: code-graph
-// class), never the free-text/enum slots Query/Kind/Package, whose kinds live
-// in the cap: vocabulary and resolve to no graph entity. Object.keys order is
-// registry.mjs's own declaration order, so this is deterministic without an
-// explicit sort.
+// The CODE-GRAPH-resolvable entity-kind names registry.mjs's KINDS declares —
+// the ones backed by a real code-graph class (a seon: ontology class or an
+// mgx: code-graph class). Excluded, with the registry's own data as the
+// authority: the free-text/enum slots Query/Kind/Package (cap: vocabulary,
+// resolve to no graph entity) and the MEMORY_KINDS (they bind in the
+// conversational-memory graph, and a goal rule's focus binds via ctx.resolve
+// over the code graph — a memory term can never be a focus class here).
+// Object.keys order is registry.mjs's own declaration order, so this is
+// deterministic without an explicit sort.
 export const FOCUS_CLASSES = Object.freeze(
-  Object.keys(KINDS).filter((k) => !String(KINDS[k]).startsWith("cap:")),
+  Object.keys(KINDS).filter((k) => !String(KINDS[k]).startsWith("cap:") && !MEMORY_KINDS.includes(KINDS[k])),
 );
 
 // The closed 2-element powerset of {"scoped","global"} minus the empty set —

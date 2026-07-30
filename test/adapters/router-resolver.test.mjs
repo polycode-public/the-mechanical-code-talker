@@ -195,15 +195,16 @@ test("resolver: the synonym/related frame reaches tmct_related via resolveMemory
     assert.equal(r.selected.name, "tmct_related", q);
     assert.deepEqual(r.selected.input, { term: "sofa" }, q);
     assert.ok(r.proof.some((s) => s.pred === "cap:memory-facts" && s.ok), `${q}: proof carries the memory-facts precondition`);
+    assert.ok(r.proof.some((s) => s.pred === "cap:resolves" && s.param === "term" && s.ok), `${q}: proof carries the memory-graph resolves step`);
   }
 });
 
-test("resolver: a term the memory graph holds no synonym/related facts for stays an honest refuse, never a guess", async () => {
+test("resolver: a term the memory graph holds no facts for stays an honest refuse, never a guess", async () => {
   const ctx = SHARED.ctx;
   const r = await resolveOne("another word for zzznotaterm", ["tmct_related"], ctx);
   assert.equal(r.refused, true);
   assert.deepEqual(r.selected, null);
-  assert.match(r.reason, /no synonym\/related facts/);
+  assert.match(r.reason, /memory graph holds no facts/);
 });
 
 test("imperative reach: a bare imperative the grammar+command register both miss ('explain X') binds via the description frame", async () => {

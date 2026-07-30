@@ -421,10 +421,14 @@ Ordered so each phase is useful on its own and unblocks the next.
 4. **The code-explorer proof.** Route `code-explorer-viz.mjs:148-163` through `tmct_related` /
    `tmct_ask`. This page already has a real graph, so it proves the round trip end to end before any
    engine change.
-5. **Gap A, memory-graph binding.** `KINDS.MemoryTerm` in `registry.mjs`, its `resolves` branch in
-   `resolver.mjs`, and a `buildCapabilityPlanCtx` that accepts `memoryDir` with no code graph. Then
-   the eight entries in Gap A's table pass `memoryDir`, and `/plan` and `tmct_ask` light up on every
-   demo. The largest and most careful phase; one agent, top tier, `src/domain/router/` only.
+5. **Gap A, memory-graph binding.** Router half LANDED: `KINDS.MemoryTerm` in `registry.mjs`
+   (with `MEMORY_KINDS` and a `resolves("term", KINDS.MemoryTerm)` gate on `tmct_related`), the
+   registry-driven oracle switch in `resolver.mjs` (`isMemoryTermSlot` + a two-tier
+   `resolveMemoryTerm`: SKOS concept, then any world-fact subject/object), and
+   `buildCapabilityPlanCtx`'s memory-only mode (`memoryDir` with no graph and no source; code-graph
+   capabilities refuse honestly). Covered by `test/adapters/router-memory-binding.test.mjs`.
+   Remaining: the eight entries in Gap A's table pass `memoryDir` instead of an empty graph, and
+   `chat.mjs` drops its `/plan` no-graph refusal — caller wiring, a separate small wave.
 6. **`fn("list the locations of flies and spiders")`.** Falls out of phase 5 as an `ask` call. Read
    the design fork in Theme 2 first and record which option you took. Prove it against the spider-fly
    grid, with `snapshot()` kept as the fast path.

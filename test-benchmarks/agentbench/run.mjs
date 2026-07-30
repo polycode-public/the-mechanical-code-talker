@@ -185,7 +185,7 @@ export async function createRunCtx() {
   // resolveMemoryTerm(): the driver's MEMORY-graph binding oracle, the sibling
   // of resolve() above — reads the seeded MEMORY_FIXTURE through the same
   // configured-backend resolution memoryFactRows/tmct_related use (off the
-  // dirname(dirname(graphFile)) repo derivation) so a memoryTerm frame pick
+  // dirname(dirname(graphFile)) repo derivation) so a KINDS.MemoryTerm slot
   // (tmct_related's `term`) can ground.
   const resolveMemoryTermCtx = async (term) => {
     const { openConfiguredMemoryBackend, loadMemory: loadMem, readFactRows: readRows } =
