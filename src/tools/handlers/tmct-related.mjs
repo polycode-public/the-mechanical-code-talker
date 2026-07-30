@@ -6,7 +6,7 @@
 import { ToolError } from "../../adapters/config.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { memoryFactRows } from "../memory-fallthrough.mjs";
-import { requiredArg } from "./kit.mjs";
+import { requiredArg, toolResult } from "./kit.mjs";
 
 export async function tmct_related(args, { config }) {
   const term = requiredArg(args, "term");
@@ -21,7 +21,7 @@ export async function tmct_related(args, { config }) {
   if (hit.synonyms.length) lines.push(`synonyms (skos:altLabel): ${hit.synonyms.join(", ")}`);
   if (hit.related.length) lines.push(`related (skos:related): ${hit.related.map((c) => c.prefLabel).join(", ")}`);
   lines.push("(from the memory graph's mgx:synonym / mgx:relatedTo / mgx:similarTo facts)");
-  return lines.join("\n");
+  return toolResult({ content: lines.join("\n"), data: hit });
 }
 
 // The memory graph is this tool's only source — it answers with or without a

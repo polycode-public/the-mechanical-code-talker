@@ -45,7 +45,7 @@
 // why the mechanism exists, just not exercised by any class shown here).
 
 import { classAncestorChain, SPRITE_REGISTRY } from "../domain/sprite-map.mjs";
-import { resolveSpriteAsset } from "../domain/sprite-templates.mjs";
+import { resolveSpriteAsset, matchConstraints } from "../domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../domain/sprite-materials.mjs";
 import { spriteFactRows } from "../domain/sprite-facts.mjs";
 import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
@@ -247,7 +247,16 @@ export function parameterVariantsFor(template) {
  *  generic root-fallback shape, not its own silhouette (this module's own
  *  header names the 19 large-tier classes this applies to). Every
  *  [parameters.*] value and every [match] variant renders through the real
- *  resolveSpriteAsset with the exact property fact it declares. A class
+ *  resolveSpriteAsset with the exact property facts it declares — and a
+ *  parameter sitting ON a [match] variant is rendered with BOTH facts, so a
+ *  facing profile's mood swatch shows the profile wearing that mood and is
+ *  labeled for the pair ("left + happy"). Rendering it on the parameter fact
+ *  alone would resolve a different template altogether (the front-facing
+ *  one) and label it as if it belonged to the profile. A value that a
+ *  match-free template of the same class already offers is listed once, from
+ *  that template: the facing pair and the `*-with-emotion.toml` file both
+ *  carry all six moods, and one swatch per mood is the catalog's unit. A
+ *  class
  *  with templates but no plain among them also gets one extra swatch,
  *  labeled `fallback: true`, showing exactly what the real resolver returns
  *  for that class with NO taught fact — honest engine behaviour, never
@@ -264,19 +273,33 @@ export function tierSwatchesFor(cls, templates, registry, tier) {
       svg: resolveSpriteAsset(cls, [], [], templates, registry, { instanceKey: `${cls}-${tier}-plain` }),
     });
   }
+  const valueKey = (v) => `${v.paramName}:${v.rawValue}`;
+  const shownByUnmatchedTemplate = new Set(
+    forClass.filter((t) => !t.match).flatMap((t) => parameterVariantsFor(t).map(valueKey)),
+  );
   for (const t of forClass) {
-    if (t.match) {
-      const propertyFacts = [{ predicate: t.match.property, object: t.match.value }];
+    // A variant may require several facts at once (sprite-templates.mjs's own
+    // matchConstraints), so the swatch is rendered with EVERY fact its
+    // [match] asks for and labeled for the whole set — "left + moving" for a
+    // combined facing-and-pose file. A one-constraint variant reads exactly
+    // as it did before the plural spelling existed.
+    const constraints = matchConstraints(t);
+    const matchFact = constraints.map((c) => ({ predicate: c.property, object: c.value }));
+    const variantLabel = constraints.map((c) => c.value).join(" + ");
+    const variantKey = constraints.map((c) => c.value).join("-");
+    const matchPrefix = constraints.length ? `${variantLabel} + ` : "";
+    if (constraints.length) {
       swatches.push({
-        tier, label: t.match.value, kind: "variant", property: t.match.property,
-        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-match-${t.match.value}` }),
+        tier, label: variantLabel, kind: "variant", property: constraints.map((c) => c.property).join(" + "),
+        svg: resolveSpriteAsset(cls, [], matchFact, templates, registry, { instanceKey: `${cls}-${tier}-match-${variantKey}` }),
       });
     }
     for (const v of parameterVariantsFor(t)) {
-      const propertyFacts = [{ predicate: v.property, object: v.rawValue }];
+      if (constraints.length && shownByUnmatchedTemplate.has(valueKey(v))) continue;
+      const propertyFacts = [...matchFact, { predicate: v.property, object: v.rawValue }];
       swatches.push({
-        tier, label: v.rawValue, kind: "material", property: v.property, treatment: v.treatment,
-        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${v.paramName}-${v.rawValue}` }),
+        tier, label: `${matchPrefix}${v.rawValue}`, kind: "material", property: v.property, treatment: v.treatment,
+        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${matchPrefix ? `${variantKey}-` : ""}${v.paramName}-${v.rawValue}` }),
       });
     }
   }
@@ -426,6 +449,73 @@ export function answerSpriteQuestion(text, rows) {
   }
 
   return null;
+}
+
+// ---- the animated swatches (pure) ----
+//
+// Each card's large tier carries three animated swatches, one per axis the
+// sprite tier actually varies on: mood (mgx:feels), facing (mgx:faces) and
+// pose (mgx:pose). The page builds their frames client-side out of its own
+// already-rendered swatches (see the inline script below — the same
+// read-the-DOM posture the scene composer's class index takes), but the
+// frame ORDER and the tempo are real logic worth pinning on their own, so
+// they live here as pure functions the page splices in by `.toString()` —
+// the same idiom extractSceneItems and answerSpriteQuestion already use.
+// One delay constant serves all three, so the three can't drift apart into
+// three tempos.
+//
+// A `frame` is `{svg, label}`. An empty return means there is nothing worth
+// animating for that class, and the page leaves its static swatch alone.
+
+/** The step between animated swatch frames, in milliseconds — the mood
+ *  cycle's own established tempo, shared by the facing sweep and the pose
+ *  toggle. */
+export const CYCLE_FRAME_DELAY_MS = 800;
+
+/** The turntable order the facing sweep steps through: one continuous
+ *  rotation from the sprite's own left profile round to its right. `null`
+ *  is the centre pose — the plain sprite, no mgx:faces fact at all — which
+ *  sits in the middle of the sweep exactly where the geometry puts it, so
+ *  the turn reads as a rotation rather than a jump back through front. */
+export const FACING_TURN_ORDER = Object.freeze(["left", "half-left", null, "half-right", "right"]);
+
+/** The mood cycle's frames: the class's plain sprite, then every mood it
+ *  has a rendered swatch for, in the order the templates declare them. Two
+ *  moods is the floor — one mood alternating with plain is a blink, not a
+ *  cycle. Pure; self-contained (no outer refs), `.toString()`-splice safe. */
+export function moodFrameSequence(plainFrame, moodFrames) {
+  const moods = (moodFrames || []).filter(Boolean);
+  if (moods.length < 2) return [];
+  return plainFrame ? [plainFrame, ...moods] : moods;
+}
+
+/** The facing sweep's frames: `order` (FACING_TURN_ORDER) filtered down to
+ *  the facings this class actually has a rendered swatch for, with
+ *  `centreFrame` — the plain, undirected sprite — dropped into the centre
+ *  slot. `facingFrames` is keyed by each swatch's own label, which is its
+ *  real mgx:faces value. A class with one facing or none has no sweep.
+ *  Pure; self-contained, `.toString()`-splice safe. */
+export function turnFrameSequence(order, centreFrame, facingFrames) {
+  const byFacing = facingFrames || {};
+  const frames = [];
+  for (const facing of order || []) {
+    if (facing === null) {
+      if (centreFrame) frames.push({ svg: centreFrame.svg, label: "centre" });
+    } else if (byFacing[facing]) {
+      frames.push({ svg: byFacing[facing].svg, label: facing });
+    }
+  }
+  return frames.length >= 2 ? frames : [];
+}
+
+/** The pose toggle's frames: the class's plain idle sprite alternating with
+ *  its mgx:pose = "moving" one. Both have to be there — a class with no
+ *  moving sprite has no second state to toggle into, and gets nothing
+ *  rather than a still frame pretending to animate. Pure; self-contained,
+ *  `.toString()`-splice safe. */
+export function movingFrameSequence(idleFrame, movingFrame) {
+  if (!idleFrame || !movingFrame) return [];
+  return [{ svg: idleFrame.svg, label: "idle" }, { svg: movingFrame.svg, label: "moving" }];
 }
 
 // ---- rendering ----
@@ -891,35 +981,41 @@ const SPRITE_CATALOG = ${pageData};
   });
   renderScene("");
 
-  // ---- the variant cycle — a card whose large tier carries expression
-  // (mgx:feels) or direction (mgx:faces) variants gains one extra swatch
-  // that steps through them: plain, then each direction, then each face.
-  // Frames are the card's own already-rendered swatches (the same
-  // read-the-DOM posture classIndex takes above — never a second embedded
-  // copy), and one shared interval steps every cycle in sync. Reduced
-  // motion disables the auto-step only; the frame itself is a button, so a
-  // click or Enter always advances one frame by hand. Injected AFTER
-  // buildClassIndexFromDom ran, so a cycle frame never leaks into the
-  // composer's material index.
-  const CYCLE_PROPERTIES = ["mgx:faces", "mgx:feels"];
+  // ---- the animated swatches — a card's large tier gains one moving
+  // swatch per axis its own templates actually vary on: mood (mgx:feels),
+  // facing (mgx:faces) and pose (mgx:pose). Frames are the card's own
+  // already-rendered swatches (the same read-the-DOM posture classIndex
+  // takes above — never a second embedded copy), ordered by the pure
+  // *FrameSequence functions spliced in below, and one shared interval
+  // steps every cycle in sync at one shared delay. The mood cycle leads the
+  // row; the facing sweep and the pose toggle take over the static plain
+  // and happy swatches' own places rather than adding cells, so the row
+  // keeps its width. Reduced motion disables the auto-step only; each frame
+  // is a button, so a click or Enter always advances one frame by hand.
+  // Injected AFTER buildClassIndexFromDom ran, so a moving frame never
+  // leaks into the composer's material index.
+  const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
+  const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
+  const MOOD_PROPERTY = "mgx:feels";
+  const FACING_PROPERTY = "mgx:faces";
+  const POSE_PROPERTY = "mgx:pose";
+  const moodFrameSequence = ${moodFrameSequence.toString()};
+  const turnFrameSequence = ${turnFrameSequence.toString()};
+  const movingFrameSequence = ${movingFrameSequence.toString()};
   const cycleSteppers = [];
-  for (const card of cards) {
-    const swatchRow = card.querySelector('.tier-row[data-tier="large"] .swatches');
-    if (!swatchRow) continue;
-    const frames = [];
-    for (const swatch of swatchRow.querySelectorAll(".swatch")) {
-      if (CYCLE_PROPERTIES.indexOf(swatch.dataset.property || "") === -1) continue;
-      const img = swatch.querySelector(".swatch-img");
-      const label = swatch.querySelector(".swatch-label");
-      if (img && label) frames.push({ svg: img.innerHTML, label: label.textContent.trim() });
-    }
-    if (frames.length < 2) continue;
-    const baseImg = swatchRow.querySelector(".swatch.plain .swatch-img, .swatch.fallback .swatch-img");
-    if (baseImg) frames.unshift({ svg: baseImg.innerHTML, label: card.dataset.cls });
+
+  function frameFromSwatch(swatch) {
+    const img = swatch && swatch.querySelector(".swatch-img");
+    const label = swatch && swatch.querySelector(".swatch-label");
+    if (!img || !label) return null;
+    return { svg: img.innerHTML, label: label.textContent.trim() };
+  }
+
+  function makeCycleSwatch(frames, ariaLabel) {
     const holder = document.createElement("div");
     holder.className = "swatch large cycle";
-    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="step through the '
-      + esc(card.dataset.cls) + ' variants"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="' + esc(ariaLabel)
+      + '"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
     const frameImgEl = holder.querySelector(".swatch-img");
     const frameLabelEl = holder.querySelector(".swatch-label");
     let frameIndex = 0;
@@ -930,12 +1026,43 @@ const SPRITE_CATALOG = ${pageData};
     const stepFrame = () => { frameIndex = (frameIndex + 1) % frames.length; showFrame(); };
     frameImgEl.addEventListener("click", stepFrame);
     showFrame();
-    swatchRow.insertBefore(holder, swatchRow.firstChild);
     cycleSteppers.push(stepFrame);
+    return holder;
+  }
+
+  for (const card of cards) {
+    const swatchRow = card.querySelector('.tier-row[data-tier="large"] .swatches');
+    if (!swatchRow) continue;
+    const cls = card.dataset.cls;
+    const rows = Array.from(swatchRow.querySelectorAll(".swatch"))
+      .map((el) => ({ el, property: el.dataset.property || "", frame: frameFromSwatch(el) }))
+      .filter((r) => r.frame);
+    const baseSwatch = swatchRow.querySelector(".swatch.plain, .swatch.fallback");
+    const baseFrame = frameFromSwatch(baseSwatch);
+
+    const moodRows = rows.filter((r) => r.property === MOOD_PROPERTY);
+    const moodFrames = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame));
+    if (moodFrames.length) {
+      swatchRow.insertBefore(makeCycleSwatch(moodFrames, "step through the " + cls + " expressions"), swatchRow.firstChild);
+    }
+
+    const facingFrames = {};
+    for (const r of rows) { if (r.property === FACING_PROPERTY) facingFrames[r.frame.label] = r.frame; }
+    const turnFrames = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
+    if (turnFrames.length && baseSwatch) {
+      swatchRow.replaceChild(makeCycleSwatch(turnFrames, "watch the " + cls + " turn through every direction"), baseSwatch);
+    }
+
+    const movingRow = rows.find((r) => r.property === POSE_PROPERTY && r.frame.label === "moving");
+    const movingFrames = movingFrameSequence(baseFrame, movingRow && movingRow.frame);
+    if (movingFrames.length) {
+      const happyRow = moodRows.find((r) => r.frame.label === "happy");
+      swatchRow.replaceChild(makeCycleSwatch(movingFrames, "watch the " + cls + " move"), (happyRow || movingRow).el);
+    }
   }
   const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (cycleSteppers.length && !reducedMotion) {
-    setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, 800);
+    setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, CYCLE_FRAME_DELAY_MS);
   }
 })();
 </script>

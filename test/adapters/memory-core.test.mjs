@@ -12,6 +12,7 @@ import {
   emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact, appendFacts,
   appendRule, findRuleByName, readFactRows, normFactTerm,
   resolveRelationChase, resolveRelationChaseReverse,
+  createInMemoryStore, applySeedPayload, cloneMemoryPayload,
 } from "../../src/adapters/memory/core.mjs";
 import { factIdForTriple, legacyFactIdFor } from "../../src/domain/hash.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
@@ -623,4 +624,35 @@ test("the legacy fact-id migration remaps premise ids inside EVERY environment, 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("applySeedPayload: spreads a seed onto the store's own empty payload rather than replacing it outright", () => {
+  const memoryDir = createInMemoryStore();
+  const before = memoryDir.payload;
+  applySeedPayload(memoryDir, { individuals: [{ id: "fact:1", class: FACT_CLASS }] });
+  assert.notEqual(memoryDir.payload, before, "a new payload object, not a mutation of the old one");
+  assert.deepEqual(memoryDir.payload.individuals, [{ id: "fact:1", class: FACT_CLASS }]);
+  assert.deepEqual(memoryDir.payload.classes, before.classes, "scaffolding the seed didn't carry keeps its empty default");
+});
+
+test("applySeedPayload: a null/undefined seed is a no-op — the store's own fresh empty payload is untouched", () => {
+  const memoryDir = createInMemoryStore();
+  const before = memoryDir.payload;
+  applySeedPayload(memoryDir, null);
+  applySeedPayload(memoryDir, undefined);
+  assert.equal(memoryDir.payload, before);
+});
+
+test("cloneMemoryPayload: returns a structurally independent copy, mutating the clone never touches the original", () => {
+  const original = { individuals: [{ id: "fact:1", class: FACT_CLASS }], classes: [] };
+  const clone = cloneMemoryPayload(original);
+  assert.deepEqual(clone, original);
+  assert.notEqual(clone, original);
+  clone.individuals.push({ id: "fact:2", class: FACT_CLASS });
+  assert.equal(original.individuals.length, 1, "the original is untouched by mutating the clone");
+});
+
+test("cloneMemoryPayload: null/undefined payload comes back as null, never an empty object", () => {
+  assert.equal(cloneMemoryPayload(null), null);
+  assert.equal(cloneMemoryPayload(undefined), null);
 });

@@ -15,8 +15,10 @@
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
-import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, countLabel, TOKENS } from "./viz-theme.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
+import { bfsLevels } from "../domain/planning.mjs";
+import { pluralOf } from "../domain/inflect.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -33,23 +35,33 @@ const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
 // themes — a deliberate departure from THEME_TOKENS_CSS's light/dark switch,
 // which every other generated page still follows. --taught/--corpus/--entail/
 // --alert stay the shared semantic provenance tokens; here they're pinned to
-// their dark-theme-friendly values (viz-theme.mjs's own dark token table) so
-// the palette that ships in dark mode elsewhere is what this page always
-// shows. viz-theme.mjs exports only the assembled THEME_TOKENS_CSS string,
-// not its per-mode token table, so the dark set is restated here from that
-// table rather than recomputed.
-const DASH_DARK_CHROME_CSS = `
+// their dark-theme-friendly values, read straight off viz-theme.mjs's own
+// exported TOKENS.dark table so this page's palette can never drift from the
+// one every other generated page's dark mode uses. The tier alphas (.35/.65/1)
+// match TOKENS's own tier scale; the four "soft" tints use higher alphas than
+// THEME_TOKENS_CSS's shared soft tokens on purpose — this dashboard chrome
+// wants a more visible tint against its always-dark background than the
+// light/dark-switching pages need, so those four alphas stay page-specific.
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+const DASH_DARK_CHROME_CSS = (() => {
+  const t = TOKENS.dark;
+  const [taught, corpus, entail] = [hexRgb(t.taught), hexRgb(t.corpus), hexRgb(t.entail)];
+  return `
   :root { color-scheme: dark; }
   body {
-    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --line: #2B3036; --card: #1C2126;
-    --taught: #5FBE8B; --corpus: #6C93BF; --entail: #D9A554; --alert: #D08070;
-    --taught-t1: rgba(95,190,139,.35); --taught-t2: rgba(95,190,139,.65); --taught-t3: rgba(95,190,139,1);
-    --corpus-t1: rgba(108,147,191,.35); --corpus-t2: rgba(108,147,191,.65); --corpus-t3: rgba(108,147,191,1);
-    --entail-t1: rgba(217,165,84,.35); --entail-t2: rgba(217,165,84,.65); --entail-t3: rgba(217,165,84,1);
-    --taught-soft: rgba(95,190,139,.14); --corpus-soft: rgba(108,147,191,.14);
-    --entail-soft: rgba(217,165,84,.16); --alert-soft: rgba(208,128,112,.16);
+    --bg: ${t.bg}; --ink: ${t.ink}; --muted: ${t.muted}; --line: ${t.line}; --card: ${t.card};
+    --taught: ${t.taught}; --corpus: ${t.corpus}; --entail: ${t.entail}; --alert: ${t.alert};
+    --taught-t1: rgba(${taught},.35); --taught-t2: rgba(${taught},.65); --taught-t3: rgba(${taught},1);
+    --corpus-t1: rgba(${corpus},.35); --corpus-t2: rgba(${corpus},.65); --corpus-t3: rgba(${corpus},1);
+    --entail-t1: rgba(${entail},.35); --entail-t2: rgba(${entail},.65); --entail-t3: rgba(${entail},1);
+    --taught-soft: rgba(${taught},.14); --corpus-soft: rgba(${corpus},.14);
+    --entail-soft: rgba(${entail},.16); --alert-soft: rgba(${hexRgb(t.alert)},.16);
   }
 `;
+})();
 
 /** Read the checked-in browser memory-ask-engine bundle
  *  (`src/surfaces/web/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
@@ -453,7 +465,7 @@ function dashboardHtml(stats, { fresh = false } = {}) {
       <div class="tile">
         <span class="tile-label">facts.total</span>
         <span class="tile-value">${total}</span>
-        <span class="tile-sub">${terms} term${terms === 1 ? "" : "s"} tracked</span>
+        <span class="tile-sub">${countLabel(terms, "term")} tracked</span>
       </div>
       <div class="tile tile-tier">
         <span class="tile-label">facts.by-tier</span>
@@ -467,7 +479,7 @@ function dashboardHtml(stats, { fresh = false } = {}) {
       <div class="tile${qualityCls}">
         <span class="tile-label">data.quality</span>
         <span class="tile-value">${s.contradictionCount || 0}</span>
-        <span class="tile-sub">term${s.contradictionCount === 1 ? "" : "s"} with more than one answer</span>
+        <span class="tile-sub">${s.contradictionCount === 1 ? "term" : pluralOf("term")} with more than one answer</span>
       </div>
     </div>
     <div class="barpanels">
@@ -545,7 +557,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false }, focusDigest: focusDigest || null, digestStructures: Array.isArray(digestStructures) ? digestStructures : [] });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
-  const title = `tmct ledger — ${shown} fact${shown === 1 ? "" : "s"}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
+  const title = `tmct ledger — ${countLabel(shown, "fact")}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
   const bundleStr = typeof memoryAskBundle === "string" ? memoryAskBundle : "";
   const hasMemChat = bundleStr.length > 0;
   // The placeholder is honest: the canonical exchange only when its terms are
@@ -833,6 +845,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // escapeHtml/pct by their real names) resolve without a second copy.
   const escapeHtml = esc;
   const pct = ${pct.toString()};
+  // pluralOf underlies countLabel's own default-parameter lookup — spliced
+  // ahead of it so that lookup resolves the same way it does node-side.
+  const pluralOf = ${pluralOf.toString()};
+  const countLabel = ${countLabel.toString()};
+  const bfsLevels = ${bfsLevels.toString()};
   const tierTileHtml = ${tierTileHtml.toString()};
   const microbarsHtml = ${microbarsHtml.toString()};
   const dashboardHtml = ${dashboardHtml.toString()};
@@ -965,7 +982,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       : "";
     let html = '<div class="focuscard"><div class="term">' + esc(focus) + "</div>" +
       '<div class="klass">' + (klass ? esc(klass.phrase + " " + klass.o) : "no class recorded") + "</div>" +
-      '<div class="stats">' + all.length + " facts &middot; " + srcs.size + " source" + (srcs.size === 1 ? "" : "s") +
+      '<div class="stats">' + countLabel(all.length, "fact") + " &middot; " + countLabel(srcs.size, "source") +
       (dates.length ? " &middot; first " + esc(dates[0].slice(0, 10)) + " &middot; last " + esc(dates[dates.length - 1].slice(0, 10)) : "") + "</div>" + digestHtml + "</div>";
     const bracketed = new Set();
     for (const fam of FAMS) {
@@ -1028,13 +1045,16 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     if (!focus) return;
     const color = { taught: cssVar("--taught"), corpus: cssVar("--corpus"), entailed: cssVar("--entail"), entail: cssVar("--entail") };
     const lineC = cssVar("--line"), inkC = cssVar("--ink");
-    const hop1 = new Set(), hop2 = new Set();
-    for (const e of LEDGER.edges) { if (e.s === focus) hop1.add(e.o); if (e.o === focus) hop1.add(e.s); }
-    hop1.delete(focus);
-    for (const e of LEDGER.edges) {
-      if (hop1.has(e.s) && e.o !== focus && !hop1.has(e.o)) hop2.add(e.o);
-      if (hop1.has(e.o) && e.s !== focus && !hop1.has(e.s)) hop2.add(e.s);
-    }
+    const neighborsOf = (term) => {
+      const out = [];
+      for (const e of LEDGER.edges) {
+        if (e.s === term) out.push(e.o);
+        else if (e.o === term) out.push(e.s);
+      }
+      return out;
+    };
+    const [hop1Level, hop2Level] = bfsLevels(focus, neighborsOf, { maxDepth: 2 });
+    const hop1 = new Set(hop1Level || []), hop2 = new Set(hop2Level || []);
     const cx = w / 2, cy = h / 2, r1 = 42, r2 = 68;
     const pos = { [focus]: { x: cx, y: cy } };
     const place = (set, r) => { const a = [...set].sort(); a.forEach((t, i) => { const ang = (2 * Math.PI * i) / a.length - Math.PI / 2; pos[t] = { x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang) }; }); };
@@ -1271,7 +1291,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
             applyLedgerData(fresh);
             const skipped = sentences.length - grounded;
-            statusEl.textContent = sentences.length + " sentence" + (sentences.length === 1 ? "" : "s")
+            statusEl.textContent = countLabel(sentences.length, "sentence")
               + ", " + grounded + " added" + (skipped ? ", " + skipped + " skipped" : "");
           } catch {
             statusEl.textContent = "something went wrong ingesting that";
@@ -1323,7 +1343,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         researchPlayBtn.setAttribute("aria-pressed", String(st.playing));
         researchStatusEl.textContent = !researchQueue ? ""
           : researchQueue.complete
-            ? 'research "' + researchQueue.topic + '" complete \\u2014 ' + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s")
+            ? 'research "' + researchQueue.topic + '" complete \\u2014 ' + countLabel(researchQueue.done.length, "topic")
             : researchQueue.done.length + " done \\u00b7 " + researchQueue.pending.length + " queued";
       }
 

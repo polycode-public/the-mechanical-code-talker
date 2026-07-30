@@ -5,7 +5,7 @@
 // three tables ([games.spider-fly], [games.guess-number], [planning]).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_GAME_CONFIG, resolveGameConfig } from "../../src/domain/game-config.mjs";
+import { DEFAULT_GAME_CONFIG, resolveGameConfig, massScaleFor } from "../../src/domain/game-config.mjs";
 
 test("resolveGameConfig returns the full shipped defaults when given no toml input at all", () => {
   assert.deepEqual(resolveGameConfig(null), DEFAULT_GAME_CONFIG);
@@ -129,4 +129,17 @@ test("resolveGameConfig returns a fully populated object of the same shape every
 
 test("DEFAULT_GAME_CONFIG.spiderFly.spiderMassDecrementPerTurn is 0.5 (slowed from the shipped 1) — the operator's own starve-too-fast fix", () => {
   assert.equal(DEFAULT_GAME_CONFIG.spiderFly.spiderMassDecrementPerTurn, 0.5);
+});
+
+test("massScaleFor reads the spider/fly mass denominator off the given config, one shared source for a HUD bar and a sprite's expression", () => {
+  const config = { maxSpiderMass: 25, maxFlyMass: 10 };
+  assert.equal(massScaleFor("spider", config), 25);
+  assert.equal(massScaleFor("fly", config), 10);
+});
+
+test("massScaleFor: a class with no denominator (an egg, or anything the config doesn't name) is null, never a guessed number", () => {
+  const config = { maxSpiderMass: 25, maxFlyMass: 10 };
+  assert.equal(massScaleFor("egg", config), null);
+  assert.equal(massScaleFor("spider", {}), null);
+  assert.equal(massScaleFor("spider", undefined), null);
 });

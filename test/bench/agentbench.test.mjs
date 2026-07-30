@@ -78,9 +78,13 @@ test("registry: every capability carries its store's safety-gate precondition �
     );
   }
   // the memory-graph view answers with or without a code-map graph, so it
-  // carries memory-facts INSTEAD of graph-loaded, never both.
+  // carries memory-facts INSTEAD of graph-loaded, never both — plus the
+  // resolves gate that binds its term slot in the memory graph.
   const related = preconditionsOf("tmct_related").map((p) => p.pred);
-  assert.deepEqual(related, [PRECOND.memoryFacts]);
+  assert.deepEqual(related, [PRECOND.memoryFacts, PRECOND.resolves]);
+  const relatedResolves = preconditionsOf("tmct_related").find((p) => p.pred === PRECOND.resolves);
+  assert.equal(relatedResolves.param, "term");
+  assert.equal(relatedResolves.as, KINDS.MemoryTerm);
 });
 
 test("registry: accessors resolve — byName / preconditionsOf / effectsOf / parametersOf", () => {

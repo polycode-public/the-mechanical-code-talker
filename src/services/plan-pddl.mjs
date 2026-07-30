@@ -25,6 +25,8 @@
 // is itself a declared class name is a class-to-class edge; anything else is
 // an individual-to-class edge), not a guess.
 
+import { countLabel } from "./viz-theme.mjs";
+
 const attachPrefix = (predicate) => {
   const p = String(predicate ?? "").trim();
   return p.includes(":") ? p : `mgx:${p}`;
@@ -208,7 +210,7 @@ export function planToPddl(plan, { problemName = "tmct-plan", domainName = "tmct
 
   if (actions.length) {
     lines.push("");
-    lines.push(`;; action sequence — findActionPath's own shortest path (${actions.length} move${actions.length === 1 ? "" : "s"})`);
+    lines.push(`;; action sequence — findActionPath's own shortest path (${countLabel(actions.length, "move")})`);
     actions.forEach((action, i) => {
       const before = states[i] || [];
       const after = states[i + 1] || [];

@@ -96,6 +96,6 @@ test("the page still hands the resolver its own state — taxonomy rows, embedde
 
 test("the page asks for an expression by name, never by hand-building an mgx:feels fact row", () => {
   const html = renderSpiderFlyHtml();
-  assert.match(html, /resolveSpriteFace\(\{ class: cls, expression: expression \}\)/);
+  assert.match(html, /resolveSpriteFace\(\{ class: cls, expression: mood \}\)/);
   assert.doesNotMatch(html, /predicate: "mgx:feels"/, "the fact shape is the resolver's business now");
 });

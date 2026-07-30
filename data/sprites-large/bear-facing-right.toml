@@ -3,6 +3,10 @@
 # the two directions stay geometrically identical twins. The mirror flips
 # the lit corner of the shared gradient along with the pose, which reads as
 # the same figure turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
 classes = ["bear"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -31,9 +35,31 @@ svg = """
     <ellipse cx="8.4" cy="6.4" rx="1.4" ry="1" fill="#ffffff" opacity="0.3"/>
     <ellipse cx="10.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
   </g>
+  {{FACE}}
 </svg>
 """
 
 [match]
 property = "mgx:faces"
 value = "right"
+
+# bear-facing-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 7.2); cy and scale are the mirror's own invariants. Because the
+# fragment sits outside the flip group, these are plain unflipped canvas
+# coordinates.
+[face]
+cx = 16.8
+cy = 8.25
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

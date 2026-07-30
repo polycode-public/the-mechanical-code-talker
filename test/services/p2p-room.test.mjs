@@ -436,6 +436,77 @@ test("a peer whose channel closes stays in the list marked away", async () => {
   assert.deepEqual(alice.room.peers(), [{ peerId: "peer-b", displayName: "mossy-acorn", connected: false }]);
 });
 
+test("rebind swaps the store under a live room: peers stay connected, the baseline is rebuilt, and both sides converge on the new store", async () => {
+  const network = createFakeNetwork();
+  const aliceTransports = [];
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", capture: aliceTransports });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await alice.room.afterLocalChange();
+  await settle();
+
+  const freshDir = createInMemoryStore();
+  const outcome = await alice.room.rebind({ memoryDir: freshDir, worldName: "mossy hollow ii", myDisplayName: "amber-fox" });
+  await settle();
+
+  assert.equal(outcome.peers, 1, "the rebind found its connected peer");
+  assert.equal(alice.room.worldName, "mossy hollow ii", "the room now reports the name it was re-bound with");
+  assert.deepEqual(alice.room.peers(), [{ peerId: "peer-b", displayName: "mossy-acorn", connected: true }],
+    "the peer map survives the rebind untouched");
+  assert.deepEqual(bob.room.peers(), [{ peerId: "peer-a", displayName: "amber-fox", connected: true }]);
+  for (const transport of aliceTransports) {
+    assert.equal(transport.connectionState, "connected", "no transport is closed by a rebind — that is the whole point versus close()");
+  }
+
+  const renamed = (await rowsOf(bob.memoryDir))
+    .filter((r) => r.predicate === "mgx:worldName")
+    .some((r) => r.object === "mossy hollow ii");
+  assert.ok(renamed, "the rebind pushed the new store's identity facts to the peer as an ordinary op");
+
+  const pulledBack = findRow(await rowsOf(freshDir), "rover", "mgx:isA");
+  assert.ok(pulledBack, "the rebind's sync-request pulled the peer's view into the fresh store, so the two converge again");
+
+  const idle = await alice.room.afterLocalChange();
+  assert.equal(idle.broadcast, 0, "nothing from the OLD store's baseline leaks into a diff against the new one");
+
+  await appendFacts(freshDir, [teachFact("wren", "mgx:isA", "bird", "sess-a2", "2026-05-01T11:00:00.000Z")]);
+  const sent = await alice.room.afterLocalChange();
+  assert.ok(sent.broadcast >= 1, "a change to the NEW store diffs and broadcasts");
+  await settle();
+  assert.ok(findRow(await rowsOf(bob.memoryDir), "wren", "mgx:isA"), "and the peer merges it");
+});
+
+test("a write racing a rebind lands in the store the rebind installed, never half in each", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  const freshDir = createInMemoryStore();
+  const rebinding = alice.room.rebind({ memoryDir: freshDir });
+  const waving = alice.room.wave("badger-1", "sett-1");
+  await rebinding;
+  await waving;
+  await settle();
+
+  assert.ok(findRow(await rowsOf(freshDir), "badger-1", WAVED_PREDICATE),
+    "the wave queued behind the in-flight rebind and wrote to the new store");
+  assert.equal(findRow(await rowsOf(alice.memoryDir), "badger-1", WAVED_PREDICATE), undefined,
+    "nothing of it leaked into the store the room just left");
+  assert.ok(findRow(await rowsOf(bob.memoryDir), "badger-1", WAVED_PREDICATE),
+    "and it still broadcast to the peer");
+});
+
+test("a closed room refuses to rebind, and a rebind without a store refuses by name", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  await assert.rejects(() => alice.room.rebind({}), /needs the store/);
+  alice.room.close();
+  await assert.rejects(() => alice.room.rebind({ memoryDir: createInMemoryStore() }), /closed/);
+});
+
 test("a joiner picks up the facts already in the room through sync, not only live ops", async () => {
   const network = createFakeNetwork();
   const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });

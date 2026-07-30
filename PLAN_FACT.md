@@ -155,15 +155,22 @@ Give every fact-ASSERTION its own record, not every fact-TRIPLE. Concretely:
   source key" for free: every tag kind already has one. The one gap (peer identity) gets its own
   section below.
 - **Two different sources asserting the same triple get two different records** sharing the
-  `tripleHash` prefix. The SAME source re-asserting the SAME triple upserts onto its own one
-  record. This preserves the G-Set property for the case that actually needs it — repeated or
-  duplicate delivery from one origin over different mesh paths — without merging away distinct
-  origins.
-- **A same-source re-assertion with a NEWER embedded timestamp updates the record in place**
-  (newest tag wins on that one record; `mgx:createdAt` stays first-write-wins). This is an
-  LWW-register per record, keyed by the origin's own assertion timestamp, and it is what keeps the
-  wave mechanic working: `latestProvenanceTimestamp` reads the record's current tag, and a repeat
-  wave refreshes it. Max-of-timestamps is a join, so this stays convergent (Shapiro et al. 2011).
+  `tripleHash` prefix. The SAME source re-asserting the SAME triple resolves onto its own lineage —
+  a genuine no-op for an identical re-delivery, a new head superseding the prior one for an
+  actually newer assertion (next bullet). This preserves the G-Set property for the case that
+  actually needs it — repeated or duplicate delivery from one origin over different mesh paths —
+  without merging away distinct origins.
+- **A same-source re-assertion with a NEWER embedded timestamp supersedes the record instead of
+  overwriting it** (decided, operator, 2026-07-30 — supersedes the earlier draft of this bullet,
+  which called it an in-place update; see "Supersession" below for the full mechanism and why).
+  The new assertion is written under the SAME stable id — `fact:<tripleHash>@<sourceId>` — so
+  nothing already holding that id goes stale; the record it replaces is kept, unmutated, under a
+  new id, linked by `mgx:supersedes`/`mgx:supersededBy`. `mgx:createdAt` still stays
+  first-write-wins on each individual record. This is still an LWW-register in spirit — newest
+  embedded timestamp wins the head slot — but the register's PRIOR values are retained rather than
+  discarded. `latestProvenanceTimestamp` reads the head's own tag exactly as before, so the wave
+  mechanic (a repeat wave refreshing the timestamp) is unaffected. Chain construction is still a
+  join (Shapiro et al. 2011) — see "Supersession" for the proof.
 - **`trustScore`/`trustInputs` move from "stored aggregate on the record" to "computed over the
   group"** — "how much do I trust dog-can-bark" means: fetch every record sharing the
   `tripleHash`, then noisy-OR over each record's own single effective prior. Same math as today,
@@ -362,7 +369,10 @@ the same shape). Four strategies, plus corroboration which is not per-predicate 
   into one answer. Exactly today's `MULTI_VALUED_PREDICATES` behavior.
 - **`latest-observation-wins` (state of the world).** Different objects are successive states,
   not a disagreement; prefer the newest OBSERVATION time, which is not the newest ingestion time
-  — the full rule is in the `observedAt` section below.
+  — the full rule is in the `observedAt` section below. The comparison itself stays read-time (see
+  "Supersession" below), but every time it finds the winner has changed, it records that as an
+  edge between the two groups' own stable ids — a breadcrumb over an already-correct computation,
+  not a new authority, and not replicated.
 - **`first-claim-wins` (registrations).** Different objects race; the OLDEST assertion wins.
   Already the shipped semantic for `mgx:playedBy` (`PLAN_MUD.md`: "first claim wins by
   timestamp"; `latestFact`'s doc comment in `src/domain/p2p/facts.mjs` points the same way). The
@@ -405,7 +415,7 @@ world's state predicates (`src/services/adventure.mjs:178-245`), and the P2P lay
 | --- | --- |
 | `mgx:currently-in`, `mgx:located-in`, `mgx:fixed-in`, `mgx:stands-locked-in`, `mgx:hidden-in` | placements |
 | `mgx:on-top-of`, `mgx:on-plane`, `mgx:under` | positions |
-| `mgx:is-open`, `mgx:hasMass`, `mgx:feels`, `mgx:faces` | mutable state (mass drains per turn) |
+| `mgx:is-open`, `mgx:hasMass`, `mgx:feels`, `mgx:faces`, `mgx:pose` | mutable state (mass drains per turn) |
 | `mgx:display-name`, `mgx:nodeName`, `mgx:worldName` | latest rename wins — `PLAN_MUD.md` already reads these "latest by timestamp" |
 | `mgx:has-exit-<direction>` (the `EXIT_PREDICATE_RE` family) | digging rewires exits |
 
@@ -438,6 +448,105 @@ Two scope notes, both deliberate:
   latest-observation-wins in spirit, but its "time" is the turn counter, not `observedAt`. The
   resolver table serves the CHAT/answer read path; it does not replace the fold, and the fold's
   rows never reach the chat resolver with conflicting sources anyway (one world, one authority).
+
+## Supersession: preserving history instead of overwriting in place
+
+Decided (operator, 2026-07-30), refining two rules stated above: the same-source LWW-register
+update in "The proposed model," and the `latest-observation-wins` strategy just above. Both
+currently describe "the newer one wins" as either an overwrite or a computation redone from
+scratch on every read; this section makes "wins" mean SUPERSEDES — an explicit, walkable edge,
+never a mutation and never a discard. The two mechanisms it touches are structurally different, so
+supersession takes two different shapes.
+
+### Same-source re-assertion: a real, replicated version chain
+
+The rule stated above already changed: a same-source re-assertion with a newer embedded timestamp
+no longer updates its record in place. Concretely:
+
+- The incoming assertion is written under the ORIGINAL stable id —
+  `fact:<tripleHash>@<sourceId>` — so nothing that already holds that id (a
+  `mgx:factJustification` premise list, a citation, a page's cached reference) ever goes stale. It
+  is the HEAD of this source's own lineage for this triple.
+- The record it replaces is neither deleted nor mutated. It is re-keyed to
+  `fact:<tripleHash>@<sourceId>#v<n>` (`n` counting up: how many times this source's own record for
+  this triple has been superseded) and kept, byte-identical in content, as a leaf of the chain.
+- The new head gets `mgx:supersedes`, naming the id(s) it replaces; the demoted record gets
+  `mgx:supersededBy`, naming the id(s) that replaced it. **Both are collections** (id lists), not
+  single values — see below for why.
+- Idempotency is unchanged: an exact re-delivery (byte-identical content AND timestamp) is still a
+  no-op, never a new version. Only a genuinely newer assertion — a later embedded timestamp, or an
+  equal-timestamp tie broken by `observedAt`-presence per the rule already stated for the dated
+  teach frame's wire section — creates one.
+
+**Why a collection, not a single pointer.** In the common case a source's own writes are totally
+ordered by its own clock, and the chain is a straight line: one `supersededBy`, one `supersedes`,
+each a singleton. But nothing in this mesh forbids one logical source having more than one live
+replica — the same node open in two tabs, or a genuine multi-device session — each locally
+superseding the same prior version before the two sides ever sync with each other. That is a real,
+concurrent fork, not a bug, and `mgx:supersededBy` on the old record can then legitimately hold TWO
+successor ids until the peers converge. `mgx:supersedes` mirrors the shape for the same reason,
+though nothing in this write path ever produces a fork on that side — no operation merges two
+prior versions into one new record — so it stays a list of one in practice; kept plural only so the
+shape does not have to change if that ever stops being true. This is the same choice already made
+for contradictions and for the Sybil ceilings: keep-and-resolve, never silently pick a winner that
+erases the other. A genuine fork resolves at READ time by the tie-break the LWW-register rule
+already states — newest embedded timestamp; equal timestamps, `observedAt`-presence wins; still
+tied, codepoint-smallest content wins — walking to whichever `supersededBy` successor that rule
+prefers, not a new rule invented for this.
+
+**Merge stays a join.** `mgx:supersededBy` on a demoted record is a write-once field: absent, then
+set — at most twice, in the fork case above — never cleared and never overwritten to a DIFFERENT
+value once a peer has recorded one. Two peers superseding the same record with the SAME new id
+converge trivially (identical write, identical result); superseding it with two DIFFERENT new ids
+converges to the union of both — an addition to a set, which is a join. Chain construction
+composes with every join this document already establishes (union of provenance tags,
+max-of-timestamp, presence-wins-on-a-tie), so the whole merge stays commutative, associative and
+idempotent — Shapiro et al.'s sufficient condition for convergence, same as everywhere else in this
+plan.
+
+### Cross-object latest-observation-wins: an edge, not a re-key
+
+`latest-observation-wins` resolves ACROSS different `tripleHash` groups sharing one (subject,
+predicate) — a placement's old room and its new one are different objects, hence different
+content-addressed ids, and an id can never be reassigned onto different content the way the
+same-source case reuses its own slot. Supersession here is an EDGE only, drawn between two groups'
+own stable ids (`fact:<tripleHash>`, the group id) when a fresh resolution finds the winner has
+changed since the last one recorded:
+
+- No write path proactively maintains this edge. Every fact behind it is already fully replicated,
+  and the strategy comparison already runs at read time (`effectiveObservedAt` across the
+  object-groups of one subject+predicate, per the section below). Recording "A used to be current,
+  B is now" is a breadcrumb over an already-correct computation, not new authority, and it changes
+  nothing about how the winner is chosen.
+- It is exactly the shape `fact_heads` already is: local, derived, useful for "what changed" views
+  and for the "as of &lt;date&gt;" walk below, and never replicated — writing it into the wire
+  model would manufacture the same class of conflict the aggregate section already rejected a
+  stored, replicated aggregate for. Built alongside `fact_heads` (landing order step 8), not
+  before.
+
+### Walking the chain: "as of &lt;date&gt;" and incremental re-resolution
+
+Both shapes exist so a reader can answer "what was this fact at time T" and "does this new
+candidate beat what's already there" by walking a small chain instead of re-deriving the answer
+from every record in a group on every read.
+
+**Rendering a view at a time.** Given any record in a chain (a head or a demoted leaf) and a
+target instant T: if its own `effectiveObservedAt` is after T, step backward along
+`mgx:supersedes`; if before-or-at T, check every id named in its `mgx:supersededBy` — if one of
+those is ALSO before-or-at T, step forward to it instead, since it is a closer answer. Stop at the
+record whose own instant is before-or-at T and none of whose successors are; that is the value as
+of T. The walk goes both directions on purpose: arriving at a too-old record from one branch of a
+fork can still have a still-valid successor down a DIFFERENT branch that is closer to T without
+overshooting it, and a single-direction walk would miss it.
+
+**Incremental sibling re-resolution.** When a new candidate for a chain arrives — a same-source
+new assertion, or a fresh object-group entering `latest-observation-wins` contention — compare it
+against the walked-to CURRENT head, not against the group's whole history: the head already
+represents everything before it that mattered. If the candidate is newer, it becomes (or, for the
+cross-group case, is recorded as) the new head; if older, it slots in behind whatever it actually
+precedes, found by the same backward walk. This is the practical payoff of never discarding a
+demoted record: comparison is against "the latest fact known" — an O(chain depth to the fork
+point) walk, not an O(group size) scan.
 
 ## `mgx:observedAt`: who sets it, and the exact fallback chain
 
@@ -577,6 +686,16 @@ per Fact individual with `trust` read off the stored attribute; every consumer �
 `renderFactLine` and its ~40 call sites, `findContradictions`, the sync filters, the p2p diff —
 consumes those rows. Under this model `readFactRows` groups records by `tripleHash` and emits one
 row per GROUP, shaped exactly as today plus one addition:
+
+**The group fold reads HEADS only — `superseded_by IS NULL` — never a demoted record.** A record a
+source has since superseded is that source's own past belief, not a second independent vote for
+the current one; folding it in would let one source's OWN edit history inflate its own
+corroboration, exactly the lever the Sybil-resistance section exists to close, just aimed inward
+instead of across fabricated identities. `row.trust`, `row.provenance`, `row.sourceIds`/
+`row.sourceTypes`, and `row.assertions` below are ALL computed over the group's live heads alone.
+Demoted records are real data — walkable via `mgx:supersedes`/`mgx:supersededBy`, per the
+"Supersession" section above — but they answer "what did this source used to say and when," never
+"how much do I currently trust this," which is a question about the present.
 
 - `row.id` = the bare `fact:<tripleHash>` — the group id, byte-identical to today's fact id.
 - `row.provenance` = the members' tags, `" | "`-joined, sorted codepoint order — the same compat
@@ -750,18 +869,39 @@ Riak's history says treat this as real before it hurts: unbounded siblings ("sib
 were a production failure mode severe enough that dotted version vectors were built to bound them
 (Riak docs; Preguiça/Baquero's DVV work). tmct's analog, designed now, triggered later:
 
-- **Trigger:** a `tripleHash` group's live record count crosses `GROUP_ROLLUP_THRESHOLD`
-  (default 64), checked on the write path. No time-based compaction. The defaults (64, and
-  keep-8-per-type below) are decided as the shipped values (operator, 2026-07-30) and are
-  starting guesses, not measurements — revisit them against real store data once `tmct inspect`'s
-  max-group-size metric (landing order, step 3) has something to report.
-- **Action:** keep the newest `ROLLUP_KEEP_PER_TYPE` (default 8) records per source type; roll
-  every older record of type `t` into ONE summary record with id `fact:<tripleHash>@rollup:<t>`,
-  carrying: `mgx:rollupSourceIds` (the absorbed source ids, space-joined), `mgx:rollupCount`,
+**Supersession opens a second, distinct growth axis, and the two need different compaction, not
+one shared rule.** Corroboration growth (above) is many DIFFERENT sources, each contributing its
+own head to the current trust number — compacting it changes what "how much do I trust this"
+reads as, so the rollup pseudo-record must carry forward an approximate trust contribution
+(`rollupPrior`) or the compacted answer would silently under-trust. A same-source supersession
+chain (the "Supersession" section above) is the opposite case: every demoted leaf already
+contributes NOTHING to the group fold (`superseded_by IS NULL` is the fold's own filter), so
+absorbing a source's own old leaves changes no live number at all — only how far back an "as of
+&lt;date&gt;" walk can reach. Treating both as one flat "keep newest K, roll the rest" pool would be
+wrong in a concrete way: a chatty source's many RECENT demoted leaves would rank above a
+quiet-but-currently-live OTHER source's own head by recency alone, and compacting that head away
+is exactly the "changes what I currently trust" mistake this section exists to avoid. So: two
+pools per `(tripleHash, source_type)`, each with its own trigger and its own rollup id, never
+mixed.
+
+**Pool 1 — heads (`superseded_by IS NULL`), the original design, unchanged in shape.**
+
+- **Trigger:** the type's LIVE HEAD count crosses `GROUP_ROLLUP_THRESHOLD` (default 64), checked on
+  the write path. No time-based compaction. The defaults (64, and keep-8-per-type below) are
+  decided as the shipped values (operator, 2026-07-30) and are starting guesses, not measurements —
+  revisit them against real store data once `tmct inspect`'s max-group-size metric (landing order,
+  step 3) has something to report.
+- **Action:** keep the newest `ROLLUP_KEEP_PER_TYPE` (default 8) heads; roll every older head of
+  type `t` into ONE summary record with id `fact:<tripleHash>@rollup:<t>`, carrying:
+  `mgx:rollupSourceIds` (the absorbed source ids, space-joined), `mgx:rollupCount`,
   `mgx:rollupEarliest`/`mgx:rollupLatest` (assertion-time bounds), and `mgx:rollupPrior` — the
-  noisy-OR base `1 − ∏(1 − p_i)` over the absorbed records' effective priors, recency NOT baked
-  in. At read time the rollup joins the group fold as one pseudo-record whose recency comes from
-  `rollupLatest`. The absorbed records are deleted.
+  noisy-OR base `1 − ∏(1 − p_i)` over the absorbed records' effective priors, recency NOT baked in.
+  At read time the rollup joins the group fold as one pseudo-record whose recency comes from
+  `rollupLatest` — it DOES count toward current trust, approximating what the absorbed heads
+  contributed. A rolled-up head's own supersession chain (if it had one) rolls up with it: the
+  chain is only reachable from a head or from another chain member, and once the head itself is
+  summarized, its demoted history is no longer the current answer to any query this plan defines,
+  so it absorbs into the same summary rather than being orphaned.
 - **Replication safety — the part that makes this a design and not a wish.** Deleting from a
   replicated grow-only set is not expressible as a G-Set operation; an uncoordinated delete gets
   resurrected by the next sync. Two pieces close the hole:
@@ -772,15 +912,36 @@ were a production failure mode severe enough that dotted version vectors were bu
   - On ANY merge path, an incoming assertion record whose source id appears in one of its group's
     rollup id-lists is dropped, not inserted — a late or re-synced copy of an absorbed assertion
     is recognized and stays absorbed.
-- **What compaction costs, stated plainly:** absorbed assertions lose their individual
-  timestamps and per-record audit lines; the count, the id list, the time bounds, and the trust
-  contribution survive. The newest-K window means the recent, disputable tail is always intact.
+- **What compaction costs, stated plainly:** absorbed heads lose their individual timestamps and
+  per-record audit lines; the count, the id list, the time bounds, and the trust contribution
+  survive. The newest-K window means the recent, disputable tail is always intact.
   `rollupSourceIds` grows linearly with absorbed count (~25 bytes/id — a thousand absorbed ids is
   ~25 KB against the ~1 MB of records they replace); if id lists ever dominate, a
   counting/Bloom representation is the successor, not designed here.
-- **When NOT to compact:** never across source TYPES (a rollup is one type, so type ceilings and
-  priors stay computable), never the sole record of a type, and never for groups under the
-  threshold — the default state of nearly every fact is "no rollup exists".
+
+**Pool 2 — demoted leaves of one source's own chain, compacted independently and more freely.**
+
+- **Trigger:** one source's own chain depth for one triple crosses `CHAIN_ROLLUP_THRESHOLD`
+  (default 8 — far lower than pool 1's, since nothing here is trust-sensitive and there is no
+  reason to let a chatty source's history grow large before trimming it).
+- **Action:** keep the newest `CHAIN_KEEP_DEPTH` (default 2 — the head plus one demoted
+  predecessor, enough for "what did it just say before this" without walking a rollup) demoted
+  leaves of that chain; roll every older leaf into ONE summary record with id
+  `fact:<tripleHash>@<sourceId>#rollup`, carrying the absorbed ids, their count, and their time
+  bounds — no `rollupPrior`, since these were never trust-contributing and a compacted chain
+  segment must not start contributing on the way out. An "as of &lt;date&gt;" walk that reaches the
+  rollup and needs a point inside its absorbed span gets the rollup's own bounds as the best
+  available answer ("sometime in this window"), not a fabricated exact instant — the same honest
+  degradation the rest of this plan insists on elsewhere.
+- **Replication safety:** identical to pool 1's — rollup records replicate and merge by union;
+  merging in a source's own already-absorbed id is a no-op re-absorption, not a re-insertion.
+- **This pool needs no `rollupPrior`, no type ceiling interaction, and no read-time trust
+  recomputation**, which is what makes it safe to trigger far more eagerly than pool 1.
+
+- **When NOT to compact (both pools):** never across source TYPES (a rollup is one type, so type
+  ceilings and priors stay computable for pool 1), never the sole record of a type/chain, and
+  never for a pool under its own threshold — the default state of nearly every fact is "no rollup
+  exists" in either pool.
 
 `PLAN_MUD.md` already names whole-store growth (and retraction tombstones) as open for the mesh at
 large; this section resolves the fact-sibling slice of it only.
@@ -799,22 +960,23 @@ nothing sqlite-specific, works against Postgres/MySQL/Aurora as written:
 
 ```sql
 CREATE TABLE IF NOT EXISTS facts (
-  id           TEXT PRIMARY KEY,   -- "fact:<tripleHash>@<sourceId>"
-  triple_hash  TEXT NOT NULL,      -- "fact:<tripleHash>" — the group key and public/compat fact id
-  subject      TEXT NOT NULL,
-  predicate    TEXT NOT NULL,
-  object       TEXT NOT NULL,
-  source_id    TEXT NOT NULL,      -- "src:corpus:conceptnet", "src:teach-node:7f3a9c2e", "src:none"
-  source_type  TEXT NOT NULL,      -- SOURCE_PRIOR key ("corpus", "teach", ...); "" for src:none
-  trust_score  REAL NOT NULL,      -- this record's OWN effective prior — never the group aggregate
-  created_at   TEXT NOT NULL,
-  observed_at  TEXT,               -- nullable BY DESIGN: stored only when a caller supplied one
-  json         TEXT NOT NULL,      -- the full individual — source of truth, same as today
-  UNIQUE (triple_hash, source_id)
+  id            TEXT PRIMARY KEY,  -- "fact:<tripleHash>@<sourceId>", or "...#v<n>" once superseded
+  triple_hash   TEXT NOT NULL,     -- "fact:<tripleHash>" — the group key and public/compat fact id
+  subject       TEXT NOT NULL,
+  predicate     TEXT NOT NULL,
+  object        TEXT NOT NULL,
+  source_id     TEXT NOT NULL,     -- "src:corpus:conceptnet", "src:teach-node:7f3a9c2e", "src:none"
+  source_type   TEXT NOT NULL,     -- SOURCE_PRIOR key ("corpus", "teach", ...); "" for src:none
+  trust_score   REAL NOT NULL,     -- this record's OWN effective prior — never the group aggregate
+  created_at    TEXT NOT NULL,
+  observed_at   TEXT,              -- nullable BY DESIGN: stored only when a caller supplied one
+  superseded_by TEXT,               -- nullable: the common-case single successor id, NULL = head
+  json          TEXT NOT NULL      -- the full individual — source of truth, same as today
 );
 CREATE INDEX IF NOT EXISTS facts_by_triple_hash       ON facts(triple_hash);
 CREATE INDEX IF NOT EXISTS facts_by_subject_predicate ON facts(subject, predicate);
 CREATE INDEX IF NOT EXISTS facts_by_predicate_object  ON facts(predicate, object);
+CREATE INDEX IF NOT EXISTS facts_current              ON facts(triple_hash, source_id, superseded_by);
 ```
 
 Fixes and decisions relative to this document's earlier draft of the same table, all made
@@ -824,9 +986,24 @@ deliberately:
   source key under this model, including the `src:none` fallback, so NULL has no meaning here.
   Renamed because corpus/reference sources aren't nodes; the column holds the assertion key,
   which is a Source id.
-- `UNIQUE (triple_hash, source_id)` added: implied by the id construction, but stating it as a
-  constraint makes the model's core invariant a database-enforced fact, and it's the natural
-  upsert conflict target (`ON CONFLICT (triple_hash, source_id)`).
+- **`UNIQUE (triple_hash, source_id)` REMOVED, superseded by supersession** (this document's
+  earlier draft had it; the "Supersession" section above is why it no longer holds). Once a
+  source's own re-assertion is kept rather than discarded, a demoted record and its head share the
+  same `(triple_hash, source_id)` pair by construction — that pair is no longer a database-provable
+  uniqueness fact, only "at most one record with this pair has `superseded_by IS NULL`," an
+  application-enforced invariant (checked by the writer before insert), not a schema constraint.
+  A `WHERE superseded_by IS NULL` partial unique index would express it directly, but partial
+  indexes aren't universally portable across the Postgres/MySQL/Aurora targets this schema is
+  written for, so the invariant stays at the application layer and `facts_current` (a plain,
+  portable composite index) makes the "find the head for this source" query fast without claiming
+  to enforce uniqueness itself.
+- `superseded_by` is a nullable projection of the FULL `mgx:supersededBy` collection living in the
+  JSON blob — the single common-case successor, fast to filter on (`WHERE superseded_by IS NULL`
+  finds every live head in one indexed scan). The rare fork case (more than one successor) is only
+  ever visible in the blob; a forked record's projection column holds one of the two arbitrarily,
+  which is fine because the column exists purely to make "is this a head" and "what superseded it,
+  usually" cheap, never to be the source of truth for the fork itself. `mgx:supersedes` gets no
+  column at all — walking backward is rarer than filtering for heads, and it's one JSON read away.
 - `trust_score` NOT NULL with its meaning pinned in the comment: the per-record prior is a
   write-time constant; the GROUP aggregate deliberately has no column (see the head discussion —
   a stored aggregate without its recompute contract is a stale-read bug waiting).
@@ -899,8 +1076,11 @@ late still merge cleanly, because the wire re-derives the same ids from the same
 Shipped seeds (`chat-seed.json`, the init corpora) regenerate at build time through `appendFacts`
 and need no data migration — they come out in the new shape on the next `npm run roll`. The SHACL
 gate (`assertIndividualValid`, `ontology/memory-shapes.ttl`) needs its Fact shape extended for
-`mgx:sourceId`/`mgx:observedAt` and the `@`-suffixed id form BEFORE the write path flips; the gate
-throws on violations, so shipping the writer first would brick every write.
+`mgx:sourceId`/`mgx:observedAt`, the `@`-suffixed id form, the `#v<n>` demoted-record id form, and
+the optional `mgx:supersedes`/`mgx:supersededBy` collections (present only once a chain's first
+supersession happens — absent, never empty, on every record migration itself produces) BEFORE the
+write path flips; the gate throws on violations, so shipping the writer first would brick every
+write.
 
 ## Landing order
 
@@ -911,9 +1091,13 @@ Each step is independently green; nothing below requires a later step to functio
 2. **Stable node id + tag grammar** (`#node:<id>` segment, `src:teach-node:` derivation,
    relabel + chip strip). Wire-compatible with old peers by construction.
 3. **The re-key**: per-assertion writes in `appendFact`/`appendFacts`, the on-load migration, the
-   `readFactRows` group fold + `computeAssertionGroupTrust`, SHACL shape update. This is the big,
-   subtle step; its blast radius is `core.mjs`, `trust.mjs`, their test files, and every
-   trust-expectation pin in the estate.
+   `readFactRows` group fold + `computeAssertionGroupTrust`, SHACL shape update, AND the
+   same-source supersession chain ("Supersession" above — re-key the demoted record to
+   `#v<n>`, write `mgx:supersedes`/`mgx:supersededBy`, keep the head at the stable id). One step:
+   a same-source re-assertion has always needed the re-key logic to detect "this is the same
+   source updating its own record," and supersession is what that detection now does instead of an
+   in-place mutation. This is the big, subtle step; its blast radius is `core.mjs`, `trust.mjs`,
+   their test files, and every trust-expectation pin in the estate.
 4. **Resolver table + `effectiveObservedAt` + `findContradictions` re-wire** (strategy enum,
    widened merge set, tie routing).
 5. **The dated teach frame** (`datedTeachSuffix` probe in `normalize.mjs`, the teach lanes'
@@ -929,7 +1113,9 @@ Each step is independently green; nothing below requires a later step to functio
    head when one exists and falling back to the group fold when none does, and the
    recency-stays-read-time rule enforced by construction (heads store the aggregate BASE only).
    Never replicated, never exported — local derived state, exactly as the aggregate section
-   specifies.
+   specifies. The cross-object `latest-observation-wins` supersession edge ("Supersession" above)
+   is built alongside this step, for the same reason: both are local, derived breadcrumbs over an
+   already-correct read-time computation, never wire state.
 
 Bench and playtest coverage for the sibling-resolution surface ships AHEAD of all of this and is
 already landed: infbench's `c2SiblingResolution` template (INF-6, 20 cases — repeat-teach

@@ -174,7 +174,43 @@ async function resumedPosition(memoryDir) {
 
 // ---- the world-state fold ----------------------------------------------------
 
-const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
+// A snapshot subject is `base@turnN`, or `base@epochE@turnN` once a recast has
+// moved the world past epoch 0 — the fold below reads both, and epoch-0 writes
+// keep the bare form so an unrecast store never changes shape.
+const SNAPSHOT_RE = /^(.+?)@(?:epoch(\d+)@)?turn(\d+)$/;
+
+/** Which run of the world a store is on. Recasting a shared world (mud.html's
+ *  RESET, a slider, the scenario dropdown) reopens the same deterministic
+ *  instance ids over a fresh store while peers may still hold the old run's
+ *  snapshots — this marker is how every reader agrees the world has started
+ *  over. It is an ordinary add-only fact: each recast appends a larger value,
+ *  the fold takes the max, and merging two peers' stores converges because max
+ *  is order-free. */
+export const WORLD_EPOCH_PREDICATE = "mgx:world-epoch";
+const WORLD_EPOCH_SUBJECT = "world";
+
+/** The bare triple a recast writes to move the world onto `epoch`. The caller
+ *  supplies provenance the same way it does for the seed facts, so the marker
+ *  travels (and folds) as a world row. */
+export function worldEpochFact(epoch) {
+  return { subject: WORLD_EPOCH_SUBJECT, predicate: WORLD_EPOCH_PREDICATE, object: String(epoch) };
+}
+
+/** `{ base, epoch, turn }` for a snapshot subject, or null for a base subject.
+ *  The one parser every reader outside this file should use — a local
+ *  `@turn(\d+)$` regex reads an epoch-stamped subject's base as
+ *  "mole-1@epoch2", which matches no character. */
+export function parseSnapshotSubject(subject) {
+  const m = SNAPSHOT_RE.exec(String(subject || ""));
+  return m ? { base: m[1], epoch: m[2] ? Number(m[2]) : 0, turn: Number(m[3]) } : null;
+}
+
+/** The snapshot subject a turn writes: bare `@turnN` while the world is on
+ *  epoch 0 (every store that has never been recast, and every fact written
+ *  before epochs existed), the epoch-stamped form after. */
+export function snapshotSubject(base, turn, epoch = 0) {
+  return epoch > 0 ? `${base}@epoch${epoch}@turn${turn}` : `${base}@turn${turn}`;
+}
 const PLACEMENT_PREDICATES = new Set([
   "mgx:currently-in", "mgx:located-in", "mgx:fixed-in", "mgx:stands-locked-in", "mgx:hidden-in",
 ]);
@@ -242,6 +278,9 @@ const MUD_STATE_PREDICATES = new Set([
   KNOWS_ABOUT_PREDICATE,
   DISPLAY_NAME_PREDICATE,
   "rdf:type",
+  // Which run the world is on IS live world state: a peer that misses the
+  // recast marker keeps folding the old run's snapshots as current.
+  WORLD_EPOCH_PREDICATE,
 ]);
 
 /** Whether `predicate` carries live world state — where a thing stands, what
@@ -269,41 +308,61 @@ export function worldIndividualNames(rows) {
 }
 
 /** Fold fact rows into the CURRENT world state: per subject, the newest
- *  placement (base row = turn 0, @turnN snapshots override), the newest
- *  open/closed state, the newest mass, the exit map, and the turn counter (the
- *  largest @turnN suffix written so far — derived, never stored). Pure. */
+ *  placement (base row = turn 0 of the current epoch, snapshots override), the
+ *  newest open/closed state, the newest mass, the exit map, the turn counter
+ *  (the largest snapshot turn written in the current epoch — derived, never
+ *  stored), and the epoch itself.
+ *
+ *  Rows rank by the (epoch, turn) pair, so a recast can never be outranked by
+ *  the run it replaced: a peer's turn-9 snapshot from before the recast loses
+ *  to a turn-1 snapshot written after it. Base rows carry no stamp of their
+ *  own and rank as turn 0 of the CURRENT epoch — a recast re-seeds the same
+ *  deterministic ids, so the shard's own rows are exactly the state the new
+ *  run starts from. A store with no epoch marker and no stamped snapshot is
+ *  wholly on epoch 0 and folds as it always has. Pure. */
 export function foldWorldState(factRows) {
-  const placements = new Map(); // subject -> { predicate, object, turn }
-  const positions = new Map();  // subject -> { predicate, object, turn }
-  const openness = new Map();   // subject -> { open, turn }
-  const masses = new Map();     // subject -> { value, turn }
+  const rows = factRows || [];
+  let epoch = 0;
+  for (const row of rows) {
+    if (row.predicate === WORLD_EPOCH_PREDICATE) {
+      const marked = Number(row.object);
+      if (Number.isInteger(marked) && marked > epoch) epoch = marked;
+      continue;
+    }
+    const m = SNAPSHOT_RE.exec(row.subject);
+    if (m && m[2] && Number(m[2]) > epoch) epoch = Number(m[2]);
+  }
+  const placements = new Map(); // subject -> { predicate, object, turn, epoch }
+  const positions = new Map();  // subject -> { predicate, object, turn, epoch }
+  const openness = new Map();   // subject -> { open, turn, epoch }
+  const masses = new Map();     // subject -> { value, turn, epoch }
   const exits = new Map();      // room -> Map(direction -> room)
   let turnCount = 0;
-  for (const row of factRows || []) {
+  const outranks = (rowEpoch, turn, prior) =>
+    !prior || rowEpoch > prior.epoch || (rowEpoch === prior.epoch && turn >= prior.turn);
+  for (const row of rows) {
+    if (row.predicate === WORLD_EPOCH_PREDICATE) continue;
     const m = SNAPSHOT_RE.exec(row.subject);
     const base = m ? m[1] : row.subject;
-    const turn = m ? Number(m[2]) : 0;
-    if (m) turnCount = Math.max(turnCount, turn);
+    const rowEpoch = m ? (m[2] ? Number(m[2]) : 0) : epoch;
+    const turn = m ? Number(m[3]) : 0;
+    if (m && rowEpoch === epoch) turnCount = Math.max(turnCount, turn);
     if (PLACEMENT_PREDICATES.has(row.predicate)) {
-      const prior = placements.get(base);
-      if (!prior || turn >= prior.turn) placements.set(base, { predicate: row.predicate, object: row.object, turn });
+      if (outranks(rowEpoch, turn, placements.get(base))) placements.set(base, { predicate: row.predicate, object: row.object, turn, epoch: rowEpoch });
       continue;
     }
     if (POSITION_PREDICATES.has(row.predicate)) {
-      const prior = positions.get(base);
-      if (!prior || turn >= prior.turn) positions.set(base, { predicate: row.predicate, object: row.object, turn });
+      if (outranks(rowEpoch, turn, positions.get(base))) positions.set(base, { predicate: row.predicate, object: row.object, turn, epoch: rowEpoch });
       continue;
     }
     if (row.predicate === OPEN_PREDICATE) {
-      const prior = openness.get(base);
-      if (!prior || turn >= prior.turn) openness.set(base, { open: row.object === "true", turn });
+      if (outranks(rowEpoch, turn, openness.get(base))) openness.set(base, { open: row.object === "true", turn, epoch: rowEpoch });
       continue;
     }
     if (row.predicate === MASS_PREDICATE) {
       const value = Number(row.object);
       if (!Number.isFinite(value)) continue; // masses hold numbers; an unparsable one is no mass at all
-      const prior = masses.get(base);
-      if (!prior || turn >= prior.turn) masses.set(base, { value, turn });
+      if (outranks(rowEpoch, turn, masses.get(base))) masses.set(base, { value, turn, epoch: rowEpoch });
       continue;
     }
     const exit = EXIT_PREDICATE_RE.exec(row.predicate);
@@ -312,7 +371,7 @@ export function foldWorldState(factRows) {
       exits.get(row.subject).set(exit[1], row.object);
     }
   }
-  return { placements, positions, openness, masses, exits, turnCount };
+  return { placements, positions, openness, masses, exits, turnCount, epoch };
 }
 
 /** A subject's CURRENT within-room position, or null. A position goes stale
@@ -323,7 +382,7 @@ export function currentPosition(state, subject) {
   const pos = state.positions.get(subject);
   if (!pos) return null;
   const place = state.placements.get(subject);
-  if (place && pos.turn < place.turn) return null;
+  if (place && (pos.epoch < place.epoch || (pos.epoch === place.epoch && pos.turn < place.turn))) return null;
   return pos;
 }
 
@@ -551,7 +610,7 @@ export function runNpcPass({ rows, state, k, families, playerRoomAfter }) {
     if (!covered) continue;
     const linked = [...(state.exits.get(from)?.values() ?? [])].includes(target);
     if (!linked) continue;
-    writes.push({ subject: `${npc}@turn${k}`, predicate: effectPredicate, object: target });
+    writes.push({ subject: snapshotSubject(npc, k, state.epoch), predicate: effectPredicate, object: target });
     if (playerRoomAfter === target) lines.push(`the ${npc} walks in.`);
     else if (playerRoomAfter === from) lines.push(`the ${npc} leaves.`);
   }
@@ -704,8 +763,8 @@ export async function recordMassDrain(memoryDir, { world, subject, drainPerTurn,
   const left = Math.max(0, Math.round((mass - drainPerTurn) * 100) / 100);
   const k = state.turnCount + 1;
   await writeWorldTurn(memoryDir, world, k, [
-    { subject: `${subject}@turn${k}`, predicate: MASS_PREDICATE, object: String(left) },
-    ...(left > 0 ? [] : [{ subject: `${subject}@turn${k}`, predicate: "mgx:currently-in", object: STARVED_PLACE }]),
+    { subject: snapshotSubject(subject, k, state.epoch), predicate: MASS_PREDICATE, object: String(left) },
+    ...(left > 0 ? [] : [{ subject: snapshotSubject(subject, k, state.epoch), predicate: "mgx:currently-in", object: STARVED_PLACE }]),
   ], cache);
   return { mass: left, starved: left <= 0 };
 }
@@ -724,6 +783,9 @@ export async function recordMassDrain(memoryDir, { world, subject, drainPerTurn,
 // schedule) stay out of the view: hidden means hidden.
 
 const VIEW_EXCLUDED_PREDICATES = new Set([
+  // The recast counter is bookkeeping, not scenery — "World mgx:world-epoch 2"
+  // must never read back as room prose.
+  WORLD_EPOCH_PREDICATE,
   "mgx:hidden-in", "mgx:is-open", "mgx:is-npc", "mgx:is-container",
   // A bare number reads as an untranslated triple in room prose ("Mole-1
   // mgx:hasMass 8"). Mass reaches a player through the verbs that change it.
@@ -1293,7 +1355,7 @@ async function handleGoVerb(ctx) {
   const predator = predatorIn(rows, state, target);
   if (predator) {
     await writeWorldTurn(memoryDir, world, k, [
-      { subject: `${actingSubject}@turn${k}`, predicate: "mgx:currently-in", object: CONSUMED_PLACE },
+      { subject: snapshotSubject(actingSubject, k, state.epoch), predicate: "mgx:currently-in", object: CONSUMED_PLACE },
     ], cache);
     return answer(
       `you go ${cmd.direction} into the ${target} — and the ${predator} is waiting. It eats the ${actingSubject}. That's the end of its run.`,
@@ -1302,7 +1364,7 @@ async function handleGoVerb(ctx) {
     );
   }
   return commit(
-    [{ subject: `${actingSubject}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
+    [{ subject: snapshotSubject(actingSubject, k, state.epoch), predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
     `you go ${cmd.direction}. Now in the ${target}.`,
     `go — the taught "go" family fired; ${actingSubject} moves ${here} -> ${target}`,
     `move through the world (now in the ${target})`,
@@ -1339,7 +1401,7 @@ async function handleTakeVerb(ctx) {
     return answer(`I don't see a ${object} here.`, noteFor(`take — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`), { miss: true });
   }
   return commit(
-    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: actingSubject }],
+    [{ subject: snapshotSubject(object, k, state.epoch), predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: actingSubject }],
     `you take the ${object}.`,
     `take — the taught "take" family fired; ${object} is now carried`,
     `carry the ${object}`,
@@ -1353,7 +1415,7 @@ async function handleDropOrGiveVerb(ctx) {
   }
   if (cmd.verb === "drop") {
     return commit(
-      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: here }],
+      [{ subject: snapshotSubject(object, k, state.epoch), predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: here }],
       `you drop the ${object} in the ${here}.`,
       `drop — the taught "drop" family fired; ${object} rests in the ${here}`,
       `set the ${object} down`,
@@ -1364,7 +1426,7 @@ async function handleDropOrGiveVerb(ctx) {
     return answer(`the ${receiver} isn't here.`, noteFor(`give — ${receiver} isn't one of the cast standing in the ${here}; precondition declined by name`), { miss: true });
   }
   return commit(
-    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: receiver }],
+    [{ subject: snapshotSubject(object, k, state.epoch), predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: receiver }],
     `you give the ${object} to the ${receiver}.`,
     `give — the taught "give" family fired; the ${receiver} holds the ${object}`,
     `hand the ${object} over`,
@@ -1496,8 +1558,8 @@ async function handleEatVerb(ctx) {
   await recordGone(memoryDir, { observer: actingSubject, thing: object, k, cache });
   return commit(
     [
-      { subject: `${actingSubject}@turn${k}`, predicate: MASS_PREDICATE, object: String(grown) },
-      { subject: `${object}@turn${k}`, predicate: "mgx:located-in", object: CONSUMED_PLACE },
+      { subject: snapshotSubject(actingSubject, k, state.epoch), predicate: MASS_PREDICATE, object: String(grown) },
+      { subject: snapshotSubject(object, k, state.epoch), predicate: "mgx:located-in", object: CONSUMED_PLACE },
     ],
     `you eat the ${object}. It adds ${gained} to your mass, so you weigh ${grown} now.`,
     `eat — the ${object}'s ${gained} mass moves onto ${actingSubject} (now ${grown}) and the ${object} leaves the world`,
@@ -1537,7 +1599,7 @@ async function handlePutVerb(ctx) {
     );
   }
   return commit(
-    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: container }],
+    [{ subject: snapshotSubject(object, k, state.epoch), predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: container }],
     `you put the ${object} in the ${container}.`,
     `put — the taught "put" family fired; the ${object} now sits in the ${container}`,
     `put the ${object} in the ${container}`,
@@ -1585,7 +1647,7 @@ async function handleContainerVerb(ctx) {
       return answer(text, noteFor(`${cmd.verb} — the taught "${cmd.verb}" family's ${failed.predicate} precondition declined by name`), { miss: true });
     }
     const effSubject = roleBinding(effect.subjectRole, ctx.actingSubject, object, domain);
-    const writeIsOpen = { subject: `${effSubject}@turn${k}`, predicate: effect.predicate, object: effect.value };
+    const writeIsOpen = { subject: snapshotSubject(effSubject, k, state.epoch), predicate: effect.predicate, object: effect.value };
 
     if (cmd.verb === "open") {
       const revealed = [...state.placements]
@@ -1595,7 +1657,7 @@ async function handleContainerVerb(ctx) {
       return commit(
         [
           writeIsOpen,
-          ...revealed.map((thing) => ({ subject: `${thing}@turn${k}`, predicate: "mgx:located-in", object })),
+          ...revealed.map((thing) => ({ subject: snapshotSubject(thing, k, state.epoch), predicate: "mgx:located-in", object })),
         ],
         revealed.length
           ? `you open the ${object} — inside: the ${revealed.join(", the ")}.`
@@ -1646,7 +1708,7 @@ async function handleContainerVerb(ctx) {
     );
   }
   return commit(
-    [{ subject: `${object}@turn${k}`, predicate: "mgx:fixed-in", object: here }],
+    [{ subject: snapshotSubject(object, k, state.epoch), predicate: "mgx:fixed-in", object: here }],
     `you unlock the ${object} with the ${required}.`,
     `unlock — the lock releases; ${object} now stands unlocked (still fixed) in the ${here}`,
     `unlock the ${object}`,

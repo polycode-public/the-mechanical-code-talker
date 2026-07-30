@@ -2,11 +2,14 @@
 // a title bar (graph source, Open graph…/Open repo…), an explorer sidebar
 // reading each import/call/contains edge back as a plain sentence, a chat
 // centre over the same graph with a rail of suggested questions, and a status
-// bar carrying the graph's own counts. The chat session seeds BOTH the loaded
-// code graph and chat.html's general-knowledge bands (./chat-seed.json,
-// fetched lazily at runtime), so one conversation answers "what is a queue"
-// and "what imports src/core/model.mjs" alike — and degrades to graph-only
-// when the seed asset is unavailable.
+// bar carrying the graph's own counts. Clicking a term asks the engine what
+// relates to it (askRelatedFacts, over tmct_ask) and renders the answer, so the
+// sidebar and the chat put the same question to the same place.
+//
+// The chat session seeds BOTH the loaded code graph and chat.html's
+// general-knowledge bands (./chat-seed.json, fetched lazily at runtime), so one
+// conversation answers "what is a queue" and "what imports src/core/model.mjs"
+// alike — and degrades to graph-only when the seed asset is unavailable.
 //
 // The derivations are pure so the shell, the packaging scripts, and the unit
 // tests all share one code path; renderCodeExplorerHtml builds one
@@ -18,24 +21,14 @@
 
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { generateCodeHints } from "../domain/code-explorer-hints.mjs";
+import { phraseForRelation } from "../domain/ask-vocab.mjs";
+import { fetchWithProgress } from "./memory-panel-viz.mjs";
 
-// Third-person verb for each stored relation kind, symbol grain folded onto its
-// coarse sibling. A kind with no row here reads back as itself, never breaking
-// the sentence.
-const EDGE_PHRASE = new Map([
-  ["imports", "imports"],
-  ["calls", "calls"], ["callsSymbol", "calls"],
-  ["contains", "contains"],
-  ["defines", "defines"],
-  ["inherits", "inherits from"],
-  ["tests", "tests"],
-  ["touches", "touches"], ["touchesSymbol", "touches"],
-  ["cochange", "co-changes with"],
-  ["reexports", "re-exports"],
-]);
-
+// Third-person verb for each stored relation kind, symbol grain folded onto
+// its coarse sibling — derived from ask-vocab.mjs's own RELATIONS table
+// rather than a second hand-curated relation-verb table.
 export function edgePhrase(kind) {
-  return EDGE_PHRASE.get(String(kind || "")) || String(kind || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  return phraseForRelation(kind);
 }
 
 // Both packagers (build-electron-app.mjs, build-demo-site.mjs) place
@@ -133,11 +126,7 @@ const CLIENT_JS = String.raw`
   };
   var session = null;
 
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  var esc = ${escapeHtml.toString()};
 
   function renderStats(data) {
     var s = data.ledger.stats;
@@ -155,11 +144,37 @@ const CLIENT_JS = String.raw`
     els.factTotal.textContent = (edges + seedState.facts).toLocaleString();
   }
 
-  function renderFocusRows(data) {
+  // "What relates to the focus", put to the engine. askRelatedFacts asks
+  // tmct_ask one question per relation kind the loaded graph carries, in both
+  // directions, and hands back the answers' own typed rows — the same ask()
+  // this page's chat turns reach, so the panel and the conversation answer one
+  // question one way. Null on the static page, which has no engine to ask.
+  function askRelated(focus) {
+    if (!api || !api.askRelatedFacts || !focus) return null;
+    try {
+      return api.askRelatedFacts(DATA.payload, focus);
+    } catch (e) {
+      console.warn("tmct code explorer: the related-facts ask failed, splitting the row list instead", e);
+      return null;
+    }
+  }
+
+  function rowKey(r) { return JSON.stringify([r.s, r.kind, r.o]); }
+
+  function renderFocusRows(data, related) {
     var focus = data.focus;
     var rows = data.ledger.rows;
-    var near = rows.filter(function (r) { return r.s === focus || r.o === focus; });
-    var rest = rows.filter(function (r) { return r.s !== focus && r.o !== focus; });
+    // The engine's answer whenever it grounded one. The row list's own split is
+    // what is left when there is no engine (the static page) or when every
+    // question came back parsed as something else — an identifier that is
+    // itself a relation verb reads as a question about the verb.
+    var grounded = Boolean(related && related.grounded);
+    var near = grounded ? related.rows : rows.filter(function (r) { return r.s === focus || r.o === focus; });
+    var nearKeys = {};
+    near.forEach(function (r) { nearKeys[rowKey(r)] = true; });
+    // Whatever the neighbourhood did not already name, in degree order: a bulk
+    // view of the rest of the graph, which is a fold and not a question.
+    var rest = rows.filter(function (r) { return !nearKeys[rowKey(r)]; });
     var ordered = near.concat(rest);
     els.ledger.innerHTML = ordered.map(function (r) {
       var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
@@ -168,7 +183,9 @@ const CLIENT_JS = String.raw`
         + '<span class="verb">' + esc(r.phrase) + '</span> '
         + '<button class="term" data-term="' + esc(r.o) + '">' + esc(r.o) + '</button>'
         + '</li>';
-    }).join("") || '<li class="row muted">no edges in this graph.</li>';
+    }).join("") || (grounded
+      ? '<li class="row muted">nothing in this graph relates to ' + esc(focus) + '.</li>'
+      : '<li class="row muted">no edges in this graph.</li>');
     els.focus.textContent = focus || "—";
   }
 
@@ -188,7 +205,7 @@ const CLIENT_JS = String.raw`
 
   function mountView(data) {
     renderStats(data);
-    renderFocusRows(data);
+    renderFocusRows(data, askRelated(data.focus));
     renderHints(data);
   }
 
@@ -233,23 +250,7 @@ const CLIENT_JS = String.raw`
   function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
   function mbText(n) { return (n / 1048576).toFixed(1); }
 
-  async function fetchTextWithProgress(url, onProgress) {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    var total = Number(res.headers.get("content-length")) || 0;
-    if (!res.body || !res.body.getReader) return res.text();
-    var reader = res.body.getReader();
-    var chunks = [];
-    var loaded = 0;
-    for (;;) {
-      var step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      loaded += step.value.byteLength;
-      onProgress(loaded, total);
-    }
-    return new Blob(chunks).text();
-  }
+  var fetchWithProgress = ${fetchWithProgress.toString()};
 
   async function loadSeed() {
     try {
@@ -258,9 +259,10 @@ const CLIENT_JS = String.raw`
         seedNote("loading general knowledge…");
         text = await window.tmctDesktop.readSeed();
       } else {
-        text = await fetchTextWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
+        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
           seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
         });
+        text = await seedBlob.text();
       }
       if (text) {
         seedState.payload = JSON.parse(text);

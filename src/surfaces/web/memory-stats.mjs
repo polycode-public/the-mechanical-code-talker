@@ -4,6 +4,7 @@
 // store shape.
 import { loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
 import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
+import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
 
 /**
  * The memory a running session holds, broken down by where each fact came
@@ -50,4 +51,14 @@ export async function memoryStats(memoryDir) {
     if (isTaught) taught.push({ subject: row.subject, predicate: row.predicate, object: row.object, tag: taughtTag });
   }
   return { total: rows.length, bandCounts, taught };
+}
+
+/**
+ * The session's whole triple store as JSONL — one
+ * { subject, predicate, object, provenance } object per line, the same shape
+ * `tmct extract` and `tmct memory --export` emit. Reads the live memory the
+ * same way memoryStats does; a page offers this as a download.
+ */
+export async function exportFactsJsonl(memoryDir) {
+  return serializeFactsJsonl(await loadMemory(memoryDir));
 }

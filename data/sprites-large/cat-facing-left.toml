@@ -2,7 +2,11 @@
 # profile: the head leads at the left with the pink nose triangle on the
 # silhouette's edge, whiskers sweep forward, the near ear keeps its pink
 # inner accent, and the curled tail closes the right side. Selected only
-# when the instance's own mgx:faces fact says "left".
+# when the instance's own mgx:faces fact says "left". It also carries the
+# shared face-fragment mechanism, so a cat taught BOTH mgx:faces = left and
+# one of the 6 mgx:feels words renders this profile wearing that mood; taught
+# only the facing, {{FACE}} resolves to nothing and the profile keeps the
+# single forward eye it draws itself.
 classes = ["cat"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -30,9 +34,35 @@ svg = """
   <ellipse cx="5.4" cy="8.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
   <ellipse cx="7.6" cy="7.6" rx="1.4" ry="1" fill="#ffffff" opacity="0.32"/>
   <ellipse cx="11.2" cy="14.8" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
 </svg>
 """
 
 [match]
 property = "mgx:faces"
 value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# cat-with-emotion.toml's front-facing anchor (cx=9 cy=9.4 scale=4.4): the
+# profile head circle is cx=6.8 cy=9.8 r=4.2, and the forward eye this file
+# already draws sits at (5.4, 8.8). scale is ~0.65 of the head radius, which
+# pulls the fragment's two eyes closer together than a front view — the read
+# of a head turned three-quarters away — and cx/cy then place the fragment so
+# its own forward eye lands exactly on the drawn one at (5.4, 8.8), leaving
+# the pink nose triangle and the whiskers on the silhouette edge clear.
+[face]
+cx = 6.5
+cy = 9.2
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

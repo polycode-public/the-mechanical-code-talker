@@ -24,14 +24,13 @@
 // runTurn engine, the same weight class as the chat/ledger bundles, and is
 // never published.
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, appendFact } from "../../adapters/memory/core.mjs";
-import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
+import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, appendFact, applySeedPayload } from "../../adapters/memory/core.mjs";
 import { splitSentencesPreservingPaths, stripCitationResidue } from "../../services/sentences.mjs";
 import { clauseCandidates, optimisticTriples } from "../../services/extract-facts.mjs";
 import { touchedFactRows } from "../../domain/memory/touched-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel, winkInstance } from "../../adapters/wink-model.mjs";
-import { memoryStats } from "./memory-stats.mjs";
+import { memoryStats, exportFactsJsonl } from "./memory-stats.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
 
 // The pronoun subjects a bounded carry substitutes with the last unique
@@ -178,7 +177,7 @@ export async function groundTextToFacts(text, { memoryDir, sessionId, lexicon, v
  */
 export function createIngestSession({ seedPayload = null, vocabSeeded = false } = {}) {
   const memoryDir = createInMemoryStore();
-  if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+  applySeedPayload(memoryDir, seedPayload);
 
   const lexicon = loadLexicon();
   const vocabHint = vocabExampleHint(vocabSeeded);
@@ -191,15 +190,6 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
       return groundTextToFacts(text, { memoryDir, sessionId, lexicon, vocabHint, onFact, optimistic });
     },
   };
-}
-
-/**
- * The session's whole triple store as JSONL — the same
- * { subject, predicate, object, provenance } shape `tmct extract` and
- * `tmct memory --export` emit, offered to the page as the canonical download.
- */
-export async function exportFactsJsonl(memoryDir) {
-  return serializeFactsJsonl(await loadMemory(memoryDir));
 }
 
 globalThis.tmctIngest = {

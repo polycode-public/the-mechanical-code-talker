@@ -2,7 +2,7 @@
 // plan-viz.mjs's own inlined ticker script (PLAN_SPIDER_FLY.md §11).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTicker } from "../../src/services/viz-ticker.mjs";
+import { createTicker, createSerialQueue } from "../../src/services/viz-ticker.mjs";
 
 const instantWait = () => Promise.resolve();
 
@@ -103,4 +103,39 @@ test("getState returns a fresh snapshot each call, never a live reference a call
   const a = ticker.getState();
   a.playing = true;
   assert.equal(ticker.getState().playing, false, "mutating a returned snapshot never touches the ticker's own state");
+});
+
+test("createSerialQueue: two jobs run one at a time, in the order they were queued, never overlapping", async () => {
+  const order = [];
+  let running = 0;
+  let maxConcurrent = 0;
+  const queue = createSerialQueue();
+  const job = (id, ms) => queue.run(async () => {
+    running += 1;
+    maxConcurrent = Math.max(maxConcurrent, running);
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    order.push(id);
+    running -= 1;
+  });
+  await Promise.all([job("a", 20), job("b", 5), job("c", 1)]);
+  assert.deepEqual(order, ["a", "b", "c"], "queued order wins even though later jobs would finish faster alone");
+  assert.equal(maxConcurrent, 1, "never more than one job in flight at once");
+});
+
+test("createSerialQueue: a job's own rejection reaches its own caller, not a sibling's", async () => {
+  const queue = createSerialQueue();
+  const first = queue.run(async () => { throw new Error("boom"); });
+  const second = queue.run(async () => "still ran");
+  await assert.rejects(first, /boom/);
+  await assert.doesNotReject(second);
+  assert.equal(await second, "still ran");
+});
+
+test("createSerialQueue: a rejected job never poisons the queue for jobs queued after it", async () => {
+  const queue = createSerialQueue();
+  const results = [];
+  await assert.rejects(queue.run(async () => { throw new Error("first fails"); }));
+  results.push(await queue.run(async () => "second"));
+  results.push(await queue.run(async () => "third"));
+  assert.deepEqual(results, ["second", "third"]);
 });

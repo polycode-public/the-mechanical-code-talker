@@ -1,0 +1,57 @@
+# boy-moving — boy-with-emotion.toml's front-facing figure caught mid-stride,
+# with no facing angle recorded (mgx:pose = "moving" alone, centre view).
+# The head stays boy-with-emotion.toml's own front anchor exactly, since a
+# head does not change shape mid-stride; the two arms swing oppositely (one
+# raised and pulled in, the other extended down and back) and the torso
+# leans slightly off its resting silhouette — the same kind of small,
+# readable coordinate shift king-facing-left-moving.toml uses for its own
+# profile stride, applied here to a front view instead of a profile.
+classes = ["boy"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="boy-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#boy-moving-fill)">
+    <path d="M9.4 14.9 C8.2 14.4 7.1 15.2 7.0 17.0 C6.95 18.1 7.5 18.8 8.2 18.5 C8.3 17.1 8.6 15.9 9.7 15.3 Z"/>
+    <path d="M14.6 14.9 C16.3 15.1 17.9 16.6 18.1 18.9 C18.2 20.1 17.5 20.9 16.6 20.4 C16.4 18.5 15.8 16.8 14.3 15.8 Z"/>
+    <path d="M7.3 21 C7.2 16.5 9.3 14.5 12 14.6 C14.8 14.7 16.8 16.7 16.7 21.2 C14.7 20.8 9.5 20.8 7.3 21 Z"/>
+    <path d="M10.8 11.4 L13.2 11.4 L13 14.6 L11 14.6 Z"/>
+  </g>
+  <ellipse cx="10.2" cy="18" rx="1.1" ry="1.6" fill="#ffffff" opacity="0.1"/>
+  <circle cx="12" cy="8.2" r="3.6" fill="url(#boy-moving-fill)"/>
+  <path d="M10.6 14.3 L12 15.4 L13.4 14.3" fill="none" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 15.4 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 15.3 C8.3 16 7.6 17.2 7.4 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 15.3 C15.7 16 16.4 17.2 16.6 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9.8 5.6 C10.4 5.1 11.1 4.9 12 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# The same cx/cy/r boy-with-emotion.toml's own front-facing head circle
+# declares — the walk cycle changes the body, never the head anchor.
+[face]
+cx = 12
+cy = 8.2
+scale = 3.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

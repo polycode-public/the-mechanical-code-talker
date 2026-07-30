@@ -9,6 +9,10 @@
 // typed service object (the Repository Interface) and hands both to the handler.
 // Each tool answers one question in ONE compact call so the caller need not
 // Read/Grep. Errors reach the caller as clean tool errors — message only, never a stack.
+//
+// Two entries, one dispatch: dispatchTool hands back the caller-facing string, and
+// dispatchToolStructured hands back { content, data } for a caller that wants the
+// answer's structure rather than its sentence (a page rendering rows, the router).
 
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -19,6 +23,7 @@ import { ask } from "../domain/ask.mjs";
 import { createGraphService } from "../adapters/providers/graph-service.mjs";
 import { loadGraph } from "./graph-load.mjs";
 import { HANDLERS } from "./handlers/index.mjs";
+import { isToolResult } from "./handlers/kit.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -32,6 +37,7 @@ setConstructionBanks(readConstructionFiles);
 
 export { loadGraph } from "./graph-load.mjs";
 export { buildContextBundle } from "./handlers/tmct-context.mjs";
+export { ASK_ENVELOPE_DELIM } from "./handlers/tmct-ask.mjs";
 
 // Tiered tool surface: the hot tools carry full descriptions/schemas in this
 // catalog; every COLD tool (describe/members/impact/history/…) is still served
@@ -44,23 +50,7 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-/** dispatchTool's structured twin: always `{ content, data }`. A handler that
- *  returns kit.mjs's `toolResult` shape is passed through; a handler that
- *  returns a plain string (all of them, historically) is wrapped with
- *  `data: null`, so the two entry points never disagree about the sentence. */
-export async function dispatchToolStructured(name, args, opts = {}) {
-  const out = await dispatchHandler(name, args, opts);
-  if (out && typeof out === "object" && typeof out.content === "string") {
-    return { content: out.content, data: out.data ?? null };
-  }
-  return { content: String(out ?? ""), data: null };
-}
-
-export async function dispatchTool(name, args, opts = {}) {
-  return (await dispatchToolStructured(name, args, opts)).content;
-}
-
-async function dispatchHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
+async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
@@ -82,4 +72,22 @@ async function dispatchHandler(name, args, { config, source = defaultSource, tel
   const repoRoot = dirname(dirname(config.graphFile));
   const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
   return handle(args, { graph, svc, config, repoRoot, memoryBackend });
+}
+
+/** The caller-facing string for one tool call. A handler that returns a structured
+ *  result is flattened to its `text` here, so every existing string caller (the chat
+ *  surface, the CLI `cli <tool>` route, the HTTP shim) is unaffected by a handler
+ *  gaining structure. */
+export async function dispatchTool(name, args, ctx = {}) {
+  const out = await runHandler(name, args, ctx);
+  return isToolResult(out) ? out.text : out;
+}
+
+/** The same call, answered as `{ content, data }`: `content` is the prose, `data` the
+ *  render-ready structure the handler already computed on its way to it. `data` is
+ *  undefined for a tool whose answer is prose and nothing else, which is most of the
+ *  cold set — an absent `data` is a real answer, not a failure. */
+export async function dispatchToolStructured(name, args, ctx = {}) {
+  const out = await runHandler(name, args, ctx);
+  return isToolResult(out) ? { content: out.content, data: out.data } : { content: out, data: undefined };
 }

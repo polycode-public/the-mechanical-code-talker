@@ -25,20 +25,25 @@ export const VOCAB = Object.freeze({
 });
 
 // Parameter entity-KINDS — the seon/mgx classes a slot ranges over. `Query` and
-// `Kind`/`Package` are free-text / enum slots (no graph resolution); `MemoryTerm`
-// binds against the CONVERSATIONAL-MEMORY graph instead of the code graph (which
-// view of it depends on the slot's own `view` — see the param builder below); the
-// rest name a code-graph entity the resolver must prove RESOLVES before the call
-// fires.
+// `Kind`/`Package` are free-text / enum slots (no graph resolution); the rest
+// name a graph entity the resolver must prove RESOLVES before the call fires —
+// code-graph kinds through resolveObject (ask.mjs), MemoryTerm through
+// resolveMemoryTerm (resolver.mjs), the conversational-memory sibling oracle.
 export const KINDS = Object.freeze({
   Symbol: "seon:CodeEntity", // any code symbol: function/method/class/module/attribute
   Module: "mgx:Module", // SEON has no JS-module class (its nearest are Namespace/main:File); owned
   Class: "seon:ClassType", // SEON's real class for a class definition
+  MemoryTerm: "mgx:MemoryTerm", // owned: a conversational-memory term (a minted skos:Concept or a world-fact subject/object) — binds in the memory graph, never the code graph
   Query: "cap:FreeText", // lexical search string — no resolution precondition
   Kind: "cap:KindFilter", // enum: function|class|method|… (search filter)
   Package: "cap:PackageName", // optional architecture-scope filter
-  MemoryTerm: "cap:MemoryTerm", // a term the conversational-memory graph grounds
 });
+
+// The kinds that bind in the conversational-memory graph (resolveMemoryTerm)
+// rather than the code graph (resolveObject). A consumer that walks KINDS for
+// code-graph-resolvable classes (e.g. the synthbench enumerator's focus
+// classes) must exclude these — a memory term is never a code-graph focus.
+export const MEMORY_KINDS = Object.freeze([KINDS.MemoryTerm]);
 
 // Precondition PREDICATE tags (the small closed vocabulary a precondition uses).
 export const PRECOND = Object.freeze({
@@ -50,12 +55,9 @@ export const PRECOND = Object.freeze({
 
 // ---- capability builder (returns PLAIN FROZEN data) -------------------------
 
-/** A parameter slot. `arg` is the exact key src/tools/server.mjs `dispatchTool`
- *  reads. `view` names which memory-graph view a KINDS.MemoryTerm slot binds
- *  against — "concept" (the SKOS synonym/related view) or "taxonomy" (the
- *  rdf:type / rdfs:subClassOf rows); it means nothing for any other kind. */
-const param = (name, kind, { arg = name, required = true, note = "", view = null } = {}) =>
-  Object.freeze({ type: VOCAB.Parameter, name, kind, arg, required, note, view });
+/** A parameter slot. `arg` is the exact key src/tools/server.mjs `dispatchTool` reads. */
+const param = (name, kind, { arg = name, required = true, note = "" } = {}) =>
+  Object.freeze({ type: VOCAB.Parameter, name, kind, arg, required, note });
 
 /** graph-loaded precondition — every graph-query capability carries it. */
 const graphLoaded = () => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.graphLoaded });
@@ -95,7 +97,7 @@ function capability({ name, label, question, params = [], preconditions = [], ad
 // subclasses take `class`; search takes `query` (+ optional kind/name/decorator);
 // architecture takes an optional `package`; untested takes nothing; related
 // takes `term` (a memory-graph concept term); sprite takes `class` (a memory-graph
-// taxonomy term) plus optional `expression`/`size`.
+// term) plus optional `expression`/`size`.
 
 const CAPABILITIES = Object.freeze([
   capability({
@@ -195,18 +197,18 @@ const CAPABILITIES = Object.freeze([
   }),
   capability({
     name: "tmct_related", label: "related", question: "a term's synonyms and related concepts (the SKOS view over the conversational-memory graph)",
-    params: [param("term", KINDS.MemoryTerm, { view: "concept", note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
-    preconditions: [memoryFacts()],
+    params: [param("term", KINDS.MemoryTerm, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
+    preconditions: [memoryFacts(), resolves("term", KINDS.MemoryTerm)],
     add: [knows("related", "term")],
   }),
   capability({
     name: "tmct_sprite", label: "sprite", question: "the sprite for a class, with the expression and size asked for",
     params: [
-      param("class", KINDS.MemoryTerm, { arg: "class", view: "taxonomy", note: "a world class, matched against the memory graph's own rdf:type / rdfs:subClassOf rows rather than resolved in the code graph" }),
+      param("class", KINDS.MemoryTerm, { arg: "class", note: "a world class, matched against the memory graph's own fact rows rather than resolved in the code graph" }),
       param("expression", KINDS.Kind, { required: false, note: "one of sprite-expressions.mjs's palette words, carried as an mgx:feels fact" }),
       param("size", KINDS.Kind, { required: false, note: "a taught mgx:hasProperty size word, resolved to a render scale — not a template tier" }),
     ],
-    preconditions: [memoryFacts()],
+    preconditions: [memoryFacts(), resolves("class", KINDS.MemoryTerm)],
     add: [knows("sprite", "class")],
   }),
 ]);

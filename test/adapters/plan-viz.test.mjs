@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { computeBlocksLayout, renderPlanHtml } from "../../src/services/plan-viz.mjs";
-import { escapeHtml } from "../../src/services/viz-theme.mjs";
+import { escapeHtml, countLabel } from "../../src/services/viz-theme.mjs";
 
 function embeddedJson(html, name) {
   const m = new RegExp(`const ${name} = (.*);`).exec(html);
@@ -215,6 +215,18 @@ test("the client-side facts renderer escapes &, <, >, \", and ' via the shared e
   // Spliced from the very same helper the rest of the page uses server-side,
   // not a lookalike reimplementation.
   assert.equal(clientEscapeHtml(dangerous), escapeHtml(dangerous));
+});
+
+test("the live re-solve status line uses the shared countLabel helper, not a hand-rolled plural", () => {
+  const html = renderPlanHtml(layoutArgs);
+  assert.ok(
+    html.includes('countLabel(n, "disk", "disks")'),
+    "the resolve-button status line should call countLabel rather than an ad hoc n === 1 ternary",
+  );
+  const clientCountLabel = splicedFunction(html, "countLabel");
+  assert.equal(clientCountLabel(1, "disk", "disks"), "1 disk");
+  assert.equal(clientCountLabel(3, "disk", "disks"), "3 disks");
+  assert.equal(clientCountLabel(1, "disk", "disks"), countLabel(1, "disk", "disks"));
 });
 
 test("a puzzle that declares no sizes gets no phase brackets, rather than an arbitrary pivot", () => {

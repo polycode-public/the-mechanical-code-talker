@@ -144,7 +144,11 @@ test("a seeded boot lists the seed corpus bands as scopeable sources", async () 
 test("teach by telling grows the graph: a taught source appears with the fact in its history and in recently-learned", async () => {
   const { context, page, consoleErrors } = await openResearchPage();
   try {
+    const factsBefore = Number((await page.locator("#statFacts").innerText()).replace(/[^\d]/g, ""));
     await teach(page, TAUGHT);
+    const factsAfter = Number((await page.locator("#statFacts").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(factsAfter, factsBefore + 1, "the facts-in-the-graph stat counts the newly taught fact");
+
     const keys = await sourceKeys(page);
     assert.ok(keys.includes("taught"), "a taught source appears once a fact is taught");
 
@@ -164,8 +168,11 @@ test("teach by telling grows the graph: a taught source appears with the fact in
 test("ingest documents grows the graph and reports the honest skip count", async () => {
   const { context, page } = await openResearchPage();
   try {
+    const factsBefore = Number((await page.locator("#statFacts").innerText()).replace(/[^\d]/g, ""));
     await ingest(page, DOC + " How are you today?");
     assert.match(await page.locator("#ingestNote").innerText(), /3 sentences read, 2 grounded, 1 skipped/, "the question is skipped honestly, the two facts grounded");
+    const factsAfter = Number((await page.locator("#statFacts").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(factsAfter, factsBefore + 2, "the facts-in-the-graph stat counts exactly the two grounded facts, not the skipped question");
     const keys = await sourceKeys(page);
     assert.ok(keys.includes("ingest"), "an ingest source appears once a document grounds a fact");
     const hubs = await page.locator("#hubsList .chip").count();

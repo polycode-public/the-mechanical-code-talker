@@ -18,18 +18,23 @@
 // entry point: `turn(line)` runs the exact same runTurn the CLI and every
 // other viz page's chat dock run, over this session's own memoryDir/graph/
 // lexicon, threading `focus`/`last`/`planState` across calls the same way a
-// real chat session does. `planState` and `autoplayTick`'s own `planHolder`
-// share ONE mutable holder here, so a manual chat command and an auto-play
-// tick can never disagree about whether the adventure is still open, mid a
-// number game, etc. — whichever ran last leaves the holder as the other's
-// starting point. `planHolder.state` starts as adventureTurn's own opened-
+// real chat session does — via turn-session.mjs's shared `createTurnSession`,
+// the wrapper every browser chat dock now hands its own turns through.
+// `planState` and `autoplayTick`'s own `planHolder` share ONE mutable holder
+// here, so a manual chat command and an auto-play tick can never disagree
+// about whether the adventure is still open, mid a number game, etc. —
+// whichever ran last leaves the holder as the other's starting point.
+// `createTurnSession`'s own `buildExtraOptions`/`captureExtraState` seams are
+// what keep the turn session's internal planState and this module's own
+// `planHolder` in sync on every manual turn (see the session factory's own
+// comment below). `planHolder.state` starts as adventureTurn's own opened-
 // world shape, so BOTH entry points treat every call as a live, already-open
 // world rather than a fresh opening line: ordinary in-game commands (look/
 // go/take/open/talk/examine/...) dispatch through adventure.mjs's own
 // adventureTurn exactly as autoplayTick's calls already do, and anything not
 // game-shaped falls through to the ordinary conversational layer, exactly
 // like a real CLI session.
-import { runTurn } from "../../services/chat.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
@@ -41,6 +46,7 @@ import { parseWorldEditorText, planWorldEditorSync } from "../../services/advent
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
+import { directedGridLayout, roomGraphSvg } from "../../services/viz-room-graph.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
 
 /** A live in-memory adventure this page's ticker AND chat dock can both
@@ -97,8 +103,27 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
-  let focus = null;
-  let last = null;
+
+  // createTurnSession owns focus/last and the catch fallback; planHolder
+  // stays a SEPARATE object because autoplayTick's own
+  // runAdventureAutoplayTick needs to mutate it directly (see this module's
+  // own header for why the two entry points share one holder).
+  // buildExtraOptions/captureExtraState are the seam that keeps the turn
+  // session's own planState reading from — and writing back to — that same
+  // holder on every manual turn, and captureExtraState is also where
+  // `visitedRoomIds` grows with the player's post-turn room (a no-op add
+  // when the command didn't move anyone) — the manual-play half of the
+  // merged exposure set.
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId,
+    vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
+    buildExtraOptions: () => ({ uiContext: "browser", planState: planHolder.state }),
+    captureExtraState: async (result) => {
+      if ("planState" in result) planHolder.state = result.planState;
+      const here = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir)))).placements.get("player")?.object ?? null;
+      if (here) visitedRoomIds.add(here);
+    },
+  });
 
   return {
     memoryDir,
@@ -115,31 +140,15 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
       return result;
     },
 
-    /** One dispatched chat turn — the SAME runTurn the CLI and every other
-     *  viz page's own chat dock run, over this session's own memoryDir. A
-     *  throwing runTurn must never kill the session — the page has no other
-     *  chance to show this turn's answer. Grows `visitedRoomIds` with the
-     *  player's post-turn room (a no-op add when the command didn't move
-     *  anyone) — the manual-play half of the merged exposure set. */
+    /** One dispatched chat turn, through createTurnSession's own shared
+     *  wrapper around the SAME runTurn the CLI and every other viz page's
+     *  chat dock run, over this session's own memoryDir. A throwing runTurn
+     *  must never kill the session — the page has no other chance to show
+     *  this turn's answer; createTurnSession's own catch fallback covers
+     *  that, and its captureExtraState hook above covers everything this
+     *  method used to do by hand. */
     async turn(line) {
-      let result;
-      try {
-        result = await runTurn(line, {
-          config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, uiContext: "browser",
-          vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
-          planState: planHolder.state,
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
-      }
-      focus = result.focus;
-      last = result.last;
-      if ("planState" in result) planHolder.state = result.planState;
-      const here = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir)))).placements.get("player")?.object ?? null;
-      if (here) visitedRoomIds.add(here);
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
+      return turnSession.turn(line);
     },
 
     /** A read-only fold of the current room — no engine advance — for the
@@ -192,9 +201,16 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
 // `classAncestorChain` back the edit mode's own cursor-suggestion pills
 // (adventure-viz.mjs's suggestionsForTerm mirrors this same pairing against
 // the global, the same reach-through-the-global pattern captionFor/pillsFor
-// already use for their own adventure.mjs calls).
+// already use for their own adventure.mjs calls). `directedGridLayout`/
+// `roomGraphSvg` (viz-room-graph.mjs's shared BFS-grid room-map layout and
+// SVG renderer) back the manor-map panel, its lightbox and its edit-mode
+// whole-map twin the same way — neither is `.toString()`-splice-safe
+// (roomGraphSvg needs escapeHtml, directedGridLayout needs its own
+// module-level exit-delta table), so the page reaches them here instead of
+// re-implementing the layout a second time.
 globalThis.tmctAdventure = {
   createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
   relatedForTerm, classAncestorChain, openPersistedStore,
+  directedGridLayout, roomGraphSvg,
 };

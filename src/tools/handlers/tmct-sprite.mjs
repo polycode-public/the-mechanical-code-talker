@@ -125,16 +125,19 @@ export async function tmct_sprite(args, { config }) {
   if (size) lines.push(`render scale: ${resolution.scale} (from the taught mgx:hasProperty "${size}")`);
   lines.push(`${resolution.svg.length} characters of SVG markup`);
 
-  return toolResult(lines.join("\n"), {
-    class: resolution.class,
-    expression: resolution.expression,
-    size: resolution.size,
-    tier,
-    scale: resolution.scale,
-    svg: resolution.svg,
-    chain: resolution.chain,
-    matched: resolution.matched,
-    expressionApplied: resolution.expressionApplied,
+  return toolResult({
+    content: lines.join("\n"),
+    data: {
+      class: resolution.class,
+      expression: resolution.expression,
+      size: resolution.size,
+      tier,
+      scale: resolution.scale,
+      svg: resolution.svg,
+      chain: resolution.chain,
+      matched: resolution.matched,
+      expressionApplied: resolution.expressionApplied,
+    },
   });
 }
 

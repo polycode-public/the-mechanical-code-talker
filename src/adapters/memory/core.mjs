@@ -172,6 +172,26 @@ export function createInMemoryStore() {
   return { backend: BACKEND_MEMORY, payload: emptyMemory() };
 }
 
+/** Assign `seedPayload` onto `memoryDir`'s own payload — spread over the
+ *  store's own (possibly empty) payload rather than replacing it outright,
+ *  so a partial seed (individuals and objectProperties only) still carries
+ *  the classes/prefixes scaffolding the write path recounts, and a later
+ *  teach turn works regardless of what the seed carries. A no-op when
+ *  `seedPayload` is null/undefined — a browser session with nothing to seed
+ *  keeps its own fresh empty payload untouched. */
+export function applySeedPayload(memoryDir, seedPayload) {
+  if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+}
+
+/** A structurally independent copy of a memory payload — `structuredClone`
+ *  where available, falling back to a JSON round-trip for an environment
+ *  without it. Returns null for a null/undefined `payload`, so a caller can
+ *  seed a fresh session with "no seed yet" rather than an empty object. */
+export function cloneMemoryPayload(payload) {
+  if (!payload) return null;
+  try { return structuredClone(payload); } catch { return JSON.parse(JSON.stringify(payload)); }
+}
+
 // ---- Backend C — SQLite: a live node:sqlite connection, per-row
 // INSERT/REPLACE/DELETE diffed against what's already stored (write cost
 // proportional to what changed, not total store size). Reads are cached on

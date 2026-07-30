@@ -15,6 +15,7 @@ import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memo
 import { buildCapabilityPlanCtx, runCapabilityPlan } from "../../src/domain/router/drive.mjs";
 import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 import { capabilityByName, KINDS, PRECOND } from "../../src/domain/router/registry.mjs";
+import { isMemoryTermSlot } from "../../src/domain/router/resolver.mjs";
 import { EXPRESSION_PALETTE } from "../../src/domain/sprite-expressions.mjs";
 import { toolByName } from "../../src/tools/definitions.mjs";
 
@@ -57,13 +58,18 @@ test("the schema takes a class plus an optional expression and size, and reads i
   assert.match(def.inputSchema.properties.size.description, /scale/i, "size is documented as a render scale, not a template tier");
 });
 
-test("the capability binds class against the memory graph's taxonomy and gates on memory facts", () => {
+test("the class slot is a memory-graph kind, so it binds through resolveMemoryTerm rather than the code graph", () => {
   const cap = capabilityByName("tmct_sprite");
   const classSlot = cap.parameters.find((p) => p.arg === "class");
   assert.equal(classSlot.kind, KINDS.MemoryTerm);
-  assert.equal(classSlot.view, "taxonomy");
+  assert.ok(isMemoryTermSlot("tmct_sprite", "class"), "the registry-driven oracle switch agrees");
   assert.ok(cap.preconditions.some((p) => p.pred === PRECOND.memoryFacts));
+  assert.ok(cap.preconditions.some((p) => p.pred === PRECOND.resolves && p.param === "class" && p.as === KINDS.MemoryTerm));
   assert.ok(cap.effects.add.some((e) => e.topic === "sprite" && e.of === "?class"));
+  // The two optional slots are plain enum filters — no binding oracle at all.
+  for (const arg of ["expression", "size"]) {
+    assert.equal(isMemoryTermSlot("tmct_sprite", arg), false, arg);
+  }
 });
 
 // ---- the whole round trip ----------------------------------------------------
@@ -101,7 +107,7 @@ test("the two other phrasings reach the same capability, filling only the slots 
   }
 });
 
-test("a class the memory graph holds no taxonomy fact for never reaches the tool — the resolver misses first", async () => {
+test("a class the memory graph holds no fact about never reaches the tool — the resolver misses first", async () => {
   const ctx = await buildCapabilityPlanCtx({
     ...capabilityPlanDeps(), source: stubSource, config: REPO.config, memoryDir: REPO.mem,
   });
@@ -110,7 +116,7 @@ test("a class the memory graph holds no taxonomy fact for never reaches the tool
     assert.equal(result.refused, true);
     // The resolver's own reason rides alongside the goal-reasoner's, which is
     // what the request falls through to once no capability binds.
-    assert.match(String(result.c1Why), /"narwhal" is not a class the memory graph carries a taxonomy fact for/);
+    assert.match(String(result.c1Why), /the memory graph holds no facts mentioning "narwhal"/);
     assert.match(String(result.c1Why), /honest miss/);
   } finally {
     for (const dispose of ctx.disposers || []) dispose();

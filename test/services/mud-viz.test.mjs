@@ -141,7 +141,7 @@ test("renderMudHtml: picking a burrow recasts through the same boot reset and th
   assert.match(html, /scenarioSelect\.addEventListener\("change"/, "the settle event, not every keystroke");
   assert.match(html, /scenarioIndex = picked;/);
   assert.match(html, /await boot\("a different burrow opened/, "the same boot the sliders and reset call");
-  assert.match(html, /dropRoom\(note \|\|/, "a live shared room is dropped the one way this page drops rooms");
+  assert.match(html, /liveRoom\.rebind\(\{ memoryDir: opened\.memoryDir/, "a live shared room re-binds to the new burrow's store instead of dropping");
   assert.match(
     html,
     /createMudSession\(scenario\(\)\.worldPayload/,
@@ -162,11 +162,28 @@ test("renderMudHtml: edit mode follows the burrow that is loaded, not the one th
   });
   assert.match(
     html,
-    /const prefix = "world:" \+ scenario\(\)\.worldPayload\.name;/,
+    /rowsForWorld\(rows, scenario\(\)\.worldPayload\.name\)/,
     "the editor's provenance filter reads the loaded burrow",
   );
   assert.match(html, /if \(wasEditing\) await exitEditMode\(\);/, "a half-typed edit lands in the burrow it was typed over");
   assert.match(html, /if \(wasEditing\) await enterEditMode\(\);/, "the editor reopens on the burrow that just loaded");
+});
+
+test("renderMudHtml: a recast keeps the link — the room re-binds one epoch on, and only a failed re-bind drops", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /const liveRoom = room;/, "the live room is held across the async re-open");
+  assert.match(html, /\(await session\.snapshot\(\)\)\.state\.epoch \+ 1/,
+    "the next epoch is read off the store every peer converged on, one past it");
+  assert.match(html, /characters: everyone\(\), epoch: nextEpoch/, "the new session opens on that epoch");
+  assert.match(html, /worldName: worldName, myDisplayName: myDisplayName/, "the room's identity rides the rebind unchanged");
+  assert.match(html, /the burrow recast \\u2014 still linked\./, "the wire note says the link held");
+  assert.match(html, /dropRoom\("the link didn't survive the recast/, "a failed rebind falls back to the drop, and says so");
+  const rebindBlock = /if \(liveRoom\) \{([\s\S]*?)\n    \}/.exec(html);
+  assert.ok(rebindBlock, "the rebind block is in the page script");
+  assert.ok(
+    rebindBlock[1].indexOf("renderWire();") < rebindBlock[1].indexOf('el("wireStateNote").textContent'),
+    "renderWire restates the stock note, so the recast reason is written after it, never before",
+  );
 });
 
 test("renderMudHtml: a dropped room's reason survives the redraw that follows it", () => {
@@ -557,7 +574,7 @@ test("isMudStatePredicate accepts what a turn writes and refuses the chrome arou
   for (const predicate of [
     "mgx:currently-in", "mgx:located-in", "mgx:hidden-in", "mgx:on-top-of", "mgx:is-open",
     "mgx:hasMass", "mgx:knows-about", "mgx:display-name", "rdf:type",
-    "mgx:has-exit-north", "mgx:has-exit-down",
+    "mgx:has-exit-north", "mgx:has-exit-down", "mgx:world-epoch",
   ]) {
     assert.equal(isMudStatePredicate(predicate), true, `${predicate} is live world state`);
   }

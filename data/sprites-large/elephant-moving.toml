@@ -1,0 +1,55 @@
+# elephant-moving — elephant-with-emotion.toml's front view caught
+# mid-stride. The ear, body, head and trunk keep that file's own shape and
+# position; only the four legs stagger into a walking gait and the trunk
+# swings forward slightly for dynamism. Chosen only when the instance's
+# own mgx:pose fact says "moving" with no facing fact at all, so this is
+# the centre view still, just no longer standing still.
+classes = ["elephant"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="elephant-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="6.2" cy="7.4" rx="3.8" ry="4.4" fill="url(#elephant-moving-fill)" opacity="0.55"/>
+  <ellipse cx="14.5" cy="15" rx="7.2" ry="5.4" fill="url(#elephant-moving-fill)"/>
+  <g fill="url(#elephant-moving-fill)">
+    <rect x="8.2" y="18" width="2" height="2.6" rx="1"/>
+    <rect x="12" y="19.6" width="2" height="3.4" rx="1"/>
+    <rect x="16.8" y="18" width="2" height="2.6" rx="1"/>
+    <rect x="20.2" y="19.6" width="2" height="3.4" rx="1"/>
+  </g>
+  <circle cx="8.8" cy="10.2" r="4.4" fill="url(#elephant-moving-fill)"/>
+  <path d="M6.2 13 C5 13.6 4.4 15 4.8 16.4 C5.5 15.6 6.1 14.5 6.5 13.1 Z" fill="#f4ecd8"/>
+  <path d="M6.4 13.4 C4 14 2.8 17 3.6 19.6 C4 21 5.4 21.2 5.6 19.8 C4.8 18.4 4.4 16.2 5.2 14.2 C5.5 13.8 6 13.6 6.4 13.4 Z" fill="url(#elephant-moving-fill)"/>
+  <ellipse cx="11.4" cy="12.6" rx="2.8" ry="1.7" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="7.4" cy="8.2" rx="1.3" ry="1" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# elephant-with-emotion.toml's own front-facing anchor, unchanged: this is
+# still the centre view.
+[face]
+cx = 8.8
+cy = 10.2
+scale = 4.4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

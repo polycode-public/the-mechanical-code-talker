@@ -579,7 +579,10 @@ export function runEcologyPass({
  *  the shipped (reusable, static) world pack itself. A no-op when spider-1
  *  already exists (idempotent — safe to call from a caller unsure whether
  *  the game has already started). `config` (default
- *  DEFAULT_GAME_CONFIG.spiderFly) supplies the starting masses. */
+ *  DEFAULT_GAME_CONFIG.spiderFly) supplies the starting masses. Every minted
+ *  agent also gets a starting mgx:feels mood (`calm` — nothing has a goal
+ *  yet), so a mood fact exists for an individual from the moment the
+ *  individual does. */
 export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEFAULT_GAME_CONFIG.spiderFly } = {}) {
   const state = foldSpiderFlyState(readFactRows(await loadMemory(memoryDir)));
   if (state.placements.has("spider-1")) return { started: false, facts: [] };
@@ -588,6 +591,7 @@ export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEF
   const facts = [
     { subject: "spider-1", predicate: "mgx:currently-in", object: cellId(WEB_HOME.x, WEB_HOME.y) },
     { subject: "spider-1", predicate: "mgx:mass", object: String(config.spiderInitialMass) },
+    { subject: "spider-1", predicate: "mgx:feels", object: "calm" },
   ];
   const occupied = new Set([cellId(WEB_HOME.x, WEB_HOME.y)]);
   for (let i = 0; i < flyCount; i += 1) {
@@ -597,10 +601,33 @@ export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEF
     occupied.add(cell);
     facts.push({ subject: flyId, predicate: "mgx:currently-in", object: cell });
     facts.push({ subject: flyId, predicate: "mgx:mass", object: String(config.flyInitialMass) });
+    facts.push({ subject: flyId, predicate: "mgx:feels", object: "calm" });
   }
   await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: worldProvenanceTag(WORLD_NAME) })));
   return { started: true, facts };
 }
+
+// ---- the goal line and the mood word -----------------------------------------
+// Every branch of the tick's own priority chain assigns a `mood` word beside
+// the `goal` sentence it renders, and that word is appended as a real
+// mgx:feels fact for the turn (runSpiderFlyTick's moodWrites), the same
+// per-agent-per-turn treatment mgx:currently-in and mgx:mass already get.
+// Two reasons it is a fact rather than something a renderer re-derives. A
+// question about "a happy spider" has to bind against the store. And this
+// branch is the one that knows the mood, so recovering it downstream means
+// re-reading the prose this file already wrote.
+//
+// The words are a subset of sprite-expressions.mjs's own six-word
+// EXPRESSION_PALETTE (`sad` and `surprised` have no state in this game's goal
+// chain). Operator-confirmed mapping: a spider that just ate is happy; a
+// spider carrying a fly or mid-chase is angry (predatory focus); a spider
+// avoiding another spider is scared; a spider holding position or building a
+// web is calm. A fly evading a believed-visible spider is scared, and so is
+// the sharper form of the same fear — just caught, being carried, or trapped
+// in a web; a fly with nothing in sight is calm. `calm` is also the
+// no-strong-emotion baseline for an agent with no goal yet: freshly hatched,
+// freshly spawned, or re-evaluating because the agent its goal named died
+// this tick.
 
 function goalLineFor(subject, believed, arrived, kind) {
   if (kind === "spider-carrying") return `carrying ${believed.subject} toward the web.`;
@@ -678,8 +705,11 @@ export function liveWebs(websMap, turn, webDurationTurns = WEB_DURATION_TURNS) {
  * it.
  *
  * Returns `{ turn, writes, agents, ecology, activeWebs }`: `agents` is keyed
- * by every live spider/fly subject after this tick, each `{ cell, goal,
- * plan, mass, belief }` — `plan` is the direction sequence that produced
+ * by every live spider/fly subject after this tick, each `{ cell, goal, mood,
+ * plan, mass, belief }` — `mood` is the branch's own mood word (see the goal
+ * line and mood word section above), also appended as this turn's mgx:feels
+ * fact, so a renderer reads the structured word rather than parsing `goal`
+ * back apart; `plan` is the direction sequence that produced
  * THIS tick's move (a full multi-step search result when one was found,
  * else a length-1 array for a single greedy step, else `[]` when the agent
  * held still — `plan[0]` is always the direction actually taken, the facing
@@ -744,15 +774,18 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     let nextCell;
     let plan;
     let goal;
+    let mood;
     if (isCarrying && alreadyDelivered) {
       nextCell = spiderCell;
       plan = [];
       goal = goalLineFor(spiderId, { subject: carriedFlyId }, false, "spider-carrying-delivered");
+      mood = "angry";
     } else if (isCarrying) {
       const path = planSpiderPathToWeb(spiderCell, applyActions, state, k, config.webDurationTurns);
       if (path && path.actions.length) { nextCell = path.states[1]; plan = path.actions; }
       else { nextCell = greedySpiderApproach(spiderCell, WEB_HOME, applyActions); plan = stepPlan(spiderCell, nextCell); }
       goal = goalLineFor(spiderId, { subject: carriedFlyId }, false, "spider-carrying");
+      mood = "angry";
     } else {
       // Priority 1: avoid any OTHER live spider believed visible.
       const avoidTarget = nearestBelievedTarget(spiderId, spiderCell, otherSpiders, state, { visionRadius: config.spiderVisionRadius, toldFacts });
@@ -760,6 +793,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
         nextCell = greedySpiderAvoid(spiderCell, avoidTarget.cell, applyActions);
         plan = stepPlan(spiderCell, nextCell);
         goal = goalLineFor(spiderId, avoidTarget, false, "spider-avoid");
+        mood = "scared";
       } else {
         // Priority 2: chase a believed-visible fly, exactly as before.
         const target = nearestBelievedTarget(spiderId, spiderCell, flies, state, { visionRadius: config.spiderVisionRadius, toldFacts });
@@ -782,11 +816,13 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
           // has-exit-* edges have no diagonal hop).
           const arrived = nextCell.x === target.cell.x && nextCell.y === target.cell.y;
           goal = goalLineFor(spiderId, target, arrived, "spider");
+          mood = "angry";
         } else {
           // Priority 3: hold position, and build/refresh a web there unless an
           // unexpired web already covers this exact cell.
           nextCell = spiderCell;
           plan = [];
+          mood = "calm";
           const heldCellId = cellId(spiderCell.x, spiderCell.y);
           if (!hasActiveWebAt(spiderCell.x, spiderCell.y, state, k, config.webDurationTurns)) {
             const webId = `web-${nextWebNum}`;
@@ -805,7 +841,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     postMovePlacements.set(spiderId, nextCell);
     movementWrites.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(nextCell.x, nextCell.y) });
     movementWrites.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:mass", object: String(newMass) });
-    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal, plan, mass: newMass, belief };
+    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal, mood, plan, mass: newMass, belief };
   }
 
   // A fly currently carried by a still-live spider (state.carrying, keyed by
@@ -827,10 +863,12 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     let nextCell;
     let plan;
     let goal;
+    let mood;
     if (captorId) {
       nextCell = postMovePlacements.get(captorId);
       plan = [];
       goal = `being carried by ${captorId}.`;
+      mood = "scared";
     } else {
       const believedSpider = nearestBelievedTarget(flyId, flyCell, spiders, state, { visionRadius: config.flyVisionRadius, toldFacts });
       const webbed = hasActiveWebAt(flyCell.x, flyCell.y, state, k, config.webDurationTurns);
@@ -838,10 +876,12 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
         nextCell = flyCell;
         plan = [];
         goal = "trapped in an active web — can't move.";
+        mood = "scared";
       } else {
         nextCell = greedyFlyMove(flyCell, believedSpider?.cell ?? null, applyActions, k, flyId);
         plan = stepPlan(flyCell, nextCell);
         goal = goalLineFor(flyId, believedSpider, true, "fly");
+        mood = believedSpider ? "scared" : "calm";
       }
     }
     const belief = beliefSnapshotFor(flyId, captorId ? nextCell : flyCell, [...spiders, ...flies.filter((id) => id !== flyId)], state, { visionRadius: config.flyVisionRadius, toldFacts });
@@ -852,7 +892,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     const newMass = Math.max(0, priorMass - config.flyMassDecrementPerTurn);
     postMoveMassByFly.set(flyId, newMass);
     movementWrites.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:mass", object: String(newMass) });
-    agents[flyId] = { cell: cellId(nextCell.x, nextCell.y), goal, plan, mass: newMass, belief };
+    agents[flyId] = { cell: cellId(nextCell.x, nextCell.y), goal, mood, plan, mass: newMass, belief };
   }
 
   const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k, config });
@@ -871,6 +911,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     for (const deadId of diedThisTick) {
       if (new RegExp(`${deadId}(?!\\d)`).test(agents[id].goal)) {
         agents[id].goal = `${deadId} is gone — re-evaluating.`;
+        agents[id].mood = "calm";
         break;
       }
     }
@@ -897,6 +938,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   for (const [spider, flyIds] of eatenBySpider) {
     if (agents[spider]) {
       agents[spider].goal = `just ate ${flyIds.join(" and ")} in the web.`;
+      agents[spider].mood = "happy";
       agents[spider].mass = ecology.events.massAfterEating.get(spider) ?? agents[spider].mass;
     }
   }
@@ -908,8 +950,14 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   // fly's own evade/wander text neither one mentions the catch.
   for (const { spider, fly } of ecology.events.caught) {
     if (eatenBySpider.has(spider)) continue;
-    if (agents[spider]) agents[spider].goal = goalLineFor(spider, { subject: fly }, false, "spider-carrying");
-    if (agents[fly]) agents[fly].goal = `just caught by ${spider} — being carried.`;
+    if (agents[spider]) {
+      agents[spider].goal = goalLineFor(spider, { subject: fly }, false, "spider-carrying");
+      agents[spider].mood = "angry";
+    }
+    if (agents[fly]) {
+      agents[fly].goal = `just caught by ${spider} — being carried.`;
+      agents[fly].mood = "scared";
+    }
   }
   // A hatched spider or a spawned fly is minted by the ecology pass, which
   // runs AFTER the movement loops above already built `agents` from the
@@ -921,13 +969,23 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   // agents[] entry, sharing the egg's own cell.
   for (const h of ecology.events.hatched) {
     for (const { spider, mass } of h.spiders) {
-      agents[spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: [], mass, belief: {} };
+      agents[spider] = { cell: h.cell, goal: "just hatched — no goal yet.", mood: "calm", plan: [], mass, belief: {} };
     }
   }
   if (ecology.events.spawned && ecology.events.spawnedCell) {
-    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", plan: [], mass: config.flyInitialMass, belief: {} };
+    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", mood: "calm", plan: [], mass: config.flyInitialMass, belief: {} };
   }
-  const writes = [...movementWrites, ...ecology.writes];
+  // Each remaining agent's mood goes on record as this turn's own mgx:feels
+  // fact, exactly the way its mgx:currently-in placement did. Built here,
+  // after the ecology pass, so the fact carries the mood the tick ENDED on
+  // (a spider that just ate is happy, not still angry mid-chase) and covers
+  // the hatchlings and the spawned fly the ecology pass just minted. An
+  // agent eaten or starved this tick is already out of `agents`, so nothing
+  // records a mood for it.
+  const moodWrites = Object.entries(agents)
+    .filter(([, agent]) => agent.mood)
+    .map(([id, agent]) => ({ subject: `${id}@turn${k}`, predicate: "mgx:feels", object: agent.mood }));
+  const writes = [...movementWrites, ...ecology.writes, ...moodWrites];
   const provenance = `${worldProvenanceTag(WORLD_NAME)}:turn${k}`;
   await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance })));
 

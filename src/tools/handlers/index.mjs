@@ -1,9 +1,10 @@
 // The tool-name → handler registry dispatchTool maps over. One module per tool, so a
 // tool's behaviour has exactly one home and this file only wires names to it.
 //
-// A handler takes (args, ctx) and returns the caller-facing string. ctx carries the
-// already-loaded { graph, svc, config, repoRoot }. A handler marked `ownsGraphLoad`
-// gets { config, source, tel } instead and loads whatever it needs itself.
+// A handler takes (args, ctx) and returns the caller-facing string, or kit.mjs's
+// toolResult({ content, data }) when it already holds the structured form of what that
+// string says. ctx carries the already-loaded { graph, svc, config, repoRoot }. A handler
+// marked `ownsGraphLoad` gets { config, source, tel } instead and loads what it needs.
 
 import { tmct_context } from "./tmct-context.mjs";
 import { tmct_context_more } from "./tmct-context-more.mjs";

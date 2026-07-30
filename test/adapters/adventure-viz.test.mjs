@@ -905,7 +905,7 @@ test("renderAdventureHtml: edit mode follows the world that is loaded, not the o
   });
   assert.match(
     html,
-    /const prefix = "world:" \+ world\(\)\.name;/,
+    /return rowsForWorld\(rows, world\(\)\.name\);/,
     "the editor's provenance filter reads the loaded world",
   );
   assert.match(
@@ -976,10 +976,11 @@ test("renderAdventureHtml: the editor's textarea is seeded through renderWorldEd
   assert.match(html, /renderWorldEditorText\(editRows, editState\)/);
 });
 
-test("renderAdventureHtml: the whole map reuses visitedRoomGraph fed allRoomIds — a parameter, not a second layout", () => {
+test("renderAdventureHtml: the whole map reuses the shared layout fed allRoomIds — a parameter, not a second layout", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /const allRoomIds = /);
-  assert.match(html, /visitedRoomGraph\(state, allRoomIds\(rows\), ACTING_SUBJECT\)/);
+  assert.match(html, /visitedRoomGraphFor\(state, allRoomIds\(rows\)\)/);
+  assert.match(html, /tmctAdventure\.directedGridLayout\(state, visitedIds, \{ actingSubject: ACTING_SUBJECT \}\)/);
 });
 
 test("renderAdventureHtml: edit-mode writes reach the store through session.applyEdit, never a direct memory write from this page", () => {
@@ -1012,9 +1013,11 @@ test("renderAdventureHtml: with no large tier passed, the icon tier is the activ
   assert.deepEqual(data.largeSpriteTemplates, []);
 });
 
-test("renderAdventureHtml: the manor map draws each room as a named board footprint, the label inside the rectangle", () => {
+test("renderAdventureHtml: the manor map draws each room as a named board footprint through the shared room-graph renderer", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
-  assert.match(html, /room-node[\s\S]{0,500}<rect x="/, "a room renders as a rect footprint");
+  assert.match(html, /function roomGraphSvgFor\(graph, clickable\)/, "the board is built through the shared viz-room-graph.mjs renderer, not a local reimplementation");
+  assert.match(html, /tmctAdventure\.roomGraphSvg\(graph, \{/);
+  assert.match(html, /cellX: 64, cellY: 64, roomW: 56, roomH: 26/, "the board keeps its own footprint sizing");
   assert.match(html, /\.roommap \.room-node rect \{ fill: var\(--parchment\)/, "the footprint fills with the parchment token in both schemes");
   assert.match(html, /\.map-viewport \{[^}]*background: var\(--baize\)/, "the board sits on the baize felt");
 });

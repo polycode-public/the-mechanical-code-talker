@@ -2,10 +2,12 @@
 // embedded (it all arrives live via the sibling ingest-browser.bundle.js,
 // exactly as chat-page-viz.mjs's own page works), so these tests pin the
 // page's STRUCTURE (mirroring chat-page-viz.test.mjs's own style) plus
-// factTripleParts and loadProgressLine, this page's own pure helpers.
+// factTripleParts and loadProgressLine, shared with research-viz.mjs from
+// memory-panel-viz.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderIngestHtml, factTripleParts, loadProgressLine } from "../../src/services/ingest-viz.mjs";
+import { renderIngestHtml } from "../../src/services/ingest-viz.mjs";
+import { factTripleParts, loadProgressLine } from "../../src/services/memory-panel-viz.mjs";
 import { createIngestSession, groundTextToFacts } from "../../src/surfaces/web/ingest-browser-entry.mjs";
 import { createInMemoryStore, readFactRows, loadMemory, appendFact } from "../../src/adapters/memory/core.mjs";
 
@@ -14,10 +16,10 @@ import { createInMemoryStore, readFactRows, loadMemory, appendFact } from "../..
 test("factTripleParts: reads subject/predicate/object/provenance as strings, defaulting to empty", () => {
   assert.deepEqual(
     factTripleParts({ subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" }),
-    { subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" },
+    { subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", source: "", provenance: "teach:chat:x" },
   );
-  assert.deepEqual(factTripleParts({}), { subject: "", predicate: "", object: "", provenance: "" });
-  assert.deepEqual(factTripleParts(null), { subject: "", predicate: "", object: "", provenance: "" });
+  assert.deepEqual(factTripleParts({}), { subject: "", predicate: "", object: "", source: "", provenance: "" });
+  assert.deepEqual(factTripleParts(null), { subject: "", predicate: "", object: "", source: "", provenance: "" });
 });
 
 // ---- loadProgressLine: the boot statusline's pure aggregator ---------------

@@ -6,6 +6,7 @@
 // ship.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import {
   computeCodeLedger,
   computeCodeExplorerData,
@@ -117,4 +118,130 @@ test("the embedded page data carries the payload and the derived view under one 
   const html = renderDefault();
   assert.match(html, /window\.__CODE_EXPLORER__ = Object\.assign\(\{ payload: /);
   assert.ok(html.includes("src/a.mjs"));
+});
+
+// ---- the page's own client, run --------------------------------------------
+
+// Enough DOM for the shell's inline script: the elements it reads by id, the
+// one delegated click listener, and the log it appends turns to.
+function stubPage() {
+  const elements = new Map();
+  const makeElement = () => {
+    const el = {
+      textContent: "", innerHTML: "", value: "", disabled: false, scrollTop: 0, scrollHeight: 0,
+      children: [],
+      appendChild(child) { this.children.push(child); return child; },
+      remove() {}, focus() {}, addEventListener() {}, closest: () => null,
+      setAttribute() {}, getAttribute: () => null,
+    };
+    return el;
+  };
+  for (const id of ["focus-name", "ledger", "hints", "stats", "chat-log", "chat-form", "chat-input",
+    "dock-note", "source-name", "seed-status", "fact-total-value", "open-graph", "open-repo"]) {
+    elements.set(id, makeElement());
+  }
+  const listeners = [];
+  const document = {
+    getElementById: (id) => elements.get(id) ?? null,
+    createElement: makeElement,
+    addEventListener: (type, fn) => listeners.push({ type, fn }),
+  };
+  const clickTerm = (term) => {
+    const target = { closest: (sel) => (sel === "[data-term]" ? { getAttribute: () => term } : null) };
+    for (const { type, fn } of listeners) if (type === "click") fn({ target });
+  };
+  return { elements, document, clickTerm };
+}
+
+/** Run the shell's inline client against a stub page and a stub engine surface,
+ *  and hand back what it rendered. `api` is the page's window.tmctCodeExplorer;
+ *  null is the static page, which has no engine to ask. */
+function runPageClient(data, api) {
+  const page = stubPage();
+  const context = {
+    console: { warn() {}, error() {}, log() {} },
+    fetch: () => Promise.reject(new Error("no network in this test")),
+    document: page.document,
+  };
+  context.window = context;
+  context.globalThis = context;
+  context.window.__CODE_EXPLORER__ = { payload: data.payload, ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta };
+  context.window.tmctCodeExplorer = api;
+  const html = renderCodeExplorerHtml(data);
+  const clientJs = html.slice(html.lastIndexOf("<script>") + "<script>".length, html.lastIndexOf("</script>"));
+  vm.runInContext(clientJs, vm.createContext(context));
+  return {
+    ledgerHtml: () => page.elements.get("ledger").innerHTML,
+    focusName: () => page.elements.get("focus-name").textContent,
+    clickTerm: page.clickTerm,
+  };
+}
+
+const askedRow = (s, phrase, o) => ({ s, kind: phrase, phrase, o, sClass: "", oClass: "" });
+
+test("the sidebar's focus rows are the engine's answer to what relates to the focus, not a filter over the row list", () => {
+  const data = computeCodeExplorerData(payload, { title: "demo code graph" });
+  const asks = [];
+  const page = runPageClient(data, {
+    computeCodeExplorerData,
+    askRelatedFacts(graphPayload, term) {
+      asks.push({ graphPayload, term });
+      return { term, grounded: true, asked: [], rows: [askedRow("src/a.mjs", "re-exports", "only-the-engine-knows.mjs")] };
+    },
+  });
+  assert.deepEqual(asks.map((a) => a.term), ["src/a.mjs"], "the focus is put to the engine on mount");
+  assert.equal(asks[0].graphPayload, payload, "over the loaded graph itself");
+  const rendered = page.ledgerHtml();
+  assert.match(rendered, /only-the-engine-knows\.mjs/, "the answer's own row is drawn");
+  assert.match(rendered, /<span class="verb">re-exports<\/span>/, "with the relation the answer named");
+  assert.ok(rendered.indexOf("only-the-engine-knows.mjs") < rendered.indexOf("src/b.mjs"), "the answered neighbourhood leads, the bulk row list follows");
+});
+
+test("clicking a term re-asks the engine about that term", () => {
+  const data = computeCodeExplorerData(payload, { title: "demo code graph" });
+  const asks = [];
+  const page = runPageClient(data, {
+    computeCodeExplorerData,
+    askRelatedFacts(graphPayload, term) {
+      asks.push(term);
+      return { term, grounded: true, asked: [], rows: [askedRow(term, "calls", "asked-about-" + term)] };
+    },
+  });
+  page.clickTerm("run");
+  assert.deepEqual(asks, ["src/a.mjs", "run"], "the click asks again about the clicked term");
+  assert.equal(page.focusName(), "run");
+  assert.match(page.ledgerHtml(), /asked-about-run/);
+});
+
+test("an ungrounded ask falls back to the row list rather than showing an empty neighbourhood", () => {
+  const data = computeCodeExplorerData(payload, { title: "demo code graph" });
+  const page = runPageClient(data, {
+    computeCodeExplorerData,
+    askRelatedFacts: (graphPayload, term) => ({ term, grounded: false, asked: [], rows: [] }),
+  });
+  const rendered = page.ledgerHtml();
+  assert.match(rendered, /src\/b\.mjs/, "the row list's own rows still draw");
+  assert.doesNotMatch(rendered, /no edges in this graph/);
+});
+
+test("a grounded ask that finds nothing says so, where an empty graph says something else", () => {
+  const data = computeCodeExplorerData(payload, { title: "demo code graph" });
+  const emptyLedger = { ...data, ledger: { ...data.ledger, rows: [] } };
+  const answered = runPageClient(emptyLedger, {
+    computeCodeExplorerData,
+    askRelatedFacts: (graphPayload, term) => ({ term, grounded: true, asked: [], rows: [] }),
+  });
+  assert.match(answered.ledgerHtml(), /nothing in this graph relates to src\/a\.mjs/);
+  const unasked = runPageClient(emptyLedger, {
+    computeCodeExplorerData,
+    askRelatedFacts: (graphPayload, term) => ({ term, grounded: false, asked: [], rows: [] }),
+  });
+  assert.match(unasked.ledgerHtml(), /no edges in this graph/);
+});
+
+test("the static page, with no engine bundle, still reads its rows back from the embedded view", () => {
+  const data = computeCodeExplorerData(payload, { title: "demo code graph" });
+  const page = runPageClient(data, null);
+  assert.match(page.ledgerHtml(), /src\/b\.mjs/);
+  assert.equal(page.focusName(), "src/a.mjs");
 });

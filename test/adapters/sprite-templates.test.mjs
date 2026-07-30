@@ -5,7 +5,9 @@
 // the Ashcombe Hall objects it names to their own specific sprite.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveSpriteAsset, spriteTemplateProblems } from "../../src/domain/sprite-templates.mjs";
+import {
+  resolveSpriteAsset, spriteTemplateProblems, matchConstraints, FACING_VALUES, POSE_VALUES,
+} from "../../src/domain/sprite-templates.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { SPRITE_REGISTRY } from "../../src/domain/sprite-map.mjs";
 
@@ -357,6 +359,254 @@ test("specificity order still holds with two parameters present: a [match] varia
 test("specificity order still holds with two parameters present: no fact at all for either dimension falls through to the plain template", () => {
   const templates = [{ classes: ["lamp"], svg: "<svg>lamp-plain</svg>" }, dualTemplate()];
   assert.equal(resolveSpriteAsset("lamp", [], [], templates, PLAIN_REGISTRY), "<svg>lamp-plain</svg>");
+});
+
+// ---- a [match] variant may carry its own [parameters.*] too ----------------
+// (the facing pairs: a satisfied [match] picks the profile art, and the
+// instance's OTHER facts then fill that same variant's placeholders, so one
+// sprite can be both turned left and visibly happy)
+
+const faces = (subject, object) => ({ subject, predicate: "mgx:faces", object });
+const feels = (subject, object) => ({ subject, predicate: "mgx:feels", object });
+
+const facingVariant = () => ({
+  classes: ["bear"],
+  svg: "<svg>left-profile{{FACE}}</svg>",
+  match: { property: "mgx:faces", value: "left" },
+  face: { cx: 7.2, cy: 8.25, scale: 3 },
+  parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE", sad: "SAD-FACE" } } },
+});
+const frontEmotionTemplate = () => ({
+  classes: ["bear"],
+  svg: "<svg>front-view{{FACE}}</svg>",
+  face: { cx: 12, cy: 9, scale: 5 },
+  parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE", sad: "SAD-FACE" } } },
+});
+const PLAIN_BEAR = { classes: ["bear"], svg: "<svg>bear-plain</svg>" };
+
+test("a [match] variant that also declares [parameters.emotion] fills that parameter from the instance's own second fact", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profileHAPPY-FACE</svg>");
+});
+
+test("each mood word fills the same [match] variant with its own substitution", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const sad = [faces("the-bear", "left"), feels("the-bear", "sad")];
+  assert.equal(resolveSpriteAsset("bear", [], sad, templates, PLAIN_REGISTRY), "<svg>left-profileSAD-FACE</svg>");
+});
+
+test("a [match] variant selected on its match alone drops the placeholder nothing filled, never leaking the raw token", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const svg = resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>left-profile</svg>");
+});
+
+test("a satisfied [match] holds even when its own parameter finds nothing to fill — the profile art never falls through to the plain template", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "ecstatic")];
+  const svg = resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>left-profile</svg>", "an unmapped mood is never a guessed face, and never costs the instance the pose it asked for");
+});
+
+test("a [match] variant outranks a sibling parameterized template that would fill the same fact", () => {
+  const templates = [PLAIN_BEAR, frontEmotionTemplate(), facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profileHAPPY-FACE</svg>");
+});
+
+test("an emotion fact with no facing fact still reaches the parameterized front view, not the profile variant", () => {
+  const templates = [PLAIN_BEAR, frontEmotionTemplate(), facingVariant()];
+  assert.equal(
+    resolveSpriteAsset("bear", [], [feels("the-bear", "happy")], templates, PLAIN_REGISTRY),
+    "<svg>front-viewHAPPY-FACE</svg>",
+  );
+});
+
+test("a [match] variant declaring no parameters at all is still returned byte-for-byte, whatever other facts the instance carries", () => {
+  const templates = [
+    PLAIN_BEAR,
+    { classes: ["bear"], svg: "<svg>left-profile-no-face</svg>", match: { property: "mgx:faces", value: "left" } },
+  ];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy"), hasProperty("the-bear", "black")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profile-no-face</svg>");
+});
+
+test("spriteTemplateProblems flags a [match] variant whose face has no parameters.emotion to select it", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["bear"], svg: "<svg>left-profile</svg>",
+    match: { property: "mgx:faces", value: "left" },
+    face: FACE_TABLE,
+  });
+  assert.ok(problems.some((p) => p.includes("face is declared without parameters.emotion")));
+});
+
+test("spriteTemplateProblems flags a [match] variant whose parameters.emotion has no face to anchor it", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["bear"], svg: "<svg>left-profile{{FACE}}</svg>",
+    match: { property: "mgx:faces", value: "left" },
+    parameters: { emotion: EMOTION_PARAM },
+  });
+  assert.ok(problems.some((p) => p.includes("parameters.emotion is declared without a face")));
+});
+
+test("spriteTemplateProblems accepts a well-formed [match] + face + parameters.emotion variant", () => {
+  assert.deepEqual(spriteTemplateProblems(facingVariant()), []);
+});
+
+test("spriteTemplateProblems still catches a missing placeholder token on a [match] variant", () => {
+  const problems = spriteTemplateProblems({ ...facingVariant(), svg: "<svg>left-profile</svg>" });
+  assert.ok(problems.some((p) => p.includes("does not appear in svg")));
+});
+
+// ---- a variant may require several facts at once ---------------------------
+// (repeated [[match]] tables: the combined facing-and-pose art needs
+// mgx:faces AND mgx:pose to hold together, which one [match] table cannot
+// say. The single-table spelling stays exactly a one-constraint list.)
+
+const poses = (subject, object) => ({ subject, predicate: "mgx:pose", object });
+
+const combinedVariant = () => ({
+  classes: ["bear"],
+  svg: "<svg>left-profile-moving{{FACE}}</svg>",
+  match: [
+    { property: "mgx:faces", value: "left" },
+    { property: "mgx:pose", value: "moving" },
+  ],
+  face: { cx: 7.2, cy: 8.25, scale: 3 },
+  parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE", sad: "SAD-FACE" } } },
+});
+
+test("matchConstraints reads both spellings into the same flat list, and neither invents a constraint", () => {
+  assert.deepEqual(matchConstraints({ match: { property: "mgx:faces", value: "left" } }), [{ property: "mgx:faces", value: "left" }]);
+  assert.deepEqual(matchConstraints(combinedVariant()).map((c) => `${c.property}=${c.value}`), ["mgx:faces=left", "mgx:pose=moving"]);
+  assert.deepEqual(matchConstraints({ classes: ["bear"], svg: "<svg/>" }), []);
+  assert.deepEqual(matchConstraints(), []);
+});
+
+test("a half-written match entry is dropped rather than read as a wildcard, so it can never widen what the variant claims", () => {
+  assert.deepEqual(matchConstraints({ match: [{ property: "mgx:faces" }, { value: "moving" }] }), []);
+  const templates = [PLAIN_BEAR, { classes: ["bear"], svg: "<svg>broken</svg>", match: { property: "mgx:faces" } }];
+  assert.equal(resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY), "<svg>bear-plain</svg>");
+});
+
+test("a two-constraint variant applies only when BOTH facts hold", () => {
+  const templates = [PLAIN_BEAR, combinedVariant()];
+  const both = [faces("the-bear", "left"), poses("the-bear", "moving")];
+  assert.equal(resolveSpriteAsset("bear", [], both, templates, PLAIN_REGISTRY), "<svg>left-profile-moving</svg>");
+  assert.equal(resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY), "<svg>bear-plain</svg>");
+  assert.equal(resolveSpriteAsset("bear", [], [poses("the-bear", "moving")], templates, PLAIN_REGISTRY), "<svg>bear-plain</svg>");
+});
+
+test("the wrong value on either axis is never a near-enough match", () => {
+  const templates = [PLAIN_BEAR, combinedVariant()];
+  const wrongAngle = [faces("the-bear", "right"), poses("the-bear", "moving")];
+  const wrongPose = [faces("the-bear", "left"), poses("the-bear", "sprinting")];
+  assert.equal(resolveSpriteAsset("bear", [], wrongAngle, templates, PLAIN_REGISTRY), "<svg>bear-plain</svg>");
+  assert.equal(resolveSpriteAsset("bear", [], wrongPose, templates, PLAIN_REGISTRY), "<svg>bear-plain</svg>");
+});
+
+test("the satisfied variant requiring the most facts wins, whichever order the templates were loaded in", () => {
+  const both = [faces("the-bear", "left"), poses("the-bear", "moving")];
+  const combinedLast = [PLAIN_BEAR, facingVariant(), combinedVariant()];
+  const combinedFirst = [PLAIN_BEAR, combinedVariant(), facingVariant()];
+  assert.equal(resolveSpriteAsset("bear", [], both, combinedLast, PLAIN_REGISTRY), "<svg>left-profile-moving</svg>");
+  assert.equal(resolveSpriteAsset("bear", [], both, combinedFirst, PLAIN_REGISTRY), "<svg>left-profile-moving</svg>");
+});
+
+test("dropping the pose fact falls back to the facing-only variant, never to the plain template", () => {
+  const templates = [PLAIN_BEAR, facingVariant(), combinedVariant()];
+  assert.equal(resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY), "<svg>left-profile</svg>");
+});
+
+test("all three axes compose: the combined variant's own emotion parameter still fills from the mood fact", () => {
+  const templates = [PLAIN_BEAR, facingVariant(), combinedVariant()];
+  const three = [faces("the-bear", "left"), poses("the-bear", "moving"), feels("the-bear", "happy")];
+  assert.equal(resolveSpriteAsset("bear", [], three, templates, PLAIN_REGISTRY), "<svg>left-profile-movingHAPPY-FACE</svg>");
+  const sad = [faces("the-bear", "left"), poses("the-bear", "moving"), feels("the-bear", "sad")];
+  assert.equal(resolveSpriteAsset("bear", [], sad, templates, PLAIN_REGISTRY), "<svg>left-profile-movingSAD-FACE</svg>");
+});
+
+test("a mood outside the curated set never costs the combined variant the art the instance did ask for", () => {
+  const templates = [PLAIN_BEAR, facingVariant(), combinedVariant()];
+  const facts = [faces("the-bear", "left"), poses("the-bear", "moving"), feels("the-bear", "ecstatic")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profile-moving</svg>");
+});
+
+test("adding a two-constraint variant leaves every one-constraint template resolving byte-for-byte as before", () => {
+  const before = [PLAIN_BEAR, facingVariant(), frontEmotionTemplate()];
+  const after = [...before, combinedVariant()];
+  const cases = [
+    [],
+    [feels("the-bear", "happy")],
+    [faces("the-bear", "left")],
+    [faces("the-bear", "left"), feels("the-bear", "sad")],
+    [poses("the-bear", "moving"), feels("the-bear", "happy")],
+  ];
+  for (const facts of cases) {
+    assert.equal(
+      resolveSpriteAsset("bear", [], facts, after, PLAIN_REGISTRY),
+      resolveSpriteAsset("bear", [], facts, before, PLAIN_REGISTRY),
+      `facts ${JSON.stringify(facts.map((f) => `${f.predicate}=${f.object}`))} must resolve the same either way`,
+    );
+  }
+});
+
+test("the two new turntable angles resolve their own art, distinct from the full profile", () => {
+  const half = { classes: ["bear"], svg: "<svg>half-left-profile</svg>", match: { property: "mgx:faces", value: "half-left" } };
+  const templates = [PLAIN_BEAR, facingVariant(), half];
+  assert.equal(resolveSpriteAsset("bear", [], [faces("the-bear", "half-left")], templates, PLAIN_REGISTRY), "<svg>half-left-profile</svg>");
+  assert.equal(resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY), "<svg>left-profile</svg>");
+});
+
+test("spriteTemplateProblems accepts a well-formed two-constraint variant", () => {
+  assert.deepEqual(spriteTemplateProblems(combinedVariant()), []);
+});
+
+test("spriteTemplateProblems flags a match entry missing either half, in the plural spelling too", () => {
+  const problems = spriteTemplateProblems({
+    ...combinedVariant(),
+    match: [{ property: "mgx:faces", value: "left" }, { property: "mgx:pose" }],
+  });
+  assert.ok(problems.some((p) => p.includes("match is missing property or value")));
+});
+
+test("spriteTemplateProblems flags two constraints demanding different values of the same property — no instance could satisfy it", () => {
+  const problems = spriteTemplateProblems({
+    ...combinedVariant(),
+    match: [{ property: "mgx:faces", value: "left" }, { property: "mgx:faces", value: "right" }],
+  });
+  assert.ok(problems.some((p) => p.includes("no instance can satisfy that")));
+});
+
+test("spriteTemplateProblems flags a facing value the turntable does not have", () => {
+  const problems = spriteTemplateProblems({ ...facingVariant(), match: { property: "mgx:faces", value: "north" } });
+  assert.ok(problems.some((p) => p.includes("not one of the turntable's angles")));
+  for (const angle of FACING_VALUES) {
+    assert.deepEqual(spriteTemplateProblems({ ...facingVariant(), match: { property: "mgx:faces", value: angle } }), []);
+  }
+});
+
+test("spriteTemplateProblems flags a pose value outside the known set, and accepts every value in it", () => {
+  const problems = spriteTemplateProblems({
+    ...combinedVariant(),
+    match: [{ property: "mgx:faces", value: "left" }, { property: "mgx:pose", value: "cartwheeling" }],
+  });
+  assert.ok(problems.some((p) => p.includes("not one of the known poses")));
+  for (const pose of POSE_VALUES) {
+    assert.deepEqual(
+      spriteTemplateProblems({ ...combinedVariant(), match: [{ property: "mgx:faces", value: "left" }, { property: "mgx:pose", value: pose } ] }),
+      [],
+    );
+  }
+});
+
+test("a variant matching on any other predicate keeps its open vocabulary — only facing and pose are closed axes", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["portrait"], svg: "<svg>round</svg>",
+    match: { property: "mgx:hasProperty", value: "whatever-a-visitor-taught" },
+  });
+  assert.deepEqual(problems, []);
 });
 
 // ---- the icon tier and the sprite tier resolve independently ---------------
