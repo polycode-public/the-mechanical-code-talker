@@ -2201,12 +2201,18 @@ function pageScript() {
   // block owns what a person sees and clicks, and nothing else.
   const P2P_ASSET = "./vendor/p2p.js";
   const NODE_NAME_KEY = "tmct.mud.nodeName";
+  // Not the IndexedDB store beside it: that record is stamped with the site
+  // version and the seed, and is dropped whenever either moves. A node id has
+  // to outlive a deploy, because peers have already keyed this node's facts
+  // on it.
+  const NODE_ID_KEY = "tmct.mud.nodeId";
   const invite = inviteParamsFrom(window.location.search);
 
   let p2p = null;
   let p2pLoad = null;
   let room = null;
   let myPeerId = null;
+  let myNodeId = "";
   let myDisplayName = "";
   let worldId = "";
   let worldName = "";
@@ -2228,6 +2234,13 @@ function pageScript() {
   async function ensureIdentity() {
     const mod = await loadP2p();
     if (!myPeerId) myPeerId = mod.generatePeerId();
+    if (!myNodeId) {
+      try { myNodeId = localStorage.getItem(NODE_ID_KEY) || ""; } catch { myNodeId = ""; }
+      if (!myNodeId) {
+        myNodeId = mod.generateNodeId();
+        try { localStorage.setItem(NODE_ID_KEY, myNodeId); } catch { /* private mode — this visit still has an id, it just won't outlive the tab */ }
+      }
+    }
     if (!myDisplayName) {
       myDisplayName = readStoredNodeName() || mod.generateDisplayName();
       el("nodeNameInput").value = myDisplayName;
@@ -2255,6 +2268,7 @@ function pageScript() {
       memoryDir: session.memoryDir,
       myPeerId: myPeerId,
       myDisplayName: myDisplayName,
+      myNodeId: myNodeId,
       worldId: worldId,
       worldName: worldName,
       transportFactory: function () { return mod.createTransport({ iceServers: [] }); },

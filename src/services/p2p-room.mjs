@@ -28,7 +28,8 @@ import {
   NODE_NAME_PREDICATE,
   WAVED_PREDICATE,
 } from "../domain/p2p/facts.mjs";
-import { appendFacts, loadMemory, readFactRows, normFactTerm, FACT_CLASS } from "../adapters/memory/core.mjs";
+import { generateNodeId } from "../domain/p2p/peer-id.mjs";
+import { appendFacts, loadMemory, loadNodeId, saveNodeId, readFactRows, normFactTerm, FACT_CLASS } from "../adapters/memory/core.mjs";
 
 export const ROOM_IDLE = "idle";
 export const ROOM_SHARING = "sharing";
@@ -69,7 +70,10 @@ const problem = (context, code) => ({
 
 // A tag this shape has already been rewritten for the wire by whichever peer
 // authored it. Relabeling it again would overwrite their node name with ours
-// and lose the attribution the receiving page renders as "taught by X".
+// and lose the attribution the receiving page renders as "taught by X". The
+// prefix is all this needs to match: everything a relabel adds after it — the
+// display name, the `#node:<id>` origin segment, the timestamp — is that
+// peer's, so a relayed tag stays byte-identical however much it carries.
 const ALREADY_PEER_LABELED = /^teach:peer:/;
 
 /** One outgoing tag per stored tag, each relabeled under the timestamp it
@@ -78,7 +82,7 @@ const ALREADY_PEER_LABELED = /^teach:peer:/;
  *  wave replayed inside a sync response reading as freshly waved, and it makes
  *  the rewrite idempotent: a peer that relays a tag it received produces the
  *  same tag again, so the union stops growing once every peer has seen it. */
-function wireProvenanceTags(provenance, myDisplayName, fallbackTimestamp) {
+function wireProvenanceTags(provenance, identity, fallbackTimestamp) {
   const stored = String(provenance || "").split(" | ").filter(Boolean);
   if (!stored.length) return [""];
   const tags = new Set();
@@ -86,9 +90,23 @@ function wireProvenanceTags(provenance, myDisplayName, fallbackTimestamp) {
     if (ALREADY_PEER_LABELED.test(segment)) { tags.add(segment); continue; }
     const assertedAt = latestProvenanceTimestamp(segment);
     const timestamp = assertedAt === null ? fallbackTimestamp : new Date(assertedAt).toISOString();
-    tags.add(relabelForBroadcast(segment, myDisplayName, timestamp));
+    tags.add(relabelForBroadcast(segment, identity.displayName, timestamp, identity.nodeId));
   }
   return [...tags];
+}
+
+/** This store's own node id, minted on first use and never regenerated: it
+ *  keys every assertion the node broadcasts, so re-minting one would split a
+ *  single node's history into two apparent origins that then corroborate each
+ *  other. An id already on the store always wins over `preferred` (what a
+ *  browser page carries across reloads) for exactly that reason — `preferred`
+ *  only seeds a store that has never joined a room. */
+export async function resolveStoreNodeId(memoryDir, preferred = "") {
+  const stored = await loadNodeId(memoryDir);
+  if (stored) return stored;
+  const minted = preferred || generateNodeId();
+  await saveNodeId(memoryDir, minted);
+  return minted;
 }
 
 const isFactShaped = (f) => !!f
@@ -102,8 +120,8 @@ const isFactShaped = (f) => !!f
  *  none of them — so a fact whose provenance had grown would union again on
  *  every hop and never settle. Sending each tag on its own row keeps the merge
  *  idempotent, and a repeated triple inside one batch unions correctly. */
-const toWireFacts = (row, myDisplayName, fallbackTimestamp) =>
-  wireProvenanceTags(row.provenance, myDisplayName, fallbackTimestamp).map((provenance) => ({
+const toWireFacts = (row, identity, fallbackTimestamp) =>
+  wireProvenanceTags(row.provenance, identity, fallbackTimestamp).map((provenance) => ({
     subject: row.subject,
     predicate: row.predicate,
     object: row.object,
@@ -122,6 +140,11 @@ export function createP2pRoom({
   memoryDir,
   myPeerId,
   myDisplayName,
+  // Optional. A browser page carries its node id across reloads itself (the
+  // in-memory store it rebuilds each visit cannot), so it passes the id it
+  // kept; a store that already holds one keeps that instead. Omitted, the
+  // room mints one onto the store the first time it joins a room.
+  myNodeId = "",
   worldId,
   worldName,
   transportFactory,
@@ -144,6 +167,11 @@ export function createP2pRoom({
     return new Date(nudged).toISOString();
   };
   let displayName = myDisplayName;
+  let nodeId = myNodeId;
+  // What this node's own assertions go out under: the name people read, and
+  // the stable id that keys them. Read fresh per broadcast — a rename or a
+  // recast can move either between one turn and the next.
+  const wireIdentity = () => ({ displayName, nodeId });
   let state = ROOM_IDLE;
   let lastError = null;
   let started = false;
@@ -242,6 +270,9 @@ export function createP2pRoom({
   async function ensureStarted() {
     if (started) return;
     started = true;
+    // Joining a room is the first moment this store needs an identity other
+    // peers can key on, so it is where the node id is minted.
+    nodeId = await resolveStoreNodeId(memoryDir, myNodeId);
     // Every fact already on disk is history, not something this session
     // authored, so it is baselined as seen. A joiner gets it through sync
     // instead, which is what the sync filter exists to size down.
@@ -273,7 +304,7 @@ export function createP2pRoom({
     const targets = connectedPeers();
     if (!targets.length) return { broadcast: 0 };
     const timestamp = now();
-    const facts = changed.flatMap((row) => toWireFacts(row, displayName, timestamp));
+    const facts = changed.flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
     broadcast(opMessage({ from: myPeerId, facts }));
     return { broadcast: changed.length };
   }
@@ -373,7 +404,7 @@ export function createP2pRoom({
         const facts = await withStore(async () => {
           await refreshRows();
           const timestamp = now();
-          return syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, displayName, timestamp));
+          return syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
         });
         send(transport, syncResponseMessage({ facts }));
         return;
@@ -557,6 +588,11 @@ export function createP2pRoom({
       if (nextWorldName) worldName = nextWorldName;
       if (nextDisplayName) displayName = nextDisplayName;
       started = true;
+      // The store changed, so the node id is re-resolved against the new one.
+      // A recast store that has never joined a room adopts the id this node
+      // has been broadcasting under all along, which is what keeps a recast
+      // from reading to every peer as a brand-new node.
+      nodeId = await resolveStoreNodeId(memoryDir, nodeId || myNodeId);
       seenProvenanceById.clear();
       cachedRows = [];
       const timestamp = now();
@@ -573,7 +609,7 @@ export function createP2pRoom({
       let pushed = 0;
       if (targets.length) {
         const wireTimestamp = now();
-        const facts = syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, displayName, wireTimestamp));
+        const facts = syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, wireIdentity(), wireTimestamp));
         pushed = facts.length;
         if (facts.length) broadcast(opMessage({ from: myPeerId, facts }));
         broadcast(syncRequestMessage());
@@ -602,6 +638,7 @@ export function createP2pRoom({
     worldId,
     get worldName() { return worldName; },
     get displayName() { return displayName; },
+    get nodeId() { return nodeId; },
     get state() { return state; },
     get lastError() { return lastError; },
     get droppedMessages() { return droppedMessages; },

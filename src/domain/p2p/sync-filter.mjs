@@ -6,7 +6,11 @@
 // actually added since boot.
 import { provenanceTagToSource } from "../memory/trust.mjs";
 
-const CHAT_SYNCABLE_KINDS = new Set(["teach", "operator"]);
+// "teachNode" is the same human teaching, seen from one hop further out: a
+// peer's own relabeled tag, keyed on the node id it carries. It syncs for
+// exactly the reason "teach" does, and leaving it out would silently strand
+// every fact that had already crossed the wire once.
+const CHAT_SYNCABLE_KINDS = new Set(["teach", "operator", "teachNode"]);
 
 /** chat.html: every fact a human (locally or via a peer) actually taught or
  *  asserted — never a row from the shipped corpus. */

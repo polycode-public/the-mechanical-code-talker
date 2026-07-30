@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createP2pRoom, PRESENCE_SCOPE } from "../../src/services/p2p-room.mjs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createP2pRoom, PRESENCE_SCOPE, resolveStoreNodeId } from "../../src/services/p2p-room.mjs";
 import { chatSyncableFacts } from "../../src/domain/p2p/sync-filter.mjs";
 import { decodeInviteBlob } from "../../src/domain/p2p/wire.mjs";
 import { WAVED_PREDICATE } from "../../src/domain/p2p/facts.mjs";
@@ -89,7 +92,7 @@ const settle = async (rounds = 60) => {
 const WORLD_ID = "world-mossy-hollow";
 const WORLD_NAME = "mossy hollow";
 
-function makeRoom(network, { peerId, displayName, capture }) {
+function makeRoom(network, { peerId, displayName, capture, nodeId }) {
   const memoryDir = createInMemoryStore();
   const transportFactory = () => {
     const transport = network.createTransport();
@@ -100,6 +103,7 @@ function makeRoom(network, { peerId, displayName, capture }) {
     memoryDir,
     myPeerId: peerId,
     myDisplayName: displayName,
+    myNodeId: nodeId,
     worldId: WORLD_ID,
     worldName: WORLD_NAME,
     transportFactory,
@@ -171,7 +175,7 @@ test("a locally taught fact is diffed, relabeled onto this node's name, and merg
   const merged = findRow(bobRows, "rover", "mgx:isA");
   assert.ok(merged, "the taught fact reached the peer");
   assert.equal(merged.object, "dog");
-  assert.match(merged.provenance, /^teach:peer:amber-fox@/);
+  assert.match(merged.provenance, /^teach:peer:amber-fox#node:[0-9a-f]{16}@/);
 
   const aliceRows = await rowsOf(alice.memoryDir);
   assert.equal(findRow(aliceRows, "rover", "mgx:isA").provenance, "teach:chat:sess-a@2026-05-01T10:00:00.000Z");
@@ -351,7 +355,7 @@ test("a fact taught after the mesh completes reaches all three peers", async () 
     const row = findRow(await rowsOf(peer.memoryDir), "heron", "mgx:isA");
     assert.ok(row, "the fact reached every peer in the mesh");
     assert.equal(row.object, "bird");
-    assert.match(row.provenance, /^teach:peer:pale-thistle@/);
+    assert.match(row.provenance, /^teach:peer:pale-thistle#node:[0-9a-f]{16}@/);
   }
 });
 
@@ -521,5 +525,104 @@ test("a joiner picks up the facts already in the room through sync, not only liv
 
   const row = findRow(await rowsOf(bob.memoryDir), "wren", "mgx:isA");
   assert.ok(row, "a fact taught before anyone connected still reaches a joiner");
-  assert.match(row.provenance, /^teach:peer:amber-fox@/);
+  assert.match(row.provenance, /^teach:peer:amber-fox#node:[0-9a-f]{16}@/);
+});
+
+// ---- the stable node id ----------------------------------------------------
+
+test("a store mints its node id once and reads back the same one on every later open", async () => {
+  const store = createInMemoryStore();
+  const first = await resolveStoreNodeId(store);
+  assert.match(first, /^[0-9a-f]{16}$/, "16 hex, safe to carry between a tag's own separators");
+  assert.equal(await resolveStoreNodeId(store), first, "a second open re-reads rather than re-mints");
+});
+
+test("an id a store already holds beats one a caller offers, because re-keying would split one node's history in two", async () => {
+  const store = createInMemoryStore();
+  const minted = await resolveStoreNodeId(store);
+  assert.equal(await resolveStoreNodeId(store, "aaaaaaaaaaaaaaaa"), minted);
+});
+
+test("a node id a page carried across a reload seeds a store that has never joined a room", async () => {
+  const store = createInMemoryStore();
+  assert.equal(await resolveStoreNodeId(store, "6589e595d1fa9a90"), "6589e595d1fa9a90");
+});
+
+test("two separate stores never mint the same node id", async () => {
+  const ids = new Set();
+  for (let i = 0; i < 8; i += 1) ids.add(await resolveStoreNodeId(createInMemoryStore()));
+  assert.equal(ids.size, 8);
+});
+
+test("a file-backed store keeps its node id across separate opens of the same directory", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-node-id-"));
+  try {
+    const first = await resolveStoreNodeId(dir);
+    assert.match(first, /^[0-9a-f]{16}$/);
+    assert.equal(await resolveStoreNodeId(dir), first, "the id survives on disk, not just in memory");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a room broadcasts under the node id its store already holds rather than minting a second one", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  await resolveStoreNodeId(alice.memoryDir, "7f3a9c2e5b1d4a60");
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await alice.room.afterLocalChange();
+  await settle();
+
+  assert.equal(alice.room.nodeId, "7f3a9c2e5b1d4a60");
+  const merged = findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA");
+  assert.equal(merged.provenance, "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-05-01T10:00:00.000Z");
+});
+
+test("a relayed fact keeps the originating node's id through a second hop, never the relayer's", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: "7f3a9c2e5b1d4a60" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: "6589e595d1fa9a90" });
+  const carol = makeRoom(network, { peerId: "peer-c", displayName: "pale-thistle", nodeId: "defbc7690571a8b6" });
+
+  await connect(alice.room, bob.room);
+  await appendFacts(alice.memoryDir, [teachFact("wren", "mgx:isA", "bird", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await alice.room.afterLocalChange();
+  await settle();
+
+  // Carol joins through Bob, so the only copy she can get has already been
+  // relayed once. An already-labeled tag is left exactly as its author wrote
+  // it, node segment and all, or attribution would follow the last hop.
+  await connect(bob.room, carol.room);
+  await settle();
+
+  const relayed = findRow(await rowsOf(carol.memoryDir), "wren", "mgx:isA");
+  assert.ok(relayed, "the fact reached the peer two hops from where it was taught");
+  assert.equal(relayed.provenance, "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-05-01T10:00:00.000Z");
+  assert.deepEqual(relayed.sourceIds, ["src:teach-node:7f3a9c2e5b1d4a60"]);
+});
+
+test("two peers who chose the same display name stay separate Sources, because the node id is what keys them", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: "7f3a9c2e5b1d4a60" });
+  const twin = makeRoom(network, { peerId: "peer-b", displayName: "amber-fox", nodeId: "6589e595d1fa9a90" });
+  const bob = makeRoom(network, { peerId: "peer-c", displayName: "mossy-acorn" });
+
+  await connect(alice.room, bob.room);
+  await connect(twin.room, bob.room);
+
+  await appendFacts(alice.memoryDir, [teachFact("wren", "mgx:isA", "bird", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await alice.room.afterLocalChange();
+  await appendFacts(twin.memoryDir, [teachFact("wren", "mgx:isA", "bird", "sess-b", "2026-05-01T11:00:00.000Z")]);
+  await twin.room.afterLocalChange();
+  await settle();
+
+  const row = findRow(await rowsOf(bob.memoryDir), "wren", "mgx:isA");
+  assert.deepEqual(
+    [...row.sourceIds].sort(),
+    ["src:teach-node:6589e595d1fa9a90", "src:teach-node:7f3a9c2e5b1d4a60"],
+    "one shared name, two nodes, two Sources",
+  );
 });

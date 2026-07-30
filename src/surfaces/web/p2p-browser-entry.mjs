@@ -26,7 +26,7 @@ export {
   ROOM_FAILED,
 } from "../../services/p2p-room.mjs";
 export { createTransport } from "../../adapters/p2p/webrtc-transport.mjs";
-export { generatePeerId, generateWorldId, generateDisplayName } from "../../domain/p2p/peer-id.mjs";
+export { generatePeerId, generateWorldId, generateDisplayName, generateNodeId } from "../../domain/p2p/peer-id.mjs";
 export { chatSyncableFacts, mudSyncableFacts } from "../../domain/p2p/sync-filter.mjs";
 export { decodeInviteBlob, encodeInviteBlob } from "../../domain/p2p/wire.mjs";
 export {

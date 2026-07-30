@@ -396,3 +396,65 @@ test("entailed hook: min(premise trusts) × rule-confidence when premises are su
   );
   assert.equal(withPremises.score, 0.3); // min(0.9,0.6,0.8)=0.6 × 0.5 = 0.30
 });
+
+// ---- teach:peer:<name>#node:<id>@<ts> — the wire's origin identity ----------
+
+test("a peer tag's node segment keys the Source; the display name beside it is presentation only", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z"),
+    { kind: "teachNode", nodeId: "7f3a9c2e5b1d4a60", displayName: "amber-fox", createdAt: "2026-01-01T00:00:00.000Z" },
+  );
+});
+
+test("one display name across two nodes parses to two different origins", () => {
+  const one = provenanceTagToSource("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  const other = provenanceTagToSource("teach:peer:amber-fox#node:6589e595d1fa9a90@2026-01-01T00:00:00.000Z");
+  assert.notEqual(one.nodeId, other.nodeId);
+  assert.equal(one.displayName, other.displayName);
+});
+
+test("a peer tag with no node segment stays a plain teach session, so an older peer's tags still parse", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:peer:amber-fox@2026-01-01T00:00:00.000Z"),
+    { kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", sessionId: "amber-fox" },
+  );
+});
+
+test("a local teach session is untouched by the peer-tag path", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:chat:sess-123@2026-01-01T00:00:00.000Z"),
+    { kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", sessionId: "sess-123" },
+  );
+});
+
+// The shipped parser reproduced exactly as it stood before the node segment
+// existed: everything between the first ":" and the "@" is one opaque session
+// slot. A peer running an older build is a real reader on a mixed mesh, so a
+// new-format tag has to survive this unchanged rather than merely not crash.
+function parseAsOlderReader(tag) {
+  const rest = tag.slice("teach:".length);
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const colon = beforeAt.indexOf(":");
+  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+  return { kind: "teach", createdAt, ...(sessionId ? { sessionId } : {}) };
+}
+
+test("an older reader parses a new-format peer tag onto a session id that is still node-unique", () => {
+  const older = parseAsOlderReader("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  assert.equal(older.kind, "teach");
+  assert.equal(older.createdAt, "2026-01-01T00:00:00.000Z", "the timestamp still lands where it always did");
+  assert.equal(older.sessionId, "amber-fox#node:7f3a9c2e5b1d4a60", "the node segment reads as part of one opaque slot");
+});
+
+test("an older reader keeps two same-named nodes apart, because the id it cannot interpret is still inside the slot it keys on", () => {
+  const one = parseAsOlderReader("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  const other = parseAsOlderReader("teach:peer:amber-fox#node:6589e595d1fa9a90@2026-01-01T00:00:00.000Z");
+  assert.notEqual(one.sessionId, other.sessionId);
+});
+
+test("an older reader and a new one agree on the timestamp, so a tag orders the same on both", () => {
+  const tag = "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z";
+  assert.equal(parseAsOlderReader(tag).createdAt, provenanceTagToSource(tag).createdAt);
+});
