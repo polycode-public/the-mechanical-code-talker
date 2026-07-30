@@ -1,0 +1,72 @@
+# manager-facing-left — manager-with-emotion.toml's figure turned to a left
+# profile, the same treatment king-facing-left.toml gives the crowned body:
+# the head shifts toward the left shoulder, a nose wedge breaks the head's
+# left silhouette, and a single forward eye replaces the front-facing pair.
+# The arms, torso, neck, clipboard, its clip, ruled lines, collar stroke and
+# id badge keep manager-with-emotion.toml's own geometry unchanged — a
+# clipboard held at the hand reads the same from the side. Selected only
+# when the instance's own mgx:faces fact says "left". It also carries the
+# shared face-fragment mechanism, so a manager taught BOTH mgx:faces = left
+# and one of the 6 mgx:feels words renders this profile wearing that mood;
+# taught only the facing, {{FACE}} resolves to nothing and the profile keeps
+# the single forward eye it draws itself.
+classes = ["manager"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="manager-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="manager-facing-left-board" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#c9a06a"/>
+      <stop offset="100%" stop-color="#8a6a3c"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#manager-facing-left-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <rect x="14.6" y="13.6" width="4.6" height="6.4" rx="0.5" fill="url(#manager-facing-left-board)"/>
+  <rect x="16.2" y="13" width="1.4" height="1.1" rx="0.3" fill="#8a8f99"/>
+  <path d="M15.4 15.4 L18.4 15.4 M15.4 16.6 L18.4 16.6 M15.4 17.8 L17.4 17.8" stroke="#5a4426" stroke-width="0.5" opacity="0.55"/>
+  <path d="M10.2 9.8 C10.6 11 11.2 12 12 12.4 C12.8 12 13.4 11 13.8 9.8" fill="none" stroke="#3a5a8a" stroke-width="0.4" opacity="0.85"/>
+  <rect x="11.1" y="12.2" width="1.8" height="2.4" rx="0.2" fill="#f4f1ea" stroke="#3a5a8a" stroke-width="0.15"/>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#manager-facing-left-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#manager-facing-left-fill)"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9.0 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from manager's own front head circle (cx=12 cy=6.6 r=3.3, same as
+# king's): the head shifts left to cx=11.4, and the forward eye this file
+# draws sits at (9.7, 6.1). scale is ~0.65 of the head radius, and cx/cy
+# place the fragment so its own forward eye lands on the drawn one.
+[face]
+cx = 10.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
