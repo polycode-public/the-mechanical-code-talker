@@ -117,37 +117,27 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In-flight: Batch A (2026-07-30, coordinator + 6 worktree sub-agents)
+## In-flight: PLAN_FACT.md landing order (2026-07-30, coordinator + worktree sub-agents)
 
-Driving all 5 open items below plus `PLAN_FACT.md`'s landing-order steps 1-2 concurrently, each in
-its own worktree, file-ownership-disjoint. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`.
+Batch A (NEXT items 1/3/4/5 plus PLAN_FACT steps 1-2) landed in full, merged to `main`, full suite
+green (5352/5352), pushed. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`. Now
+driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps 3→4 solo, then
+5/6/7 concurrent, then 8 solo — each step's own file-ownership rationale is in the plan doc).
 
-- [ ] A4 (NEXT #1 + #2 sprites slice, CLI sprites bundle + tmct.ask sprites projection): worktree
-  dispatched, Sonnet. Status: started.
-- [ ] A5 (PLAN_FACT step 1, SQL projection columns + read perf guard): worktree dispatched, Opus.
-  Status: started.
-- [ ] A6 (PLAN_FACT step 2, stable node id + tag grammar): worktree dispatched, Opus. Status:
-  started.
-
-**NEXT #2 scope decision:** only the sprites slice ships now (folded into A4). chat/ledger/ingest/
-research/plan are a documented, separate remainder — chat/ledger need a materially different
-open-vocabulary projector (not a `worldRelationGraphPayload` drop-in), ingest has no `ask`/`turn`
-route wired at all yet, research already has a working narrower `ask` route so isn't hitting the
-empty-graph miss, and plan's Hanoi-puzzle state has no board-shaped rows to project. Tracked as a
-new open item below once A4 lands.
+- [ ] Batch B — PLAN_FACT step 3, the re-key (`appendFact`/`appendFacts` per-assertion writes, the
+  on-load migration, `readFactRows`'s group fold + `computeAssertionGroupTrust`, the SHACL shape
+  update, the same-source supersession chain): worktree dispatched, Opus. Status: started. The
+  biggest, most subtle step — blast radius is `core.mjs`, `trust.mjs`, their test files, and every
+  trust-expectation pin in the estate.
 
 ## Open items
 
-- [ ] The standalone CLI's `--render sprites` export no longer ships the composer input panel —
-  its parser now lives behind `extractSceneItems`'/`scene-compose.mjs`'s real bundle, which a bare
-  CLI render doesn't have. Decide whether that page needs its own small bundle to get the composer
-  back, or whether a static render never needed it.
-- [ ] **`tmct.ask` on a memory-only page lands on the honest miss.** Gap C wired the same
-  `ask(request)` verb into all eleven pages, but `ask()` traverses a graph and chat/ledger/ingest/
-  research/sprites/plan hold a fact store with an empty one. spider-fly is the page that closed
-  this for its own world, by projecting its rows through `worldRelationGraphPayload` before every
-  turn. The same route is open to any page whose rows have a shape worth asking over; until one is
-  built, those pages answer questions through `tmct.turn` and `tmct.ask` refuses honestly.
+- [ ] **NEXT #2's remainder** (chat/ledger/ingest/research/plan) — the sprites slice shipped this
+  session (`tmct.ask` now answers from a real projected graph on the sprites page). chat/ledger
+  need a materially different open-vocabulary projector (not a `worldRelationGraphPayload`
+  drop-in), ingest has no `ask`/`turn` route wired at all yet, research already has a working
+  narrower `ask` route so isn't hitting the empty-graph miss, and plan's Hanoi-puzzle state has no
+  board-shaped rows to project. Each is a separate future scoping pass, not folded into this one.
 - [ ] `tmctChatReady`/`tmctIngestReady`/`tmctAdventureLastSave` (plus the same-shaped
   `tmctChatLastSave`) remain their own page globals with no `tmct.*` equivalent — confirmed by this
   session's fold-away of the one that WAS redundant (`tmctChatSession` → `tmct.session`, done).
