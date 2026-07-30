@@ -21,6 +21,8 @@ import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
 import { buildSkosConceptView } from "../skos-view.mjs";
 import { normFactTerm } from "../hash.mjs";
 import { edgesOfKind } from "../codegraph.mjs";
+import { EXPRESSION_PALETTE } from "../sprite-expressions.mjs";
+import { sizeScaleFor } from "../sprite-size.mjs";
 import {
   capabilities, capabilityByName, parametersOf, preconditionsOf, effectsOf, PRECOND, KINDS, MEMORY_KINDS,
 } from "./registry.mjs";
@@ -67,6 +69,25 @@ export const UNMAPPED_KINDS = Object.freeze({
 // via resolveMemoryTerm, the memory-graph sibling of resolveObject's code-graph binding.
 export const NOT_NL_REACHABLE = Object.freeze({});
 
+/** The property predicate sprite-size.mjs reads a size word off. Used to PROBE
+ *  its own closed scale table instead of restating it here: a word is a size
+ *  word exactly when it moves the scale away from 1. */
+const SIZE_FACT_PREDICATE = "mgx:hasProperty";
+
+/** The sprite frame's two OPTIONAL slots, read straight out of the request.
+ *  Both vocabularies are the real ones — sprite-expressions.mjs's own palette
+ *  and sprite-size.mjs's own scale table (probed, not copied) — so a word
+ *  either module gains is a word this frame gains. A request naming neither
+ *  fills neither, and the sprite resolves plain. */
+function spriteSlots(request) {
+  const slots = {};
+  for (const word of String(request).toLowerCase().match(/[a-z]+/g) || []) {
+    if (!slots.expression && Object.hasOwn(EXPRESSION_PALETTE, word)) slots.expression = word;
+    if (!slots.size && sizeScaleFor([{ predicate: SIZE_FACT_PREDICATE, object: word }]) !== 1) slots.size = word;
+  }
+  return slots;
+}
+
 // ---- imperative intent FRAMES (fills what the relational grammar and command register
 // both miss). regex -> { topic, arg | noArg }. Ordered: first match wins.
 export const FRAMES = Object.freeze([
@@ -93,6 +114,15 @@ export const FRAMES = Object.freeze([
   // so resolveOne binds it through resolveMemoryTerm (below) rather than the
   // code graph's resolveObject — the registry kind, not this table, decides.
   { re: /\bsynonyms?\b|\banother\s+word\s+for\b|\brelated\s+(?:words?|concepts?|to)\b/i, topic: "related", arg: "term" },
+  // tmct_sprite: the sprite surface over the memory graph's own world facts —
+  // "the large sprite for a happy spider", "what does a hungry fly look like",
+  // "show me the spider icon". Its `class` slot is the second KINDS.MemoryTerm
+  // one, so it binds the same way tmct_related's `term` does. `slots` is what
+  // makes this frame different: it fills the two OPTIONAL args itself.
+  {
+    re: /\bsprite\b|\bicon\b|\bavatar\b|\bpicture\s+of\b|\bwhat\s+does\s+.+\s+look\s+like\b/i,
+    topic: "sprite", arg: "class", slots: spriteSlots,
+  },
   { re: /\bdescribe\b|\bexplain\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, topic: "description", arg: "symbol" },
   { re: /\bsearch\b|\bfind\b|look\s+for\b/i, topic: "matches", arg: "query" },
 ]);
@@ -135,13 +165,17 @@ const STOP = new Set([
   "untested", "blast", "radius", "change", "changes", "changing", "reach", "reaches", "affect", "affects",
   "explain", "edge", "edges", "graph", "outgoing", "site", "sites", "invoke", "invokes", "run", "runs", "execute", "executes",
   "word", "words", "another", "synonym", "synonyms", "related", "relate", "relates", "like", "concept", "concepts",
+  "sprite", "sprites", "icon", "icons", "avatar", "avatars", "picture", "pictures", "image", "images", "looks",
 ]);
 
 /** Pull one entity token from a request (imperative-frame slot-filling). Prefer a
- *  path/dotted/CamelCase token, else the last non-stopword identifier. "" if none. */
-export function extractEntity(request) {
+ *  path/dotted/CamelCase token, else the last non-stopword identifier. "" if none.
+ *  `alreadyBound` holds the words a frame's own slot-filler has already claimed
+ *  (the sprite frame's expression/size), so they can't also be read as the entity. */
+export function extractEntity(request, alreadyBound = null) {
   const tokens = String(request).match(/[A-Za-z_][A-Za-z0-9_./-]*/g) || [];
-  const pool = tokens.filter((t) => !STOP.has(t.toLowerCase()));
+  const claimed = alreadyBound || new Set();
+  const pool = tokens.filter((t) => !STOP.has(t.toLowerCase()) && !claimed.has(t.toLowerCase()));
   const strong = pool.filter((t) => /[./]/.test(t) || /^[A-Z][a-z]/.test(t) || /\.[a-z]+$/.test(t));
   const pick = strong.length ? strong : pool;
   return pick.length ? pick[pick.length - 1] : "";
@@ -190,9 +224,14 @@ export function mapFrame(request) {
     const cap = backwardChain(f.topic);
     if (!cap) continue;
     if (f.noArg) return { name: cap.name, noArg: true, topic: f.topic, source: "frame", why: [`imperative frame => goal (knows ${f.topic})`, `backward-chain => ${cap.name}`] };
-    const term = f.arg === "query" ? searchQuery(request) : extractEntity(request);
+    // A frame's own OPTIONAL slots, filled from the request's vocabulary before
+    // the entity is read, so a word a slot claimed can't also be read as the entity.
+    const slots = f.slots ? f.slots(request) : null;
+    const term = f.arg === "query"
+      ? searchQuery(request)
+      : extractEntity(request, slots ? new Set(Object.values(slots)) : null);
     return {
-      name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame",
+      name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame", slots,
       why: [`imperative frame => goal (knows ${f.topic} ?${f.arg})`, `backward-chain => ${cap.name}`],
     };
   }
@@ -378,10 +417,15 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
       return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, extra);
     }
     resolved = r.match;
-    input = { [pick.arg]: r.match.label };
+    // The frame's own optional slots ride alongside the bound entity — declared
+    // params of the same capability, so hallucinationsIn still validates them.
+    input = { [pick.arg]: r.match.label, ...(pick.slots || {}) };
     why = [...why, memoryBound
       ? `resolveMemoryTerm: "${term}" binds in the memory graph (${r.match.class || "?"}, tier ${r.tier})`
       : `resolveObject: "${term}" => ${r.match.label} (${r.match.class || "?"}, tier ${r.tier})`];
+    if (pick.slots && Object.keys(pick.slots).length) {
+      why = [...why, `frame slots bound from the request's own vocabulary: ${Object.entries(pick.slots).map(([k, v]) => `${k}=${v}`).join(", ")}`];
+    }
   }
 
   const call = { name: pick.name, input };

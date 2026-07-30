@@ -96,7 +96,8 @@ function capability({ name, label, question, params = [], preconditions = [], ad
 // callees/tests/history/… take `symbol`; impact/exports take `module`; members/
 // subclasses take `class`; search takes `query` (+ optional kind/name/decorator);
 // architecture takes an optional `package`; untested takes nothing; related
-// takes `term` (a memory-graph concept term).
+// takes `term` (a memory-graph concept term); sprite takes `class` (a memory-graph
+// term) plus optional `expression`/`size`.
 
 const CAPABILITIES = Object.freeze([
   capability({
@@ -199,6 +200,16 @@ const CAPABILITIES = Object.freeze([
     params: [param("term", KINDS.MemoryTerm, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
     preconditions: [memoryFacts(), resolves("term", KINDS.MemoryTerm)],
     add: [knows("related", "term")],
+  }),
+  capability({
+    name: "tmct_sprite", label: "sprite", question: "the sprite for a class, with the expression and size asked for",
+    params: [
+      param("class", KINDS.MemoryTerm, { arg: "class", note: "a world class, matched against the memory graph's own fact rows rather than resolved in the code graph" }),
+      param("expression", KINDS.Kind, { required: false, note: "one of sprite-expressions.mjs's palette words, carried as an mgx:feels fact" }),
+      param("size", KINDS.Kind, { required: false, note: "a taught mgx:hasProperty size word, resolved to a render scale — not a template tier" }),
+    ],
+    preconditions: [memoryFacts(), resolves("class", KINDS.MemoryTerm)],
+    add: [knows("sprite", "class")],
   }),
 ]);
 

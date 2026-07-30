@@ -40,6 +40,7 @@ import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId, agentKindOf } fr
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
 import { believedFactSentence } from "./spider-fly-turn.mjs";
 import { DEFAULT_GAME_CONFIG, massScaleFor } from "../domain/game-config.mjs";
+import { resolveSpriteRequest } from "../domain/sprite-request.mjs";
 
 // A larger cell than this page's first cut (44px) — the board sits in its
 // own full-width block, so a bigger cell keeps it reading as the page's
@@ -543,6 +544,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const agentKindOf = ${agentKindOf.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
+  const resolveSpriteRequest = ${resolveSpriteRequest.toString()};
   const nextCorpses = ${nextCorpses.toString()};
   const massScaleFor = ${massScaleFor.toString()};
   const believedFactSentence = ${believedFactSentence.toString()};
@@ -645,20 +647,27 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // than deriving a mood of its own. Only spider/fly carry the mgx:feels
   // parameter (data/sprites-large/*-with-emotion.toml exists for those two
   // classes only) — every other class (egg, and any class this page has no
-  // template for at all) keeps propertyFacts empty, resolving through its
+  // template for at all) asks for no expression at all, resolving through its
   // plain template. A snapshot-sourced agent carries no mood (a chat-driven
   // tick returns text, not the structured tick shape), so the last mood the
   // engine reported stands, exactly as goalById already holds the last goal.
   // The starting board has no reported mood at all, and calm is the mood the
   // engine itself writes for a just-minted agent, so that is the baseline.
-  function propertyFactsForAgent(id, agent, cls) {
-    if (cls !== "spider" && cls !== "fly") return [];
-    return [{ predicate: "mgx:feels", object: (agent && agent.mood) || moodByAgent[id] || "calm" }];
+  function expressionForAgent(id, agent, cls) {
+    if (cls !== "spider" && cls !== "fly") return null;
+    return (agent && agent.mood) || moodByAgent[id] || "calm";
   }
-  function resolveSpriteFace(cls, propertyFacts) {
-    return window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], propertyFacts, SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-      : "";
+  // One sprite request, in the same { class, expression } shape tmct_sprite
+  // takes, answered by the same pure resolver the tool wraps (sprite-request.mjs,
+  // spliced in above) — the page holds the state and nothing else.
+  function resolveSpriteFace(spriteRequest) {
+    if (!window.tmctSpiderFly) return "";
+    return resolveSpriteRequest(spriteRequest, {
+      factRows: (session && session.taxonomyRows) || [],
+      templates: SPIDERFLY.spriteTemplates,
+      spriteRegistry: tmctSpiderFly.SPRITE_REGISTRY,
+      resolveSpriteAsset: tmctSpiderFly.resolveSpriteAsset,
+    }).svg || "";
   }
 
   function togglePov(id) {
@@ -679,16 +688,16 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     // Property-aware resolution (sprite-templates.mjs's resolveSpriteAsset):
     // a spider/fly's live mgx:feels mood resolves it through the matching
     // data/sprites-large/*-with-emotion.toml template; every other class
-    // (egg) keeps propertyFacts empty and resolves through its plain class
+    // (egg) asks for no expression and resolves through its plain class
     // template (or the flat SPRITE_REGISTRY), unchanged.
-    const propertyFacts = propertyFactsForAgent(id, agent, cls);
-    moodByAgent[id] = propertyFacts[0] ? propertyFacts[0].object : null;
+    const mood = expressionForAgent(id, agent, cls);
+    moodByAgent[id] = mood;
     // The sprite SVG lives in its own inner wrapper so plan-driven facing
     // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
     // own translate(-50%,-50%) positioning transform.
     const face = document.createElement("div");
     face.className = "sprite-face";
-    face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+    face.innerHTML = resolveSpriteFace({ class: cls, expression: mood });
     node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
@@ -728,11 +737,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         // so this must re-resolve every redraw, not just at sprite creation —
         // but only actually replace the DOM when the mood word itself
         // changed since last render, never on every tick regardless.
-        const propertyFacts = propertyFactsForAgent(id, a, cls);
-        const mood = propertyFacts[0] ? propertyFacts[0].object : null;
+        const mood = expressionForAgent(id, a, cls);
         if (mood !== moodByAgent[id]) {
           moodByAgent[id] = mood;
-          face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+          face.innerHTML = resolveSpriteFace({ class: cls, expression: mood });
         }
       }
       if (a.goal) goalById[id] = a.goal;
@@ -765,7 +773,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         // never emotion-parameterized at all (a rotting carcass has none),
         // just its class's own plain template under the grayscale/fade the
         // .sprite.corpse CSS rule already applies.
-        face.innerHTML = resolveSpriteFace(corpse.cls, []);
+        face.innerHTML = resolveSpriteFace({ class: corpse.cls });
         node.appendChild(face);
         spriteLayer.appendChild(node);
         corpseEls[id] = node;

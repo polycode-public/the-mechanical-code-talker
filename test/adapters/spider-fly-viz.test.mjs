@@ -202,7 +202,9 @@ test("renderSpiderFlyHtml: the shared ticker is spliced in, not re-implemented",
 
 test("renderSpiderFlyHtml: the sprite's expression comes from the engine's own mood word, never from re-reading its goal sentence", () => {
   const html = renderSpiderFlyHtml();
-  assert.match(html, /predicate: "mgx:feels", object: \(agent && agent\.mood\)/, "the mgx:feels row the sprite resolver reads is the engine's structured mood");
+  // The mgx:feels row itself is built inside the shared sprite resolver now, so
+  // what the page supplies is the mood WORD — still the engine's own, never derived.
+  assert.match(html, /return \(agent && agent\.mood\) \|\| moodByAgent\[id\] \|\| "calm";/, "the expression the sprite resolver is asked for is the engine's structured mood");
   assert.doesNotMatch(html, /goal\.startsWith\(/, "no page code parses the engine's rendered goal prose back apart");
   assert.doesNotMatch(html, /const emotionFor = /, "the prose-matching emotion derivation is gone, not merely unused");
 });
