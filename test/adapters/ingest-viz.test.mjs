@@ -125,9 +125,9 @@ test("renderIngestHtml: the docked panel hides on a narrow viewport, matching ch
 
 // ---- persistence: kept on this device, same convention as chat.html -------
 
-test("renderIngestHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+test("renderIngestHtml: the device store opens under a version, fact-count and seed-content stamp, and boot tries a restore before falling back to the fresh seed", () => {
   const html = renderIngestHtml();
-  assert.match(html, /openPersistedStore\(\{ storeKey: "ingest", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /openPersistedStore\(\{ storeKey: "ingest", stamp: siteVersion \+ ":" \+ seedFacts \+ ":" \+ SEED_STAMP \}\)/);
   assert.match(html, /persist\.load\(\)/);
 });
 
@@ -264,4 +264,26 @@ test("groundTextToFacts: the row-length fast path never mis-skips a real fact on
   assert.equal(summary.recognized, 1);
   const after = readFactRows(await loadMemory(memoryDir)).length;
   assert.equal(after, before + 1, "exactly one new row landed, on top of what the store already held");
+});
+
+test("renderIngestHtml: the seed is fetched by a content-stamped URL, so a rebuilt seed can never be served from the service worker's cache of the old one", () => {
+  const stamped = renderIngestHtml({ seedStamp: "deadbeef0002" });
+  assert.match(stamped, /const SEED_STAMP = "deadbeef0002";/);
+  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  assert.match(renderIngestHtml(), /const SEED_STAMP = "";/);
+});
+
+test("renderIngestHtml: reset-to-seed drops the service worker's asset cache as well as the taught-facts store", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /const clearSiteAssetCaches = async function clearSiteAssetCaches/);
+  assert.match(
+    html,
+    /el\("reinitStore"\)\.addEventListener\("click", async \(\) => \{[\s\S]*?await persist\.clear\(\);[\s\S]*?await clearSiteAssetCaches\(\);[\s\S]*?window\.location\.reload\(\)/,
+  );
+});
+
+test("renderIngestHtml: the memory's fact count rides in the topbar, not only the status line", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
+  assert.match(html, /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/);
 });

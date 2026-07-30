@@ -308,7 +308,7 @@ e2e-web-local-origin:
 e2e-tui:
   extends: .e2e-lite-base
   script:
-    - node --disable-warning=ExperimentalWarning --test test-e2e/tui.test.mjs test-e2e/tui-chat-file.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/tui.test.mjs test-e2e/tui-chat-file.test.mjs test-e2e/tui-rover-capability-chain.test.mjs
 
 e2e-cli:
   extends: .e2e-lite-base
@@ -586,6 +586,7 @@ e2e:deployed:
       test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
       test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
       test-e2e/pages-chat-research.test.mjs test-e2e/pages-chat-live-toggle.test.mjs
+      test-e2e/pages-chat-taught-capability-chain.test.mjs
       test-e2e/web-chat-memory.test.mjs test-e2e/pages-research.test.mjs
       test-e2e/pages-ingest.test.mjs test-e2e/pages-ledger.test.mjs
       test-e2e/pages-ledger-teach.test.mjs test-e2e/pages-ledger-research.test.mjs
@@ -667,3 +668,4 @@ e2e:published-package:
       test-e2e/memory-export.test.mjs test-e2e/domain-river.test.mjs
       test-e2e/domain-crates.test.mjs test-e2e/server-http.test.mjs
       test-e2e/server-http-smoke.test.mjs test-e2e/tui-chat-file.test.mjs
+      test-e2e/tui-rover-capability-chain.test.mjs

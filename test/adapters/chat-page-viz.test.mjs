@@ -327,9 +327,9 @@ test("renderChatHtml: a print stylesheet un-pins the message column and drops th
 
 // ---- persistence wiring: the page keeps taught state on the device ---------
 
-test("renderChatHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+test("renderChatHtml: the device store opens under a version, fact-count and seed-content stamp, and boot tries a restore before falling back to the fresh seed", () => {
   const html = renderChatHtml();
-  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \+ ":" \+ SEED_STAMP \}\)/);
   assert.match(html, /persist\.load\(\)/);
   assert.match(html, /Restored " \+ restoredCount \+ " taught fact/, "the boot line names how many taught facts came back");
   assert.match(html, /state kept best-effort on this device/);
@@ -408,4 +408,37 @@ test("renderChatHtml: the researched panel renders its own heading and an honest
   const html = renderChatHtml();
   assert.match(html, /textContent: "researched this session"/);
   assert.match(html, /nothing yet — ask it to "research/);
+});
+
+test("renderChatHtml: the seed is fetched by a content-stamped URL, so a rebuilt seed can never be served from the service worker's cache of the old one", () => {
+  const stamped = renderChatHtml({ seedStamp: "deadbeef0001" });
+  assert.match(stamped, /const SEED_STAMP = "deadbeef0001";/);
+  assert.match(stamped, /const SEED_QUERY = SEED_STAMP \? "\?b=" \+ SEED_STAMP : "";/);
+  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  // A build with no seed to hash asks by the plain URL rather than a "?b=" with
+  // nothing after it.
+  assert.match(renderChatHtml(), /const SEED_STAMP = "";/);
+});
+
+test("renderChatHtml: reset-to-seed drops the service worker's asset cache as well as the taught-facts store", () => {
+  const html = renderChatHtml();
+  assert.match(html, /const clearSiteAssetCaches = async function clearSiteAssetCaches/);
+  assert.match(
+    html,
+    /el\("reinitStore"\)\.addEventListener\("click", async \(\) => \{[\s\S]*?await persist\.clear\(\);[\s\S]*?await clearSiteAssetCaches\(\);[\s\S]*?window\.location\.reload\(\)/,
+    "the reset handler clears IndexedDB, then Cache Storage, then reloads",
+  );
+  assert.match(html, /caches\.delete\(key\)/, "the helper deletes the precache entries it finds");
+  assert.match(html, /registration\.unregister\(\)/, "and unregisters the worker so the reload reads the network");
+});
+
+test("renderChatHtml: the live fact count rides in the topbar, not only the status line", () => {
+  const html = renderChatHtml();
+  assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
+  assert.match(html, /<span class="fact-pill-value" id="factPillValue">/);
+  assert.match(
+    html,
+    /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/,
+    "it reads the same memoryStats total the docked panel does, so the two cannot disagree",
+  );
 });

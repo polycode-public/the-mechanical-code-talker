@@ -99,7 +99,7 @@ export function loadProgressLine(parts) {
  *  page can digest a term client-side over its grown store (no TOML parser in
  *  the browser); an empty list leaves the digest panel degrading to an honest
  *  "no digest available" the same way the node stub does. */
-export function renderResearchHtml({ title = DEFAULT_TITLE, digestStructures = [] } = {}) {
+export function renderResearchHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "" } = {}) {
   const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   return `<!doctype html>
 <html lang="en">
@@ -140,6 +140,10 @@ ${DASH_DARK_CHROME_CSS}
   .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
   .statuspanel .stat-label { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .statuspanel .stat-value { font-family: ${MONO_STACK}; font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+  /* the live total is what this page is actually growing, so it carries the
+     panel's emphasis — the seed count beside it never moves after boot. */
+  .statuspanel .stat-facts { padding-right: 1.1rem; border-right: 1px solid var(--line); }
+  .statuspanel .stat-facts .stat-value { font-size: 1.15rem; font-weight: 600; }
   .enginenote { margin: -.5rem 0 1.2rem; padding: .55rem .8rem; border: 1px solid var(--alert); border-radius: 6px; background: var(--alert-soft); color: var(--alert); font-family: ${MONO_STACK}; font-size: .78rem; }
   .enginenote[hidden] { display: none; }
 
@@ -266,6 +270,7 @@ ${DASH_DARK_CHROME_CSS}
         <span class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</span>
       </div>
       <div class="statuspanel" id="statusPanel" aria-live="polite">
+        <div class="stat stat-facts"><span class="stat-label">facts in the graph</span><span class="stat-value" id="statFacts">&mdash;</span></div>
         <div class="stat"><span class="stat-label">seed</span><span class="stat-value" id="statSeed">&mdash;</span></div>
         <div class="stat"><span class="stat-label">engine</span><span class="stat-value" id="statEngine">booting&hellip;</span></div>
       </div>
@@ -389,6 +394,13 @@ ${DASH_DARK_CHROME_CSS}
   // carries the wink-nlp load result. engineNote is a separate banner for
   // the one case that needs more room than a stat value: the whole engine
   // bundle failing to load.
+  // The build's own content hash for the seed. It rides in the URL this page
+  // fetches the seed by, so the service worker's cache-first read can only
+  // ever return the copy this page asked for. Empty in a build with no seed.
+  const SEED_STAMP = ${JSON.stringify(seedStamp)};
+  const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+
+  const statFactsEl = el("statFacts");
   const statSeedEl = el("statSeed");
   const statEngineEl = el("statEngine");
   const engineNoteEl = el("engineNote");
@@ -424,7 +436,7 @@ ${DASH_DARK_CHROME_CSS}
   let seedFacts = 0;
   async function fetchSeed() {
     try {
-      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
       seedPayload = JSON.parse(await blob.text());
       seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
     } catch (err) {
@@ -497,6 +509,8 @@ ${DASH_DARK_CHROME_CSS}
     let snap;
     try { snap = await window.tmctResearch.researchSnapshot(session.memoryDir, session.sessionIds); }
     catch (err) { console.warn("tmct research: snapshot failed", err); return; }
+    const total = (snap.sources || []).reduce((sum, source) => sum + (Number(source.count) || 0), 0);
+    statFactsEl.textContent = total.toLocaleString();
     renderRecent(snap.recent);
     renderHubs(snap.hubs);
     renderSources(snap.sources, snap.history);

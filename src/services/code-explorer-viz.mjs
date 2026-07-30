@@ -129,6 +129,7 @@ const CLIENT_JS = String.raw`
     dockNote: document.getElementById("dock-note"),
     source: document.getElementById("source-name"),
     seedStatus: document.getElementById("seed-status"),
+    factTotal: document.getElementById("fact-total-value"),
   };
   var session = null;
 
@@ -143,6 +144,15 @@ const CLIENT_JS = String.raw`
     var parts = [s.individuals + " individuals", s.edges + " edges"];
     var cls = s.classes.slice(0, 4).map(function (c) { return c[1] + " " + c[0]; });
     els.stats.textContent = parts.concat(cls).join("  ·  ");
+    renderFactTotal(data);
+  }
+
+  // Everything the chat can answer from: the graph's own edges plus the
+  // general-knowledge seed, which arrives later and re-renders this.
+  function renderFactTotal(data) {
+    if (!els.factTotal) return;
+    var edges = (data && data.ledger && data.ledger.stats && data.ledger.stats.edges) || 0;
+    els.factTotal.textContent = (edges + seedState.facts).toLocaleString();
   }
 
   function renderFocusRows(data) {
@@ -215,6 +225,10 @@ const CLIENT_JS = String.raw`
   // readSeed under the desktop shell (a file:// page cannot fetch). The
   // status bar narrates the load; a missing or failing seed leaves the chat
   // graph-only and says so, never broken.
+  // The build's own content hash for the seed rides in the URL, so the service
+  // worker's cache-first read can only return the copy this page asked for.
+  // Empty under the desktop shell, which reads the seed off disk instead.
+  var SEED_QUERY = DATA.seedStamp ? "?b=" + DATA.seedStamp : "";
   var seedState = { status: api ? "loading" : "absent", payload: null, facts: 0 };
   function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
   function mbText(n) { return (n / 1048576).toFixed(1); }
@@ -244,7 +258,7 @@ const CLIENT_JS = String.raw`
         seedNote("loading general knowledge…");
         text = await window.tmctDesktop.readSeed();
       } else {
-        text = await fetchTextWithProgress("./chat-seed.json", function (loaded, total) {
+        text = await fetchTextWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
           seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
         });
       }
@@ -253,6 +267,7 @@ const CLIENT_JS = String.raw`
         seedState.facts = (seedState.payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
         seedState.status = "ready";
         seedNote("general knowledge: " + seedState.facts + " facts");
+        renderFactTotal(DATA);
         return;
       }
     } catch (e) {
@@ -356,7 +371,7 @@ const CLIENT_JS = String.raw`
  * pointing at the desktop app's README section — the desktop shell itself
  * renders this page too and passes `false`, since it has nothing to point at.
  */
-export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false } = {}) {
+export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false, seedStamp = "" } = {}) {
   const payloadJson = embedJson(data.payload);
   const dataJson = embedJson({ ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta });
 
@@ -381,6 +396,11 @@ body { margin: 0; overflow: hidden; background: var(--bg); color: var(--ink); fo
 .titlebar h1 { font-size: 0.95rem; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
 .titlebar .sub { color: var(--muted); font-size: 0.76rem; font-family: ${MONO_STACK}; }
 .titlebar .sub a { color: var(--corpus); }
+/* the fact count sits in the titlebar, not the footer status bar: it is what
+   the chat can actually answer from, and the footer is where a wrong number
+   goes unread. */
+.titlebar .factpill { display: inline-flex; align-items: baseline; gap: 0.34rem; font-family: ${MONO_STACK}; font-size: 0.62rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--entail); border-radius: 99px; padding: 0.14rem 0.7rem; background: var(--entail-soft); white-space: nowrap; }
+.titlebar .factpill-value { font-size: 0.9rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 .titlebar .pickers { margin-left: auto; display: flex; gap: 0.45rem; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.5; }
@@ -437,6 +457,9 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
     <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1 2.3a5.8 5.8 0 0 1 1.9.8L13.3 2l.7.7-1.1 2.4c.4.6.6 1.2.8 1.9L16 8l-2.3 1a5.8 5.8 0 0 1-.8 1.9l1.1 2.4-.7.7-2.4-1.1a5.8 5.8 0 0 1-1.9.8L8 16l-1-2.3a5.8 5.8 0 0 1-1.9-.8L2.7 14l-.7-.7 1.1-2.4a5.8 5.8 0 0 1-.8-1.9L0 8l2.3-1c.2-.7.4-1.3.8-1.9L2 2.7l.7-.7 2.4 1.1A5.8 5.8 0 0 1 7 2.3L8 0zm0 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z"/></svg>
     <h1>tmct code explorer</h1>
     <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
+    <span class="factpill" id="fact-total" aria-live="polite" title="every fact this page's chat can draw on — the code graph's own edges plus the general-knowledge seed once it lands">
+      <span class="factpill-value" id="fact-total-value">&mdash;</span> facts loaded
+    </span>
     ${showDesktopLink ? `<span class="sub">Also available as a <a href="${DESKTOP_APP_URL}">desktop app</a>.</span>` : ""}
     <div class="pickers">
       <button id="open-graph">Open graph…</button>
@@ -471,7 +494,7 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
     <span id="seed-status"></span>
   </footer>
 </div>
-<script>window.__CODE_EXPLORER__ = Object.assign({ payload: ${payloadJson} }, ${dataJson});</script>
+<script>window.__CODE_EXPLORER__ = Object.assign({ payload: ${payloadJson}, seedStamp: ${JSON.stringify(seedStamp)} }, ${dataJson});</script>
 ${winkLoaderInline ? `<script>\n${embedScriptText(winkLoaderInline)}\n</script>` : ""}
 ${bundleInline ? `<script>\n${embedScriptText(bundleInline)}\n</script>` : ""}
 ${bundleAvailable && !bundleInline ? `<script src="./code-explorer.bundle.js"></script>` : ""}

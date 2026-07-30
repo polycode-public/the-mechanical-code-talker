@@ -26,7 +26,7 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/ingest.html, after ingest-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
-import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — ingest";
 
@@ -69,7 +69,7 @@ export function loadProgressLine(parts) {
 /** The self-contained ingest page. Pure — the same output for the same
  *  `title` every time; every piece of state (the session, each grounded fact)
  *  is computed live in the browser once the sibling ingest bundle loads. */
-export function renderIngestHtml({ title = DEFAULT_TITLE } = {}) {
+export function renderIngestHtml({ title = DEFAULT_TITLE, seedStamp = "" } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -102,6 +102,13 @@ ${THEME_TOKENS_CSS}
   .brand { display: flex; flex-direction: column; gap: .1rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
   .subtitle { font-size: .82rem; color: var(--muted); }
+
+  /* the live memory count, in the topbar rather than the status line: it is
+     the one number that says what this page's memory actually holds, and the
+     status line beside the buttons is where a wrong one goes unnoticed. */
+  .topbar-right { display: flex; align-items: center; gap: .7rem; }
+  .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
+  .fact-pill .fact-pill-value { font-size: .94rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 
   /* mode pills — Text | Document — the translate-tool idiom: two segments in
      one rounded track, the active one filled. */
@@ -184,9 +191,15 @@ ${THEME_TOKENS_CSS}
         <span class="eyebrow">the-mechanical-code-talker</span>
         <span class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</span>
       </div>
-      <div class="pills" role="group" aria-label="Input mode">
-        <button type="button" id="modeText" aria-pressed="true">Text</button>
-        <button type="button" id="modeDoc" aria-pressed="false">Document</button>
+      <div class="topbar-right">
+        <span class="fact-pill" id="factPill" aria-live="polite"
+          title="every fact this page's memory holds right now — the starter memory it booted with plus everything it has grounded since">
+          <span class="fact-pill-value" id="factPillValue">&mdash;</span> facts in memory
+        </span>
+        <div class="pills" role="group" aria-label="Input mode">
+          <button type="button" id="modeText" aria-pressed="true">Text</button>
+          <button type="button" id="modeDoc" aria-pressed="false">Document</button>
+        </div>
       </div>
     </header>
     <div class="optionsRow" id="optionsRow">
@@ -237,6 +250,7 @@ ${THEME_TOKENS_CSS}
   const loadProgressLine = ${loadProgressLine.toString()};
   const bandLabelFor = ${bandLabelFor.toString()};
   const statsSummaryLine = ${statsSummaryLine.toString()};
+  const clearSiteAssetCaches = ${clearSiteAssetCaches.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const el = (id) => document.getElementById(id);
@@ -259,6 +273,7 @@ ${THEME_TOKENS_CSS}
   const seedToggleEl = el("seedToggle");
   const fuzzyToggleEl = el("fuzzyToggle");
   const statsPanelEl = el("statsPanel");
+  const factPillValueEl = el("factPillValue");
 
   let session = null;
   let grounded = 0; // facts on show in the right pane, from the CURRENT ingest only
@@ -374,6 +389,7 @@ ${THEME_TOKENS_CSS}
       try { stats = await window.tmctIngest.memoryStats(session.memoryDir); }
       catch { return; }
     }
+    factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       taughtHint: "nothing yet. Ingest some text and its grounded facts land here, with their source.",
@@ -394,6 +410,12 @@ ${THEME_TOKENS_CSS}
     try { localStorage.setItem(SEED_PREF_KEY, on ? "on" : "off"); } catch { /* private mode — this visit still works */ }
   }
 
+  // The build's own content hash for the seed. It rides in the URL this page
+  // fetches the seed by, so the service worker's cache-first read can only
+  // ever return the copy this page asked for. Empty in a build with no seed.
+  const SEED_STAMP = ${JSON.stringify(seedStamp)};
+  const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+
   let seedPayload = null;
   let seedFacts = 0;
   const progressParts = {};
@@ -409,7 +431,7 @@ ${THEME_TOKENS_CSS}
   async function fetchSeedIfWanted() {
     if (!seedToggleEl.checked) { seedPayload = null; seedFacts = 0; return; }
     try {
-      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
       seedPayload = JSON.parse(await blob.text());
       seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
     } catch (err) {
@@ -528,7 +550,7 @@ ${THEME_TOKENS_CSS}
     ]);
     progressActive = false;
     if (window.tmctIngest.openPersistedStore) {
-      persist = window.tmctIngest.openPersistedStore({ storeKey: "ingest", stamp: siteVersion + ":" + seedFacts });
+      persist = window.tmctIngest.openPersistedStore({ storeKey: "ingest", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
     }
     const savedRecord = persist ? await persist.load() : null;
     session = savedRecord && savedRecord.payload
@@ -608,13 +630,16 @@ ${THEME_TOKENS_CSS}
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
-  // "reset to seed" is the full re-initialisation: drop the persisted payload
-  // outright and reload, so boot re-seeds from the page's shipped seed as if
-  // on a first visit.
+  // "reset to seed" is the full re-initialisation: drop everything this device
+  // holds and reload, so boot re-seeds from the page's shipped seed as if on a
+  // first visit. Both stores go — what you taught lives in IndexedDB, and the
+  // seed asset itself lives in the service worker's Cache Storage, so clearing
+  // only the first would re-seed out of a cached copy of an older seed.
   el("reinitStore").addEventListener("click", async () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     if (persist) await persist.clear();
+    await clearSiteAssetCaches();
     window.location.reload();
   });
 

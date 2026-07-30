@@ -32,7 +32,7 @@ import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-the
 import { provBucketFor } from "./ledger-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
-import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
@@ -379,7 +379,7 @@ export function transcriptMarkdown(turns, meta, headerMd, turnMd) {
  *  live digest-bank twin (see chat-browser-entry.mjs) rather than to a
  *  client-side digest panel of this page's own; an empty list degrades to the
  *  flat list exactly as before this page could digest at all. */
-export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [] } = {}) {
+export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "" } = {}) {
   const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   const legendHtml = PROV_LEGEND.map(
     ([key, label]) => `<span class="legend-item"><i class="dot dot-${provKey(key)}"></i>${escapeHtml(label)}</span>`,
@@ -549,6 +549,13 @@ ${THEME_TOKENS_CSS}
      input and a round send button. The chrome's controls take the same shape,
      so the page's networking reads as ordinary chat furniture rather than as
      an instrument bolted on. */
+  /* the live fact count, in the topbar rather than the statusline: it is the
+     one number that says what this session actually knows, and a small line of
+     grey mono under the composer is where a wrong one goes unnoticed. Reads as
+     a pill like its neighbours, with the number itself at reading size. */
+  .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
+  .fact-pill .fact-pill-value { font-size: .96rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
   .chrome { display: flex; align-items: center; gap: .4rem; }
   .chrome-btn { font-family: ${SERIF_STACK}; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .75rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; line-height: 1.35; }
   .chrome-btn:hover { color: var(--ink); border-color: var(--ink); }
@@ -789,6 +796,10 @@ ${THEME_TOKENS_CSS}
         <span class="eyebrow">the-mechanical-code-talker</span>
       </div>
       <div class="chrome">
+        <span class="fact-pill" id="factPill" aria-live="polite"
+          title="every fact this session's memory holds right now — the starter memory it shipped with plus anything you have taught, researched or ingested">
+          <span class="fact-pill-value" id="factPillValue">&mdash;</span> facts
+        </span>
         <button type="button" class="state-pill" id="statePill" data-tone="idle"
           title="the shared-world connection; click to open the network panel">
           <i class="pill-dot"></i><span id="statePillWord">not shared</span>
@@ -880,6 +891,7 @@ ${THEME_TOKENS_CSS}
   const transcriptMarkdown = ${transcriptMarkdown.toString()};
   const bandLabelFor = ${bandLabelFor.toString()};
   const statsSummaryLine = ${statsSummaryLine.toString()};
+  const clearSiteAssetCaches = ${clearSiteAssetCaches.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const createTicker = ${createTicker.toString()};
@@ -900,6 +912,7 @@ ${THEME_TOKENS_CSS}
   const inputEl = el("composerInput");
   const sendBtn = el("composerSend");
   const statusEl = el("status");
+  const factPillValueEl = el("factPillValue");
   const statsPanelEl = el("statsPanelStats");
   const researchedPanelEl = el("researchedPanel");
   const wikiModeFieldset = el("wikiMode");
@@ -1102,11 +1115,18 @@ ${THEME_TOKENS_CSS}
     }
   }
 
+  // The build's own content hash for the seed. It rides in the URL this page
+  // fetches the seed by, so the service worker's cache-first read can only
+  // ever return the copy this page asked for. Empty in a build that had no
+  // seed to hash (the desktop shell's own render).
+  const SEED_STAMP = ${JSON.stringify(seedStamp)};
+  const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+
   let seedPayload = null;
   let seedFacts = 0;
   async function fetchSeed() {
     try {
-      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
       seedPayload = JSON.parse(await blob.text());
       seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
     } catch (err) {
@@ -1156,8 +1176,9 @@ ${THEME_TOKENS_CSS}
   // Best-effort IndexedDB (window.tmctChat.openPersistedStore): the whole
   // Backend-B payload snapshots after each teach turn, debounced so a burst
   // of teaching costs one multi-MB write, not one per fact. The stamp ties a
-  // snapshot to this deploy (site version) AND this seed (fact count) — either
-  // changing discards the snapshot in favour of the fresh seed.
+  // snapshot to this deploy (site version) AND this seed (its fact count and
+  // content hash) — any of them changing discards the snapshot in favour of
+  // the fresh seed.
   let persist = null;
   let saveTimer = null;
   let restoredCount = 0;
@@ -1217,6 +1238,7 @@ ${THEME_TOKENS_CSS}
       try { stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir); }
       catch { return; }
     }
+    factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       onForget: persist ? forgetEverything : null,
@@ -1598,14 +1620,20 @@ ${THEME_TOKENS_CSS}
     inputEl.focus();
   });
 
-  // "reset to seed" is the full re-initialisation: drop the persisted payload
-  // outright and reload, so boot re-seeds from the page's shipped seed as if on
-  // a first visit. Harder than "forget everything", which only swaps the live
+  // "reset to seed" is the full re-initialisation: drop everything this device
+  // holds and reload, so boot re-seeds from the page's shipped seed as if on a
+  // first visit. Harder than "forget everything", which only swaps the live
   // session — this trusts nothing in memory and re-fetches the seed asset.
+  //
+  // Both stores go, not just the payload: what you taught lives in IndexedDB,
+  // and the seed asset itself lives in the service worker's Cache Storage. A
+  // reset that cleared only the first would re-seed straight back out of a
+  // cached copy of an older seed, which is exactly what it promises not to do.
   el("reinitStore").addEventListener("click", async () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     if (persist) await persist.clear();
+    await clearSiteAssetCaches();
     window.location.reload();
   });
 
@@ -2186,7 +2214,7 @@ ${THEME_TOKENS_CSS}
     progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
     if (window.tmctChat.openPersistedStore) {
-      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts });
+      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
     }
     const savedRecord = persist ? await persist.load() : null;
     const initialMode = readWikiMode();
