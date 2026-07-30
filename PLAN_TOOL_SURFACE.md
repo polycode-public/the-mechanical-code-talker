@@ -1,8 +1,8 @@
 # PLAN_TOOL_SURFACE.md — demo-page JS audited toward library, tool, ask
 
-Status: SURVEY + DESIGN. Nothing here is implemented. This document is a dispatch list: every item
-carries a file:line, a category, and a named target, so a future session can hand a row straight to
-a sub-agent without re-reading the estate.
+Status: SURVEY + DESIGN. Rows and phases marked **landed** are done; everything else is still a
+dispatch list: every item carries a file:line, a category, and a named target, so a future session
+can hand a row straight to a sub-agent without re-reading the estate.
 
 ## Origin
 
@@ -247,24 +247,16 @@ here. Whoever picks up phase 6 should read both options and say which they took.
   `sprite-size.mjs:28` (`sizeScaleFor`) reads size off property facts;
   `sprite-expressions.mjs:51` (`EXPRESSION_PALETTE`) holds the expression vocabulary.
 
-Every ingredient of "large sprite for a happy spider" is already a domain module. Three things are
-missing: a fact for the emotion, a decision about what "large" means, and a grammar that turns the
-sentence into arguments. The first is a prerequisite nothing else in this plan supplies.
+Every ingredient of "large sprite for a happy spider" is already a domain module. The fact for the
+emotion now exists (see below). Two things are still missing: a decision about what "large" means,
+and a grammar that turns the sentence into arguments.
 
-**The emotion is never a fact.** `emotionFor` (`spider-fly-viz.mjs:159-177`) recovers "happy" by
-prefix-matching the engine's own rendered goal sentence — `goal.startsWith("just ate")` → `"happy"`,
-`startsWith("avoiding")` → `"scared"`, and so on — where that sentence was written by `goalLineFor`
-(`spider-fly.mjs:605-617`). The engine had the structure, rendered it to prose, threw it away, and
-the view layer regexes it back out. The result is then synthesized into a `mgx:feels` property fact
-fresh on every render (`spider-fly-viz.mjs:694-697`) and discarded; `mgx:feels` appears nowhere in
-`spider-fly.mjs` and is never written to the store. So there is no fact for any question about "a
-happy spider" to ground against, and adding a grammar for the phrase would not help until there is.
-
-**Target, and do this first:** `runSpiderFlyTick` already branches on exactly this logic while
-building `goal` (`spider-fly.mjs:747-803`, `:830-845`). Have it emit the mood as a structured field
-and append it as a real `mgx:feels` fact per agent per turn, the same way it already appends
-`mgx:currently-in` (`spider-fly.mjs:806`, `:850`). Then `emotionFor` deletes, the page stops parsing
-engine prose, and the question has something to bind to.
+**The emotion is a fact — landed.** `runSpiderFlyTick` assigns a `mood` word in every branch that
+renders a `goal` sentence and appends it as a real `mgx:feels` row per agent per turn, beside the
+`mgx:currently-in` placement; `startSpiderFlyGame` writes the starting `calm` so an agent has a mood
+from the moment it exists. Vocabulary: happy, angry, scared, calm — the four of
+`sprite-expressions.mjs`'s six palette words this game's goal chain reaches. `emotionFor` is gone and
+the page reads `agent.mood`. So "a happy spider" has a fact to bind to.
 
 **"Large" means two unrelated things.** `sprite-size.mjs:28` (`sizeScaleFor`) is a scale multiplier
 for a taught `small`/`large` property fact on an individual, and its own header (`sprite-size.mjs:6-8`)
@@ -294,10 +286,10 @@ is canvas and DOM work that belongs there. The parts that are not:
 
 | item | file:line | cat | target |
 |---|---|---|---|
-| `emotionFor` regexing the engine's rendered prose | `spider-fly-viz.mjs:159-177` vs `spider-fly.mjs:605-617` | 2 | **lib** — engine emits structured mood and writes `mgx:feels`; the function deletes. See above; this is the sharpest instance of the anti-pattern in the estate. |
-| `maxMassFor` mirroring `massBarHtml`'s denominator, with a comment saying so | `spider-fly-viz.mjs:691-693` and `:821-826` | 1 | **lib** — one exported `massScaleFor(cls, config)` in `src/domain/game-config.mjs`, read by both. |
-| Which classes carry `mgx:feels` hardcoded in the page | `spider-fly-viz.mjs:695` | 2 | **lib** — ask `sprite-templates.mjs` which classes have an emotion variant instead of listing them. |
-| `resolveSpriteFace`'s five-argument call | `spider-fly-viz.mjs:698-702` | 2 | **tool** — replaced by the `tmct_sprite` call above. |
+| `emotionFor` regexing the engine's rendered prose | was `spider-fly-viz.mjs:159-177` | 2 | **landed** — the engine emits `mood` and writes `mgx:feels`; the function is deleted. |
+| `maxMassFor` mirroring `massBarHtml`'s denominator, with a comment saying so | was `spider-fly-viz.mjs:691-693` | 1 | **landed** — `maxMassFor` existed only to feed `emotionFor`'s unused `maxMass` argument, so it went with it. `massBarHtml` now holds the only per-class denominator; nothing to converge. |
+| Which classes carry `mgx:feels` hardcoded in the page | `spider-fly-viz.mjs:645-648` | 2 | **lib** — ask `sprite-templates.mjs` which classes have an emotion variant instead of listing them. |
+| `resolveSpriteFace`'s five-argument call | `spider-fly-viz.mjs:649-653` | 2 | **tool** — replaced by the `tmct_sprite` call above. |
 | "kind from agent id" regex, four hand-rolled implementations across three files | `spider-fly-viz.mjs:68-70` (`classOfAgentId`), `spider-fly.mjs:148-158`, `:399-400`, `:707-708`, `spider-fly-turn.mjs:124-127`, `:196-199` | 1 | **lib** — `agentKindOf(id)` and `liveIdsOfKind(agents, kind)` in `spider-fly-world.mjs`. |
 | Belief sentences hand-typed twice, where the page's own comment says they must match the dock's wording | `spider-fly-viz.mjs:833-864` (`planLineHtml`/`beliefLineHtml`/`observedFactsHtml`, comment at `:355-356`) vs `spider-fly-turn.mjs:353-360`, `:369-391` | 1 | **lib** — one `believedFactSentence(id, cell)` in `spider-fly-turn.mjs`, which already exports `oneStepDirectionBetween` for this same reason (`spider-fly-turn.mjs:184`). A rule enforced by comment is a rule that drifts. |
 | `massBarHtml` is a generic clamped-percentage meter with a page-specific class name | `spider-fly-viz.mjs:821-826` | 1 | **lib** — `meterBarHtml(cls, value, max)` in `viz-theme.mjs`. |
@@ -433,10 +425,10 @@ Ordered so each phase is useful on its own and unblocks the next.
 6. **`fn("list the locations of flies and spiders")`.** Falls out of phase 5 as an `ask` call. Read
    the design fork in Theme 2 first and record which option you took. Prove it against the spider-fly
    grid, with `snapshot()` kept as the fast path.
-7. **Mood becomes a fact.** `runSpiderFlyTick` emits structured mood and appends `mgx:feels` per
-   agent per turn; `emotionFor` (`spider-fly-viz.mjs:159-177`) deletes. Independent of phases 3-6 and
-   can run in parallel with them, but `tmct_sprite` cannot start until it lands — there is nothing to
-   ground "a happy spider" against otherwise. Engine work in `spider-fly.mjs`, so a top-tier agent.
+7. **Mood becomes a fact — landed.** `runSpiderFlyTick` assigns a `mood` word beside every `goal` it
+   renders and appends it as an `mgx:feels` fact per agent per turn; `startSpiderFlyGame` writes the
+   starting `calm`. `emotionFor` is deleted and the page reads `agent.mood`. Vocabulary: happy,
+   angry, scared, calm. `tmct_sprite` now has a fact to ground "a happy spider" against.
 8. **`tmct_sprite`.** The new tool, its capability record, its `FRAMES` entry, and the expression and
    size slots bound to `sprite-expressions.mjs` / `sprite-size.mjs` rather than a new hand-kept list.
    Decide which sense of "large" the schema carries (tier or property — see Theme 2). Then
