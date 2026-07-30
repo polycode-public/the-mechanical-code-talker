@@ -1,10 +1,12 @@
-// sprites.html in a real browser: the scene composer (the "there is a"
-// lead-in plus a free-typed continuation resolves to real, already-rendered
-// catalog sprites — never a hand-simulated stand-in, see
-// sprite-catalog-viz.mjs's own header), the catalog itself (topbar filter,
-// class cards), and the chat dock, which answers catalog questions from the
-// sprite templates' own generated facts and hands everything else to the
-// full engine, whose refusal is the honest miss.
+// sprites.html in a real browser: the LANDING page over the whole sprite
+// catalog — one example card per section (CATALOG_GROUPS' unclustered
+// groups, plus each ancestor cluster within Person roles/Physical objects —
+// see sprite-catalog-viz.mjs's own catalogSections), each linking out to its
+// own class's card on the group page that actually holds the full gallery.
+// The composer (the "there is a" lead-in) and the chat dock both still
+// answer over the WHOLE catalog from this page, even though only ~28 of its
+// classes have a card here — see test-e2e/pages-sprites-groups.test.mjs for
+// the four full-gallery pages this page links out to.
 //
 // Third-party hosts are blocked for every run, exactly as in pages-home/
 // pages-spider-fly: the whole page ships with itself, so nothing here needs
@@ -19,7 +21,7 @@ import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
-import { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } from "../src/services/sprite-catalog-viz.mjs";
+import { loadSpriteOntologyFactRows, renderSpriteCatalogLandingHtml } from "../src/services/sprite-catalog-viz.mjs";
 
 let siteDir;
 let server;
@@ -36,7 +38,7 @@ before(async () => {
     env: { ...process.env, TMCT_SPRITES_BUNDLE_OUT: siteDir },
     stdio: "pipe",
   });
-  writeFileSync(path.join(siteDir, "sprites.html"), renderSpriteCatalogHtml({
+  writeFileSync(path.join(siteDir, "sprites.html"), renderSpriteCatalogLandingHtml({
     iconTemplates: readSpriteTemplateFiles(),
     largeTemplates: readSpriteLargeTemplateFiles(),
     factRows: await loadSpriteOntologyFactRows(),
@@ -90,20 +92,63 @@ test("the heading is short and the old explanatory intro paragraph is gone", asy
   }
 });
 
-test("the composer's lead-in reads 'there is a' and the catalog below is untouched", async () => {
+test("the landing page shows exactly one example card per section — the operator's own curated favourites, not the whole catalog", async () => {
   const { context, page } = await openSpritesPage();
   try {
-    assert.equal(await page.locator(".composeform .prompt").innerText(), "there is a");
-    // The existing filter/topbar and the full class catalog still render —
-    // this feature is additive above them, not a replacement.
-    await assert.doesNotReject(page.locator("#q").waitFor({ state: "visible" }));
-    assert.ok(await page.locator('.card[data-cls="cabinet"]').count() > 0, "the cabinet card still renders below");
+    const total = await page.locator(".card").count();
+    assert.equal(total, 28, "one card per section: the whole adventure and emoji groups plus every person/object ancestor cluster");
+    for (const cls of ["adventurer", "engineer", "king", "family", "bear", "frog", "autumn"]) {
+      assert.equal(await page.locator(`.card[data-cls="${cls}"]`).count(), 1, `${cls} is one of the curated landing examples`);
+    }
+    assert.equal(await page.locator('.card[data-cls="doctor"]').count(), 0, "a class that isn't a curated example has no card here");
+    assert.equal(await page.locator('.card[data-cls="cabinet"]').count(), 0);
   } finally {
     await context.close();
   }
 });
 
-test("typing three real class names renders all three as scene sprites, in order, with no console error", async () => {
+test("every 'view all' link points to that example's own card on its group's full-gallery page", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const links = await page.locator(".viewall").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.equal(links.length, 28);
+    assert.ok(links.includes("./sprites-person-roles.html#card-king"), "the person 'man' cluster's own favourite links to its own card");
+    assert.ok(links.includes("./sprites-objects.html#card-frog"), "the object group's trailing 'everything else' cluster links to its own favourite's card");
+    assert.ok(links.includes("./sprites-adventure-props.html#card-adventurer"));
+    assert.ok(links.includes("./sprites-emotions.html#card-autumn"));
+  } finally {
+    await context.close();
+  }
+});
+
+test("the topbar nav links to the four real group pages, not in-page anchors", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const hrefs = await page.locator(".jump").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(hrefs.sort(), [
+      "./sprites-adventure-props.html", "./sprites-emotions.html", "./sprites-objects.html", "./sprites-person-roles.html",
+    ].sort());
+    for (const href of hrefs) assert.doesNotMatch(href, /^#/, "no jump is an in-page anchor any more");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking a topbar nav link really opens that group's own full-gallery page", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    await page.locator('.jump[href="./sprites-person-roles.html"]').click();
+    await page.waitForURL(/sprites-person-roles\.html$/);
+    const heading = await page.locator(".group h2").first().innerText();
+    assert.match(heading, /person roles/i);
+    assert.match(heading, /57/);
+    assert.ok(await page.locator('.card[data-cls="doctor"]').count() > 0, "the full person-roles gallery really is on that page");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the composer resolves classes with no card on this page at all — 'a doctor with a hat, and a cabinet' composes from all three groups", async () => {
   const { context, page, consoleErrors, failedRequests } = await openSpritesPage();
   try {
     await page.fill("#composeq", "a doctor with a hat, and a cabinet");
@@ -123,7 +168,7 @@ test("typing three real class names renders all three as scene sprites, in order
 });
 
 test("the operator's own 'bookcase' example: real classes render, the unrecognized word is silently dropped, never a crash", async () => {
-  // "bookcase" is not one of this catalog's own 198 real classes (checked
+  // "bookcase" is not one of this catalog's own real classes (checked
   // directly against data/sprites-large/*.toml) — this is the same honest
   // miss "red lamp" demonstrates below, just for a whole unrecognized class
   // instead of an unrecognized material word.
@@ -255,15 +300,20 @@ test("an ungrounded dock question gets a refusal, never a guess", async () => {
   }
 });
 
-test("the dock's classes-on-record question grounds in the embedded catalog rows, naming the real class count", async () => {
+test("the dock's classes-on-record question grounds in the WHOLE catalog, not just this page's own ~28 example cards", async () => {
   const { context, page, consoleErrors } = await openSpritesPage();
   try {
-    const catalogCards = await page.locator(".card").count();
+    const footerText = await page.locator("footer.page").innerText();
+    const wholeCatalogTotal = Number((footerText.match(/^(\d+) classes/) || [])[1]);
+    assert.ok(Number.isFinite(wholeCatalogTotal), `the footer names the whole catalog's real total, got: ${footerText}`);
+    const cardsOnThisPage = await page.locator(".card").count();
+    assert.ok(wholeCatalogTotal > cardsOnThisPage, "the whole catalog is far bigger than this page's ~28 example cards, or this test proves nothing");
+
     const reply = await askDock(page, "how many sprite classes are there?");
     const text = await reply.innerText();
     const counted = Number((text.match(/^(\d+) sprite classes\.$/) || [])[1]);
     assert.ok(Number.isFinite(counted), `the answer is a real count, got: ${text}`);
-    assert.equal(counted, catalogCards, "the dock's count and the rendered catalog agree card for card");
+    assert.equal(counted, wholeCatalogTotal, "the dock counts the whole catalog, never just the cards this landing page happens to show");
     assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
     assert.deepEqual(consoleErrors, [], "the classes question answers without a console error");
   } finally {
@@ -296,170 +346,22 @@ test("a dock pill fills the input with its exact question without submitting it"
   }
 });
 
-test("the catalog filter narrows the cards, hides emptied groups, counts the survivors, and clears back to everything", async () => {
+test("the catalog filter narrows the ~28 example cards, hides emptied groups, counts the survivors, and clears back to everything", async () => {
   const { context, page, consoleErrors } = await openSpritesPage();
   try {
     const total = await page.locator(".card").count();
-    await page.fill("#q", "cabinet");
+    await page.fill("#q", "person");
     const shown = await page.locator(".card:not([hidden])").count();
     assert.ok(shown > 0 && shown < total, "the needle keeps some cards and drops others");
     for (const cls of await page.locator(".card:not([hidden])").evaluateAll((els) => els.map((el) => el.dataset.cls + " " + el.dataset.group))) {
-      assert.match(cls, /cabinet/, "every surviving card matches the needle by class or group");
+      assert.match(cls, /person/, "every surviving card matches the needle by class or group");
     }
     assert.equal(await page.locator("#qcount").innerText(), `${shown} / ${total}`, "the counter reads survivors over total");
-    const emptiedGroupsShown = await page.locator(".group").evaluateAll((els) =>
-      els.filter((el) => el.querySelectorAll(".card:not([hidden])").length === 0 && el.style.display !== "none").length,
-    );
-    assert.equal(emptiedGroupsShown, 0, "a group whose every card is filtered out hides its heading too");
 
     await page.fill("#q", "");
     assert.equal(await page.locator(".card:not([hidden])").count(), total, "clearing the filter restores every card");
     assert.equal(await page.locator("#qcount").innerText(), "", "the counter goes quiet when nothing is filtered");
     assert.deepEqual(consoleErrors, [], "filtering logs no console error");
-  } finally {
-    await context.close();
-  }
-});
-
-test("every topbar jump anchor targets a real group section on this same page", async () => {
-  const { context, page } = await openSpritesPage();
-  try {
-    const hrefs = await page.locator(".jump").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    assert.ok(hrefs.length >= 3, "the topbar offers real group anchors");
-    for (const href of hrefs) {
-      assert.match(href, /^#g-/, "every jump is an in-page anchor");
-      assert.equal(await page.locator(`section[id="${href.slice(1)}"]`).count(), 1, `${href} names a real section`);
-    }
-    const personJump = page.locator('.jump[href="#g-person"]');
-    await personJump.click();
-    await page.waitForFunction(() => {
-      const rect = document.getElementById("g-person")?.getBoundingClientRect();
-      return rect && rect.top >= -8 && rect.top < window.innerHeight;
-    });
-  } finally {
-    await context.close();
-  }
-});
-
-test("the person card renders all six curated emotion variants as genuinely different sprites", async () => {
-  const { context, page } = await openSpritesPage();
-  try {
-    const card = page.locator('.card[data-cls="person"]');
-    await card.waitFor({ state: "visible" });
-    const swatches = await card.locator('.tier-row[data-tier="large"] .swatch').evaluateAll((els) => els.map((el) => ({
-      label: el.querySelector(".swatch-label")?.textContent?.trim() ?? "",
-      svg: el.querySelector(".swatch-img")?.innerHTML ?? "",
-    })));
-    const emotions = ["happy", "sad", "angry", "scared", "surprised", "calm"];
-    for (const emotion of emotions) {
-      assert.ok(swatches.some((s) => s.label === emotion), `the ${emotion} variant renders as its own swatch`);
-    }
-    const markups = new Set(swatches.filter((s) => emotions.includes(s.label)).map((s) => s.svg));
-    assert.equal(markups.size, emotions.length, "no two emotion variants share the same markup — the face genuinely changes");
-  } finally {
-    await context.close();
-  }
-});
-
-test("a card with mood variants gains a mood-cycle swatch that steps through the plain sprite and every real mood on click", async () => {
-  // reducedMotion pins the page's auto-step off, so every frame change below
-  // is the test's own click and the walk is fully deterministic.
-  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
-  try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-mood .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one mood-cycle swatch");
-    // The card sits far down a content-visibility:auto page — bring it on
-    // screen before reading, so the first frame's text is really rendered.
-    await cycleButton.scrollIntoViewIfNeeded();
-    const labels = [];
-    const markups = new Set();
-    // bear's mood cycle is plain + its six curated emotions = 7 frames; one
-    // extra click proves the wrap-around lands back on a real frame.
-    for (let i = 0; i < 8; i += 1) {
-      labels.push(await card.locator(".swatch.cycle-mood .swatch-label").textContent());
-      markups.add(await cycleButton.innerHTML());
-      await cycleButton.click();
-    }
-    for (const expected of ["bear", "happy", "calm"]) {
-      assert.ok(labels.includes(expected), `the mood cycle walks through the ${expected} frame (saw: ${labels.join(", ")})`);
-    }
-    assert.equal(labels[7], labels[0], "the eighth click wraps back around to the first frame");
-    assert.ok(markups.size >= 7, `every mood frame is genuinely different markup, got ${markups.size} distinct frames`);
-    assert.deepEqual(consoleErrors, [], "cycling logs no console error");
-  } finally {
-    await context.close();
-  }
-});
-
-test("the same card's turn-sweep swatch steps through every facing angle, centred on the plain sprite", async () => {
-  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
-  try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-turn .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one turn-sweep swatch");
-    await cycleButton.scrollIntoViewIfNeeded();
-    const labels = [];
-    // left, half-left, centre, half-right, right = 5 frames.
-    for (let i = 0; i < 6; i += 1) {
-      labels.push(await card.locator(".swatch.cycle-turn .swatch-label").textContent());
-      await cycleButton.click();
-    }
-    for (const expected of ["left", "half-left", "centre", "half-right", "right"]) {
-      assert.ok(labels.includes(expected), `the turn sweep walks through the ${expected} frame (saw: ${labels.join(", ")})`);
-    }
-    assert.equal(labels[5], labels[0], "the sixth click wraps back around to the first frame");
-    assert.deepEqual(consoleErrors, [], "the turn sweep logs no console error");
-  } finally {
-    await context.close();
-  }
-});
-
-test("the same card's moving-pose swatch toggles between its idle and moving frame", async () => {
-  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
-  try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-moving .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one moving-pose swatch");
-    await cycleButton.scrollIntoViewIfNeeded();
-    const first = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    await cycleButton.click();
-    const second = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    assert.notEqual(first, second, "a click toggles to the other pose");
-    assert.deepEqual([first, second].sort(), ["idle", "moving"], "the toggle's two states are exactly idle and moving");
-    await cycleButton.click();
-    const third = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    assert.equal(third, first, "a second click toggles back");
-    assert.deepEqual(consoleErrors, [], "the moving toggle logs no console error");
-  } finally {
-    await context.close();
-  }
-});
-
-test("a card with only material variants never grows a cycle swatch — materials are choices, not motion", async () => {
-  const { context, page } = await openSpritesPage({ reducedMotion: "reduce" });
-  try {
-    const lamp = page.locator('.card[data-cls="lamp"]');
-    await lamp.waitFor({ state: "visible" });
-    assert.equal(await lamp.locator(".swatch.cycle").count(), 0);
-  } finally {
-    await context.close();
-  }
-});
-
-test("with motion allowed, the mood-cycle swatch advances on its own — the page is a little alive with no interaction at all", async () => {
-  const { context, page } = await openSpritesPage();
-  try {
-    const label = page.locator('.card[data-cls="bear"] .swatch.cycle-mood .swatch-label');
-    await label.waitFor({ state: "attached" });
-    const first = await label.innerText();
-    await page.waitForFunction(
-      ({ selector, before }) => document.querySelector(selector)?.textContent !== before,
-      { selector: '.card[data-cls="bear"] .swatch.cycle-mood .swatch-label', before: first },
-    );
   } finally {
     await context.close();
   }

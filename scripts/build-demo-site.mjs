@@ -324,17 +324,41 @@ let largeSpriteManifest = null;
 // (the spider-fly world's SEED_TAXONOMY plus corpus/wordnet/wordnet-xl.jsonl)
 // this step loads once, in Node, the same posture the ledger/adventure/
 // spider-fly build steps above already take with their own build-time data.
+//
+// One page per CATALOG_GROUPS entry carries that group's own full gallery
+// (sprites-adventure-props.html/sprites-person-roles.html/sprites-objects.html/
+// sprites-emotions.html — each group's own `page` field), and sprites.html
+// itself is the lighter landing page: one example card per section, linking
+// out to its own class's card on the group page that actually holds it. Every
+// page shares the one sprites-browser.bundle.js bundle built once below —
+// the composer/dock both read the WHOLE catalog regardless of which page
+// they're embedded in, so there's nothing page-specific to bundle per page.
 {
   const spriteLargeTemplates = readSpriteLargeTemplateFiles();
-  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
+  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, CATALOG_GROUPS } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
   const ontologyFactRows = await loadSpriteOntologyFactRows();
   const { main: buildSpritesBundle } = await import(join(here, "build-sprites-bundle.mjs"));
   const { outPath: spritesBundlePath, size: spritesBundleBytes } = await buildSpritesBundle(SITE);
   console.log(`wrote ${spritesBundlePath} (${(spritesBundleBytes / 1024).toFixed(0)} KB)`);
+
   const spritesPagePath = join(SITE, "sprites.html");
-  const spritesHtml = renderSpriteCatalogHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
+  const spritesHtml = renderSpriteCatalogLandingHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
   await writeF(spritesPagePath, spritesHtml);
   console.log(`wrote ${spritesPagePath}`);
+
+  for (const group of CATALOG_GROUPS) {
+    const groupPagePath = join(SITE, group.page);
+    const groupHtml = renderSpriteCatalogHtml({
+      title: `tmct — ${group.label} — the sprite library`,
+      iconTemplates: spriteTemplates,
+      largeTemplates: spriteLargeTemplates,
+      factRows: ontologyFactRows,
+      spritesBundleAvailable: true,
+      groupId: group.id,
+    });
+    await writeF(groupPagePath, groupHtml);
+    console.log(`wrote ${groupPagePath}`);
+  }
 }
 
 // The plan hero: teach + solve the default hanoi-3 puzzle through the SAME
