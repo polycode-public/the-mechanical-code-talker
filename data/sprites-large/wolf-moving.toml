@@ -1,0 +1,57 @@
+# wolf-moving — wolf-with-emotion.toml's figure caught mid-prowl while still
+# facing front: selected by mgx:pose = "moving" ALONE, with no facing fact
+# at all, so the head path, ears, throat shadow, shadow patch and nose dot
+# stay at wolf-with-emotion's own front position, and the [face] anchor
+# stays at its own front value (cx=9.3 cy=9.2 scale=4.2), completely
+# unshifted. The four front-facing legs stagger into an asymmetric prowling
+# stance instead of the standing row, and the body dips slightly.
+classes = ["wolf"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="wolf-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.6" cy="15.7" rx="6.6" ry="4.2" fill="url(#wolf-moving-fill)"/>
+  <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+    <line x1="7.6" y1="17.0" x2="7.0" y2="20.8"/>
+    <line x1="10.6" y1="18.4" x2="10.2" y2="22.6"/>
+    <line x1="14.6" y1="17.0" x2="15.4" y2="20.6"/>
+    <line x1="17.6" y1="18.4" x2="18.4" y2="22.6"/>
+  </g>
+  <path d="M4.6 10.2 C4.6 7 6.8 5.2 9.6 5.2 C12.4 5.2 14 7.4 13.8 10.2 C13.6 12.4 12.2 13.4 9.4 13.4 C6.8 13.4 4.6 12.4 4.6 10.2 Z" fill="url(#wolf-moving-fill)"/>
+  <path d="M5 6.6 L3.4 2.6 L7 4.8 Z" fill="url(#wolf-moving-fill)"/>
+  <path d="M11.4 5.4 L11.8 1.6 L14.6 4.6 Z" fill="url(#wolf-moving-fill)"/>
+  <ellipse cx="7.6" cy="12.4" rx="2.2" ry="1.6" fill="color-mix(in srgb, currentColor 45%, white)"/>
+  <path d="M5.6 10.4 C6 12.2 7.8 13 9.4 13 C7.8 12.2 6.6 11.2 6.4 9.4 Z" fill="#000000" opacity="0.18"/>
+  <ellipse cx="5.6" cy="11.2" rx="0.55" ry="0.45" fill="#1c1c1c"/>
+  <path d="M17.4 12.8 C21 10.2 23.6 12.6 22 16.2 C21 17.8 19.6 18.0 18.8 16.6 C20.2 16.0 20.8 14.7 20.2 13.4 C19.2 12.6 18.3 12.5 17.4 12.8 Z" fill="url(#wolf-moving-fill)"/>
+  <ellipse cx="10.2" cy="12.2" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="9.3" cy="9.2" rx="3.6" ry="3.1" fill="#ffffff" opacity="0.22"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 9.3
+cy = 9.2
+scale = 4.2
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

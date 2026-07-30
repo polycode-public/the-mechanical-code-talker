@@ -765,3 +765,186 @@ test("portrait-round, the one [match] variant carrying no parameters, resolves b
   const svg = resolveSpriteAsset("portrait", [], [{ subject: "the-portrait", predicate: "mgx:hasProperty", object: "round" }], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
   assert.equal(svg, variant.svg, "a parameterless [match] variant is returned exactly as authored");
 });
+
+// ---- the second wave of turntable classes: 2 quadrupeds (tiger, wolf) and
+// 5 person-role figures (adult, artist, audience, baby, boss) -------------
+// Each carries the same 4-angle turntable, the 4 combined facing+pose
+// frames, and a NEW fifth pose file — mgx:pose = "moving" alone, no facing
+// fact at all — that the original 4-class proof-of-concept batch never
+// needed, since none of those files matched on mgx:pose without also
+// matching mgx:faces.
+
+const SECOND_WAVE_CLASSES = ["tiger", "wolf", "adult", "artist", "audience", "baby", "boss"];
+
+const centerMovingVariant = (cls) => variantRequiring(cls, [`${POSE_PROPERTY}=moving`]);
+
+test("every second-wave class carries all four named turntable angles as real single-constraint variants", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    for (const angle of ["left", "half-left", "half-right", "right"]) {
+      assert.ok(angleVariant(cls, angle), `${cls} has no variant requiring ${FACING_PROPERTY} = ${angle}`);
+    }
+  }
+});
+
+test("every second-wave class carries a combined facing-and-pose variant at every angle, requiring two facts at once", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    for (const angle of ["left", "half-left", "half-right", "right"]) {
+      const variant = variantRequiring(cls, [`${FACING_PROPERTY}=${angle}`, `${POSE_PROPERTY}=moving`]);
+      assert.ok(variant, `${cls} has no combined ${FACING_PROPERTY}=${angle} + ${POSE_PROPERTY} variant`);
+      assert.equal(matchConstraints(variant).length, 2, `${cls}/${angle}: the combined variant must require exactly the two facts`);
+      assert.ok(Array.isArray(variant.match), `${cls}/${angle}: two constraints must be authored as repeated [[match]] tables`);
+    }
+  }
+});
+
+test("every second-wave class carries a centre-facing moving variant requiring mgx:pose alone, no facing fact", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const variant = centerMovingVariant(cls);
+    assert.ok(variant, `${cls} has no centre-facing moving variant (a bare mgx:pose = moving [[match]])`);
+    assert.equal(matchConstraints(variant).length, 1, `${cls}: the centre-facing moving variant must require exactly one fact`);
+    assert.equal(matchConstraints(variant)[0].property, POSE_PROPERTY, `${cls}: that one fact must be on ${POSE_PROPERTY}`);
+  }
+});
+
+test("every second-wave turntable and pose file is internally consistent on its own terms", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const variants = [
+      ...HALF_ANGLES.map((a) => angleVariant(cls, a)),
+      ...["left", "half-left", "half-right", "right"].map((a) => variantRequiring(cls, [`${FACING_PROPERTY}=${a}`, `${POSE_PROPERTY}=moving`])),
+      centerMovingVariant(cls),
+    ];
+    for (const variant of variants) {
+      assert.deepEqual(spriteTemplateProblems(variant), [], `${cls}: ${JSON.stringify(matchConstraints(variant))} has authoring problems`);
+      assert.deepEqual(
+        Object.keys(variant.parameters?.emotion?.values || {}).sort(),
+        [...EMOTION_WORDS].sort(),
+        `${cls}: all six curated moods must be mapped`,
+      );
+      for (const key of ["cx", "cy", "scale"]) {
+        assert.equal(typeof variant.face?.[key], "number", `${cls}: face.${key} must be a number`);
+      }
+    }
+  }
+});
+
+test("a second-wave class's centre-facing moving variant shares its front-facing [face] anchor exactly", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const front = templatesFor(cls).find((t) => !t.match && t.parameters?.emotion);
+    const moving = centerMovingVariant(cls);
+    assert.deepEqual(moving.face, front.face, `${cls}: the centre-facing moving variant must reuse the front view's own anchor unshifted`);
+  }
+});
+
+test("a second-wave half-angle face anchor sits between the full profile's and the front view's, the eyes half as narrowed", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const profileScale = facingVariantFor(cls, "left").face.scale;
+    const frontScale = templatesFor(cls).find((t) => !t.match && t.parameters?.emotion).face.scale;
+    for (const angle of HALF_ANGLES) {
+      const halfScale = angleVariant(cls, angle).face.scale;
+      assert.ok(
+        halfScale > profileScale && halfScale < frontScale,
+        `${cls}/${angle}: a three-quarter view's face scale (${halfScale}) must sit between the profile's ${profileScale} and the front view's ${frontScale}`,
+      );
+    }
+  }
+});
+
+test("a second-wave right profile is the left profile's mirror: the same geometry under one flip transform", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const left = angleVariant(cls, "left");
+    const right = angleVariant(cls, "right");
+    assert.ok(right.svg.includes('transform="translate(24 0) scale(-1 1)"'), `${cls}: the right file mirrors rather than redrawing`);
+    assert.ok(Math.abs(right.face.cx - (24 - left.face.cx)) < 1e-9, `${cls}: the right anchor must sit at 24 - ${left.face.cx}`);
+    assert.equal(right.face.cy, left.face.cy, `${cls}: a mirror never changes the face's height`);
+    assert.equal(right.face.scale, left.face.scale, `${cls}: a mirror never changes the face's size`);
+  }
+});
+
+test("a second-wave half-right profile is the half-left one's mirror, in both its shapes and its face anchor", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const left = angleVariant(cls, "half-left");
+    const right = angleVariant(cls, "half-right");
+    assert.ok(right.svg.includes('transform="translate(24 0) scale(-1 1)"'), `${cls}: the half-right file mirrors rather than redrawing`);
+    assert.ok(Math.abs(right.face.cx - (24 - left.face.cx)) < 1e-9, `${cls}: the half-right anchor must sit at 24 - ${left.face.cx}`);
+    assert.equal(right.face.cy, left.face.cy, `${cls}: a mirror never changes the face's height`);
+    assert.equal(right.face.scale, left.face.scale, `${cls}: a mirror never changes the face's size`);
+  }
+});
+
+test("each of the four angles resolves its own art for every second-wave class, and no two angles of one class draw the same picture", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const drawn = new Map();
+    for (const angle of ["left", "half-left", "half-right", "right"]) {
+      const svg = resolveSpriteAsset(cls, [], faces(`the-${cls}`, angle), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-facing-${angle}-fill`), `${cls}/${angle}: that angle's own gradient id must render`);
+      assert.ok(!svg.includes("{{"), `${cls}/${angle}: no unresolved placeholder token may reach the output`);
+      for (const [seen, seenAngle] of drawn) {
+        assert.notEqual(svg, seen, `${cls}: ${angle} and ${seenAngle} resolve the same markup`);
+      }
+      drawn.set(svg, angle);
+    }
+  }
+});
+
+test("a second-wave facing fact with no pose still resolves the standing profile, never a moving frame", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const standing = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(standing, angleVariant(cls, "left").svg.split("{{FACE}}").join(""), `${cls}: the standing profile is what an unposed instance gets`);
+    assert.ok(!standing.includes("-moving-"), `${cls}: the moving frame must not leak into an unposed instance`);
+  }
+});
+
+test("all three axes compose on the second-wave files: the facing picks the frame, the pose picks the moving one, the mood wears it", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const standing = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    for (const word of EMOTION_WORDS) {
+      const facts = [
+        { subject: `the-${cls}`, predicate: FACING_PROPERTY, object: "left" },
+        { subject: `the-${cls}`, predicate: POSE_PROPERTY, object: "moving" },
+        { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+      ];
+      const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-facing-left-moving-fill`), `${cls}/${word}: the moving frame's own art must be what renders`);
+      assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${word}: that mood's own fragment markup must appear`);
+      assert.ok(!svg.includes("{{"), `${cls}/${word}: no unresolved placeholder token may reach the output`);
+      assert.notEqual(svg, standing, `${cls}/${word}: the moving frame must differ from the standing profile`);
+    }
+  }
+});
+
+test("a bare mgx:pose = moving fact, with no facing at all, resolves a second-wave class's centre-facing moving art", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const svg = resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes(`${cls}-moving-fill`), `${cls}: a bare moving pose must resolve this class's own centre-facing moving art`);
+    assert.notEqual(svg, plain, `${cls}: the centre-facing moving art must differ from the plain standing sprite`);
+    assert.ok(!svg.includes("{{"), `${cls}: no unresolved placeholder token may reach the output`);
+  }
+});
+
+test("the centre-facing moving variant also wears every one of the six curated moods", () => {
+  for (const cls of SECOND_WAVE_CLASSES) {
+    for (const word of EMOTION_WORDS) {
+      const facts = [
+        { subject: `the-${cls}`, predicate: POSE_PROPERTY, object: "moving" },
+        { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+      ];
+      const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-moving-fill`), `${cls}/${word}: the centre-facing moving art must still be what renders`);
+      assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${word}: that mood's own fragment markup must appear`);
+    }
+  }
+});
+
+test("no gradient id introduced by the second-wave classes collides with any other file in the pack", () => {
+  const declaredBy = new Map();
+  const collisions = [];
+  for (const t of REAL_LARGE_TEMPLATES) {
+    for (const [, id] of String(t.svg).matchAll(/<(?:linear|radial)Gradient[^>]*\sid="([^"]+)"/g)) {
+      if (declaredBy.has(id)) collisions.push(`${id} declared by both ${declaredBy.get(id)} and ${t.classes.join("/")}`);
+      declaredBy.set(id, t.classes.join("/"));
+    }
+  }
+  const secondWaveCollisions = collisions.filter((line) => SECOND_WAVE_CLASSES.some((cls) => line.includes(`${cls}-facing`) || line.includes(`${cls}-moving`)));
+  assert.deepEqual(secondWaveCollisions, [], secondWaveCollisions.join("\n"));
+});

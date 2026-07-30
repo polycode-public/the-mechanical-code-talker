@@ -1,0 +1,61 @@
+# audience-facing-left-moving — audience-facing-left.toml's own center-bust
+# profile caught mid-motion. The center bust shows no legs either, just a
+# shoulder trapezoid down to the ground line — following
+# king-facing-left-moving.toml's own reasoning for a figure with no visible
+# legs, what moves is the shoulder line itself: it leans and tilts, one side
+# raised. Head, nose wedge and eye of the center bust stay exactly as the
+# standing profile draws them; the two flanking busts and the ground line
+# are unchanged, as always.
+classes = ["audience"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="audience-facing-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.6">
+    <circle cx="5" cy="12" r="2.3" fill="url(#audience-facing-left-moving-fill)"/>
+    <path d="M1.6 21 C1.6 17.6 3 16.1 5 16.1 C7 16.1 8.4 17.6 8.4 21 Z" fill="url(#audience-facing-left-moving-fill)"/>
+    <path d="M3.9 16.2 L5 17.1 L6.1 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <g opacity="0.6">
+    <circle cx="19" cy="12" r="2.3" fill="url(#audience-facing-left-moving-fill)"/>
+    <path d="M15.6 21 C15.6 17.6 17 16.1 19 16.1 C21 16.1 22.4 17.6 22.4 21 Z" fill="url(#audience-facing-left-moving-fill)"/>
+    <path d="M20.1 16.2 L19 17.1 L17.9 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <path d="M7.9 21.2 C7.7 17.1 9.6 14.9 11.8 15.0 C14.2 15.1 16.1 17.4 15.9 21.3 Z" fill="url(#audience-facing-left-moving-fill)"/>
+  <circle cx="11.53" cy="9.4" r="2.6" fill="url(#audience-facing-left-moving-fill)"/>
+  <path d="M9.1 8.9 Q8.1 9.7 9.1 10.5 Z" fill="url(#audience-facing-left-moving-fill)"/>
+  <ellipse cx="10.2" cy="9.0" rx="0.22" ry="0.27" fill="#1c1c1c"/>
+  <path d="M1.6 21 L22.4 21" stroke="currentColor" stroke-width="0.7" opacity="0.3" stroke-linecap="round"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 10.88
+cy = 9.26
+scale = 1.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
