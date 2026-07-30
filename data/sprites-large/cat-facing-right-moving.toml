@@ -1,0 +1,70 @@
+# cat-facing-right-moving — cat-facing-left-moving.toml's stride mirrored
+# across the canvas midline (every shape wrapped in one translate-then-flip
+# group), so the two directions stay geometrically identical twins. The
+# mirror flips the lit corner of the shared gradient along with the pose,
+# which reads as the same figure turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["cat"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="cat-facing-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="13.6" cy="17" rx="5.8" ry="4" fill="url(#cat-facing-right-moving-fill)"/>
+    <g fill="url(#cat-facing-right-moving-fill)">
+      <ellipse cx="8.3" cy="19.3" rx="1" ry="1.1"/>
+      <ellipse cx="13" cy="21.1" rx="1" ry="1.2"/>
+      <ellipse cx="13.6" cy="19.7" rx="1" ry="1.1"/>
+      <ellipse cx="18.5" cy="20.9" rx="1" ry="1.2"/>
+    </g>
+    <path d="M19.4 13.2 C22.4 11.6 23.2 14.8 20.8 16.4 C19.2 17.4 17.8 15.6 19.4 13.2 Z" fill="url(#cat-facing-right-moving-fill)"/>
+    <path d="M4.4 6.8 L3.4 3 L6.6 5.4 Z" fill="url(#cat-facing-right-moving-fill)"/>
+    <circle cx="6.8" cy="9.8" r="4.2" fill="url(#cat-facing-right-moving-fill)"/>
+    <path d="M8.8 6.4 L9.8 2.6 L6.2 5 Z" fill="url(#cat-facing-right-moving-fill)"/>
+    <path d="M9.2 5.6 L9.6 3.5 L7.8 4.9 Z" fill="#e3a8a0"/>
+    <path d="M3.6 9.2 L1.2 8.8 M3.7 10.6 L1.3 11 M4.2 11.6 L2.2 12.6" stroke="currentColor" stroke-width="0.6" opacity="0.6" stroke-linecap="round"/>
+    <path d="M3.1 9.6 L3.1 10.5 L2.3 10.05 Z" fill="#d98a86"/>
+    <ellipse cx="5.4" cy="8.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
+    <ellipse cx="7.6" cy="7.6" rx="1.4" ry="1" fill="#ffffff" opacity="0.32"/>
+    <ellipse cx="11.2" cy="15.2" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# cat-facing-left-moving.toml's anchor reflected across the canvas midline
+# (cx = 24 - 6.5); cy and scale are the mirror's own invariants, and the
+# same ones cat-facing-right.toml's own standing anchor already uses, since
+# the head doesn't move mid-stride.
+[face]
+cx = 17.5
+cy = 9.2
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
