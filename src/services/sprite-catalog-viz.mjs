@@ -934,9 +934,9 @@ ${spriteBundleScript}
     return { svg: img.innerHTML, label: label.textContent.trim() };
   }
 
-  function makeCycleSwatch(frames, ariaLabel) {
+  function makeCycleSwatch(frames, ariaLabel, kind) {
     const holder = document.createElement("div");
-    holder.className = "swatch large cycle";
+    holder.className = "swatch large cycle cycle-" + kind;
     holder.innerHTML = '<button type="button" class="swatch-img" aria-label="' + esc(ariaLabel)
       + '"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
     const frameImgEl = holder.querySelector(".swatch-img");
@@ -966,21 +966,21 @@ ${spriteBundleScript}
     const moodRows = rows.filter((r) => r.property === MOOD_PROPERTY);
     const moodFrames = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame));
     if (moodFrames.length) {
-      swatchRow.insertBefore(makeCycleSwatch(moodFrames, "step through the " + cls + " expressions"), swatchRow.firstChild);
+      swatchRow.insertBefore(makeCycleSwatch(moodFrames, "step through the " + cls + " expressions", "mood"), swatchRow.firstChild);
     }
 
     const facingFrames = {};
     for (const r of rows) { if (r.property === FACING_PROPERTY) facingFrames[r.frame.label] = r.frame; }
     const turnFrames = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
     if (turnFrames.length && baseSwatch) {
-      swatchRow.replaceChild(makeCycleSwatch(turnFrames, "watch the " + cls + " turn through every direction"), baseSwatch);
+      swatchRow.replaceChild(makeCycleSwatch(turnFrames, "watch the " + cls + " turn through every direction", "turn"), baseSwatch);
     }
 
     const movingRow = rows.find((r) => r.property === POSE_PROPERTY && r.frame.label === "moving");
     const movingFrames = movingFrameSequence(baseFrame, movingRow && movingRow.frame);
     if (movingFrames.length) {
       const happyRow = moodRows.find((r) => r.frame.label === "happy");
-      swatchRow.replaceChild(makeCycleSwatch(movingFrames, "watch the " + cls + " move"), (happyRow || movingRow).el);
+      swatchRow.replaceChild(makeCycleSwatch(movingFrames, "watch the " + cls + " move", "moving"), (happyRow || movingRow).el);
     }
   }
   const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

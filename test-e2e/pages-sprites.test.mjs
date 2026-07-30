@@ -361,33 +361,79 @@ test("the person card renders all six curated emotion variants as genuinely diff
   }
 });
 
-test("a card with direction and expression variants gains a cycle swatch that steps through genuinely different frames on click", async () => {
+test("a card with mood variants gains a mood-cycle swatch that steps through the plain sprite and every real mood on click", async () => {
   // reducedMotion pins the page's auto-step off, so every frame change below
   // is the test's own click and the walk is fully deterministic.
   const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
   try {
     const card = page.locator('.card[data-cls="bear"]');
     await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one cycle swatch");
+    const cycleButton = card.locator(".swatch.cycle-mood .swatch-img");
+    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one mood-cycle swatch");
     // The card sits far down a content-visibility:auto page — bring it on
     // screen before reading, so the first frame's text is really rendered.
     await cycleButton.scrollIntoViewIfNeeded();
     const labels = [];
     const markups = new Set();
-    // bear cycles plain + left + right + the six emotions = 9 frames; one
+    // bear's mood cycle is plain + its six curated emotions = 7 frames; one
     // extra click proves the wrap-around lands back on a real frame.
-    for (let i = 0; i < 10; i += 1) {
-      labels.push(await card.locator(".swatch.cycle .swatch-label").textContent());
+    for (let i = 0; i < 8; i += 1) {
+      labels.push(await card.locator(".swatch.cycle-mood .swatch-label").textContent());
       markups.add(await cycleButton.innerHTML());
       await cycleButton.click();
     }
-    for (const expected of ["bear", "left", "right", "happy", "calm"]) {
-      assert.ok(labels.includes(expected), `the cycle walks through the ${expected} frame (saw: ${labels.join(", ")})`);
+    for (const expected of ["bear", "happy", "calm"]) {
+      assert.ok(labels.includes(expected), `the mood cycle walks through the ${expected} frame (saw: ${labels.join(", ")})`);
     }
-    assert.equal(labels[9], labels[0], "the tenth click wraps back around to the first frame");
-    assert.ok(markups.size >= 9, `every frame is genuinely different markup, got ${markups.size} distinct frames`);
+    assert.equal(labels[7], labels[0], "the eighth click wraps back around to the first frame");
+    assert.ok(markups.size >= 7, `every mood frame is genuinely different markup, got ${markups.size} distinct frames`);
     assert.deepEqual(consoleErrors, [], "cycling logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the same card's turn-sweep swatch steps through every facing angle, centred on the plain sprite", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
+  try {
+    const card = page.locator('.card[data-cls="bear"]');
+    await card.waitFor({ state: "visible" });
+    const cycleButton = card.locator(".swatch.cycle-turn .swatch-img");
+    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one turn-sweep swatch");
+    await cycleButton.scrollIntoViewIfNeeded();
+    const labels = [];
+    // left, half-left, centre, half-right, right = 5 frames.
+    for (let i = 0; i < 6; i += 1) {
+      labels.push(await card.locator(".swatch.cycle-turn .swatch-label").textContent());
+      await cycleButton.click();
+    }
+    for (const expected of ["left", "half-left", "centre", "half-right", "right"]) {
+      assert.ok(labels.includes(expected), `the turn sweep walks through the ${expected} frame (saw: ${labels.join(", ")})`);
+    }
+    assert.equal(labels[5], labels[0], "the sixth click wraps back around to the first frame");
+    assert.deepEqual(consoleErrors, [], "the turn sweep logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the same card's moving-pose swatch toggles between its idle and moving frame", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
+  try {
+    const card = page.locator('.card[data-cls="bear"]');
+    await card.waitFor({ state: "visible" });
+    const cycleButton = card.locator(".swatch.cycle-moving .swatch-img");
+    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one moving-pose swatch");
+    await cycleButton.scrollIntoViewIfNeeded();
+    const first = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
+    await cycleButton.click();
+    const second = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
+    assert.notEqual(first, second, "a click toggles to the other pose");
+    assert.deepEqual([first, second].sort(), ["idle", "moving"], "the toggle's two states are exactly idle and moving");
+    await cycleButton.click();
+    const third = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
+    assert.equal(third, first, "a second click toggles back");
+    assert.deepEqual(consoleErrors, [], "the moving toggle logs no console error");
   } finally {
     await context.close();
   }
@@ -404,15 +450,15 @@ test("a card with only material variants never grows a cycle swatch — material
   }
 });
 
-test("with motion allowed, the cycle swatch advances on its own — the page is a little alive with no interaction at all", async () => {
+test("with motion allowed, the mood-cycle swatch advances on its own — the page is a little alive with no interaction at all", async () => {
   const { context, page } = await openSpritesPage();
   try {
-    const label = page.locator('.card[data-cls="bear"] .swatch.cycle .swatch-label');
+    const label = page.locator('.card[data-cls="bear"] .swatch.cycle-mood .swatch-label');
     await label.waitFor({ state: "attached" });
     const first = await label.innerText();
     await page.waitForFunction(
       ({ selector, before }) => document.querySelector(selector)?.textContent !== before,
-      { selector: '.card[data-cls="bear"] .swatch.cycle .swatch-label', before: first },
+      { selector: '.card[data-cls="bear"] .swatch.cycle-mood .swatch-label', before: first },
     );
   } finally {
     await context.close();
