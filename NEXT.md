@@ -16,16 +16,30 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**No worktrees active.** The last one (`worktree-agent-aa5a7b1b6b420d7b9`, ledger-teach flake fix)
-was merged (`4f7d3f43`) and removed.
+**All 11 commits through `6f1fca54` are pushed and live** (`f0cc2969` through `cc5a7f67`, then a
+hotfix `6f1fca54` — see below). Nothing local left unpushed.
 
-**Local commits not yet pushed to `origin/main`** (9, oldest first) — pending one full `npm test`
-pass then a single push: `f0cc2969` (ACE N-of-N grammar), `3315a0f8` (CI restructure, see
-`PLAN_AWS.md`), `af86e290` (chat.mjs weak-grounding extended to know-about + teach-offer, honest
-citations), `f1e5a578` (roll to 4.0.1), `dbb4bec0`+`4f7d3f43` (ledger-teach flake fix + merge),
-`9a9b58f7` (service-worker stale-cache wip fix), `d6c84133` (Rover-bark regression tests), `cc5a7f67`
-(4.0.1 artifact regen + `PAGE_WEIGHTS.md` revision 2). Everything through `c7782989` was already
-pushed and pipeline-verified.
+**One worktree active right now**: a sub-agent investigating/fixing `e2e:deployed` contention
+flakiness (see below) — check `git worktree list` for its current path before touching it.
+
+**Real bug found and fixed post-push, 2026-07-30:** the new "facts in the graph" tile
+(`research-viz.mjs`, from the fact-count work below) pushed `.statuspanel`'s three fixed
+7rem-min-width stats past a 375px phone viewport with no wrap — the live site's `research.html`
+overflowed sideways on mobile. Caught by `e2e:deployed` right after the 4.0.1 deploy, fixed in
+`6f1fca54` (`flex-wrap` + a narrow-viewport `min-width: 0` override), verified against the exact
+failing assertion locally, full suite green, pushed and deployed.
+
+**Real CI reliability problem surfaced by that hotfix push, still open:** `e2e:deployed`'s 44-file
+matrix (grown from 3 files by this session's own CI restructure, `3315a0f8`) failed all 3 retries
+of pipeline `2717061891`, each time on a DIFFERENT test (`pages-mud.test.mjs`'s speech-bubble
+narration test, then a P2P mesh naming assertion, then a peer-disconnect convergence test) — none
+related to the actual pushed fix. `deploy:website`/`publish:npm`/`smoke:post-deploy`/
+`e2e:published-package` all passed every time; the live site itself is confirmed fine. Strong
+signal this is genuine cross-file contention at 44-file scale, introduced by bundling that many
+files into one job — not three unrelated regressions. Dispatched a sub-agent (in a worktree) to
+reproduce and harden this properly, same pattern as the earlier `pages-ledger-teach.test.mjs`
+contention investigation. **Do not push another commit to `main` until this lands or is
+explicitly deferred** — the pipeline is currently red on this job.
 
 **Two background sub-agents dispatched 2026-07-30, both winding down:**
 
