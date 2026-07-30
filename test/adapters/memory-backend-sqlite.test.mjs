@@ -22,6 +22,7 @@ import {
   findRuleByName, readFactRows, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
   createSqliteMemoryStore, closeSqliteMemoryStore,
   resolveMemoryGraphFile, snapshotMemory,
+  loadNodeId, saveNodeId,
 } from "../../src/adapters/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000beef";
@@ -341,6 +342,22 @@ test("Backend C cross-connection: a second connection's committed write is visib
   } finally {
     closeSqliteMemoryStore(second);
     closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a node id written through one sqlite connection is read back by the next one to open the same file", async () => {
+  const { dir, handle } = await sqliteHandle();
+  let second = null;
+  try {
+    assert.equal(await loadNodeId(handle), null, "a store that has never joined a room has no id to report");
+    await saveNodeId(handle, "7f3a9c2e5b1d4a60");
+    assert.equal(await loadNodeId(handle), "7f3a9c2e5b1d4a60");
+    closeSqliteMemoryStore(handle);
+    second = await createSqliteMemoryStore(join(dir, "graph.sqlite"));
+    assert.equal(await loadNodeId(second), "7f3a9c2e5b1d4a60", "the id outlives the connection that minted it");
+  } finally {
+    if (second) closeSqliteMemoryStore(second);
     await rm(dir, { recursive: true, force: true });
   }
 });

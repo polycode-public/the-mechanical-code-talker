@@ -16,6 +16,21 @@ export function generateWorldId() {
   return globalThis.crypto?.randomUUID?.() ?? fallbackId("world");
 }
 
+/** A store's stable node id: 16 lowercase hex characters. A peer id is minted
+ *  per connection and a display name is user-chosen and collidable, so neither
+ *  keys a node's own assertions across its lifetime; this one is minted once,
+ *  the first time a store joins a room, and never regenerated. Hex only, so it
+ *  is safe to carry inside a provenance tag beside the `#`, `:` and `@`
+ *  separators that tag's parser splits on. */
+export function generateNodeId() {
+  const bytes = new Uint8Array(8);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  let hex = "";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return hex;
+}
+
 /** Two distinct words drawn from the lexicon's own noun list — a mnemonic
  *  label, not a credential. `random` is injectable for deterministic tests;
  *  defaults to Math.random. Callers add a numeric suffix themselves if a

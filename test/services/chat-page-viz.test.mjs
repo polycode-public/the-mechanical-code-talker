@@ -112,6 +112,38 @@ test("the node list sorts by the most recent fact each node contributed", () => 
   assert.equal(rows[2].connected, false, "a node that dropped stays listed, marked away");
 });
 
+test("a tag's node segment is stripped before display, so activity still lands on the name a peer chose", () => {
+  const rows = nodeRowsFor({
+    peers: [{ peerId: "p2", connected: true }],
+    factRows: [
+      { provenance: "teach:peer:mossy-acorn#node:7f3a9c2e5b1d4a60@2026-07-20T09:00:00.000Z" },
+      { provenance: "teach:peer:mossy-acorn#node:7f3a9c2e5b1d4a60@2026-07-20T12:00:00.000Z" },
+    ],
+    myPeerId: "p1",
+    myDisplayName: "striker-ballpark",
+    nameFor,
+    latestTimestampOf: latestProvenanceTimestamp,
+  });
+  assert.deepEqual(rows.map((r) => r.name), ["mossy-acorn", "striker-ballpark"], "no id ever reaches the roster");
+  assert.equal(rows[0].lastActiveAt, Date.parse("2026-07-20T12:00:00.000Z"));
+});
+
+test("a peer's node-segment tags and its older segment-free ones fold onto the one roster row", () => {
+  const rows = nodeRowsFor({
+    peers: [{ peerId: "p2", connected: true }],
+    factRows: [
+      { provenance: "teach:peer:mossy-acorn@2026-07-20T09:00:00.000Z" },
+      { provenance: "teach:peer:mossy-acorn#node:7f3a9c2e5b1d4a60@2026-07-20T12:00:00.000Z" },
+    ],
+    myPeerId: "p1",
+    myDisplayName: "striker-ballpark",
+    nameFor,
+    latestTimestampOf: latestProvenanceTimestamp,
+  });
+  assert.equal(rows.filter((r) => r.name === "mossy-acorn").length, 1);
+  assert.equal(rows[0].lastActiveAt, Date.parse("2026-07-20T12:00:00.000Z"));
+});
+
 test("a node that has contributed nothing yet is listed with no timestamp rather than a guessed one", () => {
   const rows = nodeRowsFor({
     peers: [{ peerId: "p2", connected: true }],

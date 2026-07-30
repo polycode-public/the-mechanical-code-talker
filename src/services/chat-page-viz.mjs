@@ -203,10 +203,12 @@ export function tapeClock() {
  * recently active first.
  *
  * Activity is read off the provenance the wire already carries. A fact a peer
- * broadcast arrives tagged `teach:peer:<their node name>@<ts>`, so the tag
- * names both who contributed it and when — no separate activity ledger to
- * keep. This node's own row reads its local `teach:`/`ace:` tags instead,
- * because a fact never leaves here relabelled in its own store.
+ * broadcast arrives tagged `teach:peer:<their node name>#node:<their id>@<ts>`,
+ * so the tag names both who contributed it and when — no separate activity
+ * ledger to keep. The `#node:` segment is identity and never reaches the
+ * screen; a tag from a peer old enough not to carry one is just a name. This
+ * node's own row reads its local `teach:`/`ace:` tags instead, because a fact
+ * never leaves here relabelled in its own store.
  *
  * `nameFor` and `latestTimestampOf` are injected (the room's own
  * `displayNameFor` and the P2P layer's `latestProvenanceTimestamp`) rather
@@ -224,7 +226,12 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
       if (segment.indexOf("teach:peer:") === 0) {
         const marker = segment.lastIndexOf("@");
         if (marker < 0) continue;
-        const name = segment.slice("teach:peer:".length, marker);
+        const label = segment.slice("teach:peer:".length, marker);
+        // Everything from the `#` on is the origin's stable node id, which
+        // keys the fact but is never shown: the roster matches on the name a
+        // peer chose, and that is the part before it.
+        const node = label.indexOf("#node:");
+        const name = node < 0 ? label : label.slice(0, node);
         const prior = activeByName.get(name);
         if (prior === undefined || at > prior) activeByName.set(name, at);
       } else if (segment.indexOf("teach:") === 0 || segment.indexOf("ace:") === 0) {
@@ -1713,12 +1720,18 @@ ${THEME_TOKENS_CSS}
 
   const P2P_ASSET = "./vendor/p2p.js";
   const NODE_NAME_KEY = "tmct.chat.nodeName";
+  // Not the IndexedDB store beside it: that record is stamped with the site
+  // version and the seed, and is dropped whenever either moves. A node id has
+  // to outlive a deploy, because peers have already keyed this node's facts
+  // on it.
+  const NODE_ID_KEY = "tmct.chat.nodeId";
   const invite = inviteParamsFrom(window.location.search);
 
   let p2p = null;
   let p2pLoad = null;
   let room = null;
   let myPeerId = null;
+  let myNodeId = "";
   let myDisplayName = "";
   let worldId = "";
   let worldName = "";
@@ -1747,6 +1760,13 @@ ${THEME_TOKENS_CSS}
   async function ensureIdentity() {
     const mod = await loadP2p();
     if (!myPeerId) myPeerId = mod.generatePeerId();
+    if (!myNodeId) {
+      try { myNodeId = localStorage.getItem(NODE_ID_KEY) || ""; } catch { myNodeId = ""; }
+      if (!myNodeId) {
+        myNodeId = mod.generateNodeId();
+        try { localStorage.setItem(NODE_ID_KEY, myNodeId); } catch { /* private mode — this visit still has an id, it just won't outlive the tab */ }
+      }
+    }
     if (!myDisplayName) {
       myDisplayName = readStoredNodeName() || mod.generateDisplayName();
       nodeNameInputEl.value = myDisplayName;
@@ -1797,6 +1817,7 @@ ${THEME_TOKENS_CSS}
       memoryDir: window.tmctChatSession.memoryDir,
       myPeerId: myPeerId,
       myDisplayName: myDisplayName,
+      myNodeId: myNodeId,
       worldId: worldId,
       worldName: worldName,
       transportFactory: instrumentedTransport,

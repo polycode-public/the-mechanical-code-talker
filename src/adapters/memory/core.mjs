@@ -62,6 +62,8 @@ export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (
 // per-session Source instead (`${ID}:<sessionId>`, sourceIdFor below).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
 const TEACH_SOURCE_ID = "src:teach-chat";
+// One Source per peer NODE, keyed by the stable id its relabeled tag carries.
+const TEACH_NODE_SOURCE_ID = "src:teach-node";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -712,6 +714,44 @@ export async function saveSyllogiseState(dir, state) {
   await atomicWriteJson(file, state);
 }
 
+// ---- Node id: the stable per-store P2P identity, a second sidecar ----------
+// 16 hex, minted the first time a store joins a room and never regenerated.
+// Persisted beside the store rather than inside the graph so it survives a
+// store that gets re-seeded, and so nothing about it ever replicates: a node
+// id is this store's own name for itself, not a fact about the world.
+
+export const NODE_ID_REL = join(MEMORY_DIR_REL, "node-id.json");
+const SQLITE_NODE_ID_KEY = "nodeId";
+
+/** This store's node id, or null when it has never joined a room. */
+export async function loadNodeId(dir) {
+  if (isMemoryHandle(dir)) return dir.nodeId || null;
+  if (isSqliteHandle(dir)) {
+    const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_NODE_ID_KEY);
+    return row?.v ? JSON.parse(row.v).nodeId || null : null;
+  }
+  try {
+    return JSON.parse(await readFile(join(dir, NODE_ID_REL), "utf8")).nodeId || null;
+  } catch (e) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+/** Record this store's node id — atomic file write (Backend A), a handle field
+ *  (Backend B), or a meta-table row (Backend C). Callers mint through
+ *  resolveStoreNodeId, which never overwrites an id a store already holds. */
+export async function saveNodeId(dir, nodeId) {
+  if (isMemoryHandle(dir)) { dir.nodeId = nodeId; return; }
+  if (isSqliteHandle(dir)) {
+    dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_NODE_ID_KEY, JSON.stringify({ nodeId }));
+    return;
+  }
+  const file = join(dir, NODE_ID_REL);
+  await mkdir(dirname(file), { recursive: true });
+  await atomicWriteJson(file, { nodeId });
+}
+
 /** Fresh read -> mutate -> atomic write. Serialized per call; every public
  *  append goes through here, including the lazy legacy-provenance migration
  *  and actor-level Source reliability recompute. `fn` may be async (the
@@ -786,6 +826,12 @@ function sourceIdFor(desc) {
   switch (desc?.kind) {
     case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
+    // One Source per peer NODE, keyed on the stable id the tag carries rather
+    // than the display name beside it: names are user-chosen and collidable, so
+    // two peers who picked the same one would otherwise collapse into a single
+    // Source and corroborate each other for free. Scores at the teach tier —
+    // a peer teaching is still a person telling us something.
+    case "teachNode": return { id: `${TEACH_NODE_SOURCE_ID}:${desc.nodeId}`, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "corpusWeak": return { id: `src:corpus-weak:${desc.name}`, type: "corpusWeak" };

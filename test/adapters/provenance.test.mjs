@@ -324,3 +324,55 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
 test("MEMORY_DIR_REL points under .tmct/memory", () => {
   assert.equal(MEMORY_DIR_REL, join(".tmct", "memory"));
 });
+
+// ---- src:teach-node: — one Source per peer node ----------------------------
+
+test("a peer-taught fact keys its Source on the tag's node id, not the display name beside it", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, {
+      subject: "rover", predicate: "mgx:isA", object: "dog",
+      provenance: "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z",
+    });
+    const row = readFactRows(await loadMemory(dir))[0];
+    assert.deepEqual(row.sourceIds, ["src:teach-node:7f3a9c2e5b1d4a60"]);
+    assert.deepEqual(row.sourceTypes, ["teach"], "a peer teaching still scores at the teach tier");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("one triple asserted by two nodes sharing a display name corroborates as two Sources, never one", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, {
+      subject: "wren", predicate: "mgx:isA", object: "bird",
+      provenance: "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z",
+    });
+    await appendFact(dir, {
+      subject: "wren", predicate: "mgx:isA", object: "bird",
+      provenance: "teach:peer:amber-fox#node:6589e595d1fa9a90@2026-01-01T01:00:00.000Z",
+    });
+    const row = readFactRows(await loadMemory(dir))[0];
+    assert.deepEqual(
+      [...row.sourceIds].sort(),
+      ["src:teach-node:6589e595d1fa9a90", "src:teach-node:7f3a9c2e5b1d4a60"],
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a peer tag predating the node segment still derives its old display-name-keyed Source", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, {
+      subject: "otter", predicate: "mgx:isA", object: "mammal",
+      provenance: "teach:peer:amber-fox@2026-01-01T00:00:00.000Z",
+    });
+    const row = readFactRows(await loadMemory(dir))[0];
+    assert.deepEqual(row.sourceIds, ["src:teach-chat:amber-fox"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
