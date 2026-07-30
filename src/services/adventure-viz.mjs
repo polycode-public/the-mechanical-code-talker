@@ -19,7 +19,7 @@
 // already takes with its own precomputed memory payload, just applied to a
 // second kind of build-time data.
 //
-// Eight pure, `.toString()`-splice-safe pieces are exported as real functions
+// Seven pure, `.toString()`-splice-safe pieces are exported as real functions
 // (not raw inline-script text) so they can be pinned directly by tests, the
 // same discipline spider-fly-viz.mjs holds classOfAgentId/
 // threadCellsForSpiderPlan to: `spriteClassForObject` (an object's sprite
@@ -33,27 +33,35 @@
 // ancestor walk, then floor), `roomSceneLayout` (the room split into a wall
 // band and floor stacks, over `roomSceneObjects` and `scenePlacement`),
 // `roomKindForRoom` (a room's border treatment, from its own rdf:type),
-// `carriedItems` (every object placed with the player), `exitDoorways` (the
-// written ways out of one room, in compass order, each marked with whether
-// this session has walked it — what the room view's own door plates are
-// drawn from), and `visitedRoomGraph`
-// (a directions-only layout of the rooms a session has actually visited —
-// see its own header for the exposure discipline). None of these import
-// anything beyond this module's own exports, which is what keeps a raw
-// `.toString()` splice safe. Three further pure helpers are exported for
-// testing but NOT spliced, because each calls another module's export the
-// in-page script instead reaches through the browser bundle's own
-// `tmctAdventure` global (mirroring how the inline script calls
-// `tmctSpiderFly.*` rather than re-importing spider-fly-world.mjs):
-// `roomCaptionText` (calls `worldDigestRows`; the in-page `captionFor`
-// mirrors it against `tmctAdventure.worldDigestRows`), `pillsForRoom` (a thin
-// wrapper over adventure.mjs's own exported `roomAffordances`, whose header
-// explains why its list can never promise an action one of take/open/talk/
-// examine would then refuse; the in-page `pillsFor` mirrors it against
-// `tmctAdventure.roomAffordances`), and `goalStatusLines` (calls
-// `foldWorldState` and adventure-autoplay.mjs's own `exposedFacts`; the
-// in-page `goalStatusLinesFor` mirrors both against the `tmctAdventure`
-// global too).
+// `carriedItems` (every object currently placed with a `holder`, "player" by
+// default), and `exitDoorways` (the written ways out of one room, in compass
+// order, each marked with whether this session has walked it — what the room
+// view's own door plates are drawn from). None of these import anything
+// beyond this module's own exports, which is what keeps a raw `.toString()`
+// splice safe.
+//
+// Four further pure helpers are exported for testing but NOT spliced,
+// because each calls another module's export — the in-page script instead
+// reaches through the browser bundle's own `tmctAdventure` global (mirroring
+// how the inline script calls `tmctSpiderFly.*` rather than re-importing
+// spider-fly-world.mjs): `roomCaptionText` (calls `worldDigestRows`; the
+// in-page `captionFor` mirrors it against `tmctAdventure.worldDigestRows`),
+// `pillsForRoom` (a thin wrapper over adventure.mjs's own exported
+// `roomAffordances`, whose header explains why its list can never promise an
+// action one of take/open/talk/examine would then refuse; the in-page
+// `pillsFor` mirrors it against `tmctAdventure.roomAffordances`),
+// `goalStatusLines` (calls `foldWorldState` and adventure-autoplay.mjs's own
+// `exposedFacts`; the in-page `goalStatusLinesFor` mirrors both against the
+// `tmctAdventure` global too), and `visitedRoomGraph` (a directions-only
+// layout of the rooms a session has actually visited, now a thin wrapper over
+// viz-room-graph.mjs's shared `directedGridLayout` — mud-viz.mjs's own
+// burrowGraph wrote the same BFS-grid layout a second time under its own
+// name, and that shared module is where the layout lives now; see its own
+// header for the algorithm and what `hints`/disconnected components mean).
+// The in-page script never splices `directedGridLayout`/`roomGraphSvg`
+// either, for the same not-self-contained reason: it calls
+// `tmctAdventure.directedGridLayout`/`tmctAdventure.roomGraphSvg` straight
+// through the bundle instead of re-implementing the room map a second time.
 //
 // The chat dock (chatlog/chatform/chatq/pills, below) mirrors
 // spider-fly-viz.mjs's own side panel: every manual exchange (via
@@ -84,13 +92,14 @@
 // an edit implies run through the browser bundle's own `session.applyEdit`
 // (adventure-browser-entry.mjs), never here — this module only renders and
 // reads.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel } from "./viz-theme.mjs";
-import { createTicker } from "./viz-ticker.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel, rowsForWorld, wordBeforeCursor } from "./viz-theme.mjs";
+import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
+import { directedGridLayout } from "./viz-room-graph.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
 import { exposedFacts } from "./adventure-autoplay.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { classAncestorChain } from "../domain/sprite-map.mjs";
-import { renderWorldEditorText, wordBeforeCursor } from "./adventure-editor.mjs";
+import { renderWorldEditorText } from "./adventure-editor.mjs";
 
 const DEFAULT_TITLE = "tmct — the adventure";
 const PREVIEW_MAX_TICKS = 30;
@@ -336,13 +345,16 @@ export function roomKindForRoom(rows, roomId) {
   return "indoor";
 }
 
-/** Every object currently `mgx:located-in` `actingSubject` (default
- *  "player"), sorted, each with its sprite class — the exact placement
+/** Every object currently `mgx:located-in` `holder` (default "player"),
+ *  sorted, each with its sprite class — the exact placement
  *  `worldDigestRows`'/`inventoryAnswer`'s own "carries the" branch already
- *  reads, just returned as a plain list instead of prose. Pure. */
-export function carriedItems(rows, state, actingSubject = "player") {
+ *  reads, just returned as a plain list instead of prose. `holder` is a real
+ *  parameter, not a name baked into the function — mud-viz.mjs's own
+ *  `carriedItemsFor` used to hardcode "player" instead, so a differently-
+ *  named character's own satchel never read correctly there. Pure. */
+export function carriedItems(rows, state, holder = "player") {
   return [...state.placements]
-    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === actingSubject)
+    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === holder)
     .map(([subject]) => ({ subject, spriteClass: spriteClassForObject(rows, subject) }))
     .sort((a, b) => a.subject.localeCompare(b.subject));
 }
@@ -361,47 +373,13 @@ export function carriedItems(rows, state, actingSubject = "player") {
  *  caller can draw at most "there's an exit that way" and nothing more.
  *  Disconnected visited rooms (not reachable from each other by traveled
  *  edges) lay out as separate side-by-side blocks rather than overlapping.
- *  Pure. */
+ *
+ *  A thin wrapper over viz-room-graph.mjs's shared `directedGridLayout`: no
+ *  `root` (Ashcombe Hall is never dug two ways into one cell, so there is no
+ *  level/turf to track) and no collision nudging (a manor fixed at authoring
+ *  time never collides). Pure. */
 export function visitedRoomGraph(state, visitedRoomIds, actingSubject = "player") {
-  const DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
-  const visited = new Set(visitedRoomIds || []);
-  const here = state.placements.get(actingSubject)?.object ?? null;
-  const positions = new Map();
-  const edges = [];
-  const edgeKeys = new Set();
-  const hints = [];
-  let offsetX = 0;
-  for (const start of [...visited].sort()) {
-    if (positions.has(start)) continue;
-    positions.set(start, { x: offsetX, y: 0 });
-    const queue = [start];
-    const component = [start];
-    while (queue.length) {
-      const room = queue.shift();
-      const pos = positions.get(room);
-      const dirs = state.exits.get(room);
-      for (const direction of [...(dirs?.keys() ?? [])].sort()) {
-        const target = dirs.get(direction);
-        if (!visited.has(target)) { hints.push({ from: room, direction }); continue; }
-        const key = [room, target].sort().join("\0");
-        if (!edgeKeys.has(key)) { edgeKeys.add(key); edges.push({ from: room, to: target, direction }); }
-        if (!positions.has(target)) {
-          const [dx, dy] = DELTA[direction] ?? [0, 0];
-          positions.set(target, { x: pos.x + dx, y: pos.y + dy });
-          component.push(target);
-          queue.push(target);
-        }
-      }
-    }
-    offsetX = Math.max(...component.map((r) => positions.get(r).x)) + 2;
-  }
-  const minX = Math.min(0, ...[...positions.values()].map((p) => p.x));
-  const minY = Math.min(0, ...[...positions.values()].map((p) => p.y));
-  const nodes = [...visited].sort().map((room) => {
-    const p = positions.get(room) || { x: 0, y: 0 };
-    return { id: room, x: p.x - minX, y: p.y - minY, current: room === here };
-  });
-  return { nodes, edges, hints };
+  return directedGridLayout(state, visitedRoomIds, { actingSubject });
 }
 
 /** Every room the world DEFINES at all (every subject the fact rows type as
@@ -528,11 +506,19 @@ export function suggestionsForTerm(rows, term) {
  *  itself (its own exits) or about something placed IN it — the same
  *  "visible here" boundary `roomSceneObjects` draws from. The player's own
  *  "is in the" row is excluded: the room frame already IS the current room,
- *  so restating "you are here" is redundant, never informative. */
-export function roomCaptionText(rows, state, here) {
+ *  so restating "you are here" is redundant, never informative.
+ *
+ *  `{ caseInsensitive }` folds the room-id match to lowercase before
+ *  comparing. Ashcombe Hall's own room ids are already lowercase, so this is
+ *  a no-op here by default — it exists so mud-viz.mjs's own case-insensitive
+ *  `roomCaptionFor` variant can share this one function instead of keeping a
+ *  near-duplicate. */
+export function roomCaptionText(rows, state, here, { caseInsensitive = false } = {}) {
   const hereCased = here.charAt(0).toUpperCase() + here.slice(1);
+  const objectMatches = (value) => (caseInsensitive ? String(value).toLowerCase() === here.toLowerCase() : value === here);
+  const subjectMatches = (value) => (caseInsensitive ? String(value).toLowerCase() === here.toLowerCase() : value === hereCased);
   const lines = worldDigestRows(rows, state)
-    .filter((row) => row.subject !== "Player" && (row.object === here || row.subject === hereCased))
+    .filter((row) => row.subject !== "Player" && (objectMatches(row.object) || subjectMatches(row.subject)))
     .map((row) => `${row.subject} ${row.predicate} ${row.object}.`);
   return lines.length ? lines.join(" ") : `Nothing more about the ${here} is written down yet.`;
 }
@@ -886,7 +872,7 @@ ${THEME_TOKENS_CSS}
      this just keeps the board's own footprint stable and click-to-enlarge
      honest about what it's enlarging. */
   .map-viewport-fixed { width: 190px; margin: 0 auto; cursor: zoom-in; }
-  /* the lights-down map lightbox — the same board, the same roomMapSvg
+  /* the lights-down map lightbox — the same board, the same room-graph svg
      output, just drawn bigger over a dimmed backdrop. Closes on a click
      anywhere outside the enlarged board, or Escape. */
   .map-lightbox { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 2.4rem; background: rgba(10, 8, 4, .74); }
@@ -1123,6 +1109,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 (function () {
   "use strict";
   const createTicker = ${createTicker.toString()};
+  const createSerialQueue = ${createSerialQueue.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomSceneObjects = ${roomSceneObjects.toString()};
@@ -1130,7 +1117,6 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const roomSceneLayout = ${roomSceneLayout.toString()};
   const roomKindForRoom = ${roomKindForRoom.toString()};
   const carriedItems = ${carriedItems.toString()};
-  const visitedRoomGraph = ${visitedRoomGraph.toString()};
   const allRoomIds = ${allRoomIds.toString()};
   const groundedPlaceholder = ${groundedPlaceholder.toString()};
   const exitDoorways = ${exitDoorways.toString()};
@@ -1138,6 +1124,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const factsForSubject = ${factsForSubject.toString()};
   const renderWorldEditorText = ${renderWorldEditorText.toString()};
   const wordBeforeCursor = ${wordBeforeCursor.toString()};
+  const rowsForWorld = ${rowsForWorld.toString()};
   const esc = ${escapeHtml.toString()};
   // The identity Ashcombe Hall's own world facts place as the carrier/viewer
   // — one named constant standing in for what was six separate "player"
@@ -1258,13 +1245,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   // ---- serialize every engine-touching call: the ticker, the chat dock and
   // the editor sync all share one in-memory store, and any overlapping pair
-  // could race against the same write.
-  let lock = Promise.resolve();
-  function withLock(fn) {
-    const run = lock.then(fn, fn);
-    lock = run.catch(() => {});
-    return run;
-  }
+  // could race against the same write. createSerialQueue is the shared
+  // primitive mud-viz.mjs's own tickChain/serializeTick and spider-fly-viz.mjs's
+  // own inlined withLock each duplicated under a different name.
+  const { run: withLock } = createSerialQueue();
 
   // ---- large-sprite-tier wiring — the gradient-shaded 400px tier
   // (data/sprites-large/*.toml) arrives embedded at build time as
@@ -1349,53 +1333,39 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   }
 
   // ---- room map — ONE svg-building routine shared by play mode's visited-
-  // only map and edit mode's whole-map (visitedRoomGraph fed allRoomIds
+  // only map and edit mode's whole-map (visitedRoomGraphFor fed allRoomIds
   // instead of the exposure set — a parameter, not a second layout), so the
   // fixed-size-viewport CSS treatment and the node layout can never drift
   // between the two. clickable adds a data-room attribute and a pointer
   // cursor per node; play mode's own map stays purely informational.
-  function roomMapSvg(graph, clickable) {
-    if (!graph.nodes.length) return null;
-    // Board-game footprints: each room a named rectangle (the name INSIDE
-    // it, the way a Cluedo board prints its rooms), corridors as wide paths
-    // between the footprints, direction-only hints as path stubs fading
-    // toward rooms not yet visited.
-    const cell = 64, roomW = 56, roomH = 26;
-    const maxX = Math.max.apply(null, graph.nodes.map((n) => n.x));
-    const maxY = Math.max.apply(null, graph.nodes.map((n) => n.y));
-    const w = (maxX + 1) * cell, h = (maxY + 1) * cell;
-    const cx = (n) => (n.x + 0.5) * cell;
-    const cy = (n) => (n.y + 0.5) * cell;
-    const byRoom = new Map(graph.nodes.map((n) => [n.id, n]));
-    const edgesSvg = graph.edges.map((e) => {
-      const a = byRoom.get(e.from), b = byRoom.get(e.to);
-      return '<line class="room-edge" x1="' + cx(a) + '" y1="' + cy(a) + '" x2="' + cx(b) + '" y2="' + cy(b) + '"></line>';
-    }).join("");
-    const HINT_DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
-    const hintsSvg = graph.hints.map((hi) => {
-      const from = byRoom.get(hi.from);
-      const d = HINT_DELTA[hi.direction] || [0, 0];
-      return '<circle class="room-hint" cx="' + (cx(from) + d[0] * cell * 0.42) + '" cy="' + (cy(from) + d[1] * cell * 0.42) + '" r="3.5"></circle>';
-    }).join("");
-    const nodesSvg = graph.nodes.map((n) => {
-      const cls = "room-node" + (n.current ? " current" : "") + (clickable ? " clickable" : "") + (clickable && n.id === selectedRoomId ? " selected" : "");
-      const attr = clickable ? ' data-room="' + esc(n.id) + '"' : "";
-      return '<g class="' + cls + '"' + attr + '><rect x="' + (cx(n) - roomW / 2) + '" y="' + (cy(n) - roomH / 2) + '" width="' + roomW + '" height="' + roomH + '" rx="3"></rect>'
-        + '<text x="' + cx(n) + '" y="' + (cy(n) + 2.5) + '">' + esc(n.id) + "</text></g>";
-    }).join("");
-    return '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + (clickable ? "the whole manor \\u2014 click a room to inspect it" : "the rooms visited so far") + '">'
-      + edgesSvg + hintsSvg + nodesSvg + "</svg>";
+  // roomGraphSvgFor mirrors the OLD inline roomMapSvg's own board-game sizing
+  // (a 64px square cell, 56x26px room footprints) through the shared
+  // viz-room-graph.mjs renderer, reached via the tmctAdventure global the
+  // same way captionFor/pillsFor already reach their own adventure.mjs
+  // calls: roomGraphSvg needs escapeHtml and a module-level exit-delta table
+  // this splice-safe script carries neither of, so it runs through the
+  // bundle rather than being spliced as text (see this page's own module
+  // header). visitedRoomGraphFor is the same posture for the layout half.
+  function roomGraphSvgFor(graph, clickable) {
+    return tmctAdventure.roomGraphSvg(graph, {
+      cellX: 64, cellY: 64, roomW: 56, roomH: 26,
+      clickable, selectedRoomId,
+      label: clickable ? "the whole manor \\u2014 click a room to inspect it" : "the rooms visited so far",
+    });
+  }
+  function visitedRoomGraphFor(state, visitedIds) {
+    return tmctAdventure.directedGridLayout(state, visitedIds, { actingSubject: ACTING_SUBJECT });
   }
   function renderRoomMap(rows, state, visitedRoomIds) {
-    mapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, visitedRoomIds, ACTING_SUBJECT), false) || '<span class="empty-note">nowhere yet</span>';
+    mapWrapEl.innerHTML = roomGraphSvgFor(visitedRoomGraphFor(state, visitedRoomIds), false) || '<span class="empty-note">nowhere yet</span>';
   }
 
   // ---- the map lightbox — clicking the fixed-square play-mode map redraws
-  // the SAME roomMapSvg output larger, over a dimmed backdrop; clicking the
-  // backdrop (not the board itself) or pressing Escape closes it.
+  // the SAME roomGraphSvgFor output larger, over a dimmed backdrop; clicking
+  // the backdrop (not the board itself) or pressing Escape closes it.
   function openMapLightbox() {
     if (!lastSnapshot) return;
-    const svg = roomMapSvg(visitedRoomGraph(lastSnapshot.state, lastSnapshot.visitedRoomIds, ACTING_SUBJECT), false);
+    const svg = roomGraphSvgFor(visitedRoomGraphFor(lastSnapshot.state, lastSnapshot.visitedRoomIds), false);
     if (!svg) return;
     mapLightboxInnerEl.innerHTML = svg;
     mapLightboxEl.hidden = false;
@@ -1503,7 +1473,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !objLightboxEl.hidden) closeObjectLightbox(); });
 
   function renderEditMap(rows, state) {
-    editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows), ACTING_SUBJECT), true) || '<span class="empty-note">this world defines no rooms</span>';
+    editMapWrapEl.innerHTML = roomGraphSvgFor(visitedRoomGraphFor(state, allRoomIds(rows)), true) || '<span class="empty-note">this world defines no rooms</span>';
   }
   editMapWrapEl.addEventListener("click", (e) => {
     const g = e.target.closest("[data-room]");
@@ -1701,8 +1671,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // diff + write; this page only ever reads its result back.
 
   function worldOnlyRows(rows) {
-    const prefix = "world:" + world().name;
-    return (rows || []).filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0);
+    return rowsForWorld(rows, world().name);
   }
 
   function renderRoomDetail() {
