@@ -7,8 +7,8 @@
 // reduced-motion respected).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderSpiderFlyHtml, classOfAgentId, threadCellsForSpiderPlan, facingDegreesFor, nextCorpses } from "../../src/services/spider-fly-viz.mjs";
-import { GRID_SIZE, cellId, parseCellId, DIRECTION_DELTA } from "../../src/domain/spider-fly-world.mjs";
+import { renderSpiderFlyHtml, threadCellsForSpiderPlan, facingDegreesFor, nextCorpses } from "../../src/services/spider-fly-viz.mjs";
+import { GRID_SIZE, cellId, parseCellId, DIRECTION_DELTA, agentKindOf } from "../../src/domain/spider-fly-world.mjs";
 
 const GEOMETRY = { parseCellId, cellId, directionDelta: DIRECTION_DELTA };
 
@@ -18,16 +18,17 @@ function embeddedJson(html, name) {
   return JSON.parse(m[1]);
 }
 
-// ---- classOfAgentId / threadCellsForSpiderPlan: the two pure render-glue
-// pieces extracted as real exports (not raw inline-script text) so they can
-// be pinned directly, the same discipline ledger-viz.mjs holds its own
-// spliced helpers (facetCounts, resolveAnsweredTerm) to.
+// ---- agentKindOf (spider-fly-world.mjs) / threadCellsForSpiderPlan
+// (spider-fly-viz.mjs): pure render-glue pieces extracted as real exports
+// (not raw inline-script text) so they can be pinned directly, the same
+// discipline ledger-viz.mjs holds its own spliced helpers (facetCounts,
+// resolveAnsweredTerm) to.
 
-test("classOfAgentId strips the trailing individual number, whatever it is", () => {
-  assert.equal(classOfAgentId("spider-1"), "spider");
-  assert.equal(classOfAgentId("spider-12"), "spider");
-  assert.equal(classOfAgentId("fly-3"), "fly");
-  assert.equal(classOfAgentId("egg-1"), "egg");
+test("agentKindOf strips the trailing individual number, whatever it is", () => {
+  assert.equal(agentKindOf("spider-1"), "spider");
+  assert.equal(agentKindOf("spider-12"), "spider");
+  assert.equal(agentKindOf("fly-3"), "fly");
+  assert.equal(agentKindOf("egg-1"), "egg");
 });
 
 test("threadCellsForSpiderPlan returns null for a spider with no plan (the common greedy-approach tick)", () => {
@@ -252,8 +253,8 @@ test("renderSpiderFlyHtml: deterministic — byte-identical output for identical
 
 test("renderSpiderFlyHtml: each agent's HUD row can carry a mass bar, scaled against the real fly/spider mass constants", () => {
   const html = renderSpiderFlyHtml();
-  assert.match(html, /mass-track/, "the mass bar's track element is drawn");
-  assert.match(html, /mass-fill/);
+  assert.match(html, /meter-track/, "the mass bar's track element is drawn, via the shared meterBarHtml");
+  assert.match(html, /meter-fill/);
   assert.match(html, /maxFlyMass/);
   assert.match(html, /maxSpiderMass/);
   const data = embeddedJson(html, "SPIDERFLY");

@@ -22,7 +22,8 @@
 // `.toString()` — exactly ledger-viz.mjs's own `facetCounts`/
 // `resolveAnsweredTerm` pattern — because they are genuinely UI-only, with no
 // reason to live inside the engine bundle: `createTicker` (viz-ticker.mjs,
-// the shared play/pause/step/reset primitive), `classOfAgentId`,
+// the shared play/pause/step/reset primitive), `agentKindOf` (the shared
+// kind-from-id helper, defined once in spider-fly-world.mjs),
 // `threadCellsForSpiderPlan` (the silk-thread reconstruction), `nextCorpses`
 // (the dying-agent bookkeeping behind the dusty-corner corpse pile) and
 // `facingDegreesFor` (plan-driven sprite orientation) — all kept as real,
@@ -32,11 +33,13 @@
 // bundle's own real ES exports instead, since (unlike ledger-viz, which
 // reuses a FIXED shared bundle it can't extend for one page's own needs) this
 // page ships its own dedicated bundle and can just export what it needs.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, meterBarHtml } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
-import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
+import { loadWinkVendor } from "./viz-boot.mjs";
+import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId, agentKindOf } from "../domain/spider-fly-world.mjs";
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
-import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { believedFactSentence } from "./spider-fly-turn.mjs";
+import { DEFAULT_GAME_CONFIG, massScaleFor } from "../domain/game-config.mjs";
 
 // A larger cell than this page's first cut (44px) — the board sits in its
 // own full-width block, so a bigger cell keeps it reading as the page's
@@ -60,13 +63,6 @@ function webCellIds() {
     }
   }
   return out;
-}
-
-/** An agent id's class for sprite/HUD purposes — "spider-2" -> "spider",
- *  "fly-10" -> "fly", "egg-1" -> "egg". Self-contained (no outer refs),
- *  `.toString()`-splice safe. */
-export function classOfAgentId(id) {
-  return String(id).replace(/-\d+$/, "");
 }
 
 /**
@@ -200,7 +196,7 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
     if (agents[id] || out[id]) continue;
     const cell = prevAgents[id]?.cell;
     if (!cell) continue;
-    out[id] = { cls: classOfAgentId(id), cell, diedAtTurn: turn };
+    out[id] = { cls: agentKindOf(id), cell, diedAtTurn: turn };
   }
   return out;
 }
@@ -409,9 +405,9 @@ ${THEME_TOKENS_CSS}
      texture (repeating-linear-gradient) instead of a smooth gradient bar —
      discrete resource units, the same reading-at-a-glance language a 90s
      strategy game's own gold/mana meters use. */
-  .mass-track { height: 7px; margin-top: .35rem; background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 1px; overflow: hidden; }
-  .mass-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--taught) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
-  .mass-fill.fly { background: repeating-linear-gradient(90deg, var(--fly) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
+  .meter-track { height: 7px; margin-top: .35rem; background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 1px; overflow: hidden; }
+  .meter-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--taught) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
+  .meter-fill.fly { background: repeating-linear-gradient(90deg, var(--fly) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
   .hud-empty { color: var(--muted); font-size: .85rem; }
   .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 220px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog:empty { display: none; margin-bottom: 0; }
@@ -591,12 +587,25 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 (function () {
   "use strict";
   const createTicker = ${createTicker.toString()};
-  const classOfAgentId = ${classOfAgentId.toString()};
+  const loadWinkVendor = ${loadWinkVendor.toString()};
+  const agentKindOf = ${agentKindOf.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
   const emotionFor = ${emotionFor.toString()};
   const nextCorpses = ${nextCorpses.toString()};
-  const esc = ${escapeHtml.toString()};
+  const massScaleFor = ${massScaleFor.toString()};
+  const believedFactSentence = ${believedFactSentence.toString()};
+  const escapeHtml = ${escapeHtml.toString()};
+  const meterBarHtml = ${meterBarHtml.toString()};
+  const esc = escapeHtml;
+  // The lemma/POS tier every sibling dock loads: this game's OWN commands
+  // (tick, address, stop, see) are closed regexes that never need it, but a
+  // line that doesn't match one of those still falls through to the
+  // ordinary chat/ask/teach lanes (spiderFlyTurn returns null), and those
+  // lanes read exactly as much better with wink loaded as they do on every
+  // other page. Fired eagerly here so it is likely settled well before a
+  // visitor's first ordinary (non-game) question.
+  loadWinkVendor({ register: (factory) => tmctSpiderFly.registerWinkModel(factory) })();
   const el = (id) => document.getElementById(id);
   const boardFrame = el("boardFrame");
   const boardCanvas = el("board");
@@ -680,20 +689,18 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     }
   }
 
-  // maxMassFor/propertyFactsForAgent (emotionFor's own caller-side glue): only
-  // spider/fly carry the mgx:feels parameter (data/sprites-large/*-with-
-  // emotion.toml exists for those two classes only) — every other class (egg,
-  // and any class this page has no template for at all) keeps propertyFacts
-  // empty, resolving through its plain template exactly as before this page
-  // wired emotion through. maxMassFor mirrors massBarHtml's own per-class
-  // denominator below so the HUD's mass bar and the sprite's own expression
-  // read the same "how full" scale.
-  function maxMassFor(cls) {
-    return cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
-  }
+  // propertyFactsForAgent (emotionFor's own caller-side glue): only spider/fly
+  // carry the mgx:feels parameter (data/sprites-large/*-with-emotion.toml
+  // exists for those two classes only) — every other class (egg, and any
+  // class this page has no template for at all) keeps propertyFacts empty,
+  // resolving through its plain template exactly as before this page wired
+  // emotion through. massScaleFor is the SAME per-class denominator the HUD's
+  // mass meter below reads, so the meter and the sprite's own expression
+  // agree on "how full".
   function propertyFactsForAgent(agent, cls) {
     if (cls !== "spider" && cls !== "fly") return [];
-    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMassFor(cls)) }];
+    const maxMass = massScaleFor(cls, { maxSpiderMass: SPIDERFLY.maxSpiderMass, maxFlyMass: SPIDERFLY.maxFlyMass });
+    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMass) }];
   }
   function resolveSpriteFace(cls, propertyFacts) {
     return window.tmctSpiderFly
@@ -747,7 +754,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function applyAgents(agents) {
     removeStaleSprites(agents);
     for (const [id, a] of Object.entries(agents)) {
-      const cls = classOfAgentId(id);
+      const cls = agentKindOf(id);
       const node = ensureSpriteEl(id, cls, a);
       const parsed = tmctSpiderFly.parseCellId(a.cell);
       if (!parsed) continue;
@@ -818,13 +825,6 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     }
   }
 
-  function massBarHtml(cls, mass) {
-    const maxMass = cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
-    if (typeof mass !== "number" || !maxMass) return "";
-    const pct = Math.max(0, Math.min(100, (mass / maxMass) * 100));
-    return '<div class="mass-track"><div class="mass-fill ' + esc(cls) + '" style="width:' + pct + '%"></div></div>';
-  }
-
   // The last-created plan as a plain arrow chain ("west → west"), or
   // "holding." when the agent's plan this tick is empty — mirrors exactly
   // what drove this tick's sprite facing (facingDegreesFor reads the same
@@ -850,15 +850,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   // The full text rendering behind the click-expand panel: one sentence per
   // other candidate the observer currently has a belief about, or "has not
-  // been observed" for a candidate it doesn't — the same belief map
-  // beliefLineHtml already compresses into a single line, spelled out in
-  // full beside the clicked agent instead of abbreviated above it.
+  // been observed" for a candidate it doesn't — believedFactSentence is the
+  // SAME function spider-fly-turn.mjs's own chat lane renders "X sees: ..."
+  // from, so the chat phrasing and this panel can never drift apart.
+  // beliefLineHtml already compresses the same belief map into a single line
+  // above; this spells it out in full beside the clicked agent.
   function observedFactsHtml(observerId, belief) {
     const entries = Object.entries(belief || {});
     const lines = entries.length
-      ? entries.map(([id, cell]) => '<div class="hud-detail-line">'
-          + (cell ? esc(id) + " is at " + esc(cell) + "." : esc(id) + " has not been observed.")
-          + "</div>").join("")
+      ? entries.map(([id, cell]) => '<div class="hud-detail-line">' + esc(believedFactSentence(id, cell)) + "</div>").join("")
       : '<div class="hud-detail-line">nothing else is on the board yet.</div>';
     return '<div class="hud-detail"><div class="hud-detail-title">' + esc(observerId) + " observes</div>" + lines + "</div>";
   }
@@ -867,13 +867,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const ids = Object.keys(lastAgents).sort();
     if (!ids.length) { hudEl.innerHTML = '<div class="hud-empty">no agents on the board.</div>'; return; }
     hudEl.innerHTML = ids.map((id) => {
-      const cls = classOfAgentId(id);
+      const cls = agentKindOf(id);
       const a = lastAgents[id];
       const clickable = cls === "spider" || cls === "fly";
       const expanded = clickable && expandedAgents.has(id);
       const main = '<div class="hud-main"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
         + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span>"
-        + massBarHtml(cls, a.mass)
+        + meterBarHtml(cls, a.mass, massScaleFor(cls, { maxSpiderMass: SPIDERFLY.maxSpiderMass, maxFlyMass: SPIDERFLY.maxFlyMass }))
         + planLineHtml(a.plan)
         + beliefLineHtml(a.belief)
         + "</div>";
@@ -963,7 +963,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     // engine's own shipped default before the session has finished
     // booting) — a POV toggle always reflects whatever vision range this
     // class currently actually has, not a fixed constant.
-    const radius = classOfAgentId(povAgentId) === "spider"
+    const radius = agentKindOf(povAgentId) === "spider"
       ? (liveConfig.spiderVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS)
       : (liveConfig.flyVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS);
     const visible = new Set(tmctSpiderFly.visibleCells(p.x, p.y, radius));

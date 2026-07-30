@@ -43,7 +43,8 @@
 // spider-fly.mjs's own header comment confirms grid movement never reads
 // them back (hand-written pathfinding over has-exit-* facts, not the taught
 // action-rule DSL), so nothing here depends on them being loaded.
-import { runTurn } from "../../services/chat.mjs";
+import { createTurnSession } from "./turn-session.mjs";
+import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import {
   createInMemoryStore, normFactTerm, appendFacts, loadMemory, readFactRows,
 } from "../../adapters/memory/core.mjs";
@@ -51,6 +52,7 @@ import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
+  isLiveRenderableAgent,
 } from "../../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
 import { pillsForSpiderFly, oneStepDirectionBetween } from "../../services/spider-fly-turn.mjs";
@@ -88,9 +90,6 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
-  let focus = null;
-  let last = null;
-  let planState = { spiderFly: { turn: 0 } };
   // The live, in-page-slider-adjustable knobs (mass-loss-rate/spawn-rate/
   // vision-radius per class, and every other spiderFly tunable) — starts at
   // the shipped defaults, mutated only through setConfig() below, and
@@ -99,6 +98,17 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   // above the OLD lay threshold isn't retroactively un-laid) — a config
   // change only changes what happens FROM HERE ON, same as tmct.toml would.
   let config = { ...DEFAULT_GAME_CONFIG.spiderFly };
+
+  // The chat dock's turn dispatch — createTurnSession owns the focus/last/
+  // planState fold and the throw-safe catch fallback every browser entry
+  // needs; tick() below reaches into the SAME planState (via setPlanState)
+  // so a raw tick and a chat-driven tick can never disagree about the turn
+  // count either lane sees next.
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint: "",
+    buildExtraOptions: () => ({ gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config } }),
+  });
+  turnSession.setPlanState({ spiderFly: { turn: 0 } });
 
   return {
     memoryDir,
@@ -111,30 +121,16 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
      *  { turn, agents, ecology } shape unmodified. */
     async tick() {
       const result = await runSpiderFlyTick(memoryDir, { config });
-      planState = { spiderFly: { turn: result.turn } };
+      turnSession.setPlanState({ spiderFly: { turn: result.turn } });
       return result;
     },
 
     /** One dispatched chat turn — the SAME runTurn the CLI and the home
-     *  page's own chat run, over this session's own memoryDir. A throwing
-     *  runTurn must never kill the session — the page has no other chance
-     *  to show this turn's answer. */
+     *  page's own chat run, over this session's own memoryDir, via the
+     *  shared turn-dispatch wrapper (createTurnSession above) every browser
+     *  entry now uses. */
     async turn(line) {
-      let result;
-      try {
-        result = await runTurn(line, {
-          config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint: "", planState,
-          gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config },
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
-      }
-      focus = result.focus;
-      last = result.last;
-      if ("planState" in result) planState = result.planState;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
+      return turnSession.turn(line);
     },
 
     /** A read-only fold of the CURRENT board — no engine advance, no goal
@@ -147,7 +143,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
       const state = foldSpiderFlyState(rows);
       const agents = {};
       for (const [id, place] of state.placements) {
-        if (state.removed.has(id) || /^web-\d+$/.test(id)) continue;
+        if (!isLiveRenderableAgent(id, state)) continue;
         agents[id] = { cell: place.cell, mass: state.mass.get(id)?.value ?? null };
       }
       return { turn: state.turnCount, agents, activeWebs: liveWebs(state.webs, state.turnCount) };
@@ -183,5 +179,5 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
 globalThis.tmctSpiderFly = {
   createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
-  pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG,
+  pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG, registerWinkModel,
 };
