@@ -18,7 +18,7 @@
 // loop, src/surfaces/tui/app.mjs's Ink shell).
 
 import { join, dirname } from "node:path";
-import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
+import { dispatchTool, dispatchToolStructured, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, moduleCountOf, packageCounts, modulesOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
@@ -83,12 +83,6 @@ export { uuidv7 };
 // every existing import site — bin, tui, server-http, index, tests — keeps
 // importing createSession/runChat/SESSION_LOG_DIR/PROMPT from chat.mjs.
 export { createSession, runChat, SESSION_LOG_DIR, PROMPT } from "./chat-session.mjs";
-
-/** dispatchTool("tmct_ask", …) returns the prose answer plus a delimited
- *  machine-readable envelope; the TUI shows the prose only. Reused verbatim
- *  when chat builds the same string from a direct ask() call (the
- *  focus/contextId path), so runTurn parses one envelope shape either way. */
-const ASK_ENVELOPE_DELIM = "\n\n---tmct_ask---\n";
 
 /** The context pronouns a focus can stand in for — a bare `it`/`this`/`that`/`here`
  *  as a command arg reuses the focus, and the ask engine resolves the same words
@@ -11506,12 +11500,6 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
   return null;
 }
 
-/** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
- *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
- *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
- *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
- *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
- *  normal answer, never a crash. */
 /** Load the taught domain for the plan lane: fact rows + rule rows compiled
  *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
  *  the caller may have just written snapshot rows this same turn. */
@@ -12577,7 +12565,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let answer;
   let envelope = null;
   try {
-    let text;
+    let content;
     if (graph?.individuals?.length || (graph && (focus?.id || prev.length))) {
       // Direct ask() whenever the caller HANDED US a graph with something in it.
       // The focus/prev pair is threaded through it (contextId so "it" binds, prev
@@ -12586,15 +12574,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // below reads the CONFIG's graph instead — which an in-process session (a
       // page's own world facts, say) has no file for. Gating on history alone
       // refused every cold turn against a perfectly good graph and only started
-      // answering once a focus happened to be set. Builds the SAME delimited
-      // envelope dispatchTool emits, so the parse below is identical either way.
+      // answering once a focus happened to be set.
       const { ask } = await import("../domain/ask.mjs");
       const r = ask(graph, askQuery, { contextId: effectiveContextId, prev });
-      text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
+      content = r.content;
+      envelope = r.tmct_ask;
     } else {
-      text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
+      const r = await dispatchToolStructured("tmct_ask", { query: askQuery }, { config, source, tel });
+      content = r.content;
+      envelope = r.data ?? null;
     }
-    const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
     // ask.mjs is shared with the web GUI surface (src/surfaces/web), whose
     // graph view really does have clickable nodes to select — its own
     // "click a node first, or name it directly" wording is correct THERE,
@@ -12609,11 +12598,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       /needs a selected node to refer to — click a node first, or name it directly\.$/,
       "isn't resolved to anything yet — name the term directly, or ask a question that resolves one first.",
     );
-    if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
     // Typed discourse referents the answer established (the ask envelope's
     // additive `discourse` field, emitted beside the eval where the answer's
     // content is still typed) register into the session's record here — the
-    // one point both ask paths (direct call and dispatchTool) converge.
+    // one point both ask paths (direct call and dispatchToolStructured) converge.
     if (discourseHolder && Array.isArray(envelope?.discourse)) {
       for (const { lane, bound, ...spec } of envelope.discourse) {
         discourseHolder.record = registerReferent(discourseHolder.record, {
