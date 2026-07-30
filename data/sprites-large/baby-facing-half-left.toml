@@ -1,0 +1,56 @@
+# baby-facing-half-left — baby turned three-quarters, halfway between
+# baby-facing-left.toml's full profile and baby-with-emotion.toml's front
+# view. The head sits at the midpoint position, the nose bump projects only
+# half as far past the head's left edge, and a small far eye appears near
+# the head's right edge so both eyes read. The wrap-band body, foot bumps,
+# highlight, V-neck stroke, band stroke and knot keep baby-with-emotion's
+# own exact coordinates, the same as the full profile.
+classes = ["baby"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="baby-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="9.8" cy="21.5" rx="1.3" ry="1" fill="url(#baby-facing-half-left-fill)"/>
+  <ellipse cx="14.2" cy="21.5" rx="1.3" ry="1" fill="url(#baby-facing-half-left-fill)"/>
+  <path d="M7.2 21 C6.6 15.6 8 12.4 12 12.4 C16 12.4 17.4 15.6 16.8 21 C16.8 21 14.6 22 12 22 C9.4 22 7.2 21 7.2 21 Z" fill="url(#baby-facing-half-left-fill)"/>
+  <ellipse cx="9.8" cy="17.2" rx="1.6" ry="2.4" fill="#ffffff" opacity="0.1"/>
+  <circle cx="11.65" cy="7.4" r="3.8" fill="url(#baby-facing-half-left-fill)"/>
+  <path d="M8.8 7.0 Q8.4 7.4 8.8 7.8 Z" fill="url(#baby-facing-half-left-fill)"/>
+  <ellipse cx="10.2" cy="7.02" rx="0.3" ry="0.36" fill="#1c1c1c"/>
+  <ellipse cx="13.6" cy="6.95" rx="0.2" ry="0.24" fill="#1c1c1c"/>
+  <path d="M9 12.9 L12 15.4 L15 12.9" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8.4 16.6 C9.6 17.4 14.4 17.4 15.6 16.6" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.3" stroke-linecap="round"/>
+  <circle cx="12" cy="17" r="0.55" fill="currentColor" opacity="0.25"/>
+  <path d="M9.25 4.8 C9.95 4.2 10.75 4 11.65 4.1" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# The head sits at cx=11.65 cy=7.4 r=3.8 (half the full profile's -0.69
+# shift), so scale is 0.82 * 3.8 = 3.1. The near eye this file draws sits at
+# (10.2, 7.02). cx = 10.2 + 0.4*3.1 = 11.44, cy = 7.02 + 0.15*3.1 = 7.49.
+[face]
+cx = 11.44
+cy = 7.49
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
