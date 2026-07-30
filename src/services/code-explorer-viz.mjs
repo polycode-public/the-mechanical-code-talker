@@ -2,11 +2,14 @@
 // a title bar (graph source, Open graph…/Open repo…), an explorer sidebar
 // reading each import/call/contains edge back as a plain sentence, a chat
 // centre over the same graph with a rail of suggested questions, and a status
-// bar carrying the graph's own counts. The chat session seeds BOTH the loaded
-// code graph and chat.html's general-knowledge bands (./chat-seed.json,
-// fetched lazily at runtime), so one conversation answers "what is a queue"
-// and "what imports src/core/model.mjs" alike — and degrades to graph-only
-// when the seed asset is unavailable.
+// bar carrying the graph's own counts. Clicking a term asks the engine what
+// relates to it (askRelatedFacts, over tmct_ask) and renders the answer, so the
+// sidebar and the chat put the same question to the same place.
+//
+// The chat session seeds BOTH the loaded code graph and chat.html's
+// general-knowledge bands (./chat-seed.json, fetched lazily at runtime), so one
+// conversation answers "what is a queue" and "what imports src/core/model.mjs"
+// alike — and degrades to graph-only when the seed asset is unavailable.
 //
 // The derivations are pure so the shell, the packaging scripts, and the unit
 // tests all share one code path; renderCodeExplorerHtml builds one
@@ -155,11 +158,37 @@ const CLIENT_JS = String.raw`
     els.factTotal.textContent = (edges + seedState.facts).toLocaleString();
   }
 
-  function renderFocusRows(data) {
+  // "What relates to the focus", put to the engine. askRelatedFacts asks
+  // tmct_ask one question per relation kind the loaded graph carries, in both
+  // directions, and hands back the answers' own typed rows — the same ask()
+  // this page's chat turns reach, so the panel and the conversation answer one
+  // question one way. Null on the static page, which has no engine to ask.
+  function askRelated(focus) {
+    if (!api || !api.askRelatedFacts || !focus) return null;
+    try {
+      return api.askRelatedFacts(DATA.payload, focus);
+    } catch (e) {
+      console.warn("tmct code explorer: the related-facts ask failed, splitting the row list instead", e);
+      return null;
+    }
+  }
+
+  function rowKey(r) { return JSON.stringify([r.s, r.kind, r.o]); }
+
+  function renderFocusRows(data, related) {
     var focus = data.focus;
     var rows = data.ledger.rows;
-    var near = rows.filter(function (r) { return r.s === focus || r.o === focus; });
-    var rest = rows.filter(function (r) { return r.s !== focus && r.o !== focus; });
+    // The engine's answer whenever it grounded one. The row list's own split is
+    // what is left when there is no engine (the static page) or when every
+    // question came back parsed as something else — an identifier that is
+    // itself a relation verb reads as a question about the verb.
+    var grounded = Boolean(related && related.grounded);
+    var near = grounded ? related.rows : rows.filter(function (r) { return r.s === focus || r.o === focus; });
+    var nearKeys = {};
+    near.forEach(function (r) { nearKeys[rowKey(r)] = true; });
+    // Whatever the neighbourhood did not already name, in degree order: a bulk
+    // view of the rest of the graph, which is a fold and not a question.
+    var rest = rows.filter(function (r) { return !nearKeys[rowKey(r)]; });
     var ordered = near.concat(rest);
     els.ledger.innerHTML = ordered.map(function (r) {
       var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
@@ -168,7 +197,9 @@ const CLIENT_JS = String.raw`
         + '<span class="verb">' + esc(r.phrase) + '</span> '
         + '<button class="term" data-term="' + esc(r.o) + '">' + esc(r.o) + '</button>'
         + '</li>';
-    }).join("") || '<li class="row muted">no edges in this graph.</li>';
+    }).join("") || (grounded
+      ? '<li class="row muted">nothing in this graph relates to ' + esc(focus) + '.</li>'
+      : '<li class="row muted">no edges in this graph.</li>');
     els.focus.textContent = focus || "—";
   }
 
@@ -188,7 +219,7 @@ const CLIENT_JS = String.raw`
 
   function mountView(data) {
     renderStats(data);
-    renderFocusRows(data);
+    renderFocusRows(data, askRelated(data.focus));
     renderHints(data);
   }
 
