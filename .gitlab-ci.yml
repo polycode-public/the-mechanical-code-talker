@@ -489,6 +489,8 @@ deploy:website:
         -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
         -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
         -c hostedZoneId="${TMCT_PROD_ZONE_ID}" -c zoneName=tmct.polycode.co.uk
+    - cd ..
+    - node scripts/warm-deployed-cache.mjs
 
 # After a real publish, check that what the world serves is what we built: npm's
 # registry and the AWS-hosted home page must both show package.json's version.
