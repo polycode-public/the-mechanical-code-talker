@@ -2824,7 +2824,7 @@ function pageScript() {
         const wasEditing = editing;
         if (wasEditing) await exitEditMode();
         scenarioIndex = picked;
-        await boot("a different burrow opened \\u2014 share again to link up.");
+        await boot("a different burrow opened \\u2014 still linked.");
         if (wasEditing) await enterEditMode();
       });
     }
@@ -2891,13 +2891,20 @@ function pageScript() {
   async function openWorld(note) {
     const seq = bootSeq += 1;
     autoOn = false;
-    // A room is bound to the store it was opened over, and recasting mints a
-    // brand new one — so a burrow that restarts leaves the link behind rather
-    // than quietly syncing a world nobody else is in. Saying so is the whole
-    // handling; sharing again opens a fresh link over the new world. Picking a
-    // different burrow is the same drop for the same reason, and says so in
-    // its own words.
-    dropRoom(note || "the burrow restarted \\u2014 share again to link up.");
+    // A live link survives a recast: once the new burrow's store is open the
+    // room re-binds to it (below), pushing the fresh world to every connected
+    // node instead of quietly abandoning them. The recast moves the world one
+    // epoch forward, read from the store the peers have all converged on, so
+    // nobody's leftover snapshots from the old run can outrank the new one.
+    const liveRoom = room;
+    let nextEpoch = 0;
+    if (liveRoom && session) {
+      try {
+        nextEpoch = (await session.snapshot()).state.epoch + 1;
+      } catch (err) {
+        nextEpoch = 1;
+      }
+    }
     claimedElsewhere = {};
     wavingNow = [];
     const playBtn = el("autoToggle");
@@ -2936,9 +2943,23 @@ function pageScript() {
     showPlayerCount(cast.length);
     showNpcCount(npcs.length);
     renderStage();
-    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone() });
+    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
     if (seq !== bootSeq) return;
     session = opened;
+    if (liveRoom) {
+      try {
+        await liveRoom.rebind({ memoryDir: opened.memoryDir, worldName: worldName, myDisplayName: myDisplayName });
+        renderWire();
+        renderNodes();
+        // After renderWire, the same way dropRoom writes its own reason: the
+        // render restates the state's stock note, and WHY this recast kept
+        // the link is the thing worth saying over it.
+        el("wireStateNote").textContent = note || "the burrow recast \\u2014 still linked.";
+        await claimMyAnimals();
+      } catch (err) {
+        dropRoom("the link didn't survive the recast \\u2014 share again to link up.");
+      }
+    }
     for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     bindPanes();
     for (const character of cast) {

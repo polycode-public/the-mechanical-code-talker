@@ -55,9 +55,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
   started.
 - [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
-- [ ] a mud room is bound to the store it was opened over, so recasting (RESET, either slider, or
-  the scenario dropdown) drops the link and says so. Carrying a live room across a recast needs the
-  room to re-bind to the new store — real work in `p2p-room.mjs`, not page wiring.
 - [ ] **sprites.html variant cycles — next slice**: extend the `mgx:faces` left/right profile pairs
   beyond bear/cat/dog/king across the rest of the animal and person catalog, and design a
   profile-face anchor so a facing variant can carry the six `mgx:feels` expressions at the same
