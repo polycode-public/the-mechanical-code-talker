@@ -189,6 +189,52 @@ export const RELATIONS = {
   },
 };
 
+// ---- world relations: the predicates a WORLD graph stores about its own
+// individuals, as opposed to RELATIONS above, which is a code vocabulary —
+// a module imports a module, a commit touches a file, and none of its verbs
+// name where a thing is or how it feels. A game board, a burrow and a manor
+// all record those, in the same `mgx:` predicates, so the words for them are
+// curated once here.
+//
+// Each entry is keyed by its stored predicate and carries the LISTING NOUNS a
+// question reaches it by ("the locations of…", "the moods of…") plus `reads`,
+// the third-person phrase one subject's answer is written in. No `verbs` list
+// and no VERB_TO_KIND entry: these answer a listing over a named set, not the
+// "does X <verb> Y" shapes RELATIONS' verbs compile to, and folding them in
+// would put "is in" into the code grammar's own verb table. ----
+
+export const WORLD_RELATIONS = Object.freeze({
+  placement: Object.freeze({
+    predicate: "mgx:currently-in",
+    comment: "individual -> place: where the subject is right now.",
+    nouns: Object.freeze(["location", "locations", "position", "positions", "place", "places", "whereabouts", "room", "rooms"]),
+    reads: "is in",
+  }),
+  mood: Object.freeze({
+    predicate: "mgx:feels",
+    comment: "individual -> mood word: how the subject feels right now.",
+    nouns: Object.freeze(["mood", "moods", "feeling", "feelings", "emotion", "emotions"]),
+    reads: "feels",
+  }),
+  mass: Object.freeze({
+    predicate: "mgx:mass",
+    comment: "individual -> number: the subject's current mass.",
+    nouns: Object.freeze(["mass", "masses", "weight", "weights"]),
+    reads: "has mass",
+  }),
+});
+
+/** listing noun -> WORLD_RELATIONS key ("locations" -> "placement"). */
+export const WORLD_NOUN_TO_RELATION = Object.freeze(Object.fromEntries(
+  Object.entries(WORLD_RELATIONS).flatMap(([token, { nouns }]) => nouns.map((n) => [n, token])),
+));
+
+/** Every stored world predicate, for a caller projecting fact rows into a
+ *  graph `ask` can traverse. */
+export const WORLD_PREDICATES = Object.freeze(
+  Object.values(WORLD_RELATIONS).map((r) => r.predicate),
+);
+
 // The regular English 3rd-person-singular suffix rule (the same regular
 // -s/-es/-ies shape src/domain/inflect.mjs's own `pluralOf` applies to a
 // noun) — not imported from there, since inflect.mjs sits downstream of

@@ -26,6 +26,7 @@ import {
   PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
+  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES,
   stripTrailingScopeFiller,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
@@ -2135,6 +2136,7 @@ function evalComposite(graph, ast, opts = {}) {
     return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   }
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
+  if (ast.node === "worldRelation") return evalWorldRelation(graph, ast);
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "recentCommits") return evalRecentCommits(graph);
@@ -2291,6 +2293,20 @@ function renderComposite(parsed, result, graph) {
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";
     return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // One sentence per subject, in id order, in the world's own words — the
+  // subject's id, the relation's `reads` phrase, and the stored object
+  // verbatim. Nothing is derived: an empty set is the honest miss, never a
+  // sentence about a subject the world has no row for.
+  if (result.compositeKind === "worldRelation") {
+    const asked = listJoin(result.askedClasses);
+    const noun = WORLD_RELATIONS[result.relation].nouns[1];
+    if (!result.pairs.length) {
+      return { content: `no ${noun} on record for ${asked} in this graph.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const reads = WORLD_RELATIONS[result.relation].reads;
+    const sentences = result.pairs.map((p) => `${p.subject.label || p.subject.id} ${reads} ${p.object}`);
+    return { content: `${sentences.join("; ")}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   // A non-empty inherited result is disclosed out loud ("X has no own <kind>
   // — inherited from <ancestor>: …"), never silently presented as the owner's own.
@@ -4403,6 +4419,148 @@ function dynamicClassQuery(graph, query) {
   return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
 }
 
+// ---- world-relation listing: "list the locations of flies and spiders", the
+// plural, multi-class form of a question a world graph can already answer. A
+// listing over ONE world predicate (ask-vocab.mjs's WORLD_RELATIONS) filtered
+// to one or more subject CLASSES, resolved dynamically against whatever
+// classes actually have an individual in this graph — so a world's own
+// taxonomy needs no entry in the closed code-graph noun table, exactly as the
+// count/list fallback above resolves its class noun. Fires only once the
+// normal cascade has already produced an honest miss, and misses honestly
+// itself when any asked class has no individual here. ----
+
+// A class list: "flies and spiders", "spiders, flies and eggs". Each part must
+// be a single bare noun — a phrase with anything else in it is a restrictor
+// this shape can't honour, so it declines rather than dropping it.
+function parseWorldClassList(graph, text) {
+  const parts = String(text || "").split(/\s*,\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const asked = [];
+  const classes = [];
+  for (const part of parts) {
+    const word = part.replace(/^(?:all\s+)?(?:the\s+)?/i, "").trim();
+    if (!/^[a-z][a-z'-]*$/i.test(word)) return null;
+    const cls = resolveDynamicClass(graph, word);
+    if (!cls) return null;
+    asked.push(word.toLowerCase());
+    classes.push(cls);
+  }
+  return { asked: [...new Set(asked)], classes: [...new Set(classes)] };
+}
+
+const WORLD_LISTING_RE = new RegExp(
+  `^(?:${LIST_TRIGGERS_SORTED.map(escapeRegex).join("|")})\\s+(?:all\\s+)?(?:the\\s+)?([a-z][a-z'-]*)\\s+(?:of|for)\\s+(.+?)[?.!\\s]*$`,
+  "i",
+);
+// "where are the flies and spiders" — the same listing said the natural way.
+// Singular too ("where is the spider"): the class list resolves either way, and
+// with only the code-graph `where` lane to fall back on the answer would be
+// "no recorded code location" for a subject whose cell this graph plainly
+// holds. A phrase that isn't a bare class noun ("where is auth.mjs defined")
+// fails parseWorldClassList and keeps the definition-site reading.
+const WORLD_WHERE_RE = /^where(?:'s|\s+is|\s+are)\s+(?:all\s+)?(?:the\s+)?(.+?)[?.!\s]*$/i;
+
+/** Compile "<list trigger> the <world-relation noun> of <class> and <class>"
+ *  (or "where are the <class> and <class>") into a world-relation listing AST,
+ *  or null when this isn't that shape. */
+function worldRelationQuery(graph, query) {
+  const q = String(query || "").trim();
+  const listM = q.match(WORLD_LISTING_RE);
+  const relation = listM ? WORLD_NOUN_TO_RELATION[listM[1].toLowerCase()] : "placement";
+  if (!relation) return null;
+  const subjectText = listM ? listM[2] : q.match(WORLD_WHERE_RE)?.[1];
+  if (!subjectText) return null;
+  const resolved = parseWorldClassList(graph, subjectText);
+  if (!resolved) return null;
+  return {
+    node: "worldRelation",
+    relation,
+    predicate: WORLD_RELATIONS[relation].predicate,
+    classes: resolved.classes,
+    askedClasses: resolved.asked,
+  };
+}
+
+const normalizePredicate = (p) => String(p || "").toLowerCase();
+
+function evalWorldRelation(graph, ast) {
+  const wanted = new Set(ast.classes);
+  const latest = new Map();
+  for (const group of graph?.relations || []) {
+    if (normalizePredicate(group.prop) !== ast.predicate && normalizePredicate(group.predicate) !== ast.predicate) continue;
+    // A world appends a fresh row per turn rather than rewriting one, so the
+    // LAST edge for a subject is its current value — the same last-wins fold
+    // every world's own state reader applies to its rows.
+    for (const edge of group.edges || []) {
+      const subject = graph.byId?.get(edge.subject);
+      if (subject && wanted.has(subject.class)) latest.set(edge.subject, { subject, object: edge.object });
+    }
+  }
+  const pairs = [...latest.values()].sort((a, b) => String(a.subject.id).localeCompare(String(b.subject.id)));
+  return {
+    compositeKind: "worldRelation",
+    relation: ast.relation,
+    askedClasses: ast.askedClasses,
+    pairs,
+    matches: pairs.map((p) => p.subject),
+  };
+}
+
+// A world writes each turn's facts against a stamped subject ("spider-1@turn3",
+// "player@step7") and folds them back onto the base id, newest stamp winning —
+// spider-fly.mjs's foldSpiderFlyState and domain.mjs's foldWorldState both do
+// exactly this. An unstamped row is the world's own starting value, stamp 0.
+const WORLD_SNAPSHOT_RE = /^(.+)@(?:turn|step)(\d+)$/;
+
+function splitWorldSnapshot(term) {
+  const m = WORLD_SNAPSHOT_RE.exec(String(term ?? ""));
+  return m ? { base: m[1], stamp: Number(m[2]) } : { base: String(term ?? ""), stamp: 0 };
+}
+
+/** Project plain world fact rows (`{subject, predicate, object}`, the shape
+ *  memory/core.mjs's readFactRows returns) into the `{individuals,
+ *  objectProperties}` payload parseEntities consumes, so a page holding a live
+ *  world can hand `ask` a graph of it instead of an empty one. Only the
+ *  WORLD_PREDICATES rows are carried: a board's own geometry (every cell and
+ *  every exit) is thousands of rows no natural-language listing asks for.
+ *  Turn-stamped rows are folded onto their base subject, so the graph carries
+ *  each subject's CURRENT value and never a stale one from an earlier turn.
+ *
+ *  A subject's class comes from its own `rdf:type` row when the world states
+ *  one; `classOf(id)` is the fallback for a world that names its individuals
+ *  by convention instead (spider-fly's "spider-1" is a spider because of its
+ *  id). Returning null from `classOf` drops the subject — that is the seam a
+ *  caller filters through, so "which subjects still count as live" stays a
+ *  rule of the world module rather than of this projection. Pure. */
+export function worldRelationGraphPayload(rows, { classOf = () => null } = {}) {
+  const declaredClass = new Map();
+  for (const row of rows || []) {
+    if (row?.predicate === "rdf:type" && row.subject && row.object) {
+      declaredClass.set(splitWorldSnapshot(row.subject).base, String(row.object));
+    }
+  }
+  const wanted = new Set(WORLD_PREDICATES);
+  const individuals = new Map();
+  const newest = new Map();
+  for (const row of rows || []) {
+    if (!row?.subject || !wanted.has(row.predicate)) continue;
+    const { base, stamp } = splitWorldSnapshot(row.subject);
+    const cls = declaredClass.get(base) || classOf(base);
+    if (!cls) continue;
+    const key = `${row.predicate} ${base}`;
+    const prior = newest.get(key);
+    if (prior && prior.stamp > stamp) continue;
+    individuals.set(base, { id: base, label: base, class: cls });
+    newest.set(key, { stamp, predicate: row.predicate, subject: base, object: splitWorldSnapshot(row.object).base });
+  }
+  const groups = new Map();
+  for (const edge of newest.values()) {
+    if (!groups.has(edge.predicate)) groups.set(edge.predicate, { prop: edge.predicate, predicate: edge.predicate, examples: [] });
+    groups.get(edge.predicate).examples.push({ subject: edge.subject, object: edge.object });
+  }
+  return { individuals: [...individuals.values()], objectProperties: [...groups.values()] };
+}
+
 // Matches T5's own bare-object capture (grammar.mjs meta-whatis), reused below to
 // extract the term for the article-insertion fallback rather than duplicating it.
 const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
@@ -4445,6 +4603,16 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const dynResult = traverse(graph, dyn, { contextId, prev });
       const dynRendered = render(dyn, dynResult, graph);
       if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
+    }
+  }
+  // World-relation listing ("list the locations of flies and spiders"), on the
+  // same terms: only after an honest miss, and only when it answers for real.
+  if (rendered.miss && !rendered.ambiguous) {
+    const world = worldRelationQuery(graph, query);
+    if (world) {
+      const worldResult = traverse(graph, world, { contextId, prev });
+      const worldRendered = render(world, worldResult, graph);
+      if (!worldRendered.miss) { parsed = world; result = worldResult; rendered = worldRendered; relaxed = null; }
     }
   }
   // Bare "what is X" (no article) meta fallback, narrow to ask() and never

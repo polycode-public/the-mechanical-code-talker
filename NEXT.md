@@ -28,6 +28,15 @@ browser-entry callers still pass an empty graph, tracked below), and mood-become
 (`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
 deleted). See the doc's own Phasing section for exact detail per phase.
 
+Phase 6 landed too, by the `ask` route Theme 2 recommended. `ask-vocab.mjs` now carries a
+`WORLD_RELATIONS` table (`mgx:currently-in`, `mgx:feels`, `mgx:mass`, each with its listing nouns),
+`ask.mjs` compiles "list the locations of flies and spiders" — and its where/position/mood/mass
+paraphrases — into a `worldRelation` AST over one predicate with a multi-class subject filter, and
+`worldRelationGraphPayload` projects a world's fact rows into a graph `ask` can traverse, folding
+`@turnN`/`@stepN` rows onto their base subject so the answer is this turn's board. The spider-fly
+page builds that graph before every chat turn; `session.snapshot()` is untouched and still the
+render fast path.
+
 Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
 `rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
 `foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one — real
@@ -82,9 +91,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
-  `ask`. Gap A is fully landed, so nothing blocks this. The design fork is already decided in the
-  doc's own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
+- [ ] **`chat.mjs` reaches its own session's graph only when a focus is set.** `chat.mjs:12529`
+  routes the ask lane through `dispatchTool("tmct_ask", …, { config, source })` unless
+  `focus?.id || prev.length`, and a browser session has no config to load a graph from — so a page
+  that hands `runTurn` a real in-memory graph gets the no-code-graph wall on the first question and
+  a correct answer on the second. Phase 6's world listing answers through `runTurn` the moment a
+  focus exists, and through `ask()` always; this condition is the last hop. Prefer the passed graph
+  whenever it holds individuals.
+- [ ] **The ask bundle can no longer be built, and the pack manifest is stale** — both landed with
+  phase 8's `tmct_sprite` and both fail on clean `main`.
+  `src/adapters/corpus/sprite-template-files.mjs` and `sprite-large-template-files.mjs` import
+  `readdirSync` from `node:fs`, which `scripts/build-ask-bundle.mjs`'s browser node-stub doesn't
+  export, so `npm run build:ask-bundle` exits 1 and the freshness guard fails with it. Separately,
+  `src/domain/sprite-request.mjs` and `src/tools/handlers/tmct-sprite.mjs` are missing from
+  `test/estate/pack-manifest.json`. Until the build runs again, no vocabulary change can reach the
+  committed bundle.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 8** — the `tmct_sprite` tool. Mood is a fact (phase 7, landed)
   and the multi-constraint resolver exists (this session's sprite work); still needs the capability
   record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
