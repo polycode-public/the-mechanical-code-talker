@@ -13,7 +13,7 @@
 // Gitignored, built fresh by scripts/build-code-explorer-bundle.mjs; the page
 // degrades to a static view when it is absent (renderCodeExplorerHtml's own
 // contract), so nothing here is ever published.
-import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
+import { vocabExampleHint } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -21,6 +21,7 @@ import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import * as source from "../../adapters/source.mjs";
 import { computeCodeExplorerData, computeCodeLedger } from "../../services/code-explorer-viz.mjs";
 import { generateCodeHints } from "../../domain/code-explorer-hints.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 
 /**
  * A browser code-explorer session over the real turn engine. Registers the
@@ -54,29 +55,19 @@ export function createCodeExplorerSession({ graphPayload, seedPayload = null, vo
   // ever read, but the code lanes still do path math (join/dirname) on it.
   const config = { graphFile: "graph.json" };
 
-  let focus = null;
-  let last = null;
-  let planState = null;
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint,
+    // The code explorer is the one page whose turns run against a real
+    // provider seam (source.mjs, registered above) and a virtual graph file
+    // path, so both override createTurnSession's config:null/source:null
+    // defaults on every call.
+    buildExtraOptions: () => ({ config, source }),
+  });
 
   return {
     memoryDir,
     sessionId,
-    async turn(line) {
-      let result;
-      try {
-        result = await runTurn(line, {
-          config, source, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint, planState,
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null };
-      }
-      focus = result.focus;
-      last = result.last;
-      if ("planState" in result) planState = result.planState;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null };
-    },
+    turn: turnSession.turn,
   };
 }
 
