@@ -6108,7 +6108,7 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
             || (f.predicate === `tmct:${adjective}` && f.object === "true"))) || null;
       }
     }
-    lines.push(`${objEnt.label} ${adjective} — ${propHit ? `yes (source: ${propHit.provenance})` : "I have no fact saying so"}`);
+    lines.push(`${objEnt.label} ${adjective} — ${propHit ? `yes (source: ${citationProvenance(propHit.provenance)})` : "I have no fact saying so"}`);
   }
   const verdict = lines.join("; ");
   return { text: holds ? `${verdict}. ${subjEnt.label} does ${split.verb} ${objEnt.label}.` : `${verdict} — the premise doesn't hold.` };
@@ -6517,6 +6517,14 @@ function splitMetaPredicate(term) {
   return { subject: t, predicate: null };
 }
 
+// A peer-taught tag's `#node:<id>` segment keys the fact (PLAN_FACT.md) but is
+// never meant for a reader — strip it wherever provenance is cited in prose,
+// mirroring the same stable-node-id-is-not-shown rule chat-page-viz.mjs's own
+// node roster already applies.
+function citationProvenance(provenance) {
+  return provenance.replace(/#node:[0-9a-f]+/g, "");
+}
+
 /** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
  *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
  *  source cited, not "i learned: …" — that phrase over-claims and anthropomorphises
@@ -6528,7 +6536,7 @@ function splitMetaPredicate(term) {
  *  that it's lower-confidence, so a distinct, honest hedge ("possibly: …")
  *  applies here instead. Provenance stays VERBATIM in every case. */
 function renderFactLine(f) {
-  const cite = f.provenance ? ` (source: ${f.provenance})` : "";
+  const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
   // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
   // natural frames — both are things the operator SAID, so both read first-person.
   if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
@@ -6684,7 +6692,7 @@ function isaPolarityReply(hit, negHit) {
  *  inconsistency as a derivation — so neither side wins, same discipline as
  *  isaPolarityReply's both-sides verdict. */
 function isaInconsistencyRefusal(posFact, disjointFact) {
-  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   return {
     text: `you've told me both ${cite(posFact)} and ${cite(disjointFact)} — together those contradict, and I won't derive an answer from an inconsistency. `
       + `To settle it, say "forget that ${posFact.subject} is ${indefiniteArticleFor(posFact.object)} ${posFact.object}".`,
@@ -6703,7 +6711,7 @@ function isaInconsistencyRefusal(posFact, disjointFact) {
  *  premise's object — sound for any chain length, though today's only caller
  *  (the live cax-sco/scm-sco chase below) ever passes exactly two. */
 function renderIsaChain(premises) {
-  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   const first = premises[0];
   const last = premises[premises.length - 1];
   return `${premises.map(step).join("; ")}; so ${first.subject} is a ${last.object}`;
@@ -7242,7 +7250,7 @@ function renderIsaCite(chain, facts) {
     (f) => f.predicate === step.predicate && f.subject === step.subject && f.object === step.object,
   ));
   if (!steps.length || !steps.every(Boolean)) return null;
-  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
 }
 
 /** THE capability answer — every reader that asks "can X do Y" renders through
@@ -7630,7 +7638,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       if (declined) return declined;
       const steps = order.slice(0, -1).map((n, i) => pairs.find((f) => f.subject === n && f.object === order[i + 1]));
       if (steps.every(Boolean)) {
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
         return { text: `${order[0]} — ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
       }
     }
@@ -8210,7 +8218,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         if (!chain || chain.length < 2) return renderFactLine(f);
         const steps = chain.map(rowForStep);
         if (!steps.every(Boolean)) return renderFactLine(f);
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
         return `${renderFactLine(f)} — via: ${cite}`;
       });
       const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -9253,7 +9261,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
                   const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
                   if (seenAlias.has(key)) continue;
                   seenAlias.add(key);
-                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${citationProvenance(af.provenance)})` : ""}`);
                 }
               }
               return `${node.entity} — ${parts.join("; ")}`;
@@ -9432,7 +9440,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
           const chain = [posFact, ...(objFact ? [objFact] : [])].map(renderFactLine).join("; ");
           return {
-            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${disjointFact.provenance})` : ""} `
+            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${citationProvenance(disjointFact.provenance)})` : ""} `
               + `— so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
             replace: true,
           };
@@ -9788,7 +9796,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveCardinalityAtLeast(cardSubClassEdges, cardinalityRestrictionEdges, s, o, m, {}));
       if (witness) {
         const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
-        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        const cite = restrictionFact?.provenance ? ` (source: ${citationProvenance(restrictionFact.provenance)})` : "";
         const kindWord = witness.kind === "exactly" ? "exactly" : "at least";
         const plural = (w, n) => `${w}${n === 1 ? "" : "s"}`;
         // Premise-derived trust for THIS
@@ -9837,7 +9845,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveMaxCardinalityZeroDenial(cardSubClassEdges, cardinalityRestrictionEdges, s, o, {}));
       if (witness) {
         const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
-        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        const cite = restrictionFact?.provenance ? ` (source: ${citationProvenance(restrictionFact.provenance)})` : "";
         // Same discipline as the
         // cardinality-monotonicity reader just above (see its own comment).
         const cardPremiseTrusts = [
