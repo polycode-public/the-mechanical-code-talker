@@ -36,18 +36,21 @@ remainder tracked below) and **the two test-coverage gaps** (a new
 existing chat/ingest/code/research e2e files now assert their fact-count pill's live DOM value, not
 just its generated markup).
 
-**Sprites.html's turntable + move-pose catalog is mid-flight** — an operator-requested expansion
-of what was "extend facing pairs, next slice": a 5-point turntable (left/half-left/centre/
-half-right/right, up from left/centre/right) crossed with a new `mgx:pose = "moving"` axis, both
-crossed with the existing six `mgx:feels` moods. The resolver now supports combining several
+**Sprites.html's turntable + move-pose catalog landed, this session.** An operator-requested
+expansion of what was "extend facing pairs, next slice": a 5-point turntable (left/half-left/
+centre/half-right/right, up from left/centre/right) crossed with a new `mgx:pose = "moving"` axis,
+both crossed with the existing six `mgx:feels` moods. The resolver supports combining several
 `[[match]]` constraints in one template (`src/domain/sprite-templates.mjs`'s header carries the
-exact shape and anchor arithmetic) — proven on bear/cat/dog/king, then rolled out class by class.
-Landed so far (this session): bear/cat/dog/king's reference set, and the full 9-file turntable for
-husband/judge/lawyer/leader/man/manager/mother, teacher/team/visitor/volunteer/wife/woman/worker/
-writer, tiger/wolf/adult/artist/audience/baby/boss, and boy/brother/champion/child/citizen/crowd/
-customer. Several more sub-agent groups are still authoring the remaining animal and person classes
-as this line is written — check `git log --oneline -20` for the latest `feat(sprites):` commits
-before resuming this wave, since the exact remaining-class list moves every merge.
+exact shape and anchor arithmetic), proven on bear/cat/dog/king first, then rolled out across every
+remaining animal and person class in the `*-with-emotion.toml` catalog — 987 sprite-tier TOML files
+total, ~9 per class (facing-left/right, facing-half-left/half-right, the four combined
+facing+moving frames, one centre-facing moving-only file), verified with zero gradient-id
+collisions and zero unresolved placeholder tokens across the whole set. Ten parallel content
+sub-agents landed this in eleven merges, most needing a hand-reconciled conflict in the shared
+`test/adapters/sprite-large-template-files.test.mjs` (several independently discovered and
+worked around the same "does this class have its own centre-moving file" question under different
+names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation). The sprite content
+wave is done; the turning-character demo UI and `tmct_sprite` tool (below) are what's left.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -75,11 +78,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **the turntable and the move pose — content wave, in progress.** bear/cat/dog/king plus 32
-  more classes are done (see In-flight above for the exact list and where to check what's landed
-  since). Remaining: whatever's left of the ~39 unstarted animal/person classes once the in-flight
-  sub-agents land, following `src/domain/sprite-templates.mjs`'s header for the shape and anchor
-  arithmetic.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
   `ask`, once Gap A's caller wiring (below) lands. The design fork is already decided in the doc's
   own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
@@ -108,8 +106,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `dispatchTool`, not the structured sibling, for any external consumer that wants it.
 - [ ] **sprites.html turning-character demo**: an animated swatch cycling the five turntable angles
   next to the existing static emoting character. The page's own variant cycle only steps
-  `mgx:faces`/`mgx:feels` today, so a combined facing-and-pose swatch sits outside it. Depends on
-  the content wave above having enough classes done to demo against.
+  `mgx:faces`/`mgx:feels` today, so a combined facing-and-pose swatch sits outside it. The full
+  catalog is landed, so this is unblocked and ready to build.
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
