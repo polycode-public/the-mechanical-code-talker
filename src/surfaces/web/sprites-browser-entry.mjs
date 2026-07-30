@@ -18,36 +18,62 @@
 // a typed class name through ask.mjs's resolveObject, so it needs the real
 // resolver in the page rather than a self-contained function the page could
 // splice in as text.
-import { createInMemoryStore, appendFacts, normFactTerm } from "../../adapters/memory/core.mjs";
+//
+// `tmct.ask()` needs a real graph to traverse (engine-surface.mjs's graphAsk
+// dispatches tmct_ask over `session.graph`), so this session projects its own
+// store into one via spriteFactGraphPayload — sprite-facts.mjs's own
+// counterpart to spider-fly-browser-entry.mjs's worldRelationGraphPayload
+// use. `refreshGraph()` rebuilds it from the store's CURRENT rows (not just
+// the embedded factRows), so a fact taught mid-session is visible to a later
+// ask() the same way spider-fly's board rebuild is; `turn()` and the
+// published `ask` route both call it first, mirroring spider-fly's exact
+// wiring points.
+import { createInMemoryStore, appendFacts, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
 import { extractSceneItems } from "../../domain/scene-compose.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
-import { SPRITE_FACTS_PROVENANCE } from "../../domain/sprite-facts.mjs";
+import { SPRITE_FACTS_PROVENANCE, spriteFactGraphPayload } from "../../domain/sprite-facts.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /** A live in-memory chat session seeded with the embedded sprite-facts rows.
- *  Returns { memoryDir, sessionId, graph, factCount, turn }. */
+ *  Returns { memoryDir, sessionId, graph, refreshGraph, factCount, turn }. */
 export async function createSpriteCatalogSession({ factRows = [] } = {}) {
   const memoryDir = createInMemoryStore();
   await appendFacts(memoryDir, factRows.map((f) => ({
     subject: f.subject, predicate: f.predicate, object: f.object, provenance: SPRITE_FACTS_PROVENANCE,
   })));
 
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  let graph = parseEntities({ individuals: [], objectProperties: [] });
+  async function refreshGraph() {
+    const rows = readFactRows(await loadMemory(memoryDir));
+    graph = parseEntities(spriteFactGraphPayload(rows));
+  }
+  await refreshGraph();
+
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
-  const session = createTurnSession({ memoryDir, graph, lexicon, sessionId, vocabHint: "" });
+  // `graph` is re-read here, not captured once: createTurnSession binds its
+  // own copy at creation, and refreshGraph() reassigns this closure's own
+  // variable on every call.
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint: "",
+    buildExtraOptions: () => ({ graph }),
+  });
 
   return {
     memoryDir,
     sessionId,
-    graph,
+    get graph() { return graph; },
+    refreshGraph,
     factCount: factRows.length,
-    turn: session.turn,
+    async turn(line) {
+      await refreshGraph();
+      return turnSession.turn(line);
+    },
   };
 }
 
@@ -58,7 +84,12 @@ export async function createSpriteCatalogSession({ factRows = [] } = {}) {
 // rather than answering anything.
 publishTmctSurface({
   open: createSpriteCatalogSession,
-  ask: graphAsk,
+  // The graph is rebuilt first, so a direct tmct.ask() call (not just a
+  // typed chat turn) sees any fact taught since the last one.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
   plan: enginePlan,
   page: { registerWinkModel, normFactTerm, extractSceneItems },
 });
