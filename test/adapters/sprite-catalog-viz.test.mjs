@@ -12,10 +12,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  renderSpriteCatalogHtml, buildSpriteCatalogEntries, groupForClass, paletteTreatmentFor,
-  tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE, GROUP_PERSON,
-  GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
-  moodFrameSequence, turnFrameSequence, movingFrameSequence,
+  renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, buildSpriteCatalogEntries, groupForClass,
+  paletteTreatmentFor, tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE,
+  GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
+  moodFrameSequence, turnFrameSequence, movingFrameSequence, CATALOG_GROUPS, groupIsClustered,
+  catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
+  loadSpriteOntologyFactRows,
 } from "../../src/services/sprite-catalog-viz.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
@@ -28,6 +30,15 @@ const SEED_ROWS = [isA("poodle", "dog"), isA("dog", "animal"), isA("spider", "ar
 const iconTemplates = readSpriteTemplateFiles();
 const largeTemplates = readSpriteLargeTemplateFiles();
 const allClasses = [...new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t.classes || []))];
+
+// The real ontology facts (the same wordnet-xl-derived rows the demo site
+// build itself loads) — needed only for the tests below that check which
+// REAL classes land in which cluster/section, since the small hand-built
+// SEED_ROWS fixture above has no ancestry for most of this catalog's own
+// classes.
+const realFactRows = await loadSpriteOntologyFactRows();
+const realEntries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows: realFactRows });
+const realSpritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t.classes || []));
 
 test("buildSpriteCatalogEntries covers every real class either tier declares a template for", () => {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
@@ -387,12 +398,11 @@ test("PERSON_ROLE_CLASSES is a frozen, de-duplicated list", () => {
 
 // ---- the scene composer's free-text parser ----
 //
-// classIndex fixtures below are built the same way sprites.html's own
-// client-side buildClassIndexFromDom does — real material/variant labels
-// read off tierSwatchesFor's real output for the real large-tier templates,
-// never a hand-typed color-word list. This is the same real-data posture
-// the rest of this file already holds tierSwatchesFor/buildSpriteCatalogEntries
-// to.
+// classIndex fixtures below are built the same way sceneComposerClassIndex
+// does — real material/variant labels read off tierSwatchesFor's real
+// output for the real large-tier templates, never a hand-typed color-word
+// list. This is the same real-data posture the rest of this file already
+// holds tierSwatchesFor/buildSpriteCatalogEntries to.
 
 function realClassIndexFor(classNames) {
   const index = {};
@@ -469,4 +479,119 @@ test("extractSceneItems repeats a class once per real occurrence in the text", (
     { className: "cat", materialLabel: null },
     { className: "cat", materialLabel: null },
   ]);
+});
+
+// ---- the demo site's multi-page split: CATALOG_GROUPS' own page field,
+// section granularity, landing-page examples, and cross-page anchors ----
+
+test("CATALOG_GROUPS: every group carries its own distinct, kebab-case page filename", () => {
+  const pages = CATALOG_GROUPS.map((g) => g.page);
+  assert.deepEqual(pages, [
+    "sprites-adventure-props.html", "sprites-person-roles.html", "sprites-objects.html", "sprites-emotions.html",
+  ]);
+  assert.equal(new Set(pages).size, pages.length, "no two groups share a page filename");
+});
+
+test("groupIsClustered: only Person roles and Physical objects/creatures/places break into ancestor sections", () => {
+  assert.equal(groupIsClustered(GROUP_PERSON), true);
+  assert.equal(groupIsClustered(GROUP_OBJECT), true);
+  assert.equal(groupIsClustered(GROUP_ADVENTURE), false);
+  assert.equal(groupIsClustered(GROUP_EMOJI), false);
+});
+
+test("catalogSections breaks the real catalog into one section per top-level unclustered group plus one per ancestor cluster, covering every real entry exactly once", () => {
+  const sections = catalogSections(realEntries, realSpritedClasses);
+  const totalSectioned = sections.reduce((n, s) => n + s.entries.length, 0);
+  assert.equal(totalSectioned, realEntries.length, "every real catalog entry lands in exactly one section");
+  const adventureSections = sections.filter((s) => s.group.id === GROUP_ADVENTURE);
+  const emojiSections = sections.filter((s) => s.group.id === GROUP_EMOJI);
+  assert.equal(adventureSections.length, 1, "an unclustered group is one section");
+  assert.equal(emojiSections.length, 1, "an unclustered group is one section");
+  assert.ok(sections.filter((s) => s.group.id === GROUP_PERSON).length > 1, "Person roles really does break into more than one cluster");
+  assert.ok(sections.filter((s) => s.group.id === GROUP_OBJECT).length > 1, "the object group really does break into more than one cluster");
+});
+
+test("every one of the operator's curated landing-page examples is a real member of exactly one of today's catalog sections", () => {
+  const sections = catalogSections(realEntries, realSpritedClasses);
+  for (const cls of LANDING_EXAMPLE_CLASSES) {
+    const owners = sections.filter((s) => s.entries.some((e) => e.className === cls));
+    assert.equal(owners.length, 1, `"${cls}" should be a real member of exactly one section, found in ${owners.length}`);
+  }
+});
+
+test("landingExampleFor picks the curated favourite for each of today's real sections, in the operator's own given reading order", () => {
+  const sections = catalogSections(realEntries, realSpritedClasses);
+  const chosen = sections.map((s) => landingExampleFor(s.entries).className);
+  assert.deepEqual(chosen, LANDING_EXAMPLE_CLASSES, "today's real section order names exactly the operator's curated list, in order");
+});
+
+test("landingExampleFor falls back to a section's own first entry when none of the curated names is a member", () => {
+  const section = [{ className: "zzz-not-curated" }, { className: "aaa-not-curated" }];
+  assert.equal(landingExampleFor(section).className, "zzz-not-curated", "falls back to the section's own existing order, not alphabetical");
+  assert.equal(landingExampleFor([]), null);
+  assert.equal(landingExampleFor(null), null);
+});
+
+test("classAnchorId slugifies a class name into a stable, lowercase DOM id, multi-word names included", () => {
+  assert.equal(classAnchorId("cabinet"), "card-cabinet");
+  assert.equal(classAnchorId("body of water"), "card-body-of-water");
+  assert.equal(classAnchorId("King"), "card-king");
+});
+
+test("cardHtml gives every card a classAnchorId id, so a landing-page link can anchor straight to it", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /id="card-dog"[^>]*data-cls="dog"/);
+  assert.match(html, new RegExp(`id="${classAnchorId("lamp")}"[^>]*data-cls="lamp"`));
+});
+
+test("sceneComposerClassIndex reads defaultSvg/materials straight off largeSwatches, skipping a class with no large-tier swatch", () => {
+  const entries = [
+    { className: "widget", largeSwatches: [{ kind: "plain", label: "plain", svg: "<svg>plain</svg>" }], iconSwatches: [] },
+    {
+      className: "gizmo",
+      largeSwatches: [
+        { kind: "fallback", label: "no material taught", svg: "<svg>fallback</svg>" },
+        { kind: "material", label: "Wood", svg: "<svg>wood</svg>" },
+      ],
+      iconSwatches: [],
+    },
+    { className: "icon-only", largeSwatches: [], iconSwatches: [{ kind: "plain", label: "plain", svg: "<svg>icon</svg>" }] },
+  ];
+  const index = sceneComposerClassIndex(entries);
+  assert.deepEqual(Object.keys(index).sort(), ["gizmo", "widget"], "a class with no large-tier swatch contributes nothing");
+  assert.equal(index.widget.defaultSvg, "<svg>plain</svg>");
+  assert.equal(index.gizmo.defaultSvg, "<svg>fallback</svg>", "the fallback swatch stands in when there's no plain one");
+  assert.equal(index.gizmo.materials.wood, "<svg>wood</svg>", "a material label is lowercased");
+});
+
+test("renderSpriteCatalogHtml with a real groupId renders only that group's full gallery, with cross-page nav and group-scoped footer counts", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true, groupId: GROUP_PERSON });
+  assert.match(html, /data-cls="doctor"/, "a real person-role class renders");
+  assert.doesNotMatch(html, /data-cls="cabinet"/, "an adventure-group class does not render on the person page");
+  assert.match(html, /href="\.\/sprites-adventure-props\.html"/, "the topbar links to a sibling group page, not an in-page anchor");
+  assert.match(html, /href="\.\/sprites\.html">overview/, "the topbar links back to the landing page");
+  const personEntries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows: SEED_ROWS }).filter((e) => e.group === GROUP_PERSON);
+  assert.match(html, new RegExp(`${personEntries.length} classes`), "the footer counts only this group's own classes, not the whole catalog");
+});
+
+test("a per-group page's embedded composer/dock data still covers the WHOLE catalog, not just this group's own classes", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true, groupId: GROUP_PERSON });
+  assert.match(html, /"cabinet"/, "the embedded scene-composer class index still carries a class from a different group");
+  assert.match(html, /mgx:take-parameter|corpus:sprites/, "the dock's own fact rows are embedded regardless of which group renders");
+});
+
+test("renderSpriteCatalogLandingHtml shows exactly one example card per section, each linking to that class's own card on its group's full page", () => {
+  const html = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: realFactRows, spritesBundleAvailable: true });
+  const sections = catalogSections(realEntries, realSpritedClasses);
+  assert.equal((html.match(/class="card"/g) || []).length, sections.length, "one card per section, not one per group and not the full gallery");
+  assert.equal((html.match(/class="viewall"/g) || []).length, sections.length);
+  assert.match(html, new RegExp(`href="\\./sprites-person-roles\\.html#${classAnchorId("king")}"`), "the 'man' cluster's own favourite links straight to its own card on the person-roles page");
+  assert.match(html, new RegExp(`href="\\./sprites-objects\\.html#${classAnchorId("frog")}"`), "the object group's trailing 'everything else' cluster links to its own favourite's card");
+  assert.doesNotMatch(html, /data-cls="doctor"/, "a class that isn't one of the 28 curated examples has no card on the landing page");
+});
+
+test("the landing page's embedded composer/dock data still covers the WHOLE catalog even though only ~28 classes have cards", () => {
+  const html = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true });
+  assert.match(html, /"doctor"/, "doctor has no card on the landing page but still resolves through the embedded class index");
+  assert.match(html, /"cabinet"/);
 });

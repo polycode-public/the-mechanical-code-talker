@@ -84,6 +84,10 @@ public/adventure.html
 public/mud.html
 public/chat.html
 public/sprites.html
+public/sprites-adventure-props.html
+public/sprites-person-roles.html
+public/sprites-objects.html
+public/sprites-emotions.html
 public/code.html
 public/ingest.html
 public/research.html

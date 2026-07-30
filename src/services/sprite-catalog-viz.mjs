@@ -164,12 +164,27 @@ export const GROUP_PERSON = "person";
 export const GROUP_OBJECT = "object";
 export const GROUP_EMOJI = "emoji";
 
+// Each group's own full-gallery page filename — the demo site builds one
+// page per group (scripts/build-demo-site.mjs) plus the sprites.html landing
+// page's "view all" links, both read straight off this field so neither can
+// name a group's page differently from the other.
 export const CATALOG_GROUPS = Object.freeze([
-  Object.freeze({ id: GROUP_ADVENTURE, label: "Ashcombe Hall's own adventure props", note: "the icon tier's named cast and furniture. Each has its own 44px sprite." }),
-  Object.freeze({ id: GROUP_PERSON, label: "Person roles" }),
-  Object.freeze({ id: GROUP_OBJECT, label: "Physical objects, creatures & places" }),
-  Object.freeze({ id: GROUP_EMOJI, label: "Emotions & events", note: "abstract concepts with no single physical picture, drawn as the familiar emoji instead" }),
+  Object.freeze({ id: GROUP_ADVENTURE, label: "Ashcombe Hall's own adventure props", note: "the icon tier's named cast and furniture. Each has its own 44px sprite.", page: "sprites-adventure-props.html" }),
+  Object.freeze({ id: GROUP_PERSON, label: "Person roles", page: "sprites-person-roles.html" }),
+  Object.freeze({ id: GROUP_OBJECT, label: "Physical objects, creatures & places", page: "sprites-objects.html" }),
+  Object.freeze({ id: GROUP_EMOJI, label: "Emotions & events", note: "abstract concepts with no single physical picture, drawn as the familiar emoji instead", page: "sprites-emotions.html" }),
 ]);
+
+// The two sections large enough to need ancestor clustering rather than one
+// flat card grid — same two groups sectionHtml's own caller already singled
+// out before this was a named function.
+const CLUSTERED_GROUPS = Object.freeze([GROUP_PERSON, GROUP_OBJECT]);
+
+/** Whether `groupId`'s own full gallery clusters its cards under ancestor
+ *  headings rather than rendering one flat grid. Pure. */
+export function groupIsClustered(groupId) {
+  return CLUSTERED_GROUPS.includes(groupId);
+}
 
 /** Which catalog section `cls` belongs in. Pure. `isIconTierClass`/`isEmoji`
  *  are handed in rather than recomputed here so this stays a one-line
@@ -206,6 +221,65 @@ export function clusterEntriesByAncestor(entries, spritedClasses) {
   clusters.sort((a, b) => b.entries.length - a.entries.length || a.ancestor.localeCompare(b.ancestor));
   if (rest.length) clusters.push({ ancestor: null, entries: [...rest].sort((a, b) => a.className.localeCompare(b.className)) });
   return clusters;
+}
+
+/** Every section this catalog's own pages break into, in on-page reading
+ *  order — the four top-level groups, each expanded into its own ancestor
+ *  clusters when groupIsClustered says so (clusterEntriesByAncestor's own
+ *  cluster order — big clusters first, "everything else" trailing), or left
+ *  as one section when a group carries no clustering at all (adventure,
+ *  emoji). This is the landing page's own granularity: one example card per
+ *  section, not per top-level group, since a group as broad as "physical
+ *  objects, creatures & places" reads as dozens of unrelated sub-themes a
+ *  single example could never stand in for. Each item is `{group, label,
+ *  entries}` — `label` is the ancestor's own name, "everything else" for a
+ *  clustered group's trailing bucket, or the group's own label when the
+ *  group isn't clustered at all. Pure. */
+export function catalogSections(entries, spritedClasses) {
+  const sections = [];
+  for (const g of CATALOG_GROUPS) {
+    const rows = (entries || []).filter((e) => e.group === g.id);
+    if (!rows.length) continue;
+    if (!groupIsClustered(g.id)) {
+      sections.push({ group: g, label: g.label, entries: rows });
+      continue;
+    }
+    for (const c of clusterEntriesByAncestor(rows, spritedClasses)) {
+      sections.push({ group: g, label: c.ancestor || "everything else", entries: c.entries });
+    }
+  }
+  return sections;
+}
+
+/** The operator's own curated example sprites, one per landing-page section,
+ *  in reading order — a closed, hand-picked list in the same idiom as
+ *  PERSON_ROLE_CLASSES/CATALOG_TAXONOMY_GAPFILL above, not derived from any
+ *  ordering rule. Checked directly against catalogSections' real output: each
+ *  name here really is a member of exactly one of this catalog's 28 current
+ *  sections (the whole adventure and emoji groups, the 9 person-role
+ *  clusters, the 17 physical-object clusters), one per section. A future
+ *  catalog change that drops one of these classes, or adds/removes a section,
+ *  is exactly what landingExampleFor's own fallback below is for. */
+export const LANDING_EXAMPLE_CLASSES = Object.freeze([
+  "adventurer", "engineer", "king", "driver", "boss", "wife", "crowd", "worker",
+  "person", "family", "bear", "house", "tomato", "fly", "stadium", "spider",
+  "ocean", "planet", "metal", "boat", "breakfast", "town", "plant", "tiger",
+  "rain", "bedroom", "frog", "autumn",
+]);
+
+/** The landing page's one example entry for a section (`sectionEntries`,
+ *  already the exact class list that section's own full page shows): the
+ *  first of LANDING_EXAMPLE_CLASSES that is really a member of this section,
+ *  so the operator's own curated favourite wins whenever this catalog really
+ *  carries it there. Falls back to the section's own first entry (its
+ *  existing catalog order) when none of the 28 named favourites is a member —
+ *  an honest real example rather than nothing, for a section the curated
+ *  list doesn't happen to name. Pure. */
+const LANDING_EXAMPLE_CLASS_SET = new Set(LANDING_EXAMPLE_CLASSES);
+
+export function landingExampleFor(sectionEntries) {
+  if (!sectionEntries?.length) return null;
+  return sectionEntries.find((e) => LANDING_EXAMPLE_CLASS_SET.has(e.className)) || sectionEntries[0];
 }
 
 function templatesForClass(cls, templates) {
@@ -337,16 +411,46 @@ export function buildSpriteCatalogEntries({ iconTemplates = [], largeTemplates =
 // ---- scene composer ----
 //
 // The free-text "there is a..." box (adventure-viz.mjs's roomSceneObjects/
-// room-frame is the same shape) over THIS page's own already-real classes.
-// The parser itself is scene-compose.mjs, which resolves a typed class name
-// through the real resolver; this page owns only the class index it is matched
-// against (className -> real swatch labels, read straight off this page's own
-// already-rendered `.card`/`.swatch-label` markup at load time — see this
-// module's own header for why that beats re-embedding the same SVG data a
-// second time), which is built client-side, since walking rendered DOM has no
-// meaning in this pure module.
+// room-frame is the same shape) over the WHOLE catalog's real classes, never
+// just whichever group's cards the current page happens to render — the
+// sprites.html landing page shows one card per group, and each per-group
+// page shows only its own group, but a visitor composing "a doctor with a
+// hat, and a cabinet" needs all three classes to resolve regardless of which
+// page they typed it into. The parser itself is scene-compose.mjs, which
+// resolves a typed class name through the real resolver; this page owns only
+// the class index it is matched against (className -> real swatch labels),
+// computed HERE, in Node, over the full catalog (sceneComposerClassIndex)
+// and embedded once per page — the only way the index can stay whole-catalog
+// once no single page renders every card any more.
 
 export { extractSceneItems } from "../domain/scene-compose.mjs";
+
+/** The scene composer's class index, `{className: {defaultSvg, materials}}`
+ *  with `materials` keyed by lowercase label — computed over the WHOLE
+ *  catalog's `entries` (every group), never just the classes a particular
+ *  page's cards happen to show. Pure. Mirrors exactly what the page's own
+ *  large-tier card markup carries: a plain swatch is the default sprite, a
+ *  fallback swatch stands in when there's no plain one, and every other
+ *  swatch's own label becomes a material key. A class with no large-tier
+ *  swatch at all (icon-only) contributes nothing — there is no sprite for
+ *  the composer to draw for it either way. */
+export function sceneComposerClassIndex(entries) {
+  const index = {};
+  for (const entry of entries || []) {
+    const large = entry.largeSwatches || [];
+    if (!large.length) continue;
+    let defaultSvg = null;
+    const materials = {};
+    for (const s of large) {
+      if (s.kind === "plain") defaultSvg = s.svg;
+      else if (s.kind === "fallback") { if (!defaultSvg) defaultSvg = s.svg; }
+      else materials[String(s.label).trim().toLowerCase()] = s.svg;
+    }
+    if (!defaultSvg) defaultSvg = large[0].svg;
+    index[entry.className] = { defaultSvg, materials };
+  }
+  return index;
+}
 
 // ---- the catalog question lane ----
 //
@@ -427,6 +531,15 @@ export function movingFrameSequence(idleFrame, movingFrame) {
 
 // ---- rendering ----
 
+/** The DOM id a class's own card carries on whichever full-gallery page
+ *  renders it — what a landing-page "view all" link anchors to
+ *  (`${group.page}#${classAnchorId(className)}`), so the visitor lands
+ *  exactly on the class they clicked through for rather than the top of a
+ *  page with dozens or hundreds of other cards above it. Pure. */
+export function classAnchorId(className) {
+  return `card-${String(className).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+}
+
 function chainHtml(chain) {
   const shown = chain.slice(0, MAX_CHAIN_DISPLAY);
   const rest = chain.length - shown.length;
@@ -455,7 +568,7 @@ function tierRowHtml(tierName, swatches) {
 }
 
 function cardHtml(entry) {
-  return `<article class="card" data-cls="${escapeHtml(entry.className)}" data-group="${escapeHtml(entry.group)}">
+  return `<article class="card" id="${classAnchorId(entry.className)}" data-cls="${escapeHtml(entry.className)}" data-group="${escapeHtml(entry.group)}">
     <h3 class="card-name">${escapeHtml(entry.className)}</h3>
     ${chainHtml(entry.chain)}
     ${tierRowHtml("icon", entry.iconSwatches)}
@@ -492,14 +605,23 @@ function sectionHtml(group, entries, { clusterBy = null } = {}) {
   </section>`;
 }
 
-/** The self-contained sprite-catalog page. Pure given `iconTemplates`
- *  (readSpriteTemplateFiles' own output), `largeTemplates`
- *  (readSpriteLargeTemplateFiles' own output) and `factRows`
- *  (loadSpriteOntologyFactRows' own output) — the same "byte-identical for
- *  identical input" invariant every other viz page in this project holds.
- *  All three default to `[]` so a caller mid-migration (no ontology facts
- *  loaded yet, say) still gets a page that renders, just with plainer
- *  ancestor chains.
+/** The sprite-catalog page. Pure given `iconTemplates` (readSpriteTemplateFiles'
+ *  own output), `largeTemplates` (readSpriteLargeTemplateFiles' own output)
+ *  and `factRows` (loadSpriteOntologyFactRows' own output) — the same
+ *  "byte-identical for identical input" invariant every other viz page in
+ *  this project holds. All three default to `[]` so a caller mid-migration
+ *  (no ontology facts loaded yet, say) still gets a page that renders, just
+ *  with plainer ancestor chains.
+ *
+ *  With no `groupId`, this is the FULL catalog on one page, every group's
+ *  full gallery, anchor-nav between its own sections — the CLI's `--render
+ *  sprites` standalone export, and this module's own test fixture. Given a
+ *  real `groupId` (one of CATALOG_GROUPS' own ids), this instead renders
+ *  ONLY that group's full gallery — the demo site's own sprites-<group>.html
+ *  pages (scripts/build-demo-site.mjs) — with the topbar switched to
+ *  cross-page links (crossPageNavHtml), since a `#g-<id>` anchor to a
+ *  section that isn't on this page any more would go nowhere. Either way the
+ *  footer counts describe only what THIS page actually shows.
  *
  *  `spritesBundleAvailable: true` (ledger-viz.mjs's own ledgerBundleAvailable
  *  idiom) is what adds the two interactive panels at all: the page then embeds
@@ -511,24 +633,71 @@ function sectionHtml(group, entries, { clusterBy = null } = {}) {
  *  catalog alone: no dock, no composer, no bundle reference, nothing extra to
  *  404 — including the favicon links, since the CLI's standalone export (also
  *  `spritesBundleAvailable: false`) can't carry a dangling relative
- *  ./favicon.svg either. */
-export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
+ *  ./favicon.svg either. Both the dock's fact rows and the composer's class
+ *  index are always built from the WHOLE catalog, never just `groupId`'s own
+ *  slice — a visitor on one group's page can still ask about, or compose,
+ *  any real class from any other group. */
+export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, groupId = null } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
-  const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
-  const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
-  // Ancestor clustering for the two big sections: the heading chip is the
-  // ancestor's OWN resolved sprite — visible proof that a new subclass
-  // attached there already has fallback art waiting for it.
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const clusterBy = {
     spritedClasses,
     resolveChip: (ancestor) =>
       resolveSpriteAsset(ancestor, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `cluster-${ancestor}` }),
   };
-  const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
-  const navHtml = CATALOG_GROUPS
-    .map((g) => `<a class="jump" href="#g-${g.id}">${escapeHtml(g.label)} <span class="count">${entries.filter((e) => e.group === g.id).length}</span></a>`)
+  const groupsToRender = groupId ? CATALOG_GROUPS.filter((g) => g.id === groupId) : CATALOG_GROUPS;
+  const bodyHtml = groupsToRender
+    .map((g) => sectionHtml(g, entries, { clusterBy: groupIsClustered(g.id) ? clusterBy : null }))
     .join("");
+  const navHtml = groupId
+    ? crossPageNavHtml(entries, { currentGroupId: groupId, includeOverviewLink: true })
+    : CATALOG_GROUPS
+        .map((g) => `<a class="jump" href="#g-${g.id}">${escapeHtml(g.label)} <span class="count">${entries.filter((e) => e.group === g.id).length}</span></a>`)
+        .join("");
+  const footerEntries = groupId ? entries.filter((e) => e.group === groupId) : entries;
+  const footerSwatches = footerEntries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
+  return renderSpriteCatalogPage({
+    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable,
+    footerClassCount: footerEntries.length, footerSwatchCount: footerSwatches,
+  });
+}
+
+/** The topbar's cross-page nav for a per-group or landing site page: real
+ *  links to each group's own full-gallery page (CATALOG_GROUPS' own `page`
+ *  field), each carrying that group's real class count. Used wherever a page
+ *  no longer holds every group's own section, so an in-page `#g-<id>` anchor
+ *  would name a section that isn't there any more — the full single-page
+ *  render (no `groupId`, CLI standalone) keeps the anchor nav instead, since
+ *  every section really is on that one page. `currentGroupId` marks its own
+ *  page's link `aria-current="page"` rather than dropping it, and
+ *  `includeOverviewLink` adds a link back to the sprites.html landing page
+ *  (every per-group page wants one; the landing page itself doesn't). */
+function crossPageNavHtml(entries, { currentGroupId = null, includeOverviewLink = false } = {}) {
+  const groupLinks = CATALOG_GROUPS.map((g) => {
+    const count = entries.filter((e) => e.group === g.id).length;
+    const current = g.id === currentGroupId ? ' aria-current="page"' : "";
+    return `<a class="jump" href="./${g.page}"${current}>${escapeHtml(g.label)} <span class="count">${count}</span></a>`;
+  }).join("");
+  const overview = includeOverviewLink ? `<a class="jump jump-overview" href="./sprites.html">overview</a>` : "";
+  return groupLinks + overview;
+}
+
+/** The shared page scaffold every sprite-catalog page renders through: the
+ *  chrome (appbar, composer, ask dock, topbar+filter, footer) and every
+ *  script, identical on the CLI's standalone full-catalog export, the
+ *  sprites.html landing page, and each of the four per-group pages — only
+ *  `bodyHtml`/`navHtml`/the footer counts differ per caller. `entries` is
+ *  always the WHOLE catalog (never filtered to one group), because the
+ *  composer's class index and the dock's fact rows must resolve any real
+ *  catalog class regardless of which cards this particular page shows. */
+function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, footerClassCount, footerSwatchCount }) {
+  const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
+  const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
+  const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
+  // The composer's class index, computed here over the WHOLE catalog and
+  // embedded once — see sceneComposerClassIndex's own header for why this
+  // replaced reading it back off the page's own rendered card markup.
+  const classIndexJs = !spritesBundleAvailable ? "{}" : embedJson(sceneComposerClassIndex(entries));
 
   const dockCss = !spritesBundleAvailable ? "" : `
   .dockwrap { margin: .2rem 0 1.3rem; }
@@ -723,6 +892,8 @@ ${THEME_TOKENS_CSS}
   .jump { font-family: ${MONO_STACK}; font-size: .7rem; padding: .2rem .6rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: transparent; color: var(--ink); text-decoration: none; }
   .jump:hover { border-color: var(--corpus); color: var(--corpus); }
   .jump .count { color: var(--muted); }
+  .jump[aria-current="page"] { border-color: var(--taught); color: var(--taught); }
+  .jump-overview { margin-left: .3rem; opacity: .8; }
   .filter { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
   .filter input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--ai-panel-hi); color: var(--ink); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .3rem .6rem; width: 200px; }
   .filter .n { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); white-space: nowrap; }
@@ -748,6 +919,13 @@ ${THEME_TOKENS_CSS}
   .group h2 { font-family: ${MONO_STACK}; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h2 .count { font-size: .7rem; color: var(--muted); font-weight: 400; }
   .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .8rem; max-width: 68ch; }
+  .landing-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.1rem 1rem; }
+  .landing-section { min-width: 0; }
+  .landing-section-name { font-family: ${MONO_STACK}; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .4rem; display: flex; align-items: baseline; gap: .4rem; }
+  .landing-section-name .count { font-weight: 400; opacity: .75; }
+  .landing-section .cards { grid-template-columns: 1fr; }
+  .viewall { display: inline-block; font-family: ${MONO_STACK}; font-size: .7rem; margin-top: .4rem; color: var(--taught); text-decoration: none; }
+  .viewall:hover { color: var(--corpus); text-decoration: underline; }
   .cluster { margin: 1rem 0 1.5rem; }
   .cluster-head { display: flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .55rem; }
   .cluster-head .count { font-weight: 400; opacity: .75; }
@@ -798,11 +976,12 @@ ${dockCss}</style>
       <span class="n mono" id="qcount"></span>
     </div>
   </div>
-  ${CATALOG_GROUPS.map((g) => sectionHtml(g, entries, { clusterBy: g.id === GROUP_PERSON || g.id === GROUP_OBJECT ? clusterBy : null })).join("")}
-  <footer class="page">${entries.length} classes &middot; ${totalSwatches} swatches &middot; icon tier 44px, sprite tier 400px</footer>
+  ${bodyHtml}
+  <footer class="page">${footerClassCount} classes &middot; ${footerSwatchCount} swatches &middot; icon tier 44px, sprite tier 400px</footer>
 </main>
 <script>
 const SPRITE_CATALOG = ${pageData};
+const SPRITE_CLASS_INDEX = ${classIndexJs};
 </script>
 ${spriteBundleScript}
 <script>
@@ -828,39 +1007,15 @@ ${spriteBundleScript}
   q.addEventListener("input", apply);
   apply();
 
-  // ---- the scene composer — reads the class/material index straight off
-  // THIS page's own already-rendered card and swatch-label markup (this
-  // module's own header explains why: never a second embedded copy of the
-  // same swatch data), so the composed scene below only ever shows a sprite
-  // this same page already proved the resolver draws. Which class a typed
-  // word names is the bundle's extractSceneItems, which asks the real
-  // resolver — the page never matches a class name itself.
+  // ---- the scene composer — reads the class/material index from
+  // SPRITE_CLASS_INDEX, computed server-side over the WHOLE catalog
+  // (sceneComposerClassIndex) and embedded above, never scoped to whichever
+  // cards THIS page happens to render — a landing page showing one card per
+  // section, or a per-group page showing only one group, still composes any
+  // real catalog class. Which class a typed word names is the bundle's
+  // extractSceneItems, which asks the real resolver — the page never
+  // matches a class name itself.
   const esc = ${escapeHtml.toString()};
-
-  function buildClassIndexFromDom() {
-    const index = {};
-    for (const card of cards) {
-      const largeRow = card.querySelector('.tier-row[data-tier="large"]');
-      if (!largeRow) continue;
-      let defaultSvg = null;
-      const materials = {};
-      for (const swatch of largeRow.querySelectorAll(".swatch")) {
-        const labelEl = swatch.querySelector(".swatch-label");
-        const svgEl = swatch.querySelector(".swatch-img");
-        if (!labelEl || !svgEl) continue;
-        const svg = svgEl.innerHTML;
-        if (swatch.classList.contains("plain")) defaultSvg = svg;
-        else if (swatch.classList.contains("fallback")) { if (!defaultSvg) defaultSvg = svg; }
-        else materials[labelEl.textContent.trim().toLowerCase()] = svg;
-      }
-      if (!defaultSvg) {
-        const firstSvg = largeRow.querySelector(".swatch-img");
-        if (firstSvg) defaultSvg = firstSvg.innerHTML;
-      }
-      index[card.dataset.cls] = { defaultSvg, materials };
-    }
-    return index;
-  }
 
   function wireSceneComposer() {
     const composeqEl = document.getElementById("composeq");
@@ -870,7 +1025,7 @@ ${spriteBundleScript}
     const composePillsEl = document.getElementById("composePills");
     const sceneRowEl = document.getElementById("sceneRow");
     const sceneEmptyEl = document.getElementById("sceneEmpty");
-    const classIndex = buildClassIndexFromDom();
+    const classIndex = SPRITE_CLASS_INDEX;
 
     function renderScene(text) {
       const items = extractSceneItems(text, classIndex);
@@ -907,16 +1062,15 @@ ${spriteBundleScript}
   // ---- the animated swatches — a card's large tier gains one moving
   // swatch per axis its own templates actually vary on: mood (mgx:feels),
   // facing (mgx:faces) and pose (mgx:pose). Frames are the card's own
-  // already-rendered swatches (the same read-the-DOM posture classIndex
-  // takes above — never a second embedded copy), ordered by the pure
+  // already-rendered swatches (read straight off the DOM here — unlike the
+  // composer's classIndex above, this only ever needs whatever cards THIS
+  // page actually renders, never the whole catalog), ordered by the pure
   // *FrameSequence functions spliced in below, and one shared interval
   // steps every cycle in sync at one shared delay. The mood cycle leads the
   // row; the facing sweep and the pose toggle take over the static plain
   // and happy swatches' own places rather than adding cells, so the row
   // keeps its width. Reduced motion disables the auto-step only; each frame
   // is a button, so a click or Enter always advances one frame by hand.
-  // Injected AFTER buildClassIndexFromDom ran, so a moving frame never
-  // leaks into the composer's material index.
   const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
   const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
   const MOOD_PROPERTY = "mgx:feels";
@@ -993,4 +1147,58 @@ ${dockScripts}
 </body>
 </html>
 `;
+}
+
+/** `sprites.html` itself: a lighter landing page over the WHOLE catalog —
+ *  one real example card per section (catalogSections/landingExampleFor;
+ *  a section is a top-level group when it isn't clustered, adventure and
+ *  emoji, or one of person/object's own ancestor clusters otherwise), each
+ *  linking straight to that class's own card on its group's full-gallery
+ *  page (classAnchorId). A section this small never earns a page of its
+ *  own — every section, big or small, already lives together with the rest
+ *  of its group on that one shared full-gallery page, which is exactly
+ *  where a landing card's link lands.
+ *
+ *  The composer and the ask dock still answer over the WHOLE catalog from
+ *  here (sceneComposerClassIndex/spriteFactRows both read every class, never
+ *  just the ~28 shown), so typing "a doctor with a hat, and a cabinet"
+ *  composes correctly even though none of those three classes has a card on
+ *  this page. Same chrome, same styling, same scripts as every per-group
+ *  page — renderSpriteCatalogPage owns all of that; this function only
+ *  picks which body and nav go in it. */
+export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
+  const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
+  const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
+  const sections = catalogSections(entries, spritedClasses);
+  const bodyHtml = CATALOG_GROUPS.map((g) => {
+    const groupEntries = entries.filter((e) => e.group === g.id);
+    if (!groupEntries.length) return "";
+    const groupSections = sections.filter((s) => s.group.id === g.id);
+    const note = g.note ? `<p class="section-note">${escapeHtml(g.note)}</p>` : "";
+    const sectionsHtml = groupSections.map((section) => {
+      const example = landingExampleFor(section.entries);
+      if (!example) return "";
+      // A group with only one section (adventure, emoji) needs no
+      // sub-heading of its own — the group heading above already names it.
+      const heading = groupSections.length > 1
+        ? `<h3 class="landing-section-name">${escapeHtml(section.label)} <span class="count">${section.entries.length}</span></h3>`
+        : "";
+      return `<div class="landing-section">
+        ${heading}
+        <div class="cards">${cardHtml(example)}</div>
+        <a class="viewall" href="./${g.page}#${classAnchorId(example.className)}">view all ${section.entries.length} &rsaquo;</a>
+      </div>`;
+    }).join("");
+    return `<section class="group landing-group" id="g-${g.id}" aria-label="${escapeHtml(g.label)}">
+      <h2>${escapeHtml(g.label)} <span class="count">${groupEntries.length}</span></h2>
+      ${note}
+      <div class="landing-sections">${sectionsHtml}</div>
+    </section>`;
+  }).join("");
+  const navHtml = crossPageNavHtml(entries, {});
+  const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
+  return renderSpriteCatalogPage({
+    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable,
+    footerClassCount: entries.length, footerSwatchCount: totalSwatches,
+  });
 }

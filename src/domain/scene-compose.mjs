@@ -83,8 +83,8 @@ function resolveSpanToClass(graph, classIndex, tokens, used, start, longestClass
  *  appears, paired with the real material label (one of that SAME class's own
  *  swatch labels — never another class's, never a fabricated one) immediately
  *  preceding it, or `null`. `classIndex` is `{className: {materials}}` with
- *  `materials` keyed by lowercase label (sprites.html's own client-side
- *  `buildClassIndexFromDom` output, or an equivalent test fixture) — a class name
+ *  `materials` keyed by lowercase label (sprite-catalog-viz.mjs's own
+ *  `sceneComposerClassIndex` output, or an equivalent test fixture) — a class name
  *  absent from `classIndex` can never match, and a modifier word that isn't one
  *  of ITS matched class's own material labels is silently dropped rather than
  *  guessed at, the same honest-miss posture an unrecognized class name gets (an
