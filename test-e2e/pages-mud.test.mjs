@@ -247,11 +247,21 @@ test("a talking character's own speech bubble carries the engine's real narratio
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {
     await page.locator("#autoToggle").click();
-    const selfBubble = await page.waitForFunction(
+    // Each side of an exchange gets its own "from-self" bubble in its own
+    // pane: the asker's reads as narration ("the fox asks the badger…"), the
+    // one answering reads back the thing asked about ("there's lettuce, if
+    // you can reach it."). Both are real engine output, so grabbing whichever
+    // from-self bubble appears first (in either pane) picks up the answerer's
+    // line just as often as the asker's — that isn't a broken bubble, it's the
+    // wrong half of the exchange. Wait specifically for the asker's half.
+    const askerBubble = await page.waitForFunction(
       () => {
         for (const slot of ["a", "b"]) {
-          const bubble = document.querySelector(`#window-${slot}-bubbles .bubble.from-self`);
-          if (bubble && bubble.textContent) return { slot, text: bubble.textContent };
+          for (const bubble of document.querySelectorAll(`#window-${slot}-bubbles .bubble.from-self`)) {
+            if (/\bthe \S+ (asks|greets) the \S+\b/.test(bubble.textContent ?? "")) {
+              return { slot, text: bubble.textContent };
+            }
+          }
         }
         return null;
       },
@@ -261,11 +271,11 @@ test("a talking character's own speech bubble carries the engine's real narratio
     await page.locator("#autoToggle").click();
 
     assert.notEqual(
-      selfBubble.text, "what food do you know about?",
+      askerBubble.text, "what food do you know about?",
       "the asker's own bubble is never the old fixed placeholder line",
     );
     assert.match(
-      selfBubble.text, /\bthe \S+ (asks|greets) the \S+\b/,
+      askerBubble.text, /\bthe \S+ (asks|greets) the \S+\b/,
       "the asker's own bubble is the engine's real narration of the exchange, matching the teller's own",
     );
 
