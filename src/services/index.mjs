@@ -39,7 +39,7 @@ export { relationKind, impactClosure } from "../domain/codegraph.mjs";
 export { createGraphService } from "../adapters/providers/graph-service.mjs";
 
 // Tool dispatch (slash-commands and CLI tool calls route through here).
-export { dispatchTool } from "../tools/server.mjs";
+export { dispatchTool, dispatchToolStructured } from "../tools/server.mjs";
 
 // Conversational memory — tmct's OWN OWL-labelled graph under
 // .tmct/memory/, distinct from any provider-supplied code graph.
