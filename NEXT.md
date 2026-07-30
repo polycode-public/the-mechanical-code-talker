@@ -16,75 +16,23 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**No worktrees active.**
+**No worktrees active. Everything green.** Pipeline `2717338870` (`17673980`) passed every job on
+the first attempt, no retries anywhere — `deploy:website`, `publish:npm`, and all four
+`e2e:deployed:*` jobs (`shell`/`pages`/`pages-timing`/`mesh`) included.
 
-**DONE — the `e2e:deployed:pages` contention follow-up, `fae19dd3`.** Pushing the first contention
-fix (`efb704d1`) triggered pipeline `2717201943`, whose `e2e:deployed:pages` job (30 files,
-`--test-concurrency=4`) failed all 3 retries. The coordinator's own first dispatch mis-attributed
-every failure to `pages-research.test.mjs` — wrong: independently re-checked against the raw
-`glab ci trace` logs, every failure across all 3 attempts was actually in
-`pages-chat-research.test.mjs`, `pages-chat-live-toggle.test.mjs`, or `pages-chat-persistence.test.mjs`
-(reset-to-seed, the researched-panel, research-row pause/play, a typed research auto-play queue, a
-`/wiki` live-Wikipedia supplement) — `pages-research.test.mjs` itself has never failed either
-contention pipeline. Every other job (`deploy:website`, `e2e:deployed:shell`, `e2e:deployed:mesh`,
-`smoke:post-deploy`, `e2e:published-package`) passed clean throughout — the live site was
-confirmed fine at every point. Root cause (reproduced locally by doubling the 30-file `:pages`
-matrix's own load to approximate runner-level contention): those three files' assertions each race
-a real elapsed-time budget (a fetch's own abort timeout, an auto-play ticker's pacing, a debounced
-autosave window) against a mocked round trip that runs through the same Node test process, so
-process-level contention — not just Chromium load — can lose the race. Fix: moved the three into a
-new `e2e:deployed:pages-timing` job at `--test-concurrency=1`; the remaining 27 stay in `:pages` at
-concurrency 4. File count re-audited (9+27+3+6=45, same total, no drops/dupes), `glab ci lint`
-clean. Merged, worktree removed. Not yet re-verified against a real deploy pipeline.
+Chasing that down took three rounds after the 4.0.1 deploy, each real: (1) the new fact-count tile
+overflowed `research.html` on a 375px phone viewport, fixed in `6f1fca54`; (2) bundling
+`e2e:deployed` into 45 files in one job (this session's own CI restructure, `3315a0f8`) caused
+cross-file contention — split into `shell`/`pages`/`mesh` with capped `--test-concurrency`,
+`5cd0f652`; (3) three files (`pages-chat-research`/`pages-chat-live-toggle`/
+`pages-chat-persistence`, each racing a real elapsed-time budget against a mocked round trip) still
+contended inside `:pages` at concurrency 4 — isolated into their own `:pages-timing` job at
+concurrency 1, `fae19dd3`. Full detail in each commit's own message.
 
-**Real bug found and fixed post-push, 2026-07-30:** the new "facts in the graph" tile
-(`research-viz.mjs`, from the fact-count work below) pushed `.statuspanel`'s three fixed
-7rem-min-width stats past a 375px phone viewport with no wrap — the live site's `research.html`
-overflowed sideways on mobile. Caught by `e2e:deployed` right after the 4.0.1 deploy, fixed in
-`6f1fca54` (`flex-wrap` + a narrow-viewport `min-width: 0` override), verified against the exact
-failing assertion locally, full suite green, pushed and deployed.
-
-**DONE — `e2e:deployed` contention flakiness fixed and merged** (`5cd0f652`): that hotfix push
-also surfaced a real CI reliability problem — the job's 45-file matrix (grown from 3 files by this
-session's own CI restructure, `3315a0f8`) failed all 3 retries of pipeline `2717061891`, each time
-on a DIFFERENT test (`pages-mud.test.mjs`'s speech-bubble narration test, a P2P mesh assertion, a
-peer-disconnect convergence test) — none related to the actual pushed fix, and
-`deploy:website`/`publish:npm`/`smoke:post-deploy`/`e2e:published-package` all passed every time,
-confirming the live site itself was fine throughout. Root cause (confirmed by reproducing
-concurrent-file contention locally against a served build): node's test runner parallelizes files
-by default, so 45 files in one job meant real concurrent Chromium load bounded only by the
-runner's core count. Two real findings — `pages-mud.test.mjs` had a genuine pre-existing race
-(grabbed whichever of two real "from-self" speech bubbles rendered first, asker's narration or
-answerer's literal line, instead of waiting for the asker's specifically; fixed to match the
-narration pattern explicitly), and `pages-research.test.mjs` dropped a Playwright/CDP promise once
-under load (not deterministically reproducible, consistent with the pipeline's sporadic pattern).
-Fix: split `e2e:deployed` into `e2e:deployed:shell`/`:pages`/`:mesh` (same 45 files, 9/30/6),
-capping `--test-concurrency` (4 / 2) so concurrent Chromium load no longer scales with runner
-cores, and a retry only re-runs its own slice. Verified: the mud fix held over 12 concurrent runs,
-the pages slice held over 4 rounds at cap 4, the mesh slice over 2 rounds at cap 2, full local
-suite green, `glab ci lint` valid, file-count audited (45 in, 45 out, no drops/dupes).
-explicitly deferred** — the pipeline is currently red on this job.
-
-**Two background sub-agents dispatched 2026-07-30, both winding down:**
-
-- **Rover-bark regression coverage** — done. Unit test (`test/adapters/chat-rover-capability-chain.
-  test.mjs`), TUI e2e, and chat.html e2e all written, independently re-run by the coordinator, all
-  green. Committed `d6c84133`, wired into the right CI jobs (`e2e-tui`, `e2e:deployed`,
-  `e2e:published-package`).
-- **Service-worker stale-cache fix + visible fact count** — fix landed (`9a9b58f7`): `tmct-sw.js`'s
-  precache was cache-first keyed only on package version, so a content-only deploy (seed change, no
-  version bump) left an already-visited browser stuck on the old seed forever; "reset to seed" also
-  only cleared IndexedDB, never the separate Cache Storage the service worker owns. The visible
-  fact-count-in-topbar ask shipped alongside it across chat/ingest/code/research
-  (`chat-page-viz.mjs`, `ingest-viz.mjs`, `code-explorer-viz.mjs`, `research-viz.mjs` +
-  tests, all independently re-run green, swept into `d6c84133`/`cc5a7f67` by the coordinator when a
-  concurrent `git add` raced). Agent confirmed done, tree clean, nothing else of its own
-  outstanding. Real remainder it flagged: no Playwright regression test yet for the cache-busting
-  fix itself (repro: precache an old seed, swap in changed content, assert the next load serves
-  the new bytes and "reset to seed" recovers a stuck session); no browser/DOM run of the fact-count
-  pills. (Checked and closed: `infra/lib/website-stack.ts`'s CloudFront function matches on
-  `request.uri` alone, which CloudFront always splits from the querystring — the new
-  `chat-seed.json?b=<hash>` URL still hits the `.br`/`.gz` rewrite correctly, no conflict.)
+**Rover-bark regression coverage (`d6c84133`) and the service-worker stale-cache fix + visible
+fact count (`9a9b58f7`) are both done and merged** — unit/TUI/chat.html tests and the fact-count
+pills across chat/ingest/code/research all independently re-run green by the coordinator. Real
+remainder from the service-worker work moved to Open items below.
 
 **MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
 against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
@@ -114,6 +62,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   beyond bear/cat/dog/king across the rest of the animal and person catalog, and design a
   profile-face anchor so a facing variant can carry the six `mgx:feels` expressions at the same
   time.
+- [ ] no Playwright regression test yet for the service-worker cache-busting fix itself (repro:
+  precache an old seed, swap in changed content, assert the next load serves the new bytes and
+  "reset to seed" recovers a stuck session); no browser/DOM run confirming the fact-count pills
+  render correctly (unit-level only so far).
 
 
 ## Discipline
