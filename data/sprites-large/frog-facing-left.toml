@@ -1,0 +1,67 @@
+# frog-facing-left — the same fixed-green frog as frog.toml, turned to a
+# left profile. Frog has no head circle of its own (the two eye bulges are
+# the head), so the profile draws one eye bulge large and forward on the
+# left, tucks the other small and mostly behind it, and projects a snout
+# bump past the near bulge's edge. The body and back-leg lobes trail
+# behind on the right. A hand-authored [match] variant, selected only
+# when the instance's own mgx:faces fact says "left". It also carries the
+# shared face-fragment mechanism, so a frog taught both mgx:faces = left
+# and one of the 6 mgx:feels words renders this profile wearing that
+# mood; taught only the facing, {{FACE}} resolves to nothing and the
+# profile keeps the two eyes it draws itself.
+classes = ["frog"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="frog-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#a8d068"/>
+      <stop offset="55%" stop-color="#5a9040"/>
+      <stop offset="100%" stop-color="#2f5322"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="14.5" cy="15.2" rx="7.4" ry="5.2" fill="url(#frog-facing-left-fill)"/>
+  <ellipse cx="10" cy="17.8" rx="3" ry="2" fill="url(#frog-facing-left-fill)"/>
+  <ellipse cx="20.5" cy="17.4" rx="2.2" ry="1.6" fill="url(#frog-facing-left-fill)"/>
+  <g stroke="#2f5322" stroke-width="0.9" stroke-linecap="round">
+    <path d="M7.6 18.6 L6.6 20"/><path d="M9.4 19.6 L9.2 21"/><path d="M11.6 19.4 L12 20.8"/>
+  </g>
+  <ellipse cx="11.8" cy="17" rx="2.6" ry="1.7" fill="#dcead0" opacity="0.55"/>
+  <ellipse cx="8.6" cy="13.4" rx="1.3" ry="0.9" fill="#2f5322" opacity="0.4"/>
+  <circle cx="9.8" cy="9.6" r="1.1" fill="url(#frog-facing-left-fill)"/>
+  <circle cx="9.8" cy="9.5" r="0.75" fill="#f4ecd8"/>
+  <circle cx="6" cy="9" r="2.8" fill="url(#frog-facing-left-fill)"/>
+  <circle cx="6" cy="8.8" r="2" fill="#f4ecd8"/>
+  <path d="M3.4 9.6 C1.8 9.8 1.4 10.8 2.4 11.6 C3.4 12 4.4 10.8 3.4 9.6 Z" fill="#5a9040"/>
+  <ellipse cx="12" cy="13.8" rx="2.4" ry="1.3" fill="#ffffff" opacity="0.22"/>
+  <ellipse cx="4.8" cy="7.8" rx="0.6" ry="0.45" fill="#ffffff" opacity="0.6"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# frog has no head circle; its eye-bulge radius (2.6, frog-with-emotion.toml)
+# stands in for R_front. This profile redraws the near bulge at
+# 0.92*2.6 = 2.392, rounded to 2.39, though the drawn bulge is enlarged to
+# 2.8 to read as the sole prominent feature — a judgment call, since frog
+# has no direct anatomical precedent for this shrink. scale is 0.65*2.39 =
+# 1.5535, rounded to 1.55. The near eye-white this file draws is centred at
+# (6, 8.8), so cx = 6 + 0.4*1.55 = 6.62 and cy = 8.8 + 0.15*1.55 = 9.03.
+[face]
+cx = 6.62
+cy = 9.03
+scale = 1.55
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

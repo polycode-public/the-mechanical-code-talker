@@ -1,0 +1,59 @@
+# fly-facing-half-left — the fly turned three-quarters, halfway between
+# fly-facing-left.toml's full profile and fly-with-emotion.toml's front
+# view. The head-and-abdomen unit sits closer to the canvas centre, the
+# antenna projects only half as far, and a small far eye now shows beside
+# the near one — the cue that reads as a turned head rather than a flat
+# profile. The far wing shows more of itself here than in the full
+# profile, since the turn is shallower.
+classes = ["fly"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="fly-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="currentColor">
+    <path d="M10.3 10 C5 6.5 4 5 5 3 C7.5 3 10 6.5 11.3 10 Z" opacity="0.5"/>
+    <path d="M11.3 10 C13.5 7.5 14 6 13 4.5 C11.5 5 10.8 7.5 11.3 10 Z" opacity="0.4"/>
+  </g>
+  <path d="M9 6.6 C8.6 5.6 8.8 4.6 9.4 4.2" stroke="#5a4636" stroke-width="0.3" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="10.5" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-facing-half-left-fill)"/>
+  <ellipse cx="9.6" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <circle cx="10.5" cy="7" r="2.48" fill="url(#fly-facing-half-left-fill)"/>
+  <ellipse cx="9.3" cy="6.3" rx="0.4" ry="0.45" fill="#1c1c1c"/>
+  <ellipse cx="11.6" cy="6.6" rx="0.25" ry="0.3" fill="#1c1c1c"/>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <path d="M8.1 17 L5.9 19.4"/>
+    <path d="M12.9 17 L15.1 19.4"/>
+  </g>
+  <ellipse cx="9.3" cy="10.6" rx="1.6" ry="1" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Half scale is 0.825 * head radius 2.48 = 2.046, rounded to 2.05. The near
+# eye drawn above sits at (9.3, 6.3), so cx = 9.3 + 0.4*2.05 = 10.12 and
+# cy = 6.3 + 0.15*2.05 = 6.61.
+[face]
+cx = 10.12
+cy = 6.61
+scale = 2.05
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

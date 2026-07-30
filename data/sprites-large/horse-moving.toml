@@ -1,0 +1,59 @@
+# horse-moving — the plain front-facing horse of horse-with-emotion.toml
+# caught mid-gallop, with no facing fact required at all: an instance
+# taught only mgx:pose = moving keeps the centre view. The neck, head,
+# mane and nostril are unchanged from the front view, so the front-facing
+# [face] anchor carries over untouched. What moves: the four legs stretch
+# into an extended gallop stride and the body dips slightly beneath it.
+classes = ["horse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="horse-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.4" cy="14.9" rx="7.2" ry="4.2" fill="url(#horse-moving-fill)"/>
+  <path d="M16.8 12.4 C17.4 8.6 19.4 5.6 22 4.4 C21 6.6 20.8 8.8 21.4 11 C22.2 12 22.2 13.6 21 14.4 C19.4 13.2 17.8 13 16.8 12.4 Z" fill="url(#horse-moving-fill)"/>
+  <path d="M18.4 6 C19.4 6.6 20.2 7.6 20.6 8.8" fill="none" stroke="#000000" stroke-width="0.8" opacity="0.3" stroke-linecap="round"/>
+  <path d="M17.8 9 C18.1 10.2 18 11.4 17.6 12.4" fill="none" stroke="color-mix(in srgb, currentColor 35%, black)" stroke-width="0.5" opacity="0.45" stroke-linecap="round"/>
+  <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+    <line x1="7.6" y1="17.8" x2="5.6" y2="21.6"/>
+    <line x1="10.6" y1="18.4" x2="9" y2="22.6"/>
+    <line x1="16.4" y1="18.4" x2="19.2" y2="22"/>
+    <line x1="19.6" y1="17.6" x2="22.4" y2="21.2"/>
+  </g>
+  <g fill="#2b2118">
+    <ellipse cx="5.5" cy="21.9" rx="0.7" ry="0.4"/>
+    <ellipse cx="8.9" cy="22.9" rx="0.7" ry="0.4"/>
+    <ellipse cx="19.3" cy="22.3" rx="0.7" ry="0.4"/>
+    <ellipse cx="22.5" cy="21.5" rx="0.7" ry="0.4"/>
+  </g>
+  <path d="M6.4 16.6 C4 15.4 3.4 17.6 4.8 18.4 C6 17.8 6.4 17.1 6.4 16.6 Z" fill="url(#horse-moving-fill)"/>
+  <ellipse cx="10.4" cy="12.6" rx="2.8" ry="1.5" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="20.4" cy="7" rx="2.6" ry="2.3" fill="#ffffff" opacity="0.22"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 20.4
+cy = 7
+scale = 3.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
