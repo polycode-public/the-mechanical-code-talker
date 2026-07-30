@@ -26,47 +26,19 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/ingest.html, after ingest-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
-import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import {
+  bandLabelFor,
+  statsSummaryLine,
+  clearSiteAssetCaches,
+  fetchWithProgress,
+  renderStatsPanelInto,
+  loadProgressLine,
+  factTripleParts,
+} from "./memory-panel-viz.mjs";
 import { loadWinkVendor } from "./viz-boot.mjs";
 import { cloneMemoryPayload } from "../adapters/memory/core.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — ingest";
-
-/** One grounded fact as a canonical triple line — subject, predicate, object,
- *  each in its own cell so the pane can align them. Pure and
- *  `.toString()`-splice safe (no outer refs): the inline script splices this
- *  in and calls it per row. */
-export function factTripleParts(fact) {
-  return {
-    subject: String((fact && fact.subject) || ""),
-    predicate: String((fact && fact.predicate) || ""),
-    object: String((fact && fact.object) || ""),
-    provenance: String((fact && fact.provenance) || ""),
-  };
-}
-
-/** The boot statusline while the big assets stream in — the same aggregator
- *  chat-page-viz.mjs's own loadProgressLine is (kept as this page's own copy
- *  rather than a shared import — the two pages' boot lines diverge slightly
- *  and neither is a collaborator the other calls). `parts` is an array of
- *  { loaded, total } byte counts (total 0 when the response carried no
- *  Content-Length); with no usable total the line shows loaded bytes alone
- *  rather than inventing a denominator. Self-contained, `.toString()`-splice
- *  safe. */
-export function loadProgressLine(parts) {
-  const mb = (n) => (n / 1048576).toFixed(1);
-  let loaded = 0;
-  let total = 0;
-  let totalKnown = true;
-  for (const p of parts || []) {
-    loaded += (p && p.loaded) || 0;
-    if (p && p.total > 0) total += p.total;
-    else totalKnown = false;
-  }
-  return totalKnown && total > 0
-    ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
-    : "loading the engine… " + mb(loaded) + " MB";
-}
 
 /** The self-contained ingest page. Pure — the same output for the same
  *  `title` every time; every piece of state (the session, each grounded fact)
