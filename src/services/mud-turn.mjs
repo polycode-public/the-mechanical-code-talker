@@ -50,6 +50,7 @@ import { fnv1a32 } from "../domain/hash.mjs";
 import { bfsLevels } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG, mudMassDrainPerTurn } from "../domain/game-config.mjs";
+import { predatorSubjects } from "../domain/mud-facts.mjs";
 import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
   recordMassDrain, personKnowledgeLines, objectClassChain, diggableDirections,
@@ -220,9 +221,8 @@ function roomsStoodIn(rows, character) {
  *  funnel straight to the den, since the unvisited room nearest the burrow is
  *  exactly where the fox lives. The den stays reachable by the food gamble
  *  below, which is a gamble and is meant to be. */
-const predatorRooms = (rows, state) => new Set((rows || [])
-  .filter((r) => r.predicate === "mgx:is-predator" && r.object === "true")
-  .map((r) => state.placements.get(r.subject)?.object)
+const predatorRooms = (rows, state) => new Set(predatorSubjects(rows)
+  .map((subject) => state.placements.get(subject)?.object)
   .filter(Boolean));
 
 /**
