@@ -82,21 +82,18 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - **Publish continuously, batch what lands while CI builds.** Merge each sub-agent's verified
   commit onto local `main` as soon as it's ready — don't hold everything for one end-of-session
   merge sweep. Run the full suite once (still only at the actual push moment — see "Test the
-  blast radius"), then push immediately once at least one commit is ready. Poll the pipeline
-  (`glab ci status --branch=main --compact` or `glab ci get --branch=main --output json`; `glab`
-  is installed and authenticated) until it resolves — budget ~15-20 minutes for a push that
-  touches `src`/`test`/`package.json` (the `e2e`/`e2e:heavy`/`publish:npm` jobs dominate), ~2-3
-  minutes for a docs-only one (only the cheap `verify`-stage jobs run). While waiting, keep
-  merging any further sub-agent commits onto local `main` as they land. Once it goes green: if
-  commits have stacked up since that push, `npm run roll` (bump the patch version, regenerate
-  the version-stamped artifacts), run the full suite again, commit, and push that batch — this
-  both ships the accumulated work and gives `publish:npm`'s version check something real to
-  publish (see `.gitlab-ci.yml`'s `deploy` stage — it only publishes on an actual version
-  increase). Repeat wait → batch → roll → push until nothing is left stacked. If a pipeline goes
-  red, don't push through it — diagnose and fix (harden a flaky timing test rather than
-  re-running it, per NEXT.md's own precedent) before the next push. **The one thing this doesn't
-  relax: the full suite stays mandatory before every push that reaches `main` — this changes
-  *when* you push, never *whether* you test first.**
+  blast radius"), then push. `PLAN_PUBLISH_AND_BE_DAMNED.md` is the current CI model — secret
+  detection gates `deploy:website`/`publish:npm`, everything else runs as fast parallel
+  information — check the last pipeline's own duration rather than a remembered number, since it
+  changes as the suite grows. While a pipeline runs, keep merging further sub-agent commits onto
+  local `main`. Once it goes green: if commits have stacked up since that push, `npm run roll`
+  (bump the patch version, regenerate the version-stamped artifacts), run the full suite again,
+  commit, and push that batch — this both ships the accumulated work and gives `publish:npm`'s
+  version check something real to publish (`.gitlab-ci.yml`'s `deploy` stage only publishes on an
+  actual version increase). If a pipeline goes red, don't push through it — diagnose and fix
+  (harden a flaky timing test rather than re-running it) before the next push. **The one thing
+  this doesn't relax: the full suite stays mandatory before every push that reaches `main` — this
+  changes *when* you push, never *whether* you test first.**
 
 ## Test the blast radius, not the whole suite
 
@@ -126,12 +123,11 @@ reasonably be expected to fail *now*, in seconds, so you don't round-trip throug
 restatement, teach/recall/proof — chosen so a failure means the build is broken rather than subtly
 wrong. `test:fast` adds a sample row from every chat lane and the tool-layer contract, 172 tests in
 all. Both are named after their budgets, and `npm run check:budgets` holds them to it. **A tier that
-breaks its budget is a bug in the tier — cut its content, never raise the number.**
-
-That budget check is a `check:*` and not a test, on purpose. It measures wall-clock, and `npm test`
-runs eight workers at once — so inside the suite it spends its whole measurement competing with the
-thing it is timing. It read 4,135ms against a 1,000ms budget that way, for a tier that takes ~700ms.
-Benchmarks don't run under load.
+breaks its budget is a bug in the tier — cut its content, never raise the number.** The check
+measures wall-clock outside the suite deliberately: `npm test` runs eight workers at once, so
+measuring from inside it competes with the thing it's timing (it once read 4,135ms against a
+1,000ms budget for a tier that takes ~700ms alone). Don't confuse `test:smoke` with `smoke:deploy`
+— the latter is a live-site probe run after a release, different tier, same word.
 
 ### Finding the radius
 
@@ -157,24 +153,16 @@ any flow a README example walks through, run `npm run check:readme` locally** �
 `test-e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
 checks still run in the per-push e2e tier.
 
-### Two names for "smoke"
+### Sub-agents are the strict case
 
-`smoke:deploy` already owns the word in this repo and means something else entirely — a probe
-against a **deployed site**, after a release. `test:smoke` is the 1-second tier in the `test:*`
-namespace and never touches the network. They don't collide mechanically; they do collide in a
-reader skimming `npm run`. Say which you mean.
+They're the most expensive place to run a full suite (several run at once, each paying the whole
+cost) and the least likely to need it (they own a slice of the tree by construction). `test:fast`
+is the rung that replaces `npm test` for them — say so in the dispatch brief, name the files that
+agent should run, and tell it to cite the coordinator's count rather than re-earn it.
 
-**Sub-agents are the strict case.** They are the most expensive place to run a full suite — several
-run at once, each paying the whole cost — and the least likely to need it, because they own a slice
-of the tree by construction. A sub-agent running `npm test` is usually spending minutes confirming
-something its own range cannot break. Say so in the dispatch brief: name the files that agent
-should run, and tell it to cite the coordinator's count rather than re-earn it. `test:fast` is the
-rung that replaces the full suite for them.
-
-Two traps this rule does not excuse. A radius you cannot see is a real reason to run the suite, and
-the only one — write down that you could not see it. And a shared, generated artifact is wider than
-it looks: touching the verb vocabulary regenerates the collision table, which redraws the ask
-bundle. Follow the generator, not the diff.
+Two traps this rule does not excuse: a radius you cannot see is a real reason to run the suite (say
+so), and a shared generated artifact is wider than it looks — touching the verb vocabulary
+regenerates the collision table, which redraws the ask bundle. Follow the generator, not the diff.
 
 ## Always tee to a file before filtering — every pipe, not just the slow ones
 
@@ -183,39 +171,20 @@ Never pipe anything into `tail`, `head`, `grep` or any other filter without teei
     cmd 2>&1 | tee /tmp/some-file.log | tail -20      # or head, grep, whatever
 
 You still get the quick glance, and the full output stays on disk when the part you need turns
-out to sit somewhere else.
+out to sit somewhere else. **The trigger is the pipe, not the duration** — a 1.8s `test:fast` or
+a 0.4s unit file reads as "not long" and gets piped bare just as often as a slow command does.
 
-**The trigger is the pipe, not the duration.** This rule used to be titled "long-running command",
-and that word is a loophole: a 1.8s `test:fast`, a four-turn CLI reproducer and a 0.4s unit file all
-read as "not long", so they got piped bare — and `head` does its damage in milliseconds. If you are
-filtering output at all, tee it.
-
-Two different things go wrong without the tee. `tail -N` throws away everything before the last
-N lines for good, so if the summary sits earlier it's gone and the whole command runs again.
-`head -N` is worse: once it has its N lines it exits, the producer gets SIGPIPE, and **the
-command itself is killed part-way through**. A 17-session playtest sweep piped into `head`
-died silently at session 7 and reported like a clean run — the truncation showed up only in
-the line count. `head` doesn't just discard output, it stops the work.
-
-**A piped CLI reproducer is the sharpest case, and the easiest to miss.**
-`printf '…' | node bin/tmct.mjs chat … | head -8` can SIGPIPE the session mid-transcript: the later
-turns never run, `/exit` never runs, and what you read looks like the whole conversation. A
-reproducer that dies early doesn't fail — it agrees with you.
-
-If a command's output is worth filtering, it's worth keeping.
-
-**The summary-grep is where this rule actually dies.** Sessions keep the tee on the "big" runs
-and then drop it for `| grep -E "^ℹ (pass|fail)"` count checks, because "I only need two lines."
-Those two lines are exactly the case where the tee earns its keep: when the counts show a fail,
-the why was in the output you threw away, and the whole run repeats to get it back. A test run's
-counts NEVER travel without the log (2026-07-18: a 2-minute suite was piped bare into a counts
-grep minutes after its sibling had already needed re-running for this exact reason).
+`tail -N` silently discards everything before the last N lines for good. `head -N` is worse: once
+it has its N lines it exits, the producer gets SIGPIPE, and the command itself is killed
+part-way through — a 17-session playtest sweep piped into `head` died silently at session 7 and
+reported like a clean run, with the truncation showing up only in the line count. This includes
+the two-line summary grep (`| grep -E "^ℹ (pass|fail)"`): when the counts show a fail, the why was
+in the output you just threw away, and the whole run repeats to get it back.
 
 **And a command you have already seen run long goes to the background, full stop.** If a command
 (or its sibling in the same file) has once hit the foreground timeout or run past ~30s, the
-re-run is `run_in_background`, not foreground — "I only want the counts this time" is how a
-2-minute test file ends up blocking the coordinator chat that exists to stay free. Waiting on a
-background task uses the task-wait mechanism, never a foreground sleep loop.
+re-run is `run_in_background`, not foreground. Waiting on a background task uses the task-wait
+mechanism, never a foreground sleep loop.
 
 ## Name it, don't comment it
 
@@ -255,14 +224,8 @@ than making that call silently. Getting this wrong means real bugs sit unfixed w
 
 ## Never write capability walls — state the horizon, not the wall
 
-Prose in a live doc that declares a feature or extension permanently beyond reach is poison.
-What the system can't do today is observable from benchmarks and playtests, so writing it down
-adds no information — but it actively resists the next uplift, because every future session
-(human or Claude) reads it as a settled decision and argues against the change instead of making
-it. The earth is not flat: a problem with no generally accepted engineering today is a research
-horizon, not a wall. Write it that way ("no settled deterministic engineering exists yet for X;
-candidate literatures: A, B; until a tier is designed these land on the honest miss wall") or
-write nothing.
+Same rule as the global `~/.claude/CLAUDE.md` ("Never document capability walls") — read it there
+for the full reasoning. What's project-specific here:
 
 Purge vocabulary — when any of these describe a capability or design extension in a live doc,
 delete or reframe to horizon language: permanently, forever, never, out permanently, stays out,
@@ -277,12 +240,6 @@ the product path), safety/security decisions, behavioral invariants that protect
 timeout is a miss, never a guess"), plain plan scoping ("not in this plan", with the sequencing
 stated), historical logs (archive/, playtests/, BENCHMARK_* record what a version couldn't do —
 that's measurement, not design), and present-tense descriptions of current behavior.
-
-Why this keeps happening (so the next session recognizes the pull): bounded claims feel like
-rigor, and a declared limit makes a doc sound decisive for free. It converts present absence
-(cheap, observable, temporary) into declared essence (expensive, sticky, wrong). Same family as
-"contraction, not expansion" and the no-scope-echo-comments rule: limiting prose generated as
-caution, paid for at every future change.
 
 ## Writing style
 
