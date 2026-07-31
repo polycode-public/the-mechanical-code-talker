@@ -86,7 +86,7 @@ import {
 } from "./adventure-viz.mjs";
 import { renderMudEditorText } from "./mud-editor.mjs";
 import {
-  wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom,
+  wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom, tapeRowFor, tapeClock,
 } from "./chat-page-viz.mjs";
 import {
   SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
@@ -455,7 +455,7 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
       <div class="world-map-key" id="worldMapKey"></div>
     </section>
   </div>
-${shareOverlayHtml({ copy: MUD_SHARE_COPY })}
+${shareOverlayHtml({ copy: MUD_SHARE_COPY, withTape: true })}
   <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
   </div>
@@ -1054,8 +1054,41 @@ const MUD_STYLE = `
   .pane-node { font-family: ${MONO_STACK}; font-size: .56rem; color: var(--soil-mid); opacity: .85; }
   .mud-window.remote .pane-controls button { display: none; }
   .mud-window.remote .room-view { box-shadow: inset 0 0 0 2px rgba(60,60,180,.35); }
+
+  /* the wire tape — ported from chat.html's own instrument, riding inside the
+     sharing overlay's diagnostics fold. Every message in and out, in arrival
+     order, newest first so the latest is readable without scrolling. Themed
+     through the same --so-* custom properties the rest of the overlay reads
+     (MUD_SHARE_SKIN re-points those at the burrow's soil/parchment palette),
+     rather than chat's bare --ink/--muted tokens — those stay pinned to the
+     site's light/dark theme regardless of the overlay's own skin, which would
+     read as near-invisible text on the burrow's always-dark card. */
+  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: .4rem 0 .3rem; }
+  .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--so-muted); }
+  .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
+  .meter-n { color: var(--so-ink); font-variant-numeric: tabular-nums; }
+  .tape { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; border-top: 1px solid var(--so-line); }
+  .tape-row { display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .18rem 0 .18rem .2rem; border-bottom: 1px dotted var(--so-line); font-size: .6rem; font-variant-numeric: tabular-nums; }
+  .tape-row:first-child { animation: tape-arrive .6s ease-out; }
+  .tape-bar { align-self: stretch; border-radius: 1px; background: var(--so-muted); }
+  .tape-clock { color: var(--so-muted); }
+  .tape-type { color: var(--so-ink); overflow-wrap: anywhere; }
+  .tape-detail { color: var(--so-muted); text-align: right; white-space: nowrap; }
+  .tape-row[data-dir="out"] .tape-type::before { content: "\\2192 "; color: var(--so-muted); }
+  .tape-row[data-dir="in"] .tape-type::before { content: "\\2190 "; color: var(--so-muted); }
+  .tape-row[data-dir="note"] .tape-type::before { content: "\\00b7 "; color: var(--so-muted); }
+  .tape-row[data-family="facts"] .tape-bar { background: var(--so-good); }
+  .tape-row[data-family="state"] .tape-bar { background: var(--so-accent); }
+  .tape-row[data-family="greeting"] .tape-bar { background: var(--so-warn); }
+  .tape-row[data-family="signal"] .tape-bar { background: var(--so-warn); }
+  .tape-row[data-family="fault"] .tape-bar { background: var(--so-alert); }
+  .tape-row[data-family="fault"] .tape-type { color: var(--so-alert); }
+  .tape-empty { font-family: ${SANS_STACK}; color: var(--so-muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
+  @keyframes tape-arrive { from { background: var(--so-accent-soft); } to { background: transparent; } }
+
   @media (prefers-reduced-motion: reduce) {
     .wave-hand { animation: none; }
+    .tape-row:first-child { animation: none; }
   }
 `;
 
@@ -1132,6 +1165,8 @@ function pageScript() {
   const nodeNameFor = ${nodeNameFor.toString()};
   const offerBlobIn = ${offerBlobIn.toString()};
   const wireStateLabel = ${wireStateLabel.toString()};
+  const tapeRowFor = ${tapeRowFor.toString()};
+  const tapeClock = ${tapeClock.toString()};
   const nodeRowsFor = ${nodeRowsFor.toString()};
   const nodeInitials = ${nodeInitials.toString()};
   const inviteLinkFor = ${inviteLinkFor.toString()};
@@ -2155,6 +2190,7 @@ function pageScript() {
   let nodeClockTimer = null;
   let mintedBlob = "";
   let nodeWaveTimer = null;
+  let channelCount = 0;
 
   // Which seat this page occupies in the handshake — "idle" until something
   // happens, "sponsor" once an invite is minted here, "joiner" once an invite
@@ -2168,7 +2204,12 @@ function pageScript() {
   }
 
   function loadP2p() {
-    if (!p2pLoad) p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
+    if (!p2pLoad) {
+      p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
+      p2pLoad.catch(function (err) {
+        noteTape("note", "fault", "networking unavailable", err && err.message ? err.message : String(err));
+      });
+    }
     return p2pLoad;
   }
   window.tmctP2pLoad = loadP2p;
@@ -2201,6 +2242,35 @@ function pageScript() {
     }
   }
 
+  // The one place a transport gets made, which makes it the one place every
+  // message crossing one can be seen. The room asks for transports through
+  // this factory and never learns it is being watched.
+  function instrumentedTransport() {
+    const transport = p2p.createTransport();
+    const channel = "ch" + (++channelCount);
+    transport.onMessage(function (message) { noteWire("in", message, channel); });
+    transport.onOpen(function () { noteTape("note", "link", "channel open", channel); });
+    transport.onClose(function () { noteTape("note", "link", "channel closed", channel); });
+    return {
+      createOffer: function () {
+        return transport.createOffer().then(function (sdp) { noteTape("note", "signal", "offer minted", channel); return sdp; });
+      },
+      createAnswerFor: function (offerSdp) {
+        return transport.createAnswerFor(offerSdp).then(function (sdp) { noteTape("note", "signal", "answer minted", channel); return sdp; });
+      },
+      completeWithAnswer: function (answerSdp) {
+        noteTape("note", "signal", "answer accepted", channel);
+        return transport.completeWithAnswer(answerSdp);
+      },
+      send: function (message) { transport.send(message); noteWire("out", message, channel); },
+      onMessage: function (fn) { transport.onMessage(fn); },
+      onOpen: function (fn) { transport.onOpen(fn); },
+      onClose: function (fn) { transport.onClose(fn); },
+      close: function () { transport.close(); },
+      get connectionState() { return transport.connectionState; },
+    };
+  }
+
   async function ensureRoom() {
     if (room) return room;
     const mod = await loadP2p();
@@ -2220,10 +2290,11 @@ function pageScript() {
       myNodeId: myNodeId,
       worldId: worldId,
       worldName: worldName,
-      transportFactory: function () { return mod.createTransport(); },
+      transportFactory: instrumentedTransport,
       syncableFacts: function (rows) { return mod.mudSyncableFacts(rows, isState, extraPredicates); },
     });
     room.onStateChanged(function (state) {
+      noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
       // The overlay exists to make one connection. The moment the channel is
       // open its work is done — the lights come back up, and the pill in the
       // header is the way back in.
@@ -2235,12 +2306,17 @@ function pageScript() {
       renderWire();
     });
     room.onPeersChanged(function () { renderNodes(); renderWire(); });
-    room.onFactsChanged(function () { renderNodes(); renderSoon(); });
+    room.onFactsChanged(function (payload) {
+      noteTape("note", "facts", "merged", payload.merged + (payload.merged === 1 ? " fact" : " facts"));
+      renderNodes();
+      renderSoon();
+    });
     await room.start();
     // The burrow's name is written into the graph the moment the room starts,
     // and this version retracts nothing — so the field stops taking edits.
     el("worldNameInput").readOnly = true;
     window.tmctP2pRoom = room;
+    noteTape("note", "link", "world " + worldName, myDisplayName);
     await claimMyAnimals();
     renderWire();
     renderNodes();
@@ -2281,6 +2357,7 @@ function pageScript() {
     el("worldNameInput").readOnly = false;
     mintedBlob = "";
     setOverlayRole("idle", "");
+    noteTape("note", "link", "world closed", worldName);
     renderWire();
     renderNodes();
     // Last, not first: renderWire restates the note for the state it has just
@@ -2288,6 +2365,86 @@ function pageScript() {
     // the only copy"). WHY the room went is the thing worth saying, so it is
     // written over the top rather than under it.
     if (note) el("wireStateNote").textContent = note;
+  }
+
+  // ---- the wire tape: every message, as it happens ------------------------
+  const TAPE_CAP = 240;
+  const TAPE_FAMILY_COLOR = {
+    facts: "var(--so-good)",
+    state: "var(--so-accent)",
+    greeting: "var(--so-warn)",
+    signal: "var(--so-warn)",
+    fault: "var(--so-alert)",
+    link: "var(--so-muted)",
+  };
+  const tapeCounts = new Map();
+  let wireMessageCount = 0;
+
+  function pushTape(entry) {
+    // The meter counts real wire messages only; the tape below shows those
+    // plus the local notes (state changes, a channel opening) that explain
+    // them. Folding notes into the counts would make "12 op" mean two things.
+    if (entry.dir !== "note") {
+      wireMessageCount += 1;
+      tapeCounts.set(entry.type, (tapeCounts.get(entry.type) || 0) + 1);
+    }
+    const tapeEl = el("tape");
+    el("tapeEmpty").hidden = true;
+    const row = document.createElement("li");
+    row.className = "tape-row";
+    row.dataset.dir = entry.dir;
+    row.dataset.family = entry.family;
+    row.dataset.type = entry.type;
+    const bar = document.createElement("i");
+    bar.className = "tape-bar";
+    const clock = document.createElement("span");
+    clock.className = "tape-clock";
+    clock.textContent = tapeClock();
+    const type = document.createElement("span");
+    type.className = "tape-type";
+    type.textContent = entry.type;
+    const detail = document.createElement("span");
+    detail.className = "tape-detail";
+    detail.textContent = entry.detail || "";
+    row.appendChild(bar);
+    row.appendChild(clock);
+    row.appendChild(type);
+    row.appendChild(detail);
+    tapeEl.insertBefore(row, tapeEl.firstChild);
+    while (tapeEl.childElementCount > TAPE_CAP) tapeEl.removeChild(tapeEl.lastElementChild);
+    renderTapeMeter();
+  }
+
+  function noteWire(direction, message, channel) {
+    const row = tapeRowFor(direction, message);
+    pushTape({ dir: direction, family: row.family, type: row.type, detail: row.detail || channel });
+  }
+  function noteTape(dir, family, type, detail) {
+    pushTape({ dir: dir, family: family, type: type, detail: detail });
+  }
+
+  function renderTapeMeter() {
+    const tapeMeterEl = el("tapeMeter");
+    el("tapeTotal").textContent = wireMessageCount + (wireMessageCount === 1 ? " message" : " messages");
+    tapeMeterEl.textContent = "";
+    const counted = [...tapeCounts.entries()].sort(function (a, b) { return b[1] - a[1]; });
+    for (const pair of counted) {
+      const item = document.createElement("span");
+      item.className = "meter-item";
+      item.dataset.type = pair[0];
+      const bar = document.createElement("i");
+      bar.className = "meter-bar";
+      bar.style.background = TAPE_FAMILY_COLOR[tapeRowFor("in", { type: pair[0] }).family] || "var(--so-muted)";
+      const label = document.createElement("span");
+      label.textContent = pair[0];
+      const count = document.createElement("span");
+      count.className = "meter-n";
+      count.textContent = String(pair[1]);
+      item.appendChild(bar);
+      item.appendChild(label);
+      item.appendChild(count);
+      tapeMeterEl.appendChild(item);
+    }
   }
 
   // The state machine is shared with chat.html and the words mostly are too.
