@@ -116,11 +116,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   lives in paris", "where is ann" answers off the taught fact but "where does ann live" resolves
   the term as "ann live" and misses. The term is built in `ask.mjs`'s grammar, not `chat.mjs` —
   the verb belongs in the predicate slot, not glued to the subject.
-- [ ] **The identity/orientation templates still name `--repo` on a web page.** `orientation-empty`
-  and `identity-self` in `data/templates/responses.jsonl` hardcode `--repo <path>` and `npm run
-  example:mini`, so "who are you" reads CLI-flavoured on a browser page. The miss/decline paths
-  now split on `uiContext`; these are template data shared with the CLI, so they need a browser
-  variant plus whatever the template estate guard expects, rather than a one-line branch.
 
 ## Discipline
 
