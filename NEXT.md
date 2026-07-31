@@ -112,16 +112,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`chat.mjs` singularizes verbs on read-back.** "ann lives in paris" stores `mgx:life-in`
-  and reads back as "ann **lifes** in paris" — the singularization pass strips the wrong suffix.
-  Found while landing the chat/ledger ask/turn projector; the projector itself is unaffected
-  (predicates travel as opaque edges), this is `chat.mjs`'s own grammar layer.
-- [ ] **`tmct.turn`'s honest-miss message is CLI-flavoured on web pages.** "how many unicorns are
-  there" on a memory-only page answers "no code graph is loaded yet… index this repo with `tmct
-  index`" — correct advice for the CLI, wrong and confusing on a browser page with no filesystem to
-  index. Pre-existing in `chat.mjs`, shared by every memory-only page (sprites, now ingest); each
-  page currently has to work around it locally rather than the engine giving a page-appropriate
-  miss.
+- [ ] **`ask.mjs` binds "where does X live" to the code definition-locator.** After teaching "ann
+  lives in paris", "where is ann" answers off the taught fact but "where does ann live" resolves
+  the term as "ann live" and misses. The term is built in `ask.mjs`'s grammar, not `chat.mjs` —
+  the verb belongs in the predicate slot, not glued to the subject.
+- [ ] **The identity/orientation templates still name `--repo` on a web page.** `orientation-empty`
+  and `identity-self` in `data/templates/responses.jsonl` hardcode `--repo <path>` and `npm run
+  example:mini`, so "who are you" reads CLI-flavoured on a browser page. The miss/decline paths
+  now split on `uiContext`; these are template data shared with the CLI, so they need a browser
+  variant plus whatever the template estate guard expects, rather than a one-line branch.
 - [ ] **`ask.mjs`'s strategy precedence misfires on 3+ same-class individuals.** "where are the
   disks" (3 disks) is intercepted by the fuzzy code-module resolver and returns a spurious
   ambiguity ("did you mean disk-1, disk-2, disk-3?") before the world-relation fallback — which
