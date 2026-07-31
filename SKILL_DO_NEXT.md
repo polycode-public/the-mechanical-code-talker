@@ -1,0 +1,105 @@
+# SKILL_DO_NEXT.md — work `NEXT.md`'s open items with the coordinator model
+
+This skill turns `NEXT.md`'s **Open items** section into a dispatched batch of worktree-isolated
+sub-agents, keeps `NEXT.md` itself as the live tracking surface while they run, and lands each
+one's work the moment it's ready rather than waiting for the whole batch.
+
+> **Invoke it by telling a session:** *"Follow `SKILL_DO_NEXT.md`"*, or "work the open items in
+> NEXT.md", or "do NEXT".
+
+## When to run this
+
+- `NEXT.md`'s **Open items** section has one or more entries and nobody is actively working them.
+- A prior batch just landed and items remain — a landed batch should be followed by dispatching
+  the next one, not by stopping (see `CLAUDE.md`'s "an approved plan is authorization" rule; this
+  skill's own dispatch is exactly that authorization for the batch it launches).
+- The operator asks to "work the backlog", "clear NEXT.md", or names this skill directly.
+
+## Procedure
+
+1. **Read `NEXT.md`'s Open items fresh, don't work from memory of a prior run.** The list changes
+   shape every time a batch lands — an item from three sessions ago may already be gone.
+2. **Filter before dispatching.** Not every open item is actionable code work. A gotcha note (a
+   resolver-behavior reminder, a naming convention learned the hard way) documents something
+   already correct — it stays in `NEXT.md` as reference, it doesn't get a track. Only dispatch
+   items that describe a real, boundable change.
+3. **Decompose into tracks with clear file-ownership boundaries.** Two tracks that both need to
+   touch the same file are a merge-collision risk, not two independent tracks — either sequence
+   them (land the smaller one first, dispatch the second against updated `main`) or scope each to
+   non-overlapping regions of the shared file and say so explicitly in both briefs, the way you'd
+   flag it for the coordinator to watch at merge time.
+4. **Pick each track's model tier deliberately**, per `CLAUDE.md`'s coordinator ladder — group
+   tracks needing similar depth so one hard track doesn't price a whole batch at the top tier:
+   - **Opus** — novel design work: a projector/algorithm that doesn't exist yet, a decision with
+     real architectural weight, anything in a large/subtle engine file.
+   - **Sonnet** — a bounded decision plus mechanical implementation against an existing pattern
+     (porting a feature from one page to another, extending a contract that already has worked
+     examples to follow).
+   - **Haiku** — pure mechanical sweeps: renames, manifest updates, format-only edits.
+5. **Write `NEXT.md`'s in-flight tracking block before dispatching**, one line per track naming
+   what it covers and its status (`started`). Commit this alone, docs-only — it's the record that
+   a batch is running even if the session dispatching it ends before any track lands.
+6. **Dispatch each track as an isolated-worktree agent**, self-contained (fresh agents carry no
+   conversation context — the brief must stand alone). Every brief needs:
+   - Enough project background to work without asking (tmct is pure-JS, deterministic, no LLM in
+     the product path — state this explicitly if the task is anywhere near the query/answer path,
+     so an agent never reaches for an API call as a shortcut).
+   - The exact file-ownership list — what it owns, what it must not touch and why (another track
+     owns it concurrently).
+   - **Minimal testing only**: `npm run test:smoke` after each meaningful edit, `npm run test:fast`
+     plus the specific unit tests covering touched files before its final commit. No full suite,
+     no e2e/Playwright — that's the coordinator's job, after merge, at the actual push moment.
+   - **Git discipline**: confirm repo-local identity, commit early and often with clean messages,
+     never `git stash`/`reset --hard`/`checkout --`/`clean`, never push, never merge to `main`,
+     never edit `NEXT.md` (the coordinator owns it — concurrent edits from multiple tracks are a
+     guaranteed collision on one file).
+   - **A report-back contract**: what it implemented and why, any bugs found along the way even if
+     unrelated to the task (name file/line), exact test commands run with pass/fail counts, and
+     anything deliberately left out of scope and why.
+7. **As each track's completion notification arrives**, land it immediately — don't wait for
+   siblings:
+   - `git status --short` inside the agent's worktree first. Uncommitted work is a real loss if
+     skipped, not just an oversight to note.
+   - `cd` to the actual repo root and confirm (`pwd`, `git branch --show-current`) before merging —
+     a stale working directory silently merging inside a worktree instead of `main` is a known
+     failure mode.
+   - `git merge --no-ff` with a message naming the track and what it covers.
+   - Run that track's blast-radius tests plus `npm run test:fast` on the merged `main`, not just
+     trust the agent's own report.
+   - Green: `git push`. Then `git worktree remove` and `git branch -d` the merged branch — leaving
+     it is how `.claude/worktrees/` and stale branches silently accumulate.
+   - Red: don't push through it. Diagnose before merging the next track, since a broken `main`
+     blocks every subsequent push in the batch.
+8. **Update `NEXT.md` in the same breath as each landing**, not batched at the end. Move the
+   track's in-flight line to a landed note (commit SHA, test counts), and remove the item it
+   resolved from Open items — or narrow it, if the track only closed part of a multi-part item.
+   **Any bug a track's report surfaces gets its own tracked entry** — fold a small, safe one into
+   the current fix per `CLAUDE.md`'s "don't narrow scope on your own judgment" rule; a large or
+   engine-wide one (affects more than the page being worked) gets logged as its own Open item
+   instead of attempted mid-track, and say why explicitly.
+9. **Track the build honestly, without editorializing.** State what CI actually shows — which
+   stage passed, which didn't, why if known — and leave it there unless asked for more. A known,
+   already-documented infra blocker doesn't need re-explaining every time it's mentioned.
+10. **Roll the patch version once the build is green** (per whatever this project's actual roll
+    command is at the time — check `package.json`'s scripts, don't assume a name), running the
+    full suite before that push per `CLAUDE.md`'s own rule (the one moment the full suite is
+    mandatory, regardless of how narrow every track's own testing was).
+11. **Loop.** Anything still open — an item no track picked up, a bug logged during landing, a
+    track that failed and needs a retry — becomes the next batch. Dispatch it the same way, don't
+    stop to ask permission if the operator's own instruction already covers "keep going" for this
+    kind of batch.
+
+## What NOT to do
+
+- Don't dispatch a track for an item that's a documentation note, not a task — check first.
+- Don't let a sub-agent push, merge to `main`, or edit `NEXT.md` — those are the coordinator's own
+  integration work, and letting several agents touch `NEXT.md` concurrently guarantees a conflict.
+- Don't run the full suite inside a sub-agent — `test:fast` plus a named blast radius is the rung
+  that replaces it for worktree work; the full suite is for the coordinator's own push to `main`.
+- Don't batch every track's merge for the end of the session — merge, test, and push each one as
+  it lands, so a slow track doesn't hold back four fast ones.
+- Don't silently drop a bug a sub-agent surfaces because it's outside the current track's scope —
+  track it in `NEXT.md`, even if fixing it is deferred.
+- Don't leave a merged worktree or its branch behind — remove both in the same breath as the merge.
+- Don't re-litigate or re-explain a known, already-tracked blocker (e.g. an external infra issue)
+  every time the build comes up — state the current fact once and move on.
