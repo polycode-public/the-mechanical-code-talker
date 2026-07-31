@@ -62,6 +62,55 @@ export function kindNounAnaphoraHint(text) {
   return m ? (ENTITY_TO_TYPE[m[2].toLowerCase()] || null) : null;
 }
 
+// ---- the dated teach frame: "<sentence> as of <date>" ----
+
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/** A closed trailing suffix, not a grammar change: three accepted date forms
+ *  ("as of 2019", "as of 2019-03-01", "as of march 2019"), anchored to the
+ *  end of input with trailing punctuation tolerated. "as of" only — "as at",
+ *  "back in", and bare "in 2019" stay out (the last is ambiguous with
+ *  locatives: "the dog is in 2019" vs "the meeting is in room 4"). */
+const DATED_TEACH_SUFFIX_RE =
+  /\s+as\s+of\s+((?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:19|20)\d{2})\s*[.!?]*$/i;
+
+/** Read-only probe: does `text` carry a trailing "as of <date>" suffix? A hit
+ *  returns `{ stripped, observedAt, dateText }` — `stripped` is the sentence
+ *  with the suffix removed (exactly the shape the teach lanes already parse),
+ *  `dateText` the matched date phrase verbatim (for the acknowledgment echo),
+ *  and `observedAt` the ISO instant the date names, always Date.parse-able.
+ *  No hit, or a suffix with nothing left to teach, returns null. Same
+ *  read-only-probe shape as kindNounAnaphoraHint above — a helper a teach
+ *  lane consults, never a mutation of normalizeQuery's own text->text path.
+ *
+ *  The stored instant is the START of the named period (a bare year ->
+ *  <yyyy>-01-01T00:00:00.000Z; month+year -> the 1st of that month; a full
+ *  date -> that day, all at midnight UTC) — the CONSERVATIVE reading for
+ *  latest-observation-wins: it can under-claim how recent the observation
+ *  was, never over-claim it. */
+export function datedTeachSuffix(text) {
+  const s = String(text || "");
+  const m = DATED_TEACH_SUFFIX_RE.exec(s);
+  if (!m) return null;
+  const stripped = s.slice(0, m.index).trim();
+  if (!stripped) return null;
+  const dateText = m[1];
+  const isoForm = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(dateText);
+  let observedAt;
+  if (isoForm) {
+    const [, year, month, day] = isoForm;
+    observedAt = `${year}-${month || "01"}-${day || "01"}T00:00:00.000Z`;
+  } else {
+    const [, monthName, year] = /^([a-z]+)\s+(\d{4})$/i.exec(dateText);
+    const monthNum = String(MONTH_NAMES.indexOf(monthName.toLowerCase()) + 1).padStart(2, "0");
+    observedAt = `${year}-${monthNum}-01T00:00:00.000Z`;
+  }
+  return { stripped, observedAt, dateText };
+}
+
 // Every relation verb phrase, as one longest-first alternation — feeds the
 // DOES-X-VERB-ANYTHING-ELSE frame below without hardcoding a parallel list.
 const VERB_ALTERNATION = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");

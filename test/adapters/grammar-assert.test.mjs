@@ -134,6 +134,33 @@ test("assertSentence: unknown words return the residue parse with empty ids and 
   }
 });
 
+test("assertSentence: an observedAt option passes through to every appended triple's mgx:observedAt", async () => {
+  const dir = await tmpRepo();
+  try {
+    const r = await assertSentence(dir, "every module is a unit", { provenance: PROV, observedAt: "2019-03-01T00:00:00.000Z" });
+    const m = await loadMemory(dir);
+    const [fact] = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(attr(fact, "observedAt"), "2019-03-01T00:00:00.000Z");
+    const [row] = readFactRows(m);
+    assert.equal(row.assertions[0].observedAt, "2019-03-01T00:00:00.000Z");
+    assert.equal(row.id, r.ids[0]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("assertSentence: no observedAt option stores no mgx:observedAt at all — never fabricated", async () => {
+  const dir = await tmpRepo();
+  try {
+    await assertSentence(dir, "every module is a unit", { provenance: PROV });
+    const m = await loadMemory(dir);
+    const [fact] = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(attr(fact, "observedAt"), undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("assertSentence: honors a caller-extended lexicon end-to-end", async () => {
   const dir = await tmpRepo();
   try {

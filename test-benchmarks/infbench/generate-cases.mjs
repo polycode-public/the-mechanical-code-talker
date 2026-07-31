@@ -1257,16 +1257,17 @@ function b2PropertyInheritance(rng) {
 // a multi-valued predicate merges (two facts, no disagreement); a second
 // object under a single-valued possessive keeps BOTH and surfaces both
 // (never silently resolved); and a dated "as of <year>" teach — the
-// sun/newspaper shape — pins today's floor (the dated surface is declined,
-// so only the undated assertion stores; verified live 4.0.0) with a ceiling
-// naming the PLAN_FACT.md lift. The quantified-has teaches are chat lanes
-// and the dated surface is deliberately unparsed, so those premises are
-// unlinted (as in b2PropertyInheritance/b1Existential); the possessive and
-// subclass premises lint as usual. The pool is gated on the same wink-nlp
-// NOUN check b2PropertyInheritance gates on, for the same reason (the
-// quantified-has teach declines a verb-tagged subject). Chat-arm only
-// throughout: every cell grades the STORE's second-assertion behavior, which
-// the kernel's stateless closure has no analogue for.
+// sun/newspaper shape — reaches the SAME both-kept resolution once the
+// dated-teach frame stores the year-2019 claim as its own record (this
+// build; PLAN_FACT.md's dated teach frame). The quantified-has teaches are
+// chat lanes and the "as of <year>" suffix is a chat-layer strip OUTSIDE
+// parseAce (ACE's own grammar never learns it), so both stay unlinted (as in
+// b2PropertyInheritance/b1Existential); the plain possessive and subclass
+// premises lint as usual. The pool is gated on the same wink-nlp NOUN check
+// b2PropertyInheritance gates on, for the same reason (the quantified-has
+// teach declines a verb-tagged subject). Chat-arm only throughout: every cell
+// grades the STORE's second-assertion behavior, which the kernel's stateless
+// closure has no analogue for.
 // ======================================================================
 function c2SiblingResolution(rng) {
   const cases = [];
@@ -1327,8 +1328,9 @@ function c2SiblingResolution(rng) {
         note: "Two different objects for one single-valued possessive are a real disagreement: both facts stay stored and the recall surfaces both — 'both kept, never silently resolved' is the contract PLAN_FACT.md's contradiction default keeps, and an answer that quietly dropped either object fails the mentions pin.",
       }));
     }
-    { // observed-at-conflict: the sun/newspaper shape. Today's floor: the
-      // dated surface is declined, so only the undated assertion stores.
+    { // observed-at-conflict: the sun/newspaper shape, raised in place (this
+      // build; the c1Cardinality fixed-in-place precedent) now that the
+      // dated-teach frame stores the 2019 claim instead of declining it.
       const prop = propOrder[(2 * i + 1) % propOrder.length];
       const owner = mintIndividual();
       const o1 = mintIndividual();
@@ -1338,9 +1340,8 @@ function c2SiblingResolution(rng) {
         arms: ["chat"], checkType: "recall",
         premises: [`${owner}'s ${prop} is ${o1} as of 2019`, `${owner}'s ${prop} is ${o2}`],
         query: `what do you know about ${owner}`,
-        expect: { mentions: [o2], entailed: [] },
-        ceiling: "PLAN_FACT.md dated-teach frame ('as of <date>' -> mgx:observedAt) + latest-observation-wins sibling resolution",
-        note: "The sun/newspaper shape: a 2019-dated claim beside an undated live one. Floor today (verified live 4.0.0): the 'as of' surface is declined, only the undated assertion stores, and the recall mentions it alone. Once the dated-teach frame ships, the 2019 assertion stores as its own dated record and this pin must be raised IN PLACE to mentions [both], with the undated assertion still the preferred current value (effectiveObservedAt ranks the live teach as observed now, after 2019) — the c1Cardinality fixed-in-place precedent: leaving the stale floor pinned after the capability ships would itself be the regression.",
+        expect: { mentions: [o1, o2], entailed: [] },
+        note: "The sun/newspaper shape: a 2019-dated claim beside an undated live one. Verified live (this build): the dated-teach frame stores the 2019 assertion as its own record (mgx:observedAt) beside the undated one, and tmct:<prop> resolves via the default contradiction strategy (memory/resolution.mjs) — the same strategy contradiction-both-kept exercises above — so both stay stored and the recall mentions both. observedAt itself only changes RANKING for the closed latest-observation-wins predicate table; a contradiction-strategy predicate's both-kept outcome is the same whichever side carries the date. What changed is that the dated claim now stores at all, instead of the surface being declined outright.",
       }));
     }
   }

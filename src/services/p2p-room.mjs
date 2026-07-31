@@ -83,17 +83,26 @@ const ALREADY_PEER_LABELED = /^teach:peer:/;
  *  wave replayed inside a sync response reading as freshly waved, and it makes
  *  the rewrite idempotent: a peer that relays a tag it received produces the
  *  same tag again, so the union stops growing once every peer has seen it. */
-function wireProvenanceTags(provenance, identity, fallbackTimestamp) {
+/** `observedAtBySegment` maps a STORED (pre-relabel) tag to the observedAt its
+ *  own record carries, when it has one — the dated-teach frame's own
+ *  `mgx:observedAt`, threaded onto the wire fact each tag becomes. Returns
+ *  `{ tag, observedAt }` pairs, deduped by the RELABELED tag (the first
+ *  observedAt seen for a given output tag wins, matching the prior de-dup by
+ *  tag string alone). */
+function wireProvenanceTags(provenance, identity, fallbackTimestamp, observedAtBySegment) {
   const stored = String(provenance || "").split(" | ").filter(Boolean);
-  if (!stored.length) return [""];
-  const tags = new Set();
+  if (!stored.length) return [{ tag: "", observedAt: undefined }];
+  const byTag = new Map();
   for (const segment of stored) {
-    if (ALREADY_PEER_LABELED.test(segment)) { tags.add(segment); continue; }
-    const assertedAt = latestProvenanceTimestamp(segment);
-    const timestamp = assertedAt === null ? fallbackTimestamp : new Date(assertedAt).toISOString();
-    tags.add(relabelForBroadcast(segment, identity.displayName, timestamp, identity.nodeId));
+    const observedAt = observedAtBySegment?.get(segment);
+    const tag = ALREADY_PEER_LABELED.test(segment) ? segment : (() => {
+      const assertedAt = latestProvenanceTimestamp(segment);
+      const timestamp = assertedAt === null ? fallbackTimestamp : new Date(assertedAt).toISOString();
+      return relabelForBroadcast(segment, identity.displayName, timestamp, identity.nodeId);
+    })();
+    if (!byTag.has(tag)) byTag.set(tag, observedAt);
   }
-  return [...tags];
+  return [...byTag].map(([tag, observedAt]) => ({ tag, observedAt }));
 }
 
 /** This store's own node id, minted on first use and never regenerated: it
@@ -120,14 +129,32 @@ const isFactShaped = (f) => !!f
  *  already stores, and a joined union arrives as one opaque string that matches
  *  none of them — so a fact whose provenance had grown would union again on
  *  every hop and never settle. Sending each tag on its own row keeps the merge
- *  idempotent, and a repeated triple inside one batch unions correctly. */
-const toWireFacts = (row, identity, fallbackTimestamp) =>
-  wireProvenanceTags(row.provenance, identity, fallbackTimestamp).map((provenance) => ({
-    subject: row.subject,
-    predicate: row.predicate,
-    object: row.object,
-    provenance,
-  }));
+ *  idempotent, and a repeated triple inside one batch unions correctly.
+ *
+ *  `mgx:observedAt` is record content the same way the tag is: each of
+ *  row.assertions is one live head, and its own `provenance` (that head's own
+ *  tags) is the join key back to which outgoing wire fact carries its
+ *  observedAt. A dated taught fact's broadcast carries the date, so a peer
+ *  that receives it can resolve it against a fresher OR staler claim the same
+ *  way the local store already does (memory/resolution.mjs's
+ *  effectiveObservedAt chain). */
+const toWireFacts = (row, identity, fallbackTimestamp) => {
+  const observedAtBySegment = new Map();
+  for (const a of row.assertions || []) {
+    if (!a.observedAt) continue;
+    for (const segment of String(a.provenance || "").split(" | ").filter(Boolean)) {
+      observedAtBySegment.set(segment, a.observedAt);
+    }
+  }
+  return wireProvenanceTags(row.provenance, identity, fallbackTimestamp, observedAtBySegment)
+    .map(({ tag, observedAt }) => ({
+      subject: row.subject,
+      predicate: row.predicate,
+      object: row.object,
+      provenance: tag,
+      ...(observedAt ? { observedAt } : {}),
+    }));
+};
 
 /** A room: one shared world, one local fact store, and however many direct
  *  peer connections have been made into it.
@@ -321,6 +348,11 @@ export function createP2pRoom({
       predicate: f.predicate,
       object: f.object,
       provenance: typeof f.provenance === "string" ? f.provenance : "",
+      // Presence-wins on an id collision with equal assertion timestamps is
+      // already the join appendFacts' own supersedesPriorAssertion performs —
+      // this is the passthrough that lets a dated taught fact's wire fact
+      // reach it at all.
+      ...(typeof f.observedAt === "string" && f.observedAt ? { observedAt: f.observedAt } : {}),
     })));
     await sortFactIndividualsById();
     await refreshRows();

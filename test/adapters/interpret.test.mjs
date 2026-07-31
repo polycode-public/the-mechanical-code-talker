@@ -13,7 +13,7 @@ import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../../
 import { mergeStrategyResults, alternateLines, sameParse } from "../../src/domain/interpret/merge.mjs";
 import {
   applyPreambleFrames, applySubordinationFrames, applySelfCorrectionFrames, applyConditionalFrames,
-  COUNTERFACTUAL_RE, normalizeQuery,
+  COUNTERFACTUAL_RE, normalizeQuery, datedTeachSuffix,
 } from "../../src/domain/interpret/normalize.mjs";
 import { stripNoise } from "../../src/domain/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../../src/domain/ask.mjs";
@@ -738,4 +738,43 @@ test("the know/want wrappers never unwrap a non-interrogative remainder, and lon
   );
   // the direct question passes through unchanged (no rewrite loop)
   assert.equal(applyPreambleFrames("what is a dog"), "what is a dog");
+});
+
+test("datedTeachSuffix recognizes the three closed date forms and strips the suffix", () => {
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of 2019"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-01-01T00:00:00.000Z", dateText: "2019" },
+  );
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of 2019-03-01"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-03-01T00:00:00.000Z", dateText: "2019-03-01" },
+  );
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of march 2019"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-03-01T00:00:00.000Z", dateText: "march 2019" },
+  );
+  // month + year only carries the year+month down to the 1st — the START of
+  // the named period, never the middle or end.
+  assert.equal(datedTeachSuffix("x is y as of december 2020").observedAt, "2020-12-01T00:00:00.000Z");
+  // trailing punctuation is tolerated
+  assert.equal(datedTeachSuffix("x is y as of 2019.").stripped, "x is y");
+  assert.equal(datedTeachSuffix("x is y as of 2019!").stripped, "x is y");
+});
+
+test("datedTeachSuffix rejects every non-'as of' trigger and locative-ambiguous bare years", () => {
+  assert.equal(datedTeachSuffix("x is y as at 2019"), null);
+  assert.equal(datedTeachSuffix("x is y back in 2019"), null);
+  assert.equal(datedTeachSuffix("the dog is in 2019"), null);
+  // no content left once the suffix is stripped — nothing to teach
+  assert.equal(datedTeachSuffix("as of 2019"), null);
+  // no suffix at all
+  assert.equal(datedTeachSuffix("x is y"), null);
+});
+
+test("datedTeachSuffix returns every parsed instant Date.parse-able, and every returned instant is midnight UTC", () => {
+  for (const text of ["x is y as of 2019", "x is y as of 2019-07-15", "x is y as of july 2019"]) {
+    const hit = datedTeachSuffix(text);
+    assert.ok(Number.isFinite(Date.parse(hit.observedAt)), `${text} -> ${hit.observedAt} should be Date.parse-able`);
+    assert.match(hit.observedAt, /T00:00:00\.000Z$/);
+  }
 });

@@ -251,3 +251,97 @@ test("a bare property teach on an UNKNOWN subject stores with an empty quantifie
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- the dated teach frame: "<sentence> as of <date>" ----
+
+test("the ACE assert lane stores mgx:observedAt from a trailing 'as of <date>' suffix, and the acknowledgment echoes the date", async () => {
+  const dir = await mem("dated-ace");
+  try {
+    const taught = await runTurn("every module is a component as of 2019", { config: CONFIG, memoryDir: dir, sessionId: "ace1" });
+    assert.equal(taught.record.miss, false);
+    assert.match(taught.answer, /\(as of 2019\)/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].assertions[0].observedAt, "2019-01-01T00:00:00.000Z");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the teach-frame lane (ownership) stores mgx:observedAt from a trailing 'as of <month year>' suffix", async () => {
+  const dir = await mem("dated-teachlane");
+  try {
+    const taught = await runTurn("sam owns TaskController as of march 2019", { config: CONFIG, memoryDir: dir, sessionId: "tl1" });
+    assert.equal(taught.record.miss, false);
+    assert.match(taught.answer, /\(as of march 2019\)/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].predicate, "mgx:ownedBy");
+    assert.equal(rows[0].assertions[0].observedAt, "2019-03-01T00:00:00.000Z");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a full yyyy-mm-dd date stores that exact day at midnight UTC", async () => {
+  const dir = await mem("dated-full");
+  try {
+    await runTurn("every module is a component as of 2019-07-15", { config: CONFIG, memoryDir: dir, sessionId: "full1" });
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows[0].assertions[0].observedAt, "2019-07-15T00:00:00.000Z");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'as at'/'back in' and bare 'in <year>' never trigger the dated-teach frame — the suffix is left as ordinary (unrecognized) text", async () => {
+  const dir = await mem("dated-rejected-forms");
+  try {
+    // Neither phrasing is "as of", so the sentence is parsed AS TYPED — the
+    // trailing words are residue to the grammar, an honest miss either way.
+    const asAt = await runTurn("every module is a component as at 2019", { config: CONFIG, memoryDir: dir, sessionId: "r1" });
+    assert.doesNotMatch(asAt.answer, /noted — remembered/);
+    const backIn = await runTurn("every module is a component back in 2019", { config: CONFIG, memoryDir: dir, sessionId: "r2" });
+    assert.doesNotMatch(backIn.answer, /noted — remembered/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "neither phrasing stored a fact");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the failure-mode invariant: a dated teach that fails to parse never stores undated", async () => {
+  const dir = await mem("dated-failure-mode");
+  try {
+    // Neither "flonk" nor "zorpish" is a lexicon word, and the shape isn't any
+    // teach-lane fallback's asymmetry (a bare unmarked subject+object, no
+    // grounding on either side) — this sentence declines UNDATED too (the
+    // pre-existing floor), so the dated form must decline exactly the same
+    // way, never falling back to a silent undated store.
+    const undated = await runTurn("flonk is zorpish", { config: CONFIG, memoryDir: dir, sessionId: "u1" });
+    assert.doesNotMatch(undated.answer, /noted — remembered/, "the undated floor: this sentence already declines");
+    const dated = await runTurn("flonk is zorpish as of 2019", { config: CONFIG, memoryDir: dir, sessionId: "u2" });
+    assert.doesNotMatch(dated.answer, /noted — remembered/, "the dated form must decline too, never store undated");
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "nothing was stored on either turn");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a question that happens to end in 'as of <year>' keeps asking — the dated-teach probe never rewrites a non-teach turn", async () => {
+  const dir = await mem("dated-question");
+  try {
+    // "module is a component" was never taught, so a genuine query for it is
+    // an honest miss over the empty store — not a silently-stripped teach.
+    const asked = await runTurn("what is a module as of 2019?", { config: CONFIG, memoryDir: dir, sessionId: "q1" });
+    assert.doesNotMatch(asked.answer, /noted — remembered/, "a question never writes, suffix or not");
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

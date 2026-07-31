@@ -39,7 +39,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "../domain/interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -2819,7 +2819,7 @@ const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessi
 /** Reify one teach-lane fact + confirm (shared by the property and ownership
  *  frames). Lazy + failure-tolerated: a write failure degrades to null (the
  *  teach-miss text stands), never a crash. */
-async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "" }) {
+async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "", observedAt = "", dateText = "" }) {
   try {
     const { appendFact, normFactTerm } = await import("../adapters/memory/core.mjs");
     const s = normFactTerm(subject);
@@ -2829,9 +2829,13 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
       subject: s, predicate, object: o,
       provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
       ...(quantifier ? { quantifier } : {}),
+      ...(observedAt ? { observedAt } : {}),
     });
     const phrase = predicatePhrase(predicate);
-    return { text: `noted — remembered: ${s} ${phrase} ${o}`, via: "assert", miss: false };
+    // The dated-teach frame's own echo: the user typed the date, so the
+    // acknowledgment shows it was registered rather than silently dropped.
+    const dateSuffix = observedAt && dateText ? ` (as of ${dateText})` : "";
+    return { text: `noted — remembered: ${s} ${phrase} ${o}${dateSuffix}`, via: "assert", miss: false };
   } catch {
     return null;
   }
@@ -3084,7 +3088,7 @@ async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, gra
  *  the SUBJECT, not about the "remember that" wrapper). Only the "every"
  *  determiner records a quantifier (point 3: "a"/bare/"your" read as one
  *  specific entity, not a class-level generalization). */
-async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
+async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3127,14 +3131,14 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
-      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
     });
   }
   if (lookupAdjective(lex, objectRaw)) {
     // property assertions are about ONE specific entity — never a quantifier,
     // even when phrased with "every" (point 3).
     return teachFact(memoryDir, sessionId, {
-      subject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+      subject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, observedAt, dateText,
     });
   }
   return null; // Y unknown too — decline honestly, never guess
@@ -3211,7 +3215,7 @@ async function objectReadsAsNonNoun(word) {
     return false;
   }
 }
-async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false, graph = null }, cache = null) {
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false, graph = null, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3256,7 +3260,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
     ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
     : subjectRaw;
   return teachFact(memoryDir, sessionId, {
-    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
   });
 }
 
@@ -3309,7 +3313,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
  *  otherwise provide. "the cache is bespoke" and "Mary is female" both carry
  *  one of those signals (the leading "the", and capitalization,
  *  respectively); "module is banana" carries none. */
-async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph = null }, cache = null) {
+async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph = null, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3348,7 +3352,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
       ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
       : subjectRaw;
     return teachFact(memoryDir, sessionId, {
-      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every",
+      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every", observedAt, dateText,
     });
   }
   // Subject-side groundedness — strip a leading "the"/"a"/"an" first
@@ -3369,7 +3373,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const subjectGrounded = capitalized || factGrounded || genericAnchor || lexiconGrounded;
   if (!subjectGrounded) return null; // no deliberate-entity signal — never a guessed mint
   return teachFact(memoryDir, sessionId, {
-    subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+    subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, observedAt, dateText,
   });
 }
 
@@ -4294,7 +4298,7 @@ const NEGATIVE_UNIVERSAL_TEACH_RE = /^no\s+([\w-]+)\s+(is|are)\s+(?:an?\s+)?(?:(
 /** The mint (or the reflexive refusal) for a NEGATIVE_UNIVERSAL_TEACH_RE
  *  match, shared by teachLane and the ACE-path reflexive gate: null when the
  *  sentence isn't this shape. */
-async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
+async function negativeUniversalTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
   const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_TEACH_RE);
   if (!m || !memoryDir) return null;
   const plural = m[2].toLowerCase() === "are";
@@ -4308,7 +4312,7 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
   }
   const { DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
   const stored = await teachFact(memoryDir, sessionId, {
-    subject, predicate: DISJOINT_PREDICATE, object,
+    subject, predicate: DISJOINT_PREDICATE, object, observedAt, dateText,
   });
   if (!stored) {
     return {
@@ -4335,13 +4339,13 @@ const NEGATIVE_UNIVERSAL_CAN_TEACH_RE = /^no\s+([\w-]+)\s+can\s+([a-z][\w-]*)[.!
 /** The mint for a NEGATIVE_UNIVERSAL_CAN_TEACH_RE match, mirroring
  *  negativeUniversalTeach's own shape: null when the sentence isn't this
  *  shape. */
-async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId }) {
+async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
   const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_CAN_TEACH_RE);
   if (!m || !memoryDir) return null;
   const subject = singularizeSurface(m[1]);
   const verb = m[2].toLowerCase();
   const stored = await teachFact(memoryDir, sessionId, {
-    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb,
+    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb, observedAt, dateText,
   });
   if (!stored) {
     return {
@@ -4404,7 +4408,26 @@ async function teachExclusionReason(sentence) {
 }
 export { teachExclusionReason };
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG, observedAt = "", dateText = "" }) {
+  // THE DATED TEACH FRAME — "<sentence> as of <date>" carries an explicit
+  // mgx:observedAt past the same shapes this lane already teaches. Tried
+  // ONCE, recursively, on the suffix-stripped text, the same
+  // "rewrap and recurse into this same lane" idiom the conjunction pre-pass
+  // below already uses. A miss on the stripped text falls through to the
+  // untouched ORIGINAL query below — a question that happens to end in
+  // "as of 2019" must keep asking, never get silently rewritten (see
+  // datedTeachSuffix's own docblock) — and a dated teach that fails to parse
+  // must never fall back to storing the same sentence undated.
+  if (!observedAt && memoryDir) {
+    const suffix = datedTeachSuffix(String(query));
+    if (suffix) {
+      const dated = await teachLane(suffix.stripped, {
+        memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig,
+        observedAt: suffix.observedAt, dateText: suffix.dateText,
+      });
+      if (dated && !dated.miss) return dated;
+    }
+  }
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
   // corrupt TEACH_RE's own match, so strip it first. applyPreambleFrames is
@@ -4520,7 +4543,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, observedAt, dateText });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -4678,7 +4701,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const positive = priorRows.find((r) => r.subject === negSubject && r.predicate === SUBCLASS_PREDICATE && r.object === negObject);
       if (positive) {
         const stored = await teachFact(memoryDir, sessionId, {
-          subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject,
+          subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject, observedAt, dateText,
         });
         if (stored) {
           return {
@@ -4812,8 +4835,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const negUniversalSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     if (memoryDir && !QUESTION_LEAD_RE.test(negUniversalSrc)
       && !(await hasMidSentenceInterrogative(negUniversalSrc))) {
-      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId })
-        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId });
+      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId, observedAt, dateText })
+        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId, observedAt, dateText });
       if (negUniversal) return negUniversal;
     }
   }
@@ -4837,7 +4860,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
     && (wrapped || /^[A-Z]/.test(own[1]) || /^[A-Z]/.test(own[2]))) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1],
+      subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4855,7 +4878,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     && (wrapped || /^[A-Z]/.test(ownPassive[2]) || /^[A-Z]/.test(ownPassiveSubject)
       || MODULE_PATH_RE.test(ownPassiveSubject))) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2],
+      subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4868,7 +4891,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const relatedTo = ownSrc.match(RELATED_TO_TEACH_RE);
   if (relatedTo && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: relatedTo[1], predicate: "mgx:relatedTo", object: relatedTo[2],
+      subject: relatedTo[1], predicate: "mgx:relatedTo", object: relatedTo[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4884,7 +4907,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
   if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
+      subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4896,14 +4919,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const genitive = ownSrc.match(GENITIVE_RELATION_TEACH_RE);
   if (genitive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: genitive[1], predicate: await generalVerbPredicate(genitive[3]), object: genitive[2],
+      subject: genitive[1], predicate: await generalVerbPredicate(genitive[3]), object: genitive[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
   const genitiveRev = ownSrc.match(GENITIVE_RELATION_TEACH_REV_RE);
   if (genitiveRev && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1],
+      subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4918,7 +4941,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     ? await matchRelationalVerbTeach(ownSrc) : null;
   if (relVerb) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object,
+      subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object, observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4938,7 +4961,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const hasMethod = ownSrc.match(TEACH_HAS_METHOD_RE);
   if (hasMethod && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`,
+      subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`, observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -5241,7 +5264,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const rendersAs = ownSrc.match(RENDERS_AS_TEACH_RE);
   if (rendersAs && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2],
+      subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -5259,7 +5282,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (wrapped && memoryDir && !QUESTION_LEAD_RE.test(wrapped) && !(await hasMidSentenceInterrogative(wrapped))) {
     const gv = await generalVerbTeach(wrapped);
     if (gv) {
-      const stored = await teachFact(memoryDir, sessionId, gv);
+      const stored = await teachFact(memoryDir, sessionId, { ...gv, observedAt, dateText });
       if (stored) return stored;
     }
   } else if (!wrapped && memoryDir && !QUESTION_LEAD_RE.test(correctMisspellings(raw))
@@ -5313,14 +5336,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         if (!canLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
         if (await isGroundedTerm(canSingular, canLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb,
+            subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb, observedAt, dateText,
           });
           if (stored) return stored;
         }
       }
       const gv = await generalVerbTeach(raw);
       if (gv) {
-        const stored = await teachFact(memoryDir, sessionId, gv);
+        const stored = await teachFact(memoryDir, sessionId, { ...gv, observedAt, dateText });
         if (stored) return stored;
       }
     }
@@ -5359,7 +5382,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const compPredicate = `mgx:${comp[2].toLowerCase().replace(/\s+/g, "-")}-than`;
       const stored = await teachFact(memoryDir, sessionId, {
         subject: comp[1].trim(), predicate: compPredicate,
-        object: comp[3].trim().replace(/[.!?]+$/, ""),
+        object: comp[3].trim().replace(/[.!?]+$/, ""), observedAt, dateText,
       });
       if (stored) return stored;
     }
@@ -5378,7 +5401,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const pred = `mgx:${pp[2].toLowerCase()}-${pp[3].toLowerCase()}`;
         const stored = await teachFact(memoryDir, sessionId, {
           subject: pp[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
-          object: participleObject(pp[4]),
+          object: participleObject(pp[4]), observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -5393,11 +5416,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const subject = np[1].trim();
         const relPred = `mgx:${np[4].toLowerCase()}-${np[5].toLowerCase()}`;
         const isaStored = await teachFact(memoryDir, sessionId, {
-          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]),
+          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]), observedAt, dateText,
         });
         const relStored = await teachFact(memoryDir, sessionId, {
           subject, predicate: negated ? negatedPredicate(relPred) : relPred,
-          object: participleObject(np[6]),
+          object: participleObject(np[6]), observedAt, dateText,
         });
         const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
         if (isaStored && relStored) return { text: `noted — remembered both: ${stripNoted(isaStored.text)}; and ${stripNoted(relStored.text)}`, via: "assert", miss: false };
@@ -5410,7 +5433,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const pred = `mgx:same-${same[3].toLowerCase()}-as`;
         const stored = await teachFact(memoryDir, sessionId, {
           subject: same[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
-          object: same[2].trim(),
+          object: same[2].trim(), observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -5419,7 +5442,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
       // universal success, so every caller (this loop AND the top-level
       // declarative-sentence dispatch in runTurn) gets it uniformly.
-      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache });
+      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache, observedAt, dateText });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
     }
     // CAPABILITY over a GROUNDED subject — "penguins swim" (habitual) or "a
@@ -5441,7 +5464,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       for (const subj of new Set([singularizeSurface(habitualTeach.subject), habitualTeach.subject])) {
         if (await isGroundedTerm(subj, habLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb,
+            subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb, observedAt, dateText,
           });
           if (stored) return stored;
         }
@@ -5453,14 +5476,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // wrapped surface (payload is already unwrapped either way) — see
     // unknownSubjectFallback's own docblock for the exact narrowing rules
     // (object must still be known, etc.).
-    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache);
+    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, observedAt, dateText }, cache);
     if (fallback) return fallback;
     // MIRROR mint fallback: the known-subject/unknown-object asymmetry —
     // tried right after the unknown-subject case declines, so a subject the
     // STATIC lexicon (or a prior taught fact) already grounds can mint a
     // brand-new object term. See unknownObjectFallback's own docblock for the
     // exact narrowing rules (the "both sides ungrounded" safety guard, etc.).
-    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent, graph }, cache);
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent, graph, observedAt, dateText }, cache);
     if (objectFallback) return objectFallback;
     // ADJECTIVE-MINT fallback: tried right after unknownObjectFallback
     // declines, so a grounded subject (static
@@ -5469,7 +5492,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // docblock for the exact narrowing rules (the "both sides ungrounded"
     // safety guard, and why this must be a standalone function rather than
     // nested inside unknownSubjectFallback).
-    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph }, cache);
+    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph, observedAt, dateText }, cache);
     if (adjectiveFallback) return adjectiveFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
@@ -5479,7 +5502,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const prop = wrapped.match(TEACH_PROPERTY_RE);
       if (prop && !PLACE_ADVERB_OBJECT_RE.test(prop[2])) {
         const stored = await teachFact(memoryDir, sessionId, {
-          subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2],
+          subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2], observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -14316,22 +14339,34 @@ async function everySentenceTeaches(sentences, lexicon) {
   }
 }
 
-async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
+async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null, observedAt: observedAtIn = "", dateText: dateTextIn = "" }) {
   // A trailing "?" marks a question, and a question never writes — the ACE
   // fragment happily parses "dog have tail?" as the declarative it is not,
   // which stored a Fact at teach trust over a FLOW-0 vocabulary question.
   if (/\?\s*$/.test(String(line).trim())) return null;
   try {
+    // THE DATED TEACH FRAME — "<sentence> as of <date>". A caller that
+    // already resolved a date (teachLane, recursing into its own
+    // assertCandidates loop with the suffix already stripped) passes
+    // observedAt/dateText straight through; the standalone entry point (the
+    // top-level declarative-sentence dispatch in runTurn) probes `line`
+    // itself. Either way the ACE parse below runs on `probeLine` — the
+    // suffix-stripped text when a date was found, `line` unchanged otherwise
+    // — so an ordinary sentence's behavior never changes.
+    const suffix = observedAtIn ? null : datedTeachSuffix(line);
+    const probeLine = suffix ? suffix.stripped : line;
+    const observedAt = observedAtIn || suffix?.observedAt || "";
+    const dateText = dateTextIn || suffix?.dateText || "";
     const { parseAce, parseAceAmbiguous } = await import("../domain/grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
     // a bare runTurn (no handle) lazy-loads the cached core lexicon. The lexicon is
     // immutable, so sharing one reference across concurrent handles is re-entrant.
     let lex = lexicon;
     if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
-    const ambiguous = parseAceAmbiguous(line, lex);
+    const ambiguous = parseAceAmbiguous(probeLine, lex);
     if (ambiguous) {
       const { normFactTerm } = await import("../adapters/memory/core.mjs");
-      const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
+      const answer = renderAmbiguousAssert(probeLine, ambiguous, normFactTerm);
       // Genuinely ambiguous — no single triple was committed, so the canonical
       // form is every surviving reading's own would-be triple set, same idiom
       // as ask.mjs's canonicalOf() for a parse-level tie.
@@ -14343,7 +14378,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
       };
       return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
     }
-    const parse = parseAce(line, lex);
+    const parse = parseAce(probeLine, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("../domain/grammar/assert.mjs");
     const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
@@ -14360,10 +14395,11 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         { command: "assert", via: "teach-miss", miss: true, focus });
     }
     const ts = new Date().toISOString();
-    const res = await assertSentence(memoryDir, line, {
+    const res = await assertSentence(memoryDir, probeLine, {
       lexicon: lex,
       provenance: { source: "chat", sessionId, ts },
       appendFact,
+      ...(observedAt ? { observedAt } : {}),
     });
     if (!res || !res.ids?.length) return null;
     // A plain universal "every X is a Y" ALSO records the "every" quantifier
@@ -14371,12 +14407,13 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     // lane. Gated on the literal typed determiner: only "every" reads as a
     // class-level generalization. Best-effort: the base fact is already
     // durably stored either way, so a failure here is swallowed.
-    if (/^every\s+/i.test(String(line).trim())) {
+    if (/^every\s+/i.test(String(probeLine).trim())) {
       const triple = res.triples.find((t) => t.predicate === "rdfs:subClassOf");
       if (triple) {
         try {
           await appendFact(memoryDir, {
             subject: triple.subject, predicate: "rdfs:subClassOf", object: triple.object, quantifier: "every",
+            ...(observedAt ? { observedAt } : {}),
           });
         } catch { /* best-effort — the base fact is already stored either way */ }
       }
@@ -14408,7 +14445,10 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         if (para) paraphraseSuffix = ` (${para})`;
       } catch { /* best-effort — the literal confirmation above is already correct either way */ }
     }
-    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}${paraphraseSuffix}`;
+    // The dated-teach frame's own echo: the user typed the date, so the
+    // acknowledgment shows it was registered rather than silently dropped.
+    const dateSuffix = observedAt && dateText ? ` (as of ${dateText})` : "";
+    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}${paraphraseSuffix}${dateSuffix}`;
     // The canonical restatement of what was committed — `machine` is the same
     // fact(s) in the compact notation ask.mjs's canonicalOf() uses for
     // query-side parses, so both lanes share one consistent syntax.
