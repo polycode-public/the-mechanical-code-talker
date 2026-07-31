@@ -118,6 +118,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   risk if one gains a preposition the other doesn't. `chat.mjs` importing the set from
   `ask-vocab.mjs` would collapse it to one; deferred because it's a `chat.mjs` edit outside the
   track that found it.
+- [ ] **`code-explorer-viz.mjs`'s seed fetch lacks the retry the other three pages got.**
+  `chat-page-viz.mjs`/`ingest-viz.mjs`/`research-viz.mjs` all retry a corrupted `chat-seed.json`
+  fetch once (a transient bad CDN edge-cache entry, not a code defect — see the commit that added
+  it) before falling back to unseeded. `code-explorer-viz.mjs` has the same vulnerable pattern but
+  a more tangled control flow (a desktop-app branch shares the try/catch), left alone rather than
+  edited under time pressure.
 
 ## Discipline
 
