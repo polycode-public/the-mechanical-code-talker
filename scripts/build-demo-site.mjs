@@ -34,7 +34,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
-import { stampVersion } from "../src/domain/version-stamp.mjs";
+import { shortCommit, stampCommit, stampVersion } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
@@ -65,11 +65,23 @@ const spriteTemplates = readSpriteTemplateFiles();
 // CI stamps it again before it publishes public/, which is what makes a bump
 // reach the deployed page without anyone editing HTML. post-deploy-smoke.mjs
 // reads the same element back off that page.
-function stampPageVersion() {
+//
+// The commit stamp is written only when CI_COMMIT_SHA is in the environment,
+// so the committed page keeps its placeholder and a local build never churns
+// it. A page cannot name the commit that adds it, so the tracked value is a
+// placeholder by construction — wait-for-site.mjs treats anything that is not
+// a short object name as "no commit stamped".
+function stampPageBuild() {
   const version = siteVersion();
   const page = join(SITE, "index.html");
-  writeFileSync(page, stampVersion(readFileSync(page, "utf8"), version));
+  let html = stampVersion(readFileSync(page, "utf8"), version);
   console.log(`stamped ${page} with version ${version}`);
+  const sha = process.env.CI_COMMIT_SHA;
+  if (sha) {
+    html = stampCommit(html, sha);
+    console.log(`stamped ${page} with commit ${shortCommit(sha)}`);
+  }
+  writeFileSync(page, html);
 }
 
 /** A short content hash of one built file, or "" when it isn't there. Short
@@ -105,7 +117,7 @@ for (const rel of engineFiles) {
 
 console.log(`copied ${engineFiles.length} engine source files into ${OUT}`);
 
-stampPageVersion();
+stampPageBuild();
 
 // The shared wink vendor asset, built first: every page's lemma/POS tier
 // (chat/ledger/plan/index) imports this ONE same-origin file through the
