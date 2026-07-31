@@ -320,8 +320,8 @@ tmct> /exit
 **[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
 page answers codebase questions live, and eight more pages each ground their
-own domain: a full chat seeded with 72,098 facts (the same nine bands as
-`npm run init:xl`, uncapped, 4.4 MB on the wire), the
+own domain: a full chat seeded with 63,470 facts (the same nine bands as
+`npm run init:xl`), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
 terms inside), and the **code explorer** (the same ledger UI refocused on a
 code graph, with a hint rail of suggested next questions). An **ingest

@@ -11,9 +11,10 @@
 // human persona, SEON, ConceptNet, the tier-2 code corpuses (aws/python/java)
 // and WordNet-xl — read from package.json's own init:xl script and resolved
 // through the same name lookup `tmct import --corpus` uses, so the browser
-// and the CLI can never drift on WHICH corpuses seed, or at what scale:
-// every band, including ConceptNet and WordNet-xl, ships whole. Measured at
-// 72,098 facts, ~85.6 MB raw JSON (~7.1 MB gzip, ~4.4 MB brotli).
+// and the CLI can never drift on WHICH corpuses seed, or at what scale — every
+// band ships whole EXCEPT ConceptNet, capped per SEED_BAND_CAPS below since
+// PLAN_FACT.md's per-assertion re-key. Measured at 63,470 facts, ~93.5 MB raw
+// JSON (~7.1 MB gzip).
 //
 // SEED_BAND_CAPS and SEED_BYTE_CEILING stay in the file as a backstop, not a
 // design limit: if a future corpus addition pushes the seed's byte count high
@@ -40,14 +41,17 @@ const ROOT = join(here, "..");
  *  before this number is raised again. */
 export const SEED_BYTE_CEILING = 100 * 1024 * 1024;
 
-/** Per-band fact caps, applied only to bands named here. Empty by default —
- *  the seed ships every band whole, same as `npm run init:xl` on the CLI.
- *  Kept as a mechanism (not deleted) so a future corpus addition that pushes
- *  the seed past SEED_BYTE_CEILING has a lever to pull without a code change:
- *  add a band's name here and its cap seeds definitional-predicates-first,
- *  through the same `prefer` order the ConceptNet band already uses, so the
- *  cap buys the IsA (subClassOf) backbone rather than trivia. */
-export const SEED_BAND_CAPS = Object.freeze({});
+/** Per-band fact caps, applied only to bands named here. PLAN_FACT.md's
+ *  per-assertion re-key (`mgx:sourceId`, restructured `trustInputs`, etc. on
+ *  every record) grew each fact's own byte cost even though corpus bands stay
+ *  one record per triple — the full band set measured 106,413,353 bytes
+ *  post-re-key, over SEED_BYTE_CEILING. ConceptNet is capped at 28,000 (was
+ *  36,328 uncapped), seeding definitional-predicates-first through the same
+ *  `prefer` order it already used, so the cut buys the IsA (subClassOf)
+ *  backbone rather than trivia — 93,496,025 bytes, ~10.8 MB headroom
+ *  restored, matching this file's own documented norm. Re-measure before
+ *  changing this number again. */
+export const SEED_BAND_CAPS = Object.freeze({ conceptnet: 28000 });
 
 // `tmct init --persona-size <size>` activates these additive human-persona
 // size bands on top of the always-active `human` (same ladder bin/tmct.mjs
