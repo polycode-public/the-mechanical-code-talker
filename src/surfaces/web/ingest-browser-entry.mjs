@@ -29,10 +29,14 @@ import { splitSentencesPreservingPaths, stripCitationResidue } from "../../servi
 import { clauseCandidates, optimisticTriples } from "../../services/extract-facts.mjs";
 import { touchedFactRows } from "../../domain/memory/touched-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
+import { parseEntities } from "../../domain/codegraph.mjs";
+import { ingestFactGraphPayload, ingestedFactRows } from "../../domain/ingest-facts.mjs";
 import { registerWinkModel, winkInstance } from "../../adapters/wink-model.mjs";
 import { memoryStats, exportFactsJsonl } from "./memory-stats.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 // The pronoun subjects a bounded carry substitutes with the last unique
 // grounded subject in the SAME paragraph. Reset at every blank line, so a
@@ -171,10 +175,20 @@ export async function groundTextToFacts(text, { memoryDir, sessionId, lexicon, v
  * the page can then export. `seedPayload` (optional) pre-loads a graph the
  * recognizer can recall and link against.
  *
- * Returns { memoryDir, sessionId, ingest }. `ingest(text, { onFact,
- * optimistic })` is the one call the page makes; it drives groundTextToFacts
- * against this session's store and returns its { sentences, recognized,
- * skipped, facts } summary.
+ * Returns { memoryDir, sessionId, graph, refreshGraph, askableClasses, ingest,
+ * turn }. `ingest(text, { onFact, optimistic })` is the call the ingest panes
+ * make; it drives groundTextToFacts against this session's store and returns
+ * its { sentences, recognized, skipped, facts } summary. `turn(line)` is the
+ * ask dock's own entry point — the FULL chat turn engine (the exact dispatch
+ * the CLI runs) over the same store, so a question it can't ground gets the
+ * same refusal the CLI gives.
+ *
+ * `graph` is what a question actually traverses: the ingested rows projected
+ * through ingest-facts.mjs, rebuilt by `refreshGraph()` whenever the store has
+ * moved since the last one. The rebuild is gated on a dirty flag rather than
+ * run per call because a seeded store holds tens of thousands of rows, and
+ * re-reading all of them to answer a second question about the same two
+ * sentences is the one cost this page has to avoid.
  */
 export function createIngestSession({ seedPayload = null, vocabSeeded = false } = {}) {
   const memoryDir = createInMemoryStore();
@@ -184,22 +198,65 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
   const vocabHint = vocabExampleHint(vocabSeeded);
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
+  let graph = parseEntities({ individuals: [], objectProperties: [] });
+  let storeMovedSinceGraph = true;
+  async function refreshGraph() {
+    if (!storeMovedSinceGraph) return graph;
+    const rows = ingestedFactRows(readFactRows(await loadMemory(memoryDir)));
+    graph = parseEntities(ingestFactGraphPayload(rows));
+    storeMovedSinceGraph = false;
+    return graph;
+  }
+
+  // An empty graph is not the same as no graph to runTurn: a non-null one
+  // makes it read an ordinary "the number of X" phrase as a graph count query
+  // instead of running the teach cascade, so before anything is ingested the
+  // dock keeps the plain conversational reading.
+  const graphForTurn = () => (graph.individuals.length ? graph : null);
+
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint,
+    buildExtraOptions: () => ({ graph: graphForTurn(), uiContext: "browser" }),
+    captureExtraState: (result) => {
+      if (result?.record?.via === "assert" && !result.record.miss) storeMovedSinceGraph = true;
+    },
+  });
+
   return {
     memoryDir,
     sessionId,
-    ingest(text, { onFact = null, optimistic = false } = {}) {
-      return groundTextToFacts(text, { memoryDir, sessionId, lexicon, vocabHint, onFact, optimistic });
+    get graph() { return graph; },
+    refreshGraph,
+    /** The class nouns this graph can actually list, for a page building its
+     *  own "try asking" hint out of real data rather than invented examples. */
+    askableClasses() {
+      return [...new Set(graph.individuals.map((i) => i.class).filter(Boolean))].sort();
+    },
+    async ingest(text, { onFact = null, optimistic = false } = {}) {
+      const summary = await groundTextToFacts(text, { memoryDir, sessionId, lexicon, vocabHint, onFact, optimistic });
+      if (summary.recognized) storeMovedSinceGraph = true;
+      return summary;
+    },
+    async turn(line) {
+      await refreshGraph();
+      return turnSession.turn(line);
     },
   };
 }
 
-// This page grounds pasted prose into facts; it holds no conversation, so
-// `tmct.turn` is unwired and says so, and the one call the page makes is
-// `tmct.session.ingest(text)`. `tmct.page` keeps the recognizer entry point
-// the page also drives directly, the wink seam, the stats fold behind its
-// counters, its IndexedDB wrapper and its JSONL export.
+// The page's own two calls are `tmct.session.ingest(text)` and, from the ask
+// dock, `tmct.turn(line)`. `tmct.ask` puts one question straight to the graph
+// this session projects from what it has ingested, rebuilding it first so a
+// fact grounded a moment ago is already visible. `tmct.page` keeps the
+// recognizer entry point the page also drives directly, the wink seam, the
+// stats fold behind its counters, its IndexedDB wrapper and its JSONL export.
 publishTmctSurface({
   open: createIngestSession,
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
+  plan: enginePlan,
   page: {
     groundTextToFacts, exportFactsJsonl, registerWinkModel, normFactTerm,
     memoryStats, openPersistedStore,
