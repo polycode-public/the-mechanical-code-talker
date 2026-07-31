@@ -118,9 +118,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   drop-in), ingest has no `ask`/`turn` route wired at all yet, research already has a working
   narrower `ask` route so isn't hitting the empty-graph miss, and plan's Hanoi-puzzle state has no
   board-shaped rows to project. Each is a separate future scoping pass, not folded into this one.
-- [ ] mud.html has no wire tape — the WebRTC redesign's diagnostics fold (the connection-log panel)
-  is chat-only (`withTape`). Porting chat's instrumented transport to mud would complete "diagnostics
-  for all" there too.
+- [ ] The wire tape's CSS still lives in `chat-page-viz.mjs`'s page-level `<style>` block, hardcoded
+  to base site theme tokens (`--ink`/`--muted`/`--card`) rather than the overlay's own `--so-*`
+  custom properties — chat gets away with it because its overlay isn't reskinned, so the two token
+  sets happen to match. Mud's wire-tape port (below) had to redo the tape CSS from scratch using
+  `--so-*` tokens to avoid near-invisible text in light mode against its always-dark overlay skin.
+  A third page reusing `withTape` would hit the same trap; worth eventually moving the shared tape
+  CSS into `share-overlay-viz.mjs` itself, `--so-*` throughout, chat included.
 - [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
   `contradiction` — bit three separate test fixtures across two sessions before this was caught
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
@@ -136,10 +140,10 @@ a documentation note, not actionable — no track).
 - [ ] **Track B** — ingest ask/turn route. worktree: dispatched, not yet landed. Status: started.
 - [ ] **Track C** — plan Hanoi-puzzle board projector. worktree: dispatched, not yet landed.
   Status: started.
-- [ ] **Track E** — mud.html wire tape port. worktree: dispatched, not yet landed. Status: started.
 
-Track D (`tmct.ready`/`tmct.lastSave` surface additions) landed and merged — `ff784912`, `npm run
-test:fast` 209/209 green, pushed to main.
+Landed and merged to main:
+- Track D (`tmct.ready`/`tmct.lastSave` surface additions) — `ff784912`, `test:fast` 209/209 green.
+- Track E (mud.html wire tape port) — `85d0174e`, blast-radius 65/65 + `test:fast` 209/209 green.
 
 ## Discipline
 
