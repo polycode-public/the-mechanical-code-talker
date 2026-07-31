@@ -2785,9 +2785,9 @@ export function readFactRows(memory, opts = {}) {
  *  carries, and the two lookups a record's own source resolves through.
  *
  *  Shared by the read fold and by the head materialisation below, deliberately:
- *  a stored aggregate and a computed one that were folded from different inputs
- *  is the whole failure mode a materialised table invites, and one shared
- *  builder is what makes it unreachable. */
+ *  a stored aggregate and a computed one folded from different inputs is the
+ *  failure a materialised table invites, and one shared builder is what keeps
+ *  the two from ever drifting apart. */
 function factFoldContext(memory) {
   const individuals = memory?.individuals || [];
   const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
