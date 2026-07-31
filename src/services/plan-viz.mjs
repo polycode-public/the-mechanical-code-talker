@@ -406,6 +406,8 @@ h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0
 .chatlog:empty { display: none; margin-bottom: 0; }
 .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
 .chatlog .u::before { content: "tmct> "; color: var(--taught); }
+.chatlog .b { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
+.chatlog .b::before { content: "board> "; color: var(--corpus); }
 .chatlog .a { font-family: ${SERIF_STACK}; font-size: .87rem; line-height: 1.45; white-space: pre-wrap; color: var(--ink); }
 .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
 .chatlog:empty + .chatask { border-top: none; padding-top: 0; }
@@ -413,6 +415,12 @@ h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0
 .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--well); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .34rem .55rem; min-width: 0; }
 .chatask input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
 .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+.boardask { margin-top: .75rem; border-top: 1px dashed var(--line); padding-top: .55rem; }
+.boardask h3 { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .45rem; }
+.boardask .chatask { border-top: none; padding-top: 0; }
+.boardask .prompt { color: var(--corpus); }
+.boardask input:focus-visible { outline-color: var(--corpus); }
+.boardask .pill:hover { border-color: var(--corpus); color: var(--corpus); }
 .pill { font-family: ${MONO_STACK}; font-size: .66rem; padding: .22rem .6rem; border: 1px solid var(--line); border-radius: 99px; background: var(--well); color: var(--ink); cursor: pointer; white-space: nowrap; }
 .pill:hover { border-color: var(--taught); color: var(--taught); }
 .pill:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
@@ -466,6 +474,18 @@ h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0
       <div class="chatpills" id="chatpills" role="group" aria-label="quick phrases to fill the chat input">
         <button type="button" class="pill" data-fill="solve it.">solve it</button>
         <button type="button" class="pill" data-fill="what moves are legal now?">what moves are legal now?</button>
+      </div>
+      <div class="boardask">
+        <h3>ask the board at this step</h3>
+        <form class="chatask" id="boardform">
+          <span class="prompt">board&gt;</span>
+          <input id="boardq" type="text" placeholder="list the locations of disks" aria-label="Ask a question about the board at the current step">
+        </form>
+        <div class="chatpills" id="boardpills" role="group" aria-label="quick phrases to fill the board question input">
+          <button type="button" class="pill" data-fill="list the locations of disks">list the locations of disks</button>
+          <button type="button" class="pill" data-fill="how many moves are there?">how many moves are there?</button>
+          <button type="button" class="pill" data-fill="list the pegs">list the pegs</button>
+        </div>
       </div>
     </div>
     <div class="pddlpanel">
@@ -677,12 +697,21 @@ const PLAN = ${embedded};
   const chatformEl = document.getElementById("chatform");
   const chatqEl = document.getElementById("chatq");
   const chatpillsEl = document.getElementById("chatpills");
+  const boardformEl = document.getElementById("boardform");
+  const boardqEl = document.getElementById("boardq");
+  const boardpillsEl = document.getElementById("boardpills");
 
   const liveAvailable = typeof tmct !== "undefined" && typeof tmct.open === "function";
   if (!liveAvailable) {
     liveStatusEl.textContent = "live re-solve unavailable here — showing the baked-in replay only.";
     liveStatusEl.classList.add("isError");
     resolveBtn.disabled = true;
+    // Neither dock has a submit handler without the live engine, and a form
+    // that submits with no handler navigates away — so the inputs are shut
+    // off rather than left to reload the page on Enter.
+    chatqEl.disabled = true;
+    boardqEl.disabled = true;
+    boardqEl.placeholder = "needs the live engine — the replay above still works.";
   } else {
     let session = null;
     // Every engine-touching call (a resolve click and a chat submit) shares
@@ -731,6 +760,12 @@ const PLAN = ${embedded};
       if (!freshPlan) return;
       const { rendersAs, sizeOrder } = tmct.page.renderInputsFromPlan(freshPlan);
       mountPlan(tmct.page.planToPageData({ plan: freshPlan, rendersAs, sizeOrder }));
+      // The board tmct.ask() traverses is projected from a plan and a step.
+      // mountPlan rewinds the transport to step 0, so the graph is moved to
+      // the same position rather than left pointing at the previous puzzle.
+      if (typeof tmct.session?.showBoard === "function") {
+        tmct.session.showBoard({ plan: freshPlan, step: 0 });
+      }
       if (pddlEl) pddlEl.textContent = tmct.page.planToPddl(freshPlan);
       // The <title>/<h1> were baked from the INITIAL plan's own goal text —
       // a live re-solve toward a different goal (a fresh puzzle, or a
@@ -746,6 +781,11 @@ const PLAN = ${embedded};
         diskCount: Math.max(1, Math.min(7, parseInt(diskCountEl.value, 10) || 3)),
         maxDepth: Math.max(1, parseInt(maxDepthEl.value, 10) || 300),
       });
+      // The board on screen is the server-rendered embed until the first
+      // session opens, and the disk-count control may have moved since. A
+      // session solving a different puzzle would answer about a board nobody
+      // is looking at, so mount its own plan instead.
+      if (session.plan && session.plan.actions.length !== N) applyPlan(session.plan);
       return session;
     }
 
@@ -783,11 +823,30 @@ const PLAN = ${embedded};
       });
     });
 
-    for (const pill of chatpillsEl.querySelectorAll(".pill")) {
-      pill.addEventListener("click", () => {
-        chatqEl.value = pill.dataset.fill || "";
-        chatqEl.focus();
+    // A board question goes to tmct.ask(), not tmct.turn(): ask() traverses
+    // the puzzle projected as a graph at the step the transport is showing,
+    // so "list the locations of disks" reads the board in front of you. A
+    // question that graph can't ground gets the engine's own refusal.
+    boardformEl.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = boardqEl.value.trim();
+      if (!q) return;
+      boardqEl.value = "";
+      addChatLine("b", q + " (step " + step + ")");
+      withLock(async () => {
+        await ensureSession();
+        const result = await tmct.ask(q, { step });
+        addChatLine("a", result.answer);
       });
+    });
+
+    for (const [pills, input] of [[chatpillsEl, chatqEl], [boardpillsEl, boardqEl]]) {
+      for (const pill of pills.querySelectorAll(".pill")) {
+        pill.addEventListener("click", () => {
+          input.value = pill.dataset.fill || "";
+          input.focus();
+        });
+      }
     }
   }
 })();

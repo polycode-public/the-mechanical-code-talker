@@ -29,6 +29,7 @@ import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { hanoiLessonSentences } from "../../domain/hanoi-lesson.mjs";
+import { hanoiBoardRows, hanoiBoardGraphPayload } from "../../domain/hanoi-board.mjs";
 import { computeBlocksLayout, planToPageData, renderInputsFromPlan } from "../../services/plan-viz.mjs";
 import { planToPddl } from "../../services/plan-pddl.mjs";
 import { createTurnSession } from "./turn-session.mjs";
@@ -86,7 +87,29 @@ export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME
     if (r.plan) plan = r.plan;
   }
 
-  return { memoryDir, sessionId, graph, diskCount, maxDepth, plan, turn: session.turn };
+  // The board `tmct.ask()` traverses. The plan lane's own states are rows, not
+  // a graph, so an ask over this session used to meet an empty one and miss
+  // every question about the puzzle in front of the visitor. hanoi-board.mjs
+  // projects one position into `{individuals, objectProperties}`; the page
+  // calls `showBoard` whenever it mounts a fresh plan or the transport moves
+  // the step, so what ask() reads is what the board shows.
+  let boardPlan = plan;
+  let boardStep = 0;
+  let boardGraph = null;
+  function showBoard({ plan: nextPlan = boardPlan, step = boardStep } = {}) {
+    boardPlan = nextPlan;
+    boardStep = Math.max(0, Math.floor(Number(step) || 0));
+    boardGraph = parseEntities(hanoiBoardGraphPayload(hanoiBoardRows({ plan: boardPlan, step: boardStep })));
+    return boardGraph;
+  }
+  showBoard();
+
+  return {
+    memoryDir, sessionId, graph, diskCount, maxDepth, plan, turn: session.turn,
+    showBoard,
+    get boardGraph() { return boardGraph; },
+    get boardStep() { return boardStep; },
+  };
 }
 
 // `tmct.page` keeps the board layout and the PDDL/OWL-RDF formatting the
@@ -95,9 +118,17 @@ export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME
 // CAPABILITY planner, not the puzzle solver: a typed "solve it" is a
 // conversational turn like any other, so the page reaches the hanoi plan
 // through `tmct.turn("solve it", { maxDepth })` and reads `.plan` off it.
+//
+// `tmct.ask(q, { step })` answers over the projected BOARD rather than the
+// session's own (empty) code graph, so a question about the puzzle is grounded
+// in the position on screen. Passing `step` moves the board first, which is
+// how the page keeps the two in step while the transport scrubs.
 publishTmctSurface({
   open: createPlanSession,
-  ask: graphAsk,
+  ask: (request, options, session) => {
+    if (options?.step != null) session.showBoard({ step: options.step });
+    return graphAsk(request, options, { graph: session.boardGraph, memoryDir: session.memoryDir });
+  },
   plan: enginePlan,
   page: { computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel },
 });
