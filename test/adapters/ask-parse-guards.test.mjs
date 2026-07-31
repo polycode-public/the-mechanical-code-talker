@@ -71,6 +71,15 @@ test("the same split holds for a plural auxiliary and for a light verb before a 
   assert.equal(marked.verb, "get");
 });
 
+test("a trailing temporal adverb is not mistaken for the fronted verb", () => {
+  const parsed = parseQueryFull("where does ann live now", { nlp: null }).parsed;
+  assert.equal(parsed.object, "ann");
+  assert.equal(parsed.verb, "live");
+  assert.equal(parsed.altObject, "ann live");
+  // and the adverb comes off even when there is no verb to split out
+  assert.equal(parseQueryFull("where do mice today", { nlp: null }).parsed.object, "mice");
+});
+
 test("'where does <term> live' resolves the same entity 'where is <term>' does", () => {
   const aux = ask(graph, "where does fnAlpha live", { nlp: null });
   assert.equal(aux.tmct_ask.miss, false);

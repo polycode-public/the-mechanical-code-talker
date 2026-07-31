@@ -26,8 +26,8 @@ import {
   PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
-  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES,
-  stripTrailingScopeFiller,
+  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition,
+  stripTrailingScopeFiller, stripTrailingTemporalAdverb,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -189,27 +189,34 @@ function pruneSpuriousMeaningAmbiguity(parsed) {
 const WHERE_AUX_LEAD_RE = /^where\s+(?:does|do|did)\s+/i;
 const WHERE_MARKER_WORDS = new Set(wordsOf(WHERE_MARKERS));
 
-function splitAuxFrontedWhereVerb(parsed, text) {
-  if (!parsed || parsed.shape !== "where" || parsed.altObject || !WHERE_AUX_LEAD_RE.test(text)) return parsed;
-  const objectWords = splitWords(String(parsed.object || ""));
-  if (objectWords.length < 2) return parsed;
+function splitAuxFrontedWhereVerb(parsed, rawText) {
+  if (!parsed || parsed.shape !== "where" || parsed.altObject || !WHERE_AUX_LEAD_RE.test(rawText)) return parsed;
+  // The shared pre-pass takes a trailing temporal adverb off "where is X now",
+  // but the auxiliary fronts the verb past it ("where does ann live now"), so
+  // the adverb is still on the end here — and it sits exactly where this split
+  // looks for the verb.
+  const text = stripTrailingTemporalAdverb(rawText);
+  const objectText = stripTrailingTemporalAdverb(String(parsed.object || ""));
+  const withoutAdverb = objectText === parsed.object ? parsed : { ...parsed, object: objectText };
+  const objectWords = splitWords(objectText);
+  if (objectWords.length < 2) return withoutAdverb;
   const verb = objectWords[objectWords.length - 1].toLowerCase();
-  if (!/^[a-z][a-z'-]*$/.test(verb) || STOPWORDS.has(verb) || VERB_TO_KIND[verb]) return parsed;
+  if (!/^[a-z][a-z'-]*$/.test(verb) || STOPWORDS.has(verb) || VERB_TO_KIND[verb]) return withoutAdverb;
   // do/does/did takes a bare infinitive, so a trailing participle ("where do i
   // begin reading") is a complement and the tensed verb sits further left —
   // dropping one word would leave a verb in the term either way, so decline.
-  if (verb.endsWith("ing")) return parsed;
+  if (verb.endsWith("ing")) return withoutAdverb;
   // The auxiliary fronts the verb to the end of the sentence, so the glued word
   // is only the predicate when it really sits there — a trailing where marker
   // ("... get defined") is scaffolding keyword-spot already dropped.
   const sentenceWords = splitWords(text).map((w) => w.toLowerCase());
   while (sentenceWords.length && WHERE_MARKER_WORDS.has(sentenceWords[sentenceWords.length - 1])) sentenceWords.pop();
-  if (sentenceWords[sentenceWords.length - 1] !== verb) return parsed;
+  if (sentenceWords[sentenceWords.length - 1] !== verb) return withoutAdverb;
   const subject = objectWords.slice(0, -1).join(" ");
   // The glued reading stays reachable as `altObject`: traverse() prefers it when
   // the subject alone doesn't resolve, so a graph holding an entity actually
   // spelt that way still answers.
-  return { ...parsed, object: subject, altObject: String(parsed.object), verb };
+  return { ...parsed, object: subject, altObject: objectText, verb };
 }
 
 export function parseQuery(query, { nlp = undefined } = {}) {
@@ -2333,13 +2340,12 @@ function renderComposite(parsed, result, graph) {
   // verbatim. Nothing is derived: an empty set is the honest miss, never a
   // sentence about a subject the world has no row for.
   if (result.compositeKind === "worldRelation") {
-    const asked = listJoin(result.askedClasses);
+    const asked = listJoin(result.asked);
     const noun = WORLD_RELATIONS[result.relation].nouns[1];
     if (!result.pairs.length) {
       return { content: `no ${noun} on record for ${asked} in this graph.`, miss: true, ambiguous: false, matches: [] };
     }
-    const reads = WORLD_RELATIONS[result.relation].reads;
-    const sentences = result.pairs.map((p) => `${p.subject.label || p.subject.id} ${reads} ${p.object}`);
+    const sentences = result.pairs.map((p) => `${p.subject.label || p.subject.id} ${p.reads} ${p.object}`);
     return { content: `${sentences.join("; ")}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   // A non-empty inherited result is disclosed out loud ("X has no own <kind>
@@ -4508,48 +4514,103 @@ const WORLD_LISTING_RE = new RegExp(
 // holds. A phrase that isn't a bare class noun ("where is auth.mjs defined")
 // fails parseWorldClassList and keeps the definition-site reading.
 const WORLD_WHERE_RE = /^where(?:'s|\s+is|\s+are)\s+(?:all\s+)?(?:the\s+)?(.+?)[?.!\s]*$/i;
+// "where does ann live", "where do the mice sleep" — the auxiliary-fronted
+// sibling of WORLD_WHERE_RE. The trailing verb is dropped rather than captured:
+// a stored relation is matched on its own folded preposition, not on the verb
+// the question happened to use, so group 1 is the subject alone and both shapes
+// hand this lane the same text.
+const WORLD_WHERE_AUX_RE = /^where\s+(?:does|do|did)\s+(?:all\s+)?(?:the\s+)?(.+?)\s+[a-z][a-z'-]*[?.!\s]*$/i;
+
+/** The single individual a question names ("where is ann"), or null when this
+ *  graph holds no individual of that name — or holds more than one, which is a
+ *  real ambiguity this lane declines rather than picking a side of. */
+function worldIndividualSubject(graph, text) {
+  const wanted = String(text || "").trim().toLowerCase();
+  if (!wanted) return null;
+  const ids = new Set();
+  for (const ind of graph?.individuals || []) {
+    if (!ind?.id) continue;
+    if (String(ind.id).toLowerCase() === wanted || String(ind.label || "").toLowerCase() === wanted) ids.add(ind.id);
+  }
+  return ids.size === 1 ? [...ids][0] : null;
+}
 
 /** Compile "<list trigger> the <world-relation noun> of <class> and <class>"
  *  (or "where are the <class> and <class>") into a world-relation listing AST,
- *  or null when this isn't that shape. */
+ *  or null when this isn't that shape. A subject that names no class is tried
+ *  as one named INDIVIDUAL, so "where is ann" reads a taught locative fact off
+ *  the same lane the board's own pieces answer through. Classes win the tie:
+ *  a graph where "pod" is both a class and an individual keeps its class
+ *  reading, exactly as before. */
 function worldRelationQuery(graph, query) {
-  const q = String(query || "").trim();
+  // "where is disk-1 now" asks the same question "where is disk-1" does, and the
+  // adverb would otherwise be bound as part of the subject.
+  const q = stripTrailingTemporalAdverb(String(query || "").trim());
   const listM = q.match(WORLD_LISTING_RE);
   const relation = listM ? WORLD_NOUN_TO_RELATION[listM[1].toLowerCase()] : "placement";
   if (!relation) return null;
-  const subjectText = listM ? listM[2] : q.match(WORLD_WHERE_RE)?.[1];
+  const subjectText = listM ? listM[2] : (q.match(WORLD_WHERE_RE)?.[1] || q.match(WORLD_WHERE_AUX_RE)?.[1]);
   if (!subjectText) return null;
+  const base = { node: "worldRelation", relation, predicate: WORLD_RELATIONS[relation].predicate };
   const resolved = parseWorldClassList(graph, subjectText);
-  if (!resolved) return null;
-  return {
-    node: "worldRelation",
-    relation,
-    predicate: WORLD_RELATIONS[relation].predicate,
-    classes: resolved.classes,
-    askedClasses: resolved.asked,
-  };
+  if (resolved) return { ...base, classes: resolved.classes, asked: resolved.asked };
+  const individual = worldIndividualSubject(graph, subjectText);
+  if (!individual) return null;
+  return { ...base, subjects: [individual], asked: [individual] };
 }
 
 const normalizePredicate = (p) => String(p || "").toLowerCase();
 
+/** The preposition a group's rows are stated with when they are a TAUGHT
+ *  locative fact rather than this relation's own curated predicate — "on" for
+ *  mgx:rest-on, "in" for mgx:life-in. Null for a group that says nothing about
+ *  where its subject is, and for a relation that isn't about placement. */
+function taughtLocativePreposition(relation, group) {
+  if (!WORLD_RELATIONS[relation].matchesLocativePredicates) return null;
+  return locativePreposition(normalizePredicate(group.prop))
+    || locativePreposition(normalizePredicate(group.predicate));
+}
+
 function evalWorldRelation(graph, ast) {
-  const wanted = new Set(ast.classes);
-  const latest = new Map();
+  const wantedClasses = ast.classes ? new Set(ast.classes) : null;
+  const wantedSubjects = ast.subjects ? new Set(ast.subjects) : null;
+  const entry = WORLD_RELATIONS[ast.relation];
+  const stated = new Map();
+  const taught = new Map();
   for (const group of graph?.relations || []) {
-    if (normalizePredicate(group.prop) !== ast.predicate && normalizePredicate(group.predicate) !== ast.predicate) continue;
-    // A world appends a fresh row per turn rather than rewriting one, so the
-    // LAST edge for a subject is its current value — the same last-wins fold
-    // every world's own state reader applies to its rows.
+    const prop = normalizePredicate(group.prop);
+    const predicate = normalizePredicate(group.predicate);
+    const statesRelation = prop === entry.predicate || predicate === entry.predicate;
+    const prep = statesRelation ? null : taughtLocativePreposition(ast.relation, group);
+    if (!statesRelation && !prep) continue;
     for (const edge of group.edges || []) {
       const subject = graph.byId?.get(edge.subject);
-      if (subject && wanted.has(subject.class)) latest.set(edge.subject, { subject, object: edge.object });
+      if (!subject) continue;
+      const kept = wantedSubjects ? wantedSubjects.has(edge.subject) : wantedClasses.has(subject.class);
+      if (!kept) continue;
+      // A world appends a fresh row per turn rather than rewriting one, so the
+      // LAST edge for a subject is its current value — the same last-wins fold
+      // every world's own state reader applies to its rows. A taught row keys
+      // on its predicate as well, because two taught locative facts about one
+      // subject are two separate claims and neither supersedes the other.
+      const pair = { subject, object: edge.object, reads: statesRelation ? entry.reads : `is ${prep}` };
+      if (statesRelation) stated.set(edge.subject, pair);
+      else taught.set(`${prop || predicate}\u0000${edge.subject}`, pair);
     }
   }
-  const pairs = [...latest.values()].sort((a, b) => String(a.subject.id).localeCompare(String(b.subject.id)));
+  // A graph that states this relation in its own predicate has already said
+  // where the subject is. A taught locative row about the same subject
+  // describes that position more loosely — a hanoi disk rests on a disk AND
+  // stands on a peg — so taught rows are read only for subjects the graph
+  // never placed outright.
+  const pairs = [...stated.values(), ...[...taught.values()].filter((p) => !stated.has(p.subject.id))]
+    .sort((a, b) => (
+      String(a.subject.id).localeCompare(String(b.subject.id)) || String(a.object).localeCompare(String(b.object))
+    ));
   return {
     compositeKind: "worldRelation",
     relation: ast.relation,
-    askedClasses: ast.askedClasses,
+    asked: ast.asked,
     pairs,
     matches: pairs.map((p) => p.subject),
   };
@@ -4635,7 +4696,21 @@ function tieNamesAClass(graph, parsed, result) {
   const cls = resolveDynamicClass(graph, term);
   if (!cls) return false;
   const tied = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
-  return tied.length > 1 && tied.every((i) => i.class === cls);
+  const tiedIds = new Set(tied.map((i) => i.id));
+  if (tiedIds.size < 2) return false;
+  // One id can hold several class entries — a memory projection lists a taught
+  // term under every class it was taught, so the entry that ties is often the
+  // generic one. Membership is read across ALL of an id's entries, and the
+  // class's own word counts as one of them: a projection that lists "disk"
+  // itself as an individual ties it in alongside disk-1 and disk-2, and it is
+  // the word the question used rather than a rival reading of it.
+  const classesById = new Map();
+  for (const ind of graph?.individuals || []) {
+    if (!ind?.id) continue;
+    if (!classesById.has(ind.id)) classesById.set(ind.id, new Set());
+    classesById.get(ind.id).add(ind.class);
+  }
+  return [...tiedIds].every((id) => id === cls || classesById.get(id)?.has(cls));
 }
 
 /** The class-membership fallbacks below run once the cascade above has nothing
