@@ -105,7 +105,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   }
 
   const lexicon = loadLexicon();
-  const vocabHint = vocabExampleHint(vocabSeeded);
+  const vocabHint = vocabExampleHint(vocabSeeded, "browser");
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
   // Four-state, like the CLI: false (off), true (rescue on a miss),
@@ -122,7 +122,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
     memoryDir, graph: codeGraph, lexicon, sessionId, vocabHint,
     buildExtraOptions: () => ({
       liveReference: liveReferenceOn, onLiveLookup,
-      uiContext: "browser", synthesisBudget: synthesisBudgetOn,
+      synthesisBudget: synthesisBudgetOn,
     }),
     // `result.liveReference` mirrors a `/wiki on|off|supplement|always`
     // command back into this session's own toggle state.

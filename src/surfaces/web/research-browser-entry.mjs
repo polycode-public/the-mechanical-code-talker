@@ -204,7 +204,7 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
-  const vocabHint = vocabExampleHint(vocabSeeded);
+  const vocabHint = vocabExampleHint(vocabSeeded, "browser");
   // A DISTINCT id so an ingested fact's teach tag is told apart from a typed
   // teach turn's by session id alone — the whole reason the two growth paths
   // stay separable in the source panel.
@@ -228,7 +228,7 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
     sessionId: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
     buildExtraOptions: () => ({
       researchConfig, liveReference: liveReferenceOn, onLiveLookup,
-      uiContext: "browser", synthesisBudget: synthesisBudgetOn,
+      synthesisBudget: synthesisBudgetOn,
     }),
     captureExtraState: (result) => {
       if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") {

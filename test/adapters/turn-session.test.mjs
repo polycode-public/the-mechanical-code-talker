@@ -116,6 +116,20 @@ test("captureExtraState runs once after a successful turn with the folded-forwar
   assert.ok("focus" in captured[0] && "last" in captured[0] && "planState" in captured[0] && "researchState" in captured[0]);
 });
 
+test("every session runs the engine on the browser surface, so a dead-end never names a CLI-only remedy", async () => {
+  const seen = [];
+  const session = createTurnSession({
+    memoryDir: createInMemoryStore(), graph: emptyGraph, lexicon, sessionId: "s",
+    runTurn: async (line, options) => { seen.push(options.uiContext); return { answer: "", focus: null, last: null }; },
+  });
+  await session.turn("which modules import walk.mjs");
+  assert.deepEqual(seen, ["browser"]);
+
+  const real = newSession({ vocabHint: "" });
+  const { answer } = await real.turn("which modules import walk.mjs");
+  assert.doesNotMatch(answer, /tmct index|tmct init|--repo|npm run example:mini/);
+});
+
 test("session.setPlanState/setResearchState let an external caller redirect what the next turn sees, mirroring the plan/adventure planHolder pattern", async () => {
   const session = newSession();
   session.setPlanState({ custom: "state" });

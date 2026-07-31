@@ -119,7 +119,7 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   const turnSession = createTurnSession({
     memoryDir, graph, lexicon, sessionId,
     vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
-    buildExtraOptions: () => ({ uiContext: "browser", planState: planHolder.state }),
+    buildExtraOptions: () => ({ planState: planHolder.state }),
     captureExtraState: async (result) => {
       if ("planState" in result) planHolder.state = result.planState;
       const here = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir)))).placements.get("player")?.object ?? null;
