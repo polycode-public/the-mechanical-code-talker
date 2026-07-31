@@ -9,7 +9,39 @@
 
 image: node:24.18.0
 
+# ---- how this pipeline is scheduled: a DAG, not a queue --------------------
+# Every job carries a `stage:` because GitLab requires one, and the stages
+# below are for READING the pipeline, not for scheduling it. Scheduling comes
+# from each job's `needs:`, which names only what that job genuinely depends
+# on. A stage boundary used to mean an implicit "wait for all of that", and
+# almost none of those waits were backed by a real dependency. `deploy:website`
+# sat behind a browser channel that runs for eight minutes and proves nothing
+# the deploy reads. `publish:npm`, the longest job in the pipeline, spent its
+# first 758 seconds waiting for the whole test and e2e stages to clear, purely
+# to reach its own stage position.
+#
+# The project has no users yet. Shipping something broken costs a redeploy;
+# NOT KNOWING it is broken is the expensive failure. So the test tiers are no
+# longer release gates. They are fast, parallel INFORMATION: they all still
+# run, they all now start at once, and a failure still turns the pipeline red.
+# What they no longer do is hold the deploy or the publish.
+#
+# Two things stay hard gates, and they are the only two:
+#   secret_detection  nothing reaches the edge or the registry carrying a
+#                     credential. It runs first, on its own, in `gate`.
+#   unit:smoke        ~37s, one test per capability family. A build that fails
+#                     it is broken in a way worth a red deploy, and waiting
+#                     for it costs the deploy almost nothing.
+# publish:npm adds pack:contents: a published npm version is immutable, and
+# that job IS the "is this tarball right" check (publint plus the shipped file
+# list) — ~42s against a mistake that cannot be taken back.
+#
+# Deliberately NOT `allow_failure: true`: the informational tiers. Under
+# `needs:` a failing job with no dependents already blocks nothing, so
+# allow_failure would buy no speed and would cost exactly the red pipeline
+# that is the reason for still running them.
 stages:
+  - gate
   - test
   - e2e
   - deploy
@@ -71,10 +103,26 @@ links:check:
   script:
     - npm run check:links
 
+# The one hard gate on both consumer surfaces. It used to run with
+# allow_failure and nothing needing it, which meant it blocked nothing at all —
+# a leaked credential would have been scanned, reported, and deployed anyway.
+# `deploy:website` and `publish:npm` now need it, so it runs first, alone, in
+# its own stage and costs the deploy ~19s.
+#
+# `allow_failure: false` is written out because the stock template sets it
+# true; deleting the line would inherit the template's value, not clear it.
+#
+# The template's own rules are replaced rather than inherited, so this job's
+# presence is deterministic. Two of them (`AST_ENABLE_MR_PIPELINES`) can drop
+# the job from a branch pipeline, and a `needs:` pointing at an absent job
+# fails pipeline CREATION — the whole push, not one job. One rule, always
+# present on a branch, is what makes the hard `needs:` below safe.
 secret_detection:
-  stage: verify
+  stage: gate
   needs: []
-  allow_failure: true
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
 
 # ---- nightly dependency scanning (free-tier substitute for Ultimate DS) ----
 # Runs ONLY from a scheduled pipeline. The operator creates the schedule once
@@ -87,6 +135,7 @@ secret_detection:
 dep:audit:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
@@ -110,6 +159,7 @@ dep:audit:
 renovate:
   stage: test
   interruptible: true
+  needs: []
   image: renovate/renovate:43.264.2
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TOKEN'
@@ -155,9 +205,13 @@ renovate:
 # lives; test:slow's own package.json script names those same five files
 # directly. Rebalance the buckets if a file's own timing drifts across that
 # 20s line.
+#
+# All four carry `needs: []` so they start the moment the pipeline does. Only
+# unit:smoke has anything downstream of it.
 unit:smoke:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   script:
@@ -167,6 +221,7 @@ unit:smoke:
 unit:fast:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   script:
@@ -177,6 +232,7 @@ unit:fast:
 unit:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   script:
@@ -185,11 +241,18 @@ unit:
 
 # The five files with at least one test over 20s: synthbench's SYN rungs, the
 # generated-artifacts estate guards, the README shell-example harness, the
-# bench-smoke corpus lane, and the inference corpus lane. Isolated so their
-# wall-clock doesn't sit on the critical path of the other three tiers.
+# bench-smoke corpus lane, and the inference corpus lane.
+#
+# This tier gates nothing now, but it is deliberately NOT made conditional on a
+# fresh x.y.0 the way e2e:heavy is. It owns the generated-artifacts estate
+# guard, which is the one check standing between a committed bundle that has
+# drifted from the code and a published npm tarball carrying it — and the
+# publish is exactly what this restructure made easier to reach. Drift has bit
+# this repo repeatedly; the guard runs on every push.
 unit:slow:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   script:
@@ -202,6 +265,7 @@ unit:slow:
 pack:contents:
   stage: test
   interruptible: true
+  needs: []
   # The consumer-impacting set OR README.md: this job is the guard on the shipped
   # file list, and README.md is one of the shipped files, so a README-only push
   # must still prove the manifest.
@@ -220,21 +284,24 @@ pack:contents:
 license:deps:
   stage: test
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   script:
     - npm ci
     - npm run check:licences
 
-# The PRE-DEPLOY e2e tier, deliberately small. `e2e-web-index`, `e2e-cli` and
-# `e2e-tui` are the set `deploy:website` waits for — the cheapest coverage that
-# can still say "this build is worth putting on the edge". `e2e-web-local-origin`
-# holds the files that can only run against a local server; it is not in the
-# deploy's `needs`. Everything else that used to run in this stage now runs
-# POST-deploy against the live site, in the `e2e:deployed:*` jobs at the bottom of this
-# file. The trade is faster feedback for less pre-deploy certainty: a page
-# regression is caught after the edge has already served it, and the fix is a
-# new pipeline.
+# The PRE-DEPLOY e2e tier, deliberately small. It holds the browser and
+# CLI/TUI channels that want a local origin, and nothing downstream needs any
+# of it: every job here carries `needs: []`, starts with the pipeline, and
+# reports. `e2e-web-index` alone ran for 505 seconds while the deploy waited
+# on it, which bought pre-deploy certainty the deployed matrix then re-earned
+# against the real edge minutes later. Now the two run side by side.
+#
+# Everything else that used to run in this stage runs POST-deploy against the
+# live site, in the `e2e:deployed:*` jobs at the bottom of this file. The trade
+# is faster feedback for less pre-deploy certainty: a page regression is caught
+# after the edge has already served it, and the fix is a new pipeline.
 # `test-e2e/*.test.mjs` — top-level only; test-e2e/heavy/ is the separate
 # `e2e:heavy` job below.
 #
@@ -249,6 +316,7 @@ license:deps:
 .e2e-web-base:
   stage: e2e
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   variables:
@@ -266,6 +334,7 @@ license:deps:
 .e2e-lite-base:
   stage: e2e
   interruptible: true
+  needs: []
   rules:
     - changes: *consumer-paths
   before_script:
@@ -299,9 +368,6 @@ e2e-web-index:
 # directory in place under a second version partway through — a deployed
 # site is one live snapshot, with no second historical build to redeploy
 # over it, so this one is structurally local-only too.
-#
-# Not in `deploy:website`'s `needs`, so this job costs the deploy nothing; it
-# still gates `publish:npm`.
 e2e-web-local-origin:
   extends: .e2e-web-base
   script:
@@ -334,9 +400,18 @@ e2e-cli:
 # push actually touches what these tests exercise, and on the nightly
 # schedule (the same one dep:audit/renovate use) so drift still gets caught
 # even on a quiet week.
+#
+# It stands down on an ordinary patch roll (see scripts/release-scope.mjs,
+# which also explains why the check runs in the script rather than in `rules:`).
+# `package.json` is in its own `changes:` list, so today every version roll
+# fires it whether or not anything it exercises moved — several minutes of a
+# contended runner, gating nothing, to re-prove a build nobody touched. On a
+# fresh x.y.0 it runs in full, and the nightly schedule runs it in full too, so
+# nothing it covers goes unwatched for more than a day.
 e2e:heavy:
   stage: e2e
   interruptible: true
+  needs: []
   variables:
     PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
   cache:
@@ -356,6 +431,11 @@ e2e:heavy:
         - package-lock.json
         - test-e2e/heavy/**/*
   script:
+    - |
+      if [ "$(node scripts/release-scope.mjs)" != full ] && [ "$CI_PIPELINE_SOURCE" != schedule ]; then
+        echo "patch roll — this tier runs in full on the next x.y.0 and on the nightly schedule"
+        exit 0
+      fi
     - npm ci
     - npx playwright install --with-deps chromium
     - npm run test:e2e:heavy
@@ -370,28 +450,28 @@ e2e:heavy:
 # doesn't run) rather than failing loud on every push.
 publish:npm:
   stage: deploy
-  # Optional so a README-only push still runs the publish gate: README.md is in
-  # this job's rules but not in the test/e2e jobs' rules, so on that push all of
-  # these are absent from the pipeline. The job re-runs `npm test` itself below,
-  # so the guard holds either way. One entry per job in the two stages before
-  # this one, so deploy still starts as soon as test+e2e clear, without waiting
-  # on pack:contents/license:deps in the same stage.
+  # This was the longest job in the pipeline AND the last to start: it waited
+  # for every unit tier and every e2e channel to clear, and the first 758
+  # seconds of its wall-clock were that wait. Its real dependencies are three:
+  #
+  #   secret_detection  no credential goes to a public registry. Hard.
+  #   pack:contents     publint plus the shipped file list — the one check
+  #                     that answers "is this tarball right". An npm version
+  #                     is immutable once published, so this ~42s is worth
+  #                     more here than anywhere else in the pipeline.
+  #   unit:smoke        ~37s of "the engine still works at all".
+  #
+  # The e2e channels prove the page and the CLI, which the deployed matrix and
+  # e2e:published-package both re-prove after the fact against the real thing.
+  #
+  # `optional: true` on the two test-stage jobs because a README-only push has
+  # README.md in this job's rules but the unit tiers key off the consumer set
+  # alone; pack:contents carries README.md in its own rules, so it is there.
   needs:
+    - secret_detection
+    - job: pack:contents
+      optional: true
     - job: unit:smoke
-      optional: true
-    - job: unit:fast
-      optional: true
-    - job: unit
-      optional: true
-    - job: unit:slow
-      optional: true
-    - job: e2e-web-index
-      optional: true
-    - job: e2e-web-local-origin
-      optional: true
-    - job: e2e-tui
-      optional: true
-    - job: e2e-cli
       optional: true
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not re-publish.
@@ -415,7 +495,13 @@ publish:npm:
     # ignore-scripts/save-exact hardening exactly where it matters most.
     - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
     - npm ci
-    - npm test
+    # The fast tier, not the full suite. The full suite ran here serially for
+    # roughly six minutes, on top of the four unit jobs that had already run it
+    # in parallel — the same tests, twice, once on the critical path. Those
+    # jobs still run and still turn the pipeline red. This keeps a seconds-long
+    # sanity check in the job itself so a completely broken build cannot reach
+    # the registry through a pipeline whose test jobs simply had not finished.
+    - npm run test:fast
     # Ask the registry what it serves (shell's job — one npm view), then let
     # check:publish decide. The decision is semver-aware and unit tested in
     # src/domain/publish-gate.mjs: it exits 0 to publish, 1 to skip, and says
@@ -436,31 +522,25 @@ publish:npm:
 deploy:website:
   stage: deploy
   image: nikolaik/python-nodejs:python3.13-nodejs24
-  # Named explicitly, because the default — wait for EVERY job in every earlier
-  # stage — is what made the deploy the slowest job in the pipeline rather than
-  # one of the first. These are the jobs whose failure means "don't put this on
-  # the edge at all": the four unit tiers, the one browser channel that covers
-  # the site's own shell, and the CLI/TUI channels (cheap, and a broken binary
-  # is a broken release even when the page is fine). `optional: true` on the
-  # unit tiers mirrors publish:npm's reason — a README-only push has none of
-  # them in the pipeline.
+  # Two jobs, and the pipeline's whole shape follows from how short this list
+  # is. The deploy is the head of the longest chain in the pipeline
+  # (deploy -> site:ready -> the deployed matrix), so every second it spends
+  # waiting is a second on the critical path. It used to wait ~13 minutes for
+  # the unit tiers and four e2e channels, one of which (e2e-web-index, 505s)
+  # was on its own the reason the deploy started when it did.
   #
-  # Everything the deploy no longer waits for runs in the `e2e:deployed:*` jobs after it,
-  # against the site this job just published.
+  #   secret_detection  nothing with a credential in it reaches the edge. Hard.
+  #   unit:smoke        ~37s. A build that fails one test per capability family
+  #                     is broken loudly enough to be worth not deploying.
+  #
+  # Everything else runs beside this job instead of before it, and the deployed
+  # matrix re-proves the page against the real edge a few minutes later anyway.
+  # A page regression is now caught after the edge has served it; the site has
+  # no users yet and the fix is a new pipeline, which is the trade this whole
+  # file is making.
   needs:
+    - secret_detection
     - job: unit:smoke
-      optional: true
-    - job: unit:fast
-      optional: true
-    - job: unit
-      optional: true
-    - job: unit:slow
-      optional: true
-    - job: e2e-web-index
-      optional: true
-    - job: e2e-cli
-      optional: true
-    - job: e2e-tui
       optional: true
   # Required for the PROD_* CI/CD variables (environment-scoped to production)
   # to actually inject into this job — GitLab only applies a non-wildcard
@@ -545,7 +625,8 @@ smoke:post-deploy:
 #     channels spent their time on — each of them rebuilt the whole site once per
 #     FILE. That is why one job can carry the whole matrix.
 # e2e-web-index's list repeats here deliberately: it is the one channel proven
-# both before the deploy (as the gate) and after it (against the real edge).
+# twice, once against a local build and once against the real edge. The two now
+# run alongside each other rather than in sequence.
 #
 # Not here, and why: the five files in `e2e-web-local-origin` need a local origin
 # — four build the page they open, and the boot budget wants a fixed one.
@@ -564,9 +645,15 @@ smoke:post-deploy:
 # re-runs its own slice, not the whole matrix, and the concurrency cap bounds
 # how many of THOSE Chromium instances run at once regardless of the runner's
 # core count.
-# Polls the deployed site (parseVersionStamp against the same page
-# smoke:post-deploy checks) until it serves THIS build's version, capped at
-# ~5 minutes by default (WAIT_FOR_SITE_ATTEMPTS/WAIT_FOR_SITE_DELAY_MS). The
+#
+# Polls the deployed site until it serves THIS build — this build's version,
+# this build's COMMIT, and a full-size chat-seed.json — capped at ~5 minutes by
+# default (WAIT_FOR_SITE_ATTEMPTS/WAIT_FOR_SITE_DELAY_MS). The version alone
+# was not commit-precise: commits share a version between bumps, so a slow
+# deploy still settling while the next push raced past it could pass the
+# version check while the edge served the wrong code. deploy:website stamps
+# CI_COMMIT_SHA into the page (GitLab predefines it in every job, so there is
+# nothing to pass) and this demands it back. The
 # e2e-deployed jobs below need this instead of racing deploy:website directly
 # — pipeline history (2721958621, 2722312066) showed real, inconsistent
 # failures (different files, different assertions, every retry) that
