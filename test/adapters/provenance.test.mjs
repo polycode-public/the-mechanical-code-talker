@@ -255,18 +255,21 @@ test("(d) contradictions are surfaced, both kept with provenance, never silently
     // here would make THIS very fact its own session's sole contradicted
     // assertion, self-penalising its trust — a real, separately-tested B3
     // behavior, but not what this test is about).
-    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat@2026-07-05T00:00:00.000Z" });
-    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "grey", provenance: "corpus:conceptnet /r/HasProperty" });
+    // mgx:father, a functional relation the resolver table leaves on the
+    // default `contradiction` strategy — a subject has one father, so a second
+    // object is a real disagreement rather than a second true fact.
+    await appendFact(dir, { subject: "rover", predicate: "mgx:father", object: "bruno", provenance: "ace:chat@2026-07-05T00:00:00.000Z" });
+    await appendFact(dir, { subject: "rover", predicate: "mgx:father", object: "rex", provenance: "corpus:conceptnet /r/IsA" });
     const m = await loadMemory(dir);
     const groups = findContradictions(m);
     assert.equal(groups.length, 1, "one contradiction detected");
-    assert.deepEqual(groups[0].map((r) => r.object), ["blue", "grey"], "both objects present, higher-trust first");
+    assert.deepEqual(groups[0].map((r) => r.object), ["bruno", "rex"], "both objects present, higher-trust first");
     // the inspector surfaces BOTH with provenance
     const text = renderMemory({ memory: m, blocks: { blocks: {} } });
     assert.match(text, /contradictions \(1 — both kept, never silently resolved\):/);
-    assert.match(text, /sky mgx:hasProperty\?/);
-    assert.match(text, /blue \(trust /);
-    assert.match(text, /grey \(trust /);
+    assert.match(text, /rover mgx:father\?/);
+    assert.match(text, /bruno \(trust /);
+    assert.match(text, /rex \(trust /);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -297,12 +300,15 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
   try {
     const sliceA = join(dir, "bundle-a.jsonl");
     const sliceB = join(dir, "bundle-b.jsonl");
-    // same (subject, predicate) — /r/HasProperty maps to mgx:hasProperty in the
-    // committed conceptnet-map.toml — DIFFERENT object, from two DIFFERENT
-    // provenancePrefixes (the exact shape a tier2-aws bundle and a seon bundle
-    // would each pass to seedMemory via src/services/extensions.mjs's resolved entries).
-    await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
-    await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
+    // same (subject, predicate) — /r/HasFirstSubevent maps to
+    // mgx:hasFirstSubevent in the committed conceptnet-map.toml, and "the FIRST
+    // thing you do" is functional by meaning, so the resolver table leaves it on
+    // the default `contradiction` strategy — DIFFERENT object, from two
+    // DIFFERENT provenancePrefixes (the exact shape a tier2-aws bundle and a
+    // seon bundle would each pass to seedMemory via
+    // src/services/extensions.mjs's resolved entries).
+    await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasFirstSubevent", end: "/c/en/red", weight: 1 }) + "\n");
+    await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasFirstSubevent", end: "/c/en/blue", weight: 1 }) + "\n");
     const { seedMemory } = await import("../../src/adapters/corpus/conceptnet.mjs");
     await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
     await seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });

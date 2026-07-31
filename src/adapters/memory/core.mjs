@@ -25,15 +25,19 @@ import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdF
 export { normFactTerm, normFactPredicate, factIdForTriple } from "../../domain/hash.mjs";
 import {
   computeTrust, computeAssertionGroupTrust, assertionPrior, sessionReliabilityFrom,
-  TRUST_SCORE_PROP, TRUST_INPUTS_PROP,
+  TRUST_SCORE_PROP, TRUST_INPUTS_PROP, PROV_CLASS_BY_SOURCE_TYPE,
   CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource,
 } from "../../domain/memory/trust.mjs";
+import {
+  resolutionStrategyFor, resolveSiblingGroups, MERGE_PREDICATES,
+  RESOLUTION_MERGE, RESOLUTION_CONTRADICTION,
+} from "../../domain/memory/resolution.mjs";
 
 // The createdAt/updatedAt vocabulary and the provenance-tag Source parser live
 // with the trust layer (they are its inputs); re-exported here so store
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
-import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
+import { NEG_PREDICATE_PREFIX } from "../../domain/memory/capability.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
@@ -1200,25 +1204,6 @@ function sourceIdFor(desc) {
 }
 
 const sourceLabel = (id) => String(id).replace(/^src:/, "");
-
-// The read-side of the Source split ontology/tmct-core.ttl declares. tmct:Source
-// is one flat class over a sourceType key whose values fall into all three of
-// PROV's disjoint top classes; this maps each stored sourceType to its read-side
-// subclass and PROV top class. Nothing on disk changes — sourceType is already
-// stored on every Source — so this is derivation, not migration.
-const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
-  operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  reference: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  referenceLive: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  optimisticExtract: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
-});
 
 /** The read-side PROV subclass and top class a Source's mgx:sourceType maps to,
  *  or null for an unrecognised type (never force-fit). Mirrors the Source-split
@@ -2492,32 +2477,37 @@ export const CAPABLE_OF_PREDICATE = "mgx:capableOf";
 
 /** Predicates whose real-world semantics allow many objects at once ("a dog
  *  has legs" AND "a dog has a tail"; "a bird can fly" AND "a bird can sing"),
- *  so a second object is a second fact, never a disagreement. A closed list:
- *  every predicate outside it keeps the full contradiction contract. Each
- *  entry's negative twin joins it — "a penguin cannot fly" and "a penguin
- *  cannot sing" are two claims, not a self-contradiction. */
-export const MULTI_VALUED_PREDICATES = new Set(
-  [HAS_A_PREDICATE, CAPABLE_OF_PREDICATE].flatMap((p) => [p, negatedPredicate(p)]),
-);
+ *  so a second object is a second fact, never a disagreement. Derived from the
+ *  resolver table's `merge` row, so the two can never say different things. */
+export const MULTI_VALUED_PREDICATES = MERGE_PREDICATES;
 
 /** Facts that CONTRADICT: same (subject, predicate), different object, each
  *  above the trust floor. Returns groups (trust-desc) so callers surface both,
- *  never silently pick one. Same (s,p,o) is corroboration, not contradiction,
- *  and a MULTI_VALUED_PREDICATES predicate never contradicts on object count. */
+ *  never silently pick one.
+ *
+ *  Two stages, and only the second one is here. Stage 1 — the records inside
+ *  one triple group — is readFactRows' own fold: same (s,p,o) is corroboration,
+ *  and a group is internally agreeing by construction. Stage 2 is this: across
+ *  the OBJECTS one (subject, predicate) carries, under the resolver table.
+ *  A merge predicate never reports; a state or registration predicate reports
+ *  only what its own clock could not order (the resolver's trust and codepoint
+ *  tie-breaks — see resolveSiblingGroups), so ordinary succession stops reading
+ *  as disagreement; every other predicate keeps the full keep-both contract. */
 export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
   const rows = readFactRows(memory).filter((r) => r.trust >= floor);
   const byKey = new Map();
   for (const r of rows) {
-    if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
+    if (resolutionStrategyFor(r.predicate) === RESOLUTION_MERGE) continue;
     const key = `${r.subject} ${r.predicate}`;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
   }
   const out = [];
   for (const group of byKey.values()) {
-    if (new Set(group.map((r) => r.object)).size > 1) {
-      out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
-    }
+    if (new Set(group.map((r) => r.object)).size < 2) continue;
+    const strategy = resolutionStrategyFor(group[0].predicate);
+    if (strategy !== RESOLUTION_CONTRADICTION && !resolveSiblingGroups(group, strategy).contested) continue;
+    out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
   }
   return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
 }

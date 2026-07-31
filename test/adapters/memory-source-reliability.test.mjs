@@ -22,33 +22,38 @@ const attr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop
 const SESSION_A = "0189ffff-0000-7000-8000-00000000aaaa"; // contradicted repeatedly
 const SESSION_B = "0189ffff-0000-7000-8000-00000000bbbb"; // corroborated (never contradicted)
 
+// A functional relation — one subject has one of these — so the resolver table
+// leaves it on the default `contradiction` strategy and a differing object is a
+// real disagreement the reliability tally can count.
+const SINGLE_VALUED = "mgx:father";
+
 test("actor-level trust end-to-end: a contradicted session's Source scores lower than a corroborated session's, and it measurably lowers that session's own facts' trust", async () => {
   const dir = await tmpRepo();
   try {
     const teachA = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: `teach:chat:${SESSION_A}@2026-07-09T00:00:00.000Z`,
+      subject, predicate: SINGLE_VALUED, object, provenance: `teach:chat:${SESSION_A}@2026-07-09T00:00:00.000Z`,
     });
     const teachB = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: `teach:chat:${SESSION_B}@2026-07-09T00:00:00.000Z`,
+      subject, predicate: SINGLE_VALUED, object, provenance: `teach:chat:${SESSION_B}@2026-07-09T00:00:00.000Z`,
     });
     const corpusSays = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: "corpus:conceptnet /r/HasProperty",
+      subject, predicate: SINGLE_VALUED, object, provenance: "corpus:conceptnet /r/IsA",
     });
 
     // Session A: 5 taught facts, 3 of which are later contradicted by a
     // (unrelated, non-session-scoped) corpus source — 3 differing-object pairs.
-    await teachA("alpha", "red"); await corpusSays("alpha", "blue");
-    await teachA("beta", "red"); await corpusSays("beta", "blue");
-    await teachA("gamma", "red"); await corpusSays("gamma", "blue");
-    await teachA("delta", "red");   // asserted by A, NEVER itself contradicted
-    await teachA("epsilon", "red"); // asserted by A, NEVER itself contradicted
+    await teachA("alpha", "bruno"); await corpusSays("alpha", "rex");
+    await teachA("beta", "bruno"); await corpusSays("beta", "rex");
+    await teachA("gamma", "bruno"); await corpusSays("gamma", "rex");
+    await teachA("delta", "bruno");   // asserted by A, NEVER itself contradicted
+    await teachA("epsilon", "bruno"); // asserted by A, NEVER itself contradicted
 
     // Session B: 5 taught facts, none ever contradicted.
-    await teachB("zeta", "red");
-    await teachB("eta", "red");
-    await teachB("theta", "red");
-    await teachB("iota", "red");
-    await teachB("kappa", "red");
+    await teachB("zeta", "bruno");
+    await teachB("eta", "bruno");
+    await teachB("theta", "bruno");
+    await teachB("iota", "bruno");
+    await teachB("kappa", "bruno");
 
     const m = await loadMemory(dir);
     const sourceA = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-chat:${SESSION_A}`);
