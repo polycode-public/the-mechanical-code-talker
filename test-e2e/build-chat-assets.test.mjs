@@ -54,6 +54,11 @@ test("build-chat-seed: the payload answers 'what is a dog' with provenance, carr
   }
 });
 
+// This ceiling only proves the override mechanism narrows the build, not a real
+// page's boot budget (that's SEED_BYTE_CEILING, checked above). human+seon
+// grow with the corpus itself; re-measured at 1,798,187 bytes (human 954,322 +
+// seon 549,538 + conceptnet-capped-200 294,327) — 1,900,000 leaves ~100 KB of
+// headroom. Re-measure before raising this again.
 test("build-chat-seed: band and ceiling overrides reproduce a smaller configuration", async () => {
   const dir = await mkdtemp(join(tmpdir(), "chat-seed-small-test-"));
   const out = join(dir, "chat-seed.json");
@@ -61,10 +66,10 @@ test("build-chat-seed: band and ceiling overrides reproduce a smaller configurat
     const res = await buildChatSeed(out, {
       bands: ["human", "seon", "conceptnet"],
       caps: { conceptnet: 200 },
-      byteCeiling: 1600 * 1024,
+      byteCeiling: 1_900_000,
     });
     assert.deepEqual(res.bands, ["human", "seon", "conceptnet"]);
-    assert.ok(res.bytes <= 1600 * 1024, `${res.bytes} bytes respects the overridden ceiling`);
+    assert.ok(res.bytes <= 1_900_000, `${res.bytes} bytes respects the overridden ceiling`);
     assert.ok(res.perBundle.conceptnet.total <= 200, "the overridden cap holds");
   } finally {
     await rm(dir, { recursive: true, force: true });
