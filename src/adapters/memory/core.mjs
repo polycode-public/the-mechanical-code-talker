@@ -2837,85 +2837,85 @@ function foldFactGroup(id, heads, ctx) {
   const keyOf = individualKey;
 
   const assertions = [];
-    const sourceIds = [];
-    const sourceTypes = [];
-    const tags = new Set();
-    const environments = [];
-    const seenEnvironment = new Set();
-    let quantifier = "";
-    for (const head of heads) {
-      // A pool-1 summary joins the fold as ONE pseudo-record standing for every
-      // head it absorbed: its noisy-OR base is their combined contribution, and
-      // its recency comes from the newest assertion time it absorbed, so the
-      // decay still happens at the reading moment rather than being baked in.
-      // The sources it absorbed stay in the union a reader renders — they did
-      // vouch for this triple, and the summary is where that record now lives.
-      if (isHeadRollupId(head.id)) {
-        const rollupType = headRollupTypeOf(head.id);
-        const absorbed = absorbedSourceIds(head);
-        for (const sid of absorbed) {
-          if (sourceIds.includes(sid)) continue;
-          sourceIds.push(sid);
-          if (rollupType) sourceTypes.push(rollupType);
-        }
-        assertions.push({
-          id: head.id, sourceId: "", sourceType: rollupType,
-          provenance: "",
-          createdAt: attrOf(head, ROLLUP_EARLIEST_PROP),
-          ownTrust: Number(attrOf(head, ROLLUP_PRIOR_PROP)) || 0,
-          assertedAt: attrOf(head, ROLLUP_LATEST_PROP),
-          rollup: {
-            count: Number(attrOf(head, ROLLUP_COUNT_PROP)) || absorbed.length,
-            sourceIds: absorbed,
-            earliest: attrOf(head, ROLLUP_EARLIEST_PROP),
-            latest: attrOf(head, ROLLUP_LATEST_PROP),
-          },
-        });
-        continue;
+  const sourceIds = [];
+  const sourceTypes = [];
+  const tags = new Set();
+  const environments = [];
+  const seenEnvironment = new Set();
+  let quantifier = "";
+  for (const head of heads) {
+    // A pool-1 summary joins the fold as ONE pseudo-record standing for every
+    // head it absorbed: its noisy-OR base is their combined contribution, and
+    // its recency comes from the newest assertion time it absorbed, so the
+    // decay still happens at the reading moment rather than being baked in.
+    // The sources it absorbed stay in the union a reader renders — they did
+    // vouch for this triple, and the summary is where that record now lives.
+    if (isHeadRollupId(head.id)) {
+      const rollupType = headRollupTypeOf(head.id);
+      const absorbed = absorbedSourceIds(head);
+      for (const sid of absorbed) {
+        if (sourceIds.includes(sid)) continue;
+        sourceIds.push(sid);
+        if (rollupType) sourceTypes.push(rollupType);
       }
-      const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
-      for (const tag of headTags) tags.add(tag);
-      const [statedBy] = statedByRecord.get(head.id) || [];
-      const sourceId = statedBy || attrOf(head, SOURCE_ID_PROP);
-      const sourceType = sourceTypeOf(sourceId);
-      // src:none stands for "no Source at all", so it stays out of the union a
-      // reader renders and out of the corroboration count, exactly as an
-      // unattributable fact has always read.
-      if (statedBy && !sourceIds.includes(statedBy)) {
-        sourceIds.push(statedBy);
-        if (sourceType) sourceTypes.push(sourceType);
-      }
-      const createdAt = attrOf(head, CREATED_AT_PROP);
-      const observedAt = attrOf(head, OBSERVED_AT_PROP);
       assertions.push({
-        id: head.id, sourceId, sourceType,
-        provenance: headTags.join(" | "),
-        createdAt,
-        ...(observedAt ? { observedAt } : {}),
-        ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
-        assertedAt: assertionTimestampFor(headTags, createdAt),
+        id: head.id, sourceId: "", sourceType: rollupType,
+        provenance: "",
+        createdAt: attrOf(head, ROLLUP_EARLIEST_PROP),
+        ownTrust: Number(attrOf(head, ROLLUP_PRIOR_PROP)) || 0,
+        assertedAt: attrOf(head, ROLLUP_LATEST_PROP),
+        rollup: {
+          count: Number(attrOf(head, ROLLUP_COUNT_PROP)) || absorbed.length,
+          sourceIds: absorbed,
+          earliest: attrOf(head, ROLLUP_EARLIEST_PROP),
+          latest: attrOf(head, ROLLUP_LATEST_PROP),
+        },
       });
-      quantifier = quantifier || keyOf(head, "quantifier");
-      // ' | '-separated environments, one premise-id list per independent
-      // derivation; a legacy value with no ' | ' parses as one environment.
-      for (const chunk of keyOf(head, "justification").split(" | ")) {
-        const env = chunk.split(" ").filter(Boolean);
-        if (!env.length) continue;
-        const key = env.join(" ");
-        if (seenEnvironment.has(key)) continue;
-        seenEnvironment.add(key);
-        environments.push(env);
-      }
+      continue;
     }
-    const justification = [];
-    const seenPremise = new Set();
-    for (const env of environments) {
-      for (const premise of env) {
-        if (seenPremise.has(premise)) continue;
-        seenPremise.add(premise);
-        justification.push(premise);
-      }
+    const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
+    for (const tag of headTags) tags.add(tag);
+    const [statedBy] = statedByRecord.get(head.id) || [];
+    const sourceId = statedBy || attrOf(head, SOURCE_ID_PROP);
+    const sourceType = sourceTypeOf(sourceId);
+    // src:none stands for "no Source at all", so it stays out of the union a
+    // reader renders and out of the corroboration count, exactly as an
+    // unattributable fact has always read.
+    if (statedBy && !sourceIds.includes(statedBy)) {
+      sourceIds.push(statedBy);
+      if (sourceType) sourceTypes.push(sourceType);
     }
+    const createdAt = attrOf(head, CREATED_AT_PROP);
+    const observedAt = attrOf(head, OBSERVED_AT_PROP);
+    assertions.push({
+      id: head.id, sourceId, sourceType,
+      provenance: headTags.join(" | "),
+      createdAt,
+      ...(observedAt ? { observedAt } : {}),
+      ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
+      assertedAt: assertionTimestampFor(headTags, createdAt),
+    });
+    quantifier = quantifier || keyOf(head, "quantifier");
+    // ' | '-separated environments, one premise-id list per independent
+    // derivation; a legacy value with no ' | ' parses as one environment.
+    for (const chunk of keyOf(head, "justification").split(" | ")) {
+      const env = chunk.split(" ").filter(Boolean);
+      if (!env.length) continue;
+      const key = env.join(" ");
+      if (seenEnvironment.has(key)) continue;
+      seenEnvironment.add(key);
+      environments.push(env);
+    }
+  }
+  const justification = [];
+  const seenPremise = new Set();
+  for (const env of environments) {
+    for (const premise of env) {
+      if (seenPremise.has(premise)) continue;
+      seenPremise.add(premise);
+      justification.push(premise);
+    }
+  }
   return {
     id,
     subject: keyOf(heads[0], "subject"), predicate: keyOf(heads[0], "predicate"), object: keyOf(heads[0], "object"),
