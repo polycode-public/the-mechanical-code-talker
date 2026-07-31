@@ -195,6 +195,10 @@ function splitAuxFrontedWhereVerb(parsed, text) {
   if (objectWords.length < 2) return parsed;
   const verb = objectWords[objectWords.length - 1].toLowerCase();
   if (!/^[a-z][a-z'-]*$/.test(verb) || STOPWORDS.has(verb) || VERB_TO_KIND[verb]) return parsed;
+  // do/does/did takes a bare infinitive, so a trailing participle ("where do i
+  // begin reading") is a complement and the tensed verb sits further left —
+  // dropping one word would leave a verb in the term either way, so decline.
+  if (verb.endsWith("ing")) return parsed;
   // The auxiliary fronts the verb to the end of the sentence, so the glued word
   // is only the predicate when it really sits there — a trailing where marker
   // ("... get defined") is scaffolding keyword-spot already dropped.
