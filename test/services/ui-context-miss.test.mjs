@@ -67,6 +67,27 @@ test("the empty-memory summary offers `tmct init` only in a terminal", async () 
   assert.match(await cliTurn("what do you know"), /tmct init/);
 });
 
+test("a plain greeting over an empty graph offers /help only on a page, --repo in a terminal", async () => {
+  const page = await pageTurn("hi");
+  assert.doesNotMatch(page, CLI_COMMANDS);
+  assert.match(page, /^Hi\. I'm tmct\./);
+  assert.match(await cliTurn("hi"), CLI_COMMANDS);
+});
+
+test("the empty-graph orientation card points at what's loaded on a page, --repo/tmct index/example:mini in a terminal", async () => {
+  const page = await pageTurn("help");
+  assert.doesNotMatch(page, CLI_COMMANDS);
+  assert.match(page, /ask about what's already loaded/);
+  assert.match(await cliTurn("help"), CLI_COMMANDS);
+});
+
+test("identity-self swaps its --repo clause for a page, keeps it in a terminal", async () => {
+  const page = await pageTurn("who are you");
+  assert.doesNotMatch(page, CLI_COMMANDS);
+  assert.match(page, /^I'm tmct — a deterministic, offline chat assistant\./);
+  assert.match(await cliTurn("who are you"), CLI_COMMANDS);
+});
+
 test("vocabExampleHint keeps the teach pointer on both surfaces and the seed command on neither when seeded", () => {
   assert.match(vocabExampleHint(false), /tmct init/);
   assert.match(vocabExampleHint(false), /teach me directly/);

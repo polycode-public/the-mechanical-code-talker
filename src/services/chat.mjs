@@ -1548,13 +1548,21 @@ const T_WHY_EMPTY = "miss-no-previous-answer";
 /** Empty / degenerate-graph variants (#3/#5): shown when the loaded graph has 0
  *  modules (a graph-less bootstrap OR a graph.json with no code entities). They
  *  orient toward `--repo`/`tmct init` + the seeded vocabulary instead of
- *  over-promising "ask me about this codebase". */
+ *  over-promising "ask me about this codebase". The `_BROWSER` twins carry the
+ *  same content with the CLI-only remedy (`--repo`, `tmct index`,
+ *  `npm run example:mini`) swapped for what a page visitor can actually do —
+ *  selected via uiTemplateId()'s uiContext branch, the same split
+ *  offRampClause/vocabExampleHint already apply to the surrounding prose. */
 const T_GREETING_EMPTY = "conversational-greeting-empty";
+const T_GREETING_EMPTY_BROWSER = "conversational-greeting-empty-browser";
 const T_ORIENTATION_EMPTY = "orientation-empty";
-/** IDENTITY answers — self-description and the "no LLM" clarification. Both work
- *  regardless of graph state (no empty/populated variant): what tmct IS doesn't
- *  depend on whether a repo is loaded. */
+const T_ORIENTATION_EMPTY_BROWSER = "orientation-empty-browser";
+/** IDENTITY answers — self-description and the "no LLM" clarification. Neither
+ *  varies with graph state (empty vs. populated); identity-self DOES vary with
+ *  uiContext (its `--repo <path>` clause is CLI-only), so it alone carries a
+ *  `_BROWSER` twin. */
 const T_IDENTITY_SELF = "identity-self";
+const T_IDENTITY_SELF_BROWSER = "identity-self-browser";
 const T_IDENTITY_NOT_LLM = "identity-not-an-llm";
 const T_IDENTITY_NO_FEELINGS = "identity-no-feelings";
 /** Confirms the honest-miss promise itself when a user asks about it directly
@@ -1929,6 +1937,11 @@ export function renderVerbose(last) {
   return { text: lines.join("\n"), empty: false };
 }
 
+/** Picks a template id's browser twin when `uiContext` is "browser", else the
+ *  CLI id unchanged — the same surface split offRampClause/vocabExampleHint
+ *  apply to hand-written prose, applied here to which DATA row gets rendered. */
+const uiTemplateId = (uiContext, id, browserId) => (uiContext === "browser" ? browserId : id);
+
 /** The "here's what you CAN ask" tail on a decline that names no term of its own
  *  (the SQL-statement and arithmetic shapes below). `ctx.vocabHint` already
  *  carries the session-gated vocabulary/teach pointer, so only the CODE-graph
@@ -2018,7 +2031,9 @@ function conversationalTurn(line, ctx) {
       // modules leads with the (now provably-correct) vocabulary hint instead of
       // over-promising "ask me about this codebase". Phrase-specific variants (good
       // morning, hello there) keep their wording; only the default greeting swaps.
-      const id = (!T_GREETING_BY_PHRASE[greetHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[greetHit] || T_GREETING);
+      const id = (!T_GREETING_BY_PHRASE[greetHit] && noCodeGraph(ctx.graph))
+        ? uiTemplateId(ctx.uiContext, T_GREETING_EMPTY, T_GREETING_EMPTY_BROWSER)
+        : (T_GREETING_BY_PHRASE[greetHit] || T_GREETING);
       note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
       return mk(t(id, { vocabHint: ctx.vocabHint }), { lane: "greeting" });
     }
@@ -2077,7 +2092,7 @@ function conversationalTurn(line, ctx) {
   if (identityPhraseMatch(raw)) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
-    return mk(t(T_IDENTITY_SELF), { lane: "help" });
+    return mk(t(uiTemplateId(ctx.uiContext, T_IDENTITY_SELF, T_IDENTITY_SELF_BROWSER), { vocabHint: ctx.vocabHint }), { lane: "help" });
   }
   {
     const metaHit = META_COMMAND_ANSWERS.find(([re]) => re.test(raw));
@@ -2097,7 +2112,7 @@ function conversationalTurn(line, ctx) {
     || CAPABILITY_PHRASES.some((re) => re.test(applyPreambleFrames(raw))) || ORIENT_OPENERS.has(q)) {
     note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
     note(ctx.trace, "lane: conversational — help/orientation (CAPABILITY_PHRASES/ORIENT_OPENERS / bare help / ?)");
-    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint), { lane: "help" });
+    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext), { lane: "help" });
   }
   // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
   // try a bounded edit-distance match against the flattened conversational phrase
@@ -2113,9 +2128,13 @@ function conversationalTurn(line, ctx) {
       note(ctx.trace, `lane: conversational — fuzzy typo tolerance (${bucket})`);
       if (bucket === "bye") return mk(t(T_FAREWELL), { end: true });
       if (bucket === "thanks") return mk(t(T_THANKS), { lane: "thanks" });
-      if (bucket === "identity") return mk(t(T_IDENTITY_SELF), { lane: "help" });
-      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint), { lane: "help" });
-      const id = (!T_GREETING_BY_PHRASE[fuzzyHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[fuzzyHit] || T_GREETING);
+      if (bucket === "identity") {
+        return mk(t(uiTemplateId(ctx.uiContext, T_IDENTITY_SELF, T_IDENTITY_SELF_BROWSER), { vocabHint: ctx.vocabHint }), { lane: "help" });
+      }
+      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext), { lane: "help" });
+      const id = (!T_GREETING_BY_PHRASE[fuzzyHit] && noCodeGraph(ctx.graph))
+        ? uiTemplateId(ctx.uiContext, T_GREETING_EMPTY, T_GREETING_EMPTY_BROWSER)
+        : (T_GREETING_BY_PHRASE[fuzzyHit] || T_GREETING);
       return mk(t(id, { vocabHint: ctx.vocabHint }), { lane: "greeting" });
     }
   }
@@ -2170,10 +2189,14 @@ function orientationExamples(graph) {
 }
 
 /** The orientation surface, module-aware: the empty variant (→ the provably-correct
- *  vocabulary hint + --repo/tmct init) when there's no code graph, the standard one
- *  (with live {example1}/{example2} query examples from the loaded graph) otherwise. */
-function orientationAnswer(templates, graph, vocabHint) {
-  if (noCodeGraph(graph)) return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? TEMPLATES_UNAVAILABLE;
+ *  vocabulary hint + --repo/tmct init, or its browser twin) when there's no code
+ *  graph, the standard one (with live {example1}/{example2} query examples from
+ *  the loaded graph) otherwise. */
+function orientationAnswer(templates, graph, vocabHint, uiContext = "cli") {
+  if (noCodeGraph(graph)) {
+    const id = uiTemplateId(uiContext, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_BROWSER);
+    return tRender(templates, id, { vocabHint }) ?? TEMPLATES_UNAVAILABLE;
+  }
   return tRender(templates, T_ORIENTATION, orientationExamples(graph)) ?? TEMPLATES_UNAVAILABLE;
 }
 
@@ -2184,20 +2207,24 @@ function orientationAnswer(templates, graph, vocabHint) {
 const ORIENTATION_EMPTY_FALLBACK = "I'm tmct — a deterministic, offline chat assistant (no LLM). "
   + "For code structure (imports, calls, definitions) run `tmct index` here, point me at a repo with `--repo <path>`, "
   + "or try the shipped example `npm run example:mini`. /help for commands.";
+const ORIENTATION_EMPTY_FALLBACK_BROWSER = "I'm tmct — a deterministic, offline chat assistant (no LLM). "
+  + "Teach me a fact directly, e.g. \"every bug is an issue\", or ask about what's already loaded. /help for commands.";
 
 /** A dynamic orientation string for the meta/self lane: a /stats-style overview
  *  when a code graph is loaded, else the honest empty-graph orientation — rendered
- *  through the SAME template (T_ORIENTATION_EMPTY) conversationalTurn's orientation
- *  branch uses, so there is exactly one copy of that wording to keep in sync, not
- *  two hand-duplicated strings. */
-function orientationText(graph, templates, vocabHint) {
+ *  through the SAME template (T_ORIENTATION_EMPTY/T_ORIENTATION_EMPTY_BROWSER)
+ *  conversationalTurn's orientation branch uses, so there is exactly one copy of
+ *  that wording to keep in sync, not two hand-duplicated strings. */
+function orientationText(graph, templates, vocabHint, uiContext = "cli") {
   // A null (never-loaded) graph reads as "unknown, not empty" to noCodeGraph,
   // which is the right call for the greeting/orientation CARD — but there is no
   // entity count to render from one either, so the empty wording is the only
   // truthful thing left to say. Without this the entity tally below threw on a
   // graph-less runTurn.
   if (!graph || noCodeGraph(graph)) {
-    return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? ORIENTATION_EMPTY_FALLBACK;
+    const id = uiTemplateId(uiContext, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_BROWSER);
+    const fallback = uiContext === "browser" ? ORIENTATION_EMPTY_FALLBACK_BROWSER : ORIENTATION_EMPTY_FALLBACK;
+    return tRender(templates, id, { vocabHint }) ?? fallback;
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
   const parts = [];
@@ -5839,7 +5866,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
     return { text: await memorySummary(memoryDir, graph, uiContext), via: "meta" };
   }
   if (peeled !== q && META_ORIENT_RE.test(peeled)) {
-    const text = orientationText(graph, templates, vocabHint);
+    const text = orientationText(graph, templates, vocabHint, uiContext);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   if (META_ORIENT_RE.test(q)) {
@@ -5849,7 +5876,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
     // reprints orientationText(graph) verbatim on every repeat, never
     // collapsing. Mirrors ORIENTATION_REPEAT_ONELINER's identity-check
     // pattern exactly, with its own distinct oneliner text.
-    const text = orientationText(graph, templates, vocabHint);
+    const text = orientationText(graph, templates, vocabHint, uiContext);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   // A bare "what is in here" with NO standing focus — see
@@ -5864,7 +5891,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
   if (!focus?.label) {
     const stripped = normalizeQuery(String(query)).trim().replace(/[?.!]+$/, "").trim();
     if (NO_FOCUS_WHATS_IN_HERE_RE.test(stripped)) {
-      const text = orientationText(graph, templates, vocabHint);
+      const text = orientationText(graph, templates, vocabHint, uiContext);
       return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
     }
   }
@@ -13284,7 +13311,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // 3 words with no STRUCT_WORDS token, so without this guard
     // isConversational would discard a correct, already-composed answer for
     // the generic orientation wall.
-    const orientation = orientationAnswer(templates, graph, vocabHint);
+    const orientation = orientationAnswer(templates, graph, vocabHint, uiContext);
     const repeat = last?.answer === orientation;
     answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;
     via = "template"; handled = true;
