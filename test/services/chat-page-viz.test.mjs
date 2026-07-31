@@ -27,7 +27,7 @@ test("waiting for a reply is a calm state; only a failed connection reads as a f
   assert.equal(wireStateLabel("failed").tone, "failed");
   assert.equal(wireStateLabel("idle").tone, "idle");
   assert.equal(wireStateLabel(undefined).tone, "idle", "an unknown state falls back to idle rather than blank");
-  assert.match(wireStateLabel("failed").note, /same network/, "the failure names the design's own reachability boundary");
+  assert.match(wireStateLabel("failed").note, /STUN server/, "the failure names the design's own reachability boundary");
 });
 
 test("every state carries a distinct pill, headline and sentence of its own", () => {
