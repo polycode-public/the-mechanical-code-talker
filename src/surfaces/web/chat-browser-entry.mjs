@@ -30,6 +30,7 @@ import { vocabExampleHint } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, applySeedPayload } from "../../adapters/memory/core.mjs";
 import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import { setDigestStructures } from "../../adapters/corpus/digest-bank.mjs";
@@ -72,9 +73,14 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  * is module-scope, last write wins, and every session created after this one
  * shares it.
  *
- * Returns { memoryDir, sessionId, graph, turn }. `turn(line)` resolves to
- * { answer, end, record, plan } and threads focus/last/planState between
- * calls exactly as the CLI session does.
+ * Returns { memoryDir, sessionId, graph, codeGraph, refreshGraph, turn }.
+ * `turn(line)` resolves to { answer, end, record, plan } and threads
+ * focus/last/planState between calls exactly as the CLI session does.
+ *
+ * The two graphs are separate on purpose. `codeGraph` is the known-empty index
+ * the turn engine reads, and `graph` is this session's memory store projected
+ * for `ask()` — a question about taught facts has a real graph to traverse
+ * while a code-structure question keeps its honest no-code-graph refusal.
  */
 export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
   setDigestStructures(digestStructures || []);
@@ -82,8 +88,22 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   applySeedPayload(memoryDir, seedPayload);
 
   // A known-empty code graph: code-structure questions get the same honest
-  // no-code-graph answer an un-pointed CLI session gives, never a crash.
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // no-code-graph answer an un-pointed CLI session gives, never a crash. The
+  // turn engine keeps reading THIS one, so the identity-led greeting, the teach
+  // pointer and the zero module counts a page earns from an empty index all
+  // stay exactly as they were.
+  const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
+
+  // What `tmct.ask()` traverses is a different graph: this session's own memory
+  // store, projected through memoryFactGraphPayload. Rebuilt on demand rather
+  // than once at open, because every teach, ingest and research turn grows the
+  // store — the same reason spider-fly rebuilds its board before each turn.
+  let memoryGraph = parseEntities({ individuals: [], objectProperties: [] });
+  async function refreshGraph() {
+    memoryGraph = parseEntities(memoryFactGraphPayload(readFactRows(await loadMemory(memoryDir))));
+    return memoryGraph;
+  }
+
   const lexicon = loadLexicon();
   const vocabHint = vocabExampleHint(vocabSeeded);
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
@@ -99,7 +119,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   let synthesisBudgetOn = Number.isFinite(synthesisBudget) ? synthesisBudget : 12;
 
   const session = createTurnSession({
-    memoryDir, graph, lexicon, sessionId, vocabHint,
+    memoryDir, graph: codeGraph, lexicon, sessionId, vocabHint,
     buildExtraOptions: () => ({
       liveReference: liveReferenceOn, onLiveLookup,
       uiContext: "browser", synthesisBudget: synthesisBudgetOn,
@@ -114,7 +134,9 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   return {
     memoryDir,
     sessionId,
-    graph,
+    get graph() { return memoryGraph; },
+    codeGraph,
+    refreshGraph,
     get liveReference() { return liveReferenceOn; },
     /** The page's toggle seam: set the live Wikipedia mode for every later turn
      *  (the `/wiki on|off|supplement|always` command sets the same state). */
@@ -155,7 +177,12 @@ export async function researchedFactRows(memoryDir) {
 // and paste-ingest controls run.
 publishTmctSurface({
   open: createChatSession,
-  ask: graphAsk,
+  // The memory projection is rebuilt first, so a direct tmct.ask() sees every
+  // fact taught, pasted or researched since the last one.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
   plan: enginePlan,
   page: {
     registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider,

@@ -17,9 +17,10 @@
 // never published — only the hosted demo site's public/ledger.html links to
 // it, as an optional sibling script the page degrades honestly without.
 import { vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm, applySeedPayload } from "../../adapters/memory/core.mjs";
+import { createInMemoryStore, normFactTerm, applySeedPayload, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
 import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import { registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
@@ -37,7 +38,12 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  * a fact taught through the dock extends the SAME graph the page renders
  * from, never a disconnected one.
  *
- * Returns { memoryDir, sessionId, graph, turn }, identical to createChatSession.
+ * Returns { memoryDir, sessionId, graph, codeGraph, refreshGraph, turn },
+ * identical to createChatSession — including the two-graph split: `codeGraph`
+ * is the known-empty index the turn engine reads, and `graph` is the ledger's
+ * own store projected for `ask()`, so a question about the facts on the page
+ * traverses those facts while a code-structure question still refuses honestly.
+ *
  * ledger-viz.mjs's own inline script calls computeLedgerDataFromPayload
  * (re-exported below) on `memoryDir.payload` after a turn whose record shows
  * a successful write (`via: "assert"` or `via: "retract"`, `miss: false`) to
@@ -48,13 +54,27 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
   const memoryDir = createInMemoryStore();
   applySeedPayload(memoryDir, seedPayload);
 
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
+
+  let memoryGraph = parseEntities({ individuals: [], objectProperties: [] });
+  async function refreshGraph() {
+    memoryGraph = parseEntities(memoryFactGraphPayload(readFactRows(await loadMemory(memoryDir))));
+    return memoryGraph;
+  }
+
   const lexicon = loadLexicon();
   const vocabHint = vocabExampleHint(vocabSeeded);
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
-  const session = createTurnSession({ memoryDir, graph, lexicon, sessionId, vocabHint });
-  return { memoryDir, sessionId, graph, turn: session.turn };
+  const session = createTurnSession({ memoryDir, graph: codeGraph, lexicon, sessionId, vocabHint });
+  return {
+    memoryDir,
+    sessionId,
+    get graph() { return memoryGraph; },
+    codeGraph,
+    refreshGraph,
+    turn: session.turn,
+  };
 }
 
 // `tmct.page` keeps what the page's own script renders with and the engine has
@@ -64,7 +84,12 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
 // paste-ingest and JSONL export.
 publishTmctSurface({
   open: createLedgerSession,
-  ask: graphAsk,
+  // The memory projection is rebuilt first, so a direct tmct.ask() sees every
+  // fact the dock or the ingest panel has taught since the last one.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
   plan: enginePlan,
   page: {
     computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider,
