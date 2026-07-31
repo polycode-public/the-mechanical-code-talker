@@ -183,6 +183,36 @@ export const SOURCE_PRIOR = Object.freeze({
   entailed: 0.3,
 });
 
+// The read-side of the Source split ontology/tmct-core.ttl declares. tmct:Source
+// is one flat class over a sourceType key whose values fall into all three of
+// PROV's disjoint top classes; this maps each stored sourceType to its read-side
+// subclass and PROV top class. Nothing on disk changes — sourceType is already
+// stored on every Source — so this is derivation, not migration. It lives beside
+// SOURCE_PRIOR because both are tables over the same closed type set, and both
+// the ontology reader in core.mjs and the observation-time chain in
+// resolution.mjs read it.
+export const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
+  operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  reference: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  referenceLive: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  optimisticExtract: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
+});
+
+/** The source types that assert as a live agent rather than as a document or a
+ *  derivation — the prov:Agent rows above, derived so the two can never drift.
+ *  An agent asserting a claim is witnessing it, which is the whole reason the
+ *  observation-time chain lets these fall back to their own assertion time. */
+export const AGENT_SOURCE_TYPES = new Set(
+  Object.entries(PROV_CLASS_BY_SOURCE_TYPE).filter(([, v]) => v.prov === "prov:Agent").map(([t]) => t),
+);
+
 const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENCY_FLOOR = 0.9; // recency multiplier stays within [0.9, 1.0]
 
