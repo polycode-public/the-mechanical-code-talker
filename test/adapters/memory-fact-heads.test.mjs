@@ -201,6 +201,32 @@ test("retracting a group's last record drops its head instead of leaving one beh
   });
 });
 
+test("a second connection writing the same group recomputes the head over both writers' records", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-fact-heads-concurrent-"));
+  const dbPath = join(dir, "graph.sqlite");
+  const first = await createSqliteMemoryStore(dbPath);
+  const second = await createSqliteMemoryStore(dbPath);
+  try {
+    await appendFact(first, { ...BARK, provenance: "corpus:human /r/CapableOf" });
+    await appendFact(second, { ...BARK, provenance: "teach:chat:s1@2026-07-01T00:00:00.000Z" });
+
+    // The later writer's own transaction folded a group it did not write alone.
+    // It never had to be told: the data_version guard invalidated its payload
+    // cache when the first connection committed, so the payload it mutated
+    // already carried both records.
+    const [head] = headRows(second);
+    assert.deepEqual(JSON.parse(head.inputs_json).map((i) => i.sourceType).sort(), ["corpus", "teach"]);
+
+    const [row] = readFactRows(withoutHeads(await loadMemory(second)));
+    assert.equal(row.assertions.length, 2);
+    assert.equal(head.trust_base, computeAssertionGroupTrustBase(row.assertions).score);
+  } finally {
+    closeSqliteMemoryStore(first);
+    closeSqliteMemoryStore(second);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a head survives the connection: reopening the store reads back the same base", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-fact-heads-reopen-"));
   const dbPath = join(dir, "graph.sqlite");
