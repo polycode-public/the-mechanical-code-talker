@@ -112,45 +112,35 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **NEXT #2's remainder** (chat/ledger/ingest) — sprites and plan now answer `tmct.ask` from a
-  real projected graph (`src/domain/sprite-facts.mjs`, `src/domain/hanoi-board.mjs`). chat/ledger
-  need a materially different open-vocabulary projector (not a `worldRelationGraphPayload`
-  drop-in), ingest has no `ask`/`turn` route wired at all yet, research already has a working
-  narrower `ask` route so isn't hitting the empty-graph miss.
+- [ ] **`chat.mjs` singularizes verbs on read-back.** "ann lives in paris" stores `mgx:life-in`
+  and reads back as "ann **lifes** in paris" — the singularization pass strips the wrong suffix.
+  Found while landing the chat/ledger ask/turn projector; the projector itself is unaffected
+  (predicates travel as opaque edges), this is `chat.mjs`'s own grammar layer.
+- [ ] **`tmct.turn`'s honest-miss message is CLI-flavoured on web pages.** "how many unicorns are
+  there" on a memory-only page answers "no code graph is loaded yet… index this repo with `tmct
+  index`" — correct advice for the CLI, wrong and confusing on a browser page with no filesystem to
+  index. Pre-existing in `chat.mjs`, shared by every memory-only page (sprites, now ingest); each
+  page currently has to work around it locally rather than the engine giving a page-appropriate
+  miss.
 - [ ] **`ask.mjs`'s strategy precedence misfires on 3+ same-class individuals.** "where are the
   disks" (3 disks) is intercepted by the fuzzy code-module resolver and returns a spurious
   ambiguity ("did you mean disk-1, disk-2, disk-3?") before the world-relation fallback — which
   only runs after an honest miss — ever gets a turn. 2 individuals of the same class work fine.
   Reproduced identically against a spider-fly world payload, so it's the engine's own precedence,
-  not a projector bug — found while landing the plan Hanoi-board projector below. Left unfixed:
-  the precedence ordering is engine-wide (every world page shares it), so higher risk than a
+  not a projector bug — found while landing the plan Hanoi-board projector. Left unfixed: the
+  precedence ordering is engine-wide (every world page shares it), so higher risk than a
   single-page fix.
 - [ ] The wire tape's CSS still lives in `chat-page-viz.mjs`'s page-level `<style>` block, hardcoded
   to base site theme tokens (`--ink`/`--muted`/`--card`) rather than the overlay's own `--so-*`
   custom properties — chat gets away with it because its overlay isn't reskinned, so the two token
-  sets happen to match. Mud's wire-tape port (below) had to redo the tape CSS from scratch using
-  `--so-*` tokens to avoid near-invisible text in light mode against its always-dark overlay skin.
-  A third page reusing `withTape` would hit the same trap; worth eventually moving the shared tape
-  CSS into `share-overlay-viz.mjs` itself, `--so-*` throughout, chat included.
+  sets happen to match. Mud's wire-tape port had to redo the tape CSS from scratch using `--so-*`
+  tokens to avoid near-invisible text in light mode against its always-dark overlay skin. A third
+  page reusing `withTape` would hit the same trap; worth eventually moving the shared tape CSS into
+  `share-overlay-viz.mjs` itself, `--so-*` throughout, chat included.
 - [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
   `contradiction` — bit three separate test fixtures across two sessions before this was caught
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
   should use `mgx:father` or `mgx:mass`.
-
-## In flight (coordinator-dispatched batch, 2026-07-31)
-
-Five worktree agents dispatched against the four open items above (the `mgx:hasProperty` item is
-a documentation note, not actionable — no track).
-
-- [ ] **Track A** — chat/ledger open-vocabulary ask/turn projector. worktree: dispatched, not yet
-  landed. Status: started.
-- [ ] **Track B** — ingest ask/turn route. worktree: dispatched, not yet landed. Status: started.
-
-Landed and merged to main:
-- Track D (`tmct.ready`/`tmct.lastSave` surface additions) — `ff784912`, `test:fast` 209/209 green.
-- Track E (mud.html wire tape port) — `85d0174e`, blast-radius 65/65 + `test:fast` 209/209 green.
-- Track C (plan Hanoi-puzzle board projector) — `6c82b089`, blast-radius 42/42 + `test:fast`
-  209/209 green.
 
 ## Discipline
 
