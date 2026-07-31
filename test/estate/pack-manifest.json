@@ -358,6 +358,7 @@
   "src/domain/grammar/assert.mjs",
   "src/domain/grammar/lexicon-core.json",
   "src/domain/grammar/lexicon.mjs",
+  "src/domain/hanoi-board.mjs",
   "src/domain/hanoi-lesson.mjs",
   "src/domain/hash.mjs",
   "src/domain/interpret/fuzzy.mjs",
