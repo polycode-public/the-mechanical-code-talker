@@ -396,14 +396,25 @@ ${DASH_DARK_CHROME_CSS}
 
   let seedPayload = null;
   let seedFacts = 0;
+  // One retry with a cache-busting query param: a CDN edge can serve a
+  // corrupted or truncated precompressed response (a transient bad cache
+  // entry, not a code defect — real bytes decompress fine, and the same URL
+  // fetched moments later is clean), and JSON.parse throwing is the only
+  // signal of that. The bust param forces a fresh fetch past that one entry.
   async function fetchSeed() {
-    try {
-      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
-      seedPayload = JSON.parse(await blob.text());
-      seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
-    } catch (err) {
-      seedPayload = null;
-      console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
+        const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, (loaded, total) => noteProgress("seed", loaded, total));
+        seedPayload = JSON.parse(await blob.text());
+        seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
+        return;
+      } catch (err) {
+        if (attempt === 2) {
+          seedPayload = null;
+          console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
+        }
+      }
     }
   }
   async function newSession() {

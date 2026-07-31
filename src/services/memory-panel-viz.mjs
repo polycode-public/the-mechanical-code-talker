@@ -75,12 +75,17 @@ export async function clearSiteAssetCaches() {
 
 /** Fetch `url` reading the body as a stream, reporting (loadedBytes,
  *  totalBytes) after every chunk — total is 0 when the response carries no
- *  Content-Length. Resolves to a Blob of the whole body. Falls back to a
- *  single-shot blob() read when the runtime has no streaming body reader. */
+ *  Content-Length, OR when Content-Encoding is set: the stream this function
+ *  reads is always the DECOMPRESSED body (the browser decompresses before
+ *  handing it to a reader), but Content-Length names the compressed wire
+ *  size — reporting that as "total" against decompressed "loaded" bytes
+ *  makes progress read as over 100% almost immediately. Resolves to a Blob
+ *  of the whole body. Falls back to a single-shot blob() read when the
+ *  runtime has no streaming body reader. */
 export async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("HTTP " + res.status);
-  const total = Number(res.headers.get("content-length")) || 0;
+  const total = res.headers.get("content-encoding") ? 0 : Number(res.headers.get("content-length")) || 0;
   if (!res.body || !res.body.getReader) {
     const blob = await res.blob();
     onProgress(blob.size, total || blob.size);
