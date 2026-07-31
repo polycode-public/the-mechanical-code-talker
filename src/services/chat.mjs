@@ -7247,6 +7247,13 @@ const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.
  *  fact subject named that, and falls through to the code-graph where lane
  *  unchanged. Consumed by factAnswer's (a-pre4) reader. */
 const WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
+/** "where does ann live[ now]" — the auxiliary-fronted sibling of
+ *  WHERE_IS_FACT_RE, over the same taught locative facts. The trailing verb
+ *  carries no meaning here (LOCATIVE_FACT_PREDICATE_RE below matches on the
+ *  predicate's own folded preposition, not the query's surface verb), so it
+ *  is dropped rather than captured — group 1 is the subject alone, same
+ *  shape WHERE_IS_FACT_RE's reader already expects. */
+const WHERE_DOES_FACT_RE = /^where\s+(?:does|do|did)\s+(.+?)\s+[a-z][a-z'-]*(?:\s+now)?\s*[?.!]*$/i;
 /** The closed locative tail of a folded prepositional-verb predicate
  *  (mgx:rest-on, mgx:stand-on, mgx:sit-in, …) — what makes a taught fact a
  *  LOCATION answer rather than any arbitrary relation. */
@@ -7738,7 +7745,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // after the code lane already missed, and takes over only when a locative
   // fact row for that exact subject exists — a real module answer, and every
   // no-fact miss, is untouched.
-  const whereQ = miss ? q.match(WHERE_IS_FACT_RE) : null;
+  const whereQ = miss ? (q.match(WHERE_IS_FACT_RE) || q.match(WHERE_DOES_FACT_RE)) : null;
   if (whereQ) {
     const variants = factTermVariants(normFactTerm, whereQ[1]);
     const hits = (await factRows(memoryDir, cache))
