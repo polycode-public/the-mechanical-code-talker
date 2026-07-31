@@ -1909,6 +1909,11 @@ function dropAbsorbedRecords(payload, ids) {
  * A head absorbed by pool 1 takes its own chain with it. The chain is reachable
  * only through the head, so once the head is summarized its history answers no
  * question this model asks, and leaving it behind would orphan it.
+ *
+ * Returns the record ids it absorbed rather than removing them, so a batch that
+ * compacts many groups pays for one sweep of the payload instead of one per
+ * group. Groups are independent, so a still-present absorbed record can never
+ * affect another group's planning.
  */
 function compactFactGroup(payload, groupId) {
   const idx = memoryIndexOf(payload);
@@ -1916,7 +1921,7 @@ function compactFactGroup(payload, groupId) {
   // Nearly every fact has no summary in either pool, and the record count says
   // so before anything else is read: pool 2 has the lower trigger, so a group
   // under it can fire neither pool.
-  if (ids.length < CHAIN_ROLLUP_THRESHOLD) return;
+  if (ids.length < CHAIN_ROLLUP_THRESHOLD) return [];
 
   const headsByType = new Map();
   const leavesBySource = new Map();
@@ -1988,7 +1993,7 @@ function compactFactGroup(payload, groupId) {
     if (rewired) setAttr(rewired, SUPERSEDES_PROP, "supersedes", plan.rollup.id);
   }
 
-  dropAbsorbedRecords(payload, absorbed);
+  return absorbed;
 }
 
 /** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual —
@@ -2027,7 +2032,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
       }
     }
     // After the Sources exist, so a summary can price what it absorbs.
-    compactFactGroup(payload, groupId);
+    dropAbsorbedRecords(payload, compactFactGroup(payload, groupId));
     recountClasses(payload);
   });
   return { id: groupId };
@@ -2129,7 +2134,9 @@ export async function appendFacts(dir, facts) {
     // After the Sources exist, so a summary can price what it absorbs, and once
     // per touched GROUP rather than once per prepared row — a batch that
     // asserts the same triple many times compacts it once.
-    for (const groupId of new Set(ids)) compactFactGroup(payload, groupId);
+    const absorbed = [];
+    for (const groupId of new Set(ids)) absorbed.push(...compactFactGroup(payload, groupId));
+    dropAbsorbedRecords(payload, absorbed);
     recountClasses(payload);
   });
   return { ids, appended: ids.length, skipped };
