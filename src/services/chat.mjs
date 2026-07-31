@@ -6010,7 +6010,7 @@ function nudgeName(captured, focus) {
  *  for the opinion gate: it must fire BEFORE the short-miss's "is a <thing> a
  *  <kind>" membership hint would (the caller runs this whole step before the
  *  short-miss rewrite). */
-function nudgeAnswer(query, focus, vocabHint = null) {
+function nudgeAnswer(query, focus, vocabHint = null, uiContext = "cli") {
   const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (PERSONAL_ASSISTANT_NUDGE_RE.test(q)) {
     // A hardcoded "what is a dog" example here would be a lie in any UNSEEDED
@@ -6020,9 +6020,14 @@ function nudgeAnswer(query, focus, vocabHint = null) {
     // summary). vocabHint (threaded from runAsk/runTurn's own
     // hasSeededVocabulary check) is ALREADY the correct session-gated clause:
     // "what is a dog" when seeded, `tmct init` otherwise — reused verbatim
-    // instead of a second, ungated copy.
+    // instead of a second, ungated copy. Its own last-resort fallback (a
+    // session that passed no hint at all) still has to pick a remedy, so it
+    // splits on the surface for the same reason vocabExampleHint does.
+    const fallback = uiContext === "browser"
+      ? 'Teach me a fact, e.g. "every bug is an issue".'
+      : "Run `tmct init` to seed a starter vocabulary.";
     return "I don't have access to that — I'm a deterministic code/vocabulary assistant, not a general assistant. "
-      + `Ask me about code structure ("which modules import <name>"). ${vocabHint || 'Run `tmct init` to seed a starter vocabulary.'}`;
+      + `Ask me about code structure ("which modules import <name>"). ${vocabHint || fallback}`;
   }
   if (OPINION_NUDGE_RE.test(q)) {
     const name = focus?.label || "<name>";
@@ -13524,7 +13529,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // must never become a recallable answer. The opinion gate fires HERE, before the
   // short-miss's "is a <thing> a <kind>" membership hint could claim the line.
   if (miss && recordMiss && via === "composed") {
-    const nudged = nudgeAnswer(query, newFocus, vocabHint);
+    const nudged = nudgeAnswer(query, newFocus, vocabHint, uiContext);
     if (nudged) {
       answer = nudged; via = "miss";
       note(trace, "lane: (4c) CAPABILITY NUDGE — the question asked tmct to do something outside its scope (opinion/generation/risk-scoring)");

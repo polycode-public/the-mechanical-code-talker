@@ -57,6 +57,11 @@ test("the arithmetic decline offers a repo only in a terminal", async () => {
   assert.match(await cliTurn("whats 2+2"), /--repo/);
 });
 
+test("the personal-assistant nudge falls back to a teach pointer on a page, a seed command in a terminal", async () => {
+  assert.doesNotMatch(await pageTurn("what time is it"), CLI_COMMANDS);
+  assert.match(await cliTurn("what time is it"), /tmct init/);
+});
+
 test("the empty-memory summary offers `tmct init` only in a terminal", async () => {
   assert.doesNotMatch(await pageTurn("what do you know"), CLI_COMMANDS);
   assert.match(await cliTurn("what do you know"), /tmct init/);
