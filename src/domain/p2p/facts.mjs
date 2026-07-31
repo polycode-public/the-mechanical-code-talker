@@ -12,15 +12,22 @@ export const WORLD_NAME_PREDICATE = "mgx:worldName";
 export const NODE_NAME_PREDICATE = "mgx:nodeName";
 export const PLAYED_BY_PREDICATE = "mgx:playedBy";
 export const WAVED_PREDICATE = "mgx:waved";
+export const INVITED_BY_PREDICATE = "mgx:invitedBy";
 
 export const P2P_PREDICATES = Object.freeze([
   WORLD_NAME_PREDICATE,
   NODE_NAME_PREDICATE,
   PLAYED_BY_PREDICATE,
   WAVED_PREDICATE,
+  INVITED_BY_PREDICATE,
 ]);
 
 const provenanceFor = (id, timestamp) => `ace:p2p:${id}@${timestamp}`;
+
+/** The term a node id takes as a fact subject or object, matching `peer:` for
+ *  connection-scoped peer ids. A node id is the stable one — it outlives a
+ *  reconnect, which is what an admission edge needs. */
+export const nodeTerm = (nodeId) => `node:${nodeId}`;
 
 export function worldNameFact(worldId, name, timestamp) {
   return { subject: worldId, predicate: WORLD_NAME_PREDICATE, object: name, provenance: provenanceFor(worldId, timestamp) };
@@ -32,6 +39,20 @@ export function nodeNameFact(peerId, name, timestamp) {
 
 export function playedByFact(characterId, peerId, timestamp) {
   return { subject: characterId, predicate: PLAYED_BY_PREDICATE, object: `peer:${peerId}`, provenance: provenanceFor(characterId, timestamp) };
+}
+
+/** Who let a node into the mesh. There is no open discovery here — every node
+ *  arrives through an invite a member chose to send — so this edge records a
+ *  social admission graph that identities cannot mint for themselves. The
+ *  joiner writes it, because the joiner is the only side that knows both node
+ *  ids at the moment it decides to join. */
+export function invitedByFact(joinerNodeId, inviterNodeId, timestamp) {
+  return {
+    subject: nodeTerm(joinerNodeId),
+    predicate: INVITED_BY_PREDICATE,
+    object: nodeTerm(inviterNodeId),
+    provenance: provenanceFor(joinerNodeId, timestamp),
+  };
 }
 
 export function waveFact(characterId, roomId, timestamp) {

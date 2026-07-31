@@ -309,12 +309,43 @@ export function assertionPrior(sourceType, source) {
   return round(Math.max(0, Math.min(1, p)));
 }
 
+/** The most any ONE source type's corroboration can contribute to a group,
+ *  however many sources of that type assert the triple. Identities are free to
+ *  mint in a mesh with no central authority, so identity COUNT on its own must
+ *  never buy certainty: a thousand cooperating peers asymptote here instead of
+ *  climbing to 1. `operator` is uncapped, because the person holding the store
+ *  is the one authority this model trusts outright; an unrecognised type is
+ *  uncapped too, since there is no prior to derive a ceiling from.
+ *
+ *  The (prior + 1) / 2 formula is a starting guess. It has not been measured or
+ *  tuned against real corroboration or abuse data, and it is meant to be
+ *  revisited once such data exists. */
+export function aggregateCeilingFor(sourceType) {
+  if (sourceType === "operator") return 1;
+  const prior = SOURCE_PRIOR[sourceType];
+  if (prior === undefined) return 1;
+  return (prior + 1) / 2;
+}
+
 /**
  * Trust for one assertion GROUP — every live head sharing a triple hash, one
  * record per asserting source. Noisy-OR over each record's own effective prior,
  * each decayed by ITS OWN assertion time rather than the group's first write:
  * every hop ages separately, so a fresh assertion is no longer dragged down by
  * an old corpus record's timestamp beside it.
+ *
+ * The noisy-OR runs per source TYPE first, each type's aggregate is clamped to
+ * that type's own ceiling, and the clamped aggregates then combine across
+ * types. So same-type corroboration asymptotes at its ceiling, while
+ * cross-type corroboration still climbs past any single type's: an independent
+ * corpus record and an independent peer say more together than either alone.
+ *
+ * The ceiling bounds what CORROBORATION adds, so it never drags a type below
+ * its own strongest single record. One record is testimony, not agreement, and
+ * the Sybil lever this caps is minting extra asserters — an entailed
+ * conclusion whose premise-derived trust already sits above the entailed
+ * ceiling, or a peer whose track record has earned it a prior above the teach
+ * ceiling, keeps what it scored on its own.
  *
  * `records` supplies `{ ownTrust, assertedAt, sourceId?, sourceType? }` per
  * head. Deterministic given the same inputs and `opts.now`. Returns
@@ -323,16 +354,23 @@ export function assertionPrior(sourceType, source) {
 export function computeAssertionGroupTrust(records, opts = {}) {
   const now = typeof opts.now === "number" ? opts.now : Date.now();
   const heads = Array.isArray(records) ? records : [];
-  let complement = 1;
+  const byType = new Map();
   const inputs = [];
   for (const r of heads) {
     const recency = recencyNudge(r?.assertedAt, now, opts.halfLifeMs);
     const own = Math.max(0, Math.min(1, Number(r?.ownTrust) || 0));
-    complement *= 1 - Math.max(0, Math.min(1, own * recency));
-    inputs.push({
-      sourceId: r?.sourceId || "", sourceType: r?.sourceType || "",
-      ownTrust: own, recency: round(recency),
-    });
+    const sourceType = r?.sourceType || "";
+    const contribution = Math.max(0, Math.min(1, own * recency));
+    const bucket = byType.get(sourceType) || { complement: 1, strongest: 0 };
+    bucket.complement *= 1 - contribution;
+    bucket.strongest = Math.max(bucket.strongest, contribution);
+    byType.set(sourceType, bucket);
+    inputs.push({ sourceId: r?.sourceId || "", sourceType, ownTrust: own, recency: round(recency) });
+  }
+  let complement = 1;
+  for (const [sourceType, bucket] of byType) {
+    const ceiling = Math.max(aggregateCeilingFor(sourceType), bucket.strongest);
+    complement *= 1 - Math.min(1 - bucket.complement, ceiling);
   }
   return { score: heads.length ? round(Math.min(1, 1 - complement)) : 0, inputs };
 }

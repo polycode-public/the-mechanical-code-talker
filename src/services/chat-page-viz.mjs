@@ -227,12 +227,12 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
   let mineLastActive = null;
   let mineLastFact = null;
   let mineLastFactAt = null;
-  // The P2P layer's own bookkeeping rows (names, claims, waves) key on raw
-  // node ids, and the roster's rule is that no id ever reaches the screen —
-  // they still count as activity, they just never show as "last shared".
-  // The fact keeps its own newest-timestamp race, apart from activity, so a
-  // fresh wave can never mask an older real fact.
-  const BOOKKEEPING = ["mgx:worldName", "mgx:nodeName", "mgx:playedBy", "mgx:waved"];
+  // The P2P layer's own bookkeeping rows (names, claims, waves, who invited
+  // whom) key on raw node ids, and the roster's rule is that no id ever
+  // reaches the screen — they still count as activity, they just never show
+  // as "last shared". The fact keeps its own newest-timestamp race, apart
+  // from activity, so a fresh wave can never mask an older real fact.
+  const BOOKKEEPING = ["mgx:worldName", "mgx:nodeName", "mgx:playedBy", "mgx:waved", "mgx:invitedBy"];
   const factOf = (row) => (BOOKKEEPING.indexOf(row.predicate) >= 0
     ? null
     : { subject: row.subject, predicate: row.predicate, object: row.object });

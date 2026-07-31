@@ -144,3 +144,74 @@ test("a Fact's and a Source's mgx:updatedAt advance when recomputeFactTrust/reco
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+const NODE_CLEAN = "7f3a9c2e5b1d4a60";
+const NODE_JUNK = "6589e595d1fa9a90";
+const peerTag = (nodeId, name) => `teach:peer:${name}#node:${nodeId}@2026-07-30T00:00:00.000Z`;
+
+test("a peer node carries its own track record: an asserting-and-contradicted node's Source scores below a clean node's, and it drags that node's every fact down", async () => {
+  const dir = await tmpRepo();
+  try {
+    const teachFromNode = (nodeId, name) => (subject, object) => appendFact(dir, {
+      subject, predicate: SINGLE_VALUED, object, provenance: peerTag(nodeId, name),
+    });
+    const junkNode = teachFromNode(NODE_JUNK, "scavenger-dial");
+    const cleanNode = teachFromNode(NODE_CLEAN, "amber-fox");
+    const corpusSays = (subject, object) => appendFact(dir, {
+      subject, predicate: SINGLE_VALUED, object, provenance: "corpus:conceptnet /r/HasProperty",
+    });
+
+    await junkNode("alpha", "red"); await corpusSays("alpha", "blue");
+    await junkNode("beta", "red"); await corpusSays("beta", "blue");
+    await junkNode("gamma", "red"); await corpusSays("gamma", "blue");
+    await junkNode("delta", "red");   // asserted by the junk node, never itself contradicted
+    await junkNode("epsilon", "red");
+
+    await cleanNode("zeta", "red");
+    await cleanNode("eta", "red");
+    await cleanNode("theta", "red");
+    await cleanNode("iota", "red");
+    await cleanNode("kappa", "red");
+
+    const m = await loadMemory(dir);
+    const junkSource = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_JUNK}`);
+    const cleanSource = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_CLEAN}`);
+    assert.ok(junkSource && cleanSource, "one Source per peer node exists");
+
+    const junkReliability = Number(attr(junkSource, SOURCE_RELIABILITY_PROP));
+    const cleanReliability = Number(attr(cleanSource, SOURCE_RELIABILITY_PROP));
+    assert.equal(junkReliability, sessionReliabilityFrom({ factsAsserted: 5, factsContradicted: 3 }));
+    assert.equal(cleanReliability, sessionReliabilityFrom({ factsAsserted: 5, factsContradicted: 0 }));
+    assert.ok(junkReliability < 1, "a node whose claims keep getting contradicted drops below neutral");
+    assert.ok(cleanReliability > 1, "a node whose claims stand rises above neutral");
+
+    const rows = readFactRows(m);
+    const junkOwnFactTrust = rows.find((r) => r.subject === "delta")?.trust;
+    const cleanOwnFactTrust = rows.find((r) => r.subject === "zeta")?.trust;
+    assert.ok(
+      junkOwnFactTrust < cleanOwnFactTrust,
+      `the junk node's reputation follows a fact nothing contradicted (${junkOwnFactTrust} < ${cleanOwnFactTrust})`,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a peer node's first-ever fact scores the teach prior nudged by a mildly-positive one-assertion record", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, {
+      subject: "dog", predicate: "mgx:capableOf", object: "bark", provenance: peerTag(NODE_CLEAN, "amber-fox"),
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_CLEAN}`);
+    assert.equal(Number(attr(source, SOURCE_RELIABILITY_PROP)), sessionReliabilityFrom({ factsAsserted: 1, factsContradicted: 0 }));
+    assert.equal(Number(attr(source, SOURCE_RELIABILITY_PROP)), 1.025);
+
+    const record = m.individuals.find((i) => i.class === "Fact" && i.id.endsWith(`@src:teach-node:${NODE_CLEAN}`));
+    assert.ok(record, "the assertion record is keyed on the peer node's own Source id");
+    assert.equal(Number(attr(record, "mgx:trustScore")), 0.97375, "0.95 teach prior x the 1.025 nudge");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

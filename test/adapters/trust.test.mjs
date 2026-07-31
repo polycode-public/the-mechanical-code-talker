@@ -10,6 +10,7 @@ import {
   computeTrust, recencyNudge, SOURCE_PRIOR, RECENCY_FLOOR,
   SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL,
   sessionReliabilityFrom, provenanceTagToSource,
+  computeAssertionGroupTrust, aggregateCeilingFor,
 } from "../../src/domain/memory/trust.mjs";
 import { appendFact, loadMemory, provSourceClassFor, SOURCE_CLASS } from "../../src/adapters/memory/core.mjs";
 
@@ -461,4 +462,67 @@ test("an older reader keeps two same-named nodes apart, because the id it cannot
 test("an older reader and a new one agree on the timestamp, so a tag orders the same on both", () => {
   const tag = "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z";
   assert.equal(parseAsOlderReader(tag).createdAt, provenanceTagToSource(tag).createdAt);
+});
+
+// Assertion-group heads, all asserted at the same fixed instant so recency is
+// one shared constant and the ceiling arithmetic below is exact.
+const ASSERTED_AT = "2026-07-05T00:00:00.000Z";
+const heads = (sourceType, count, ownTrust) => Array.from({ length: count }, (_, i) => ({
+  sourceId: `src:${sourceType}:${i}`, sourceType, ownTrust, assertedAt: ASSERTED_AT,
+}));
+const groupScore = (records) => computeAssertionGroupTrust(records, { now: Date.parse(ASSERTED_AT) }).score;
+
+test("aggregateCeilingFor: (prior + 1) / 2 per type, with operator uncapped", () => {
+  assert.equal(aggregateCeilingFor("teach"), 0.975);
+  assert.equal(aggregateCeilingFor("corpus"), 0.85);
+  assert.equal(aggregateCeilingFor("web"), 0.7);
+  assert.equal(aggregateCeilingFor("operator"), 1, "the store's own holder is the one authority left uncapped");
+  assert.equal(aggregateCeilingFor("no-such-type"), 1, "no prior to derive a ceiling from means no ceiling");
+});
+
+test("same-type corroboration approaches its ceiling and never crosses it, however many sources pile on", () => {
+  let previous = 0;
+  for (const count of [1, 2, 5, 20, 200, 1000]) {
+    const score = groupScore(heads("teach", count, SOURCE_PRIOR.teach));
+    assert.ok(score <= aggregateCeilingFor("teach"), `${count} teach sources stay at or under the ceiling, got ${score}`);
+    assert.ok(score >= previous, "more corroboration never lowers the score");
+    previous = score;
+  }
+  assert.equal(previous, aggregateCeilingFor("teach"), "a thousand peers max out AT the ceiling, not above it");
+});
+
+test("a Sybil pile of same-type asserters stays below what a single operator says on its own", () => {
+  const thousandPeers = groupScore(heads("teach", 1000, SOURCE_PRIOR.teach));
+  const oneOperator = groupScore(heads("operator", 1, SOURCE_PRIOR.operator));
+  assert.ok(thousandPeers < oneOperator, `${thousandPeers} must stay under operator certainty ${oneOperator}`);
+});
+
+test("each type is capped on its own, so corpus and web asymptote at their own ceilings", () => {
+  assert.equal(groupScore(heads("corpus", 500, SOURCE_PRIOR.corpus)), aggregateCeilingFor("corpus"));
+  assert.equal(groupScore(heads("web", 500, SOURCE_PRIOR.web)), aggregateCeilingFor("web"));
+});
+
+test("cross-type corroboration still climbs past any single type's ceiling", () => {
+  const cappedCorpus = groupScore(heads("corpus", 500, SOURCE_PRIOR.corpus));
+  const cappedWeb = groupScore(heads("web", 500, SOURCE_PRIOR.web));
+  const both = groupScore([...heads("corpus", 500, SOURCE_PRIOR.corpus), ...heads("web", 500, SOURCE_PRIOR.web)]);
+  assert.ok(both > cappedCorpus, "a whole second, independent type adds real weight");
+  assert.ok(both > cappedWeb);
+  assert.equal(both, 1 - (1 - cappedCorpus) * (1 - cappedWeb), "the capped per-type aggregates combine by noisy-OR");
+});
+
+test("the ceiling bounds corroboration, so it never drags a lone record below what it scored on its own", () => {
+  // An entailed conclusion's premise-derived trust sits above the entailed
+  // ceiling of 0.65; one record is testimony, not agreement, so it keeps it.
+  const lone = groupScore([{ sourceId: "src:entailed:cax-dw", sourceType: "entailed", ownTrust: 0.9, assertedAt: ASSERTED_AT }]);
+  assert.ok(aggregateCeilingFor("entailed") < 0.9, "the fixture really is above its type ceiling");
+  assert.equal(lone, 0.9);
+});
+
+test("the corpus + peer-teach worked pair folds to the same number the flat noisy-OR gave", () => {
+  const score = groupScore([
+    { sourceId: "src:corpus:human", sourceType: "corpus", ownTrust: 0.7, assertedAt: ASSERTED_AT },
+    { sourceId: "src:teach-node:7f3a9c2e", sourceType: "teach", ownTrust: 0.97375, assertedAt: ASSERTED_AT },
+  ]);
+  assert.equal(score, 0.992125, "both sit under their own ceilings, so nothing is clamped");
 });
