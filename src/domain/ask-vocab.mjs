@@ -209,6 +209,11 @@ export const WORLD_RELATIONS = Object.freeze({
     comment: "individual -> place: where the subject is right now.",
     nouns: Object.freeze(["location", "locations", "position", "positions", "place", "places", "whereabouts", "room", "rooms"]),
     reads: "is in",
+    // A folded prepositional-verb predicate the teach path minted (mgx:rest-on,
+    // mgx:sit-in) says where its subject is, same as `predicate` above. This
+    // relation answers off those rows too, reading each one under its own
+    // preposition rather than under this entry's default `reads`.
+    matchesLocativePredicates: true,
   }),
   mood: Object.freeze({
     predicate: "mgx:feels",
@@ -234,6 +239,25 @@ export const WORLD_NOUN_TO_RELATION = Object.freeze(Object.fromEntries(
 export const WORLD_PREDICATES = Object.freeze(
   Object.values(WORLD_RELATIONS).map((r) => r.predicate),
 );
+
+/** The closed set of prepositions a folded prepositional-verb predicate ends in
+ *  when it states WHERE its subject is. A world writes its own placement rows
+ *  under WORLD_RELATIONS.placement's single predicate; a taught fact arrives as
+ *  whatever verb someone used, folded with the preposition they said it with
+ *  ("ann lives in paris" -> mgx:life-in), so the tail is the only thing that
+ *  marks it as a location rather than an arbitrary relation. */
+export const LOCATIVE_PREPOSITIONS = Object.freeze([
+  "on", "in", "at", "inside", "under", "below", "above", "near", "beside", "behind", "by",
+]);
+
+const LOCATIVE_PREDICATE_RE = new RegExp(`^mgx:[a-z]+-(${LOCATIVE_PREPOSITIONS.join("|")})$`, "i");
+
+/** The preposition a locative predicate folded ("mgx:rest-on" -> "on"), or null
+ *  when the predicate says nothing about where its subject is. */
+export function locativePreposition(predicate) {
+  const m = LOCATIVE_PREDICATE_RE.exec(String(predicate || ""));
+  return m ? m[1].toLowerCase() : null;
+}
 
 // The regular English 3rd-person-singular suffix rule (the same regular
 // -s/-es/-ies shape src/domain/inflect.mjs's own `pluralOf` applies to a
@@ -279,6 +303,21 @@ export const WHERE_MARKERS = Object.freeze(["defined", "declared", "located", "i
  *  one — so they are stripped rather than bound as part of the term. A closed set:
  *  the term itself is free text, and only a listed word may be taken off it. */
 export const TRAILING_TEMPORAL_ADVERBS = Object.freeze(["now", "currently", "right now", "at the moment", "these days", "today"]);
+
+// Longest phrase first, or "right now" would lose only its "now" and leave a
+// stray "right" glued to the term.
+const TRAILING_TEMPORAL_ADVERB_RE = new RegExp(
+  `\\s+(?:${[...TRAILING_TEMPORAL_ADVERBS].sort((a, b) => b.length - a.length).join("|")})(\\s*[?.!]*)$`,
+  "i",
+);
+
+/** Take one trailing temporal adverb off a locative question ("where does ann
+ *  live now" -> "where does ann live"), leaving the question's own punctuation.
+ *  A question that IS the adverb keeps it — the strip needs something in front
+ *  of the word to be taking it off. */
+export function stripTrailingTemporalAdverb(text) {
+  return String(text || "").replace(TRAILING_TEMPORAL_ADVERB_RE, "$1");
+}
 
 /** Prose-mention markers: "where is X <marker>" -> the prose/mentions surface. */
 export const MENTION_MARKERS = Object.freeze(["mentioned", "referenced"]);
