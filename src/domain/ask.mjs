@@ -3829,7 +3829,14 @@ function renderCore(parsed, result, graph) {
         }
       }
     }
-    const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
+    // Candidates that all share one class are named by THAT class: a board's
+    // pegs are pegs, and calling them modules states something about the graph
+    // that isn't true. A class the curated noun table doesn't carry (a world's
+    // own taxonomy) reads as its own enum. Mixed grains keep "module".
+    const tiedClass = pool.length && pool.every((i) => i.class === pool[0].class) ? pool[0].class : null;
+    const noun = tiedClass
+      ? (PLURAL_FORMS[tiedClass] ? nounFor(tiedClass, 1) : classDisplayName(tiedClass))
+      : "module";
     const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
     const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
     const lead = `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`;
@@ -3843,9 +3850,17 @@ function renderCore(parsed, result, graph) {
     // preview is about. Swapped only when the literal ambiguous term still
     // appears as a whole word in that ONE branch's own text — every other
     // branch, and every non-branch render, is untouched.
+    //
+    // The candidate's own label is held out of the swap: a label that CONTAINS
+    // the term as a word ("peg" inside "peg-a") already names the candidate,
+    // and rewriting it there would grow it into "peg-a-a".
     const term = String(parsed.object || "");
     const termRe = term ? new RegExp(`\\b${escapeRegex(term)}\\b`, "gi") : null;
-    const branchText = (b) => (termRe ? b.rendered.content.replace(termRe, b.candidate.label) : b.rendered.content);
+    const branchText = (b) => {
+      const label = String(b.candidate.label || "");
+      if (!termRe || !label) return b.rendered.content;
+      return b.rendered.content.split(label).map((outsideLabel) => outsideLabel.replace(termRe, label)).join(label);
+    };
     const content = (branches && branches.length)
       ? `${lead}\n${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${branchText(b)}`).join("\n")}`
       : lead;
@@ -4571,6 +4586,31 @@ const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // is entity-term noise (resolveObject's own article strip) and is dropped.
 const WHATIS_FOR_FALLBACK_RE = /^what\s+is\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\s+(?:used\s+)?for[?.!\s]*$/i;
 
+/** True when the name resolver's tie is not a second reading of the question at
+ *  all: every tied candidate belongs to ONE class, and the term the question
+ *  used is that class's own noun. "where are the disks" over a board of disk-1,
+ *  disk-2 and disk-3 ties on the pieces' names — but "disks" names the class
+ *  they are all members of, so the question is about the class, and offering
+ *  "did you mean disk-1, disk-2 or disk-3" answers a question nobody asked.
+ *
+ *  A genuine module-name ambiguity fails this: two modules both called store.mjs
+ *  tie on their names, and no class in the graph is called "store". */
+function tieNamesAClass(graph, parsed, result) {
+  const term = String(parsed?.object || "").trim();
+  if (!term) return false;
+  const cls = resolveDynamicClass(graph, term);
+  if (!cls) return false;
+  const tied = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
+  return tied.length > 1 && tied.every((i) => i.class === cls);
+}
+
+/** The class-membership fallbacks below run once the cascade above has nothing
+ *  of its own to say: an honest miss, or a name tie that was really a reference
+ *  to a class. Each lane still has to answer for real before it is adopted. */
+const classLanesApply = (graph, parsed, result, rendered) => (rendered.ambiguous
+  ? tieNamesAClass(graph, parsed, result)
+  : !!rendered.miss);
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   if (isHelpRequest(query)) {
     return {
@@ -4595,9 +4635,9 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   }
   let result = traverse(graph, parsed, { contextId, prev });
   let rendered = render(parsed, result, graph);
-  // Dynamic memory-graph class count/list fallback, only once everything
-  // above already produced an honest miss.
-  if (rendered.miss && !rendered.ambiguous) {
+  // Dynamic memory-graph class count/list fallback, only once everything above
+  // has had its turn and come back with nothing of its own.
+  if (classLanesApply(graph, parsed, result, rendered)) {
     const dyn = dynamicClassQuery(graph, query);
     if (dyn) {
       const dynResult = traverse(graph, dyn, { contextId, prev });
@@ -4606,8 +4646,8 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     }
   }
   // World-relation listing ("list the locations of flies and spiders"), on the
-  // same terms: only after an honest miss, and only when it answers for real.
-  if (rendered.miss && !rendered.ambiguous) {
+  // same terms, and only when it answers for real.
+  if (classLanesApply(graph, parsed, result, rendered)) {
     const world = worldRelationQuery(graph, query);
     if (world) {
       const worldResult = traverse(graph, world, { contextId, prev });

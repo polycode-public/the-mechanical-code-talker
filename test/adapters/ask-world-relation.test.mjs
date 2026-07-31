@@ -138,6 +138,62 @@ test("world-relation listing never intercepts a code-graph question", () => {
   assert.equal(ask(graph, "which modules import b.mjs").tmct_ask.miss, false);
 });
 
+// Pieces named after their own class ("pod-1" in class "pod") tie in the name
+// resolver against the word the question uses: "pods" is one edit from the
+// "pod" component of every id, and "pod" is a prefix of every label. That tie
+// is a reference to the class, not a second reading of the question, so the
+// board still answers.
+const podBoard = (n) => parseEntities(worldRelationGraphPayload(
+  Array.from({ length: n }, (_, i) => ({ subject: `pod-${i + 1}`, predicate: "mgx:currently-in", object: `cell-${i + 1}-1` })),
+  { classOf: (id) => id.replace(/-\d+$/, "") },
+));
+
+test("a name tie against the pieces' own class noun still answers off the board, at any number of pieces", () => {
+  for (const n of [2, 3, 5]) {
+    const expected = `${Array.from({ length: n }, (_, i) => `pod-${i + 1} is in cell-${i + 1}-1`).join("; ")}.`;
+    for (const q of ["where are the pods", "where is the pod", "list the locations of pods"]) {
+      const r = ask(podBoard(n), q);
+      assert.equal(r.tmct_ask.ambiguous, false, `${q} (${n} pods)`);
+      assert.equal(r.tmct_ask.miss, false, `${q} (${n} pods)`);
+      assert.equal(r.content, expected, `${q} (${n} pods)`);
+      assert.equal(r.tmct_ask.canonical.machine, "composite(worldRelation)", `${q} (${n} pods)`);
+    }
+  }
+});
+
+test("a real module-name collision keeps its ambiguity — no class in the graph carries that noun", () => {
+  const graph = parseEntities({
+    individuals: [
+      { id: "m:1", label: "src/store.mjs", class: "Module" },
+      { id: "m:2", label: "src/core/store.mjs", class: "Module" },
+    ],
+    objectProperties: [],
+  });
+  const r = ask(graph, "where is store");
+  assert.equal(r.tmct_ask.ambiguous, true);
+  assert.match(r.content, /matches more than one module ambiguously/);
+  assert.match(r.content, /src\/store\.mjs/);
+  assert.match(r.content, /src\/core\/store\.mjs/);
+});
+
+test("a module collision inside a live world graph is still an ambiguity, and the world pieces still answer", () => {
+  const graph = parseEntities({
+    individuals: [
+      { id: "m:1", label: "src/store.mjs", class: "Module" },
+      { id: "m:2", label: "src/core/store.mjs", class: "Module" },
+      { id: "pod-1", label: "pod-1", class: "pod" },
+      { id: "pod-2", label: "pod-2", class: "pod" },
+    ],
+    objectProperties: [{
+      prop: "mgx:currently-in",
+      predicate: "mgx:currently-in",
+      examples: [{ subject: "pod-1", object: "cell-1-1" }, { subject: "pod-2", object: "cell-2-1" }],
+    }],
+  });
+  assert.equal(ask(graph, "where is store").tmct_ask.ambiguous, true);
+  assert.equal(ask(graph, "where are the pods").content, "pod-1 is in cell-1-1; pod-2 is in cell-2-1.");
+});
+
 test("WORLD_RELATIONS: every listing noun maps back to exactly one relation, and none collides with a code entity noun", async () => {
   const { ENTITY_TO_TYPE } = await import("../../src/domain/ask-vocab.mjs");
   const seen = new Map();
