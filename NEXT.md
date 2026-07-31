@@ -112,14 +112,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **A taught individual's location doesn't answer through the world-relation projector.**
-  Over a memory-fact graph holding `ann mgx:life-in paris`, "where is ann" still answers "no
-  recorded code location" instead of the taught fact — the where lane only reads code sites, and
-  the world lane (`WORLD_RELATIONS` in `ask-vocab.mjs`) only fires for class nouns, not individual
-  subjects. Found landing the "where does X live" fix (`chat.mjs`'s own taught-fact reader now
-  covers this phrasing, a real, separate code path — this item is not that one). Needs
-  `ask-vocab.mjs`'s world-relation vocabulary opened to individual-level locatives — a design
-  change, not a one-line fix.
+- [ ] **The locative-predicate closed set is spelled twice.** `chat.mjs`'s `LOCATIVE_FACT_PREDICATE_RE`
+  and `ask-vocab.mjs`'s new `LOCATIVE_PREPOSITIONS` (added landing individual-level world-relation
+  locatives) are the same preposition family, defined independently in two files — a real drift
+  risk if one gains a preposition the other doesn't. `chat.mjs` importing the set from
+  `ask-vocab.mjs` would collapse it to one; deferred because it's a `chat.mjs` edit outside the
+  track that found it.
 
 ## Discipline
 
