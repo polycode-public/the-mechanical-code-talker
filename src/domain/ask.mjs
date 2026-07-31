@@ -178,6 +178,40 @@ function pruneSpuriousMeaningAmbiguity(parsed) {
   return metaC;
 }
 
+// "where does ann live", "where do the mice sleep", "where does startup get
+// defined" — a where question fronted by do/does/did. Its verb carries no
+// relation kind, so keyword-spot's where branch is the strategy that claims the
+// surface, and that branch has no verb slot: it drops the auxiliary as a stop
+// word and glues subject and verb into one term ("ann live"), which resolves
+// against nothing. The subject alone is the term asked about; the verb is the
+// sentence's predicate and rides in its own `verb` slot for a caller that mints
+// a predicate from it.
+const WHERE_AUX_LEAD_RE = /^where\s+(?:does|do|did)\s+/i;
+const WHERE_MARKER_WORDS = new Set(wordsOf(WHERE_MARKERS));
+
+function splitAuxFrontedWhereVerb(parsed, text) {
+  if (!parsed || parsed.shape !== "where" || parsed.altObject || !WHERE_AUX_LEAD_RE.test(text)) return parsed;
+  const objectWords = splitWords(String(parsed.object || ""));
+  if (objectWords.length < 2) return parsed;
+  const verb = objectWords[objectWords.length - 1].toLowerCase();
+  if (!/^[a-z][a-z'-]*$/.test(verb) || STOPWORDS.has(verb) || VERB_TO_KIND[verb]) return parsed;
+  // do/does/did takes a bare infinitive, so a trailing participle ("where do i
+  // begin reading") is a complement and the tensed verb sits further left —
+  // dropping one word would leave a verb in the term either way, so decline.
+  if (verb.endsWith("ing")) return parsed;
+  // The auxiliary fronts the verb to the end of the sentence, so the glued word
+  // is only the predicate when it really sits there — a trailing where marker
+  // ("... get defined") is scaffolding keyword-spot already dropped.
+  const sentenceWords = splitWords(text).map((w) => w.toLowerCase());
+  while (sentenceWords.length && WHERE_MARKER_WORDS.has(sentenceWords[sentenceWords.length - 1])) sentenceWords.pop();
+  if (sentenceWords[sentenceWords.length - 1] !== verb) return parsed;
+  const subject = objectWords.slice(0, -1).join(" ");
+  // The glued reading stays reachable as `altObject`: traverse() prefers it when
+  // the subject alone doesn't resolve, so a graph holding an entity actually
+  // spelt that way still answers.
+  return { ...parsed, object: subject, altObject: String(parsed.object), verb };
+}
+
 export function parseQuery(query, { nlp = undefined } = {}) {
   return parseQueryFull(query, { nlp }).parsed;
 }
@@ -198,7 +232,7 @@ export function parseQueryFull(query, { nlp = undefined } = {}) {
   const merged = mergeStrategyResults(runStrategiesSync(text, { nlp: adapter, raw }));
   if (!merged) return { parsed: null, alternates: [], class: null };
   return {
-    parsed: pruneSpuriousMeaningAmbiguity(merged.parsed),
+    parsed: splitAuxFrontedWhereVerb(pruneSpuriousMeaningAmbiguity(merged.parsed), text),
     alternates: merged.alternates || [],
     class: merged.class || null,
   };

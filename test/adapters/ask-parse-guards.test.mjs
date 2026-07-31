@@ -53,3 +53,42 @@ test("an explicit whole-query 'help' asks for the rephrase hint; a symbol named 
   assert.match(r.content, /which <functions\|classes\|modules>/);
   assert.notEqual(ask(graph, "which functions call help", { nlp: null }).tmct_ask.help, true);
 });
+
+test("an auxiliary-fronted where question keeps its verb out of the term: 'where does ann live' asks about ann", () => {
+  const parsed = parseQueryFull("where does ann live", { nlp: null }).parsed;
+  assert.equal(parsed.shape, "where");
+  assert.equal(parsed.object, "ann");
+  assert.equal(parsed.verb, "live");
+  assert.equal(parsed.altObject, "ann live");
+});
+
+test("the same split holds for a plural auxiliary and for a light verb before a where marker", () => {
+  const plural = parseQueryFull("where do the mice sleep", { nlp: null }).parsed;
+  assert.equal(plural.object, "mice");
+  assert.equal(plural.verb, "sleep");
+  const marked = parseQueryFull("where does startup get defined", { nlp: null }).parsed;
+  assert.equal(marked.object, "startup");
+  assert.equal(marked.verb, "get");
+});
+
+test("'where does <term> live' resolves the same entity 'where is <term>' does", () => {
+  const aux = ask(graph, "where does fnAlpha live", { nlp: null });
+  assert.equal(aux.tmct_ask.miss, false);
+  assert.equal(aux.content, ask(graph, "where is fnAlpha", { nlp: null }).content);
+});
+
+test("a relation verb keeps its own reading, and the copula where question is untouched", () => {
+  const relational = parseQueryFull("where does fnAlpha import from", { nlp: null }).parsed;
+  assert.equal(relational.shape, "forward");
+  assert.equal(relational.kind, "imports");
+  assert.equal(relational.object, "fnAlpha");
+  assert.deepEqual(parseQueryFull("where is fnAlpha defined", { nlp: null }).parsed,
+    { shape: "where", entityType: null, modifier: "direct", kind: "where", object: "fnAlpha" });
+});
+
+test("the yes/no form of the same sentence keeps its subject and object apart", () => {
+  const parsed = parseQueryFull("does ann live in paris", { nlp: null }).parsed;
+  assert.equal(parsed.shape, "ask");
+  assert.equal(parsed.subject, "ann");
+  assert.equal(parsed.object, "paris");
+});
