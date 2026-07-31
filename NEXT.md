@@ -132,9 +132,17 @@ driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps
   syllogise), not just expectation drift. Known, correctly-deferred gap: peer-teach records score
   0.95 in the group aggregate, not the plan's worked-example 0.97375, until step 6's
   `src:teach-node:` reliability-tracking join lands.
-- [ ] Batch C — PLAN_FACT step 4, resolver table + `effectiveObservedAt` + `findContradictions`
-  stage-2 rewire: worktree dispatched, Opus. Status: started. Batches D (5/6/7) and E (8) stay
-  queued behind it.
+- [x] Batch C — PLAN_FACT step 4, resolver table — merged. Closed predicate-keyed strategy table
+  (`src/domain/memory/resolution.mjs`, new) — `merge`/`latest-observation-wins`/`first-claim-wins`/
+  contradiction default. `MULTI_VALUED_PREDICATES` is now derived from the merge row, one authority
+  instead of two. `effectiveObservedAt`/`resolveSiblingGroups` implement the read-time fallback
+  chain and the full tie ladder. All three named consumers (`recomputeSourceReliability`,
+  `inspect.mjs`, `ledger-viz.mjs`) needed expectation updates only, no code changes.
+- [x] Batch D — PLAN_FACT steps 5/6/7, all three merged (dated teach frame; Sybil tiers 1+2; two-pool
+  compaction). Peer-teach trust verified at the plan's own worked example: 0.97375 for a fresh
+  node's first fact. Compaction's CRDT convergence/drop-on-absorbed properties mutation-tested.
+- [ ] Batch E — PLAN_FACT step 8, `fact_heads` materialization (the final landing-order step):
+  worktree dispatched, Opus. Status: started.
 - [x] WebRTC connect-UX redesign (chat.html + mud.html) — merged. A shared `share-overlay-viz.mjs`
   full-page "lights down" component replaces chat's netPanel/joinCard and mud's independently-
   duplicated net-panel/join-card: a two-browser wire diagram doubling as connection status, a
@@ -169,6 +177,25 @@ driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps
   timing issue for the 89MB `chat-seed.json`, wider margin needed than `retry: 2` covers. Fixed with
   `scripts/warm-deployed-cache.mjs`, run at the end of `deploy:website` before the `e2e:deployed:*`
   jobs start.
+- The re-key grew every corpus record's own byte cost (`mgx:sourceId`, restructured `trustInputs`)
+  even though corpus bands stay one record per triple — the full `init:xl` band set measures
+  106,413,353 bytes, over `SEED_BYTE_CEILING`, breaking `demo:build` and cascading into
+  `e2e-web-index`/`e2e-web-local-origin`. Capped ConceptNet at 28,000 facts (was 36,328), buying back
+  ~10.8 MB headroom, seeding definitional-predicates-first so the cut favors the IsA/subClassOf
+  backbone over trivia.
+- Four bugs specific to the ask-bundle path (`test-e2e/`, not `test/adapters/` — outside every
+  PLAN_FACT worktree's own blast radius, only found by running the real CI job sets locally):
+  `recountClasses` threw on a payload with no `classes` array (a real, documented `tmct.open({payload})`
+  usage), silently swallowed into an honest miss with zero diagnostic trace; the ask-bundle test's
+  `vm.createContext` lacked `TextEncoder`, which the re-key's fact-id hashing now needs (a real
+  global in every environment the bundle ships to, already present in `chat-browser-bundle.test.mjs`'s
+  own context); `ledger-viz.mjs` joined `createdAt` by looking up a row's GROUP id directly in
+  individuals now keyed by per-source ASSERTION id, always missing; two independent test fixtures
+  (`ledger-viz.test.mjs`, and step 6's own new `memory-source-reliability.test.mjs` test) used
+  `mgx:hasProperty` as a "single-valued" contradiction fixture, not knowing step 4's widened merge
+  table reclassified it — the SAME mistake step 4's own agent had already made and fixed six times
+  in `test/adapters/`. **Any future fixture needing a genuinely single-valued/contradiction-default
+  predicate should use `mgx:father` or `mgx:mass` — `mgx:hasProperty` is `merge` now.**
 
 ## Open items
 
