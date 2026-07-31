@@ -1366,11 +1366,20 @@ function migrateLegacyProvenance(payload) {
   if (changed) recountClasses(payload);
 }
 
-/** A session-scoped operator/teach Source id (Part B2's `${SINGLETON}:<sessionId>`
- *  shape) — the only Source kind actor-level reliability applies to; a corpus/
- *  web/provider/entailed Source has no "session" to hold a track record for. */
+/** A Source id that names one actor and can therefore hold a track record —
+ *  the `${SINGLETON}:<id>` shape, for a local operator/teach session or for a
+ *  peer NODE across the mesh. A corpus/web/provider/entailed Source names a
+ *  document or a derivation, so there is no actor to score.
+ *
+ *  A peer node counts for the same reason a local session does, and it is the
+ *  reason this matters most: a node that asserts junk drags its own every-fact
+ *  prior toward half, so minting fresh identities to corroborate yourself stops
+ *  being free the moment any of those claims is contradicted. */
 const isSessionScopedSourceId = (id) =>
-  typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
+  typeof id === "string"
+  && (id.startsWith(`${OPERATOR_SOURCE_ID}:`)
+    || id.startsWith(`${TEACH_SOURCE_ID}:`)
+    || id.startsWith(`${TEACH_NODE_SOURCE_ID}:`));
 
 /**
  * Recompute + materialise mgx:sourceReliability on every session-scoped
