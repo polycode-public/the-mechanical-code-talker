@@ -112,10 +112,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`ask.mjs` binds "where does X live" to the code definition-locator.** After teaching "ann
-  lives in paris", "where is ann" answers off the taught fact but "where does ann live" resolves
-  the term as "ann live" and misses. The term is built in `ask.mjs`'s grammar, not `chat.mjs` —
-  the verb belongs in the predicate slot, not glued to the subject.
+- [ ] **A taught individual's location doesn't answer through the world-relation projector.**
+  Over a memory-fact graph holding `ann mgx:life-in paris`, "where is ann" still answers "no
+  recorded code location" instead of the taught fact — the where lane only reads code sites, and
+  the world lane (`WORLD_RELATIONS` in `ask-vocab.mjs`) only fires for class nouns, not individual
+  subjects. Found landing the "where does X live" fix (`chat.mjs`'s own taught-fact reader now
+  covers this phrasing, a real, separate code path — this item is not that one). Needs
+  `ask-vocab.mjs`'s world-relation vocabulary opened to individual-level locatives — a design
+  change, not a one-line fix.
 
 ## Discipline
 
