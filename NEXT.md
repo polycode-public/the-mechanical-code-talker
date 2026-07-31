@@ -130,13 +130,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   not a projector bug — found while landing the plan Hanoi-board projector. Left unfixed: the
   precedence ordering is engine-wide (every world page shares it), so higher risk than a
   single-page fix.
-- [ ] The wire tape's CSS still lives in `chat-page-viz.mjs`'s page-level `<style>` block, hardcoded
-  to base site theme tokens (`--ink`/`--muted`/`--card`) rather than the overlay's own `--so-*`
-  custom properties — chat gets away with it because its overlay isn't reskinned, so the two token
-  sets happen to match. Mud's wire-tape port had to redo the tape CSS from scratch using `--so-*`
-  tokens to avoid near-invisible text in light mode against its always-dark overlay skin. A third
-  page reusing `withTape` would hit the same trap; worth eventually moving the shared tape CSS into
-  `share-overlay-viz.mjs` itself, `--so-*` throughout, chat included.
 - [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
   `contradiction` — bit three separate test fixtures across two sessions before this was caught
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
@@ -151,8 +144,10 @@ a documentation note, not actionable — no track).
   message (both items live in the same file). worktree: dispatched, not yet landed. Status: started.
 - [ ] **Track G** — `ask.mjs` strategy-precedence fix for 3+ same-class individuals. worktree:
   dispatched, not yet landed. Status: started.
-- [ ] **Track H** — wire-tape CSS moved into `share-overlay-viz.mjs`, `--so-*` tokens throughout,
-  chat's duplicate removed. worktree: dispatched, not yet landed. Status: started.
+
+Landed and merged to main:
+- Track H (wire-tape CSS consolidated into `share-overlay-viz.mjs`, `--so-*` tokens throughout) —
+  blast-radius 137/137 + `test:fast` 209/209 green.
 
 ## Discipline
 
