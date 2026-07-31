@@ -642,35 +642,6 @@ ${THEME_TOKENS_CSS}
   @keyframes wire-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
   @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
 
-  /* the wire tape — this page's own instrument, riding inside the sharing
-     overlay's diagnostics fold. Every message in and out, in arrival order,
-     newest first so the latest is readable without scrolling. The 3px bar
-     carries the message family in the page's own provenance colours; the
-     type is spelled out beside it, so colour is never the only thing
-     distinguishing one row from another. */
-  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: .4rem 0 .3rem; }
-  .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--muted); }
-  .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
-  .meter-n { color: var(--ink); font-variant-numeric: tabular-nums; }
-  .tape { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; border-top: 1px solid var(--line); }
-  .tape-row { display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .18rem 0 .18rem .2rem; border-bottom: 1px dotted var(--line); font-size: .6rem; font-variant-numeric: tabular-nums; }
-  .tape-row:first-child { animation: tape-arrive .6s ease-out; }
-  .tape-bar { align-self: stretch; border-radius: 1px; background: var(--muted); }
-  .tape-clock { color: var(--muted); }
-  .tape-type { color: var(--ink); overflow-wrap: anywhere; }
-  .tape-detail { color: var(--muted); text-align: right; white-space: nowrap; }
-  .tape-row[data-dir="out"] .tape-type::before { content: "\\2192 "; color: var(--muted); }
-  .tape-row[data-dir="in"] .tape-type::before { content: "\\2190 "; color: var(--muted); }
-  .tape-row[data-dir="note"] .tape-type::before { content: "\\00b7 "; color: var(--muted); }
-  .tape-row[data-family="facts"] .tape-bar { background: var(--taught); }
-  .tape-row[data-family="state"] .tape-bar { background: var(--corpus); }
-  .tape-row[data-family="greeting"] .tape-bar { background: var(--entail); }
-  .tape-row[data-family="signal"] .tape-bar { background: var(--entail-t1); }
-  .tape-row[data-family="fault"] .tape-bar { background: var(--alert); }
-  .tape-row[data-family="fault"] .tape-type { color: var(--alert); }
-  .tape-empty { font-family: ${SERIF_STACK}; color: var(--muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
-  @keyframes tape-arrive { from { background: var(--corpus-soft); } to { background: transparent; } }
-
   /* a wave, on every page it reaches: the waver's node name, over the
      conversation, for as long as the wave is recent. Anchored under the
      topbar, where a chat app puts a presence toast — the foot of the column
@@ -695,7 +666,7 @@ ${THEME_TOKENS_CSS}
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
-    .state-pill .pill-dot, .tape-row:first-child { animation: none; transition: none; }
+    .state-pill .pill-dot { animation: none; transition: none; }
     .wave-pill, .wave-pill .hand { animation: none; }
   }
 
