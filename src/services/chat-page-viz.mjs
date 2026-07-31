@@ -1110,6 +1110,7 @@ ${shareOverlayHtml({ withTape: true })}
   let siteVersion = "dev";
   let lastStatsTotal = null;
   window.tmctChatLastSave = null;
+  window.tmct.lastSave = null;
 
   function scheduleSave() {
     if (!persist) return;
@@ -1126,7 +1127,10 @@ ${shareOverlayHtml({ withTape: true })}
         try { snapshot = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
       }
       persist.save(snapshot).then((saved) => {
-        if (saved) window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+        if (saved) {
+          window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+          window.tmct.lastSave = window.tmctChatLastSave;
+        }
       });
     }, 500);
   }
@@ -2369,6 +2373,7 @@ ${shareOverlayHtml({ withTape: true })}
     console.error("tmct chat failed to boot", err);
     statusEl.textContent = "the chat failed to start (" + (err && err.message ? err.message : err) + ")";
   });
+  window.tmct.ready = window.tmctChatReady;
 })();
 </script>
 </body>
