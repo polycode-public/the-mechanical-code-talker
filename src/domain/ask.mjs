@@ -3859,7 +3859,7 @@ function renderCore(parsed, result, graph) {
     const branchText = (b) => {
       const label = String(b.candidate.label || "");
       if (!termRe || !label) return b.rendered.content;
-      return b.rendered.content.split(label).map((away) => away.replace(termRe, label)).join(label);
+      return b.rendered.content.split(label).map((outsideLabel) => outsideLabel.replace(termRe, label)).join(label);
     };
     const content = (branches && branches.length)
       ? `${lead}\n${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${branchText(b)}`).join("\n")}`
@@ -4636,7 +4636,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   let result = traverse(graph, parsed, { contextId, prev });
   let rendered = render(parsed, result, graph);
   // Dynamic memory-graph class count/list fallback, only once everything above
-  // has produced an honest miss or a bounded-fuzzy name guess.
+  // has had its turn and come back with nothing of its own.
   if (classLanesApply(graph, parsed, result, rendered)) {
     const dyn = dynamicClassQuery(graph, query);
     if (dyn) {

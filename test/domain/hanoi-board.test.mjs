@@ -129,6 +129,25 @@ test("ask() reads the projected board: locations move with the step, counts come
   assert.equal(ask(graphAt(0), "list the moves").content, "move-1 and move-2.");
 });
 
+test("'where are the disks' reads the board, not a did-you-mean over the disks' own names", () => {
+  for (const q of ["where are the disks", "where is the disk"]) {
+    const r = ask(graphAt(0), q);
+    assert.equal(r.tmct_ask.ambiguous, false, q);
+    assert.equal(r.content, "disk-1 is in peg-a; disk-2 is in peg-a.", q);
+  }
+  assert.equal(ask(graphAt(2), "where are the disks").content, "disk-1 is in peg-c; disk-2 is in peg-b.");
+});
+
+test("a tie the board cannot place names the pieces' own class, and each preview names one piece", () => {
+  // Pegs carry no placement of their own, so the class lanes have no answer and
+  // the name tie stands — as pegs, and with no candidate's label doubled back
+  // onto itself.
+  const r = ask(graphAt(0), "where is the peg");
+  assert.equal(r.tmct_ask.ambiguous, true);
+  assert.match(r.content, /matches more than one peg ambiguously/);
+  for (const peg of ["peg-a", "peg-b", "peg-c"]) assert.ok(!r.content.includes(`${peg}-`), r.content);
+});
+
 test("ask() over the board still misses honestly on what the puzzle does not hold", () => {
   const graph = graphAt(0);
   assert.equal(ask(graph, "list the locations of horses").tmct_ask.miss, true);
@@ -144,8 +163,13 @@ test("a live plan session answers board questions over its own solved puzzle", a
   assert.equal(start.tmct_ask.miss, false);
   assert.equal(start.content, "disk-1 is in peg-a; disk-2 is in peg-a; disk-3 is in peg-a.");
 
+  const asked = ask(session.boardGraph, "where are the disks");
+  assert.equal(asked.tmct_ask.ambiguous, false);
+  assert.equal(asked.content, start.content);
+
   session.showBoard({ step: session.plan.actions.length });
   const solved = ask(session.boardGraph, "list the locations of disks");
   assert.equal(solved.content, "disk-1 is in peg-c; disk-2 is in peg-c; disk-3 is in peg-c.");
+  assert.equal(ask(session.boardGraph, "where are the disks").content, solved.content);
   assert.equal(ask(session.boardGraph, "how many moves are there").tmct_ask.miss, false);
 });
