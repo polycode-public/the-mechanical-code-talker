@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createP2pRoom, PRESENCE_SCOPE, resolveStoreNodeId } from "../../src/services/p2p-room.mjs";
 import { chatSyncableFacts } from "../../src/domain/p2p/sync-filter.mjs";
-import { decodeInviteBlob } from "../../src/domain/p2p/wire.mjs";
-import { WAVED_PREDICATE } from "../../src/domain/p2p/facts.mjs";
+import { decodeInviteBlob, encodeInviteBlob } from "../../src/domain/p2p/wire.mjs";
+import { WAVED_PREDICATE, INVITED_BY_PREDICATE, nodeTerm } from "../../src/domain/p2p/facts.mjs";
 import { createInMemoryStore, appendFacts, loadMemory, readFactRows, normFactTerm, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 
 // A pair of in-memory transports wired straight to each other, matching the
@@ -625,4 +625,81 @@ test("two peers who chose the same display name stay separate Sources, because t
     ["src:teach-node:6589e595d1fa9a90", "src:teach-node:7f3a9c2e5b1d4a60"],
     "one shared name, two nodes, two Sources",
   );
+});
+
+const ALICE_NODE = "7f3a9c2e5b1d4a60";
+const BOB_NODE = "6589e595d1fa9a90";
+const CAROL_NODE = "b21c4d0e77a35f18";
+
+const inviteEdges = (rows) => rows.filter((r) => r.predicate === INVITED_BY_PREDICATE);
+const nodeSubject = (nodeId) => normFactTerm(nodeTerm(nodeId));
+
+test("joining through an invite records who admitted whom, once, on the joiner's own store", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+
+  await connect(alice.room, bob.room);
+
+  const edges = inviteEdges(await rowsOf(bob.memoryDir));
+  assert.equal(edges.length, 1, "exactly one admission edge per join");
+  assert.equal(edges[0].subject, nodeSubject(BOB_NODE), "the joiner is the subject");
+  assert.equal(edges[0].object, nodeSubject(ALICE_NODE), "the node that sent the invite is the object");
+});
+
+test("the invite edge reaches the inviter, so an admission is visible from both sides of the mesh", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+
+  await connect(alice.room, bob.room);
+  await bob.room.afterLocalChange();
+  await settle();
+
+  const edges = inviteEdges(await rowsOf(alice.memoryDir));
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0].subject, nodeSubject(BOB_NODE));
+  assert.equal(edges[0].object, nodeSubject(ALICE_NODE));
+});
+
+test("a second invite from the same inviter adds no second edge — the admission already happened", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+
+  await connect(alice.room, bob.room);
+  await connect(alice.room, bob.room);
+
+  assert.equal(inviteEdges(await rowsOf(bob.memoryDir)).length, 1);
+});
+
+test("each joiner records its own inviter, so a chain of invites reads as a chain of edges", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+  const carol = makeRoom(network, { peerId: "peer-c", displayName: "slate-heron", nodeId: CAROL_NODE });
+
+  await connect(alice.room, bob.room);
+  await connect(bob.room, carol.room);
+
+  const own = inviteEdges(await rowsOf(carol.memoryDir)).find((r) => r.subject === nodeSubject(CAROL_NODE));
+  assert.ok(own, "carol recorded her own admission");
+  assert.equal(own.object, nodeSubject(BOB_NODE), "bob let carol in, not alice");
+});
+
+test("an invite carrying no node id still joins, and records no edge it cannot name", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+
+  const invite = await alice.room.startSharing();
+  const nodelessBlob = encodeInviteBlob({
+    kind: "offer",
+    sdp: decodeInviteBlob(invite.blob).value.sdp,
+    world: WORLD_ID,
+    worldName: WORLD_NAME,
+  });
+  const reply = await bob.room.acceptInvite(nodelessBlob);
+  assert.equal(reply.error, undefined, "the join itself still works");
+  assert.deepEqual(inviteEdges(await rowsOf(bob.memoryDir)), []);
 });

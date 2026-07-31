@@ -20,12 +20,15 @@ function fromBase64Url(b64url) {
 
 /** Encode one invite envelope — an offer (from the sharer) or a reply (from
  *  the joiner) — into a URL-safe string. An offer carries the world id and
- *  name so a fresh joiner can be shown them before connecting; a reply only
- *  needs to carry the answer SDP back to the inviter. */
-export function encodeInviteBlob({ kind, sdp, world, worldName }) {
+ *  name so a fresh joiner can be shown them before connecting, plus the
+ *  inviter's own node id, which is what lets the joiner record who admitted it;
+ *  a reply only needs to carry the answer SDP back to the inviter. */
+export function encodeInviteBlob({ kind, sdp, world, worldName, node }) {
   if (!INVITE_KINDS.has(kind)) throw new Error(`encodeInviteBlob: unknown kind "${kind}"`);
   if (typeof sdp !== "string" || !sdp) throw new Error("encodeInviteBlob: sdp is required");
-  const envelope = kind === "offer" ? { v: 1, kind, sdp, world, worldName } : { v: 1, kind, sdp };
+  const envelope = kind === "offer"
+    ? { v: 1, kind, sdp, world, worldName, ...(node ? { node } : {}) }
+    : { v: 1, kind, sdp };
   return toBase64Url(JSON.stringify(envelope));
 }
 

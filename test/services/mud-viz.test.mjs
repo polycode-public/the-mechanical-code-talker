@@ -464,7 +464,7 @@ test("renderMudHtml: the page reads its sync filter off the engine rather than n
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   assert.match(html, /mudSyncableFacts\(rows, isState, extraPredicates\)/, "the predicate check is handed over, never inlined");
   assert.match(html, /window\.tmct\.page\.isMudStatePredicate/, "and it comes from the world engine's own export");
-  assert.match(html, /window\.tmct\.page\.P2P_PREDICATES/, "alongside the P2P layer's own four");
+  assert.match(html, /window\.tmct\.page\.P2P_PREDICATES/, "alongside the P2P layer's own list");
 });
 
 // ---- the shared burrow's own readers ----------------------------------------

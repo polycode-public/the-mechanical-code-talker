@@ -21,6 +21,7 @@ import { relabelForBroadcast } from "../domain/p2p/provenance-relabel.mjs";
 import {
   worldNameFact,
   nodeNameFact,
+  invitedByFact,
   waveFact,
   latestFact,
   latestProvenanceTimestamp,
@@ -465,7 +466,7 @@ export function createP2pRoom({
     lastError = null;
     const sdp = await transport.createOffer();
     setState(ROOM_SHARING);
-    return { blob: encodeInviteBlob({ kind: "offer", sdp, world: worldId, worldName }) };
+    return { blob: encodeInviteBlob({ kind: "offer", sdp, world: worldId, worldName, node: nodeId }) };
   }
 
   /** Decode someone's invite and answer it. Returns the reply blob to send
@@ -488,12 +489,29 @@ export function createP2pRoom({
     const transport = attachTransport(transportFactory());
     lastError = null;
     const sdp = await transport.createAnswerFor(decoded.value.sdp);
+    await recordInviteEdge(decoded.value.node);
     setState(ROOM_ANSWERING);
     return {
       blob: encodeInviteBlob({ kind: "reply", sdp }),
       world: decoded.value.world,
       worldName: decoded.value.worldName,
     };
+  }
+
+  /** Write the admission edge for the invite this node just answered. Only the
+   *  joiner can: the inviter does not learn the joining node's id until the
+   *  channel is already open, and by then the edge would be indistinguishable
+   *  from any other fact that arrived over it. An invite from a build that
+   *  predates the node field carries no inviter to record, and an invite a node
+   *  answers with its own id is no admission at all. */
+  async function recordInviteEdge(inviterNodeId) {
+    if (typeof inviterNodeId !== "string" || !inviterNodeId) return;
+    if (!nodeId || inviterNodeId === nodeId) return;
+    await withStore(async () => {
+      await appendFacts(memoryDir, [invitedByFact(nodeId, inviterNodeId, now())]);
+      await sortFactIndividualsById();
+      await refreshRows();
+    });
   }
 
   /** Feed the joiner's reply back into the invite it answers, completing the
