@@ -289,3 +289,62 @@ test("renderIngestHtml: the memory's fact count rides in the topbar, not only th
   assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
   assert.match(html, /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/);
 });
+
+// ---- the ask dock: a question put to what this session ingested -----------
+
+test("renderIngestHtml: the ask dock sits under the facts pane, disabled until the engine opens a session", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<form class="askDock" id="askForm"/);
+  assert.match(html, /<input type="text" id="askq"[^>]*disabled>/);
+  assert.match(html, /<button type="submit" class="askGo" id="askGo" disabled>ask<\/button>/);
+  assert.match(html, /<div id="askLog" aria-live="polite"><\/div>/);
+  assert.ok(html.indexOf('id="askForm"') > html.indexOf('id="facts"'), "the dock follows the facts it questions");
+});
+
+test("renderIngestHtml: a submitted question tries the graph route first and the turn engine only on its miss", () => {
+  const html = renderIngestHtml();
+  const handler = html.slice(html.indexOf('askFormEl.addEventListener("submit"'), html.indexOf("// ---- memory stats"));
+  assert.ok(handler.indexOf("window.tmct.ask(q)") < handler.indexOf("window.tmct.turn(q)"), "ask leads, turn follows");
+  assert.match(handler, /if \(asked && asked\.answer && !asked\.miss\)/, "a missed ask never renders as an answer");
+  assert.match(handler, /!\(turned\.record && turned\.record\.miss\)/, "a missed turn never renders as an answer either");
+  assert.match(handler, /addAskLine\("miss", askMissNote\(\)\)/);
+});
+
+test("renderIngestHtml: the miss note names the kinds this memory really holds rather than an invented example", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /session\.askableClasses\(\)/);
+  assert.match(html, /"I can't ground that in what you've ingested\. The kinds it holds: " \+ kinds/);
+});
+
+// ---- the session's own ask/turn wiring -----------------------------------
+
+test("createIngestSession: a fresh session holds an empty graph, so a turn keeps the plain conversational reading", () => {
+  const session = createIngestSession();
+  assert.deepEqual(session.graph.individuals, []);
+  assert.deepEqual(session.askableClasses(), []);
+});
+
+test("createIngestSession: turn reads back a fact the page just ingested, and refuses one it never saw", async () => {
+  const session = createIngestSession();
+  await session.ingest("A beagle is a kind of dog.");
+  const recall = await session.turn("what is a beagle");
+  assert.equal(recall.record.miss, false);
+  assert.match(recall.answer, /kind of dog/);
+  const missed = await session.turn("what is a quombat");
+  assert.match(missed.answer, /isn't a term in this graph's own vocabulary|don't know/);
+});
+
+test("createIngestSession: the projected graph follows the store — an ingest and a taught turn both land in a later question", async () => {
+  const session = createIngestSession();
+  await session.ingest("A beagle is a kind of dog.");
+  await session.refreshGraph();
+  assert.deepEqual(session.askableClasses(), ["dog"]);
+
+  const taught = await session.turn("remember: a poodle is a kind of dog");
+  assert.equal(taught.record.via, "assert");
+  await session.refreshGraph();
+  assert.deepEqual(
+    session.graph.individuals.filter((i) => i.class === "dog").map((i) => i.id).sort(),
+    ["beagle", "poodle"],
+  );
+});

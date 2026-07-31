@@ -361,6 +361,7 @@
   "src/domain/hanoi-board.mjs",
   "src/domain/hanoi-lesson.mjs",
   "src/domain/hash.mjs",
+  "src/domain/ingest-facts.mjs",
   "src/domain/interpret/fuzzy.mjs",
   "src/domain/interpret/merge.mjs",
   "src/domain/interpret/nlp-registry.mjs",
