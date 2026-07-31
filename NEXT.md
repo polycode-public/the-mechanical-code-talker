@@ -112,16 +112,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **CI ran out of compute-minutes quota mid-pipeline (`d6ad2aa5`, pipeline 2720448652,
-  2026-07-31).** `deploy:website`/`publish:npm` both succeeded before the quota hit — the site is
-  live and the package published with everything through PLAN_FACT.md's completion. Only
-  `e2e:deployed:mesh` and `e2e:deployed:pages` never started (`failure_reason: ci_quota_exceeded`,
-  `started_at: null` on both — not a test failure, GitLab account/billing level). Both test sets
-  were verified green locally against this exact commit multiple times this session. Needs either
-  the quota to reset or the operator's account action before CI can confirm this push itself;
-  retrying blindly would just fail the same way. Re-run `e2e:deployed:mesh`/`e2e:deployed:pages`
-  (or the whole pipeline) once quota is available, and roll the patch version once that's green —
-  this session stopped short of that step for exactly this reason.
 - [ ] **NEXT #2's remainder** (chat/ledger/ingest/research/plan) — the sprites slice shipped this
   session (`tmct.ask` now answers from a real projected graph on the sprites page). chat/ledger
   need a materially different open-vocabulary projector (not a `worldRelationGraphPayload`
@@ -142,6 +132,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
   should use `mgx:father` or `mgx:mass`.
 
+## In flight (coordinator-dispatched batch, 2026-07-31)
+
+Five worktree agents dispatched against the four open items above (the `mgx:hasProperty` item is
+a documentation note, not actionable — no track).
+
+- [ ] **Track A** — chat/ledger open-vocabulary ask/turn projector. worktree: dispatched, not yet
+  landed. Status: started.
+- [ ] **Track B** — ingest ask/turn route. worktree: dispatched, not yet landed. Status: started.
+- [ ] **Track C** — plan Hanoi-puzzle board projector. worktree: dispatched, not yet landed.
+  Status: started.
+- [ ] **Track D** — `tmct.ready`-style engine surface decision (may conclude "not worth it").
+  worktree: dispatched, not yet landed. Status: started.
+- [ ] **Track E** — mud.html wire tape port. worktree: dispatched, not yet landed. Status: started.
 
 ## Discipline
 
