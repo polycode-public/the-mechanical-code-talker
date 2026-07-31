@@ -145,13 +145,16 @@ const trustTierFor = (trust) => (trust >= 0.85 ? 3 : trust >= 0.5 ? 2 : 1);
  *  build-demo-site.mjs consumes directly). Returns
  *  { rows, terms, edges, focus, contradictions, worthALook, payload, meta }. */
 export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = LEDGER_ROW_LIMIT_DEFAULT } = {}) {
-  const individuals = payload?.individuals || [];
-  const indById = new Map(individuals.map((i) => [i?.id, i]));
   const factRows = readFactRows(payload);
 
   const rows = factRows.map((r) => {
-    const ind = indById.get(r.id);
-    const createdAt = (ind?.attributes || []).find((a) => a?.key === "createdAt")?.value || "";
+    // A row is now a GROUP of one-or-more per-source assertion records
+    // (PLAN_FACT.md's re-key), so there is no single individual to join
+    // against by r.id any more — r.id is the group's own id, distinct from
+    // every member record's id. The newest assertion's own createdAt is what
+    // "when was this learned" means for a row the ledger already sorts
+    // newest-first.
+    const createdAt = (r.assertions || []).reduce((newest, a) => (a.createdAt > newest ? a.createdAt : newest), "");
     return {
       id: r.id, s: r.subject, p: r.predicate, o: r.object,
       phrase: phraseFor(r.predicate),

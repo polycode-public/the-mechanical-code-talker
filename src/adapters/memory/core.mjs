@@ -1482,7 +1482,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
  *  and sampled the way graph-build.mjs counts the code classes. */
 function recountClasses(payload) {
   const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
-  payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
+  payload.classes = (payload.classes || []).filter((c) => !names.includes(c?.name));
   for (const name of names) {
     const of = payload.individuals.filter((i) => i?.class === name);
     if (of.length) payload.classes.push({ name, count: of.length, sample: of.slice(0, 3).map((i) => i.label) });

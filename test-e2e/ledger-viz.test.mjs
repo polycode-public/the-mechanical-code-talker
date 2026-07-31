@@ -36,8 +36,12 @@ async function seededRepo() {
   await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat", createdAt: T_NEW });
   await appendFact(dir, { subject: "disk-1", predicate: "mgx:rest-on", object: "peg-a", provenance: "teach:chat", createdAt: T_NEW });
   // A real contradiction pair: same (subject, predicate), two trusted objects.
-  await appendFact(dir, { subject: "logger", predicate: "mgx:hasProperty", object: "deprecated", provenance: "teach:chat", createdAt: T_WEEK });
-  await appendFact(dir, { subject: "logger", predicate: "mgx:hasProperty", object: "maintained", provenance: "corpus:seon", createdAt: T_OLD });
+  // mgx:mass, not mgx:hasProperty: PLAN_FACT.md's widened merge table now
+  // treats hasProperty as many-true-at-once (a logger really can be both
+  // deprecated and maintained), so it no longer contradicts — mass stays a
+  // functional, single-valued relation on the contradiction default.
+  await appendFact(dir, { subject: "logger", predicate: "mgx:mass", object: "deprecated", provenance: "teach:chat", createdAt: T_WEEK });
+  await appendFact(dir, { subject: "logger", predicate: "mgx:mass", object: "maintained", provenance: "corpus:seon", createdAt: T_OLD });
   return dir;
 }
 
@@ -389,7 +393,7 @@ test("computeLedgerStats: real counts over the seeded fixture — tiers, bundles
     assert.deepEqual(s.byProv, { taught: 3, corpus: 4, entailed: 0 });
     assert.deepEqual(s.byTier, { 1: 0, 2: 4, 3: 3 });
     assert.deepEqual(s.bundles.map((b) => [b.key, b.count]), [["corpus:human", 3], ["teach:chat", 3], ["corpus:seon", 1]]);
-    assert.equal(s.predicates[0].predicate, "mgx:hasProperty", "the only repeated predicate (logger's two answers) ranks first");
+    assert.equal(s.predicates[0].predicate, "mgx:mass", "the only repeated predicate (logger's two answers) ranks first");
     assert.equal(s.predicates[0].count, 2);
     assert.equal(s.predicates.length, 6, "all six distinct predicates fit under the top-N cap");
     assert.ok(Math.abs(s.density - 14 / 11) < 1e-9, "avg degree = 2*facts / terms, since every row bumps both its subject and object");

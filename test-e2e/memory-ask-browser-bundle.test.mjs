@@ -16,7 +16,12 @@ const BUNDLE_PATH = join(here, "..", "src", "surfaces", "web", "memory-ask-brows
 
 async function loadBundleContext() {
   const bundle = await readFile(BUNDLE_PATH, "utf8");
-  const ctx = vm.createContext({ console });
+  // TextEncoder/TextDecoder are real globals in every environment this bundle
+  // actually ships to (a browser page, a service worker) — PLAN_FACT.md's
+  // per-assertion re-key hashes every fact id through fnv1aHex, which needs
+  // TextEncoder, so a bare vm context has to carry it too or it silently
+  // under-represents what the bundle can rely on.
+  const ctx = vm.createContext({ console, TextEncoder, TextDecoder });
   vm.runInContext(bundle, ctx);
   return ctx;
 }
