@@ -129,7 +129,7 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
       memoryDir, graph, lexicon, sessionId: character,
       vocabHint: 'Try a world command ("dig north", "eat the carrot-1"), or ask "what food do you know about".',
       buildExtraOptions: () => ({
-        uiContext: "browser", actingSubject: character, planState: planHolder.state,
+        actingSubject: character, planState: planHolder.state,
       }),
       captureExtraState: async (result, state) => {
         if ("planState" in result) planHolder.state = state.planState;

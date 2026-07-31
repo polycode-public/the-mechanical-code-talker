@@ -199,7 +199,7 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
   applySeedPayload(memoryDir, seedPayload);
 
   const lexicon = loadLexicon();
-  const vocabHint = vocabExampleHint(vocabSeeded);
+  const vocabHint = vocabExampleHint(vocabSeeded, "browser");
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
   let graph = parseEntities({ individuals: [], objectProperties: [] });
@@ -220,7 +220,7 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
 
   const turnSession = createTurnSession({
     memoryDir, lexicon, sessionId, vocabHint,
-    buildExtraOptions: () => ({ graph: graphForTurn(), uiContext: "browser" }),
+    buildExtraOptions: () => ({ graph: graphForTurn() }),
     captureExtraState: (result) => {
       if (STORE_WRITING_TURNS.has(result?.record?.via) && !result.record.miss) storeMovedSinceGraph = true;
     },

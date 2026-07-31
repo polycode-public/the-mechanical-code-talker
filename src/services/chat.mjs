@@ -587,8 +587,12 @@ const RESTRICTOR_VERB_RE = new RegExp(
  *  node (parseAggregate) already evaluates a restrictor tail correctly via
  *  parseSetPhrase, so once the tail names a real relation verb
  *  (RESTRICTOR_VERB_RE), decline here and let the turn fall through to the
- *  real ask engine instead of returning a misleading bare total. */
-export function answerCount(graph, query) {
+ *  real ask engine instead of returning a misleading bare total.
+ *
+ *  `uiContext` picks the empty-graph remedy: only a terminal session can run
+ *  the index/--repo commands, so a page names what it can actually offer
+ *  instead (see vocabExampleHint's own split). */
+export function answerCount(graph, query, { uiContext = "cli" } = {}) {
   if (!graph) return null;
   // ANAPHORIC counts ("how many of those are tested", "count them", "how many of
   // them") count the PREVIOUS answer's set, not a graph kind — decline so the turn
@@ -614,6 +618,9 @@ export function answerCount(graph, query) {
     // When no code graph is loaded, countableKinds(graph) is genuinely
     // empty — an honest, non-dangling message pointing at how to load one.
     if (!kinds.length) {
+      if (uiContext === "browser") {
+        return `I can't count "${noun}" — this page holds taught facts only, so there's no code structure to count.`;
+      }
       return `I can't count "${noun}" — no code graph is loaded yet, so there's nothing to count ` +
         `(index this repo with "tmct index", point me at another with --repo, or run "npm run example:mini").`;
     }
@@ -1922,6 +1929,16 @@ export function renderVerbose(last) {
   return { text: lines.join("\n"), empty: false };
 }
 
+/** The "here's what you CAN ask" tail on a decline that names no term of its own
+ *  (the SQL-statement and arithmetic shapes below). `ctx.vocabHint` already
+ *  carries the session-gated vocabulary/teach pointer, so only the CODE-graph
+ *  half needs the surface split: pointing at a repo is a command a terminal can
+ *  run and a page cannot. */
+const offRampClause = (ctx) => {
+  const hint = ctx.vocabHint || 'Try "what is a dog" for vocabulary.';
+  return ctx.uiContext === "browser" ? hint : `${hint} Or point me at a repo with --repo <path>.`;
+};
+
 /** Recognise a conversational expression and return a templated turn result, or null
  *  to fall through to counts/ask. Handled BEFORE slash-commands' non-slash siblings:
  *  greetings, thanks, help/orientation, farewell (ends the session via `end:true`),
@@ -2045,8 +2062,7 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: nonsense input shaped like a SQL statement — a targeted decline, not the identity blurb");
     note(ctx.trace, "lane: conversational — SQL-statement decline (SQL_STATEMENT_RE)");
     return mk(
-      "That reads like a SQL statement, not a question about a code graph or taught facts. "
-      + "Try \"what is a dog\" for vocabulary, or point me at a repo with --repo <path>.",
+      `That reads like a SQL statement, not a question about a code graph or taught facts. ${offRampClause(ctx)}`,
       { lane: "help" },
     );
   }
@@ -2054,8 +2070,7 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: arithmetic — not a code/vocabulary question, an honest decline");
     note(ctx.trace, "lane: conversational — arithmetic decline (ARITHMETIC_RE)");
     return mk(
-      "I don't do arithmetic — I answer questions about a code graph or taught facts. "
-      + "Try \"what is a dog\" for vocabulary, or point me at a repo with --repo <path>.",
+      `I don't do arithmetic — I answer questions about a code graph or taught facts. ${offRampClause(ctx)}`,
       { lane: "help" },
     );
   }
@@ -2625,13 +2640,33 @@ const INSTANCE_TYPE_TEACH_RE = /^([a-z][\w]*(?:-[\w]+)+)\s+is\s+an?\s+([a-z][\w-
 // Bare article-led kind-of taxonomy: "a disk is a kind of game piece".
 const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?\s+)?([a-z][\w-]+(?:\s+[a-z][\w-]+)?)([.!?]*)$/i;
 
+/** Wink lemmatises a token with no sentence around it, so a surface that is
+ *  both a plural noun and a 3rd-person-singular verb comes back as the NOUN
+ *  singular: "lives" → "life", "halves" → "half", "shelves" → "shelf". Every
+ *  caller here has already bound the word to a VERB slot, so the noun reading
+ *  is the wrong one, and left alone it mints an mgx:life-in predicate that
+ *  reads back as "ann lifes in paris".
+ *
+ *  Spelling identifies the noun reading on its own: an "-f"/"-fe" noun forms
+ *  its plural in "-ves", and no verb base ends in a bare "-v", so a "-ves"
+ *  surface whose lemma ends in "-f"/"-fe" was read as that plural. The verb
+ *  base is then the surface minus its "s" ("lives" → "live", "shelves" →
+ *  "shelve"). Deliberately this one spelling pair and no more (same accepted
+ *  trade as singularizeSurface, no real morphology) — a "-ves" verb wink
+ *  already reads correctly ("leaves" → "leave", "moves" → "move") keeps its
+ *  lemma untouched. */
+function verbReadingOfLemma(surface, lemma) {
+  if (!/ves$/i.test(surface) || !/fe?$/i.test(lemma)) return lemma;
+  return surface.slice(0, -1);
+}
+
 /** Verb → lemma via the prose adapter, degrading to the word itself. */
 async function verbLemma(word) {
   const w = String(word || "").toLowerCase();
   try {
     const { proseLemma } = await import("../adapters/prose-nlp.mjs");
     const lemma = proseLemma();
-    return lemma ? lemma(w) : w;
+    return lemma ? verbReadingOfLemma(w, lemma(w)) : w;
   } catch { return w; }
 }
 
@@ -3719,9 +3754,7 @@ async function generalVerbPredicate(verb) {
   // "can a X <verb>" reader finds it (same reasoning as HAS_A above).
   if (v === "can") return "mgx:capableOf";
   try {
-    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
-    const lemma = proseLemma();
-    const l = lemma ? lemma(v) : v;
+    const l = await verbLemma(v);
     if (l === "have") return HAS_A_PREDICATE;
     return normFactPredicate(`mgx:${l}`);
   } catch {
@@ -5604,12 +5637,15 @@ const NO_FOCUS_WHATS_IN_HERE_RE = /^what(?:'s|s|\s+is)\s+in\s+here\??$/i;
  *  ACE lexicon: an abstract "every X is a Y" invites a curious user to
  *  substitute intuitive-but-unknown words — "every cache is a thing" — which
  *  the closed lexicon then rejects; "every bug is an issue" parses and stores. */
-async function memorySummary(memoryDir, graph) {
+async function memorySummary(memoryDir, graph, uiContext = "cli") {
   const rows = memoryDir ? await memoryFacts(memoryDir) : [];
   if (!rows.length) {
+    const seedClause = uiContext === "browser"
+      ? 'teach me directly, e.g. "every bug is an issue"'
+      : 'run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue"';
     const hook = moduleCountOf(graph) > 0
       ? 'ask about this codebase\'s structure (imports, calls, definitions), or teach me with "every X is a Y"'
-      : 'run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue"';
+      : seedClause;
     return `I haven't been told any facts yet — ${hook}. /memory to inspect, /help for commands.`;
   }
   const preds = new Set(rows.map((f) => f.predicate).filter(Boolean));
@@ -5792,7 +5828,7 @@ async function moduleOrientLane(query, { graph }) {
   return null;
 }
 
-async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null }) {
+async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null, uiContext = "cli" }) {
   // Preamble-peeled twin of `q`: a self-intro/greeting lead ("I'm new here,
   // what should I read first") wraps exactly the orientation questions this
   // lane owns, and the anchored META_ORIENT_RE can't see past it. Peeling
@@ -5800,7 +5836,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
   const peeled = applyPreambleFrames(String(query).trim()).toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ").trim();
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
-    return { text: await memorySummary(memoryDir, graph), via: "meta" };
+    return { text: await memorySummary(memoryDir, graph, uiContext), via: "meta" };
   }
   if (peeled !== q && META_ORIENT_RE.test(peeled)) {
     const text = orientationText(graph, templates, vocabHint);
@@ -12847,7 +12883,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (!handled && miss) {
-    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus });
+    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus, uiContext });
     if (meta) {
       // A lane may answer with a better-worded decline (the module-orient
       // residue guard) — still a miss in the turn record, like the isa
@@ -15198,7 +15234,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   const trace = narrate ? [] : null;
   // vocabHint: createSession computes this ONCE per session; a direct
   // runTurn() caller that doesn't pass one gets it computed here instead.
-  const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
+  const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir), uiContext);
   // The session's in-progress plan rides a mutable holder: the plan lane and
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
@@ -15679,7 +15715,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
-  const count = answerCount(graph, workingLine);
+  const count = answerCount(graph, workingLine, { uiContext });
   if (count != null) {
     // An "I can't count <noun>" from a bare kind may still be answerable from an
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
@@ -15746,9 +15782,18 @@ export async function hasSeededVocabulary(repo) {
  *  pair too: an abstract "every X is a Y" invites a curious user to fill X/Y
  *  with an intuitive-but-unknown word and hit the teach-miss dead-end right
  *  after being offered the pattern. "every bug is an issue" is confirmed to
- *  parse and store, so the offer resolves if copied verbatim. */
-export function vocabExampleHint(seeded) {
-  return seeded
-    ? 'Try "what is a dog" for general vocabulary.'
+ *  parse and store, so the offer resolves if copied verbatim.
+ *
+ *  `uiContext` picks the REMEDY the same way: a terminal session can run
+ *  `tmct init` against a real directory, a page has no filesystem and no argv,
+ *  so naming the command there sends the reader after something the surface
+ *  can't do. The teach pointer works on both, so the browser arm keeps only
+ *  that. This clause is threaded through runAsk as `vocabHint` and reused by
+ *  every dead-end that needs to name an exit, so one split here covers them
+ *  all rather than each miss carrying its own copy. */
+export function vocabExampleHint(seeded, uiContext = "cli") {
+  if (seeded) return 'Try "what is a dog" for general vocabulary.';
+  return uiContext === "browser"
+    ? 'Teach me directly, e.g. "every bug is an issue".'
     : 'Run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue".';
 }

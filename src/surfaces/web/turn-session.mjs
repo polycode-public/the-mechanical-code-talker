@@ -9,8 +9,15 @@
 // capture, and a return shape covering every field one caller or another
 // reads back.
 //
+// Every caller of this wrapper is a page by construction, so `uiContext:
+// "browser"` is a DEFAULT here rather than something each entry remembers to
+// pass. It is what makes the engine's dead-ends name an exit a page can take
+// ("teach me a fact") instead of the CLI's `tmct index`/`--repo`/`tmct init`.
+// Five of the nine already passed it and four had never got round to it, which
+// is exactly the drift a shared default removes.
+//
 // The nine differ in what they hand `runTurn` beyond the common core
-// (`uiContext`, `synthesisBudget`, `gameConfig`, `researchConfig`,
+// (`synthesisBudget`, `gameConfig`, `researchConfig`,
 // `actingSubject`, a per-character `sessionId`...) and in what they do with a
 // turn's result besides the standard focus/last/planState/researchState fold
 // (sync an externally-held plan holder, grow a visited-rooms set, bump a
@@ -41,7 +48,7 @@ function turnErrorFallback(message) {
  *
  * `buildExtraOptions(state, callArgs)` (optional) returns extra `runTurn`
  * options to merge OVER the defaults below — anything a specific page needs
- * (`uiContext: "browser"`, `synthesisBudget`, `gameConfig`, `researchConfig`,
+ * (`synthesisBudget`, `gameConfig`, `researchConfig`,
  * a per-character `actingSubject`/`sessionId`, or a `planState` read from an
  * external holder instead of this closure's own). `state` is
  * `{ focus, last, planState, researchState }` as this turn is about to run;
@@ -88,7 +95,7 @@ export function createTurnSession({
     try {
       result = await runTurn(line, {
         config: null, source: null, graph, focus, last, memoryDir, sessionId,
-        env: {}, lexicon, vocabHint, planState, researchState,
+        env: {}, lexicon, vocabHint, planState, researchState, uiContext: "browser",
         ...extra,
       });
     } catch (e) {

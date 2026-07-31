@@ -53,7 +53,7 @@ export function createCodeExplorerSession({ graphPayload, seedPayload = null, vo
   // the write path recounts — teach turns must work on any seed.
   if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
   const lexicon = loadLexicon();
-  const vocabHint = vocabExampleHint(vocabSeeded);
+  const vocabHint = vocabExampleHint(vocabSeeded, "browser");
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
   // A stable virtual path: the provider answers every fetch, so no file is
   // ever read, but the code lanes still do path math (join/dirname) on it.

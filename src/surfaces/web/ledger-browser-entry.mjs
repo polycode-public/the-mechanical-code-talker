@@ -63,7 +63,7 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
   }
 
   const lexicon = loadLexicon();
-  const vocabHint = vocabExampleHint(vocabSeeded);
+  const vocabHint = vocabExampleHint(vocabSeeded, "browser");
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
   const session = createTurnSession({ memoryDir, graph: codeGraph, lexicon, sessionId, vocabHint });
