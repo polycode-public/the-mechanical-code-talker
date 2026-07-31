@@ -372,6 +372,7 @@
   "src/domain/interpret/strategies/noise-strip.mjs",
   "src/domain/memory/bias.mjs",
   "src/domain/memory/capability.mjs",
+  "src/domain/memory/compaction.mjs",
   "src/domain/memory/fold.mjs",
   "src/domain/memory/resolution.mjs",
   "src/domain/memory/session-turns.mjs",
