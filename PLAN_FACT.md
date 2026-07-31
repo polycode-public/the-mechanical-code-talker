@@ -1,11 +1,11 @@
 # PLAN_FACT.md — one record per assertion, not one record per triple
 
-Status: DESIGN, implementation-ready, all choices settled (operator, 2026-07-30). The engine
-changes are not yet implemented; what IS landed already is the coverage that waits for them —
-infbench's `c2SiblingResolution` template and `SKILL_PLAYTEST_EDGE_HUNT.md`'s sibling-resolution
-axis (see Landing order). Every code claim below was verified against the real files this
-session; file and line references name where. External claims cite the Sources section at the
-end.
+Status: LANDED. All 8 landing-order steps shipped 2026-07-30/31 — per-assertion fact records and
+supersession, the resolver table, the dated teach frame, Sybil resistance tiers 1+2, two-pool
+compaction, and the `fact_heads` materialization. infbench's `c2SiblingResolution` template and
+`SKILL_PLAYTEST_EDGE_HUNT.md`'s sibling-resolution axis cover it. Every code claim below was
+verified against the real files at design time; file and line references may have drifted since —
+see `git log` for the exact landing commits. External claims cite the Sources section at the end.
 
 ## Origin
 
