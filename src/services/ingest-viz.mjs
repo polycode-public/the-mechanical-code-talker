@@ -618,6 +618,7 @@ ${THEME_TOKENS_CSS}
     console.error("tmct ingest failed to boot", err);
     statusEl.textContent = "the ingest page failed to start (" + (err && err.message ? err.message : err) + ")";
   });
+  window.tmct.ready = window.tmctIngestReady;
 })();
 </script>
 </body>

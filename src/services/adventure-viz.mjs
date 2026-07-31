@@ -1208,6 +1208,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   let persist = null;
   let persistSaveTimer = null;
   window.tmctAdventureLastSave = null;
+  window.tmct.lastSave = null;
 
   // The deploy's own version, read off the service worker file the build
   // already stamps (its cache name embeds package.json's version) — the only
@@ -1238,7 +1239,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       }
       const visitedRoomIds = lastSnapshot ? lastSnapshot.visitedRoomIds : [];
       persist.save({ memoryPayload: memoryPayload, visitedRoomIds: visitedRoomIds }).then((saved) => {
-        if (saved) window.tmctAdventureLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+        if (saved) {
+          window.tmctAdventureLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+          window.tmct.lastSave = window.tmctAdventureLastSave;
+        }
       });
     }, 500);
   }
