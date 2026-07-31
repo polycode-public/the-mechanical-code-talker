@@ -118,12 +118,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   drop-in), ingest has no `ask`/`turn` route wired at all yet, research already has a working
   narrower `ask` route so isn't hitting the empty-graph miss, and plan's Hanoi-puzzle state has no
   board-shaped rows to project. Each is a separate future scoping pass, not folded into this one.
-- [ ] `tmctChatReady`/`tmctIngestReady`/`tmctAdventureLastSave` (plus the same-shaped
-  `tmctChatLastSave`) remain their own page globals with no `tmct.*` equivalent — confirmed by this
-  session's fold-away of the one that WAS redundant (`tmctChatSession` → `tmct.session`, done).
-  These four are genuine page-lifecycle/persistence-timestamp state the engine surface contract
-  doesn't model; a `tmct.ready`-style member would need to be added to `tmct-surface.mjs`'s
-  contract, not just renamed. Not a bug, just undecided whether it's worth doing.
 - [ ] mud.html has no wire tape — the WebRTC redesign's diagnostics fold (the connection-log panel)
   is chat-only (`withTape`). Porting chat's instrumented transport to mud would complete "diagnostics
   for all" there too.
@@ -142,9 +136,10 @@ a documentation note, not actionable — no track).
 - [ ] **Track B** — ingest ask/turn route. worktree: dispatched, not yet landed. Status: started.
 - [ ] **Track C** — plan Hanoi-puzzle board projector. worktree: dispatched, not yet landed.
   Status: started.
-- [ ] **Track D** — `tmct.ready`-style engine surface decision (may conclude "not worth it").
-  worktree: dispatched, not yet landed. Status: started.
 - [ ] **Track E** — mud.html wire tape port. worktree: dispatched, not yet landed. Status: started.
+
+Track D (`tmct.ready`/`tmct.lastSave` surface additions) landed and merged — `ff784912`, `npm run
+test:fast` 209/209 green, pushed to main.
 
 ## Discipline
 
