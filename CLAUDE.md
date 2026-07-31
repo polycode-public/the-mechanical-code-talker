@@ -87,8 +87,7 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   is installed and authenticated) until it resolves — budget ~15-20 minutes for a push that
   touches `src`/`test`/`package.json` (the `e2e`/`e2e:heavy`/`publish:npm` jobs dominate), ~2-3
   minutes for a docs-only one (only the cheap `verify`-stage jobs run). While waiting, keep
-  merging any further sub-agent commits onto local `main` as they land — don't push again until
-  the in-flight pipeline resolves, so pipelines never race each other. Once it goes green: if
+  merging any further sub-agent commits onto local `main` as they land. Once it goes green: if
   commits have stacked up since that push, `npm run roll` (bump the patch version, regenerate
   the version-stamped artifacts), run the full suite again, commit, and push that batch — this
   both ships the accumulated work and gives `publish:npm`'s version check something real to
