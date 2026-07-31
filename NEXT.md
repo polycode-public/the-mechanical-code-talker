@@ -97,105 +97,18 @@ page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e p
 checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
 shape (fixed).
 
-**This session's work is now reaching CI.** The push restriction lifted; `v4.1.0` (phases 1-9 of
-this plan, the mud rebind, the sprite catalog + its animations, the two test-coverage gaps,
-`PLAN_FACT.md`'s supersession design) shipped and pushed first, full suite green (5268/5268)
-before the push. `v4.1.1` plus Gap C follow behind it as a second push once Gap C's own merge is
-verified — see `git log` for the exact commit sequence and CI status.
-
 **MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
 against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
 Bartle/mudii.co.uk) is in `PLAN_MUD.md`. Operator's chosen sequencing: ship `mudiii.html` with
 credit to `world-of-claudecraft` and MUD1/MUD2 first, email Bartle once it's live. Still waiting on
 the operator's call on timing for that email — noted directly in `PLAN_MUD.md`.
 
-**`PLAN_FACT.md`** (multi-record-per-assertion fact model) is a complete, reviewed design doc, not
-yet implemented. See the doc for the worked example, the Sybil/Riak-sibling-resolution research, the
-"as of &lt;date&gt;" grammar design, and the migration/schema.
+**`archive/PLAN_FACT.md`** (multi-record-per-assertion fact model) shipped in full, all 8
+landing-order steps — see `git log` for the commit sequence.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
-
-## In-flight: PLAN_FACT.md landing order (2026-07-30, coordinator + worktree sub-agents)
-
-Batch A (NEXT items 1/3/4/5 plus PLAN_FACT steps 1-2) landed in full, merged to `main`, full suite
-green (5352/5352), pushed. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`. Now
-driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps 3→4 solo, then
-5/6/7 concurrent, then 8 solo — each step's own file-ownership rationale is in the plan doc).
-
-- [x] Batch B — PLAN_FACT step 3, the re-key — merged, 4936/4936 non-e2e tests passed on the
-  worktree. One Fact record per assertion (`fact:<hash>@<sourceId>`, `#v<n>` once superseded),
-  `readFactRows` folds one row per group reading live heads only, `computeAssertionGroupTrust`
-  aggregates at read time with per-record recency. Two real defects fixed along the way
-  (supersession reading the wrong timestamp source; a provenance-less write silently swallowing
-  syllogise), not just expectation drift. Known, correctly-deferred gap: peer-teach records score
-  0.95 in the group aggregate, not the plan's worked-example 0.97375, until step 6's
-  `src:teach-node:` reliability-tracking join lands.
-- [x] Batch C — PLAN_FACT step 4, resolver table — merged. Closed predicate-keyed strategy table
-  (`src/domain/memory/resolution.mjs`, new) — `merge`/`latest-observation-wins`/`first-claim-wins`/
-  contradiction default. `MULTI_VALUED_PREDICATES` is now derived from the merge row, one authority
-  instead of two. `effectiveObservedAt`/`resolveSiblingGroups` implement the read-time fallback
-  chain and the full tie ladder. All three named consumers (`recomputeSourceReliability`,
-  `inspect.mjs`, `ledger-viz.mjs`) needed expectation updates only, no code changes.
-- [x] Batch D — PLAN_FACT steps 5/6/7, all three merged (dated teach frame; Sybil tiers 1+2; two-pool
-  compaction). Peer-teach trust verified at the plan's own worked example: 0.97375 for a fresh
-  node's first fact. Compaction's CRDT convergence/drop-on-absorbed properties mutation-tested.
-- [ ] Batch E — PLAN_FACT step 8, `fact_heads` materialization (the final landing-order step):
-  worktree dispatched, Opus. Status: started.
-- [x] WebRTC connect-UX redesign (chat.html + mud.html) — merged. A shared `share-overlay-viz.mjs`
-  full-page "lights down" component replaces chat's netPanel/joinCard and mud's independently-
-  duplicated net-panel/join-card: a two-browser wire diagram doubling as connection status, a
-  5-step ladder shared between sponsor/joiner roles, copy-link + copy-code-only + navigator.share +
-  wa.me affordances, a node roster with last-shared-fact and directional wave-to-one/wave-to-all,
-  WebRTC reference links. mud.html gained header chrome; sharing controls moved out of the
-  game-controls deck. Verified live in real browsers (49 scripted checks) by the building agent,
-  then 17/17 e2e p2p/mesh tests by the coordinator post-merge.
-- [x] **WebRTC now defaults to a public STUN server** (`DEFAULT_ICE_SERVERS`, `webrtc-transport.mjs`)
-  instead of `iceServers: []` — real-browser cross-engine testing (Chromium + Firefox, default
-  flags) found the old empty-list setting depends on OS-level local-network/mDNS behavior that
-  varies by machine, invisible to the e2e suite's own Chromium-only, mDNS-patched harness. STUN only
-  discovers each peer's own address; the connection still prefers a direct host-to-host path when
-  one exists, and no application data ever passes through the STUN server. Purged "not a bug to fix
-  later"/"stated boundary" framing for the no-STUN setting from `PLAN_MUD.md` and code comments —
-  described a decision as permanent that wasn't.
-
-**Bugs found and fixed this session:**
-- PLAN_FACT step 2's `teach:peer:<name>#node:<id>@<ts>` tag grammar landed clean in isolation, but
-  broke chat.mjs's citation text — `renderFactLine` and ~9 sibling call sites interpolated the raw
-  provenance tag verbatim into `(source: ...)`. Caught by CI's `e2e:deployed:mesh` post-deploy job,
-  not by any local blast-radius run beforehand — none of A1-A6's own test scopes crossed into
-  chat.mjs's citation rendering, since the change that broke it (A6's tag grammar) landed in a
-  different worktree than the code it broke. Fixed with a `citationProvenance()` display helper.
-- `whenIceGatheringCompletes()` had no timeout of its own — a STUN request that never gets a reply
-  (rate-limited public server, two peer connections in one tab racing for it) hung the offer/answer
-  blob forever. Caught by a real, reproducible e2e failure (a page minting a second invite while its
-  first connection was already open), not by inspection. Now bounded at 5s.
-- `e2e:deployed:pages`/`e2e:deployed:shell` failed deterministically (all 3 retries, twice) with
-  "starter memory unavailable — starting empty." The deployed seed data was never actually broken
-  (fetched directly: 72,109 individuals, valid JSON, boots in ~3s once warm) — a CDN cold-cache
-  timing issue for the 89MB `chat-seed.json`, wider margin needed than `retry: 2` covers. Fixed with
-  `scripts/warm-deployed-cache.mjs`, run at the end of `deploy:website` before the `e2e:deployed:*`
-  jobs start.
-- The re-key grew every corpus record's own byte cost (`mgx:sourceId`, restructured `trustInputs`)
-  even though corpus bands stay one record per triple — the full `init:xl` band set measures
-  106,413,353 bytes, over `SEED_BYTE_CEILING`, breaking `demo:build` and cascading into
-  `e2e-web-index`/`e2e-web-local-origin`. Capped ConceptNet at 28,000 facts (was 36,328), buying back
-  ~10.8 MB headroom, seeding definitional-predicates-first so the cut favors the IsA/subClassOf
-  backbone over trivia.
-- Four bugs specific to the ask-bundle path (`test-e2e/`, not `test/adapters/` — outside every
-  PLAN_FACT worktree's own blast radius, only found by running the real CI job sets locally):
-  `recountClasses` threw on a payload with no `classes` array (a real, documented `tmct.open({payload})`
-  usage), silently swallowed into an honest miss with zero diagnostic trace; the ask-bundle test's
-  `vm.createContext` lacked `TextEncoder`, which the re-key's fact-id hashing now needs (a real
-  global in every environment the bundle ships to, already present in `chat-browser-bundle.test.mjs`'s
-  own context); `ledger-viz.mjs` joined `createdAt` by looking up a row's GROUP id directly in
-  individuals now keyed by per-source ASSERTION id, always missing; two independent test fixtures
-  (`ledger-viz.test.mjs`, and step 6's own new `memory-source-reliability.test.mjs` test) used
-  `mgx:hasProperty` as a "single-valued" contradiction fixture, not knowing step 4's widened merge
-  table reclassified it — the SAME mistake step 4's own agent had already made and fixed six times
-  in `test/adapters/`. **Any future fixture needing a genuinely single-valued/contradiction-default
-  predicate should use `mgx:father` or `mgx:mass` — `mgx:hasProperty` is `merge` now.**
 
 ## Open items
 
@@ -211,6 +124,13 @@ driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps
   These four are genuine page-lifecycle/persistence-timestamp state the engine surface contract
   doesn't model; a `tmct.ready`-style member would need to be added to `tmct-surface.mjs`'s
   contract, not just renamed. Not a bug, just undecided whether it's worth doing.
+- [ ] mud.html has no wire tape — the WebRTC redesign's diagnostics fold (the connection-log panel)
+  is chat-only (`withTape`). Porting chat's instrumented transport to mud would complete "diagnostics
+  for all" there too.
+- [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
+  `contradiction` — bit three separate test fixtures across two sessions before this was caught
+  everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
+  should use `mgx:father` or `mgx:mass`.
 
 
 ## Discipline
