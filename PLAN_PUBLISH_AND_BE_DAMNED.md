@@ -1,9 +1,9 @@
 # PLAN_PUBLISH_AND_BE_DAMNED.md — CI as sensors, not gates
 
-Status: Phase 1 PROPOSED (a parallel engineering track is implementing a first cut alongside this
-doc; mark DELIVERED only once its pipeline is verified). Phases 2 and 3 are follow-ups, PROPOSED
-and DESIGN respectively. Evidence throughout is pipeline `2722619624`, the last known-good run
-before this plan: 1636 seconds (27.3 minutes) wall-clock.
+Status: Phase 1 merged to `main`, DELIVERED once a real pipeline there demonstrates the projected
+critical path (not yet confirmed empirically). Phase 2 is a follow-up, PROPOSED. Phase 3 is not
+being pursued — see its own section. Evidence throughout is pipeline `2722619624`, the last
+known-good run before this plan: 1636 seconds (27.3 minutes) wall-clock.
 
 ## The philosophy
 
@@ -98,10 +98,10 @@ window instead of after it. Every sensor reports well before the chain completes
 wall-clock roughly halves, and the halving comes entirely from cutting gating down to what is
 load-bearing, with zero jobs removed.
 
-## Phase 1 — sensors, two gates, and commit-precise readiness (PROPOSED)
+## Phase 1 — sensors, two gates, and commit-precise readiness (MERGED)
 
-A parallel engineering track is implementing this phase now. The coordinator flips this heading
-to DELIVERED once a real pipeline on `main` demonstrates it.
+Landed on `main`. Flips to DELIVERED once a real pipeline there demonstrates the projected
+critical path.
 
 ### 1a. Secret detection gates both ship jobs
 
@@ -124,21 +124,21 @@ overlapping a fast next push) can both pass the version check while the edge ser
 commit's build. Every deployed-e2e result downstream would then describe a build nobody asked
 about.
 
-The fix, concretely:
+The fix, as actually implemented:
 
 - **What stamps it.** `src/domain/version-stamp.mjs` grows a commit twin of its version trio:
   `stampCommit(html, sha)` / `parseCommitStamp(html)` / `hasCommitStamp(html)`, same
-  one-place-writer-and-reader pattern that file exists to enforce. The carrier is a
-  `data-commit` attribute on the existing `#pkg-version` element, with a committed placeholder
-  in the page source so stamping fails loud when the element goes missing, exactly as
-  `stampVersion` already does. `scripts/build-demo-site.mjs` stamps it at build time from
-  `TMCT_BUILD_COMMIT` when set, else `git rev-parse --short HEAD`, else leaves the placeholder
-  (a build outside git still works, and reads as unstamped).
-- **Who sets it.** `deploy:website` exports `TMCT_BUILD_COMMIT=$CI_COMMIT_SHORT_SHA` before
-  `npm run demo:build`.
+  one-place-writer-and-reader pattern that file exists to enforce. The carrier is a hidden
+  `<span id="pkg-commit">local</span>` placeholder committed in `public/index.html` — "local"
+  never matches the twelve-hex-character shape the reader accepts, so an unstamped page reads
+  as "no commit stamped" rather than a false match. `scripts/build-demo-site.mjs` stamps it at
+  build time only when `CI_COMMIT_SHA` is present in the environment; a local build leaves the
+  placeholder untouched, so it never churns outside CI.
+- **Who sets it.** Nothing has to — `CI_COMMIT_SHA` is one of GitLab's own predefined variables,
+  present in every job automatically.
 - **What reads it.** `scripts/wait-for-site.mjs` keeps its version and seed checks and adds: when
-  `CI_COMMIT_SHORT_SHA` (or an explicit `TMCT_EXPECT_COMMIT` override) is set, the live page's
-  commit stamp must equal it. Run locally with neither set, the script behaves as today.
+  `CI_COMMIT_SHA` is set in the poller's own environment, the live page's commit stamp must
+  match its short form. Run locally with it unset, the script behaves as before this phase.
 - **Failure mode when the stamp is absent or wrong.** An expected-but-missing stamp means the
   edge is still serving a pre-stamp build; a mismatched stamp means it is serving some other
   commit's build. Both are "not ready": the poll keeps polling and, at the attempt cap,
@@ -167,12 +167,13 @@ Consequences to accept with open eyes: `main`'s pipeline badge will show red mor
 now means "something is broken, and it may already be live". Whether it shipped is answered by
 which jobs failed, in one click. For a project with no users, that trade is the whole plan.
 
-### 1d. `publish:npm` drops its in-job `npm test`
+### 1d. `publish:npm` runs `test:fast`, not the full suite
 
-The job's script currently runs the full suite before publishing. That is a hidden gate inside
-the job, and several minutes of its 615s. Under this plan the suite's knowledge comes from the
-parallel unit sensors; the publish job keeps only what publishing needs (`npm ci`, the
-registry-aware version gate, the publish itself).
+The job's script ran the full suite before publishing — a hidden gate inside the job, several
+minutes of its 615s, duplicating what four parallel unit sensors already run. It now runs
+`npm run test:fast` (seconds, not minutes): a real check still stands between a broken build and
+the registry even if a pipeline's other test jobs haven't finished yet, without reintroducing
+the duplication the full suite cost.
 
 ### 1e. What keeps its hard `needs:`
 
@@ -216,30 +217,22 @@ pass rather than riding along with a scheduling rewrite.
 Local development keeps a drift story during the transition: until a bundle stops being
 committed, its estate guard stays. Guard and commit are removed together, per artifact.
 
-## Phase 3 — patch pushes travel lighter than x.y.0 releases (DESIGN)
+## Phase 3 — patch-vs-x.y.0 conditional scope: not pursued
 
-The idea: some currently-always-on jobs (the heavier e2e coverage, `unit:slow`) become optional
-on an ordinary patch bump (`x.y.z`, z ≠ 0) and mandatory on a fresh minor or major (`x.y.0`),
-where a wider blast radius is presumed.
+The idea was: some currently-always-on jobs become optional on an ordinary patch bump (`x.y.z`,
+z ≠ 0) and mandatory on a fresh minor or major (`x.y.0`). A prototype (`scripts/release-scope.mjs`,
+a script-level soft-skip — GitLab evaluates `rules:` at pipeline creation, before any job runs,
+so a dotenv variable a job computes can never reach another job's `rules:`) was built and applied
+to `e2e:heavy`, then removed.
 
-GitLab's `rules:` cannot parse semver, so the mechanism is a small early job:
-
-- `version:scope` (seconds, `needs: []`) reads `package.json`'s version and writes a dotenv
-  artifact: `IS_MINOR_OR_MAJOR_RELEASE=true|false`, plus `RELEASE_VERSION` for logging.
-- One correction to the obvious wiring, because it decides the design: GitLab evaluates `rules:`
-  at pipeline creation, before any job runs, so a dotenv variable from `version:scope` cannot
-  appear in a downstream job's `rules:`. Two mechanisms actually work:
-  - **Soft skip (recommended).** The scoped jobs add `version:scope` to `needs:`, inherit the
-    dotenv variable, and their script's first line exits 0 with a printed reason when
-    `IS_MINOR_OR_MAJOR_RELEASE` is false. The job appears in every pipeline (which keeps the
-    graph legible) and costs seconds on a patch push.
-  - **Child pipeline.** `version:scope` generates a pipeline YAML and a `trigger` job runs it.
-    True job-level omission, at the price of a second pipeline surface in the UI and in
-    `glab ci` tooling. Not worth it for two or three scoped jobs; becomes worth revisiting if
-    the scoped set grows.
-
-Sequenced last because it only tunes sensor cost, and Phase 1 must land first to establish what
-the sensors even are.
+The reason: under Phase 1's `needs:`-based scheduling, `e2e:heavy` already has `needs: []` and
+gates nothing. Skipping it on a patch roll would save runner-minutes, not wall-clock — neither
+push-to-deploy nor push-to-pipeline-complete change, because it was never on the critical path to
+begin with. A conditional-scope mechanism only pays for itself on a job that actually sits on the
+critical path, and the one candidate this plan had doesn't. Not worth the added moving part for a
+cost saving alone, so this phase stops here rather than carrying speculative complexity forward.
+If a future job genuinely earns a place on the critical path AND has a legitimate reason to run
+lighter on patch bumps, revisit this section rather than starting over.
 
 ## Not in this plan
 

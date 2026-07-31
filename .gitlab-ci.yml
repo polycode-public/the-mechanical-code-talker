@@ -401,13 +401,10 @@ e2e-cli:
 # schedule (the same one dep:audit/renovate use) so drift still gets caught
 # even on a quiet week.
 #
-# It stands down on an ordinary patch roll (see scripts/release-scope.mjs,
-# which also explains why the check runs in the script rather than in `rules:`).
-# `package.json` is in its own `changes:` list, so today every version roll
-# fires it whether or not anything it exercises moved — several minutes of a
-# contended runner, gating nothing, to re-prove a build nobody touched. On a
-# fresh x.y.0 it runs in full, and the nightly schedule runs it in full too, so
-# nothing it covers goes unwatched for more than a day.
+# No x.y.0-vs-patch distinction: this job has `needs: []` and gates nothing,
+# so skipping it on a patch roll would save runner-minutes, not wall-clock —
+# not worth the complexity of a separate release-scope mechanism for that
+# alone. It runs every time its own `changes:` rules fire, patch or not.
 e2e:heavy:
   stage: e2e
   interruptible: true
@@ -431,11 +428,6 @@ e2e:heavy:
         - package-lock.json
         - test-e2e/heavy/**/*
   script:
-    - |
-      if [ "$(node scripts/release-scope.mjs)" != full ] && [ "$CI_PIPELINE_SOURCE" != schedule ]; then
-        echo "patch roll — this tier runs in full on the next x.y.0 and on the nightly schedule"
-        exit 0
-      fi
     - npm ci
     - npx playwright install --with-deps chromium
     - npm run test:e2e:heavy
