@@ -613,19 +613,23 @@ e2e:deployed:shell:
 # below, since none of them were actually pages-research.test.mjs (that file
 # has never failed either pipeline) — every failure was in
 # pages-chat-research.test.mjs, pages-chat-live-toggle.test.mjs, or
-# pages-chat-persistence.test.mjs.
+# pages-chat-persistence.test.mjs. pages-ingest.test.mjs and
+# pages-chat-export.test.mjs joined them after pipeline 2721958621: both
+# reproduced 0/13 and 0/3 locally (single file, no concurrency) but failed
+# 3/3 retries here under real 4x contention — a Playwright click/waitFor
+# timing out, not a code defect.
 e2e:deployed:pages:
   extends: .e2e-deployed-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test --test-concurrency=4
       test-e2e/pages-chat-fullscreen.test.mjs
-      test-e2e/pages-chat-export.test.mjs test-e2e/pages-chat-digest.test.mjs
+      test-e2e/pages-chat-digest.test.mjs
       test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
       test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
       test-e2e/pages-chat-taught-capability-chain.test.mjs
       test-e2e/web-chat-memory.test.mjs test-e2e/pages-research.test.mjs
-      test-e2e/pages-ingest.test.mjs test-e2e/pages-ledger.test.mjs
+      test-e2e/pages-ledger.test.mjs
       test-e2e/pages-ledger-teach.test.mjs test-e2e/pages-ledger-research.test.mjs
       test-e2e/ledger-viz-cli.test.mjs test-e2e/ledger-viz.test.mjs
       test-e2e/pages-code.test.mjs test-e2e/pages-spider-fly.test.mjs
@@ -654,6 +658,8 @@ e2e:deployed:pages-timing:
       test-e2e/pages-chat-persistence.test.mjs
       test-e2e/pages-chat-research.test.mjs
       test-e2e/pages-chat-live-toggle.test.mjs
+      test-e2e/pages-ingest.test.mjs
+      test-e2e/pages-chat-export.test.mjs
 
 # Sharing between browsers: every file here drives two or three real browser
 # contexts at once, so the heaviest per-file Chromium load in the matrix and
