@@ -86,6 +86,16 @@ export const PREDICATE_DOCS = Object.freeze([
     "Module → Function/Class. A module's public-API (`__all__`) entry that re-exports a " +
     "symbol defined or imported elsewhere — answers \"where is X importable from,\" not " +
     "just \"where is X defined.\"" },
+  { prop: "mgx:serves", kind: "serves", description:
+    "Module/Function → Module/Route/surface. A provider-declared \"this component provides " +
+    "or backs that one\" edge — a handler serving a route, a module serving a surface. An " +
+    "owned term with no SEON equivalent; tmct's own indexer emits none, so it appears only " +
+    "in a graph supplied through the provider seam." },
+  { prop: "mgx:denotes", kind: "denotes", description:
+    "Vocabulary term → any code entity. A provider-declared naming edge: a glossary or " +
+    "lexicon term is the word for this module, class or function. An owned term with no " +
+    "SEON equivalent; tmct's own indexer emits none, so it appears only in a graph supplied " +
+    "through the provider seam." },
   { prop: "mgx:asksAbout", kind: "asksAbout", description:
     "Session → any entity. A chat session's turn resolved this entity as its subject " +
     "or cited it in the answer — which parts of the codebase a human actually asked " +

@@ -1,11 +1,15 @@
 # pan — the kitchen's default portable: a frying pan seen from above with a
-# long handle, so a taken pan reads as its own thing rather than the generic
-# portable box.
+# long handle. The cooking surface reads darker than the rim (a pan's own
+# interior is seasoned/scorched, its rim stays brighter metal) and the
+# handle carries a rivet, so a taken pan reads as its own thing rather than
+# the generic portable box.
 classes = ["pan"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <circle cx="10" cy="14" r="6" fill="currentColor"/>
-  <circle cx="10" cy="14" r="3.6" fill="currentColor" opacity="0.35"/>
+  <circle cx="10" cy="14" r="4.8" fill="color-mix(in srgb, currentColor 70%, black)"/>
+  <path d="M6.6 11 A4.8 4.8 0 0 1 13 10" fill="none" stroke="color-mix(in srgb, currentColor 20%, white)" stroke-width="0.6" stroke-linecap="round" opacity="0.6"/>
   <rect x="15" y="13" width="7" height="2" rx="1" fill="currentColor"/>
+  <circle cx="16.4" cy="14" r="0.5" fill="color-mix(in srgb, currentColor 55%, black)"/>
 </svg>
 """

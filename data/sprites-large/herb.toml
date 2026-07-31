@@ -1,0 +1,29 @@
+# herb — the leafy sprig behind carrot.toml, lettuce.toml, tomato.toml and
+# vegetable.toml in this pack's own taxonomy: three tied stems fanning out
+# into leaflets, with no pot and no root the way plant.toml and
+# vegetable.toml each show one. Every leaf and the tie both stay a fixed
+# green/brown pair, the same fixed-identity reasoning carrot.toml's own top
+# uses, because a cut herb's own colours don't vary with a taught instance.
+classes = ["herb"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <g fill="none" stroke-linecap="round">
+    <path d="M12 21 C10 16 8.4 11 7.6 6.4" stroke="#4a7a34" stroke-width="0.9"/>
+    <path d="M12 21 C12 15 12 9 12 4" stroke="#5a9040" stroke-width="0.9"/>
+    <path d="M12 21 C14 16 15.6 11 16.4 6.4" stroke="#4a7a34" stroke-width="0.9"/>
+  </g>
+  <g>
+    <ellipse cx="6.4" cy="6" rx="1.6" ry="0.75" fill="#5a9040" transform="rotate(-40 6.4 6)"/>
+    <ellipse cx="8.6" cy="5.4" rx="1.6" ry="0.75" fill="#4a7a34" transform="rotate(-15 8.6 5.4)"/>
+    <ellipse cx="9.8" cy="11.6" rx="1.4" ry="0.65" fill="#6ca43f" transform="rotate(-35 9.8 11.6)"/>
+    <ellipse cx="10.4" cy="4.4" rx="1.6" ry="0.75" fill="#4a7a34" transform="rotate(-20 10.4 4.4)"/>
+    <ellipse cx="13.6" cy="4.2" rx="1.6" ry="0.75" fill="#5a9040" transform="rotate(20 13.6 4.2)"/>
+    <ellipse cx="12" cy="10.2" rx="1.4" ry="0.65" fill="#6ca43f"/>
+    <ellipse cx="17.6" cy="6" rx="1.6" ry="0.75" fill="#4a7a34" transform="rotate(40 17.6 6)"/>
+    <ellipse cx="15.4" cy="5.4" rx="1.6" ry="0.75" fill="#5a9040" transform="rotate(15 15.4 5.4)"/>
+    <ellipse cx="14.2" cy="11.6" rx="1.4" ry="0.65" fill="#6ca43f" transform="rotate(35 14.2 11.6)"/>
+  </g>
+  <path d="M9.6 20.6 C9.6 19.6 14.4 19.6 14.4 20.6 C14.4 21.2 9.6 21.2 9.6 20.6 Z" fill="#7a5230"/>
+  <ellipse cx="11" cy="6" rx="1.4" ry="0.6" fill="#ffffff" opacity="0.25" transform="rotate(-10 11 6)"/>
+</svg>
+"""

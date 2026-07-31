@@ -1,18 +1,25 @@
-# road — a converging perspective strip with a dashed centre line reads as
-# a road viewed from the driver's own position, rather than the top-down
-# map view river.toml and street.toml use.
+# road — a driver's-eye asphalt strip narrowing to a horizon, its own
+# tarmac grey and painted dashes fixed the way any road surface is,
+# whatever theme sits behind it. The sky band at the vanishing point is
+# what tells it apart from street.toml's own top-down block.
 classes = ["road"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="road-fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    <linearGradient id="road-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cfe0e6"/>
+      <stop offset="100%" stop-color="#eef4f6"/>
+    </linearGradient>
+    <linearGradient id="road-asphalt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a5f66"/>
+      <stop offset="100%" stop-color="#26282c"/>
     </linearGradient>
   </defs>
-  <path d="M9.4 2.4 L14.6 2.4 L20 21.6 H4 Z" fill="url(#road-fill)"/>
-  <path d="M9.4 2.4 L4 21.6 M14.6 2.4 L20 21.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
-  <g stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.55">
+  <rect x="2" y="1.4" width="20" height="3.4" fill="url(#road-sky)"/>
+  <line x1="2" y1="4.8" x2="22" y2="4.8" stroke="#b7c4c9" stroke-width="0.4"/>
+  <path d="M9.4 2.4 L14.6 2.4 L20 21.6 H4 Z" fill="url(#road-asphalt)"/>
+  <path d="M9.4 2.4 L4 21.6 M14.6 2.4 L20 21.6" fill="none" stroke="#1c1c1c" stroke-width="1"/>
+  <g stroke="#f4ece0" stroke-width="1" stroke-linecap="round" opacity="0.85">
     <line x1="12" y1="4.4" x2="12" y2="7"/>
     <line x1="12" y1="9.6" x2="12" y2="12.2"/>
     <line x1="12" y1="14.8" x2="12" y2="17.4"/>

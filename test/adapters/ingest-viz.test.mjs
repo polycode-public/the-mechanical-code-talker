@@ -2,10 +2,12 @@
 // embedded (it all arrives live via the sibling ingest-browser.bundle.js,
 // exactly as chat-page-viz.mjs's own page works), so these tests pin the
 // page's STRUCTURE (mirroring chat-page-viz.test.mjs's own style) plus
-// factTripleParts and loadProgressLine, this page's own pure helpers.
+// factTripleParts and loadProgressLine, shared with research-viz.mjs from
+// memory-panel-viz.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderIngestHtml, factTripleParts, loadProgressLine } from "../../src/services/ingest-viz.mjs";
+import { renderIngestHtml } from "../../src/services/ingest-viz.mjs";
+import { factTripleParts, loadProgressLine } from "../../src/services/memory-panel-viz.mjs";
 import { createIngestSession, groundTextToFacts } from "../../src/surfaces/web/ingest-browser-entry.mjs";
 import { createInMemoryStore, readFactRows, loadMemory, appendFact } from "../../src/adapters/memory/core.mjs";
 
@@ -14,10 +16,10 @@ import { createInMemoryStore, readFactRows, loadMemory, appendFact } from "../..
 test("factTripleParts: reads subject/predicate/object/provenance as strings, defaulting to empty", () => {
   assert.deepEqual(
     factTripleParts({ subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" }),
-    { subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" },
+    { subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", source: "", provenance: "teach:chat:x" },
   );
-  assert.deepEqual(factTripleParts({}), { subject: "", predicate: "", object: "", provenance: "" });
-  assert.deepEqual(factTripleParts(null), { subject: "", predicate: "", object: "", provenance: "" });
+  assert.deepEqual(factTripleParts({}), { subject: "", predicate: "", object: "", source: "", provenance: "" });
+  assert.deepEqual(factTripleParts(null), { subject: "", predicate: "", object: "", source: "", provenance: "" });
 });
 
 // ---- loadProgressLine: the boot statusline's pure aggregator ---------------
@@ -125,9 +127,9 @@ test("renderIngestHtml: the docked panel hides on a narrow viewport, matching ch
 
 // ---- persistence: kept on this device, same convention as chat.html -------
 
-test("renderIngestHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+test("renderIngestHtml: the device store opens under a version, fact-count and seed-content stamp, and boot tries a restore before falling back to the fresh seed", () => {
   const html = renderIngestHtml();
-  assert.match(html, /openPersistedStore\(\{ storeKey: "ingest", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /openPersistedStore\(\{ storeKey: "ingest", stamp: siteVersion \+ ":" \+ seedFacts \+ ":" \+ SEED_STAMP \}\)/);
   assert.match(html, /persist\.load\(\)/);
 });
 
@@ -264,4 +266,85 @@ test("groundTextToFacts: the row-length fast path never mis-skips a real fact on
   assert.equal(summary.recognized, 1);
   const after = readFactRows(await loadMemory(memoryDir)).length;
   assert.equal(after, before + 1, "exactly one new row landed, on top of what the store already held");
+});
+
+test("renderIngestHtml: the seed is fetched by a content-stamped URL, so a rebuilt seed can never be served from the service worker's cache of the old one", () => {
+  const stamped = renderIngestHtml({ seedStamp: "deadbeef0002" });
+  assert.match(stamped, /const SEED_STAMP = "deadbeef0002";/);
+  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  assert.match(renderIngestHtml(), /const SEED_STAMP = "";/);
+});
+
+test("renderIngestHtml: reset-to-seed drops the service worker's asset cache as well as the taught-facts store", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /const clearSiteAssetCaches = async function clearSiteAssetCaches/);
+  assert.match(
+    html,
+    /el\("reinitStore"\)\.addEventListener\("click", async \(\) => \{[\s\S]*?await persist\.clear\(\);[\s\S]*?await clearSiteAssetCaches\(\);[\s\S]*?window\.location\.reload\(\)/,
+  );
+});
+
+test("renderIngestHtml: the memory's fact count rides in the topbar, not only the status line", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
+  assert.match(html, /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/);
+});
+
+// ---- the ask dock: a question put to what this session ingested -----------
+
+test("renderIngestHtml: the ask dock sits under the facts pane, disabled until the engine opens a session", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<form class="askDock" id="askForm"/);
+  assert.match(html, /<input type="text" id="askq"[^>]*disabled>/);
+  assert.match(html, /<button type="submit" class="askGo" id="askGo" disabled>ask<\/button>/);
+  assert.match(html, /<div id="askLog" aria-live="polite"><\/div>/);
+  assert.ok(html.indexOf('id="askForm"') > html.indexOf('id="facts"'), "the dock follows the facts it questions");
+});
+
+test("renderIngestHtml: a submitted question tries the graph route first and the turn engine only on its miss", () => {
+  const html = renderIngestHtml();
+  const handler = html.slice(html.indexOf('askFormEl.addEventListener("submit"'), html.indexOf("// ---- memory stats"));
+  assert.ok(handler.indexOf("window.tmct.ask(q)") < handler.indexOf("window.tmct.turn(q)"), "ask leads, turn follows");
+  assert.match(handler, /if \(asked && asked\.answer && !asked\.miss\)/, "a missed ask never renders as an answer");
+  assert.match(handler, /!\(turned\.record && turned\.record\.miss\)/, "a missed turn never renders as an answer either");
+  assert.match(handler, /addAskLine\("miss", askMissNote\(\)\)/);
+});
+
+test("renderIngestHtml: the miss note names the kinds this memory really holds rather than an invented example", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /session\.askableClasses\(\)/);
+  assert.match(html, /"I can't ground that in what you've ingested\. The kinds it holds: " \+ kinds/);
+});
+
+// ---- the session's own ask/turn wiring -----------------------------------
+
+test("createIngestSession: a fresh session holds an empty graph, so a turn keeps the plain conversational reading", () => {
+  const session = createIngestSession();
+  assert.deepEqual(session.graph.individuals, []);
+  assert.deepEqual(session.askableClasses(), []);
+});
+
+test("createIngestSession: turn reads back a fact the page just ingested, and refuses one it never saw", async () => {
+  const session = createIngestSession();
+  await session.ingest("A beagle is a kind of dog.");
+  const recall = await session.turn("what is a beagle");
+  assert.equal(recall.record.miss, false);
+  assert.match(recall.answer, /kind of dog/);
+  const missed = await session.turn("what is a quombat");
+  assert.match(missed.answer, /isn't a term in this graph's own vocabulary|don't know/);
+});
+
+test("createIngestSession: the projected graph follows the store — an ingest and a taught turn both land in a later question", async () => {
+  const session = createIngestSession();
+  await session.ingest("A beagle is a kind of dog.");
+  await session.refreshGraph();
+  assert.deepEqual(session.askableClasses(), ["dog"]);
+
+  const taught = await session.turn("remember: a poodle is a kind of dog");
+  assert.equal(taught.record.via, "assert");
+  await session.refreshGraph();
+  assert.deepEqual(
+    session.graph.individuals.filter((i) => i.class === "dog").map((i) => i.id).sort(),
+    ["beagle", "poodle"],
+  );
 });

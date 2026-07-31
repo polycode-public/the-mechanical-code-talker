@@ -192,13 +192,17 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
 
   // GLOBAL mode has no bound focus to prove relevance, so also screen the request against
   // ask.mjs's NL grammar: it must parse to a shape naming the candidate rule's focusClass.
+  // The refusal reads as plain language — it is user-facing chat text (/plan renders the
+  // why verbatim), so it names what the planner CAN plan about, never the grammar machinery
+  // that decided it.
   let domainRelevant = applicable;
   if (mode === "global" && applicable.length) {
     const requestClass = parsedEntityType(parseQuery(request));
     domainRelevant = applicable.filter((r) => requestClass === r.focusClass);
     if (!domainRelevant.length) {
-      const classes = [...new Set(applicable.map((r) => r.focusClass))].join("/");
-      return refuse(`open-world: the request does not parse as a query about ${classes} (ask.mjs's own NL grammar names ${requestClass || "no recognized entity kind"} in it) — global goal deduction needs the REQUEST ITSELF to be about the deduced goal's domain, not just a declared toolset that happens to ground it — escalate`, driver);
+      const classes = [...new Set(applicable.map((r) => r.focusClass))];
+      const plain = classes.map((c) => `${String(c).toLowerCase()}s`).join(" or ");
+      return refuse(`open-world: I can only plan toward goals about things this graph knows (${plain} here), and this request doesn't read as being about ${plain} — I won't invent a goal for it — escalate`, driver);
     }
   }
 

@@ -138,6 +138,17 @@ export const CLI_VERBS = [
     ],
   },
   {
+    mode: "digest",
+    errorLabel: "digest",
+    usage: "tmct digest <term>",
+    prose: ["a readable digest of what the graph knows about one term:"],
+    flags: [
+      { flag: "[--repo <abs>]", prose: ["a bounded narrative first (selected, sense-filtered,"] },
+      { flag: "[--graph <path>]", prose: ["deduped), then its sources and the stored-fact count."] },
+      { flag: "[--config <path>]", prose: ["The vocabulary-side sibling of `cli digest`'s code map."] },
+    ],
+  },
+  {
     mode: "serve",
     errorLabel: "serve",
     usage: "tmct serve [--repo <abs>]",

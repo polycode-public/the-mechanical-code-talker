@@ -31,6 +31,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
 import { stampVersion } from "../src/domain/version-stamp.mjs";
@@ -65,10 +66,29 @@ const spriteTemplates = readSpriteTemplateFiles();
 // reach the deployed page without anyone editing HTML. post-deploy-smoke.mjs
 // reads the same element back off that page.
 function stampPageVersion() {
-  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const version = siteVersion();
   const page = join(SITE, "index.html");
   writeFileSync(page, stampVersion(readFileSync(page, "utf8"), version));
   console.log(`stamped ${page} with version ${version}`);
+}
+
+/** A short content hash of one built file, or "" when it isn't there. Short
+ *  on purpose: this rides in a URL and a cache name, and 12 hex characters of
+ *  SHA-256 already make an accidental collision between two builds of the same
+ *  file implausible. */
+function contentHash(path) {
+  if (!existsSync(path)) return "";
+  return createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 12);
+}
+
+/** package.json's version, or TMCT_DEMO_VERSION_OVERRIDE when set. The
+ *  override lets a test drive two builds that differ only in the version
+ *  the site stamps and the service worker's cache name embeds, without
+ *  touching the repo's own package.json — test-e2e/pages-service-worker-
+ *  cache-bust.test.mjs is the one caller. */
+function siteVersion() {
+  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  return process.env.TMCT_DEMO_VERSION_OVERRIDE || version;
 }
 
 // Clear OUT first. Copying into it without clearing leaves every file src/ has
@@ -96,6 +116,16 @@ stampPageVersion();
   console.log(`wrote ${winkVendorPath} (${(winkVendorBytes / 1048576).toFixed(2)} MB)`);
 }
 
+// The shared P2P asset, built the same way and for the same reason: every page
+// that can join a shared world imports THIS one same-origin module at runtime,
+// so the networking layer is never copied into a per-page engine bundle. The
+// pages import it lazily, so a visitor who never shares never fetches it.
+{
+  const { buildP2pVendor } = await import(join(here, "build-p2p-vendor.mjs"));
+  const { outPath: p2pVendorPath, bytes: p2pVendorBytes } = await buildP2pVendor(SITE);
+  console.log(`wrote ${p2pVendorPath} (${(p2pVendorBytes / 1024).toFixed(0)} KB)`);
+}
+
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
 // The ledger hero: build the memory payload through the real teach paths, then
@@ -113,12 +143,37 @@ const { readFile: readF, writeFile: writeF } = await import("node:fs/promises");
 const { computeLedgerDataFromPayload, renderLedgerHtml, readMemoryAskBundle } = await import(join(ROOT, "src", "services/ledger-viz.mjs"));
 const payload = JSON.parse(await readF(memoryPath, "utf8"));
 const ledgerData = computeLedgerDataFromPayload(payload, {});
+// The focus term's digest paragraph, computed here — node-side, where the
+// sentence-structure bank is readable — and embedded for the ledger's focus
+// card; a client refocus to another term shows the fact groups without it.
+const { readFactRows: readLedgerFactRows } = await import(join(ROOT, "src", "adapters/memory/core.mjs"));
+const { digestTermFromRows, readDigestStructures: readLedgerDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+// The digest structure table, embedded so the page recomputes a term's digest
+// client-side on refocus (over the store the dock grows in the browser) rather
+// than losing the focus card. The server digest below stays as the initial
+// focus's fallback for a page whose engine bundle never loads.
+const ledgerDigestStructures = readLedgerDigestStructures();
+let focusDigest = null;
+if (ledgerData.focus) {
+  const allFactRows = readLedgerFactRows(payload);
+  const focusRows = allFactRows.filter((r) => r.subject === ledgerData.focus);
+  const article = focusRows.length ? digestTermFromRows(ledgerData.focus, focusRows, allFactRows, { budget: 8 }) : null;
+  if (article && article.paragraphs.length) {
+    focusDigest = {
+      term: ledgerData.focus,
+      paragraphs: article.paragraphs,
+      sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+      facts: (article.detail.facts || []).map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+      factCount: article.detail.factCount,
+    };
+  }
+}
 const memoryAskBundle = await readMemoryAskBundle();
 const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle.mjs"));
 const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
 console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true }));
+await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The code explorer: the exact page the Electron shell renders for itself
@@ -128,9 +183,21 @@ console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no 
 // ledger bundle above. showDesktopLink:true is the one option that differs
 // from the Electron build (scripts/build-electron-app.mjs), which renders
 // the identical page for the desktop shell and has nothing to point at.
-// The page also fetches ./chat-seed.json (built further down this script)
-// at runtime for its chat's general-knowledge bands — nothing to embed
-// here, and a build without the seed leaves the page graph-only.
+// chat.html's starter-memory seed, generated (never committed) so every page
+// that fetches it serves what src/ builds today. Built here, ahead of the four
+// pages that fetch it, because each of them embeds the seed's own content hash
+// in the URL it requests: a cache-first read in the service worker can then
+// only ever return the copy the page asked for, so a content-only deploy (a
+// rebuilt seed under an unchanged package version) can never be served from a
+// browser's cache of the previous one.
+const { main: buildChatSeed } = await import(join(here, "build-chat-seed.mjs"));
+const seed = await buildChatSeed(join(SITE, "chat-seed.json"));
+const seedStamp = contentHash(seed.outPath);
+console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).toFixed(0)} KB, content ${seedStamp})`);
+
+// The page also fetches ./chat-seed.json at runtime for its chat's
+// general-knowledge bands — nothing to embed here, and a build without the
+// seed leaves the page graph-only.
 {
   const { computeCodeExplorerData, renderCodeExplorerHtml, VENDOR_WINK_LOADER_JS } = await import(join(ROOT, "src", "services/code-explorer-viz.mjs"));
   const { main: buildCodeExplorerBundle } = await import(join(here, "build-code-explorer-bundle.mjs"));
@@ -144,19 +211,18 @@ console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no 
     winkLoaderInline: VENDOR_WINK_LOADER_JS,
     sourceName: "demo code graph",
     showDesktopLink: true,
+    seedStamp,
   }));
   console.log(`wrote ${codePath} (focus "${codeExplorerData.focus}", ${codeExplorerData.hints.length} hints)`);
 }
 
-// chat.html's full engine: the browser bundle plus its starter-memory seed,
-// both generated (never committed) so the page always serves what src/
-// builds today.
+// chat.html's full engine: the browser bundle, generated (never committed) so
+// the page always serves what src/ builds today. Its starter-memory seed is
+// built further up, ahead of the pages that stamp its content hash into the
+// URL they fetch it by.
 const { main: buildChatBundle } = await import(join(here, "build-chat-bundle.mjs"));
 const { outPath: chatBundlePath, size: chatBundleBytes } = await buildChatBundle(SITE);
 console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)`);
-const { main: buildChatSeed } = await import(join(here, "build-chat-seed.mjs"));
-const seed = await buildChatSeed(join(SITE, "chat-seed.json"));
-console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).toFixed(0)} KB)`);
 
 // The reference pack's browser subset (public/reference-pack/): EVERY term
 // the full pack at this machine already resolves, not a curated slice — the
@@ -183,8 +249,14 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
 // never a second engine.
 {
   const { renderChatHtml } = await import(join(ROOT, "src", "services", "chat-page-viz.mjs"));
+  // The digest sentence-structure bank, read once here (node-side, where the
+  // TOML is) and embedded in the page, same as research.html's own call just
+  // below — chat.html's answer flow feeds these rows to the chat bundle's
+  // live digest-bank twin (chat-browser-entry.mjs) so a long answer leads
+  // with a composed digest instead of always falling back to the flat list.
+  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const chatPagePath = join(SITE, "chat.html");
-  await writeF(chatPagePath, renderChatHtml());
+  await writeF(chatPagePath, renderChatHtml({ digestStructures: readDigestStructures(), seedStamp }));
   console.log(`wrote ${chatPagePath}`);
 }
 
@@ -198,8 +270,29 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   console.log(`wrote ${ingestBundlePath} (${(ingestBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderIngestHtml } = await import(join(ROOT, "src", "services", "ingest-viz.mjs"));
   const ingestPagePath = join(SITE, "ingest.html");
-  await writeF(ingestPagePath, renderIngestHtml());
+  await writeF(ingestPagePath, renderIngestHtml({ seedStamp }));
   console.log(`wrote ${ingestPagePath}`);
+}
+
+// The research page: grow one in-memory graph three ways (research a term over
+// Simple English Wikipedia, teach by telling, ingest documents) and ask it a
+// question scoped by source. Its own dedicated browser bundle (the full turn
+// engine plus the ingest recognizer, same posture as the chat/ingest bundles
+// above — generated fresh per build, never committed), then the self-contained
+// page. It reuses ./chat-seed.json (built above) for its seed corpus bands and
+// ./reference-pack/ (built above) at runtime, so nothing new to embed here.
+{
+  const { main: buildResearchBundle } = await import(join(here, "build-research-bundle.mjs"));
+  const { outPath: researchBundlePath, size: researchBundleBytes } = await buildResearchBundle(SITE);
+  console.log(`wrote ${researchBundlePath} (${(researchBundleBytes / 1024).toFixed(0)} KB)`);
+  const { renderResearchHtml } = await import(join(ROOT, "src", "services", "research-viz.mjs"));
+  // The digest sentence-structure bank, read once here (node-side, where the
+  // TOML is), embedded in the page so the research digest composes client-side
+  // over the store it grows in the browser — no TOML parser ever ships.
+  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+  const researchPagePath = join(SITE, "research.html");
+  await writeF(researchPagePath, renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }));
+  console.log(`wrote ${researchPagePath}`);
 }
 
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
@@ -231,17 +324,41 @@ let largeSpriteManifest = null;
 // (the spider-fly world's SEED_TAXONOMY plus corpus/wordnet/wordnet-xl.jsonl)
 // this step loads once, in Node, the same posture the ledger/adventure/
 // spider-fly build steps above already take with their own build-time data.
+//
+// One page per CATALOG_GROUPS entry carries that group's own full gallery
+// (sprites-adventure-props.html/sprites-person-roles.html/sprites-objects.html/
+// sprites-emotions.html — each group's own `page` field), and sprites.html
+// itself is the lighter landing page: one example card per section, linking
+// out to its own class's card on the group page that actually holds it. Every
+// page shares the one sprites-browser.bundle.js bundle built once below —
+// the composer/dock both read the WHOLE catalog regardless of which page
+// they're embedded in, so there's nothing page-specific to bundle per page.
 {
   const spriteLargeTemplates = readSpriteLargeTemplateFiles();
-  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
+  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, CATALOG_GROUPS } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
   const ontologyFactRows = await loadSpriteOntologyFactRows();
   const { main: buildSpritesBundle } = await import(join(here, "build-sprites-bundle.mjs"));
   const { outPath: spritesBundlePath, size: spritesBundleBytes } = await buildSpritesBundle(SITE);
   console.log(`wrote ${spritesBundlePath} (${(spritesBundleBytes / 1024).toFixed(0)} KB)`);
+
   const spritesPagePath = join(SITE, "sprites.html");
-  const spritesHtml = renderSpriteCatalogHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
+  const spritesHtml = renderSpriteCatalogLandingHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
   await writeF(spritesPagePath, spritesHtml);
   console.log(`wrote ${spritesPagePath}`);
+
+  for (const group of CATALOG_GROUPS) {
+    const groupPagePath = join(SITE, group.page);
+    const groupHtml = renderSpriteCatalogHtml({
+      title: `tmct — ${group.label} — the sprite library`,
+      iconTemplates: spriteTemplates,
+      largeTemplates: spriteLargeTemplates,
+      factRows: ontologyFactRows,
+      spritesBundleAvailable: true,
+      groupId: group.id,
+    });
+    await writeF(groupPagePath, groupHtml);
+    console.log(`wrote ${groupPagePath}`);
+  }
 }
 
 // The plan hero: teach + solve the default hanoi-3 puzzle through the SAME
@@ -298,32 +415,71 @@ let largeSpriteManifest = null;
   console.log(`wrote ${spiderFlyPath}`);
 }
 
-// The adventure hero: the shipped Ashcombe Hall world's real facts+rules,
-// read ONCE through the same Node worlds-pack provider the CLI itself uses
-// and embedded straight into the page (adventure-viz.mjs's own header
-// explains why — the world's canonical definition is a Node-only JSONL
-// corpus source, not a pure JS module the browser bundle could call
-// directly), plus this game's own dedicated browser bundle.
-{
+// What each scenario's dropdown entry says. The label names the difference
+// that made the world worth shipping — how big it is, and what it is that
+// makes it harder or easier — so picking one is a choice rather than a guess
+// at what a hyphenated world id means.
+const ADVENTURE_SCENARIO_LABELS = {
+  "ashcombe-hall": "ashcombe hall (6 rooms, 1 lock)",
+  "lantern-cottage": "lantern cottage (3 rooms, no locks)",
+  "greyvale-museum": "greyvale museum (9 rooms, 3 locks)",
+};
+const MUD_SCENARIO_LABELS = {
+  "mud-garden": "mud garden (4 rooms, 1 fox)",
+  "mud-hollow": "mud hollow (3 rooms, nothing hunting)",
+  "mud-warren": "mud warren (8 rooms, fox and owl)",
+};
+
+// The world payload every game page embeds: one shipped world's real
+// facts+rules, read through the same Node worlds-pack provider the CLI itself
+// uses (the viz headers explain why — a world's canonical definition is a
+// Node-only gzipped JSONL shard, not a pure JS module the browser bundle
+// could call directly).
+function worldPayloadOf(world) {
+  return {
+    name: world.name,
+    facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+    rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
+    opening: world.meta?.opening || "",
+  };
+}
+
+/** The worlds a page's scenario dropdown offers, in the order named, skipping
+ *  any the pack does not carry. A page whose alternates are all missing still
+ *  builds — it just ships the one world it found. */
+async function loadScenarioWorlds(names) {
   const { getWorldsPackProvider, clearWorldsPackCache } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
   clearWorldsPackCache();
-  const world = await getWorldsPackProvider({}).load("ashcombe-hall");
-  if (!world) {
-    console.log("ashcombe-hall world not found in the worlds pack — run `npm run gen:worlds-pack` first; the adventure hero has no world to embed, so this is a heads-up, not a build failure");
+  const provider = getWorldsPackProvider({});
+  const found = [];
+  for (const name of names) {
+    const world = await provider.load(name);
+    if (world) found.push(worldPayloadOf(world));
+    else console.log(`${name} world not found in the worlds pack — run \`npm run gen:worlds-pack\`; skipping that scenario`);
+  }
+  return found;
+}
+
+// The adventure hero: Ashcombe Hall plus the two alternates its scenario
+// dropdown offers, a shorter cottage and a bigger museum with a deeper lock
+// chain. Ashcombe stays first, so the page opens on the world it always has.
+{
+  const worlds = await loadScenarioWorlds(["ashcombe-hall", "lantern-cottage", "greyvale-museum"]);
+  if (!worlds.length) {
+    console.log("no adventure worlds found in the worlds pack — the adventure hero has no world to embed, so this is a heads-up, not a build failure");
   } else {
     const { main: buildAdventureBundle } = await import(join(here, "build-adventure-bundle.mjs"));
     const { outPath: adventureBundlePath, size: adventureBundleBytes } = await buildAdventureBundle(SITE);
     console.log(`wrote ${adventureBundlePath} (${(adventureBundleBytes / 1024).toFixed(0)} KB)`);
     const { renderAdventureHtml } = await import(join(ROOT, "src", "services", "adventure-viz.mjs"));
-    const worldPayload = {
-      name: world.name,
-      facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
-      rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
-      opening: world.meta?.opening || "",
-    };
+    const scenarios = worlds.map((worldPayload) => ({
+      label: ADVENTURE_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+      worldPayload,
+    }));
     const adventurePath = join(SITE, "adventure.html");
     await writeF(adventurePath, renderAdventureHtml({
-      worldPayload,
+      worldPayload: scenarios[0].worldPayload,
+      scenarios,
       spriteTemplates,
       largeSpriteTemplates: largeSpriteManifest ? largeSpriteManifest.templates : [],
     }));
@@ -331,27 +487,92 @@ let largeSpriteManifest = null;
   }
 }
 
-// The site's service worker, version-stamped so a version bump rolls the
-// cache name and the activate step drops the previous release's entries.
-// What it caches is best-effort and volatile — browser storage can be
-// evicted or cleared; every page works identically without it, this only
-// stops a RETURN visitor re-paying for the big boot assets.
-function renderServiceWorker(version) {
+// The mud demo: mud-garden plus the two alternates its scenario dropdown
+// offers, a three-room hollow with nothing hunting in it and an eight-room
+// warren with two predators and thin food. mud-garden stays first, so the
+// page opens on the burrow it always has. The large-tier sprite set is read
+// again here (not shared with spider-fly's own spriteLargeTemplates above) so
+// this block stays self-contained regardless of build-step ordering, matching
+// the spider-fly block's own posture.
+{
+  const worlds = await loadScenarioWorlds(["mud-garden", "mud-hollow", "mud-warren"]);
+  if (!worlds.length) {
+    console.log("no mud worlds found in the worlds pack — the mud demo has no world to embed, so this is a heads-up, not a build failure");
+  } else {
+    const { main: buildMudBundle } = await import(join(here, "build-mud-bundle.mjs"));
+    const { outPath: mudBundlePath, size: mudBundleBytes } = await buildMudBundle(SITE);
+    console.log(`wrote ${mudBundlePath} (${(mudBundleBytes / 1024).toFixed(0)} KB)`);
+    const { renderMudHtml } = await import(join(ROOT, "src", "services", "mud-viz.mjs"));
+    const { mudSpeciesOf } = await import(join(ROOT, "src", "domain", "game-config.mjs"));
+    // The roster each burrow may cast from, read off the burrow's own
+    // adventurers in the order its source file places them — never a list
+    // typed out here, which would go stale the moment a world's cast changed
+    // and would have nothing to say about a world this file never saw. The
+    // page's players slider decides how many of them play, and pickMudRoster
+    // decides which.
+    const rosterOf = (worldPayload) => worldPayload.facts
+      .filter((f) => f.predicate === "rdf:type" && f.object === "adventurer")
+      .map((f) => ({ id: f.subject, species: mudSpeciesOf(f.subject) }));
+    const scenarios = worlds.map((worldPayload) => ({
+      label: MUD_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+      worldPayload,
+      characters: rosterOf(worldPayload),
+    }));
+    const mudSpriteTemplates = readSpriteLargeTemplateFiles();
+    const mudPath = join(SITE, "mud.html");
+    await writeF(mudPath, renderMudHtml({
+      worldPayload: scenarios[0].worldPayload,
+      characters: scenarios[0].characters,
+      scenarios,
+      spriteTemplates: mudSpriteTemplates,
+    }));
+    console.log(`wrote ${mudPath}`);
+  }
+}
+
+// The site's service worker. What it caches is best-effort and volatile —
+// browser storage can be evicted or cleared; every page works identically
+// without it, this only stops a RETURN visitor re-paying for the big boot
+// assets.
+//
+// Two rules keep a cached copy from outliving the file it copied:
+//
+//   1. The cache name carries a content hash of the whole precached set, not
+//      just the release version. A content-only deploy — the seed rebuilt, a
+//      bundle recompiled, no version bump — rolls the name, so the activate
+//      step drops every entry of the build before it.
+//   2. Only a URL that identifies its own content is read cache-first. The
+//      seed's URL carries its content hash (the pages request it that way), so
+//      a cache-first read can only return the copy the page asked for. Pages
+//      and bundles have plain URLs, so they track the deploy over the network
+//      and fall back to the cache only when the network fails.
+function renderServiceWorker(version, { seedStamp, buildHash }) {
+  const seedPath = seedStamp ? `./chat-seed.json?b=${seedStamp}` : "./chat-seed.json";
   return `"use strict";
-const CACHE = ${JSON.stringify("tmct-precache-v" + version)};
-// The page shell and its big boot assets. Cached one-by-one, tolerating any
-// individual 404 (a build without the reference pack, say) — cache.addAll
-// would refuse the whole install over one missing optional file.
-const PRECACHE = [
+const CACHE = ${JSON.stringify(`tmct-precache-v${version}-${buildHash}`)};
+// Assets whose URL identifies their content, read cache-first. The seed's
+// query is this build's own content hash; the vendor assets and the pack index
+// ride the cache name for that instead.
+const CONTENT_ADDRESSED = [
+  ${JSON.stringify(seedPath)},
+  "./vendor/wink.js",
+  "./vendor/p2p.js",
+  "./reference-pack/index.json",
+];
+// Pages and bundles: precached for an offline second visit, but always read
+// network-first so a deploy reaches the browser on the next load.
+const DEPLOY_TRACKING = [
   "./index.html",
   "./chat.html",
   "./ingest.html",
+  "./research.html",
   "./chat-browser.bundle.js",
   "./sprites-browser.bundle.js",
-  "./vendor/wink.js",
-  "./chat-seed.json",
-  "./reference-pack/index.json",
 ];
+// The page shell and its big boot assets. Cached one-by-one, tolerating any
+// individual 404 (a build without the reference pack, say) — cache.addAll
+// would refuse the whole install over one missing optional file.
+const PRECACHE = DEPLOY_TRACKING.concat(CONTENT_ADDRESSED);
 const precacheUrl = (p) => new URL(p, self.location.href).href;
 
 self.addEventListener("install", (event) => {
@@ -379,24 +600,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
-  const href = url.origin + url.pathname;
-  const precached = PRECACHE.some((p) => precacheUrl(p) === href);
   const packArticle = url.pathname.includes("/reference-pack/articles/");
   const pageOrBundle = url.pathname.endsWith(".html") || url.pathname.endsWith("/") || url.pathname.endsWith(".bundle.js");
-  if (precached || packArticle) {
-    // Cache-first: immutable-per-release boot assets and the per-article
-    // pack tier (cached the first time a citation fetches it).
-    event.respondWith((async () => {
-      const cached = await caches.match(event.request, { ignoreSearch: true });
-      if (cached) return cached;
-      const res = await fetch(event.request);
-      if (res.ok) {
-        const cache = await caches.open(CACHE);
-        await cache.put(event.request, res.clone());
-      }
-      return res;
-    })());
-  } else if (pageOrBundle) {
+  // A page's own URL carries query strings of its own (an invite link), so the
+  // deploy-tracking test comes first and reads the path alone.
+  const contentAddressed = !pageOrBundle
+    && (packArticle || CONTENT_ADDRESSED.some((p) => precacheUrl(p) === url.href));
+  if (pageOrBundle) {
     // Network-first: pages and bundles track the deploy; the cache is only
     // the offline fallback.
     event.respondWith((async () => {
@@ -413,16 +623,42 @@ self.addEventListener("fetch", (event) => {
         throw err;
       }
     })());
+  } else if (contentAddressed) {
+    // Cache-first, matched on the whole URL including its content hash: a
+    // rebuilt seed asks by a different URL and misses on purpose.
+    event.respondWith((async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      const res = await fetch(event.request);
+      if (res.ok) {
+        const cache = await caches.open(CACHE);
+        await cache.put(event.request, res.clone());
+      }
+      return res;
+    })());
   }
 });
 `;
 }
 
 {
-  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const version = siteVersion();
+  // Hashed over the built files themselves, so the cache name moves whenever
+  // any precached asset's bytes move — the seed hash is reused rather than
+  // recomputed over its 90-odd MB a second time.
+  const hashedAssets = [
+    ["index.html", null], ["chat.html", null], ["ingest.html", null], ["research.html", null],
+    ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
+    ["vendor/wink.js", null], ["vendor/p2p.js", null],
+    ["chat-seed.json", seedStamp], ["reference-pack/index.json", null],
+  ];
+  const buildHash = createHash("sha256")
+    .update(hashedAssets.map(([name, known]) => `${name}:${known ?? contentHash(join(SITE, name))}`).join("\n"))
+    .digest("hex")
+    .slice(0, 12);
   const swPath = join(SITE, "tmct-sw.js");
-  writeFileSync(swPath, renderServiceWorker(version));
-  console.log(`wrote ${swPath} (cache tmct-precache-v${version})`);
+  writeFileSync(swPath, renderServiceWorker(version, { seedStamp, buildHash }));
+  console.log(`wrote ${swPath} (cache tmct-precache-v${version}-${buildHash}, seed content ${seedStamp || "unhashed"})`);
 }
 
 // Precompressed siblings (.gz/.br) for every sizable text asset, last, over

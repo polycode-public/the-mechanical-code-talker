@@ -1,0 +1,30 @@
+# building — the generic gabled elevation behind house.toml and every
+# other place in this pack: a currentColor wall and roof rather than
+# house.toml's own fixed brick and slate, since a plain building's own
+# material is a theme's to own, not one real-world fact. A centred door
+# with a window on each side keeps the front symmetric and institutional
+# rather than home-like; the door and window glass stay fixed because a
+# door's wood and a window's glass are what the eye reads as "entrance"
+# and "opening" regardless of theme.
+classes = ["building"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="building-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <rect x="4.4" y="11" width="15.2" height="10.4" fill="url(#building-fill)"/>
+  <rect x="4.4" y="11" width="15.2" height="10.4" fill="none" stroke="currentColor" stroke-width="1"/>
+  <path d="M3 12 L12 4 L21 12 Z" fill="color-mix(in srgb, currentColor 70%, black)" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="6.2" y="14" width="3" height="3" fill="#cfe0e6"/>
+  <path d="M6.2 15.5 H9.2 M7.7 14 V17" stroke="currentColor" stroke-width="0.35" opacity="0.6"/>
+  <rect x="14.8" y="14" width="3" height="3" fill="#cfe0e6"/>
+  <path d="M14.8 15.5 H17.8 M16.3 14 V17" stroke="currentColor" stroke-width="0.35" opacity="0.6"/>
+  <rect x="9.8" y="15.4" width="4.4" height="6" fill="#6b4423"/>
+  <circle cx="13.4" cy="18.6" r="0.26" fill="#c9a227"/>
+  <path d="M4.4 11.6 L11 11.6" stroke="#ffffff" stroke-width="1" opacity="0.28"/>
+</svg>
+"""

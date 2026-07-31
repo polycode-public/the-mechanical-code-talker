@@ -67,7 +67,36 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`). Keep the tests green at every commit — but which tests depends on where
   the commit lands, see "Test the blast radius" below.
-- Push/publish is gated on the operator (CI publishes on version bump on `main`).
+- **Before merging a worktree, check `git status --short` inside it, not just its last commit.**
+  A sub-agent can leave real, uncommitted work behind (an untracked test file it wrote but never
+  `git add`ed) that vanishes the moment the worktree is removed — the coordinator gets exactly
+  one look. (Recovered once: a `-ses` singularization fix's own test file sat untracked in an
+  abandoned worktree for hours before this check would have caught it.)
+- **Remove the worktree (and its branch) as soon as its commit is merged onto `main`** —
+  `git worktree remove <path>` then `git branch -d worktree-agent-<id>` (safe delete; it refuses
+  if the branch isn't actually an ancestor of `main`, which is exactly the check you want).
+  Skipping this is how `.claude/worktrees/` and `git branch` silently accumulate hundreds of
+  already-integrated directories/refs across sessions — recovered once after 89 stale entries
+  had piled up over a week, none of them at risk (their content was already on `main`) but all
+  of them dead weight. Do this in the same breath as the merge, not as a later cleanup pass.
+- **Publish continuously, batch what lands while CI builds.** Merge each sub-agent's verified
+  commit onto local `main` as soon as it's ready — don't hold everything for one end-of-session
+  merge sweep. Run the full suite once (still only at the actual push moment — see "Test the
+  blast radius"), then push immediately once at least one commit is ready. Poll the pipeline
+  (`glab ci status --branch=main --compact` or `glab ci get --branch=main --output json`; `glab`
+  is installed and authenticated) until it resolves — budget ~15-20 minutes for a push that
+  touches `src`/`test`/`package.json` (the `e2e`/`e2e:heavy`/`publish:npm` jobs dominate), ~2-3
+  minutes for a docs-only one (only the cheap `verify`-stage jobs run). While waiting, keep
+  merging any further sub-agent commits onto local `main` as they land. Once it goes green: if
+  commits have stacked up since that push, `npm run roll` (bump the patch version, regenerate
+  the version-stamped artifacts), run the full suite again, commit, and push that batch — this
+  both ships the accumulated work and gives `publish:npm`'s version check something real to
+  publish (see `.gitlab-ci.yml`'s `deploy` stage — it only publishes on an actual version
+  increase). Repeat wait → batch → roll → push until nothing is left stacked. If a pipeline goes
+  red, don't push through it — diagnose and fix (harden a flaky timing test rather than
+  re-running it, per NEXT.md's own precedent) before the next push. **The one thing this doesn't
+  relax: the full suite stays mandatory before every push that reaches `main` — this changes
+  *when* you push, never *whether* you test first.**
 
 ## Test the blast radius, not the whole suite
 
@@ -125,7 +154,7 @@ The README's two heavy copy-paste examples cost ~6 CI-minutes and exercise machi
 and seed tests already cover at smaller scale, so they are not in the per-push pipeline at all.
 **After changing the CLI surface (bin/ flags, command output), the library's public exports, or
 any flow a README example walks through, run `npm run check:readme` locally** — it runs
-`e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
+`test-e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
 checks still run in the per-push e2e tier.
 
 ### Two names for "smoke"

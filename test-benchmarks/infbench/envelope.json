@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": {
+    "infbenchVersion": "4.1.1",
+    "stamp": "4.1.1",
+    "caseCount": 399
+  },
+  "bands": [
+    "INF-1",
+    "INF-2",
+    "INF-3",
+    "INF-4",
+    "INF-5",
+    "INF-6",
+    "INF-7",
+    "INF-8"
+  ],
+  "capability": {
+    "kernel": {
+      "ladder": {
+        "bandReached": "INF-5",
+        "gatedAt": null
+      },
+      "fabricationZero": true,
+      "gatePass": true,
+      "metrics": {
+        "overall": {
+          "n": 100,
+          "completion": 1,
+          "fabricationRate": 0,
+          "gatePass": true
+        },
+        "byBand": {
+          "INF-1": {
+            "n": 10,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-2": {
+            "n": 30,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-3": {
+            "n": 10,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-4": {
+            "n": 10,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-5": {
+            "n": 40,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          }
+        }
+      },
+      "ceilingCapabilities": {}
+    },
+    "chat": {
+      "ladder": {
+        "bandReached": "INF-8",
+        "gatedAt": null
+      },
+      "fabricationZero": true,
+      "gatePass": true,
+      "metrics": {
+        "overall": {
+          "n": 399,
+          "completion": 1,
+          "fabricationRate": 0,
+          "gatePass": true
+        },
+        "byBand": {
+          "INF-1": {
+            "n": 40,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-2": {
+            "n": 72,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-3": {
+            "n": 103,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-4": {
+            "n": 70,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 30,
+            "ceilingGradedPassed": 30
+          },
+          "INF-5": {
+            "n": 40,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-6": {
+            "n": 40,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
+          },
+          "INF-7": {
+            "n": 14,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 14,
+            "ceilingGradedPassed": 14
+          },
+          "INF-8": {
+            "n": 20,
+            "completion": 1,
+            "fabricationRate": 0,
+            "gatePass": true,
+            "ceilingGraded": 12,
+            "ceilingGradedPassed": 12
+          }
+        }
+      },
+      "ceilingCapabilities": {
+        "INF-4": [
+          "chat-layer multi-hop proof-chain materialization"
+        ],
+        "INF-7": [
+          "OWL 2 EL saturation (Stage EL, PLAN_SYLLOGIST_EL_DL.md): classify through class expressions the graph never declared as nodes"
+        ],
+        "INF-8": [
+          "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation",
+          "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation"
+        ]
+      }
+    }
+  },
+  "notes": [
+    "Two arms, always reported separately: kernel (src/domain/syllogise.mjs's pure provers over a case's own premises, blind to chat.mjs) and chat (a real runChat transcript, driven through the same ACE-assert lane a session uses) — see infbench/grade.mjs's file header. A number under capability.kernel says nothing about the mouth-to-kernel wire; a number under capability.chat says nothing about the prover in isolation. Never average them.",
+    "bandReached is the highest INF-1..INF-8 band with an unbroken gate-PASS chain from INF-1 (0% fabrication AT >= 50% completion, infbench/grade.mjs COMPLETION_FLOOR) for that arm — see infbench/grade.mjs's ladderGate()/tallyOne() and this file's highestGatePassBand().",
+    "ceilingGraded/ceilingGradedPassed count rows whose expected verdict is the engine's declared honest floor ('unproven'), not the classical answer — a band's pass rate can look higher than its actual capability if these aren't read alongside it. See infbench/grade.mjs's tallyOne()/ceilingCapabilities().",
+    "There is no maxContextTokens-shaped field here at all (not even a null placeholder): INFBENCH has no tokenizer and does no token accounting anywhere in run.mjs/grade.mjs, so there is nothing analogous for it to measure or omit-honestly.",
+    "Regenerate with `node infbench/generate-envelope.mjs` after any INFBENCH-affecting change; the output is deterministic (no Date.now) so a clean re-run over an unchanged tree is byte-identical."
+  ]
+}

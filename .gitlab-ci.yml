@@ -1,9 +1,11 @@
 # CI for @polycode-projects/the-mechanical-code-talker (tmct) — a single
-# published npm package plus a static GitLab Pages home page (no AWS, no
-# benchmark rig). Three jobs: run the tests, publish to public npm on a
-# deliberate version bump, and deploy public/ to Pages on main. Mirrors the
-# seonix repo's publish:npm shape, minus the --workspace flag (tmct is a
-# single package, not a workspace).
+# published npm package plus a static home page (no benchmark rig). Core
+# jobs: run the tests, publish to public npm on a deliberate version bump,
+# and deploy public/ to an AWS-hosted edge (`deploy:website`, `e2e:deployed:*`)
+# on main — see PLAN_AWS.md. The home page moved off GitLab Pages entirely
+# (2026-07-28); the old `pages` job and its redirect-stub burn-in period are
+# retired. Mirrors the seonix repo's publish:npm and deploy:website shapes,
+# minus the --workspace flag (tmct is a single package, not a workspace).
 
 image: node:24.18.0
 
@@ -29,6 +31,21 @@ variables:
   # the on-disk graph memory, node_modules is dependencies.
   SAST_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
   SECRET_DETECTION_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
+
+# ---- AWS deploy CI/CD variables (documentation only — set via `glab variable
+# set`, masked + environment-scoped, once the tmct-ci/tmct-prod accounts exist
+# per PLAN_AWS.md Phase 1) ----------------------------------------------------
+# None of these are declared with values here: they don't exist yet (no AWS
+# account has been created), and `deploy:website` / `e2e:deployed:*` below fail
+# closed (rules require the variable present) until they are set, the same
+# gate publish:npm already uses for NPM_TOKEN.
+#   CI_AWS_ACTIONS_ROLE_ARN    — tmct-ci OIDC actions-role ARN (branch-scoped)
+#   CI_AWS_DEPLOY_ROLE_ARN     — tmct-ci deployment-role ARN
+#   PROD_AWS_ACTIONS_ROLE_ARN  — tmct-prod OIDC actions-role ARN (main only)
+#   PROD_AWS_DEPLOY_ROLE_ARN   — tmct-prod deployment-role ARN; gates deploy:website
+#   TMCT_PROD_ACCOUNT_ID       — tmct-prod AWS account ID
+#   TMCT_PROD_CERT_ARN         — ACM cert for tmct.polycode.co.uk (us-east-1)
+#   TMCT_PROD_ZONE_ID          — tmct-prod's Route53 hosted zone ID
 
 semgrep-sast:
   stage: verify
@@ -101,12 +118,81 @@ renovate:
   script:
     - renovate $CI_PROJECT_PATH
 
+# ---- consumer-impacting path set -------------------------------------------
+# The heavy pipeline — the suite, package hygiene, the licence audit, the e2e
+# tier, the website deploy, the npm publish and everything in the verify stage
+# after them — only earns its cost when a commit can change what a consumer
+# receives: the installed npm package or the deployed home page. It follows that
+# every one of those jobs' rules keys off this set. These globs are it. They cover
+# the shipped code and its committed data, the build and test machinery that
+# proves it, the fixtures the demo build reads, and the manifests that pin
+# versions. .gitlab-ci.yml is in the set so a pipeline change proves itself.
+# A commit confined to design docs, plans, or benchmark notes touches none of
+# them, so it runs only the cheap always-on doc guards (links:check, pii:lint)
+# and the stock security templates. README.md is deliberately NOT in this set:
+# it ships to npm but never to the web page, so the two jobs that own the npm
+# surface (pack:contents, publish:npm) add it to their own rules instead.
+.consumer-paths: &consumer-paths
+  - src/**/*
+  - bin/**/*
+  - corpus/**/*
+  - data/**/*
+  - ontology/**/*
+  - public/**/*
+  - scripts/**/*
+  - test/**/*
+  - test-e2e/**/*
+  - examples/**/*
+  - test-benchmarks/agentbench/envelope.json
+  - package.json
+  - package-lock.json
+  - .gitlab-ci.yml
+
+# The suite split four ways so a push isn't gated on one long serial run.
+# `scripts/list-unit-test-files.mjs` is the one place the >=20s exclusion list
+# lives; test:slow's own package.json script names those same five files
+# directly. Rebalance the buckets if a file's own timing drifts across that
+# 20s line.
+unit:smoke:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:smoke
+
+unit:fast:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:fast
+
+# Everything except the five files test:slow owns.
 unit:
   stage: test
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   script:
     - npm ci
-    - npm test
+    - npm run test:unit
+
+# The five files with at least one test over 20s: synthbench's SYN rungs, the
+# generated-artifacts estate guards, the README shell-example harness, the
+# bench-smoke corpus lane, and the inference corpus lane. Isolated so their
+# wall-clock doesn't sit on the critical path of the other three tiers.
+unit:slow:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:slow
 
 # Package hygiene: publint over the exports map, and the file list npm pack
 # would publish diffed against the committed expected manifest — no stray
@@ -114,6 +200,13 @@ unit:
 pack:contents:
   stage: test
   interruptible: true
+  # The consumer-impacting set OR README.md: this job is the guard on the shipped
+  # file list, and README.md is one of the shipped files, so a README-only push
+  # must still prove the manifest.
+  rules:
+    - changes: *consumer-paths
+    - changes:
+        - README.md
   script:
     - npm ci
     - npm run check:publint
@@ -125,22 +218,37 @@ pack:contents:
 license:deps:
   stage: test
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   script:
     - npm ci
     - npm run check:licences
 
-# The e2e tier: real-binary spawns, build smoke, and the browser journeys
-# (e2e/*.test.mjs — top-level only, so this glob never picks up e2e/heavy/).
-# Its own pipeline column, so the tier's pass/fail is visible at the top level.
+# The PRE-DEPLOY e2e tier, deliberately small. `e2e-web-index`, `e2e-cli` and
+# `e2e-tui` are the set `deploy:website` waits for — the cheapest coverage that
+# can still say "this build is worth putting on the edge". `e2e-web-local-origin`
+# holds the files that can only run against a local server; it is not in the
+# deploy's `needs`. Everything else that used to run in this stage now runs
+# POST-deploy against the live site, in the `e2e:deployed:*` jobs at the bottom of this
+# file. The trade is faster feedback for less pre-deploy certainty: a page
+# regression is caught after the edge has already served it, and the fix is a
+# new pipeline.
+# `test-e2e/*.test.mjs` — top-level only; test-e2e/heavy/ is the separate
+# `e2e:heavy` job below.
 #
-# Chromium is installed explicitly. .npmrc's ignore-scripts=true stops
-# playwright's install hook, so `npm ci` never downloads a browser as a side
-# effect; the browsers land in the project dir (PLAYWRIGHT_BROWSERS_PATH) so the
-# cache can carry them, keyed on the lockfile because the pinned playwright
-# version lives there and each version wants its own build.
-e2e:
+# Two base templates: `.e2e-web-base` installs Chromium for channels that spawn
+# a real browser page; `.e2e-lite-base` skips it for the CLI/TUI channels that
+# never do. A file can reach playwright through test-e2e/helpers/ rather than
+# importing it, so check both before putting one on the lite base.
+# .npmrc's ignore-scripts=true stops playwright's install hook, so
+# `npm ci` never downloads a browser as a side effect; the browsers land in the
+# project dir (PLAYWRIGHT_BROWSERS_PATH) so the cache can carry them, keyed on
+# the lockfile because the pinned playwright version lives there.
+.e2e-web-base:
   stage: e2e
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   variables:
     PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
   cache:
@@ -149,12 +257,76 @@ e2e:
         - package-lock.json
     paths:
       - .playwright-browsers
-  script:
+  before_script:
     - npm ci
     - npx playwright install --with-deps chromium
-    - npm run test:e2e
 
-# The heavy half of the e2e tier (e2e/heavy/*.test.mjs): a full demo:build, an
+.e2e-lite-base:
+  stage: e2e
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  before_script:
+    - npm ci
+
+e2e-web-index:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
+      test-e2e/pages-demo-history.test.mjs test-e2e/pages-demo-templates.test.mjs
+      test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
+      test-e2e/pages-service-worker-cache-bust.test.mjs
+      test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
+      test-e2e/cli-render-views.test.mjs
+
+# The browser files that need a LOCAL origin, so they cannot move to
+# `e2e:deployed:pages` with the rest of the matrix. Four of them build the page they
+# open, and a deployed site has no equivalent to serve:
+#   pages-sprites            rewrites sprites.html with the chat dock enabled
+#   sprites-large-visual     writes its own single-page harness
+#   ledger-viz-query-only-dock  renders what `tmct viz` writes (dock-less
+#                            ledger.html), which is deliberately NOT the site's
+#   p2p-webrtc-handshake     serves a transport fixture page, and skips itself
+#                            outright when TMCT_E2E_BASE_URL is set
+# The fifth is different: pages-chat-boot-budget runs fine against a deployed
+# origin, but what it measures stops being the page's own boot cost and starts
+# being the CDN's — its own header says so. A budget wants a fixed origin.
+# The sixth, pages-service-worker-cache-bust, rebuilds its own served
+# directory in place under a second version partway through — a deployed
+# site is one live snapshot, with no second historical build to redeploy
+# over it, so this one is structurally local-only too.
+#
+# Not in `deploy:website`'s `needs`, so this job costs the deploy nothing; it
+# still gates `publish:npm`.
+e2e-web-local-origin:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
+      test-e2e/ledger-viz-query-only-dock.test.mjs test-e2e/p2p-webrtc-handshake.test.mjs
+      test-e2e/pages-chat-boot-budget.test.mjs test-e2e/pages-service-worker-cache-bust.test.mjs
+
+# No browser: pure stdio/process spawns.
+e2e-tui:
+  extends: .e2e-lite-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test test-e2e/tui.test.mjs test-e2e/tui-chat-file.test.mjs test-e2e/tui-rover-capability-chain.test.mjs
+
+e2e-cli:
+  extends: .e2e-lite-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/cli-smoke.test.mjs test-e2e/cli-help.test.mjs test-e2e/cli-config-flags.test.mjs
+      test-e2e/init.test.mjs test-e2e/init-cli.test.mjs test-e2e/bootstrap-seed.test.mjs
+      test-e2e/import-file.test.mjs test-e2e/digest-cli.test.mjs test-e2e/memory-export.test.mjs
+      test-e2e/domain-river.test.mjs test-e2e/domain-crates.test.mjs test-e2e/lib-chat-sqlite.test.mjs
+      test-e2e/build-demo-memory.test.mjs test-e2e/server-http.test.mjs test-e2e/server-http-smoke.test.mjs
+
+# The heavy half of the e2e tier (test-e2e/heavy/*.test.mjs): a full demo:build, an
 # uncapped ConceptNet seed, and a full-store export/import round trip —
 # together several minutes of real signal, but not on every push. Runs when a
 # push actually touches what these tests exercise, and on the nightly
@@ -180,7 +352,7 @@ e2e:heavy:
         - data/**/*
         - package.json
         - package-lock.json
-        - e2e/heavy/**/*
+        - test-e2e/heavy/**/*
   script:
     - npm ci
     - npx playwright install --with-deps chromium
@@ -196,14 +368,41 @@ e2e:heavy:
 # doesn't run) rather than failing loud on every push.
 publish:npm:
   stage: deploy
+  # Optional so a README-only push still runs the publish gate: README.md is in
+  # this job's rules but not in the test/e2e jobs' rules, so on that push all of
+  # these are absent from the pipeline. The job re-runs `npm test` itself below,
+  # so the guard holds either way. One entry per job in the two stages before
+  # this one, so deploy still starts as soon as test+e2e clear, without waiting
+  # on pack:contents/license:deps in the same stage.
   needs:
-    - unit
-    - e2e
+    - job: unit:smoke
+      optional: true
+    - job: unit:fast
+      optional: true
+    - job: unit
+      optional: true
+    - job: unit:slow
+      optional: true
+    - job: e2e-web-index
+      optional: true
+    - job: e2e-web-local-origin
+      optional: true
+    - job: e2e-tui
+      optional: true
+    - job: e2e-cli
+      optional: true
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not re-publish.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+    # The npm surface: the consumer-impacting set OR README.md, which ships to
+    # npm. A version bump always touches package.json, so real publishes still
+    # fire; a README-only push starts the job and the version gate no-ops it.
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+      changes: *consumer-paths
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+      changes:
+        - README.md
   id_tokens:
     # npm provenance on GitLab CI signs the build via Sigstore using this OIDC
     # token (npm reads SIGSTORE_ID_TOKEN); the aud must be sigstore.
@@ -228,49 +427,76 @@ publish:npm:
         npm publish --provenance --access public
       fi
 
-# GitLab Pages: the static home page. GitLab's convention is a job literally
-# named `pages` whose artifact is the `public/` directory — the repo already
-# keeps the site there, so this job just hands it over. Main branch only.
-#
-# The page embeds a LIVE, client-side chat demo that runs the real src/domain/ask.mjs query
-# engine in the visitor's browser (no backend — GitLab Pages is static). src/ stays the
-# single source of truth: this job COPIES the small, already browser-clean transitive
-# import set src/domain/ask.mjs actually needs (verified: zero Node built-ins reachable at
-# runtime once public/engine-shims/*.mjs stand in for the three still-unconditionally-
-# imported `node:*` specifiers) into public/engine/, unmodified, byte-for-byte — no
-# transpilation, no bundling. It also regenerates public/demo-graph.json from the
-# committed examples/mini-webapp fixture (scripts/build-demo-graph.mjs — real tmct code,
-# schema-docs.mjs's ingestSchemaDocs, run offline) so the published demo graph can never
-# drift from source.
-pages:
+# Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
+# GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds
+# public/ and hands it to CDK instead of a GitLab Pages artifact; no artifact
+# upload, so the ~85 MB payload never transits GitLab.
+deploy:website:
   stage: deploy
+  image: nikolaik/python-nodejs:python3.13-nodejs24
+  # Named explicitly, because the default — wait for EVERY job in every earlier
+  # stage — is what made the deploy the slowest job in the pipeline rather than
+  # one of the first. These are the jobs whose failure means "don't put this on
+  # the edge at all": the four unit tiers, the one browser channel that covers
+  # the site's own shell, and the CLI/TUI channels (cheap, and a broken binary
+  # is a broken release even when the page is fine). `optional: true` on the
+  # unit tiers mirrors publish:npm's reason — a README-only push has none of
+  # them in the pipeline.
+  #
+  # Everything the deploy no longer waits for runs in the `e2e:deployed:*` jobs after it,
+  # against the site this job just published.
+  needs:
+    - job: unit:smoke
+      optional: true
+    - job: unit:fast
+      optional: true
+    - job: unit
+      optional: true
+    - job: unit:slow
+      optional: true
+    - job: e2e-web-index
+      optional: true
+    - job: e2e-cli
+      optional: true
+    - job: e2e-tui
+      optional: true
+  # Required for the PROD_* CI/CD variables (environment-scoped to production)
+  # to actually inject into this job — GitLab only applies a non-wildcard
+  # variable scope to jobs whose `environment` matches it.
+  environment:
+    name: production
   rules:
-    # schedule-guarded: the nightly dep:audit schedule must not redeploy Pages.
+    # schedule-guarded: the nightly dep:audit schedule must not redeploy the site.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    # Fails closed until PROD_AWS_DEPLOY_ROLE_ARN is set (see the AWS deploy
+    # CI/CD variables block near the top of this file) — same posture as
+    # publish:npm's NPM_TOKEN gate.
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
   script:
-    - echo "publishing public/ to GitLab Pages"
     - npm ci
-    # demo:build INLINES the ask bundle into ledger.html rather than building it, so
-    # without this the deployed chat dock would run whatever bundle was last committed
-    # by hand. Rebuilding here means the page always matches main.
-    # test/estate/generated-artifacts.test.mjs is what keeps the committed copy honest
-    # for `npm publish`, which packs the file itself.
     - npm run build:ask-bundle
-    # Literal, unmodified copies of the browser-clean engine sources into
-    # public/engine/ (mirroring src/'s own directory structure so their relative
-    # `import`s keep resolving) + a freshly regenerated public/demo-graph.json — see
-    # scripts/build-demo-site.mjs's header for the full rationale. Both are
-    # .gitignored; this is the only place they're produced.
     - npm run demo:build
-  artifacts:
-    paths:
-      - public
+    - command -v aws >/dev/null || pip install --quiet awscli
+    - source scripts/assume-aws.sh prod
+    - cd infra
+    - npm ci
+    - npx cdk deploy tmct-prod-prod-website --require-approval never
+        -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
+        -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
+        -c hostedZoneId="${TMCT_PROD_ZONE_ID}" -c zoneName=tmct.polycode.co.uk
+    - cd ..
+    - node scripts/warm-deployed-cache.mjs
 
 # After a real publish, check that what the world serves is what we built: npm's
-# registry and the Pages home page must both show package.json's version. Both
-# lag a publish by a minute or two, so the script polls before reporting.
+# registry and the AWS-hosted home page must both show package.json's version.
+# Both lag a publish by a minute or two, so the script polls before reporting.
+# Follows package.json's `homepage` automatically -- no script change needed
+# for the cutover, only which job this waits on.
 #
 # It runs only on main, only with NPM_TOKEN, and never from a schedule — the
 # same gate publish:npm uses, because there is nothing to smoke without a
@@ -281,11 +507,227 @@ smoke:post-deploy:
   stage: verify
   needs:
     - publish:npm
-    - pages
+    - deploy:website
+  # Needed so this job's own rule can see PROD_AWS_DEPLOY_ROLE_ARN (production-
+  # scoped) -- without it the rule's `&&` sees an empty variable, evaluates
+  # false, and the job is omitted from the pipeline entirely (not skipped,
+  # just absent) -- caught live: it silently vanished from a real pipeline
+  # until this was added.
+  environment:
+    name: production
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    # Only when a consumer-impacting commit could have produced a new publish or
+    # deploy to smoke, AND both jobs this one needs are actually in the pipeline
+    # (deploy:website's own rule additionally requires PROD_AWS_DEPLOY_ROLE_ARN —
+    # checking it here too keeps `needs:` from ever pointing at an absent job).
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  retry: 2
+  script:
+    - npm run smoke:deploy
+
+# The browser matrix, run against the LIVE AWS-deployed site. test-e2e/helpers'
+# TMCT_E2E_BASE_URL switch points every fixture at the deployed URL instead of a
+# local build snapshot (demo-site.mjs skips the per-file build entirely,
+# static-server.mjs hands back the deployed origin in place of a local port), so
+# these are the same files the pre-deploy channels used to run, now reading what
+# the edge actually serves.
+#
+# This is the pipeline's main browser coverage, not a smoke test after one. Two
+# consequences worth knowing before editing it:
+#   - Every page file below is proven ONLY here. A regression in one of them is
+#     caught after the edge has served it, and the fix is a new pipeline.
+#   - There is no local site build in this job, which is most of what the old
+#     channels spent their time on — each of them rebuilt the whole site once per
+#     FILE. That is why one job can carry the whole matrix.
+# e2e-web-index's list repeats here deliberately: it is the one channel proven
+# both before the deploy (as the gate) and after it (against the real edge).
+#
+# Not here, and why: the five files in `e2e-web-local-origin` need a local origin
+# — four build the page they open, and the boot budget wants a fixed one.
+#
+# Three jobs, not one, and each caps `--test-concurrency` rather than leaving
+# node's default (all files at once, bounded only by the runner's own core
+# count). At 44 files in one job (grown from 3 by this same restructure) a live
+# pipeline (2717061891) failed all three `retry: 2` attempts, each on a
+# DIFFERENT file — a real speech-bubble assertion race in pages-mud (fixed
+# below, in the same commit as this split: it was picking up either half of a
+# two-character exchange as "the asker's own bubble" and only one half is
+# narration) and, reproduced locally under the same concurrent-file load, an
+# intermittent dropped Playwright/CDP promise in pages-research. Neither file
+# is slow or wrong on its own; both surfaced only when several real Chromium
+# instances ran at once against the live site. Splitting means a retry only
+# re-runs its own slice, not the whole matrix, and the concurrency cap bounds
+# how many of THOSE Chromium instances run at once regardless of the runner's
+# core count.
+.e2e-deployed-base:
+  stage: verify
+  needs:
+    - deploy:website
+  environment:
+    name: production
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  # Kept from the three-file version, and it earns more here: this job starts
+  # seconds after a CDK deploy, so the first attempt can race CloudFront still
+  # settling. A genuinely flaky file should be hardened rather than left to the
+  # retry — the split below already shrinks what a retry has to redo.
+  retry: 2
+  variables:
+    TMCT_E2E_BASE_URL: "https://tmct.polycode.co.uk"
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .playwright-browsers
+  before_script:
+    - npm ci
+    - npx playwright install --with-deps chromium
+
+# The site shell, also run pre-deploy as e2e-web-index. Nine single-context
+# pages — the lightest slice, so it keeps node's default concurrency.
+e2e:deployed:shell:
+  extends: .e2e-deployed-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
+      test-e2e/pages-demo-history.test.mjs test-e2e/pages-demo-templates.test.mjs
+      test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
+      test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
+      test-e2e/cli-render-views.test.mjs
+
+# Every page the site ships, plus the engine-level and CLI files that shared a
+# channel with them. The largest slice by file count — capped so at most 4 of
+# these run their own real Chromium instance at once, regardless of how many
+# cores the runner has. pages-mud (one of the pipeline-2717061891 failures)
+# lives here; the other three files that failed under contention across
+# pipelines 2717061891 and 2717201943 moved to `e2e:deployed:pages-timing`
+# below, since none of them were actually pages-research.test.mjs (that file
+# has never failed either pipeline) — every failure was in
+# pages-chat-research.test.mjs, pages-chat-live-toggle.test.mjs, or
+# pages-chat-persistence.test.mjs.
+e2e:deployed:pages:
+  extends: .e2e-deployed-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=4
+      test-e2e/pages-chat-fullscreen.test.mjs
+      test-e2e/pages-chat-export.test.mjs test-e2e/pages-chat-digest.test.mjs
+      test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
+      test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
+      test-e2e/pages-chat-taught-capability-chain.test.mjs
+      test-e2e/web-chat-memory.test.mjs test-e2e/pages-research.test.mjs
+      test-e2e/pages-ingest.test.mjs test-e2e/pages-ledger.test.mjs
+      test-e2e/pages-ledger-teach.test.mjs test-e2e/pages-ledger-research.test.mjs
+      test-e2e/ledger-viz-cli.test.mjs test-e2e/ledger-viz.test.mjs
+      test-e2e/pages-code.test.mjs test-e2e/pages-spider-fly.test.mjs
+      test-e2e/pages-plan.test.mjs test-e2e/plan-cli.test.mjs
+      test-e2e/plan-browser-entry.test.mjs test-e2e/pages-adventure.test.mjs
+      test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
+      test-e2e/pages-mud.test.mjs test-e2e/pages-mud-scenarios.test.mjs
+      test-e2e/pages-screenshot-sweep.test.mjs
+
+# The three files whose own assertions race a real elapsed-time budget
+# against a mocked round trip that runs through THIS Node process (a fetch's
+# own abort timeout in pages-chat-live-toggle, an auto-play ticker's pacing
+# in pages-chat-research, a debounced autosave window in
+# pages-chat-persistence's reset-to-seed test) — each one documents the race
+# in its own comments already. Reproduced locally: doubling this repo's own
+# --test-concurrency=4 30-file run (two copies at once, to load the box the
+# way a 2-vCPU runner is loaded by 4 real concurrent Chromium instances)
+# reliably reproduced the exact pipeline-2717201943 failures in these three
+# files and only these three, never in pages-research.test.mjs. Alone, at
+# concurrency 1, none of the three have anything left to contend with.
+e2e:deployed:pages-timing:
+  extends: .e2e-deployed-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=1
+      test-e2e/pages-chat-persistence.test.mjs
+      test-e2e/pages-chat-research.test.mjs
+      test-e2e/pages-chat-live-toggle.test.mjs
+
+# Sharing between browsers: every file here drives two or three real browser
+# contexts at once, so the heaviest per-file Chromium load in the matrix and
+# the tightest cap — at most 2 of these files run their own contexts at once.
+# Nothing they do reaches another visitor — the transport has no signalling
+# server and no room registry, and two contexts only find each other because
+# the test carries the SDP blob from one to the other by hand.
+e2e:deployed:mesh:
+  extends: .e2e-deployed-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=2
+      test-e2e/pages-chat-p2p.test.mjs test-e2e/pages-mud-p2p.test.mjs
+      test-e2e/p2p-mesh-three-peers.test.mjs test-e2e/pages-mud-p2p-mesh.test.mjs
+      test-e2e/p2p-disconnect-rejoin.test.mjs
+      test-e2e/pages-chat-p2p-distributed-inference.test.mjs
+
+# The other half of "does what we shipped actually work": install the package
+# from the real registry, the way a consumer would, and run the CLI/TUI e2e files
+# against THAT copy's binary instead of bin/tmct.mjs in the checkout.
+#
+# smoke:post-deploy already asks the registry which version it SERVES. That
+# proves propagation and nothing else — a tarball with a missing file, a
+# dependency that resolves only inside the repo, a bin entry that points at
+# nothing, all still pass it. This job installs and runs the thing.
+#
+# scripts/install-published.mjs polls until package.json's exact version is on
+# the registry (a publish lands a minute or two after the job that pushed it),
+# installs it into a temp directory with its own package.json so the repo's
+# .npmrc plays no part, checks the installed version, and prints the binary's
+# path. TMCT_E2E_CLI_BIN then redirects the same test files at it — see
+# test-e2e/helpers/cli-bin.mjs, the CLI-side twin of TMCT_E2E_BASE_URL.
+#
+# It needs publish:npm, not deploy:website, and gates on NPM_TOKEN, because
+# there is nothing to install without a publish. No browser, so no Chromium.
+#
+# It runs on every consumer-impacting push to main, not only on a version bump.
+# On a push that publishes nothing, the version already on the registry is this
+# commit's version, so the install still proves the package a consumer gets today.
+#
+# Two e2e-cli/e2e-tui files are deliberately absent. cli-render-views expects
+# `--render spider-fly`/`--render adventure` to exit 0, and those two archetypes
+# inline a bundle built by scripts/, which the package does not ship — the
+# installed CLI refuses them by design, naming the reason. tui.test.mjs drives
+# the TUI through ink-testing-library rather than spawning a binary, so there is
+# nothing here for it to redirect.
+e2e:published-package:
+  stage: verify
+  needs:
+    - publish:npm
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
-  retry: 2
+      changes: *consumer-paths
   script:
-    - npm run smoke:deploy
+    # npm ci for the test files' own imports (they read src/ and scripts/ from the
+    # checkout); the BINARY they spawn is the installed one.
+    - npm ci
+    # The script prints one line on stdout, the binary's path; its progress goes
+    # to stderr so this capture stays clean. Assign FIRST and export second:
+    # `export VAR=$(cmd)` reports the export's own status, not the command's, so a
+    # failed install would sail past and the run below would silently fall back to
+    # the checkout's bin/tmct.mjs — a green job proving the wrong thing.
+    - TMCT_E2E_CLI_BIN=$(node scripts/install-published.mjs)
+    - export TMCT_E2E_CLI_BIN
+    - echo "running the CLI/TUI e2e files against $TMCT_E2E_CLI_BIN"
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/cli-smoke.test.mjs test-e2e/cli-help.test.mjs
+      test-e2e/cli-config-flags.test.mjs test-e2e/init.test.mjs
+      test-e2e/init-cli.test.mjs test-e2e/bootstrap-seed.test.mjs
+      test-e2e/import-file.test.mjs test-e2e/digest-cli.test.mjs
+      test-e2e/memory-export.test.mjs test-e2e/domain-river.test.mjs
+      test-e2e/domain-crates.test.mjs test-e2e/server-http.test.mjs
+      test-e2e/server-http-smoke.test.mjs test-e2e/tui-chat-file.test.mjs
+      test-e2e/tui-rover-capability-chain.test.mjs

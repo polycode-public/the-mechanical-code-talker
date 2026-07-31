@@ -53,7 +53,8 @@ import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
-import { runTurn, uuidv7 } from "./chat.mjs";
+import { runTurn, uuidv7, stripLeadingDiscourseAdverb } from "./chat.mjs";
+import { beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences.mjs";
 import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
@@ -62,6 +63,7 @@ import { normFactTerm } from "../domain/hash.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, predicateOf,
+  OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
 } from "../domain/grammar/lexicon.mjs";
 
 export const USAGE = "usage: tmct extract <text-file>|--file <text-file> [--repo <path>] [--out <file.jsonl>] [--optimistic] [--canonical]";
@@ -106,6 +108,27 @@ const OPTIMISTIC_SKIP = new Set([
   "our", "my", "your", "some", "any", "one", "kind", "sort", "type", "of",
 ]);
 const OPTIMISTIC_ENTITY_HOPS = 4;
+// Crossing any of these while scanning for a copula's entities voids the isa
+// read — the noun on the far side belongs to a different clause or to a
+// prepositional complement, not to "X is a Y".
+const COPULA_FRAME_BLOCKERS = new Set(["VERB", "AUX", "ADP", "SCONJ", "CCONJ"]);
+// Naming periphrases stay copular: "can be termed as a name", "is known as",
+// "is defined as" — the participle + "as" carries the same class claim the
+// bare copula does, unlike any other verb after "is".
+const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "described", "referred", "called", "classified"]);
+// The relative pronouns that open a clause predicating about the SENTENCE
+// subject: "a mountain that has lava" is a fact about the volcano, so the
+// relative clause's verb binds to the copula's own subject, not to its object.
+const RELATIVE_PRONOUNS = new Set(["that", "which", "who", "whom", "whose"]);
+// At most this many triples from one sentence — a bound so a run-on can never
+// shatter into noise, not a first-wins cap.
+const MAX_TRIPLES_PER_SENTENCE = 4;
+// How far a copula object scan walks past an attributive-adjective compound
+// (wink tokenizes "medium-sized" as NOUN + "-" + VERB and never re-fuses it) to
+// reach the real head noun through a coordinate modifier list
+// (", burrowing, nocturnal mammal"). A small, explicit bound: past it the object
+// abstains rather than guess, so a long noun pile never mints a stray class.
+const ATTRIBUTIVE_CHAIN_MAX_HOPS = 8;
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
@@ -128,32 +151,203 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     values = doc.tokens().out(nlp.its.value);
     pos = doc.tokens().out(nlp.its.pos);
   } catch { return []; }
-  const nearestEntity = (idx, step) => {
+  // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
+  // folded — "a string instrument" is the class "string instrument", never
+  // its modifier "string"; a single-word run keeps the plain lemma fold.
+  const isNounish = (i) => pos[i] === "NOUN" || pos[i] === "PROPN";
+  const runLoOf = (i) => { let lo = i; while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1; return lo; };
+  const entityRunAt = (i) => {
+    let lo = i;
+    let hi = i;
+    while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
+    while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+    if (lo === hi) return foldEntity(values[i], lexicon);
+    const head = lookupNoun(lexicon, String(values[hi]).toLowerCase());
+    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : values[hi]].join(" "));
+  };
+  const nearestEntityIndex = (idx, step, blocked = null) => {
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
       if (pos[i] === "PUNCT") break;
-      if (pos[i] === "NOUN" || pos[i] === "PROPN") return foldEntity(values[i], lexicon);
+      if (blocked && blocked.has(pos[i])) break;
+      if (isNounish(i)) return i;
     }
     return null;
   };
-  const tripleAt = (i, predicate) => {
-    const subject = nearestEntity(i, -1);
-    const object = nearestEntity(i, +1);
-    return subject && object && subject !== object ? { subject, predicate, object } : null;
+  const nearestEntity = (idx, step, blocked = null) => {
+    const i = nearestEntityIndex(idx, step, blocked);
+    return i === null ? null : entityRunAt(i);
   };
+  // The subject-side mirror of the copula-object of-chain rule: when a found
+  // subject run is the inner noun of an of-chain ("the weight of all of the
+  // snow …"), climb to the outer run's nominal head ("weight"), bounded to two
+  // hops. A classifier head (type/kind/sort/…) reads THROUGH — a "kind of X"
+  // outer never becomes the subject, so the inner noun is kept. When the run is
+  // governed by "of" but no readable noun heads the chain (a mis-tagged head,
+  // e.g. "the top of the mountain …"), return null: an honest abstain, never the
+  // inner-noun confusion ("mountain", "snow"). A run not governed by "of" is
+  // returned unchanged. Returns a run-lo index to fold, or null to abstain.
+  const ofChainSkip = (k) => {
+    const p = pos[k];
+    return p === "DET" || p === "ADJ" || p === "ADV" || p === "NUM";
+  };
+  const climbSubjectRun = (found) => {
+    let lo = runLoOf(found);
+    for (let hop = 0; hop < 2; hop += 1) {
+      let g = lo - 1;
+      while (g >= 0 && ofChainSkip(g)) g -= 1;
+      if (g < 0 || values[g]?.toLowerCase() !== "of") return lo; // not an of-chain object
+      let k = g - 1;
+      while (k >= 0 && !isNounish(k) && (ofChainSkip(k) || values[k]?.toLowerCase() === "of")) k -= 1;
+      if (k < 0 || !isNounish(k)) return null; // no readable head — abstain
+      if (OF_CLASSIFIER_HEADS.has(String(values[k]).toLowerCase())) return lo; // classifier reads through
+      lo = runLoOf(k);
+    }
+    return lo;
+  };
+  // The subject resolution shared by the relation-verb tiers: a run climbed
+  // through its of-chain and folded, or null when the of-chain has no readable
+  // head (abstain rather than store the inner-noun confusion).
+  const climbedSubjectAt = (idx) => {
+    const found = nearestEntityIndex(idx, -1);
+    if (found === null) return null;
+    const climbed = climbSubjectRun(found);
+    return climbed === null ? null : entityRunAt(climbed);
+  };
+  // A relation verb whose nearest content token leftward (skipping adverbs and
+  // the auxiliaries of its own verb complex) is a relative pronoun sits in a
+  // "that/which …" relative clause — its subject is the sentence subject.
+  const inRelativeFrame = (i) => {
+    for (let k = i - 1; k >= 0; k -= 1) {
+      if (pos[k] === "ADV" || pos[k] === "AUX") continue;
+      return RELATIVE_PRONOUNS.has(String(values[k]).toLowerCase());
+    }
+    return false;
+  };
+  // An isa needs a CLEAN copula frame: only determiners/adjectives/adverbs/
+  // numerals may sit between each entity and the copula. Crossing a verb or
+  // auxiliary means the noun belongs to another clause ("one reason life can
+  // exist here IS that earth …" is not "life is-a earth"); crossing a
+  // preposition or subordinator means locative/complement predication ("water
+  // is IN the oceans", "land is grouped INTO continents") — none of them
+  // class membership.
+  // An of-chain on the object reads through a classifier head to the real
+  // class ("a type of mammal" → mammal); a partitive container head states
+  // composition, never a class ("a large body of ice" — no isa at all).
+  const copulaObjectAt = (i) => {
+    for (let j = i + 1; j < values.length; j += 1) {
+      // A naming periphrasis ("… termed as …", "… known as …") keeps the
+      // frame copular: skip the participle and its "as" and read on.
+      if ((pos[j] === "VERB" || pos[j] === "AUX") && COPULA_NAMING_PARTICIPLES.has(values[j]?.toLowerCase())
+        && values[j + 1]?.toLowerCase() === "as") { j += 1; continue; }
+      if (pos[j] === "PUNCT" || COPULA_FRAME_BLOCKERS.has(pos[j])) {
+        if (values[j]?.toLowerCase() !== "of") return null;
+        return null;
+      }
+      if (!isNounish(j)) continue;
+      let hi = j;
+      while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      // A NOUN immediately followed by "-" then a VERB or ADJ is the left half of
+      // an attributive-adjective compound wink never re-fused ("medium-sized"),
+      // not the class. Walk forward through the coordinate modifier list (hyphens,
+      // commas, "and", further ADJ/VERB tokens) to the real head noun and re-point
+      // there; abstain if none appears within the bound, never mint the modifier.
+      if (values[hi + 1] === "-" && (pos[hi + 2] === "VERB" || pos[hi + 2] === "ADJ")) {
+        let head = null;
+        let k = hi + 1;
+        for (let hop = 0; hop < ATTRIBUTIVE_CHAIN_MAX_HOPS && k < values.length; hop += 1, k += 1) {
+          if (isNounish(k)) { head = k; break; }
+          const w = values[k]?.toLowerCase();
+          if (w === "-" || w === "," || w === "and" || pos[k] === "ADJ" || pos[k] === "VERB" || pos[k] === "CCONJ") continue;
+          break;
+        }
+        if (head === null) return null;
+        j = head;
+        hi = head;
+        while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      }
+      const headWord = String(values[hi]).toLowerCase();
+      const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
+      if (!nextIsOf) return { label: entityRunAt(j), hi };
+      if (OF_CLASSIFIER_HEADS.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
+      if (OF_PARTITIVE_HEADS.has(headWord)) return null;
+      return { label: entityRunAt(j), hi };
+    }
+    return null;
+  };
+  // The copula's own modal chain ("can be", "may be") is part of one verb
+  // complex — the subject scan starts left of it, while a free-standing VERB
+  // on the way still voids the frame. An of-chain subject climbs to its head
+  // ("the weight of the snow is …" → weight); a mis-headed of-chain abstains.
+  const copulaSubjectAt = (i) => {
+    let k = i - 1;
+    while (k >= 0 && pos[k] === "AUX") k -= 1;
+    const found = nearestEntityIndex(k + 1, -1, COPULA_FRAME_BLOCKERS);
+    if (found === null) return null;
+    const climbed = climbSubjectRun(found);
+    return climbed === null ? null : entityRunAt(climbed);
+  };
+
+  const triples = [];
+  const seen = new Set();
+  const push = (subject, predicate, object) => {
+    if (!(subject && object && subject !== object)) return;
+    const key = `${subject}\0${predicate}\0${object}`;
+    if (seen.has(key) || triples.length >= MAX_TRIPLES_PER_SENTENCE) return;
+    seen.add(key);
+    triples.push({ subject, predicate, object });
+  };
+
+  // Pass 1 — the first clean copula frame yields the isa (all guards unchanged);
+  // its subject and object-run end anchor the relative-clause continuation.
+  let copulaSubject = null;
+  let copulaObjHi = -1;
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
-      const t = tripleAt(i, "rdfs:subClassOf");
-      if (t) return [t];
+      const subject = copulaSubjectAt(i);
+      const object = copulaObjectAt(i);
+      if (subject && object && subject !== object.label) {
+        push(subject, "rdfs:subClassOf", object.label);
+        copulaSubject = subject;
+        copulaObjHi = object.hi;
+        break;
+      }
     }
   }
+
+  // Pass 2a — with a copula isa in hand, CONTINUE past its object for relation
+  // verbs (has/creates/…), so one sentence contributes every fact it grounds.
+  // A "that/which <verb>" clause right after the object predicates about the
+  // SENTENCE subject ("a mountain that has lava" → volcano has lava); any other
+  // relation verb keeps its nearest-entity-leftward subject. AUX relation verbs
+  // ("has") count here — but only inside a copula frame that already resolved,
+  // so a bare "… is that Earth has …" complement never mints "earth has lot".
+  if (copulaSubject) {
+    for (let i = copulaObjHi + 1; i < values.length; i += 1) {
+      if (pos[i] !== "VERB" && pos[i] !== "AUX") continue;
+      const word = values[i].toLowerCase();
+      if (OPTIMISTIC_COPULAS.has(word)) continue;
+      const verb = lookupVerb(lexicon, word);
+      if (!verb) continue;
+      const subject = inRelativeFrame(i) ? copulaSubject : climbedSubjectAt(i);
+      if (subject === null) continue;
+      push(subject, predicateOf(verb), nearestEntity(i, +1));
+    }
+    return triples;
+  }
+
+  // Pass 2b — no copula isa: the relation-verb tier over the whole sentence,
+  // climbing an of-chain subject to its head ("the weight of the snow creates
+  // pressure" → weight creates pressure, not snow). VERB-tagged only, so a bare
+  // AUX ("Earth has …") in a non-frame sentence stays an honest miss.
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] !== "VERB") continue;
     const verb = lookupVerb(lexicon, values[i].toLowerCase());
     if (!verb) continue;
-    const t = tripleAt(i, predicateOf(verb));
-    if (t) return [t];
+    const subject = climbedSubjectAt(i);
+    if (subject === null) continue;
+    push(subject, predicateOf(verb), nearestEntity(i, +1));
   }
-  return [];
+  return triples;
 }
 
 /** The lexical fallback for a checkout with no wink model: a copula flanked by
@@ -187,11 +381,15 @@ function optimisticTriplesLexical(sentence, lexicon) {
 }
 
 /**
- * A bounded triple candidate from a sentence the strict recognizer skipped: a
- * copula (→ rdfs:subClassOf) or a lexicon-known relation verb (→ its predicate)
- * flanked by two entities. At most one triple per sentence; [] when nothing
- * resolves both sides — no guessing past the shape. Uses wink POS tags when a
- * model is available (the precise tier), else a narrower lexicon-only fallback.
+ * The bounded triple candidates from a sentence the strict recognizer skipped:
+ * a copula (→ rdfs:subClassOf) and, past its object, the relation verbs it
+ * grounds (→ their predicates), so one sentence contributes every fact it holds
+ * ("a volcano is a mountain that has lava" → volcano ⊑ mountain AND volcano has
+ * lava). Every triple passes the same entity/guard checks on its own, deduped,
+ * capped at MAX_TRIPLES_PER_SENTENCE so a run-on never shatters into noise; []
+ * when nothing resolves both sides — no guessing past the shape. Uses wink POS
+ * tags when a model is available (the precise tier), else a narrower
+ * lexicon-only fallback.
  *
  *   opts.lexicon  a loaded lexicon (the core vocabulary when absent).
  *   opts.nlp      a wink instance (winkInstance() when absent); null forces the
@@ -258,6 +456,17 @@ export function clauseCandidates(sentence, { nlp } = {}) {
 // grounded subject. Ingest only — a chat turn resolves "it"/"they" against the
 // live focus, never a stale paragraph carry.
 const PRONOUN_LEAD_RE = /^(?:they|it|these|those|this)\b\s*/i;
+
+/** Re-article a bare carried subject so the retried sentence is a grammatical
+ *  habitual surface the recognizer accepts: "cell" → "a cell", "orbit" → "an
+ *  orbit". Uses the same vowel-sound-aware article rule (grammar-rules.toml)
+ *  the chat recognizer's own capability rewrite uses, rather than a hardcoded
+ *  "a". */
+function articledSubject(subject) {
+  const articleRule = grammarRules().find((r) => r.kind === "article");
+  const article = articleRule && beginsWithVowelSound(subject, articleRule) ? "an" : "a";
+  return `${article} ${subject}`;
+}
 
 /** A readable predicate for canonical output: the local part of an rdfs:/ace:
  *  CURIE, otherwise the predicate verbatim. */
@@ -357,9 +566,14 @@ export async function ingestText(text, {
         }
         // Bounded pronoun carry: a "they/it/these/those/this …" sentence the
         // recognizer skipped is retried once with the paragraph's last grounded
-        // subject in the pronoun's place. Never a chat turn — ingest only.
-        if (!rows && carrySubject && PRONOUN_LEAD_RE.test(cleaned)) {
-          rows = await strictRows(cleaned.replace(PRONOUN_LEAD_RE, `${carrySubject} `));
+        // subject in the pronoun's place. A leading ordinal/temporal discourse
+        // adverb ("Then it splits.") is stripped first so the pronoun reaches
+        // the sentence front; the carried subject is re-articled ("a cell") so
+        // the retry is a grammatical habitual surface. Never a chat turn —
+        // ingest only.
+        const threaded = stripLeadingDiscourseAdverb(cleaned);
+        if (!rows && carrySubject && PRONOUN_LEAD_RE.test(threaded)) {
+          rows = await strictRows(threaded.replace(PRONOUN_LEAD_RE, `${articledSubject(carrySubject)} `));
         }
         if (rows) {
           recognizedSentences += 1;

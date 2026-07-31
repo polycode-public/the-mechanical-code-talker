@@ -72,15 +72,37 @@ test("index-entry and article-row validators accept the shipped shapes and rejec
   assert.ok(!isReferenceArticleRow({ ...good, summary: "" }));
   assert.ok(!isReferenceArticleRow({ ...good, revid: "9184482" }), "revid must be an integer");
   assert.ok(!isReferenceArticleRow({ ...good, isa: "" }), "an isa field, when present, must name a term");
+  assert.ok(isReferenceArticleRow({ ...good, source: "a demo corpus", licence: "none" }), "source/licence are accepted per-entry overrides");
+  assert.ok(!isReferenceArticleRow({ ...good, source: "" }), "a source field, when present, must name one");
+  assert.ok(!isReferenceArticleRow({ ...good, licence: "" }), "a licence field, when present, must name one");
 });
 
-test("renderReferenceAnswer cites title, licence and the revision-pinned URL in one line", () => {
+test("renderReferenceAnswer cites title, licence and the revision-pinned URL in one line, then names the grain", () => {
   const article = row("otter", 9184482);
   assert.equal(
     renderReferenceAnswer("otter", article),
     'otter — A otter is a thing. (source: reference article "Otter", Simple English Wikipedia, '
-      + "CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/otter?oldid=9184482)",
+      + "CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/otter?oldid=9184482)"
+      + " General vocabulary, not from this codebase.",
   );
+});
+
+test("renderReferenceAnswer cites a synthetic entry's OWN source/licence/URL, never the Wikipedia default", () => {
+  const article = {
+    ...row("trelvox", 1),
+    url: "https://example.test/trelvox",
+    source: "a coined demo term, not from Wikipedia",
+    licence: "none — not third-party content",
+  };
+  assert.equal(
+    renderReferenceAnswer("trelvox", article),
+    'trelvox — A trelvox is a thing. (source: reference article "Trelvox", '
+      + "a coined demo term, not from Wikipedia, none — not third-party content — https://example.test/trelvox)"
+      + " General vocabulary, not from this codebase.",
+  );
+  // No Wikipedia revision-pinning on a non-Wikipedia URL: the bare url stands,
+  // not "https://example.test/trelvox?oldid=1".
+  assert.ok(!renderReferenceAnswer("trelvox", article).includes("?oldid="));
 });
 
 test("referenceProvenanceTag emits the tag trust.mjs parses back to the same pack and article", () => {
@@ -205,4 +227,14 @@ test("the committed fixture pack matches its own manifest byte-for-byte", async 
     assert.equal(body.length, entry.bytes, `${entry.file}: byte count drifted`);
     assert.equal(createHash("sha256").update(body).digest("hex"), entry.sha256, `${entry.file}: sha256 drifted`);
   }
+});
+
+test("isaOf: an of-chain reads through classifier heads only — a partitive container yields no isa", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("A glacier is a large body of ice and snow.", lex), null);
+  assert.equal(isaOf("A lake is a large body of water.", lex), null);
+  assert.equal(isaOf("A poodle is a kind of dog.", lex), "dog");
+  assert.equal(isaOf("Chess is a game of skill.", lex), "game");
 });

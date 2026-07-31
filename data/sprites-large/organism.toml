@@ -1,0 +1,32 @@
+# organism — the sprite tier's root for every living thing: a slender
+# upright seed body that a sprout breaks straight out of the top and roots
+# fork straight out of the bottom, rather than any animal or plant shape,
+# so it reads as "life" without leaning toward one kingdom. The body keeps
+# the tier's own currentColor gradient the way animal.toml's fallback body
+# does; the sprout and root hairs are fixed green/brown because chlorophyll
+# green and root brown are the two universal markers of new growth, the
+# same fixed-accent reasoning plant.toml's pot uses for its own one part.
+classes = ["organism"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="organism-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <radialGradient id="organism-sheen" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M12 8.6 C14.8 9.4 16.3 12.6 16 16.8 C15.7 20.4 14.1 22.4 12 22.4 C9.9 22.4 8.3 20.4 8 16.8 C7.7 12.6 9.2 9.4 12 8.6 Z" fill="url(#organism-fill)"/>
+  <path d="M9.6 9.8 C10.4 10.6 13.6 10.6 14.4 9.8" fill="none" stroke="color-mix(in srgb, currentColor 85%, black)" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M12 8.8 C9.8 7.4 7.6 7.6 6.6 9.4 C8.4 10.4 10.4 10 12 8.8 Z" fill="#5a9040"/>
+  <path d="M12 8.8 C14.2 7.4 16.4 7.6 17.4 9.4 C15.6 10.4 13.6 10 12 8.8 Z" fill="#4a7a34"/>
+  <path d="M12 8.8 C11.8 7.2 12 6 12 5.2 C12.4 6 12.4 7.4 12.2 8.8 Z" fill="#6ca43f"/>
+  <path d="M12 22.4 C11.4 23.2 10.6 23.6 9.8 23.7" fill="none" stroke="#8a6a4a" stroke-width="0.5" stroke-linecap="round" opacity="0.6"/>
+  <path d="M12 22.4 C12.6 23.2 13.4 23.6 14.2 23.7" fill="none" stroke="#8a6a4a" stroke-width="0.5" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="9.8" cy="13.8" rx="2" ry="2.6" fill="url(#organism-sheen)"/>
+</svg>
+"""

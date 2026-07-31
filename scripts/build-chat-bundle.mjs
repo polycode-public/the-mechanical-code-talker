@@ -14,7 +14,7 @@
 //
 // Stub selection differs from build-ask-bundle.mjs in two deliberate ways:
 //   - ask-nlp/wink-model stay LIVE — the page registers a CDN-loaded wink
-//     model through tmctChat.registerWinkModel, so the lemma/POS tier can
+//     model through tmct.page.registerWinkModel, so the lemma/POS tier can
 //     come up in the browser; without a registration the loader's internal
 //     catch degrades it to null, same as a checkout without the optional deps;
 //   - the ace strategy stays LIVE — grammar/ace.mjs reads its lexicon as an
@@ -34,9 +34,36 @@ const OPTIONAL_ADAPTER_STUBS = {
   // the fs+TOML side of the construction banks — never read in the browser
   // (the strategy above is stubbed out entirely).
   "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
+  // the fs+TOML side of the digest bank swaps for a live, in-memory twin: the
+  // page's own script calls setDigestStructures(rows) once per session
+  // (chat-browser-entry.mjs, fed the build-time-embedded [[structure]] rows —
+  // see chat-page-viz.mjs), and this module's digestTermFromRows delegates to
+  // digest-client.mjs's browser-native pipeline over that table, so
+  // termDigestReadBack's dynamic import (chat.mjs) sees a real digest instead
+  // of the always-null stub this used to be.
+  "corpus/digest-bank.mjs": {
+    resolveDir: join(ROOT, "src", "adapters", "corpus"),
+    contents:
+      "import { digestTermFromRowsBrowser } from \"../../surfaces/web/digest-client.mjs\";\n"
+      + "let structures = [];\n"
+      + "export function setDigestStructures(rows) { structures = Array.isArray(rows) ? rows : []; }\n"
+      + "export const readDigestStructures = () => structures;\n"
+      + "export const loadDigestStructureTable = () => null; // interface parity only, unused by this call path\n"
+      + "export function digestTermFromRows(term, termRows, allRows, opts = {}) {\n"
+      + "  return digestTermFromRowsBrowser(term, termRows, allRows, structures, opts);\n"
+      + "}\n",
+  },
   // phrasing variety stays OFF in the embedded chat — the browser answer is
   // always the base phrase, exactly as when the variants file can't be read.
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",
+  // the fs+TOML side of the sprite template libraries — tmct_sprite is a cold
+  // (CLI-only) tool, but dispatchTool's handler registry imports every
+  // handler statically, so these two loaders are link-time reachable from
+  // this bundle even though nothing in it ever calls tmct_sprite. Both
+  // modules' own headers already declare "never imported by a browser entry"
+  // as the intended invariant; this restores it rather than changing it.
+  "corpus/sprite-template-files.mjs": "export const SPRITE_TEMPLATES_DIR = \"\";\nexport const readSpriteTemplateFiles = () => [];\n",
+  "corpus/sprite-large-template-files.mjs": "export const SPRITE_LARGE_TEMPLATES_DIR = \"\";\nexport const readSpriteLargeTemplateFiles = () => [];\n",
 };
 
 /** Build public/chat-browser.bundle.js into `outDir` (default the repo's own

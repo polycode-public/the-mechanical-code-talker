@@ -1,19 +1,22 @@
 // chat-demos.mjs — scripted chat turns and the reference pack's demo term
-// allowlist. Data only: e2e/web-chat-memory.test.mjs replays DEMOS at the
+// allowlist. Data only: test-e2e/web-chat-memory.test.mjs replays DEMOS at the
 // engine level, and scripts/build-demo-pack.mjs reads REFERENCE_PACK_TERMS
 // to cut the browser-fetchable pack subset (it norm-folds the entries
 // itself).
 
 /** Terms the demo reference pack ships articles for. Each must
  *  resolve in the full pack — build-demo-pack fails loudly on one that
- *  doesn't. "identifier" leads as the demo's lookup term: learn-on-miss
- *  needs a term the shipped chat seed does NOT already ground, and the
- *  seed's conceptnet/WordNet/persona bands cover the everyday animal/object
- *  nouns below (at the 40 MB seed they also cover "license", the previous
- *  lead). The page transcript's "quokka" stays an honest miss on purpose
- *  (not a lexicon noun, so the pack can never carry it — the two together
- *  show both sides of the fallback). */
+ *  doesn't. "trelvox" leads as the demo's lookup term: learn-on-miss needs a
+ *  term the shipped chat seed can NEVER ground on its own, and the seed's
+ *  ConceptNet band now has some weak association for nearly every ordinary
+ *  English noun (both "identifier" and "license", each a previous lead, have
+ *  one). "trelvox" is a word coined for this demo — it appears in no corpus
+ *  tmct ships, so it stays a clean miss regardless of how far the corpus
+ *  grows. The page transcript's "quokka" stays an honest miss for a
+ *  different reason (a real word, but not a lexicon noun, so the pack can
+ *  never carry it — the two together show both sides of the fallback). */
 export const REFERENCE_PACK_TERMS = [
+  "trelvox",
   "identifier", "license",
   "otter", "falcon", "badger", "beaver", "anchor", "compass", "saddle",
   "canoe", "harp", "flute", "marble", "barn", "canal", "ferry", "swan",

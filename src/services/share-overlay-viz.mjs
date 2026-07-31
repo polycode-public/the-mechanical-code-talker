@@ -1,0 +1,623 @@
+// share-overlay-viz.mjs — the ONE sharing surface chat.html and mud.html both
+// render: a full-page "lights down" dialog that walks the WebRTC invite/reply
+// handshake as a five-step relay, with the connected-node roster, every
+// copy/share affordance, and the learn-more links in one place. Both pages
+// build their markup from shareOverlayHtml() and their styles from
+// SHARE_OVERLAY_CSS, so the two flows cannot drift apart again the way the
+// hand-copied .joinCard/.join-card pair did.
+//
+// The component is themed entirely through `--so-*` custom properties, which
+// default to the site's shared theme tokens; mud.html re-points them at its
+// own soil/parchment palette in its page style and inherits everything else.
+//
+// The pure helpers here (shareStepStates, activeWaves, offerBlobIn, the share
+// message builders, copyTextToClipboard, flashCopyTip, isProbablyMobile) are
+// self-contained and `.toString()`-splice safe — both pages splice them into
+// their inline scripts, the same discipline chat-page-viz.mjs's own p2p
+// helpers hold.
+import { SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+
+/** The five relay stations of the handshake, in wire order. Each key is also
+ *  the DOM id suffix (`step-<key>`) both pages stamp `data-status` onto. */
+export const SHARE_STEP_KEYS = Object.freeze(["invite", "send", "reply", "return", "connect"]);
+
+/**
+ * Where each of the five steps stands right now — "done" | "now" | "todo" |
+ * "fail" — for either seat at the table. The SAME ladder renders for the
+ * sponsor and the joiner; only the position differs:
+ *
+ * - sponsor (minted an invite): step 1 done, step 2 is theirs to act on,
+ *   and everything after waits on the far side;
+ * - joiner (opened an invite): the first two legs already happened to get
+ *   the invite here, so step 3 (or 4, once the reply exists) is live;
+ * - nobody yet ("idle"): step 1 is the only live step;
+ * - connecting/connected/failed override the seat — by then both halves have
+ *   been exchanged and the ladder reads the wire, not the role.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function shareStepStates({ role, state, hasReply }) {
+  const keys = ["invite", "send", "reply", "return", "connect"];
+  const upTo = (n) => keys.map((key, i) => ({ key: key, status: i < n ? "done" : "todo" }));
+  if (state === "connected") return upTo(5);
+  if (state === "failed") {
+    const rows = upTo(4);
+    rows[4].status = "fail";
+    return rows;
+  }
+  if (state === "connecting") {
+    const rows = upTo(4);
+    rows[4].status = "now";
+    return rows;
+  }
+  if (role === "sponsor") {
+    const rows = upTo(1);
+    rows[1].status = "now";
+    return rows;
+  }
+  if (role === "joiner") {
+    const live = hasReply ? 3 : 2;
+    const rows = upTo(live);
+    rows[live].status = "now";
+    return rows;
+  }
+  const rows = upTo(0);
+  rows[0].status = "now";
+  return rows;
+}
+
+/**
+ * Every wave currently live in `rows`: who waved, at whom, and when. A wave
+ * is an ordinary `mgx:waved` fact whose object is either the presence scope
+ * (a wave at everyone, returned as target "") or a specific term (a wave at
+ * one node/room). Recency is read off the NEWEST provenance stamp — a repeat
+ * wave re-asserts the same fact with a fresh tag — and anything older than
+ * the window simply stops being read as a wave, nothing retracted. Newest
+ * first. Self-contained, `.toString()`-splice safe.
+ */
+export function activeWaves(rows, nowMs, windowMs = 8000) {
+  const found = new Map();
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:waved") continue;
+    const text = String(row.provenance || "");
+    const pattern = /@(\d{4}-\d{2}-\d{2}T[0-9:.]+Z)/g;
+    let newest = null;
+    let m = pattern.exec(text);
+    while (m !== null) {
+      const at = Date.parse(m[1]);
+      if (!Number.isNaN(at) && (newest === null || at > newest)) newest = at;
+      m = pattern.exec(text);
+    }
+    if (newest === null) continue;
+    const age = nowMs - newest;
+    if (age < 0 || age > windowMs) continue;
+    const waver = String(row.subject);
+    const target = String(row.object) === "presence" ? "" : String(row.object);
+    const key = waver + "\u0000" + target;
+    const prior = found.get(key);
+    if (!prior || newest > prior.at) found.set(key, { waver: waver, target: target, at: newest });
+  }
+  return [...found.values()].sort((a, b) => b.at - a.at);
+}
+
+/** A peer id as the fact store actually holds it. `appendFacts` normalizes a
+ *  term by stripping its CURIE prefix and lowercasing, so the `peer:<id>` a
+ *  fact is written with reads back as the bare id — a comparison against a
+ *  raw peer id has to normalize the same way or it never matches. Pure,
+ *  self-contained. */
+export function peerTerm(peerId) {
+  return String(peerId || "").replace(/^[a-z][\w.-]*:/i, "").toLowerCase();
+}
+
+/** The offer blob inside whatever somebody actually pasted: the `offer`
+ *  parameter of a whole invite link, or the bare blob when that is what
+ *  arrived. Both are what people really paste, and telling them apart by
+ *  looking is cheaper than asking them to. Pure, self-contained. */
+export function offerBlobIn(pasted) {
+  const text = String(pasted || "").trim();
+  const marker = text.indexOf("offer=");
+  if (marker === -1) return text;
+  const rest = text.slice(marker + "offer=".length);
+  const end = rest.search(/[&#\s]/);
+  return decodeURIComponent(end === -1 ? rest : rest.slice(0, end));
+}
+
+/** The invite as one message a share sheet or chat app can carry whole —
+ *  what it is, what to do, and the link last so a preview never hides the
+ *  instructions. Self-contained, `.toString()`-splice safe. */
+export function shareMessageFor({ worldName, link, thing = "graph" }) {
+  return 'you’re invited into "' + worldName + '" — a shared ' + thing
+    + " that runs browser to browser, no server in the middle. open the link, press “create my reply”, and send the reply back: "
+    + link;
+}
+
+/** The joiner's reply as one message, with the instruction riding along so
+ *  the sponsor knows where it goes. Self-contained, splice safe. */
+export function replyMessageFor({ worldName, blob }) {
+  return 'my reply to your "' + worldName + '" invite — paste it into the “paste their reply here” box on your page: ' + blob;
+}
+
+/** The wa.me share URL for one message — WhatsApp's own documented deep link,
+ *  which hands the app the whole text atomically (the fix for links that a
+ *  chat app splits when they are pasted by hand). Works on WhatsApp mobile
+ *  and WhatsApp Web alike. Self-contained, splice safe. */
+export function whatsAppShareUrl(text) {
+  return "https://wa.me/?text=" + encodeURIComponent(String(text || ""));
+}
+
+/** Whether this is probably a touch-first mobile browser — used only to
+ *  promote the OS share sheet above manual copying, never to remove a path.
+ *  Self-contained, browser-only, splice safe. */
+export function isProbablyMobile() {
+  if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean") return navigator.userAgentData.mobile;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+}
+
+/** One-tap copy with the textarea fallback for clipboards the page can't
+ *  reach directly. Self-contained, browser-only, splice safe. */
+export function copyTextToClipboard(text) {
+  const viaExec = function () {
+    try {
+      const holder = document.createElement("textarea");
+      holder.value = text;
+      holder.setAttribute("readonly", "");
+      holder.style.position = "fixed";
+      holder.style.opacity = "0";
+      document.body.appendChild(holder);
+      holder.select();
+      const copied = document.execCommand("copy");
+      holder.remove();
+      return copied;
+    } catch {
+      return false;
+    }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(function () { return true; }, viaExec);
+  }
+  return Promise.resolve(viaExec());
+}
+
+/** The little "copied" toast, anchored under whatever was pressed — the
+ *  same tip on every page, so a copy feels the same everywhere.
+ *  Self-contained, browser-only, splice safe. */
+export function flashCopyTip(anchor, text) {
+  const tip = document.createElement("div");
+  tip.className = "copyTip";
+  tip.setAttribute("role", "status");
+  tip.textContent = text;
+  document.body.appendChild(tip);
+  const box = anchor.getBoundingClientRect();
+  const width = tip.offsetWidth;
+  tip.style.top = (box.bottom + 6) + "px";
+  tip.style.left = Math.max(6, Math.min(window.innerWidth - width - 6, box.left + box.width / 2 - width / 2)) + "px";
+  setTimeout(function () { tip.remove(); }, 2600);
+}
+
+const DEFAULT_COPY = {
+  thing: "graph",
+  eyebrow: "browser-to-browser sharing",
+  lede: "This graph lives in your browser and nowhere else. Sharing it opens a direct line (WebRTC) to one other browser: you send an invite, they send a reply, you paste it in. No account, no server, no copy anywhere in between.",
+  worldLabel: "the graph you are sharing",
+  nodeLabel: "your node name",
+  namesNote: "both names are facts in the graph, not settings.",
+  invitedEyebrow: "you’ve been invited to",
+  joinBody: "Nothing has run yet. The button below makes your reply and copies it — send it back the same way this invite reached you, and leave this tab open.",
+  dismiss: "start talking on your own instead",
+  rosterTitle: "who holds this graph",
+  nodeEmpty: "nobody else yet. invite someone and their node appears here.",
+  themLabel: "your friend",
+  helpHref: "./help.html#sharing",
+  idleNote: "this browser holds the only copy of what you teach it.",
+  factsVerb: "teach",
+};
+
+const STEP_COPY = [
+  {
+    key: "invite",
+    title: "make the invite",
+    hint: "one invite, one person. it holds your half of the handshake — nothing is sent until you share it.",
+  },
+  {
+    key: "send",
+    title: "send it to them",
+    hint: "any messenger works. if links arrive mangled (some apps split long ones), send the code instead — it travels as plain text.",
+  },
+  {
+    key: "reply",
+    title: "they open it and make a reply",
+    hint: "their browser builds the answering half. still nothing connected — just the second half of the handshake.",
+  },
+  {
+    key: "return",
+    title: "they send the reply back",
+    hint: "same channel, opposite direction.",
+  },
+  {
+    key: "connect",
+    title: "paste the reply here — connected",
+    hint: "the moment it lands, your two browsers talk directly.",
+  },
+];
+
+/**
+ * The overlay's markup: one dialog both pages embed verbatim, differing only
+ * in wording (`copy` overrides) and whether the wire tape rides along
+ * (`withTape` — chat.html's diagnostics instrument; mud.html has none yet).
+ * Every interactive element keeps a stable id — the page scripts and the
+ * e2e drivers address them by id, never by structure.
+ */
+export function shareOverlayHtml({ copy = {}, withTape = false } = {}) {
+  const c = { ...DEFAULT_COPY, ...copy };
+  const esc = escapeHtml;
+  const stepSlots = {
+    invite: `
+          <div class="so-slot for-idle">
+            <button type="button" class="so-btn primary" id="mintInviteBtn">make an invite</button>
+          </div>
+          <div class="so-slot for-sponsor">
+            <p class="so-summary" id="inviteSummary"></p>
+            <textarea class="so-blob" id="shareLink" rows="3" readonly aria-label="the invite link, exactly as it will be sent"></textarea>
+            <div class="so-btnrow">
+              <button type="button" class="so-btn primary" id="copyLinkBtn">copy link</button>
+              <button type="button" class="so-btn" id="copyCodeBtn">copy code only</button>
+              <button type="button" class="so-btn" id="webShareBtn" hidden>share&#8230;</button>
+              <a class="so-btn" id="waShareBtn" href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+            </div>
+            <p class="so-hint">the box above is everything that gets copied. “code only” is the same invite without the link around it — they paste it under step 3 on their own page.</p>
+            <button type="button" class="so-btn ghost" id="remintBtn">each invite admits one person — make a fresh one for the next</button>
+          </div>`,
+    send: "",
+    reply: `
+          <div class="so-slot for-idle">
+            <label class="so-label" for="inviteBox">got an invite? paste the link or the code here</label>
+            <textarea class="so-blob" id="inviteBox" rows="3" spellcheck="false" aria-label="an invite somebody sent you, as a link or a bare code"></textarea>
+            <div class="so-btnrow">
+              <button type="button" class="so-btn primary" id="inviteBtn">make my reply</button>
+            </div>
+            <p class="so-problem" id="inviteProblem" role="alert" hidden></p>
+          </div>`,
+    return: `
+          <div class="so-slot for-joiner for-joiner-paste">
+            <label class="so-label" for="replyOut">your reply — send it back the same way the invite reached you</label>
+            <textarea class="so-blob" id="replyOut" rows="3" readonly></textarea>
+            <div class="so-btnrow">
+              <button type="button" class="so-btn primary" id="copyReplyBtn">copy the reply</button>
+              <button type="button" class="so-btn" id="replyShareBtn" hidden>share&#8230;</button>
+              <a class="so-btn" id="replyWaBtn" href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+            </div>
+          </div>`,
+    connect: `
+          <div class="so-slot for-idle for-sponsor">
+            <label class="so-label" for="replyBox">paste their reply here</label>
+            <textarea class="so-blob" id="replyBox" rows="3" spellcheck="false"></textarea>
+            <div class="so-btnrow">
+              <button type="button" class="so-btn primary" id="replyBtn">connect</button>
+            </div>
+            <p class="so-problem" id="replyProblem" role="alert" hidden></p>
+          </div>`,
+  };
+  const steps = STEP_COPY.map((step, i) => `
+        <li class="so-step" id="step-${step.key}" data-status="${i === 0 ? "now" : "todo"}">
+          <span class="so-step-mark" aria-hidden="true"><i class="so-step-n">${i + 1}</i><i class="so-step-check">&#10003;</i><i class="so-step-x">&#10007;</i></span>
+          <div class="so-step-body">
+            <span class="so-step-title">${esc(step.title)}</span>
+            <span class="so-step-hint">${esc(step.hint)}</span>${stepSlots[step.key]}
+          </div>
+        </li>`).join("");
+
+  const tape = withTape ? `
+      <details class="so-tape">
+        <summary>the wire, message by message <span class="so-count" id="tapeTotal"></span></summary>
+        <div class="tape-meter" id="tapeMeter"></div>
+        <ol class="tape" id="tape"></ol>
+        <p class="tape-empty" id="tapeEmpty">every message this browser sends or receives lands here, as it happens.</p>
+      </details>` : "";
+
+  return `  <div class="shareOverlay" id="netPanel" role="dialog" aria-modal="true" aria-labelledby="shareOverlayTitle" data-role="idle" data-tone="idle" hidden>
+    <section class="so-card" tabindex="-1">
+      <button type="button" class="so-close" id="netPanelClose" aria-label="close sharing">&times;</button>
+      <header class="so-head">
+        <p class="so-eyebrow" id="shareOverlayTitle">${esc(c.eyebrow)}</p>
+        <div class="so-state" id="wireState" data-tone="idle" role="status">
+          <span class="so-state-word" id="wireStateWord">not shared</span>
+          <span class="so-state-note" id="wireStateNote">${esc(c.idleNote)}</span>
+        </div>
+      </header>
+      <p class="so-lede">${esc(c.lede)}</p>
+      <section class="so-join" id="joinCard" hidden>
+        <p class="so-join-eyebrow" id="joinEyebrow">${esc(c.invitedEyebrow)}</p>
+        <h2 class="so-join-world" id="joinWorld"></h2>
+        <p class="so-join-body" id="joinBody">${esc(c.joinBody)}</p>
+        <div class="so-btnrow">
+          <button type="button" class="so-btn primary big" id="joinBtn">create my reply</button>
+        </div>
+        <p class="so-problem" id="joinProblem" role="alert" hidden></p>
+        <div class="so-join-reply" id="joinReplyWrap" hidden>
+          <label class="so-label" for="joinReply">your reply — send it back the same way the invite reached you</label>
+          <textarea class="so-blob" id="joinReply" rows="3" readonly></textarea>
+          <div class="so-btnrow">
+            <button type="button" class="so-btn primary" id="joinCopyBtn">copy the reply</button>
+            <button type="button" class="so-btn" id="joinShareBtn" hidden>share&#8230;</button>
+            <a class="so-btn" id="joinWaBtn" href="https://wa.me/" target="_blank" rel="noopener">WhatsApp</a>
+          </div>
+        </div>
+        <button type="button" class="so-btn ghost" id="joinDismiss">${esc(c.dismiss)}</button>
+      </section>
+      <div class="so-scene" aria-hidden="true">
+        <div class="so-browser">
+          <div class="so-browser-chrome"><i></i><i></i><i></i></div>
+          <div class="so-browser-body">
+            <span class="so-browser-who" id="sceneYouName">you</span>
+          </div>
+        </div>
+        <div class="so-wirebed">
+          <i class="so-packet so-packet-out"></i>
+          <i class="so-packet so-packet-back"></i>
+          <span class="so-wire-break">&#10007;</span>
+          <span class="so-wire-caption">webrtc — a direct line, no server between you</span>
+        </div>
+        <div class="so-browser">
+          <div class="so-browser-chrome"><i></i><i></i><i></i></div>
+          <div class="so-browser-body">
+            <span class="so-browser-who" id="sceneThemName">${esc(c.themLabel)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="so-body">
+        <ol class="so-steps" aria-label="the handshake, step by step">${steps}
+        </ol>
+        <aside class="so-side">
+          <section class="so-block">
+            <h3 class="so-side-title">${esc(c.rosterTitle)} <span class="so-count" id="nodeCount"></span></h3>
+            <ul class="node-list" id="nodeList"></ul>
+            <p class="so-hint" id="nodeEmpty">${esc(c.nodeEmpty)}</p>
+            <button type="button" class="so-btn" id="waveAllBtn">&#128075; wave at everyone</button>
+          </section>
+          <section class="so-block so-names">
+            <label class="so-label" for="worldNameInput">${esc(c.worldLabel)}
+              <input class="so-name-input" id="worldNameInput" type="text" autocomplete="off" spellcheck="false"></label>
+            <label class="so-label" for="nodeNameInput">${esc(c.nodeLabel)}
+              <input class="so-name-input" id="nodeNameInput" type="text" autocomplete="off" spellcheck="false"></label>
+            <p class="so-hint">${esc(c.namesNote)}</p>
+          </section>${tape}
+          <section class="so-block so-links">
+            <h3 class="so-side-title">how this works</h3>
+            <p class="so-hint">the invite and the reply are the two halves of a WebRTC handshake (an offer and an answer). once both sides hold both halves, your browsers talk directly — no server ever holds this ${esc(c.thing)}.</p>
+            <ul class="so-linklist">
+              <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API" target="_blank" rel="noopener">WebRTC, on MDN &#8599;</a></li>
+              <li><a href="https://webrtc.org/" target="_blank" rel="noopener">webrtc.org &#8599;</a></li>
+              <li><a href="${esc(c.helpHref)}" target="_blank" rel="noopener">how sharing works, on this site &#8599;</a></li>
+            </ul>
+          </section>
+        </aside>
+      </div>
+    </section>
+  </div>`;
+}
+
+/** The overlay's whole stylesheet, themed through `--so-*` custom properties
+ *  that default to the shared theme tokens — a page with a palette of its own
+ *  (mud.html) re-points the variables and inherits every rule. */
+export const SHARE_OVERLAY_CSS = `
+  .shareOverlay {
+    --so-scrim: rgba(12, 12, 10, .62);
+    --so-card: var(--card, #fff);
+    --so-ink: var(--ink, #23272B);
+    --so-muted: var(--muted, #6E7168);
+    --so-line: var(--line, #DDD9D0);
+    --so-accent: var(--corpus, #5A80AC);
+    --so-good: var(--taught, #2E7D4F);
+    --so-warn: var(--entail, #B07C2E);
+    --so-alert: var(--alert, #B0503F);
+    --so-good-soft: var(--taught-soft, rgba(46, 125, 79, .12));
+    --so-accent-soft: var(--corpus-soft, rgba(90, 128, 172, .12));
+    --so-alert-soft: var(--alert-soft, rgba(176, 80, 63, .12));
+    --so-display: ${SERIF_STACK};
+    --so-body: ${SERIF_STACK};
+    --so-mono: ${MONO_STACK};
+    position: fixed; inset: 0; z-index: 40; overflow-y: auto; overscroll-behavior: contain;
+    background: var(--so-scrim);
+  }
+  .shareOverlay[hidden] { display: none !important; }
+  /* Setting display at all outranks the browser's own [hidden] rule, so
+     everything inside the overlay that hides by attribute needs it restated
+     once — scoped here so a host page never has to carry its own guard. */
+  .shareOverlay [hidden] { display: none !important; }
+  .so-card {
+    position: relative; box-sizing: border-box; width: min(58rem, calc(100% - 2rem));
+    margin: 2.5rem auto 3rem; padding: 1.5rem 1.7rem 1.4rem;
+    background: var(--so-card); color: var(--so-ink);
+    border: 1px solid var(--so-line); border-radius: 12px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+    font-family: var(--so-body); font-size: .95rem; line-height: 1.5;
+    animation: so-rise .22s ease-out; outline: none;
+  }
+  .shareOverlay button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
+  .so-close { position: absolute; top: .55rem; right: .7rem; font-size: 1.5rem; line-height: 1; color: var(--so-muted); padding: .2rem .45rem; }
+  .so-close:hover { color: var(--so-ink); }
+
+  .so-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-right: 2rem; }
+  .so-eyebrow { margin: .1rem 0 0; font-family: var(--so-mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--so-muted); }
+  .so-lede { margin: .55rem 0 0; max-width: 62ch; font-size: .88rem; color: var(--so-muted); }
+
+  /* connection state: a calm slow breath while nothing is in flight, a
+     quicker one while ICE runs, solid on live, static dashed red on failed —
+     a fault should not twitch. */
+  .so-state { position: relative; overflow: hidden; flex: 0 1 24rem; min-width: 14rem; border: 1px solid var(--so-line); border-left-width: 3px; border-radius: 8px; padding: .45rem .7rem .5rem .75rem; background: var(--so-card); }
+  .so-state-word { display: block; font-size: .95rem; }
+  .so-state-note { display: block; margin-top: .2rem; font-size: .74rem; line-height: 1.4; color: var(--so-muted); }
+  .so-state[data-tone="waiting"], .so-state[data-tone="working"] { border-left-color: var(--so-accent); }
+  .so-state[data-tone="waiting"]::before, .so-state[data-tone="working"]::before { content: ""; position: absolute; left: -3px; top: 0; bottom: 0; width: 3px; background: var(--so-accent); animation: so-breathe 2.4s ease-in-out infinite; }
+  .so-state[data-tone="working"]::before { animation-duration: .9s; }
+  .so-state[data-tone="live"] { border-left-color: var(--so-good); background: var(--so-good-soft); }
+  .so-state[data-tone="live"] .so-state-word { color: var(--so-good); }
+  .so-state[data-tone="failed"] { border-style: dashed; border-left-style: solid; border-left-color: var(--so-alert); background: var(--so-alert-soft); }
+  .so-state[data-tone="failed"] .so-state-word { color: var(--so-alert); }
+  @keyframes so-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+  @keyframes so-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* the joiner's headline: the world's generated two-word name, as big as it
+     ever gets — the one moment the invite is the whole page's subject. */
+  .so-join { margin: 1.1rem 0 .2rem; padding: 1.1rem 1.2rem 1rem; border: 1px solid var(--so-line); border-radius: 10px; background: var(--so-accent-soft); display: flex; flex-direction: column; gap: .55rem; }
+  .so-join-eyebrow { margin: 0; font-family: var(--so-mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--so-muted); }
+  .so-join-world { margin: 0; font-family: var(--so-display); font-size: clamp(1.7rem, 4.5vw, 2.6rem); line-height: 1.05; overflow-wrap: anywhere; }
+  .so-join-body { margin: 0; max-width: 52ch; font-size: .9rem; color: var(--so-muted); }
+  .so-join-reply { display: flex; flex-direction: column; gap: .45rem; }
+
+  /* the scene: two browsers and the direct line between them — the diagram's
+     one-glance version, animated by the live connection state. */
+  .so-scene { display: flex; align-items: stretch; gap: .9rem; margin: 1.2rem 0 1.3rem; }
+  .so-browser { flex: 0 0 auto; width: 8rem; border: 1px solid var(--so-line); border-radius: 8px; background: var(--so-card); box-shadow: 0 2px 8px rgba(0, 0, 0, .08); }
+  .so-browser-chrome { display: flex; gap: 3px; padding: .32rem .45rem; border-bottom: 1px solid var(--so-line); }
+  .so-browser-chrome i { width: 6px; height: 6px; border-radius: 50%; background: var(--so-line); }
+  .so-browser-body { display: flex; align-items: center; justify-content: center; padding: .7rem .4rem .75rem; }
+  .so-browser-who { font-family: var(--so-mono); font-size: .66rem; color: var(--so-muted); overflow-wrap: anywhere; text-align: center; }
+  .so-wirebed { position: relative; flex: 1 1 auto; align-self: center; height: 3rem; min-width: 6rem; }
+  .so-wirebed::before { content: ""; position: absolute; left: 2%; right: 2%; top: 50%; border-top: 2px dashed var(--so-line); }
+  .shareOverlay[data-tone="live"] .so-wirebed::before { border-top-style: solid; border-top-color: var(--so-good); }
+  .shareOverlay[data-tone="failed"] .so-wirebed::before { border-top-color: var(--so-alert); }
+  .so-packet { position: absolute; top: 50%; left: 2%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 3px; opacity: 0; }
+  .so-packet-out { background: var(--so-accent); }
+  .so-packet-back { background: var(--so-warn); }
+  .shareOverlay[data-tone="waiting"] .so-packet-out,
+  .shareOverlay[data-tone="working"] .so-packet-out { animation: so-travel-out 2.1s ease-in-out infinite; }
+  .shareOverlay[data-tone="waiting"][data-role="joiner"] .so-packet-out { animation: none; }
+  .shareOverlay[data-tone="waiting"][data-role="joiner"] .so-packet-back,
+  .shareOverlay[data-tone="working"] .so-packet-back { animation: so-travel-back 2.1s ease-in-out infinite; animation-delay: 1s; }
+  .shareOverlay[data-tone="working"] .so-packet-out { animation-duration: .8s; }
+  .shareOverlay[data-tone="working"] .so-packet-back { animation-duration: .8s; animation-delay: .4s; }
+  .shareOverlay[data-tone="live"] .so-packet-out { animation: so-travel-out 3.2s ease-in-out infinite; background: var(--so-good); }
+  .shareOverlay[data-tone="live"] .so-packet-back { animation: so-travel-back 3.2s ease-in-out infinite; animation-delay: 1.6s; background: var(--so-good); }
+  @keyframes so-travel-out { 0% { left: 2%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: 98%; opacity: 0; } }
+  @keyframes so-travel-back { 0% { left: 98%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: 2%; opacity: 0; } }
+  .so-wire-break { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -55%); color: var(--so-alert); font-size: .9rem; background: var(--so-card); padding: 0 .3rem; }
+  .shareOverlay[data-tone="failed"] .so-wire-break { display: block; }
+  .so-wire-caption { position: absolute; left: 50%; top: calc(50% + .55rem); transform: translateX(-50%); font-family: var(--so-mono); font-size: .56rem; letter-spacing: .04em; color: var(--so-muted); white-space: nowrap; }
+
+  .so-body { display: grid; grid-template-columns: minmax(0, 1fr) 16.5rem; gap: 1.5rem; align-items: start; }
+
+  /* the ladder: five stations joined by one spine. data-status drives the
+     mark — number, check, cross — and the live station carries the accent. */
+  .so-steps { list-style: none; margin: 0; padding: 0; }
+  .so-step { position: relative; display: grid; grid-template-columns: 1.7rem minmax(0, 1fr); gap: 0 .75rem; padding: 0 0 1.05rem; }
+  .so-step:last-child { padding-bottom: 0; }
+  .so-step::before { content: ""; position: absolute; left: .8rem; top: 1.8rem; bottom: -.1rem; width: 2px; background: var(--so-line); }
+  .so-step:last-child::before { display: none; }
+  .so-step[data-status="done"]::before { background: var(--so-good); }
+  .so-step-mark { position: relative; width: 1.7rem; height: 1.7rem; border-radius: 50%; border: 2px solid var(--so-line); box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-family: var(--so-mono); font-size: .72rem; color: var(--so-muted); background: var(--so-card); }
+  .so-step-mark i { font-style: normal; display: none; }
+  .so-step[data-status="todo"] .so-step-n { display: block; }
+  .so-step[data-status="now"] .so-step-n { display: block; }
+  .so-step[data-status="now"] .so-step-mark { border-color: var(--so-accent); color: var(--so-card); background: var(--so-accent); animation: so-now-pulse 2.2s ease-in-out infinite; }
+  .so-step[data-status="done"] .so-step-mark { border-color: var(--so-good); color: var(--so-good); background: var(--so-good-soft); }
+  .so-step[data-status="done"] .so-step-check { display: block; }
+  .so-step[data-status="fail"] .so-step-mark { border-color: var(--so-alert); color: var(--so-alert); background: var(--so-alert-soft); }
+  .so-step[data-status="fail"] .so-step-x { display: block; }
+  @keyframes so-now-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--so-accent-soft); } 50% { box-shadow: 0 0 0 6px var(--so-accent-soft); } }
+  .so-step-body { display: flex; flex-direction: column; gap: .28rem; min-width: 0; padding-top: .12rem; }
+  .so-step-title { font-size: .98rem; }
+  .so-step[data-status="now"] .so-step-title { font-weight: 600; }
+  .so-step[data-status="todo"] .so-step-title, .so-step[data-status="todo"] .so-step-hint { color: var(--so-muted); }
+  .so-step-hint { font-size: .78rem; color: var(--so-muted); max-width: 52ch; }
+
+  /* the CTA slots: which of them shows is the role's call, not the step's */
+  .so-slot { display: none; flex-direction: column; gap: .45rem; margin-top: .35rem; }
+  .shareOverlay[data-role="idle"] .so-slot.for-idle { display: flex; }
+  .shareOverlay[data-role="sponsor"] .so-slot.for-sponsor { display: flex; }
+  .shareOverlay[data-role="joiner"] .so-slot.for-joiner { display: flex; }
+  .shareOverlay[data-role="joiner"][data-entry="link"] .so-slot.for-joiner-paste { display: none; }
+
+  .so-btnrow { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+  .so-btn { font-family: var(--so-body); font-size: .84rem; line-height: 1.35; color: var(--so-ink); border: 1px solid var(--so-line); border-radius: 99px; padding: .32rem .85rem; background: var(--so-card); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; }
+  .so-btn:hover { border-color: var(--so-ink); }
+  .so-btn:disabled { opacity: .5; cursor: default; }
+  .so-btn.primary { background: var(--so-ink); color: var(--so-card); border-color: var(--so-ink); }
+  .so-btn.big { font-size: 1rem; padding: .5rem 1.2rem; align-self: flex-start; }
+  .so-btn.ghost { border-color: transparent; color: var(--so-muted); padding-left: 0; align-self: flex-start; text-decoration: underline; text-underline-offset: 3px; }
+  .so-btn.ghost:hover { color: var(--so-ink); }
+  .shareOverlay.so-mobile .so-btnrow #webShareBtn:not([hidden]),
+  .shareOverlay.so-mobile .so-btnrow #replyShareBtn:not([hidden]),
+  .shareOverlay.so-mobile .so-btnrow #joinShareBtn:not([hidden]) { order: -1; }
+  .shareOverlay.so-mobile .so-btn { padding: .45rem 1rem; }
+
+  .so-summary { margin: 0; font-family: var(--so-mono); font-size: .68rem; color: var(--so-muted); }
+  /* machine text stays mono: it is something a person only ever copies, and a
+     prose face on base64 would be a lie about what it is. */
+  .so-blob { width: 100%; box-sizing: border-box; font-family: var(--so-mono); font-size: .6rem; line-height: 1.35; color: var(--so-muted); background: var(--so-accent-soft); border: 1px solid var(--so-line); border-radius: 8px; padding: .45rem .55rem; resize: vertical; word-break: break-all; }
+  .so-blob:focus { color: var(--so-ink); outline: 2px solid var(--so-accent); outline-offset: 1px; }
+  .so-label { font-size: .8rem; color: var(--so-muted); display: flex; flex-direction: column; gap: .25rem; }
+  .so-hint { margin: 0; font-size: .74rem; line-height: 1.45; color: var(--so-muted); }
+  .so-problem { margin: 0; font-size: .8rem; color: var(--so-alert); border-left: 2px solid var(--so-alert); padding-left: .5rem; }
+  .so-name-input { font-family: var(--so-body); font-size: .88rem; color: var(--so-ink); background: var(--so-card); border: 1px solid var(--so-line); border-radius: 8px; padding: .3rem .6rem; width: 100%; box-sizing: border-box; }
+  .so-name-input:read-only { background: none; border-color: transparent; padding-left: 0; color: var(--so-muted); }
+
+  .so-side { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+  .so-block { display: flex; flex-direction: column; gap: .5rem; }
+  .so-side-title { margin: 0; font-family: var(--so-mono); font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--so-muted); }
+  .so-count { letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+  .so-links .so-linklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; }
+  .so-links a { color: var(--so-accent); }
+  .so-tape summary { font-family: var(--so-mono); font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--so-muted); cursor: pointer; }
+
+  /* the wire tape: every message in and out, in arrival order, newest first
+     so the latest is readable without scrolling. The 3px bar carries the
+     message family in the host page's own accent colours; the type is
+     spelled out beside it, so colour is never the only thing distinguishing
+     one row from another. */
+  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: .4rem 0 .3rem; }
+  .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--so-muted); }
+  .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
+  .meter-n { color: var(--so-ink); font-variant-numeric: tabular-nums; }
+  .tape { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; border-top: 1px solid var(--so-line); }
+  .tape-row { display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .18rem 0 .18rem .2rem; border-bottom: 1px dotted var(--so-line); font-size: .6rem; font-variant-numeric: tabular-nums; }
+  .tape-row:first-child { animation: tape-arrive .6s ease-out; }
+  .tape-bar { align-self: stretch; border-radius: 1px; background: var(--so-muted); }
+  .tape-clock { color: var(--so-muted); }
+  .tape-type { color: var(--so-ink); overflow-wrap: anywhere; }
+  .tape-detail { color: var(--so-muted); text-align: right; white-space: nowrap; }
+  .tape-row[data-dir="out"] .tape-type::before { content: "\\2192 "; color: var(--so-muted); }
+  .tape-row[data-dir="in"] .tape-type::before { content: "\\2190 "; color: var(--so-muted); }
+  .tape-row[data-dir="note"] .tape-type::before { content: "\\00b7 "; color: var(--so-muted); }
+  .tape-row[data-family="facts"] .tape-bar { background: var(--so-good); }
+  .tape-row[data-family="state"] .tape-bar { background: var(--so-accent); }
+  .tape-row[data-family="greeting"] .tape-bar { background: var(--so-warn); }
+  .tape-row[data-family="signal"] .tape-bar { background: var(--so-warn); }
+  .tape-row[data-family="fault"] .tape-bar { background: var(--so-alert); }
+  .tape-row[data-family="fault"] .tape-type { color: var(--so-alert); }
+  .tape-empty { font-family: var(--so-body); color: var(--so-muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
+  @keyframes tape-arrive { from { background: var(--so-accent-soft); } to { background: transparent; } }
+
+  /* the roster: every node that holds this graph, its last shared fact, and a
+     hand to wave at it. Colour never carries presence alone — the dot does. */
+  .node-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .15rem; }
+  .node-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "avatar name when wave" "avatar fact fact wave"; column-gap: .55rem; align-items: center; padding: .32rem 0; border-bottom: 1px dotted var(--so-line); }
+  .node-row:last-child { border-bottom: none; }
+  .node-avatar { grid-area: avatar; position: relative; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--so-line); color: var(--so-muted); display: flex; align-items: center; justify-content: center; font-family: var(--so-mono); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; }
+  .node-row[data-self="true"] .node-avatar { background: var(--so-ink); color: var(--so-card); }
+  .node-dot { position: absolute; right: -1px; bottom: -1px; width: 7px; height: 7px; border-radius: 50%; background: var(--so-good); box-shadow: 0 0 0 2px var(--so-card); }
+  .node-row[data-away="true"] .node-dot { background: var(--so-muted); }
+  .node-name { grid-area: name; font-size: .86rem; min-width: 0; overflow-wrap: anywhere; }
+  .node-row[data-self="true"] .node-name::after { content: " (you)"; color: var(--so-muted); font-size: .74rem; }
+  .node-row[data-away="true"] .node-name { color: var(--so-muted); }
+  .node-when { grid-area: when; color: var(--so-muted); font-family: var(--so-mono); font-size: .62rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .node-fact { grid-area: fact; font-family: var(--so-mono); font-size: .6rem; color: var(--so-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-wave-btn { grid-area: wave; font-size: .95rem; line-height: 1; padding: .25rem .3rem; border-radius: 6px; opacity: .55; }
+  .node-wave-btn:hover { opacity: 1; background: var(--so-accent-soft); }
+  .node-hand { position: absolute; top: -.55rem; right: -.45rem; font-size: .9rem; opacity: 0; transform-origin: 70% 80%; pointer-events: none; }
+  .node-row[data-waving="true"] .node-hand { opacity: 1; animation: so-hand-wave .8s ease-in-out infinite; }
+  @keyframes so-hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
+
+  .copyTip { position: fixed; z-index: 60; background: var(--so-ink, #23272B); color: var(--so-card, #fff); font-family: var(--so-body, inherit); font-size: .78rem; padding: .3rem .7rem; border-radius: 99px; pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .22); animation: so-rise .14s ease-out; }
+
+  @media (max-width: 860px) {
+    .so-card { width: 100%; margin: 0; border-radius: 0; border-left: none; border-right: none; min-height: 100dvh; padding: 1.1rem 1rem 2rem; }
+    .so-body { grid-template-columns: 1fr; }
+    .so-head { padding-right: 1.8rem; }
+    .so-wire-caption { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .so-card, .so-packet, .so-state::before, .so-step[data-status="now"] .so-step-mark,
+    .node-row[data-waving="true"] .node-hand, .copyTip, .tape-row:first-child { animation: none !important; }
+  }
+`;

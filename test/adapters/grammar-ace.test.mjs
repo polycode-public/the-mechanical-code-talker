@@ -254,3 +254,51 @@ test("compound noun never fires where it isn't requested: a question lead ('does
   const r = parseAce("does dog have a tail");
   assert.ok(!r || !r.triples?.length, "a question must never parse as a stored assertion");
 });
+
+test("'N of N' compound noun: one term across the subject, complement, disjoint and capability slots", () => {
+  const subject = parseAce("a unit of work is a task");
+  assert.equal(subject.pattern, "subClassOf");
+  assert.deepEqual(subject.residue, []);
+  assert.deepEqual(subject.triples, [
+    { subject: "tmct:unit of work", predicate: "rdfs:subClassOf", object: "tmct:task", kind: "rdfs:subClassOf" },
+  ]);
+  const complement = parseAce("a task is a unit of work");
+  assert.deepEqual(triplesOf(complement), [["tmct:task", "rdfs:subClassOf", "tmct:unit of work"]]);
+  const every = parseAce("every unit of work is a task");
+  assert.deepEqual(triplesOf(every), [["tmct:unit of work", "rdfs:subClassOf", "tmct:task"]]);
+  const disjoint = parseAce("no unit of work is a milestone");
+  assert.deepEqual(triplesOf(disjoint), [["tmct:unit of work", "owl:disjointWith", "tmct:milestone"]]);
+  const capability = parseAce("a unit of work can fail");
+  assert.deepEqual(triplesOf(capability), [["tmct:unit of work", "mgx:capableOf", "tmct:fail"]]);
+  // a second real compound, to show the rule is the of-frame and not one phrase
+  const chain = parseAce("a chain of command is a structure");
+  assert.deepEqual(triplesOf(chain), [["tmct:chain of command", "rdfs:subClassOf", "tmct:structure"]]);
+});
+
+test("'N of N' declines a partitive or quantity head: 'a piece of cake'/'a lot of dogs' name no class", () => {
+  for (const sentence of ["a piece of cake is a food", "a lot of dogs is a group"]) {
+    const r = parseAce(sentence);
+    assert.deepEqual(r.triples, [], `${sentence}: quantity, not a compound term`);
+    assert.deepEqual(r.residue, ["of"]);
+  }
+  // a classifier head rewrites the inner noun rather than compounding with it,
+  // so it mints no "type of module" class either
+  const classifier = parseAce("a type of module is a unit");
+  assert.deepEqual(classifier.triples, []);
+  assert.deepEqual(classifier.residue, ["of"]);
+});
+
+test("'N of N' holds its shape: an inner determiner, an undeclared noun, a code-shaped ref and the relation walk all decline", () => {
+  assert.deepEqual(parseAce("a unit of the work is a task").triples, [], "no compound noun carries an inner determiner");
+  assert.deepEqual(parseAce("a unit of frobnicate is a task").residue, ["of", "frobnicate"], "both nouns must be declared");
+  assert.deepEqual(parseAce("a copy of chat.mjs is a module").triples, [], "a code-shaped ref is an individual, not a compound half");
+  assert.deepEqual(parseAce("modules import units of work").triples, [], "the generic relation walk never opts in");
+});
+
+test("'N of N' leaves the definite relational frame to pattern 7", () => {
+  const r = parseAce("the unit of work is a task");
+  assert.equal(r.pattern, "possessive", "'the N of N is VALUE' is parseOfForm's, claimed before any copula split");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:work", predicate: "tmct:unit", object: "a task", kind: "owl:DatatypeProperty" },
+  ]);
+});

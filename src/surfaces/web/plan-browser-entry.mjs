@@ -24,17 +24,18 @@
 // engine. `maxDepth` is overridable PER CALL (not just at session creation)
 // so the page's own max-search-depth control can re-run "solve it" on the
 // CURRENT board without tearing down and re-teaching the whole puzzle.
-import { runTurn } from "../../services/chat.mjs";
 import { createInMemoryStore } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { hanoiLessonSentences } from "../../domain/hanoi-lesson.mjs";
+import { hanoiBoardRows, hanoiBoardGraphPayload } from "../../domain/hanoi-board.mjs";
 import { computeBlocksLayout, planToPageData, renderInputsFromPlan } from "../../services/plan-viz.mjs";
 import { planToPddl } from "../../services/plan-pddl.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 // Re-exported so the page can register a CDN-loaded wink-nlp pair before the
 // first teach, the same seam chat-browser-entry.mjs exposes as
-// tmctChat.registerWinkModel — see wink-model.mjs's own header. The hanoi
+// tmct.page.registerWinkModel — see wink-model.mjs's own header. The hanoi
 // lesson's own "moving a disk onto a target makes the disk rest on the
 // target" sentence needs a REAL lemmatiser (verbLemma reduces "moving" to
 // "move" to match the taught "move onto" action family) — without it, that
@@ -44,10 +45,12 @@ import { planToPddl } from "../../services/plan-pddl.mjs";
 // model because their own gameplay never asks a taught rule to reduce a
 // verb; the hanoi lesson is the first live session here that does.
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /** A live in-memory towers-of-hanoi session this page's live controls AND
- *  chat dock can both drive. Returns `{ memoryDir, sessionId, diskCount,
- *  maxDepth, plan, turn }`. `plan` is the puzzle's freshly solved plan (the
+ *  chat dock can both drive. Returns `{ memoryDir, sessionId, graph,
+ *  diskCount, maxDepth, plan, turn }`. `plan` is the puzzle's freshly solved plan (the
  *  same shape chat.mjs's planLaneAnswer returns, enriched with
  *  `becauseText` — see `turn()` below), or null when `maxDepth` was too low
  *  to find one (an honest miss, not an error: `turn()`'s own answer text
@@ -57,58 +60,75 @@ export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  const planHolder = { state: null };
-  let focus = null;
-  let last = null;
 
-  /** One dispatched chat turn — the SAME runTurn the CLI and every other
-   *  viz page's own chat dock run, over this session's own memoryDir. A
-   *  throwing runTurn must never kill the session — the page has no other
-   *  chance to show this turn's answer. `maxDepth` overrides the session's
-   *  own default for just this one call (the page's own max-search-depth
-   *  control threads it on every call, including a plain typed "solve
-   *  it"), so raising or lowering it never requires re-teaching the board.
-   *  A returned `plan` carries `becauseText` folded in from the session's
-   *  own plan slot — the plan-lane contract's returned object never carries
-   *  it itself (only planHolder.state does), and the PDDL panel's own
-   *  "because —" line needs it. */
-  async function turn(line, { maxDepth: maxDepthOverride } = {}) {
-    const gameConfig = {
-      ...DEFAULT_GAME_CONFIG,
-      planning: { ...DEFAULT_GAME_CONFIG.planning, maxDepth: maxDepthOverride ?? maxDepth },
-    };
-    let result;
-    try {
-      result = await runTurn(line, {
-        config: null, source: null, graph, focus, last, memoryDir, sessionId,
-        env: {}, lexicon, vocabHint: "", planState: planHolder.state, gameConfig,
-      });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
-    }
-    focus = result.focus;
-    last = result.last;
-    if ("planState" in result) planHolder.state = result.planState;
-    const plan = result.plan
-      ? { ...result.plan, becauseText: planHolder.state?.becauseText ?? null }
-      : null;
-    return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan };
-  }
+  // `maxDepth` overrides the session's own default for just this one call
+  // (the page's own max-search-depth control threads it on every call,
+  // including a plain typed "solve it"), so raising or lowering it never
+  // requires re-teaching the board. `captureExtraState` folds `becauseText`
+  // onto the returned `plan` from the session's own plan slot — the
+  // plan-lane contract's returned object never carries it itself (only
+  // planState does), and the PDDL panel's own "because —" line needs it.
+  const session = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint: "",
+    buildExtraOptions: (state, callArgs) => ({
+      gameConfig: {
+        ...DEFAULT_GAME_CONFIG,
+        planning: { ...DEFAULT_GAME_CONFIG.planning, maxDepth: callArgs?.maxDepth ?? maxDepth },
+      },
+    }),
+    captureExtraState: (result, state) => {
+      if (result.plan) result.plan = { ...result.plan, becauseText: state.planState?.becauseText ?? null };
+    },
+  });
 
   let plan = null;
   for (const sentence of hanoiLessonSentences(diskCount)) {
-    const r = await turn(sentence);
+    const r = await session.turn(sentence);
     if (r.plan) plan = r.plan;
   }
 
-  return { memoryDir, sessionId, diskCount, maxDepth, plan, turn };
+  // The board `tmct.ask()` traverses. The plan lane's own states are rows, not
+  // a graph, so an ask over this session used to meet an empty one and miss
+  // every question about the puzzle in front of the visitor. hanoi-board.mjs
+  // projects one position into `{individuals, objectProperties}`; the page
+  // calls `showBoard` whenever it mounts a fresh plan or the transport moves
+  // the step, so what ask() reads is what the board shows.
+  let boardPlan = plan;
+  let boardStep = 0;
+  let boardGraph = null;
+  function showBoard({ plan: nextPlan = boardPlan, step = boardStep } = {}) {
+    boardPlan = nextPlan;
+    boardStep = Math.max(0, Math.floor(Number(step) || 0));
+    boardGraph = parseEntities(hanoiBoardGraphPayload(hanoiBoardRows({ plan: boardPlan, step: boardStep })));
+    return boardGraph;
+  }
+  showBoard();
+
+  return {
+    memoryDir, sessionId, graph, diskCount, maxDepth, plan, turn: session.turn,
+    showBoard,
+    get boardGraph() { return boardGraph; },
+    get boardStep() { return boardStep; },
+  };
 }
 
-// Re-exported so the page's own rendering script (plan-viz.mjs's inlined
-// script) never has to duplicate board layout or PDDL/OWL-RDF formatting —
-// the same posture adventure-browser-entry.mjs/spider-fly-browser-entry.mjs
-// take re-exporting their own engines' pure helpers.
-globalThis.tmctPlan = {
-  createPlanSession, computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel,
-};
+// `tmct.page` keeps the board layout and the PDDL/OWL-RDF formatting the
+// page's own script draws with, plus the wink seam the hanoi lesson needs
+// registered before its first teach. Note that `tmct.plan(...)` here is the
+// CAPABILITY planner, not the puzzle solver: a typed "solve it" is a
+// conversational turn like any other, so the page reaches the hanoi plan
+// through `tmct.turn("solve it", { maxDepth })` and reads `.plan` off it.
+//
+// `tmct.ask(q, { step })` answers over the projected BOARD rather than the
+// session's own (empty) code graph, so a question about the puzzle is grounded
+// in the position on screen. Passing `step` moves the board first, which is
+// how the page keeps the two in step while the transport scrubs.
+publishTmctSurface({
+  open: createPlanSession,
+  ask: (request, options, session) => {
+    if (options?.step != null) session.showBoard({ step: options.step });
+    return graphAsk(request, options, { graph: session.boardGraph, memoryDir: session.memoryDir });
+  },
+  plan: enginePlan,
+  page: { computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel },
+});

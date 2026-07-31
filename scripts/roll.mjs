@@ -9,8 +9,9 @@
 //
 // It bumps package.json (and the lockfile) with NO git tag and NO commit — the
 // caller commits — then regenerates the artifacts a release must not ship stale:
-// the three version-stamped ones (the agentbench envelope, the home-page footer,
-// and the screenshot manifest's tmctVersion field) AND the browser ask bundle.
+// the four version-stamped ones (the agentbench envelope, the infbench envelope,
+// the home-page footer, and the screenshot manifest's tmctVersion field) AND the
+// browser ask bundle.
 // The bundle is code-derived, not version-stamped, so a version-only roll leaves
 // its bytes unchanged — but it is force-rebuilt here anyway because a comment
 // change anywhere in its wide import closure drifts it, and `npm publish` packs
@@ -47,7 +48,8 @@ const version = versionNow();
 console.log(`\nrolled to ${version} — regenerating version-stamped artifacts\n`);
 
 // 2) regenerate the release artifacts
-run("node", ["agentbench/generate-envelope.mjs"]); // agentbench/envelope.json (version-stamped)
+run("node", ["test-benchmarks/agentbench/generate-envelope.mjs"]); // test-benchmarks/agentbench/envelope.json (version-stamped)
+run("node", ["test-benchmarks/infbench/generate-envelope.mjs"]); // test-benchmarks/infbench/envelope.json (version-stamped)
 run("npm", ["run", "demo:build"]); // public/index.html footer stamp (version-stamped)
 run("npm", ["run", "build:ask-bundle"]); // force the packaged ask bundle fresh from its closure
 run("npm", ["run", "gen:screenshots"]); // public/screenshots/manifest.json's tmctVersion stamp

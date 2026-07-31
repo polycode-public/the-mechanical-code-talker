@@ -1,0 +1,65 @@
+# mother-facing-half-left-moving — mother-facing-half-left.toml's
+# three-quarter turn caught mid-stride, using the same arm/torso stride
+# king-facing-left-moving.toml draws (the body figure doesn't change shape
+# between the full and half profile, only the head turns further). The two
+# raised stroke-arms cradling the bundle, and the bundle itself, hold their
+# rest position.
+classes = ["mother"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="mother-facing-half-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M15.6 5.4 C17 7 17.2 9.6 16 12.6" fill="none" stroke="url(#mother-facing-half-left-moving-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M8.4 5.4 C7 7 6.8 9.6 8 12.6" fill="none" stroke="url(#mother-facing-half-left-moving-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <g fill="url(#mother-facing-half-left-moving-fill)">
+    <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+    <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+    <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <circle cx="11.7" cy="6.6" r="3.3" fill="url(#mother-facing-half-left-moving-fill)"/>
+  <path d="M8.6 6.1 Q7.9 7.4 8.6 8.1 Z" fill="url(#mother-facing-half-left-moving-fill)"/>
+  <ellipse cx="10" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <ellipse cx="14" cy="6.05" rx="0.18" ry="0.22" fill="#1c1c1c"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9.3 4.2 C10.0 3.6 10.8 3.4 11.7 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  <path d="M5.4 15.3 C4.3 15.5 3.7 16.3 3.9 17.4 C4 18.3 4.8 18.9 5.8 18.7 C6.7 18.5 7.1 17.6 6.9 16.7 C6.7 15.8 6.1 15.2 5.4 15.3 Z" fill="#e4cfa0"/>
+  <path d="M6.4 16.4 C5.7 16.7 5 16.7 4.4 16.3" fill="none" stroke="#b89860" stroke-width="0.25" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="5.3" cy="15.9" r="0.22" fill="#8a6a3a"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 11.08
+cy = 6.51
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

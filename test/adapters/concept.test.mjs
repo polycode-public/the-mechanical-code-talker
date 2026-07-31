@@ -282,6 +282,73 @@ test("composeRelation: declines (null) for an unknown relation or no definition;
   assert.ok(composeRelation(importsOnly, "imports", { definition: IMPORTS_DEF }), "the present kind still composes");
 });
 
+// ---- the provider-declared relation kinds (serves/denotes). tmct's own indexer
+// emits neither, so they reach the relation force only through a graph supplied
+// over the provider seam — and land on the zero-edge degrade everywhere else. ----
+
+const SERVES_DEF = "A service edge is one part of the codebase providing or backing another, such as a handler serving a route.";
+const DENOTES_DEF = "A denotation is a vocabulary term naming a code entity, linking the word to the thing it refers to.";
+
+/** A graph in the shape a provider supplies: one mgx:serves and one mgx:denotes edge. */
+function providerGraph() {
+  return parseEntities({
+    individuals: [
+      { id: "mod:src/handlers/tasks.mjs", label: "src/handlers/tasks.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "mod:src/routes/api.mjs", label: "src/routes/api.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "lex:task", label: "task", class: "LexiconTerm", derived_from: [], mentions: [], attributes: [] },
+    ],
+    objectProperties: [
+      { predicate: "serves", prop: "mgx:serves", count: 1, examples: [
+        { subject: "mod:src/handlers/tasks.mjs", object: "mod:src/routes/api.mjs",
+          subjectLabel: "src/handlers/tasks.mjs", objectLabel: "src/routes/api.mjs" }] },
+      { predicate: "denotes", prop: "mgx:denotes", count: 1, examples: [
+        { subject: "lex:task", object: "mod:src/handlers/tasks.mjs",
+          subjectLabel: "task", objectLabel: "src/handlers/tasks.mjs" }] },
+    ],
+  });
+}
+
+test("composeRelation: a vague touch on 'serves' composes three bands over a provider-supplied graph", () => {
+  const c = composeRelation(providerGraph(), "serves", { definition: SERVES_DEF });
+  assert.ok(c, "a provider-declared relation with edges composes");
+  assert.equal(c.definition, SERVES_DEF);
+  assert.equal(c.examples,
+    "In this codebase, for example: src/handlers/tasks.mjs serves src/routes/api.mjs (1 service edge).");
+  assert.deepEqual(c.followupQueries,
+    ["what does src/handlers/tasks.mjs serve", "what serves src/routes/api.mjs"]);
+  assert.equal(c.noun, "service edge");
+});
+
+test("composeRelation: a vague touch on 'denotes' reads the naming edge from both ends", () => {
+  const c = composeRelation(providerGraph(), "denotes", { definition: DENOTES_DEF });
+  assert.ok(c);
+  assert.equal(c.examples,
+    "In this codebase, for example: task denotes src/handlers/tasks.mjs (1 denotation edge).");
+  assert.deepEqual(c.followupQueries,
+    ["what does task denote", "what denotes src/handlers/tasks.mjs"]);
+});
+
+test("composeRelation: every serves/denotes follow-up resolves against the graph that seeded it", () => {
+  const graph = providerGraph();
+  for (const [term, definition] of [["serves", SERVES_DEF], ["denotes", DENOTES_DEF]]) {
+    for (const q of composeRelation(graph, term, { definition }).followupQueries) {
+      const r = ask(graph, q);
+      assert.equal(r.tmct_ask.miss, false, `follow-up "${q}" must not miss`);
+      assert.ok((r.tmct_ask.matches || []).length > 0, `follow-up "${q}" must return results`);
+    }
+  }
+});
+
+test("composeRelation: serves/denotes gerunds collapse to the same kind, and a graph without those edges degrades honestly", async () => {
+  assert.equal(RELATION_TERM.serving, "serves");
+  assert.equal(RELATION_TERM.denoting, "denotes");
+  const indexerGraph = await fixtureGraph();
+  const degraded = composeRelation(indexerGraph, "serving", { definition: SERVES_DEF });
+  assert.ok(degraded, "a graph tmct's own indexer built still composes, never null");
+  assert.equal(degraded.empty, true);
+  assert.equal(degraded.examples, "This codebase has no service edges in the index.");
+});
+
 test("trigger discipline: a specific-entity 'what is Widget' and an unknown concept are not hijacked", async () => {
   const dir = await repoWithFixture();
   try {

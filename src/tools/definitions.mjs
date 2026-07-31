@@ -20,11 +20,18 @@
 // restated here, so a verb the parser learns is a verb the documentation gains.
 
 import { RELATIONS, WHERE_MARKERS } from "../domain/ask-vocab.mjs";
+import { EXPRESSION_PALETTE } from "../domain/sprite-expressions.mjs";
 
 /** The relation kinds tmct_ask traverses, each with the opening verbs a question can
  *  use for it. Read from the parser's RELATIONS table — never a hand-kept copy. */
 export const askLexicon = () =>
   Object.entries(RELATIONS).map(([kind, { verbs }]) => ({ kind, verbs: verbs.slice(0, 4) }));
+
+/** The expression words tmct_sprite's schema offers. Read from the face-fragment
+ *  palette sprite-expressions.mjs already ships — the same derivation askLexicon
+ *  does for the ask verbs, so an expression the palette gains is an expression
+ *  the schema gains. */
+export const spriteExpressionEnum = () => Object.keys(EXPRESSION_PALETTE).sort();
 
 const symbolArg = (description) => ({
   type: "object",
@@ -192,6 +199,29 @@ export const TOOL_DEFINITIONS = Object.freeze([
       },
     },
     example: { term: "sofa" },
+  },
+  {
+    name: "tmct_sprite",
+    tier: "cold",
+    summary:
+      "The sprite markup for a class, resolved up the taught rdfs:subClassOf chain — with the expression and size asked for, and the ancestor chain the resolver walked to find it.",
+    inputSchema: {
+      type: "object",
+      required: ["class"],
+      properties: {
+        class: { type: "string", description: "The class to draw, e.g. spider. Resolved through the memory graph's own rdfs:subClassOf taxonomy." },
+        expression: {
+          type: "string",
+          enum: spriteExpressionEnum(),
+          description: "The face the sprite wears, as an mgx:feels value. A class whose template takes no expression parameter misses rather than dropping it.",
+        },
+        size: {
+          type: "string",
+          description: "A taught size property word (mgx:hasProperty), resolved to a numeric render SCALE — the size of the thing drawn, not a choice of template tier.",
+        },
+      },
+    },
+    example: { class: "spider", expression: "happy", size: "large" },
   },
   {
     name: "tmct_architecture",

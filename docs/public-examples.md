@@ -23,24 +23,26 @@ repo open. A reader who just wants to use tmct reads `README.md`.
 
 Every fence carries a harness tag, and `test/readme/readme.test.mjs` asserts that
 (an untagged fence fails the suite). `attrs.e2e` blocks run from
-`e2e/readme-examples.test.mjs`; `skip=` blocks never run.
+`test-e2e/readme-examples.test.mjs`; `skip=` blocks never run.
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `README.md:27` | `js` — packaged exports smoke | `runChat` | `test/readme/readme.test.mjs` | replay |
 | `README.md:59` | `node examples/teach-and-infer.mjs` | `runChat`, `appendFact` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| `README.md:137` | `node examples/rover-infer.mjs` | `runChat`, first-run corpus bootstrap (`seedBootstrapMemory`) | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| `README.md:153` | `node examples/raw-fact-shape.mjs` | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
 | `README.md:109` | `what does app.mjs talk to?` / `what talks to store.mjs?` | `runTurn` → `reverse(uses)` | `test/readme/readme.test.mjs` | replay |
-| `README.md:130` | `npm run demo:build` / `build:ask-bundle` | `scripts/build-demo-site.mjs` | `e2e/readme-examples.test.mjs` | replay |
-| `README.md:137` | `npx tmct viz` / `init` / `import` / `chat --render blocks` | `renderLedger`, `renderPlanHtml` | `e2e/readme-examples.test.mjs` | replay |
+| `README.md:130` | `npm run demo:build` / `build:ask-bundle` | `scripts/build-demo-site.mjs` | `test-e2e/readme-examples.test.mjs` | replay |
+| `README.md:137` | `npx tmct viz` / `init` / `import` / `chat --render blocks` | `renderLedger`, `renderPlanHtml` | `test-e2e/readme-examples.test.mjs` | replay |
 | `README.md:234` | session — taught-fact recall | `runTurn` | `test/readme/readme.test.mjs` | replay |
 | `README.md:243` | `js` — library call | `runChat` | `test/readme/readme.test.mjs` | replay |
 | `README.md:271` | session — 23 pinned lines | `runTurn` | `test/readme/readme.test.mjs` | replay |
 | `README.md:308` | session — 3 pinned lines, 1 elided | `runTurn` | `test/readme/readme.test.mjs` | replay |
-| `README.md:339` | hanoi-3 solve, 10 pinned lines | `compileDomain`, `compileGoal`, `movesFromRules` | `e2e/readme-examples.test.mjs` | replay |
+| `README.md:339` | hanoi-3 solve, 10 pinned lines | `compileDomain`, `compileGoal`, `movesFromRules` | `test-e2e/readme-examples.test.mjs` | replay |
 | `README.md:404`, `:426`, `:803`, `:898`, `:934`, `:973` | `bash` — CLI invocations | `bin/tmct.mjs`, `CLI_VERBS` | `test/readme/readme.test.mjs` | replay |
 | `README.md:431` | `output` — full stdout, no elision | `bin/tmct.mjs`, `CLI_VERBS` | `test/readme/readme.test.mjs` | output |
 | `README.md:499`–`:678` | 13 `output:help:*` excerpts | `renderUsage`, `CLI_VERBS` | `test/readme/readme.test.mjs` (verbatim in live `--help`) | replay |
-| `README.md:634`, `:688` | `bash e2e` | `bin/tmct.mjs`, `CLI_VERBS` | `e2e/readme-examples.test.mjs` | replay |
+| `README.md:634`, `:688` | `bash e2e` | `bin/tmct.mjs`, `CLI_VERBS` | `test-e2e/readme-examples.test.mjs` | replay |
 | `README.md:706` | `tmct.toml` reference | `loadTomlConfig` | `test/readme/readme.test.mjs` | replay |
 | `README.md:811`, `:823` | `text` — illustrative | — | never run, by tag | — |
 | `README.md:834`, `:846` | `js` — library snippets | `runChat` | `test/readme/readme.test.mjs` | replay |
@@ -51,21 +53,22 @@ Every fence carries a harness tag, and `test/readme/readme.test.mjs` asserts tha
 ## public/index.html
 
 The page's transcripts opt in with `data-tmct-session`, and
-`e2e/pages-examples.test.mjs` replays each against the live CLI through the same
+`test-e2e/pages-examples.test.mjs` replays each against the live CLI through the same
 harness the README fences use.
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `index.html:227` | `what is a dog` / `what is a quokka` | `runTurn`, corpus seed | `e2e/pages-examples.test.mjs` | replay |
-| `index.html:290` | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `e2e/pages-examples.test.mjs` | replay |
-| `index.html:287` | `npm install -g @polycode-projects/…` | — | `e2e/pages-home.test.mjs` | dom |
-| `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `e2e/pages-home.test.mjs` | dom |
-| `demo-ui.mjs` `HISTORY` | the 5 scripted turns the demo box types out | `runTurn`, `ask` | `e2e/pages-demo-history.test.mjs` (each answer verbatim) | replay |
-| `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
+| `index.html:227` | `what is a dog` / `what is a quokka` | `runTurn`, corpus seed | `test-e2e/pages-examples.test.mjs` | replay |
+| `index.html:734` | `Rover is a dog.` / `Does Rover bark?` (via `examples/rover-infer.mjs`) | `runChat`, first-run corpus bootstrap | `test-e2e/pages-examples.test.mjs` | replay |
+| `index.html:290` | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `test-e2e/pages-examples.test.mjs` | replay |
+| `index.html:287` | `npm install -g @polycode-projects/…` | — | `test-e2e/pages-home.test.mjs` | dom |
+| `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `test-e2e/pages-home.test.mjs` | dom |
+| `demo-ui.mjs` `HISTORY` | the 5 scripted turns the demo box types out | `runTurn`, `ask` | `test-e2e/pages-demo-history.test.mjs` (each answer verbatim) | replay |
+| `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `test-e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
 | `index.html:311` | `runChat` library block | `runChat` | `test/tools/chat-library-block.test.mjs` (runs the block, asserts the answer) | tool |
-| ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `e2e/pages-home.test.mjs`, `e2e/pages-index.test.mjs` | dom |
-| plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
-| version stamp | `<span id="pkg-version">` | `scripts/build-demo-site.mjs` | `e2e/pages-home.test.mjs`, `test/estate/page-version-stamp.test.mjs` | estate |
+| ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `test-e2e/pages-home.test.mjs`, `test-e2e/pages-index.test.mjs` | dom |
+| plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `test-e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
+| version stamp | `<span id="pkg-version">` | `scripts/build-demo-site.mjs` | `test-e2e/pages-home.test.mjs`, `test/estate/page-version-stamp.test.mjs` | estate |
 
 The `runChat` block is pinned at the tool layer:
 `test/tools/chat-library-block.test.mjs` runs the same call in-process and
@@ -111,12 +114,12 @@ Counts were checked against the files for this table and all match. The row
 counts are not asserted as numbers, so a regrow that forgets the README drifts
 silently.
 
-## chatbench/
+## test-benchmarks/chatbench/
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
-| `chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
+| `test-benchmarks/chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
+| `test-benchmarks/chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 
 Both figures were counted off the pools for this table and both match.
 
@@ -125,10 +128,17 @@ Both figures were counted off the pools for this table and both match.
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `examples/teach-and-infer.mjs` | the whole script | `runChat` | `test/readme/readme.test.mjs` via `README.md:59` | output |
+| `examples/rover-infer.mjs` | the whole script | `runChat`, first-run corpus bootstrap | `test/readme/readme.test.mjs` via `README.md:137`, `test-e2e/pages-examples.test.mjs` via `index.html:734` | output |
+| `examples/raw-fact-shape.mjs` | the whole script | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` via `README.md:153` | output |
 | `examples/mini-webapp` | the fixture graph | `parseEntities` | `test/estate/fixture-repos.test.mjs` | estate |
 
-`teach-and-infer.mjs` carries no `assert` of its own. It does not need one: the
-README pins its **entire** stdout with no elision, so any drift fails the suite.
+`teach-and-infer.mjs`, `rover-infer.mjs`, and `raw-fact-shape.mjs` carry no
+`assert` of their own. They do not need one: the README pins each one's
+**entire** stdout with no elision (session-id/timestamp normalized to a
+literal placeholder first), so any drift fails the suite. `rover-infer.mjs`
+is also replayed as `index.html:734`'s `data-tmct-session` command — pointing
+that block at the example script itself, rather than the raw `tmct` binary,
+is what makes the same non-deterministic citation checkable there too.
 
 ## .tmct/TOOLS.md
 

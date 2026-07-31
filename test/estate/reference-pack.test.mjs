@@ -89,11 +89,11 @@ test("sentencesUpTo keeps whole sentences under the cap; isaOf needs the pattern
     "animal",
     "the copula must sit in the first sentence — a later sentence never supplies the category",
   );
-  assert.equal(isaOf("A beagle is a small kind of dog.", lexicon), "dog", "an of-chain resolves to its final noun");
+  assert.equal(isaOf("A beagle is a small kind of dog.", lexicon), "dog", "an of-chain reads through a classifier head");
   assert.equal(isaOf("A harbor is a place where ships shelter.", lexicon), "place", "a relative clause ends the phrase");
   assert.equal(isaOf("An otter is a member of the weasel family.", lexicon), null, "a generic classifier head is no isa");
   assert.equal(isaOf("The sun is light and warm.", lexicon), null, "a bare predicate head must be an inflected plural");
-  assert.equal(isaOf("Falcons are birds of prey.", lexicon), null, "the of-chain head 'prey' is not a folded plural");
+  assert.equal(isaOf("Falcons are birds of prey.", lexicon), "bird", "a content head before 'of' keeps the outer class");
 });
 
 // ---- the pipeline end-to-end over the dump fixture --------------------------

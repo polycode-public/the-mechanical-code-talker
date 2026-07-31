@@ -17,6 +17,30 @@ Teach it a fact in plain English and it mints a node. Ask it a question and
 it answers from what it was seeded with, what you taught it, and what it can
 derive by rule from both. Every answer is either grounded or an honest miss.
 
+## Repository layout
+
+| directory | contains |
+|---|---|
+| `bin/` | the CLI entrypoint (`tmct.mjs`) |
+| `src/` | the shipped product: `domain/` (pure logic), `adapters/` (I/O, storage, providers), `services/` (chat, adventure, research, ledger, plan), `surfaces/` (CLI, HTTP, TUI, web), `index/` (repo indexing) |
+| `corpus/` | committed corpus and template data (ConceptNet, WordNet, NameNet, the generated persona vocab) |
+| `data/` | seed data assets: sprites, phrasebook, games, response templates |
+| `ontology/` | the software ontology (`tmct-core.ttl`) and memory shapes, in Turtle |
+| `scripts/` | build, check, and maintenance scripts (`npm run` targets live here) |
+| `examples/` | runnable example scripts and fixture repos used by the README's own examples and the test suite |
+| `demo/` | standalone demo scripts (e.g. the agentic-loop demo) |
+| `electron/` | the Electron desktop app wrapper |
+| `docs/` | reference docs: the adapter/repository-interface contracts, bibliography |
+| `test/` | the unit, corpus, and estate-guard test suite (`npm test`) |
+| `test-e2e/` | the end-to-end suite: real CLI/TUI spawns and Playwright browser journeys (`npm run test:e2e`) |
+| `test-benchmarks/` | the benchmark harnesses (agentbench, chatbench, idxbench, infbench, ingestbench, researchbench, synthbench) and their shared `benchlib/` |
+| `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
+| `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
+| `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
+| `public/` | the built demo site — a gitignored output of `npm run demo:build`, never hand-edited |
+
+`node_modules/` (dependencies) and dotfiles/hidden tooling directories are omitted above.
+
 ## Teach it, then ask it to reason
 
 This is real, runnable output. No cherry-picking, no model anywhere in the
@@ -106,6 +130,181 @@ and never run: one would touch the network, the other needs an LLM judge.
 `docs/public-examples.md` maps every example on every public surface to the
 test that holds it.
 
+Facts don't have to come entirely from teaching. tmct's corpus already knows
+a dog can bark; teach it that Rover is a dog and it reasons the rest, citing
+both the taught fact and the corpus fact the answer chained through:
+
+```output cmd="node examples/rover-infer.mjs" cwd=repo
+tmct> Rover is a dog.
+noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+
+Goal (inferred): Teach/remember a new fact.
+
+Canonical: rover rdfs:subClassOf dog — fact("rover", "rdfs:subClassOf", "dog")
+
+tmct> Does Rover bark?
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:<session-id>@<timestamp>)
+```
+
+Every fact above is a small stored record, not just words in an answer. Here
+are two of them exactly as they sit in the graph — `dog capableOf bark` and
+`dog subClassOf animal` — timestamps normalized so this stays reproducible:
+
+```output cmd="node examples/raw-fact-shape.mjs" cwd=repo
+{
+  "id": "fact:d5327019d311a956@src:corpus:human",
+  "label": "dog mgx:capableOf bark",
+  "class": "Fact",
+  "derived_from": [],
+  "mentions": [],
+  "attributes": [
+    {
+      "prop": "rdf:type",
+      "key": "type",
+      "value": "rdf:Statement"
+    },
+    {
+      "prop": "rdf:subject",
+      "key": "subject",
+      "value": "dog"
+    },
+    {
+      "prop": "rdf:predicate",
+      "key": "predicate",
+      "value": "mgx:capableOf"
+    },
+    {
+      "prop": "rdf:object",
+      "key": "object",
+      "value": "bark"
+    },
+    {
+      "prop": "mgx:createdAt",
+      "key": "createdAt",
+      "value": "<timestamp>"
+    },
+    {
+      "prop": "mgx:sourceId",
+      "key": "sourceId",
+      "value": "src:corpus:human"
+    },
+    {
+      "prop": "mgx:factProvenance",
+      "key": "provenance",
+      "value": "corpus:human /r/CapableOf"
+    },
+    {
+      "prop": "mgx:hasProseTokens",
+      "key": "prose_tokens",
+      "value": "bark capableof dog mgx"
+    },
+    {
+      "prop": "mgx:trustScore",
+      "key": "trustScore",
+      "value": "0.7"
+    },
+    {
+      "prop": "mgx:trustInputs",
+      "key": "trustInputs",
+      "value": {
+        "sourceType": "corpus",
+        "sourceId": "src:corpus:human",
+        "createdAt": "<timestamp>"
+      }
+    },
+    {
+      "prop": "mgx:updatedAt",
+      "key": "updatedAt",
+      "value": "<timestamp>"
+    }
+  ]
+}
+
+{
+  "id": "fact:08d02295fc0fed1c@src:corpus:human",
+  "label": "dog rdfs:subClassOf animal",
+  "class": "Fact",
+  "derived_from": [],
+  "mentions": [],
+  "attributes": [
+    {
+      "prop": "rdf:type",
+      "key": "type",
+      "value": "rdf:Statement"
+    },
+    {
+      "prop": "rdf:subject",
+      "key": "subject",
+      "value": "dog"
+    },
+    {
+      "prop": "rdf:predicate",
+      "key": "predicate",
+      "value": "rdfs:subClassOf"
+    },
+    {
+      "prop": "rdf:object",
+      "key": "object",
+      "value": "animal"
+    },
+    {
+      "prop": "mgx:createdAt",
+      "key": "createdAt",
+      "value": "<timestamp>"
+    },
+    {
+      "prop": "mgx:sourceId",
+      "key": "sourceId",
+      "value": "src:corpus:human"
+    },
+    {
+      "prop": "mgx:factProvenance",
+      "key": "provenance",
+      "value": "corpus:human /r/IsA"
+    },
+    {
+      "prop": "mgx:hasProseTokens",
+      "key": "prose_tokens",
+      "value": "animal dog rdfs subclassof"
+    },
+    {
+      "prop": "mgx:trustScore",
+      "key": "trustScore",
+      "value": "0.7"
+    },
+    {
+      "prop": "mgx:trustInputs",
+      "key": "trustInputs",
+      "value": {
+        "sourceType": "corpus",
+        "sourceId": "src:corpus:human",
+        "createdAt": "<timestamp>"
+      }
+    },
+    {
+      "prop": "mgx:updatedAt",
+      "key": "updatedAt",
+      "value": "<timestamp>"
+    }
+  ]
+}
+```
+
+Every attribute value here is a plain string except `mgx:trustInputs`, which
+is `JSON.stringify`'d into its `value` field in the actual store (parsed back
+out above for readability) since the flat attribute list has nowhere else to
+put a nested object.
+
+The id says who asserted it: `fact:<triple-hash>@<source-id>`. One record is
+one source asserting one triple, so a fact two sources agree on is two
+records sharing the hash. The part before the `@` is the fact id you see in
+citations and premise lists, and it never changes. Each record's own
+`mgx:trustScore` is just that one source's prior, from its type and its own
+track record — never guessed. What the whole fact is worth, corroboration
+across sources and how recently each of them said it, is folded over those
+records when you read them, so it answers for today rather than for the day
+it was written.
+
 Point it at a codebase's graph and the same engine answers structural questions.
 `examples/mini-webapp` ships in this repo, so this runs as written:
 
@@ -118,20 +317,20 @@ src/handlers/tasks.mjs and src/handlers/users.mjs.
 tmct> /exit
 ```
 
-**[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
+**[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
 page answers codebase questions live, and eight more pages each ground their
-own domain: a full chat seeded with 32,646 facts (the same nine bands as
-`npm run init:xl`, capped to a 38.7 MB download, 2.1 MB on the wire), the
+own domain: a full chat seeded with 63,470 facts (the same nine bands as
+`npm run init:xl`), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
-terms inside), the **code explorer** (the same ledger UI refocused on a code
-graph, with a hint rail of suggested next questions), an **ingest page** that
-turns pasted or dropped text into grounded facts and downloads them as
-canonical JSONL, a Towers-of-Hanoi plan replayed move by move, the
-spider-and-fly and text-adventure games, and a sprite gallery whose chat dock
-answers from 1,033 generated sprite facts. The chat page and the ledger take
-the same paste-or-drop text in place; every page that holds a fact store
-exports it as JSONL.
+terms inside), and the **code explorer** (the same ledger UI refocused on a
+code graph, with a hint rail of suggested next questions). An **ingest
+page** turns pasted or dropped text into grounded facts and downloads them
+as canonical JSONL. The rest are a Towers-of-Hanoi plan replayed move by
+move, the spider-and-fly and text-adventure games, and a sprite gallery
+whose chat dock answers from 1,033 generated sprite facts. The chat page and
+the ledger take the same paste-or-drop text in place; every page that holds
+a fact store exports it as JSONL.
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
 and a service worker precaches the big ones, so a second visit works
 offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
@@ -168,13 +367,14 @@ The same ledger UI, refocused on a code graph, also runs as a desktop app. It
 reads a `graph.json` (or a repo's `.tmct/` folder), shows every import, call and
 `contains` edge as a plain sentence around a focus symbol, and docks a live chat
 over the same graph. A hint rail suggests the next question from what the graph
-actually holds — "what does X import", "which functions call Y", "list
-functions" — so every suggestion resolves to a real answer.
+actually holds: "what does X import", "which functions call Y", "list
+functions". Every suggestion resolves to a real answer.
 
-The identical page also runs as a plain hosted page, over the demo code
-graph — **[try it live →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/code.html)**
-— for a look with nothing to install. The desktop build below is for
-exploring your own repo or graph, which the hosted page cannot reach.
+The identical page also runs as a plain hosted page over the demo code
+graph, with nothing to install:
+**[try it live →](https://tmct.polycode.co.uk/code.html)**.
+The desktop build below is for exploring your own repo or graph, which the
+hosted page cannot reach.
 
 Electron is a dev-only dependency and never ships in the npm package. Because
 `.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime
@@ -188,8 +388,8 @@ npm run electron                        # open the code explorer on the demo gra
 ```
 
 Open a graph or a repo from the window's title bar to explore your own code.
-The UI is channel-agnostic — only the Electron shell (`electron/main.mjs` +
-`electron/preload.cjs`) is desktop-specific; the same page stays servable as a
+The UI is channel-agnostic. Only the Electron shell (`electron/main.mjs` +
+`electron/preload.cjs`) is desktop-specific. The same page stays servable as a
 plain web page. `npm run test:electron` runs the shell smoke via Playwright and
 skips cleanly when the binary is absent.
 
@@ -226,8 +426,8 @@ resolves to a real graph traversal or declines cleanly:
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
 
-The full catalog with measured coverage lives in `CAPABILITIES_2.7.12.md` and
-the `BENCHMARK_*.md` reports.
+The full catalog with measured coverage lives in the `reports/BENCHMARK_*.md`
+reports.
 
 **Response finishing.** Before an answer prints, it is segmented into typed
 spans: prose versus *protected* entities, paths, numbers, code, provenance,
@@ -310,7 +510,7 @@ planner over the same read-only graph-query tools chat/serve use
 step in order with a provable causal-link proof chain, and folds the results
 into one answer. A request neither the planner nor a single lookup can ground
 escalates to a closed-world goal-reasoner, which deduces maintenance goals
-(coverage gaps, change-coupling risk) straight from the graph — never from
+(coverage gaps, change-coupling risk) straight from the graph, never from
 keywords in your question. Anything none of that grounds is an honest "no plan
 found", the same "grounded or an honest miss" rule as everywhere else in tmct.
 
@@ -344,7 +544,7 @@ composed answer (4): src/handlers/base.mjs, src/handlers/users.mjs, src/server/a
 ```
 
 tmct planned two calls (`tmct_impact` then `tmct_untested`), ran both against the
-real graph, and intersected the results itself — you get the four modules that
+real graph, and intersected the results itself. You get the four modules that
 are both downstream of the change AND missing coverage, not two separate lists
 you'd have to cross-reference by hand.
 
@@ -361,7 +561,7 @@ composed answer (1): src/lib/http.mjs
 
 It deduced the goal ("an impactful module must be tested"), gathered every
 untested module, ranked each by blast radius, and named the one worth testing
-first — `src/lib/http.mjs`, the module with the widest reach.
+first: `src/lib/http.mjs`, the module with the widest reach.
 
 `--tools tmct_impact,tmct_untested` restricts which capabilities the planner is
 allowed to use; `--json` prints the full machine-readable loop result (calls,
@@ -372,9 +572,9 @@ flag reference.
 ## Teach it a game, then ask it to plan
 
 The planner above works over a fixed toolset. This one works over rules you
-teach. A game definition is a plain-text file of controlled English — the
+teach. A game definition is a plain-text file of controlled English: the
 classes, the pieces, the ordering, and the legal moves as taught action
-rules — with `#` comment lines carrying example prompts. `tmct init`
+rules, with `#` comment lines carrying example prompts. `tmct init`
 scaffolds one at `.tmct/imports/games/hanoi-3.txt`, and
 `tmct import --file` teaches it sentence by sentence, reporting every line
 and refusing (exit 1) if any sentence declines.
@@ -402,8 +602,8 @@ Goal (inferred): Plan a move sequence from the current state to the goal (7 move
 facts stamped with the step that produced them ("disk-1@step1 rests on peg-c",
 sourced to the plan). The final step re-reads the store and confirms the goal
 from those written facts, never assuming success. The stamp is what makes each
-step a separate record; a question about the piece itself ("where does disk-1
-rest?", "is disk-1 clear?") reads the current board — the latest step's facts,
+step a separate record. A question about the piece itself ("where does disk-1
+rest?", "is disk-1 clear?") reads the current board: the latest step's facts,
 not every step at once. The search is
 domain-general: the test
 suite teaches Towers of Hanoi purely as sentences for 1 to 8 disks and
@@ -417,17 +617,17 @@ the plan as a self-contained animated page (see "Two more surfaces" above).
 Three games run inside an ordinary chat session, no setup.
 
 **Guess the number.** Say `I'm thinking of a number between 1 and 100` and
-tmct guesses by narrowing an interval — answer `higher`, `lower`, or
+tmct guesses by narrowing an interval: answer `higher`, `lower`, or
 `correct`. It finds any number in at most 7 guesses, and if your answers
 contradict each other it names the contradicting pair and stops rather than
 guessing on. Say `think of a number` to swap seats: tmct commits to a secret
-and answers your guesses honestly, reveals on request, and corrects you from
-its own record if you claim it already said `correct`. The behaviour is
-pinned by `test/corpus/games/guess-number.jsonl`.
+and sticks to it. It answers your guesses, reveals the number on request, and
+corrects you from its own record if you claim it already said `correct`. The
+behaviour is pinned by `test/corpus/games/guess-number.jsonl`.
 
 **A text adventure.** Say `start the adventure` (or `play ashcombe hall`)
 and tmct loads a small country-house mystery from a lazily-fetched worlds
-pack (`corpus/worlds/`) into the session's ordinary memory graph — rooms,
+pack (`corpus/worlds/`) into the session's ordinary memory graph: rooms,
 objects and people become graph facts, and the verbs (`go`, `take`, `open`,
 `unlock`, `look`…) are taught action rules, not hard-wired code. Every move
 writes per-turn snapshot facts, `look` is an extractive digest of the graph,
@@ -436,30 +636,30 @@ schedule whether you are there to see it or not. The full worked mystery is
 pinned step by step in `test/corpus/games/adventure.jsonl`.
 
 **Two agents, planning against each other.** Say `play spider and fly` (or
-`watch the spider and the fly`) and tmct runs both sides itself — neither is
+`watch the spider and the fly`) and tmct runs both sides itself. Neither is
 player-controlled. A spider hunts a fly across a 10×10 web; each side only
 believes what it can currently see (`vision_radius`, tunable), a fly wanders
 when nothing threatens it and evades when something does, a spider avoids
 other spiders, chases what it believes it sees, and builds a web when it
 holds position. Mass is real: both sides waste away each turn they don't
 eat, and a spider gains exactly the mass of what it catches. You can address
-either side directly (`@spider the fly is east`) to feed it a belief — true
-or false — and watch a wrong assertion mislead it for as long as the real
+either side directly (`@spider the fly is east`) to feed it a belief, true
+or false, and watch a wrong assertion mislead it for as long as the real
 target stays out of sight. `tmct.toml`'s `[games.spider-fly]` table tunes
 every rate; the full mechanic is pinned in `test/corpus/games/spider-fly.jsonl`.
 
 ## Learning on a miss
 
-A question tmct cannot ground is still an honest miss — but on the cleanest
-kind of miss (a recognised word, a clean parse, simply no facts anywhere) it
+A question tmct cannot ground is still an honest miss. But on the cleanest
+kind of miss (a recognised word, a clean parse, simply no facts anywhere), it
 now consults two shipped, lazily-loaded packs before giving up:
 
-- `corpus/child/` — 93k everyday-world triples filtered from ConceptNet by a
+- `corpus/child/`: 93k everyday-world triples filtered from ConceptNet by a
   child-concept seed. Asked `what is a kettle` cold, tmct loads the term's
   triples into memory (provenance `child:conceptnet:kettle`, ranked below
   anything you teach) and answers from them; the next ask answers from
   memory directly.
-- `corpus/reference/` — 3,887 Simple English Wikipedia summaries. When the
+- `corpus/reference/`: 3,887 Simple English Wikipedia summaries. When the
   triples cannot answer, a matching article answers as a cited read-out
   (`source: reference article "Otter"…, CC BY-SA 4.0`).
 
@@ -495,7 +695,7 @@ by cleaned session logs:
   relevance rather than loaded wholesale.
 
 Every session also writes its own human-readable transcript,
-`.tmct/session-<id>.md` — a glow-friendly Markdown file with one heading per
+`.tmct/session-<id>.md`, a glow-friendly Markdown file with one heading per
 turn, the question as a blockquote, the reply in a fenced block. The
 browser chat page's "export .md" button writes the same shape.
 
@@ -538,7 +738,7 @@ Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo really eats ribs", and it mints a fact you can
 ask about directly: "what does margo eat". New vocabulary compounds as you
 teach: "redis is a cache" mints "redis" even though it was never in the
-built-in lexicon, as long as one side of the sentence is already grounded —
+built-in lexicon, as long as one side of the sentence is already grounded.
 tmct never mints a fact between two totally ungrounded terms; it declines and
 nudges you to ground one side first. Quantified teaching stores the
 quantifier ("some functions are risky" … "how many functions are risky" →
@@ -553,13 +753,13 @@ rather than the code graph. A taught class answers both shapes too: after
 
 When you ask about a term, the read-back shows each "is a kind of" object with
 its own superclass chain: "what is rover" answers "rover is a kind of dog →
-canine → mammal → animal". If one label carries two unrelated senses — you
-taught "rover is a dog" and a corpus row says "rover is a scout" — the answer
+canine → mammal → animal". If one label carries two unrelated senses (you
+taught "rover is a dog" and a corpus row says "rover is a scout"), the answer
 groups by concept ("rover, the dog:" / "rover, the scout:") instead of listing
 two unrelated lines as if they were one thing. The split is deterministic over
 the stored hierarchy: two senses part when a stored disjointness separates
 their ancestors, when their chains never meet, or when they meet only at the
-very top. When the evidence is thin the answer stays a flat list — grouping is
+very top. When the evidence is thin the answer stays a flat list. Grouping is
 presentation, and it never retracts or reranks a fact.
 
 Teaching doesn't have to be typed, either. `tmct extract` runs a plain text
@@ -586,14 +786,14 @@ carries an `extracted:<file>` provenance tag at its own trust tier.
 recognizer skips: a copula or a known relation verb flanked by two nouns
 becomes a candidate triple, stored under its own `optimistic-extract:<file>`
 provenance (prior 0.35, below every curated pack) with no operator tag riding
-alongside — so a fuzzy guess can never corroborate a curated fact. It is an
+alongside, so a fuzzy guess can never corroborate a curated fact. It is an
 attempt, not full NLU: a sentence with no clean pair yields nothing.
 `--canonical` prints each grounded fact as a triple, noting how each endpoint
 already links into the store.
 
 The same pipeline is one library seam, `ingestText(text, options)` (exported
 as `@polycode-projects/the-mechanical-code-talker/ingest`), and one cold tool,
-`tmct_ingest` — so a browser page, a script, or a tool-calling agent can ground
+`tmct_ingest`. A browser page, a script, or a tool-calling agent can ground
 text without the CLI.
 
 ### Provenance and trust
@@ -754,7 +954,7 @@ already set up. Its `--graph` flag works differently from the others: it appends
 ```
 
 `tmct extract` is the document route into memory described under "Teach it"
-above — the same teach recognizer, reading a file instead of your typing:
+above: the same teach recognizer, reading a file instead of your typing:
 
 ```output:help:extract
   tmct extract <text-file>     read a plain text file's sentences through the chat's own
@@ -787,7 +987,7 @@ inference" above:
                                retractable entailed facts (never on the chat path)
 ```
 
-`tmct viz` renders the memory graph as the ledger explorer — a single,
+`tmct viz` renders the memory graph as the ledger explorer, a single,
 self-contained HTML file you can open in a browser:
 
 ```output:help:viz
@@ -799,6 +999,17 @@ self-contained HTML file you can open in a browser:
        [--config <path>]       --term <word> override it); --output defaults to
                                ledger.html in the cwd; --limit caps the embedded fact
                                rows; --term resolves via the same normalization chat uses.
+```
+
+`tmct digest <term>` turns what the graph knows about one term into a short, readable
+paragraph — the vocabulary-side sibling of `tmct cli digest`'s code map. The narrative
+leads, its sources follow, and the full fact count points at the ledger for the rest:
+
+```output:help:digest
+  tmct digest <term>           a readable digest of what the graph knows about one term:
+       [--repo <abs>]          a bounded narrative first (selected, sense-filtered,
+       [--graph <path>]        deduped), then its sources and the stored-fact count.
+       [--config <path>]       The vocabulary-side sibling of `cli digest`'s code map.
 ```
 
 `tmct serve` runs an Anthropic Messages API-compatible HTTP endpoint over the graph,
@@ -861,13 +1072,19 @@ once with `tmct init --memory-backend <...>` and every later `tmct chat` in that
 repo picks it up with no flag needed.
 ```
 
-`npm run init:large` in `package.json` chains one `init` and five `import --corpus`
+`npm run init` in `package.json` chains one `init` and five `import --corpus`
 calls to combine every shipped bundle (human persona + seon + conceptnet +
-aws/python/java) into ~7,380 facts on the default sqlite backend, a working
-example to copy from. `init:xl` starts from the large persona tier and adds
-the wordnet-xl corpus (~72,000 facts); `init:xxl` swaps wordnet-xl for the
-full WordNet slice plus namenet (~239,000 facts, the biggest committed
-vocabulary — expect its imports to take a minute). The xl chain, spelled out:
+aws/python/java) into ~37,800 facts on the default sqlite backend, a working
+example to copy from (`init:large` is now just an alias for it). `npm run
+init:small` is the lighter variant: a bare `tmct init`, default persona only,
+no big corpora, 688 facts. It's what a first `npm run chat` in an
+uninitialized repo bootstraps automatically, so no init command is required
+just to start talking; running `init:small` explicitly (after `rm -rf
+tmct.toml .tmct`) gets you back to that same minimal state on purpose.
+`init:xl` starts from the large persona tier and adds the wordnet-xl corpus
+(~72,000 facts); `init:xxl` swaps wordnet-xl for the full WordNet slice plus
+namenet (~239,000 facts, the biggest committed vocabulary, so expect its
+imports to take a minute). The xl chain, spelled out:
 
 ```bash e2e heavy
 npx tmct init --persona-size large   # npm run init:xl runs this whole chain from a clone
@@ -1064,7 +1281,7 @@ loads a repo's graph into a `{ dispatch, resolve, graph }` context,
 
 ## The tool surface
 
-Everything above runs on the same 25 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
+Everything above runs on the same 26 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
 
 Three of them are **hot**: their schemas stay resident, so an agent driving tmct sees them every turn and reaches for one call instead of a Read/Grep loop.
 
@@ -1099,6 +1316,8 @@ The `<where-marker>` slot takes any of *defined*, *declared*, *located*, *implem
 - **touches** — *touched*, *touches*, *changed*, *change*, and more
 - **cochange** — *changed with*, *co-changes with*, *co-change with*, *changes alongside*, and more
 - **reexports** — *exports*, *export*, *re-exports*, *re-export*, and more
+- **serves** — *serves*, *serve*, *serving*, and more
+- **denotes** — *denotes*, *denote*, *denoting*, and more
 
 Every question in that table runs against the example graph:
 
@@ -1123,6 +1342,7 @@ The remaining tools are **cold**: still served, but not billed to an agent every
 | `tmct_members` | A class's methods + attributes (file:line, decorators) in one slice. | `class` (required) |
 | `tmct_subclasses` | A class's base classes plus the transitive set of classes that extend it. | `class` (required) |
 | `tmct_related` | A term's synonyms (skos:altLabel) and related concepts (skos:related), from the memory graph's relation facts. | `term` (required) |
+| `tmct_sprite` | The sprite markup for a class, resolved up the taught rdfs:subClassOf chain — with the expression and size asked for, and the ancestor chain the resolver walked to find it. | `class` (required), `expression`, `size` |
 | `tmct_architecture` | Package/module map + the most-imported hub modules (optionally scoped to a package). | `package` |
 | `tmct_exports` | A module's public __all__ surface, each name resolved to the module that defines it. | `module` (required) |
 | `tmct_tests_for` | The test modules covering a symbol or module, from the typed test edges. | `symbol` (required) |
@@ -1167,18 +1387,20 @@ service. The LLM agent stays outside tmct, as the no-LLM ethos requires.
 
 ## Measuring it
 
-What the 2.7.11/2.7.12 cycle measured, on 2026-07-19. Each figure links to its
-method and carries, in the same row, the caveat that changes what it means.
-The full tables, judge scores, and transcripts are in the linked write-ups.
+**For the latest measured numbers, see `STATUS.md`** — a one-page summary of the most
+recent full sweep, citing its source reports by name. What follows here is what the 2.7.11/2.7.12
+cycle measured, on 2026-07-19, kept for its own detail. Each figure links to its method and
+carries, in the same row, the caveat that changes what it means. The full tables, judge scores,
+and transcripts are in the linked write-ups.
 
 | What it does | Result (2.7.12) | Read the number with this | Method |
 |---|---|---|---|
-| Multi-hop entailment | 379/379 chat cases and 100/100 kernel cases, 0% fabrication, all bands pass | The case set is unchanged from 2.6.0 (same templates, same counts) — the one real move this cycle is INF-4's ceiling-graded count dropping 35→30, five cases that now pass as genuine capability instead of against the declared honest-miss floor. | `BENCHMARK_INFERENCE_2.7.12.md` |
-| Tool-call planning | 68/68 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. 2.6.0 gated at TOOL-7 (62/66, 94%) — this cycle's router uplift (a guarded RECOVER step, a tied-candidate composer) cleared it, a real capability move, not a ruler change. | `BENCHMARK_AGENT_2.7.12.md` |
-| Groundedness | Every answer carries a source, and an empty graph reports itself empty. Judge-scored mean 1.809/2 over 138 cases, 5 hard fails, 136/138 tier-1. | Judged (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) at N=1. The judge prompt moved v1→v2 since 2.6.0, so this is a measurement, not a clean lever comparison against the prior cycle. The judge runs in the offline eval harness, never in the product. | `BENCHMARK_CEFR_ENGLISH_2.7.12.md` |
-| Abstention (the honest miss) | 0% fabrication across 479 inference rows (379 chat + 100 kernel) and 0% hallucination across 272 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `BENCHMARK_INFERENCE_2.7.12.md`, `BENCHMARK_AGENT_2.7.12.md` |
-| Determinism | Byte-identical on rerun — a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `BENCHMARK_INFERENCE_2.7.12.md` |
-| Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check — the single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `NEXT.md`). | `BENCHMARK_CONVERSATION_2.7.11.md` |
+| Multi-hop entailment | 379/379 chat cases and 100/100 kernel cases, 0% fabrication, all bands pass | The case set is unchanged from 2.6.0 (same templates, same counts). The one real move this cycle is INF-4's ceiling-graded count dropping 35→30: five cases that now pass as genuine capability instead of against the declared honest-miss floor. | `archive/BENCHMARK_INFERENCE_2.7.12.md` |
+| Tool-call planning | 68/68 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. 2.6.0 gated at TOOL-7 (62/66, 94%). This cycle's router uplift (a guarded RECOVER step, a tied-candidate composer) cleared it: a real capability move, not a ruler change. | `archive/BENCHMARK_AGENT_2.7.12.md` |
+| Groundedness | Every answer carries a source, and an empty graph reports itself empty. Judge-scored mean 1.809/2 over 138 cases, 5 hard fails, 136/138 tier-1. | Judged (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) at N=1. The judge prompt moved v1→v2 since 2.6.0, so this is a measurement, not a clean lever comparison against the prior cycle. The judge runs in the offline eval harness, never in the product. | `archive/BENCHMARK_CEFR_ENGLISH_2.7.12.md` |
+| Abstention (the honest miss) | 0% fabrication across 479 inference rows (379 chat + 100 kernel) and 0% hallucination across 272 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `archive/BENCHMARK_INFERENCE_2.7.12.md`, `archive/BENCHMARK_AGENT_2.7.12.md` |
+| Determinism | Byte-identical on rerun: a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `archive/BENCHMARK_INFERENCE_2.7.12.md` |
+| Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check. The single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `NEXT.md`). | `archive/BENCHMARK_CONVERSATION_2.7.11.md` |
 
 Three offline benchmark rigs live in a clone (they are not in the npm
 package). Each replays a committed case set through the real product and
@@ -1196,10 +1418,10 @@ The smallest real slice of each, the same invocations the test suite's
 bench-smoke lane replays:
 
 ```bash cwd=repo
-node chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
-node infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
-node infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
-node agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
+node test-benchmarks/chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
+node test-benchmarks/infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
+node test-benchmarks/infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
+node test-benchmarks/agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
 ```
 
 Grading beyond tier 1 uses an LLM as judge. The offline eval harness is the
@@ -1217,7 +1439,6 @@ hardened:
 - CI runs **SAST and secret detection**.
 - A nightly **`npm audit` + OSV-Scanner** job watches dependencies.
 - Releases are published with **npm provenance** (`--provenance`).
-- A coordinated-disclosure `SECURITY.md` policy covers reports.
 
 The content-address hash is single-sourced in `src/domain/hash.mjs`, so the
 cross-version-stable fact-id contract has exactly one definition.
@@ -1279,7 +1500,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 
 | source | edition | what tmct uses it for |
 |---|---|---|
-| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `chatbench/GRADED.md` are tmct's own prose. |
+| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `test-benchmarks/chatbench/GRADED.md` are tmct's own prose. |
 | Reiter, "On Closed World Data Bases" | *Logic and Data Bases*, Plenum, 1978, pp. 55–76 | Both halves of the honest miss. The planner's operator model is **closed-world**, which is what makes a plan checkable. The chat layer is **open-world**: it will not read "no matching rule" as "the answer is no". |
 | Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | Prior art for the goal. The literature calls a refusal **abstention**, or selective prediction, and Chow's reject option is its root. Those methods threshold a confidence score; tmct has none, and abstains because nothing matched — which is why the row above names the mechanism. |
 | Ji et al., "Survey of Hallucination in Natural Language Generation" | *ACM Computing Surveys* 55(12), 2023 | Groundedness, and what tmct is avoiding by having no model to hallucinate with. |

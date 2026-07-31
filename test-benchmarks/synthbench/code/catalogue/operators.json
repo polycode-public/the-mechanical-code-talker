@@ -1,0 +1,23 @@
+{
+  "note": "The taught operator catalogue for SYNTHBENCH-CODE, authored offline as reviewed static data (the Track 1 posture). The engine (synth.mjs) RUNS these; it never hardcodes an operator's behaviour. Append-only alongside the case set. Each operator declares the rungs it serves, the parameters it binds from a case goal, the preconditions the fixture must satisfy, and the edit template it applies. No fixture identifier appears here — a case's goal supplies the bindings.",
+  "operators": [
+    {
+      "id": "insert-observable-print",
+      "family": "planned-edit",
+      "rungs": ["SYN-0"],
+      "params": ["targetModule", "targetFunction", "token"],
+      "preconditions": ["target-module-parses", "target-function-defined", "target-function-has-block-body"],
+      "effect": "prepend a stdout emission of <token> to <targetFunction>'s block body",
+      "emit": "console.log(<token>);"
+    },
+    {
+      "id": "rename-entity",
+      "family": "planned-edit",
+      "rungs": ["SYN-3"],
+      "params": ["entityId", "newTitle"],
+      "preconditions": ["entity-defined", "no-name-collision", "target-module-parses"],
+      "effect": "retitle <entityId> to <newTitle>, rewriting its declaration and every call-site/import reference across its defining module and every importing module",
+      "emit": "retitle-entity"
+    }
+  ]
+}

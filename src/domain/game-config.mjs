@@ -27,6 +27,35 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     minHatchlingMass: 3,
     webDurationTurns: 10,
   }),
+  // The drains are what make a mud character mortal: every scripted turn
+  // charges one, and a character whose mass reaches zero starves and takes no
+  // more turns. They are sized against the demo page's own default run (400
+  // shared turns, so roughly 200 each for two animals) — an animal that never
+  // eats dies about two thirds of the way through, and one that forages does
+  // not. A drain that emptied a starting mass in twenty turns would end every
+  // run before it had shown anything.
+  mud: Object.freeze({
+    moleInitialMass: 8,
+    moleMassDecrementPerTurn: 0.06,
+    moleSpeed: 1,
+    moleDigReach: 1,
+    voleInitialMass: 6,
+    voleMassDecrementPerTurn: 0.05,
+    voleSpeed: 1,
+    voleDigReach: 1,
+    badgerInitialMass: 20,
+    badgerMassDecrementPerTurn: 0.08,
+    badgerSpeed: 2,
+    badgerDigReach: 2,
+    groundhogInitialMass: 12,
+    groundhogMassDecrementPerTurn: 0.06,
+    groundhogSpeed: 2,
+    groundhogDigReach: 2,
+    meerkatInitialMass: 9,
+    meerkatMassDecrementPerTurn: 0.05,
+    meerkatSpeed: 1,
+    meerkatDigReach: 1,
+  }),
   guessNumber: Object.freeze({
     defaultLo: 1,
     defaultHi: 100,
@@ -55,6 +84,29 @@ const SPIDER_FLY_KEY_MAP = Object.freeze({
   web_duration_turns: "webDurationTurns",
 });
 
+const MUD_KEY_MAP = Object.freeze({
+  mole_initial_mass: "moleInitialMass",
+  mole_mass_decrement_per_turn: "moleMassDecrementPerTurn",
+  mole_speed: "moleSpeed",
+  mole_dig_reach: "moleDigReach",
+  vole_initial_mass: "voleInitialMass",
+  vole_mass_decrement_per_turn: "voleMassDecrementPerTurn",
+  vole_speed: "voleSpeed",
+  vole_dig_reach: "voleDigReach",
+  badger_initial_mass: "badgerInitialMass",
+  badger_mass_decrement_per_turn: "badgerMassDecrementPerTurn",
+  badger_speed: "badgerSpeed",
+  badger_dig_reach: "badgerDigReach",
+  groundhog_initial_mass: "groundhogInitialMass",
+  groundhog_mass_decrement_per_turn: "groundhogMassDecrementPerTurn",
+  groundhog_speed: "groundhogSpeed",
+  groundhog_dig_reach: "groundhogDigReach",
+  meerkat_initial_mass: "meerkatInitialMass",
+  meerkat_mass_decrement_per_turn: "meerkatMassDecrementPerTurn",
+  meerkat_speed: "meerkatSpeed",
+  meerkat_dig_reach: "meerkatDigReach",
+});
+
 const GUESS_NUMBER_KEY_MAP = Object.freeze({
   default_lo: "defaultLo",
   default_hi: "defaultHi",
@@ -77,6 +129,31 @@ function mergeSection(defaults, raw, keyMap) {
   return out;
 }
 
+/** The species a mud character id names — "mole-1" -> "mole" — which is how
+ *  every per-species knob above is keyed. Pure. */
+export function mudSpeciesOf(characterId) {
+  return String(characterId).replace(/-\d+$/, "");
+}
+
+/** What one turn costs `characterId` in mass, from the resolved `mud` section.
+ *  Zero for a species the config carries no drain for: a knob nobody set is not
+ *  a reason to invent a number and starve something with it. Pure. */
+export function mudMassDrainPerTurn(mudConfig, characterId) {
+  const drain = mudConfig?.[`${mudSpeciesOf(characterId)}MassDecrementPerTurn`];
+  return Number.isFinite(drain) ? drain : 0;
+}
+
+/** The mass denominator a spider-and-fly class's HUD bar and sprite
+ *  expression both scale against — "how full" reads the same on either. `cls`
+ *  is "spider" or "fly"; any other class (an egg, or a class this world adds
+ *  later) has no denominator and gets null, never a guessed number. `config`
+ *  is the page's own `{ maxSpiderMass, maxFlyMass }` pair. Pure. */
+export function massScaleFor(cls, config) {
+  if (cls === "spider") return config?.maxSpiderMass ?? null;
+  if (cls === "fly") return config?.maxFlyMass ?? null;
+  return null;
+}
+
 /**
  * Fold a normalized tmct.toml's `games`/`planning` tables (the raw sparse
  * pass-through src/adapters/toml-config.mjs's normalizeConfig produces —
@@ -90,6 +167,7 @@ export function resolveGameConfig(toml) {
   const games = toml?.games ?? {};
   return {
     spiderFly: mergeSection(DEFAULT_GAME_CONFIG.spiderFly, games["spider-fly"], SPIDER_FLY_KEY_MAP),
+    mud: mergeSection(DEFAULT_GAME_CONFIG.mud, games.mud, MUD_KEY_MAP),
     guessNumber: mergeSection(DEFAULT_GAME_CONFIG.guessNumber, games["guess-number"], GUESS_NUMBER_KEY_MAP),
     planning: mergeSection(DEFAULT_GAME_CONFIG.planning, toml?.planning, PLANNING_KEY_MAP),
   };

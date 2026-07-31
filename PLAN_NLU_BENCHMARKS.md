@@ -26,8 +26,8 @@ defeats the purpose.
 tmct's capability universe is: 16 read-only code-graph capabilities
 (`src/domain/router/registry.mjs`, `capabilities()`), a 25-tool declared surface
 (`src/tools/definitions.mjs`, of which `tmct_context`, `tmct_snippet` and `tmct_ask` are the hot
-tier `src/tools/server.mjs` dispatches; `CAPABILITIES_2.11.0.md` row 210 flags two of the 25,
-`tmct_ingest`/`tmct_export`, as dispatched but not yet in the capability registry), a
+tier `src/tools/server.mjs` dispatches; two of the 25, `tmct_ingest`/`tmct_export`, are
+dispatched but not yet in the capability registry), a
 commonsense fact/teach surface in `src/services/chat.mjs` (IsA/HasA/CapableOf over a small
 animal-flavoured seed corpus), and runtime-taught game actions. None of the CLINC150/HWU64 domains
 (banking, travel, weather, alarms, music, cooking, ...) exist anywhere in the product. A sweep of
@@ -99,8 +99,8 @@ substitute for the matcher. It matters in three places:
 
 The estate is now organised around a tested tool surface and a keyed corpus: `src/` is five layers
 with downward-only imports (`test/estate/import-layers.test.mjs`), `src/tools/` is the tool layer,
-and `test/corpus/` holds 1101 rows across 15 JSONL lanes / 531 keys (measured 2026-07-23, per
-`CAPABILITIES_2.11.0.md`), each row keyed by the production or capability it pins and driven through
+and `test/corpus/` holds 1101 rows across 15 JSONL lanes / 531 keys (measured 2026-07-23),
+each row keyed by the production or capability it pins and driven through
 the real session. The lanes grow most weeks, so treat any row count here as a snapshot — `wc -l
 test/corpus/*.jsonl test/corpus/games/*.jsonl` is the live one. `node scripts/corpus-matrix.mjs`
 prints the
@@ -122,7 +122,7 @@ That changes three things for this plan, and leaves the central problem untouche
   checked on every `npm test` instead of rotting between cycles.
 - **Confirmed failure families get a home.** Step 5 folds each confirmed family back as a keyed row
   that freezes the current wrong answer, so a later fix has to flip it deliberately. The chat-surface
-  debt rows in `PLAN_AGENTS.md` §3 are the worked precedent.
+  debt rows in `archive/PLAN_AGENTS.md` §3 are the worked precedent.
 - **The promotion path is concrete if the matcher is ever promoted.** The layer rule decides where it
   could live: harness-only means outside `src/` entirely, and a promoted matcher would be a `domain/`
   module the tool layer calls, with a contract test and a registry entry. That remains a separate,
@@ -143,7 +143,7 @@ That changes three things for this plan, and leaves the central problem untouche
 
 ## Design: a benchmark adapter, not a product rewrite
 
-New top-level `nlubench/` directory, sibling to `chatbench/`, holding data plumbing, the
+New top-level `nlubench/` directory, sibling to `test-benchmarks/chatbench/`, holding data plumbing, the
 matcher, the runners and the reports, plus a `bench.nlubench` smoke row in
 `test/corpus/bench-smoke.jsonl`. The matcher trains from the benchmarks' example utterances; that is
 the layer tmct lacks today.
@@ -173,7 +173,7 @@ product-path domain via `registerCapability` is a separate, later decision.
 
 ### Scoring integration
 
-- Runners follow `chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
+- Runners follow `test-benchmarks/chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
   byte-identical result rows, JSONL per-case output under `nlubench/results/raw/run-<version>/`.
 - Write-ups follow the chatbench measurement contract: `BENCHMARK_CLINC150_<version>.md`
   and `BENCHMARK_HWU64_<version>.md`, named for the `package.json` version they measure,
@@ -310,7 +310,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
 - **L2 — char 3–5-grams on the CLINC150 OOS axis.** Measured: +11.5 OOS recall at equal
   accuracy. Slow index; CLINC-only (measured no gain on HWU64's closed-set task).
 - **L3 — wink-nlp lemma/token normalization in the matcher tokenizer.** Est. +1–2 on both
-  scales; also the first lever that makes the adapter genuinely tmct-flavoured rather
+  scales; also the first lever that makes the adapter tmct-flavoured rather
   than generic IR.
 - **L4 — WordNet synonym/hypernym expansion from `corpus/wordnet/wordnet-full.jsonl`.**
   Deterministic query-token expansion (synset siblings at a fixed weight discount)

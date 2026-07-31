@@ -1,0 +1,65 @@
+# bear-facing-right — bear-facing-left.toml's profile mirrored across the
+# canvas midline (every shape wrapped in one translate-then-flip group), so
+# the two directions stay geometrically identical twins. The mirror flips
+# the lit corner of the shared gradient along with the pose, which reads as
+# the same figure turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["bear"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bear-facing-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="13.2" cy="15.6" rx="7" ry="5.4" fill="url(#bear-facing-right-fill)"/>
+    <g fill="url(#bear-facing-right-fill)">
+      <ellipse cx="7.6" cy="20" rx="1.2" ry="1.4"/>
+      <ellipse cx="11" cy="20.5" rx="1.2" ry="1.4"/>
+      <ellipse cx="15.6" cy="20.5" rx="1.2" ry="1.4"/>
+      <ellipse cx="19" cy="19.9" rx="1.2" ry="1.4"/>
+    </g>
+    <circle cx="20.9" cy="13.4" r="1.2" fill="url(#bear-facing-right-fill)"/>
+    <circle cx="5.8" cy="5.2" r="1.6" fill="url(#bear-facing-right-fill)"/>
+    <circle cx="7.4" cy="8.8" r="4.6" fill="url(#bear-facing-right-fill)"/>
+    <circle cx="9.6" cy="4.8" r="2" fill="url(#bear-facing-right-fill)"/>
+    <ellipse cx="3.9" cy="10.2" rx="2.4" ry="1.8" fill="#c9a273"/>
+    <ellipse cx="2.5" cy="9.6" rx="0.85" ry="0.65" fill="#1c1c1c"/>
+    <ellipse cx="6" cy="7.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
+    <ellipse cx="8.4" cy="6.4" rx="1.4" ry="1" fill="#ffffff" opacity="0.3"/>
+    <ellipse cx="10.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "right"
+
+# bear-facing-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 7.2); cy and scale are the mirror's own invariants. Because the
+# fragment sits outside the flip group, these are plain unflipped canvas
+# coordinates.
+[face]
+cx = 16.8
+cy = 8.25
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

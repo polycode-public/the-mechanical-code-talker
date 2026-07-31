@@ -43,7 +43,7 @@ test("the validator accepts a well-formed bench-smoke row", () => {
     validateRow({
       id: "chatbench-one-case",
       key: "bench.cefr",
-      run: { script: "chatbench/run.mjs", args: ["--limit", "1"], predicate: "answerIncludes" },
+      run: { script: "test-benchmarks/chatbench/run.mjs", args: ["--limit", "1"], predicate: "answerIncludes" },
     }),
     [],
   );

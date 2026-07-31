@@ -11,15 +11,20 @@
 // grammar doesn't carry, and a rescue path when the NL parse selects an out-of-set
 // capability).
 //
-// Entity binding is delegated to `resolveObject` (ask.mjs); an ambiguous or no-match term
-// is an honest refuse, never a guess.
+// Entity binding is delegated to `resolveObject` (ask.mjs) for code-graph slots, and to
+// `resolveMemoryTerm` (below) for a slot whose registry kind is KINDS.MemoryTerm — the
+// conversational-memory graph's own binding oracle. An ambiguous or no-match term is an
+// honest refuse, never a guess, on both paths.
 
 import { parseQuery } from "../ask.mjs";
 import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
 import { buildSkosConceptView } from "../skos-view.mjs";
+import { normFactTerm } from "../hash.mjs";
 import { edgesOfKind } from "../codegraph.mjs";
+import { EXPRESSION_PALETTE } from "../sprite-expressions.mjs";
+import { sizeScaleFor } from "../sprite-size.mjs";
 import {
-  capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
+  capabilities, capabilityByName, parametersOf, preconditionsOf, effectsOf, PRECOND, KINDS, MEMORY_KINDS,
 } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
 
@@ -54,6 +59,8 @@ export const UNMAPPED_KINDS = Object.freeze({
   imports: "no importer/imports query tool in the registry (there is no tmct_imports); refusing beats mis-routing to calls",
   uses: "a query-side UNION (imports+calls+callsSymbol) with no single capability; a router that must emit ONE call cannot honour it — refuse",
   defines: "Module->symbol `defines` has no dedicated capability (tmct_members is Class-scoped `contains`); refuse rather than answer a different grain",
+  serves: "a provider-declared edge with no capability in the registry; the ask lane traverses it directly, so refusing here beats mis-routing to a code-grain tool",
+  denotes: "a provider-declared edge with no capability in the registry; the ask lane traverses it directly, so refusing here beats mis-routing to a code-grain tool",
 });
 
 // ---- capabilities the NL surface cannot reach today (named, not accidental) ---
@@ -61,6 +68,25 @@ export const UNMAPPED_KINDS = Object.freeze({
 // here with the reason. Empty today: the synonym/related FRAME below reaches tmct_related
 // via resolveMemoryTerm, the memory-graph sibling of resolveObject's code-graph binding.
 export const NOT_NL_REACHABLE = Object.freeze({});
+
+/** The property predicate sprite-size.mjs reads a size word off. Used to PROBE
+ *  its own closed scale table instead of restating it here: a word is a size
+ *  word exactly when it moves the scale away from 1. */
+const SIZE_FACT_PREDICATE = "mgx:hasProperty";
+
+/** The sprite frame's two OPTIONAL slots, read straight out of the request.
+ *  Both vocabularies are the real ones — sprite-expressions.mjs's own palette
+ *  and sprite-size.mjs's own scale table (probed, not copied) — so a word
+ *  either module gains is a word this frame gains. A request naming neither
+ *  fills neither, and the sprite resolves plain. */
+function spriteSlots(request) {
+  const slots = {};
+  for (const word of String(request).toLowerCase().match(/[a-z]+/g) || []) {
+    if (!slots.expression && Object.hasOwn(EXPRESSION_PALETTE, word)) slots.expression = word;
+    if (!slots.size && sizeScaleFor([{ predicate: SIZE_FACT_PREDICATE, object: word }]) !== 1) slots.size = word;
+  }
+  return slots;
+}
 
 // ---- imperative intent FRAMES (fills what the relational grammar and command register
 // both miss). regex -> { topic, arg | noArg }. Ordered: first match wins.
@@ -84,10 +110,19 @@ export const FRAMES = Object.freeze([
   { re: /\bsignature\b/i, topic: "signature", arg: "symbol" },
   // tmct_related: the SKOS synonym/related-concept surface over the memory graph
   // — "another word for X" / "a synonym for X" / "synonyms of X" / "what's
-  // related to X". `arg: "term"` is the one memory-graph-bound slot in this
-  // table (see resolveMemoryTerm below); every other frame's arg binds against
-  // the code graph via ctx.resolve.
+  // related to X". Its `term` slot is declared KINDS.MemoryTerm in the registry,
+  // so resolveOne binds it through resolveMemoryTerm (below) rather than the
+  // code graph's resolveObject — the registry kind, not this table, decides.
   { re: /\bsynonyms?\b|\banother\s+word\s+for\b|\brelated\s+(?:words?|concepts?|to)\b/i, topic: "related", arg: "term" },
+  // tmct_sprite: the sprite surface over the memory graph's own world facts —
+  // "the large sprite for a happy spider", "what does a hungry fly look like",
+  // "show me the spider icon". Its `class` slot is the second KINDS.MemoryTerm
+  // one, so it binds the same way tmct_related's `term` does. `slots` is what
+  // makes this frame different: it fills the two OPTIONAL args itself.
+  {
+    re: /\bsprite\b|\bicon\b|\bavatar\b|\bpicture\s+of\b|\bwhat\s+does\s+.+\s+look\s+like\b/i,
+    topic: "sprite", arg: "class", slots: spriteSlots,
+  },
   { re: /\bdescribe\b|\bexplain\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, topic: "description", arg: "symbol" },
   { re: /\bsearch\b|\bfind\b|look\s+for\b/i, topic: "matches", arg: "query" },
 ]);
@@ -130,13 +165,17 @@ const STOP = new Set([
   "untested", "blast", "radius", "change", "changes", "changing", "reach", "reaches", "affect", "affects",
   "explain", "edge", "edges", "graph", "outgoing", "site", "sites", "invoke", "invokes", "run", "runs", "execute", "executes",
   "word", "words", "another", "synonym", "synonyms", "related", "relate", "relates", "like", "concept", "concepts",
+  "sprite", "sprites", "icon", "icons", "avatar", "avatars", "picture", "pictures", "image", "images", "looks",
 ]);
 
 /** Pull one entity token from a request (imperative-frame slot-filling). Prefer a
- *  path/dotted/CamelCase token, else the last non-stopword identifier. "" if none. */
-export function extractEntity(request) {
+ *  path/dotted/CamelCase token, else the last non-stopword identifier. "" if none.
+ *  `alreadyBound` holds the words a frame's own slot-filler has already claimed
+ *  (the sprite frame's expression/size), so they can't also be read as the entity. */
+export function extractEntity(request, alreadyBound = null) {
   const tokens = String(request).match(/[A-Za-z_][A-Za-z0-9_./-]*/g) || [];
-  const pool = tokens.filter((t) => !STOP.has(t.toLowerCase()));
+  const claimed = alreadyBound || new Set();
+  const pool = tokens.filter((t) => !STOP.has(t.toLowerCase()) && !claimed.has(t.toLowerCase()));
   const strong = pool.filter((t) => /[./]/.test(t) || /^[A-Z][a-z]/.test(t) || /\.[a-z]+$/.test(t));
   const pick = strong.length ? strong : pool;
   return pick.length ? pick[pick.length - 1] : "";
@@ -185,13 +224,14 @@ export function mapFrame(request) {
     const cap = backwardChain(f.topic);
     if (!cap) continue;
     if (f.noArg) return { name: cap.name, noArg: true, topic: f.topic, source: "frame", why: [`imperative frame => goal (knows ${f.topic})`, `backward-chain => ${cap.name}`] };
-    const term = f.arg === "query" ? searchQuery(request) : extractEntity(request);
-    // memoryTerm: this slot binds against the memory graph's SKOS concept view
-    // (resolveMemoryTerm below), not the code graph resolveObject resolves
-    // every other frame's arg against — "term" is the one param kind this is
-    // true for (tmct_related's own memory-facts-gated param).
+    // A frame's own OPTIONAL slots, filled from the request's vocabulary before
+    // the entity is read, so a word a slot claimed can't also be read as the entity.
+    const slots = f.slots ? f.slots(request) : null;
+    const term = f.arg === "query"
+      ? searchQuery(request)
+      : extractEntity(request, slots ? new Set(Object.values(slots)) : null);
     return {
-      name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame", memoryTerm: f.arg === "term",
+      name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame", slots,
       why: [`imperative frame => goal (knows ${f.topic} ?${f.arg})`, `backward-chain => ${cap.name}`],
     };
   }
@@ -213,24 +253,41 @@ export function commandCapability(request, declaredNames, selectTool) {
   return { name: sel.name, input, source: "command", why: [`command register: "${String(request).trim().split(/\s+/)[0]}" => ${sel.name}`] };
 }
 
-/** Resolve a term against the memory graph's SKOS concept view
- *  (skos-view.mjs's buildSkosConceptView) — the memory-graph sibling of
- *  resolveObject, for a param whose precondition is memory-facts rather than
- *  a code-graph `resolves`. Same `{ match, ambiguous }` shape resolveObject
- *  returns, so resolveOne's generic binding step treats both the same way:
- *  `match.label` is the RAW queried term (not the concept's canonicalised
- *  prefLabel), because tmct_related's own lookup (relatedForTerm) re-derives
- *  the concept from whatever term it's given — the bound call should carry
- *  what the user actually asked about. No code-graph fallback: a term the
- *  store holds no synonym/related facts for is an honest miss, never a guess.
- *  `rows` is a loadMemory+readFactRows payload — the same trust-bearing rows
- *  skosRelatedAnswer (chat.mjs) and tmct_related (the tool handler) read. */
+/** Resolve a term against the conversational-memory graph — the memory-graph
+ *  sibling of resolveObject, for a slot whose registry kind is KINDS.MemoryTerm.
+ *  Two tiers, tried in order, both EXACT after normFactTerm (no fuzzy tier — a
+ *  near-miss is a miss, never a guess):
+ *    1. "memory-concept" — the SKOS concept view (skos-view.mjs) mints a
+ *       concept for the term, i.e. the store holds synonym/related facts for it;
+ *    2. "memory-fact-term" — the term appears as the subject or object of any
+ *       stored fact row (a world-fact term: a room, a game agent, a taught
+ *       individual).
+ *  Same `{ match, ambiguous }` shape resolveObject returns, so resolveOne's
+ *  generic binding step treats both oracles the same way: `match.label` is the
+ *  RAW queried term (not a canonicalised prefLabel), because a memory tool's
+ *  own lookup (e.g. relatedForTerm) re-derives its rows from whatever term it's
+ *  given — the bound call should carry what the user actually asked about. No
+ *  code-graph fallback: a term the store holds no facts for at all is an honest
+ *  miss. `rows` is a loadMemory+readFactRows payload — the same trust-bearing
+ *  rows skosRelatedAnswer (chat.mjs) and the memory tool handlers read. */
 export function resolveMemoryTerm(rows, term) {
   const t = String(term || "").trim();
   if (!t) return { match: null };
   const view = buildSkosConceptView(rows);
-  if (!view.conceptIdForTerm(t)) return { match: null };
-  return { match: { label: t, class: "skos:Concept" }, ambiguous: false, tier: "memory-concept" };
+  if (view.conceptIdForTerm(t)) return { match: { label: t, class: "skos:Concept" }, ambiguous: false, tier: "memory-concept" };
+  const n = normFactTerm(t);
+  if (n && rows.some((r) => normFactTerm(r.subject) === n || normFactTerm(r.object) === n)) {
+    return { match: { label: t, class: KINDS.MemoryTerm }, ambiguous: false, tier: "memory-fact-term" };
+  }
+  return { match: null };
+}
+
+/** True when capability `capName`'s slot with arg key `arg` is declared a
+ *  memory-graph kind (KINDS.MemoryTerm) — the registry-driven switch between
+ *  the two binding oracles: resolveMemoryTerm for memory slots, the code
+ *  graph's resolveObject for everything else. */
+export function isMemoryTermSlot(capName, arg) {
+  return parametersOf(capName).some((p) => p.arg === arg && MEMORY_KINDS.includes(p.kind));
 }
 
 // ---- the full single-call resolver (async — binds + grounds) -----------------
@@ -326,27 +383,29 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   if (!declared.has(pick.name)) return REFUSE(`selected ${pick.name} but it is not in the declared toolset`);
 
   // A command pick already carries a bound input; an NL/frame pick carries a raw term
-  // we bind via resolveObject (code graph) or, for a memoryTerm slot, resolveMemoryTerm
-  // (the memory graph's SKOS concept view) — the two binding oracles never mix on one pick.
+  // we bind via resolveObject (code graph) or, for a KINDS.MemoryTerm slot (the
+  // registry's own declaration, read through isMemoryTermSlot), resolveMemoryTerm —
+  // the two binding oracles never mix on one pick.
   let input = pick.input ? { ...pick.input } : {};
   let resolved = null;
   if (!pick.input && !pick.noArg) {
     const term = String(pick.term || "").trim();
     if (!term) return REFUSE(`the ${pick.topic} intent named no entity to bind`);
-    const r = pick.memoryTerm
+    const memoryBound = isMemoryTermSlot(pick.name, pick.arg);
+    const r = memoryBound
       ? (ctx.resolveMemoryTerm ? await ctx.resolveMemoryTerm(term) : { match: null })
       : (ctx.resolve ? ctx.resolve(term) : { match: { label: term }, ambiguous: false });
     if (!r || !r.match) {
-      return REFUSE(pick.memoryTerm
-        ? `"${term}" has no synonym/related facts in the memory graph (honest miss)`
+      return REFUSE(memoryBound
+        ? `the memory graph holds no facts mentioning "${term}" (honest miss)`
         : `"${term}" does not resolve to any graph entity (honest miss)`);
     }
     // A tied read: either resolveObject's own score-tie (r.ambiguous), or a same-tier
     // candidate the graph's own `tests` edge ties to the match (a source module and
     // its test module — a grain neither side's raw score alone reveals as tied).
-    // resolveMemoryTerm's SKOS concept view has no code-graph tests-edge notion, so the
-    // sibling tie-check only applies on the code-graph resolution path.
-    const sibling = (!pick.memoryTerm && !r.ambiguous)
+    // resolveMemoryTerm's exact-match tiers have no code-graph tests-edge notion, so
+    // the sibling tie-check only applies on the code-graph resolution path.
+    const sibling = (!memoryBound && !r.ambiguous)
       ? (r.candidates || []).find((c) => testModuleTie(ctx.graph, r.match, c))
       : null;
     if (r.ambiguous || sibling) {
@@ -358,10 +417,15 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
       return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, extra);
     }
     resolved = r.match;
-    input = { [pick.arg]: r.match.label };
-    why = [...why, pick.memoryTerm
-      ? `resolveMemoryTerm: "${term}" mints a memory-graph SKOS concept (tier ${r.tier})`
+    // The frame's own optional slots ride alongside the bound entity — declared
+    // params of the same capability, so hallucinationsIn still validates them.
+    input = { [pick.arg]: r.match.label, ...(pick.slots || {}) };
+    why = [...why, memoryBound
+      ? `resolveMemoryTerm: "${term}" binds in the memory graph (${r.match.class || "?"}, tier ${r.tier})`
       : `resolveObject: "${term}" => ${r.match.label} (${r.match.class || "?"}, tier ${r.tier})`];
+    if (pick.slots && Object.keys(pick.slots).length) {
+      why = [...why, `frame slots bound from the request's own vocabulary: ${Object.entries(pick.slots).map(([k, v]) => `${k}=${v}`).join(", ")}`];
+    }
   }
 
   const call = { name: pick.name, input };

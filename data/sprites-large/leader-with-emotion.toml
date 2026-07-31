@@ -1,7 +1,5 @@
-# leader-with-emotion — the same body as leader.toml, where the silhouette
-# itself extends into a raised, pointing arm rather than adding a held
-# prop (an outer-silhouette gesture, the single cue for someone directing
-# others forward), plus the shared face-fragment mechanism
+# leader-with-emotion — the same pointing-arm, rosetted body as
+# leader.toml, plus the shared face-fragment mechanism
 # (sprite-expressions.mjs): a required [face] anchor and a {{FACE}}
 # placeholder that resolves to whichever of the 6 curated mgx:feels words
 # (happy/sad/angry/scared/surprised/calm) the instance's own fact names. No
@@ -18,8 +16,19 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
+  <g fill="url(#leader-with-emotion-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C13.6 12.8 15 13.5 16 14.8 L21 11.4 L21.8 12.7 L16.8 16.6 C17.5 18 18 19.6 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <circle cx="9.4" cy="13.9" r="0.7" fill="#2a4d7a"/>
+  <circle cx="9.4" cy="13.9" r="0.32" fill="#1c3355"/>
   <circle cx="12" cy="6.6" r="3.3" fill="url(#leader-with-emotion-fill)"/>
-  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C13.6 12.8 15 13.5 16 14.8 L21 11.4 L21.8 12.7 L16.8 16.6 C17.5 18 18 19.6 18 21 Z" fill="url(#leader-with-emotion-fill)"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M16 14.8 L20.2 11.9" fill="none" stroke="currentColor" stroke-width="0.3" opacity="0.25" stroke-linecap="round"/>
   <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
   {{FACE}}
 </svg>

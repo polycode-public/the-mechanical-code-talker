@@ -1,10 +1,12 @@
-# bee — gradient-shaded like dog/animal, no material table: the dark
-# banding stays the SAME black-overlay convention every other sprite here
-# uses for shading (not a new fixed hue), so it reads as "stripes" without
-# breaking the tier's own currentColor discipline. The wings are drawn
-# AFTER the body (layered on top, translucent) rather than behind it, so
-# they stay visible instead of being swallowed by the body's own fill —
-# an early draft got this backwards and the wings disappeared entirely.
+# bee — the head and thorax (the fuzzy parts a theme can plausibly recolor)
+# stay currentColor, but the abdomen is fixed amber with fixed black bands,
+# the same reasoning carrot.toml fixes its whole body: black-on-amber
+# banding IS a bee's identity, not a coat a theme should ever override, and
+# fixing the amber base under the bands keeps them showing on every theme
+# instead of vanishing into a near-black currentColor on a dark surface. A
+# fixed stinger point closes the abdomen's tip. The wings are drawn AFTER
+# the body (layered on top, translucent) rather than behind it, so they
+# stay visible instead of being swallowed by the body's own fill.
 classes = ["bee"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,17 +16,28 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <linearGradient id="bee-abdomen-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f6c667"/>
+      <stop offset="55%" stop-color="#e8a23a"/>
+      <stop offset="100%" stop-color="#b5741c"/>
+    </linearGradient>
   </defs>
   <path d="M6.4 6.4 L5.4 3 M8.8 6.4 L9.8 3" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
   <circle cx="7.6" cy="8.6" r="2.8" fill="url(#bee-fill)"/>
-  <circle cx="6.4" cy="8.2" r="0.5" fill="#000000" opacity="0.55"/>
-  <ellipse cx="14" cy="13.4" rx="5.8" ry="4.6" fill="url(#bee-fill)"/>
-  <g fill="#000000" opacity="0.45">
+  <circle cx="6.4" cy="8.2" r="0.5" fill="#1c1c1c"/>
+  <path d="M20.2 13.4 L21.6 13.4 L20.2 14.6 Z" fill="#1c1c1c"/>
+  <ellipse cx="14" cy="13.4" rx="5.8" ry="4.6" fill="url(#bee-abdomen-fill)"/>
+  <g fill="#1c1c1c">
     <path d="M9 10.2 C11 9.4 17 9.4 19 10.2 L18.6 11.8 C16.6 11.1 11.4 11.1 9.4 11.8 Z"/>
     <path d="M8.6 13.8 C10.8 13 17.2 13 19.4 13.8 L19 15.4 C16.8 14.7 11.2 14.7 9 15.4 Z"/>
   </g>
+  <g stroke="#1c1c1c" stroke-width="0.8" stroke-linecap="round" opacity="0.6">
+    <path d="M10.6 16.6 L9.4 19"/>
+    <path d="M14 17.4 L13.6 19.8"/>
+    <path d="M17 16.4 L18 18.8"/>
+  </g>
   <ellipse cx="16.2" cy="9.4" rx="3.2" ry="1.9" fill="#ffffff" opacity="0.4" transform="rotate(-20 16.2 9.4)"/>
-  <ellipse cx="18.8" cy="11.2" rx="2.7" ry="1.6" fill="#ffffff" opacity="0.3" transform="rotate(-10 18.8 11.2)"/>
+  <ellipse cx="18.8" cy="11.2" rx="2.7" ry="1.6" fill="#ffffff" opacity="0.35" transform="rotate(-10 18.8 11.2)"/>
   <ellipse cx="10.4" cy="12" rx="1.7" ry="1.1" fill="#ffffff" opacity="0.28"/>
 </svg>
 """

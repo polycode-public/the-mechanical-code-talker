@@ -15,7 +15,7 @@
 // ask.mjs's own `touches`/`cochange` verbs answer one-hop structural edges
 // (mgx:touchedByCommit / mgx:changeCoupledWith).
 
-import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
+import { relationKind, impactClosure, moduleCountOf, normPath, packageCounts, modulesOf, HISTORY_CAP } from "./codegraph.mjs";
 import { isTestPath } from "./module-paths.mjs";
 import {
   RELATIONS,
@@ -23,9 +23,10 @@ import {
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
-  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS,
+  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
+  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES,
   stripTrailingScopeFiller,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
@@ -35,6 +36,7 @@ import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mj
 import { runStrategiesSync } from "./interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines } from "./interpret/merge.mjs";
 import { lookupByProseTokens, splitIdentifierWords } from "./prose.mjs";
+import { articleFor } from "./digest/words.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
@@ -84,12 +86,30 @@ const PLURAL_FORMS = {
   Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
   Commit: ["commit", "commits"],
   Change: ["change", "changes"],
+  Package: ["package", "packages"],
   Fact: ["fact", "facts"], Utterance: ["utterance", "utterances"],
   Session: ["session", "sessions"], Source: ["source", "sources"], Rule: ["rule", "rules"],
 };
 function nounFor(entityType, n) {
   const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
   return n === 1 ? s : p;
+}
+
+/** A discourse `set` referent for a class-homogeneous result list — the typed
+ *  content a listing/filter answer establishes, so a later "which of those …"
+ *  binds it (see evalCommitFilter for the shape the session layer registers).
+ *  Returns an empty array when nothing typed can be registered: no member
+ *  class, or an empty result. `extra` carries a lane's own sibling flags (the
+ *  anaphora lane's `bound: true`). */
+function setReferentsFor(cls, matches, lane, extra = {}) {
+  if (!cls || !matches.length) return [];
+  return [{
+    kind: "set", class: cls,
+    label: `${matches.length} ${nounFor(cls, matches.length)}`,
+    ids: matches.map((m) => m.id),
+    attrs: { count: matches.length },
+    lane, ...extra,
+  }];
 }
 
 /** A class enum rendered as prose words ("GlobalVariable" -> "global
@@ -119,7 +139,7 @@ function verbFor(kind) {
 const PLURAL_SUBJECT_VERB = {
   imports: "import", calls: "call", callsSymbol: "call", inherits: "inherit from",
   contains: "contain", tests: "test", touches: "touch", cochange: "cochange",
-  reexports: "export", uses: "use",
+  reexports: "export", uses: "use", serves: "serve", denotes: "denote",
 };
 const pluralVerbFor = (kind) => PLURAL_SUBJECT_VERB[kind] || verbFor(kind);
 
@@ -236,7 +256,55 @@ function parseComposite(text, nlp) {
     || parseList(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
     || parsePluralAnaphoraObject(w, lc, nlp)
+    || parseStackedReducedRelative(w, lc)
     || parseRelationalOrQualified(w, lc, nlp, 0);
+}
+
+// Two reduced relatives stacked on one head noun ("classes INHERITED FROM
+// Widget DEFINED IN c.mjs") — a garden-path shape a naive incremental parser
+// misattaches as a second main clause. Both clauses modify the head, so the
+// reading is their intersection. Each clause's REDUCED_RELATIVE_CLAUSES entry
+// says whether its term is the relation's object (reverse: the subjects that
+// point at it) or its agent (forward: the term's own targets). The head noun's
+// entityType rides the SEED clause, so a forward "defines" leg that would
+// otherwise return every symbol is filtered to the asked kind. Anything that
+// isn't exactly [lead] head bigram term bigram term returns null, leaving
+// every other shape's behavior byte-identical.
+const STACKED_RRC_LEAD = new Set(["which", "the", "all"]);
+function parseStackedReducedRelative(w, lc) {
+  let i = 0;
+  if (STACKED_RRC_LEAD.has(lc[i])) i += 1;
+  const noun = entityNoun(lc[i]);
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  const entityType = noun.entityType;
+  i += 1;
+  const bigramAt = (k) => (k + 1 < lc.length ? REDUCED_RELATIVE_CLAUSES[`${lc[k]} ${lc[k + 1]}`] : undefined);
+  const rr1 = bigramAt(i);
+  if (!rr1) return null;
+  const term1Start = i + 2;
+  let split = -1;
+  let rr2;
+  for (let k = term1Start; k + 1 < lc.length; k += 1) {
+    const hit = bigramAt(k);
+    if (hit) { split = k; rr2 = hit; break; }
+  }
+  if (split < 0) return null;
+  const term1 = w.slice(term1Start, split).join(" ").trim();
+  const term2 = w.slice(split + 2).join(" ").trim();
+  if (!term1 || !term2) return null;
+  const clauseFor = (rr, term) => (rr.role === "object"
+    ? { shape: "reverse", kind: rr.kind, entityType, modifier: "direct", object: term }
+    : { shape: "forward", kind: rr.kind, modifier: "direct", object: term });
+  const seed = clauseFor(rr1, term1);
+  seed.entityType = entityType;   // head-noun class filter on the seed set
+  return {
+    node: "boolean",
+    entityType,
+    atoms: [
+      { op: "seed", kind: "set", ast: { node: "clause", clause: seed } },
+      { op: "intersection", kind: "set", ast: { node: "clause", clause: clauseFor(rr2, term2) } },
+    ],
+  };
 }
 
 // Negation as set complement: "which X do not <verb> Y" compiles to
@@ -598,6 +666,12 @@ function parsePredicateFilter(words, nlp) {
   const restLc = lc.slice(i);
   if (!rest.length) return { type: "all" };
   if (restLc.every((x) => QUALIFIERS[x])) return { type: "qual", filters: restLc };
+  // A bare concrete entity noun ("which of them are functions") narrows the
+  // prior set to one class rather than testing a relation.
+  if (rest.length === 1) {
+    const en = entityNoun(restLc[0]);
+    if (en && !en.placeholder && en.entityType) return { type: "entity", entityType: en.entityType };
+  }
   const clause = parseSimpleClause(`what ${rest.join(" ")}`, nlp);
   if (clause && (clause.shape === "reverse" || clause.shape === "forward") && clause.object) {
     return { type: "clause", clause };
@@ -780,7 +854,7 @@ function parseAggregate(w, lc, nlp) {
 
 const LIST_SKIP = new Set(["the", "a", "an", "all", "me", "us"]);
 const LIST_TRIGGERS_SORTED = [...LIST_TRIGGERS].sort((a, b) => b.split(" ").length - a.split(" ").length);
-const LISTABLE_KINDS = "functions, classes, methods, modules, attributes, variables, or commits";
+const LISTABLE_KINDS = "functions, classes, methods, modules, packages, attributes, variables, or commits";
 // A leading "in"/"inside"/"under" right after the entity noun is an
 // unambiguous location-scope tail, never a reverse-clause predicate object.
 const SCOPE_PREPOSITIONS = new Set(["in", "inside", "under"]);
@@ -1567,11 +1641,25 @@ function computeFind(graph, entityType, term) {
   return { narrow: [], broad: sortFindHits([...broadHits.values()]) };
 }
 
+/** The graph's packages as list/count-shaped individuals. Packages are derived
+ *  from module labels rather than stored as nodes (see codegraph.mjs's
+ *  packageCounts), so these carry a `pkg:` id of their own and resolve to
+ *  nothing in graph.byId — a follow-up that tries to traverse one gets an
+ *  empty result, never a wrong one. Ordered by module count, the same order
+ *  the architecture map prints, so the two surfaces agree. */
+function packageIndividuals(graph) {
+  return [...packageCounts(modulesOf(graph)).entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([dir]) => ({ id: `pkg:${dir}`, label: dir, class: "Package" }));
+}
+
 /** Compile a set-producing AST into an array of individuals. */
 function evalSet(graph, ast, opts) {
   switch (ast.node) {
     case "clause": return traverse(graph, ast.clause, opts).matches || [];
-    case "allOfClass": return graph.individuals.filter((i) => i.class === ast.entityType);
+    case "allOfClass":
+      if (ast.entityType === "Package") return packageIndividuals(graph);
+      return graph.individuals.filter((i) => i.class === ast.entityType);
     // Predicate-find as a set atom: the narrow-then-broaden cascade's result,
     // transparently flattened ("related, not exact" is a render concern).
     case "find": {
@@ -1729,6 +1817,8 @@ function evalAnaphora(graph, ast, opts) {
   const f = ast.filter;
   if (f && f.type === "qual") {
     items = items.filter((ind) => f.filters.every((q) => qualHolds(graph, ind, QUALIFIERS[q])));
+  } else if (f && f.type === "entity") {
+    items = items.filter((ind) => ind.class === f.entityType);
   } else if (f && f.type === "clause") {
     const r = resolveObject(graph, f.clause.object);
     if (!r.match) items = [];
@@ -1743,11 +1833,20 @@ function evalAnaphora(graph, ast, opts) {
   }
   // A count over a prior set names the entity kind when survivors share a
   // class; fall back to the prior set's own class when the filter empties it,
-  // so the honest-empty render still names what was checked.
+  // so the honest-empty render still names what was checked. An entity-type
+  // filter that empties the set names the FILTER's kind ("functions"), not the
+  // base set's — the reader asked which of them were that kind.
   const sameClass = (list) => (list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null);
-  const common = items.length ? sameClass(items) : sameClass(baseItems);
+  const emptyClass = f && f.type === "entity" ? f.entityType : sameClass(baseItems);
+  const common = items.length ? sameClass(items) : emptyClass;
   if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
-  return { compositeKind: "set", matches: items, entityType: common };
+  // A narrowed, class-homogeneous result registers as a NEW set referent so
+  // the narrowing survives a later count and binds a further "which of those".
+  // It rides `bound: true` (a follow-up derived FROM the standing set), so the
+  // session layer's register() does not evict the set on the class change a
+  // narrowing produces.
+  const referents = setReferentsFor(common, items, "anaphora", { bound: true });
+  return { compositeKind: "set", matches: items, entityType: common, referents };
 }
 
 // Structural kinds counted for "most-connected" (total degree). Symbol-grain and
@@ -1782,18 +1881,26 @@ function evalRecentCommits(graph) {
 const COMMIT_FILTER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** Resolves the pivot (a literal ISO date, or a named commit whose own date
  *  becomes the pivot), then filters every Commit's date against it. An
- *  unresolvable pivot declines honestly (pivotResolved:false). */
+ *  unresolvable pivot declines honestly (pivotResolved:false).
+ *
+ *  A resolved answer also carries `referents` — the typed discourse referents
+ *  this answer establishes (the result set, and the pivot commit the question
+ *  was ABOUT, which the focus rules deliberately refuse to hold). Emitted
+ *  here, beside the fully typed result, before render() flattens it all to a
+ *  sentence; the session layer is what registers them into its record. */
 function evalCommitFilter(graph, ast) {
   const { op, pivotRaw } = ast;
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10);
   let pivotDate = null;
   let pivotId = null;
+  let pivotLabel = null;
   if (COMMIT_FILTER_DATE_RE.test(pivotRaw)) {
     pivotDate = pivotRaw;
   } else {
     const { match, ambiguous } = resolveObject(graph, pivotRaw, { expectedClass: "Commit" });
     if (match && !ambiguous && match.class === "Commit" && dateOf(match)) {
       pivotId = match.id;
+      pivotLabel = match.label;
       pivotDate = dateOf(match);
     }
   }
@@ -1808,7 +1915,24 @@ function evalCommitFilter(graph, ast) {
       return d === pivotDate; // "on"
     })
     .sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
-  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches };
+  const referents = [];
+  if (matches.length) {
+    referents.push({
+      kind: "set", class: "Commit",
+      label: `${matches.length} commit${matches.length === 1 ? "" : "s"} ${op} ${pivotRaw}`,
+      ids: matches.map((c) => c.id),
+      attrs: { count: matches.length, op, ...(pivotId ? { pivot: pivotId } : {}) },
+      lane: "commitFilter",
+    });
+  }
+  if (pivotId) {
+    referents.push({
+      kind: "event", class: "Commit", label: pivotLabel,
+      ids: [pivotId], attrs: { date: pivotDate },
+      lane: "commitFilter",
+    });
+  }
+  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches, referents };
 }
 
 /** Temporal over a nested set: the commits that touched any member of the
@@ -1839,7 +1963,17 @@ function evalSuperlative(graph, ast) {
   if (!scored.length) return { compositeKind: "superlative", entityType: ast.entityType, matches: [] };
   const best = scored[0].score;
   const winners = scored.filter((s) => s.score === best).map((s) => s.ind);
-  return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners };
+  // What the ranking established, as discourse referents (see evalCommitFilter
+  // for the shape the session layer registers). A lone winner is one entity a
+  // later "it"/"this"/"that" can bind; a metric tie (two winners on the same
+  // score) is a set instead, since no singular form should silently pick one.
+  // The score itself is always a measure referent, so "is that bigger than X"
+  // binds the number the ranking produced rather than re-deriving it.
+  const referents = winners.length >= 2
+    ? setReferentsFor(ast.entityType, winners, "superlative")
+    : [{ kind: "entity", class: ast.entityType, label: winners[0].label, ids: [winners[0].id], attrs: {}, lane: "superlative" }];
+  referents.push({ kind: "measure", label: `${best} ${ast.metricNoun}`, ids: [], attrs: { metric: best }, lane: "superlative" });
+  return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners, referents };
 }
 
 /** Top-level "<kind> of/in <owner>" membership eval, covering both a bare
@@ -1854,6 +1988,9 @@ function evalMembershipComposite(graph, ast, opts) {
   const filterFn = qualNode
     ? (ind) => qualNode.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]))
     : null;
+  // A class-typed membership result registers as a discourse set referent (see
+  // evalCommitFilter) so a later "which of those …" binds it.
+  const membershipReferents = (list) => setReferentsFor(entityType, list, "membership");
   const owner = resolveMembershipOwner(graph, memNode.term, opts && opts.contextId);
   if (owner.kind === "dir") {
     let objs;
@@ -1863,14 +2000,16 @@ function evalMembershipComposite(graph, ast, opts) {
       objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids))).filter((o) => o.class === entityType);
     }
     if (filterFn) objs = objs.filter(filterFn);
-    return { compositeKind: "set", matches: objs, entityType };
+    return { compositeKind: "set", matches: objs, entityType, referents: membershipReferents(objs) };
   }
   if (owner.kind === "miss") return { compositeKind: "set", matches: [], entityType };
   const { own, inherited, viaLabel } = computeMembership(graph, owner.id, owner.entityClass, entityType, filterFn);
   const inheritedNotOwn = !own.length && inherited.length > 0;
+  const finalMatches = inheritedNotOwn ? inherited : own;
   return {
-    compositeKind: "membership", entityType, matches: inheritedNotOwn ? inherited : own,
+    compositeKind: "membership", entityType, matches: finalMatches,
     inheritedNotOwn, viaLabel, ownerLabel: owner.label,
+    referents: membershipReferents(finalMatches),
   };
 }
 
@@ -1935,7 +2074,11 @@ function evalQualCheck(graph, ast, opts) {
   }
   const rawHolds = qualHolds(graph, r.match, QUALIFIERS[qualifier]);
   const holds = negated ? !rawHolds : rawHolds;
-  return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
+  // The subject the check resolved is a discourse referent either way — the
+  // answer being "no" does not make the entity any less bindable by a
+  // follow-up (see evalCommitFilter for the registration shape).
+  const referents = [{ kind: "entity", class: r.match.class, label: r.match.label, ids: [r.match.id], attrs: {}, lane: "qualCheck" }];
+  return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match], referents };
 }
 
 /** Universal-over-a-set: the object is grounded first (an unknown one is an
@@ -1993,6 +2136,7 @@ function evalComposite(graph, ast, opts = {}) {
     return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   }
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
+  if (ast.node === "worldRelation") return evalWorldRelation(graph, ast);
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "recentCommits") return evalRecentCommits(graph);
@@ -2018,7 +2162,14 @@ function evalComposite(graph, ast, opts = {}) {
     && !(Array.isArray(opts.prev) && opts.prev.length)) {
     return { compositeMiss: true, reason: "no-prev", matches: [] };
   }
-  return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
+  const matches = evalSet(graph, ast, opts);
+  const entityType = ast.entityType || null;
+  // A resolved, class-typed listing/filter set registers as a discourse
+  // referent (see evalCommitFilter) so a later "which of those …" binds it. A
+  // qualifier listing ("which modules are tested") registers the same way, just
+  // under its own lane name.
+  const referents = setReferentsFor(entityType, matches, ast.node === "qualifier" ? "qualifierListing" : "compositeSet");
+  return { compositeKind: "set", matches, entityType, referents };
 }
 
 // ---- compositional render: templated, same "honest miss vs cited hit"
@@ -2039,7 +2190,28 @@ function describeFindHit(ind) {
   const label = ["Function", "Method"].includes(ind.class) ? `${ind.label}()` : ind.label;
   if (ind.class === "Module") return label;
   const mod = moduleLabelOf(ind);
-  return mod && mod !== "(unknown module)" ? `${label} in ${mod}` : label;
+  return mod ? `${label} in ${mod}` : label;
+}
+
+/** Does any branch of a compositional AST filter on test coverage? Keyed off
+ *  QUALIFIERS' own `via` field, so a new coverage adjective in the vocabulary
+ *  is picked up here without a second list to keep in step. */
+function filtersOnCoverage(node) {
+  if (!node || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some(filtersOnCoverage);
+  if (Array.isArray(node.filters)
+    && node.filters.some((f) => QUALIFIERS[String(f).toLowerCase()]?.via === "tested")) return true;
+  return Object.values(node).some(filtersOnCoverage);
+}
+
+/** An empty coverage-filtered set over symbols is a grain mismatch, not an
+ *  absent answer: `tests` edges are recorded module to module, so no
+ *  function-grain coverage exists to filter on. Say that instead of the
+ *  generic rephrase nudge, which would send the reader somewhere unrelated. */
+function coverageGrainNote(parsed, entityType) {
+  if (!["Function", "Method"].includes(entityType)) return null;
+  if (!filtersOnCoverage(parsed)) return null;
+  return "This index records tests edges module to module, so it holds no function-grain coverage to filter on — ask whether the module a function lives in is tested instead.";
 }
 
 function renderComposite(parsed, result, graph) {
@@ -2062,7 +2234,7 @@ function renderComposite(parsed, result, graph) {
       }
       const hit = result.matches[0];
       const modLabel = moduleLabelOf(hit);
-      const definedIn = hit.class === "Module" ? "" : (modLabel && modLabel !== "(unknown module)" ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "");
+      const definedIn = hit.class === "Module" ? "" : (modLabel ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "");
       return { content: `Yes — ${hit.label} is a ${kindSingular}${definedIn}.`, miss: false, ambiguous: false, matches: result.matches };
     }
     if (!result.matches.length) {
@@ -2116,11 +2288,25 @@ function renderComposite(parsed, result, graph) {
     }
     // Kinds that don't live in a module (or have no module-scope parse at
     // all, like memory-graph classes) get no narrow-by-module hint.
-    const scopeable = !["Module", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
+    const scopeable = !["Module", "Package", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
     const hint = (!result.scoped && scopeable && result.matches.length > OVERFLOW_CAP)
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";
     return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // One sentence per subject, in id order, in the world's own words — the
+  // subject's id, the relation's `reads` phrase, and the stored object
+  // verbatim. Nothing is derived: an empty set is the honest miss, never a
+  // sentence about a subject the world has no row for.
+  if (result.compositeKind === "worldRelation") {
+    const asked = listJoin(result.askedClasses);
+    const noun = WORLD_RELATIONS[result.relation].nouns[1];
+    if (!result.pairs.length) {
+      return { content: `no ${noun} on record for ${asked} in this graph.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const reads = WORLD_RELATIONS[result.relation].reads;
+    const sentences = result.pairs.map((p) => `${p.subject.label || p.subject.id} ${reads} ${p.object}`);
+    return { content: `${sentences.join("; ")}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   // A non-empty inherited result is disclosed out loud ("X has no own <kind>
   // — inherited from <ancestor>: …"), never silently presented as the owner's own.
@@ -2238,7 +2424,8 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
+    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
+    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
 }
@@ -2311,6 +2498,14 @@ function joinedQueryForm(term) {
     .toLowerCase()
     .replace(/[\s\-_]+/g, "");
 }
+
+/** Ceiling of tier 3's weakest scoring band (the term-component-overlap
+ *  fraction): a candidate scores exactly this when EVERY component of the
+ *  term appears in its label, strictly less on a partial overlap. Every
+ *  NAME-evidence band (stem/containment/joined/derivational) scores
+ *  hundreds and up, so score < this ceiling means the candidate shares only
+ *  some generic path components with the term. */
+const COMPONENT_OVERLAP_MAX = 10;
 
 /** Resolve a free-text object/subject term against the graph's individuals, in
  *  priority order: a sha-shaped term first resolves against Commit
@@ -2490,7 +2685,7 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
         // stem hit from the tier above, nor a fuller-fraction overlap on another
         // candidate. termComps.length > 0 is guaranteed here (overlap > 0 requires
         // at least one termComps entry to have matched).
-        scored.push({ ind: m, score: (overlap / termComps.length) * 10 });
+        scored.push({ ind: m, score: (overlap / termComps.length) * COMPONENT_OVERLAP_MAX });
       }
     }
   }
@@ -2498,9 +2693,20 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
   if (scored.length) {
     const [best, ...rest] = scored;
     const tied = rest.filter((x) => x.score === best.score);
+    // A PARTIAL component-overlap runner-up (score < COMPONENT_OVERLAP_MAX:
+    // some but not all of the term's own tokens, e.g. graph-merge.mjs
+    // sharing only "graph"/"mjs" with "graph-build.mjs") is not another
+    // reading of the term, and disclosing it in the "(answering for X — N
+    // other matches)" note reads as leakage. A candidate that matched EVERY
+    // term token (score === COMPONENT_OVERLAP_MAX) or matched by name
+    // evidence (score above the band) stays disclosed. A partial-overlap
+    // winner keeps its partial peers — they are all the evidence there is.
+    const disclosable = best.score >= COMPONENT_OVERLAP_MAX
+      ? rest.filter((x) => x.score >= COMPONENT_OVERLAP_MAX)
+      : rest;
     return {
       match: best.ind,
-      candidates: rest.slice(0, 4).map((x) => x.ind),
+      candidates: disclosable.slice(0, 4).map((x) => x.ind),
       tier: 3,
       ambiguous: tied.length > 0,
     };
@@ -2796,6 +3002,25 @@ function modifierIsWired(shape, kind, entityType) {
 }
 const TRANSITIVE_MAX_DEPTH = 8; // matches renderImpact's own default (codegraph.mjs)
 
+/** A graph's own vocabulary nodes carry their definition text under this
+ *  property. A code entity's docstring rides `seon:hasDoc` and shares the
+ *  plain `doc` key, so the PROP is what separates the two. */
+const SCHEMA_DOC_PROP = "mgx:schemaDoc";
+
+/** The definition text an individual publishes about itself, or null. Reading
+ *  the meta lane off this attribute rather than a fixed class-name list lets a
+ *  graph declare its own documented individual class (a glossary term, say)
+ *  and have "what is X" answer for it like any other vocabulary node. */
+function schemaDefinitionOf(ind) {
+  return (ind?.attributes || []).find((a) => a.prop === SCHEMA_DOC_PROP)?.value || null;
+}
+
+function schemaKindWordFor(cls) {
+  if (cls === "SchemaClass") return "a class in the graph's schema";
+  if (cls === "SchemaPredicate") return "a predicate (relation) in the graph's schema";
+  return `${articleFor(cls)} ${cls} in this graph's vocabulary`;
+}
+
 /** Compile a parsed query into a graph lookup. Pure given (graph, parsed, opts).
  *  `opts.contextId` resolves a context pronoun ("this"/"it"/…) when the parse
  *  needed one. Returns {matches, objMatch, candidates, traversal, ambiguous,
@@ -2825,7 +3050,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     const term = String(parsed.object || "").trim();
     const termLc = term.toLowerCase();
     const match = (graph.individuals || []).find((i) => {
-      if (i.class !== "SchemaClass" && i.class !== "SchemaPredicate") return false;
+      if (!schemaDefinitionOf(i)) return false;
       if (String(i.label).toLowerCase() === termLc) return true;
       const token = (i.attributes || []).find((a) => a.key === "token")?.value;
       return token && String(token).toLowerCase() === termLc;
@@ -3008,8 +3233,15 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       }
       commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
     }
+    // The dated commit this answer named is a discourse `event` referent, so a
+    // later "was that before X was touched" binds it (see evalCommitFilter).
+    // Only when a dated commit resolved — an undated one is the render's honest
+    // miss, and a referent with no date could not feed the comparison lane.
+    const referents = commits.length && dateOf(commits[0])
+      ? [{ kind: "event", class: "Commit", label: commits[0].label, ids: [commits[0].id], attrs: { date: dateOf(commits[0]).slice(0, 10) }, lane: "when" }]
+      : [];
     return {
-      matches: commits, objMatch, candidates, ambiguous, matchedVia, whenShape: true,
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whenShape: true, referents,
       traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit date first`,
     };
   }
@@ -3032,8 +3264,14 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       if (c && c.class === "Commit") commits.push(c);
     }
     commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    // The dated commit behind the "who last touched X" answer is the same
+    // `event` referent the when-shape registers, so either phrasing feeds a
+    // later temporal comparison. Registered only when the commit carries a date.
+    const referents = commits.length && dateOf(commits[0])
+      ? [{ kind: "event", class: "Commit", label: commits[0].label, ids: [commits[0].id], attrs: { date: dateOf(commits[0]).slice(0, 10) }, lane: "whoLast" }]
+      : [];
     return {
-      matches: commits, objMatch, candidates, ambiguous, matchedVia, whoLastShape: true,
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whoLastShape: true, referents,
       traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit's author`,
     };
   }
@@ -3255,12 +3493,15 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
 // ---- templated renderer: string interpolation + grouping/pluralization/
 // overflow rules, never generation. ----
 
+/** The module an individual lives in, or null when the index places it in
+ *  none — a graph can carry individuals that are not code (a glossary term,
+ *  a schema node), and naming a module for those would be a fabrication. */
 function moduleLabelOf(ind) {
   if (ind.class === "Module") return ind.label;
   const site = (ind.attributes || []).find((a) => a.key === "site")?.value;
   if (site) return String(site).split(":")[0];
   const m = String(ind.id || "").match(/^fn:(.+)#/);
-  return m ? m[1] : "(unknown module)";
+  return m ? m[1] : null;
 }
 
 function symbolLabelOf(ind) {
@@ -3294,6 +3535,15 @@ function describeParse(p) {
  *  than being coerced into a guessed base form. */
 function bareVerbFor(kind) {
   return RELATIONS[kind]?.bare || kind;
+}
+
+/** The passive participle of a relation ("uses" -> "used", "imports" ->
+ *  "imported"), for the confirming "X is <participle> by Y" frame. The bare
+ *  forms in this vocabulary are all regular, so a single +d/+ed rule covers
+ *  them. */
+function passiveParticipleFor(kind) {
+  const bare = bareVerbFor(kind);
+  return bare.endsWith("e") ? `${bare}d` : `${bare}ed`;
 }
 
 /** English gloss of a SET-COMPLEMENT AST — the shape parseNegation compiles
@@ -3464,9 +3714,8 @@ function renderCore(parsed, result, graph) {
     if (result.metaCodeClass) {
       return { content: result.metaFallbackText, miss: false, ambiguous: false, matches: result.matches };
     }
-    const doc = (result.objMatch.attributes || []).find((a) => a.key === "doc")?.value || "";
-    const kindWord = result.objMatch.class === "SchemaClass" ? "a class in the graph's schema" : "a predicate (relation) in the graph's schema";
-    return { content: `${result.objMatch.label} is ${kindWord}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
+    const doc = schemaDefinitionOf(result.objMatch) || "";
+    return { content: `${result.objMatch.label} is ${schemaKindWordFor(result.objMatch.class)}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
   }
   // mentions: the prose surface — checked before the generic objMatch-null miss
   // below, because a mentions result deliberately carries no resolved object
@@ -3621,8 +3870,15 @@ function renderCore(parsed, result, graph) {
       const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
       return { content: `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`, miss: false, ambiguous: false, matches: result.matches };
     }
+    const mod = moduleLabelOf(ind);
+    if (!mod) {
+      return {
+        content: `${ind.label} has no recorded code location in this index — it carries no source site, and nothing places it in a module.`,
+        miss: true, ambiguous: false,
+      };
+    }
     return {
-      content: `${symbolLabelOf(ind)} is defined in ${moduleLabelOf(ind)} (no line span recorded in this index).`,
+      content: `${symbolLabelOf(ind)} is defined in ${mod} (no line span recorded in this index).`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }
@@ -3747,9 +4003,26 @@ function renderCore(parsed, result, graph) {
       };
     }
     const entityWord = nounFor(parsed.entityType || "Module", 2);
+    // Name the resolved antecedent, not the raw pronoun: "who touched it" that
+    // bound "it" to fnAlpha must say so, or the receipt reads as though nothing
+    // was resolved at all. Scoped to a context pronoun so a typed term keeps the
+    // wording the reader chose, never its normalized graph label.
+    const object = (result.objMatch && CONTEXT_PRONOUNS.includes(String(parsed.object || "").toLowerCase()))
+      ? result.objMatch.label
+      : parsed.object;
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint(graph)}`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
+    };
+  }
+  // A polar reverse question ("is X used anywhere") with exactly one match
+  // reads as a confirming yes that names the single subject, rather than a bare
+  // one-item list. Scoped to one match: two or more keep the plain list.
+  if (parsed.polar && result.matches.length === 1) {
+    const objLabel = result.objMatch?.label || parsed.object;
+    return {
+      content: `Yes — ${objLabel} is ${passiveParticipleFor(parsed.kind)} by ${result.matches[0].label}.`,
+      miss: false, ambiguous: false, matches: result.matches,
     };
   }
   // Route by the matched entities' actual class, not just the parsed hint —
@@ -3768,7 +4041,7 @@ function renderCore(parsed, result, graph) {
   // "there is … in {module}" (module trails, not leads).
   const byModule = new Map();
   for (const m of result.matches.slice(0, OVERFLOW_CAP)) {
-    const mod = moduleLabelOf(m);
+    const mod = moduleLabelOf(m) || "no recorded module";
     if (!byModule.has(mod)) byModule.set(mod, []);
     byModule.get(mod).push(symbolLabelOf(m));
   }
@@ -3860,8 +4133,7 @@ function fuzzyCascadeWord(w) {
  *  question. Exact/substring/prose matches are untouched. */
 function schemaTypoTrap(resolution, term) {
   if (!resolution?.match || resolution.matchedVia !== "fuzzy" || resolution.ambiguous) return false;
-  const cls = resolution.match.class;
-  if (cls !== "SchemaClass" && cls !== "SchemaPredicate") return false;
+  if (!schemaDefinitionOf(resolution.match)) return false;
   const lc = String(term || "").trim().toLowerCase();
   const kindNoun = fuzzyCascadeWord(lc);
   return !!kindNoun && kindNoun !== lc && !!ENTITY_TO_TYPE[kindNoun];
@@ -4147,6 +4419,148 @@ function dynamicClassQuery(graph, query) {
   return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
 }
 
+// ---- world-relation listing: "list the locations of flies and spiders", the
+// plural, multi-class form of a question a world graph can already answer. A
+// listing over ONE world predicate (ask-vocab.mjs's WORLD_RELATIONS) filtered
+// to one or more subject CLASSES, resolved dynamically against whatever
+// classes actually have an individual in this graph — so a world's own
+// taxonomy needs no entry in the closed code-graph noun table, exactly as the
+// count/list fallback above resolves its class noun. Fires only once the
+// normal cascade has already produced an honest miss, and misses honestly
+// itself when any asked class has no individual here. ----
+
+// A class list: "flies and spiders", "spiders, flies and eggs". Each part must
+// be a single bare noun — a phrase with anything else in it is a restrictor
+// this shape can't honour, so it declines rather than dropping it.
+function parseWorldClassList(graph, text) {
+  const parts = String(text || "").split(/\s*,\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const asked = [];
+  const classes = [];
+  for (const part of parts) {
+    const word = part.replace(/^(?:all\s+)?(?:the\s+)?/i, "").trim();
+    if (!/^[a-z][a-z'-]*$/i.test(word)) return null;
+    const cls = resolveDynamicClass(graph, word);
+    if (!cls) return null;
+    asked.push(word.toLowerCase());
+    classes.push(cls);
+  }
+  return { asked: [...new Set(asked)], classes: [...new Set(classes)] };
+}
+
+const WORLD_LISTING_RE = new RegExp(
+  `^(?:${LIST_TRIGGERS_SORTED.map(escapeRegex).join("|")})\\s+(?:all\\s+)?(?:the\\s+)?([a-z][a-z'-]*)\\s+(?:of|for)\\s+(.+?)[?.!\\s]*$`,
+  "i",
+);
+// "where are the flies and spiders" — the same listing said the natural way.
+// Singular too ("where is the spider"): the class list resolves either way, and
+// with only the code-graph `where` lane to fall back on the answer would be
+// "no recorded code location" for a subject whose cell this graph plainly
+// holds. A phrase that isn't a bare class noun ("where is auth.mjs defined")
+// fails parseWorldClassList and keeps the definition-site reading.
+const WORLD_WHERE_RE = /^where(?:'s|\s+is|\s+are)\s+(?:all\s+)?(?:the\s+)?(.+?)[?.!\s]*$/i;
+
+/** Compile "<list trigger> the <world-relation noun> of <class> and <class>"
+ *  (or "where are the <class> and <class>") into a world-relation listing AST,
+ *  or null when this isn't that shape. */
+function worldRelationQuery(graph, query) {
+  const q = String(query || "").trim();
+  const listM = q.match(WORLD_LISTING_RE);
+  const relation = listM ? WORLD_NOUN_TO_RELATION[listM[1].toLowerCase()] : "placement";
+  if (!relation) return null;
+  const subjectText = listM ? listM[2] : q.match(WORLD_WHERE_RE)?.[1];
+  if (!subjectText) return null;
+  const resolved = parseWorldClassList(graph, subjectText);
+  if (!resolved) return null;
+  return {
+    node: "worldRelation",
+    relation,
+    predicate: WORLD_RELATIONS[relation].predicate,
+    classes: resolved.classes,
+    askedClasses: resolved.asked,
+  };
+}
+
+const normalizePredicate = (p) => String(p || "").toLowerCase();
+
+function evalWorldRelation(graph, ast) {
+  const wanted = new Set(ast.classes);
+  const latest = new Map();
+  for (const group of graph?.relations || []) {
+    if (normalizePredicate(group.prop) !== ast.predicate && normalizePredicate(group.predicate) !== ast.predicate) continue;
+    // A world appends a fresh row per turn rather than rewriting one, so the
+    // LAST edge for a subject is its current value — the same last-wins fold
+    // every world's own state reader applies to its rows.
+    for (const edge of group.edges || []) {
+      const subject = graph.byId?.get(edge.subject);
+      if (subject && wanted.has(subject.class)) latest.set(edge.subject, { subject, object: edge.object });
+    }
+  }
+  const pairs = [...latest.values()].sort((a, b) => String(a.subject.id).localeCompare(String(b.subject.id)));
+  return {
+    compositeKind: "worldRelation",
+    relation: ast.relation,
+    askedClasses: ast.askedClasses,
+    pairs,
+    matches: pairs.map((p) => p.subject),
+  };
+}
+
+// A world writes each turn's facts against a stamped subject ("spider-1@turn3",
+// "player@step7") and folds them back onto the base id, newest stamp winning —
+// spider-fly.mjs's foldSpiderFlyState and domain.mjs's foldWorldState both do
+// exactly this. An unstamped row is the world's own starting value, stamp 0.
+const WORLD_SNAPSHOT_RE = /^(.+)@(?:turn|step)(\d+)$/;
+
+function splitWorldSnapshot(term) {
+  const m = WORLD_SNAPSHOT_RE.exec(String(term ?? ""));
+  return m ? { base: m[1], stamp: Number(m[2]) } : { base: String(term ?? ""), stamp: 0 };
+}
+
+/** Project plain world fact rows (`{subject, predicate, object}`, the shape
+ *  memory/core.mjs's readFactRows returns) into the `{individuals,
+ *  objectProperties}` payload parseEntities consumes, so a page holding a live
+ *  world can hand `ask` a graph of it instead of an empty one. Only the
+ *  WORLD_PREDICATES rows are carried: a board's own geometry (every cell and
+ *  every exit) is thousands of rows no natural-language listing asks for.
+ *  Turn-stamped rows are folded onto their base subject, so the graph carries
+ *  each subject's CURRENT value and never a stale one from an earlier turn.
+ *
+ *  A subject's class comes from its own `rdf:type` row when the world states
+ *  one; `classOf(id)` is the fallback for a world that names its individuals
+ *  by convention instead (spider-fly's "spider-1" is a spider because of its
+ *  id). Returning null from `classOf` drops the subject — that is the seam a
+ *  caller filters through, so "which subjects still count as live" stays a
+ *  rule of the world module rather than of this projection. Pure. */
+export function worldRelationGraphPayload(rows, { classOf = () => null } = {}) {
+  const declaredClass = new Map();
+  for (const row of rows || []) {
+    if (row?.predicate === "rdf:type" && row.subject && row.object) {
+      declaredClass.set(splitWorldSnapshot(row.subject).base, String(row.object));
+    }
+  }
+  const wanted = new Set(WORLD_PREDICATES);
+  const individuals = new Map();
+  const newest = new Map();
+  for (const row of rows || []) {
+    if (!row?.subject || !wanted.has(row.predicate)) continue;
+    const { base, stamp } = splitWorldSnapshot(row.subject);
+    const cls = declaredClass.get(base) || classOf(base);
+    if (!cls) continue;
+    const key = `${row.predicate}\u0000${base}`;
+    const prior = newest.get(key);
+    if (prior && prior.stamp > stamp) continue;
+    individuals.set(base, { id: base, label: base, class: cls });
+    newest.set(key, { stamp, predicate: row.predicate, subject: base, object: splitWorldSnapshot(row.object).base });
+  }
+  const groups = new Map();
+  for (const edge of newest.values()) {
+    if (!groups.has(edge.predicate)) groups.set(edge.predicate, { prop: edge.predicate, predicate: edge.predicate, examples: [] });
+    groups.get(edge.predicate).examples.push({ subject: edge.subject, object: edge.object });
+  }
+  return { individuals: [...individuals.values()], objectProperties: [...groups.values()] };
+}
+
 // Matches T5's own bare-object capture (grammar.mjs meta-whatis), reused below to
 // extract the term for the article-insertion fallback rather than duplicating it.
 const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
@@ -4189,6 +4603,16 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const dynResult = traverse(graph, dyn, { contextId, prev });
       const dynRendered = render(dyn, dynResult, graph);
       if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
+    }
+  }
+  // World-relation listing ("list the locations of flies and spiders"), on the
+  // same terms: only after an honest miss, and only when it answers for real.
+  if (rendered.miss && !rendered.ambiguous) {
+    const world = worldRelationQuery(graph, query);
+    if (world) {
+      const worldResult = traverse(graph, world, { contextId, prev });
+      const worldRendered = render(world, worldResult, graph);
+      if (!worldRendered.miss) { parsed = world; result = worldResult; rendered = worldRendered; relaxed = null; }
     }
   }
   // Bare "what is X" (no article) meta fallback, narrow to ask() and never
@@ -4280,6 +4704,18 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       content = `${content}\n(answering for ${result.objMatch.label} — ${others.length} other match${others.length === 1 ? "" : "es"}: ${list})`;
     }
   }
+  // A plain relation LISTING ("which modules import X", "which functions call
+  // X") resolves through the simple traverse path, not evalComposite, so it
+  // registers its class-typed result here — the same set referent the
+  // composite listing lanes emit, so a later "which of those …" binds it. Only
+  // a real, non-empty, class-homogeneous answer no lane already registered
+  // (the composite lanes set result.referents themselves).
+  if (!Array.isArray(result.referents) && !rendered.miss && !rendered.ambiguous
+    && (parsed?.shape === "reverse" || parsed?.shape === "forward")
+    && parsed.entityType && Array.isArray(result.matches) && result.matches.length
+    && result.matches.every((m) => m && m.class === parsed.entityType)) {
+    result = { ...result, referents: setReferentsFor(parsed.entityType, result.matches, "relationListing") };
+  }
   return {
     content,
     tmct_ask: {
@@ -4299,6 +4735,11 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       // edit-distance, announced in the content as "assuming you meant …");
       // null for every literal-identifier tier.
       matchedVia: result.matchedVia || null,
+      // The typed discourse referents this answer established (see
+      // evalCommitFilter) — additive, present only when a lane emitted them,
+      // so a session layer can register them without re-deriving the answer's
+      // typed content from its rendered sentence.
+      ...(Array.isArray(result.referents) && result.referents.length ? { discourse: result.referents } : {}),
       ...(rendered.ambiguous ? { candidates: rendered.candidates, candidateParses: rendered.candidateParses } : {}),
     },
   };

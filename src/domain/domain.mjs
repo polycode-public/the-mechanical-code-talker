@@ -228,6 +228,20 @@ export function stateFromFacts(factRows, domain) {
   return state;
 }
 
+/** The highest @stepN snapshot index present for a domain individual, or 0
+ *  when the board carries no snapshot layer yet. A freshly minted plan reads
+ *  this as its stepBase, so its own @stepK writes stack ABOVE any standing
+ *  snapshot instead of colliding with it and being read as the same layer. */
+export function maxSnapshotStep(factRows, domain) {
+  const individuals = domainIndividuals(domain);
+  let max = 0;
+  for (const row of factRows || []) {
+    const m = SNAPSHOT_RE.exec(normTerm(row.subject));
+    if (m && individuals.has(m[1])) max = Math.max(max, Number(m[2]));
+  }
+  return max;
+}
+
 /** Canonical identity for a state (rows are kept sorted). NUL-joined so
  *  multi-word terms can never collide with the separator; spelled without an
  *  escape sequence because tooling has twice turned a source-level \\0 into a

@@ -12,6 +12,10 @@ import { RELATION_TERM } from "./concept.mjs";
 export const REFERENCE_PACK_NAME = "simplewiki";
 export const REFERENCE_SHARD_COUNT = 64;
 
+/** The grain cue every encyclopedia-grounded answer carries: this is a word's
+ *  general meaning, not something read out of the graph the session is about. */
+export const GENERAL_VOCABULARY_CUE = "General vocabulary, not from this codebase.";
+
 /** The shard a term's article row lives in: FNV-1a first byte mod 64, as the
  *  file basename "ref-00" … "ref-3f". Part of the pack's on-disk contract —
  *  the build script shards with THIS function, so the reader never scans. */
@@ -31,22 +35,50 @@ export function isReferenceIndexEntry(e) {
     && Number.isInteger(e.r) && e.r > 0;
 }
 
-/** A shard row: {term, title, text, summary, url, revid, isa?}. */
+/** A shard row: {term, title, text, summary, url, revid, isa?, source?,
+ *  licence?}. `source`/`licence` are optional per-entry overrides of the
+ *  citation's source name and licence line (renderReferenceAnswer, below) —
+ *  absent on every real Simple English Wikipedia row the build pipeline
+ *  emits, present only on a hand-added synthetic entry (e.g. a demo/test
+ *  term) whose citation must name its OWN real source, not Wikipedia's. */
 export function isReferenceArticleRow(row) {
   if (!row || typeof row !== "object") return false;
   for (const field of ["term", "title", "text", "summary", "url"]) {
     if (typeof row[field] !== "string" || !row[field]) return false;
   }
   if (!Number.isInteger(row.revid) || row.revid <= 0) return false;
-  if (row.isa !== undefined && (typeof row.isa !== "string" || !row.isa)) return false;
+  for (const field of ["isa", "source", "licence"]) {
+    if (row[field] !== undefined && (typeof row[field] !== "string" || !row[field])) return false;
+  }
   return true;
 }
 
+/** The default citation source/licence — every article the build pipeline
+ *  (scripts/fetch-reference-pack.mjs) emits from the pinned Simple English
+ *  Wikipedia dump carries neither field, so this is what renderReferenceAnswer
+ *  falls back to for the overwhelming majority of rows. */
+export const DEFAULT_REFERENCE_SOURCE = "Simple English Wikipedia";
+export const DEFAULT_REFERENCE_LICENCE = "CC BY-SA 4.0";
+
 /** The cited answer for a clean miss the pack could ground: the article's
- *  summary with its title, licence and revision-pinned URL always visible. */
+ *  summary with its title, licence and source always visible, then the grain
+ *  cue. Without the cue a reader has to recognize the source name to tell
+ *  this apart from a fact read out of their own graph — both answer the same
+ *  "what is X" question in the same voice.
+ *
+ *  The source/licence line reads the article's OWN `source`/`licence` fields
+ *  when present, falling back to the Wikipedia defaults otherwise — every
+ *  real pack row renders byte-identically to before this existed. Wikipedia's
+ *  revision-pinned `?oldid=` query is a convention of that source alone, so it
+ *  is only appended when the article is citing the default source; a
+ *  non-Wikipedia entry's own `url` is shown bare. */
 export function renderReferenceAnswer(term, article) {
+  const source = article.source ?? DEFAULT_REFERENCE_SOURCE;
+  const licence = article.licence ?? DEFAULT_REFERENCE_LICENCE;
+  const url = source === DEFAULT_REFERENCE_SOURCE ? `${article.url}?oldid=${article.revid}` : article.url;
   return `${term} — ${article.summary} (source: reference article "${article.title}", `
-    + `Simple English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+    + `${source}, ${licence} — ${url})`
+    + ` ${GENERAL_VOCABULARY_CUE}`;
 }
 
 /** The provenance tag a fact stored from a pack article carries —
@@ -88,7 +120,8 @@ export function liveProvenanceTag(article) {
  *  the revision-pinned URL always visible. */
 export function renderLiveReferenceAnswer(term, article) {
   return `${term} — ${article.summary} (source: live Wikipedia article "${article.title}", `
-    + `English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+    + `English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`
+    + ` ${GENERAL_VOCABULARY_CUE}`;
 }
 
 /** The pure half of the LIVE clean-miss gate — same fold, shape check and
@@ -139,9 +172,16 @@ const ISA_GENERIC_HEADS = new Set([
   "type", "kind", "sort", "form", "class", "variety", "group", "part",
   "piece", "member", "way", "term", "name", "word", "thing", "example",
   "family", "genus", "species", "unit", "series", "set", "list", "number",
-  "amount",
+  "amount", "body", "mass",
 ]);
 const ISA_ARTICLES = new Set(["a", "an", "the"]);
+// The classifier heads an of-chain reads THROUGH to the real class ("a kind
+// of dog" → dog). Any other head before "of" keeps the outer phrase: "a body
+// of ice" states composition, and "a game of skill" is a game — neither
+// makes the of-object the class.
+const ISA_OF_READ_THROUGH = new Set([
+  "type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus",
+]);
 
 /** The isa lemma of a lead's first sentence, or null. The copula must sit in
  *  the first sentence; an of-chain resolves to its final noun ("a kind of
@@ -158,8 +198,13 @@ export function isaOf(plain, lexicon) {
     window.push(word);
     if (window.length >= 6) break;
   }
-  const lastOf = window.lastIndexOf("of");
-  let headWords = lastOf >= 0 ? window.slice(lastOf + 1) : window;
+  let headWords = window;
+  for (let ofIdx = headWords.indexOf("of"); ofIdx > 0; ofIdx = headWords.indexOf("of")) {
+    const outer = headWords[ofIdx - 1]?.split("-").pop();
+    if (outer && ISA_OF_READ_THROUGH.has(outer)) { headWords = headWords.slice(ofIdx + 1); continue; }
+    headWords = headWords.slice(0, ofIdx);
+    break;
+  }
   while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
   if (!headWords.length) return null;
   const headToken = headWords[headWords.length - 1].split("-").pop();

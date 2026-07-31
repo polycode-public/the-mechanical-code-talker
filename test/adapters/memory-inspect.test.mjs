@@ -18,7 +18,8 @@ const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", impor
 const SESSION = "0189aaaa-0000-7000-8000-000000000000";
 
 /** A seeded fixture memory: 12 facts (one dual-provenance), one Q/A utterance
- *  pair in a session, one folded block. */
+ *  pair in a session, one folded block. The dual-provenance fact holds one
+ *  record per asserting source, so 12 triples are 13 Fact individuals. */
 /** Seed the fixture content: facts/utterances into `store` (a plain dir for
  *  the Backend-A read-path tests, a routed handle for the CLI test), the
  *  folded block always beside the repo dir (blocks are file-backed). */
@@ -63,20 +64,22 @@ test("renderMemory over the seeded fixture: classes+samples, provenance breadth,
   try {
     const text = await inspectMemory(dir);
     // Sources are now first-class individuals (2: the corpus + the operator-chat)
-    assert.match(text, /^memory — \d+ individuals: 12 Fact, 2 Source, 2 Utterance, 1 Session\./);
-    assert.match(text, /Fact — 12 \(showing 3\)/, "12 facts → log-scaled 3 samples (terse)");
+    assert.match(text, /^memory — \d+ individuals: 13 Fact, 2 Source, 2 Utterance, 1 Session\./);
+    assert.match(text, /Fact — 13 \(showing 3\)/, "13 fact records → log-scaled 3 samples (terse)");
     assert.match(text, /Source — 2 \(showing 2\)/, "Source is counted + sampled like any class");
     assert.match(text, /Session — 1 \(showing 1\)/);
-    // provenance breadth upgraded to COMPUTED TRUST: the corroborated operator+corpus
-    // fact (trust 1.00) tops the lone-corpus facts (0.70)
-    assert.match(text, /top facts by trust:\n {2}module rdfs:subClassOf component — trust 1\.00, 2 sources: /,
+    // provenance breadth upgraded to COMPUTED TRUST: the corroborated
+    // operator+corpus fact tops the lone-corpus facts (0.70). Its exact value
+    // decays from the fixture's own fixed tag date, so the band is the pin —
+    // recency is read-time, and a frozen number here would rot by the calendar.
+    assert.match(text, /top facts by trust:\n {2}module rdfs:subClassOf component — trust 0\.9\d, 2 sources: /,
       "the corpus+chat-corroborated fact ranks first by trust");
     assert.match(text, /recent Q→A pairs \(1 recorded\):\n {2}Q: which modules import a\.mjs\n {2}A: app\/lib\/b\.mjs/);
     assert.match(text, /blocks — 1 folded session block, \d+ indexed tokens\./);
     assert.match(text, /top by rank: 0189aaaa \(1\.000\)/);
 
     const verbose = await inspectMemory(dir, { verbose: true });
-    assert.match(verbose, /Fact — 12 \(showing 6\)/, "verbose doubles the sample");
+    assert.match(verbose, /Fact — 13 \(showing 6\)/, "verbose doubles the sample");
     assert.match(verbose, /ace:chat:0189aaaa-0000-7000-8000-000000000000@2026-07-04T10:00:00\.000Z/,
       "verbose shows provenance (the compat shim) in full, verbatim");
   } finally {
@@ -94,12 +97,12 @@ test("/memory chat command: same renderer, recorded as a command turn; no store 
   const dir = await seededMemory();
   try {
     const r = await runTurn("/memory", { config: { graphFile: FIXTURE }, memoryDir: dir });
-    assert.match(r.answer, /memory — \d+ individuals: 12 Fact/);
+    assert.match(r.answer, /memory — \d+ individuals: 13 Fact/);
     assert.equal(r.record.command, "memory");
     assert.equal(r.record.via, "command");
 
     const verbose = await runTurn("/memory verbose", { config: { graphFile: FIXTURE }, memoryDir: dir });
-    assert.match(verbose.answer, /Fact — 12 \(showing 6\)/);
+    assert.match(verbose.answer, /Fact — 13 \(showing 6\)/);
 
     const bare = await runTurn("/memory", { config: { graphFile: FIXTURE } });
     assert.match(bare.answer, /no memory store here/);
@@ -121,11 +124,11 @@ test("tmct memory CLI: renders the same inspection text, exit 0", async () => {
   try {
     const r = spawnSync(process.execPath, [BIN, "memory", "--repo", dir], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /memory — \d+ individuals: 12 Fact, 2 Source, 2 Utterance, 1 Session\./);
+    assert.match(r.stdout, /memory — \d+ individuals: 13 Fact, 2 Source, 2 Utterance, 1 Session\./);
     assert.match(r.stdout, /top facts by trust:/);
     const v = spawnSync(process.execPath, [BIN, "memory", "--repo", dir, "--verbose"], { encoding: "utf8" });
     assert.equal(v.status, 0, v.stderr);
-    assert.match(v.stdout, /Fact — 12 \(showing 6\)/);
+    assert.match(v.stdout, /Fact — 13 \(showing 6\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

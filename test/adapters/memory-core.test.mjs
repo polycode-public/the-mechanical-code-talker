@@ -12,6 +12,7 @@ import {
   emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact, appendFacts,
   appendRule, findRuleByName, readFactRows, normFactTerm,
   resolveRelationChase, resolveRelationChaseReverse,
+  createInMemoryStore, applySeedPayload, cloneMemoryPayload,
 } from "../../src/adapters/memory/core.mjs";
 import { factIdForTriple, legacyFactIdFor } from "../../src/domain/hash.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
@@ -281,10 +282,14 @@ test("appendFacts: GOLDEN EQUIVALENCE — byte-identical to looping appendFact (
     // the load-bearing assertion: the two graphs are structurally identical
     assert.deepEqual(norm(b), norm(a), "batch graph == per-fact graph (modulo array order)");
 
-    // and prove the duplicate-fact provenance union is arrival-ordered in BOTH
-    const provOf = (g) => attr(g.individuals.find((i) => i.class === FACT_CLASS && attr(i, "subject") === "cache"), "provenance");
-    assert.equal(provOf(a), "corpus:conceptnet /r/IsA | web:https://ex.org/x", "per-fact: arrival-ordered union");
-    assert.equal(provOf(b), provOf(a), "batch: byte-identical arrival-ordered union");
+    // and prove the two writers of one triple land as two records — one per
+    // asserting source, each carrying only its own tag — in BOTH paths
+    const cacheProvs = (g) => g.individuals
+      .filter((i) => i.class === FACT_CLASS && attr(i, "subject") === "cache")
+      .sort((x, y) => x.id.localeCompare(y.id))
+      .map((i) => attr(i, "provenance"));
+    assert.deepEqual(cacheProvs(a), ["corpus:conceptnet /r/IsA", "web:https://ex.org/x"], "per-fact: one record per asserting source");
+    assert.deepEqual(cacheProvs(b), cacheProvs(a), "batch: byte-identical records");
   } finally {
     await rm(dirA, { recursive: true, force: true });
     await rm(dirB, { recursive: true, force: true });
@@ -317,17 +322,25 @@ test("appendFact: term normalization converges ConceptNet/CURIE/bare spellings o
   }
 });
 
-test("appendFact: provenance is UNIONED across writers, never overwritten", async () => {
+test("two writers of one triple keep separate records, and the group row unions their provenance", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-mem-"));
   try {
-    await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet" });
+    const first = await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet" });
     await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "chat:session-1" });
+    // the SAME writer saying it again is the same hop, not a second vote
     await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "chat:session-1" });
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
-    assert.equal(facts.length, 1);
-    const prov = facts[0].attributes.find((x) => x.key === "provenance")?.value;
-    assert.equal(prov, "corpus:conceptnet | chat:session-1", "both provenances kept, deduped");
+    assert.equal(facts.length, 2, "one record per asserting source, and a re-assert by one of them adds nothing");
+    assert.deepEqual(
+      facts.map((f) => f.attributes.find((x) => x.key === "provenance")?.value).sort(),
+      ["chat:session-1", "corpus:conceptnet"],
+      "each record carries only its own tag, never a cross-source union",
+    );
+    const [row] = readFactRows(m).filter((r) => r.subject === "module");
+    assert.equal(row.id, first.id, "the group id is the public fact id, unchanged by the second writer");
+    assert.equal(row.provenance, "chat:session-1 | corpus:conceptnet", "the compat union is synthesized at read time, codepoint-sorted");
+    assert.deepEqual(row.sourceIds.slice().sort(), ["src:corpus:conceptnet", "src:operator-chat"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -615,7 +628,9 @@ test("the legacy fact-id migration remaps premise ids inside EVERY environment, 
     await writeFile(file, JSON.stringify(legacy));
 
     const currentPremiseId = factIdForTriple(s1, p1, o1);
-    const row = readFactRows(await loadMemory(dir)).find((r) => r.id === "fact:bbbbbbbbbbbbbbbb");
+    // The entailed row content-addresses off its own triple: the assertion
+    // re-key recomputes the group id, healing the hand-written one it carried.
+    const row = readFactRows(await loadMemory(dir)).find((r) => r.id === factIdForTriple("widget", "rdfs:subClassOf", "machine"));
     assert.deepEqual(row.environments, [
       [currentPremiseId, stableId],
       [stableId, currentPremiseId],
@@ -623,4 +638,35 @@ test("the legacy fact-id migration remaps premise ids inside EVERY environment, 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("applySeedPayload: spreads a seed onto the store's own empty payload rather than replacing it outright", () => {
+  const memoryDir = createInMemoryStore();
+  const before = memoryDir.payload;
+  applySeedPayload(memoryDir, { individuals: [{ id: "fact:1", class: FACT_CLASS }] });
+  assert.notEqual(memoryDir.payload, before, "a new payload object, not a mutation of the old one");
+  assert.deepEqual(memoryDir.payload.individuals, [{ id: "fact:1", class: FACT_CLASS }]);
+  assert.deepEqual(memoryDir.payload.classes, before.classes, "scaffolding the seed didn't carry keeps its empty default");
+});
+
+test("applySeedPayload: a null/undefined seed is a no-op — the store's own fresh empty payload is untouched", () => {
+  const memoryDir = createInMemoryStore();
+  const before = memoryDir.payload;
+  applySeedPayload(memoryDir, null);
+  applySeedPayload(memoryDir, undefined);
+  assert.equal(memoryDir.payload, before);
+});
+
+test("cloneMemoryPayload: returns a structurally independent copy, mutating the clone never touches the original", () => {
+  const original = { individuals: [{ id: "fact:1", class: FACT_CLASS }], classes: [] };
+  const clone = cloneMemoryPayload(original);
+  assert.deepEqual(clone, original);
+  assert.notEqual(clone, original);
+  clone.individuals.push({ id: "fact:2", class: FACT_CLASS });
+  assert.equal(original.individuals.length, 1, "the original is untouched by mutating the clone");
+});
+
+test("cloneMemoryPayload: null/undefined payload comes back as null, never an empty object", () => {
+  assert.equal(cloneMemoryPayload(null), null);
+  assert.equal(cloneMemoryPayload(undefined), null);
 });

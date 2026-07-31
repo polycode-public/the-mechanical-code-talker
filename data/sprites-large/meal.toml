@@ -1,21 +1,29 @@
-# meal — a plate of food at the sprite tier: the same warm
-# currentColor-anchored gradient as food, mounded onto a plate rather
-# than food's own single-item loaf shape, no material.
+# meal — a plate scene at the sprite tier: three food masses fixed to
+# what a plated meal actually looks like (a seared main, a golden side,
+# a green side), the same fixed-colour call breakfast/dinner make for
+# the same reason, plus a fork and knife flanking the plate.
 classes = ["meal"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
     <linearGradient id="meal-fill" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, #fff2d8)"/>
-      <stop offset="55%" stop-color="currentColor"/>
-      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 75%, #4a2c14)"/>
+      <stop offset="0%" stop-color="#8fbe5c"/>
+      <stop offset="100%" stop-color="#4a7a34"/>
     </linearGradient>
   </defs>
   <ellipse cx="12" cy="17.2" rx="9.4" ry="3" fill="#e6e1d8"/>
   <ellipse cx="12" cy="16.6" rx="7" ry="2.1" fill="none" stroke="#aba69c" stroke-width="0.6" opacity="0.6"/>
-  <ellipse cx="9.6" cy="14.6" rx="3.6" ry="2.6" fill="url(#meal-fill)"/>
-  <ellipse cx="15" cy="15.2" rx="2.6" ry="2" fill="url(#meal-fill)" opacity="0.9"/>
-  <ellipse cx="12.4" cy="13" rx="2.2" ry="1.7" fill="url(#meal-fill)" opacity="0.95"/>
-  <ellipse cx="8.6" cy="13.4" rx="1.6" ry="1" fill="#ffffff" opacity="0.32"/>
+  <ellipse cx="9.6" cy="14.6" rx="3.6" ry="2.6" fill="#c78e5b"/>
+  <ellipse cx="9.6" cy="13.8" rx="3.6" ry="2.3" fill="#a9714a"/>
+  <ellipse cx="15" cy="15.2" rx="2.6" ry="2" fill="url(#meal-fill)"/>
+  <ellipse cx="12.4" cy="13" rx="2.2" ry="1.7" fill="#e0c168"/>
+  <g stroke="#8a8378" stroke-width="0.85" stroke-linecap="round" fill="none">
+    <path d="M3.5 10.8 L3.3 13.8"/>
+    <path d="M4.3 10.8 L4.3 13.8"/>
+    <path d="M5.1 10.8 L4.9 13.8"/>
+    <path d="M4.2 13.8 L3.6 20.6"/>
+    <path d="M19.5 10.6 C20.3 11.2 20.3 12.6 19.5 13.2 L19 20.6"/>
+  </g>
+  <ellipse cx="8.6" cy="13.4" rx="1.6" ry="1" fill="#ffffff" opacity="0.3"/>
 </svg>
 """

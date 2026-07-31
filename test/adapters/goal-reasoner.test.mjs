@@ -1,5 +1,5 @@
 // test/goal-reasoner.test.mjs — the closed-world C2 goal-reasoner
-// (src/domain/router/goal-reasoner.mjs + agentbench/driver-goal.mjs).
+// (src/domain/router/goal-reasoner.mjs + test-benchmarks/agentbench/driver-goal.mjs).
 //
 // Three groups:
 //   1. UNIT — the declared goal model + the pure meta-loop primitives (goal
@@ -24,14 +24,14 @@ import { fileURLToPath } from "node:url";
 import {
   GOAL_RULES, MAX_TICKS, backwardChainGoal, applicableRules, threatsAmong, dropCondition, goalReason,
 } from "../../src/domain/router/goal-reasoner.mjs";
-import { goalDriver } from "../../agentbench/driver-goal.mjs";
-import { cochangesLabels, untestedModules, intersect } from "../../agentbench/results.mjs";
+import { goalDriver } from "../../test-benchmarks/agentbench/driver-goal.mjs";
+import { cochangesLabels, untestedModules, intersect } from "../../test-benchmarks/agentbench/results.mjs";
 import { capabilities } from "../../src/domain/router/registry.mjs";
-import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
-import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
-import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
+import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../test-benchmarks/agentbench/run.mjs";
+import { parseCases, hallucinationsIn } from "../../test-benchmarks/agentbench/grade.mjs";
+import { resolverDriver } from "../../test-benchmarks/agentbench/driver-resolver.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/cases.jsonl", import.meta.url));
 
 // ONE shared run context (speed insurance, mirroring
 // test/adapters/router-resolver.test.mjs): every consumer below is READ-ONLY over the
@@ -373,6 +373,16 @@ test("goal-reasoner e2e: domain gate — an unrelated global-mode request REFUSE
   assert.deepEqual(r.calls, [], "no calls emitted — never a confident-wrong answer");
   assert.equal(r.composed, null);
   assert.match(String(r.why), /open-world.*escalate/, "the honest open-world seam, not an invented goal");
+});
+
+test("goal-reasoner e2e: the domain-gate refusal reads as plain language — names what it can plan about, never the grammar machinery", async () => {
+  const r = await goalDriver("write a haiku about pizza", ["tmct_impact", "tmct_untested"], SHARED.ctx);
+  assert.equal(r.refused, true);
+  const why = String(r.why);
+  assert.match(why, /I can only plan toward goals about things this graph knows/, "the honest content: what the planner CAN plan about");
+  assert.match(why, /modules/, "the covered domain, as a plain plural noun");
+  assert.doesNotMatch(why, /ask\.mjs|NL grammar|entity kind|focusClass/i, "no internals leak into user-facing chat text");
+  assert.doesNotMatch(why, /about Module\b/, "the raw class name never reads as prose");
 });
 
 test("goal-reasoner e2e: the gate is DOMAIN-based, not a keyword blocklist (held-out off-domain phrasings)", async () => {

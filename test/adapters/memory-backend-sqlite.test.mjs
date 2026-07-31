@@ -19,9 +19,10 @@ import {
   UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, SAID_IN_SESSION_PROP,
   emptyMemory, loadMemory,
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
-  findRuleByName, readFactRows, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
+  findRuleByName, readFactRows, factGroupId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
   createSqliteMemoryStore, closeSqliteMemoryStore,
   resolveMemoryGraphFile, snapshotMemory,
+  loadNodeId, saveNodeId,
 } from "../../src/adapters/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000beef";
@@ -94,7 +95,15 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
     const sqliteMemory = await loadMemory(handle);
     const fileMemory = await loadMemory(fileDir);
 
-    const norm = (rows) => rows.map((r) => ({ ...r, sourceIds: [...r.sourceIds].sort() }))
+    // trust is recomputed via recencyNudge(createdAt, now = Date.now()) — the SAME wall-clock
+    // dependence as mgx:updatedAt below, just one layer deeper (through the trust calculation
+    // rather than the timestamp itself). The two sequential ops() calls above legitimately
+    // compute it a fraction of a millisecond apart; ordinarily that's far below the 6-decimal
+    // storage precision, but a raw value sitting close enough to a rounding boundary can still
+    // flip the last stored digit between backends. Round for comparison only (never stored data)
+    // to absorb that noise while still catching any REAL trust divergence between backends,
+    // which would differ by far more than one unit at the 6th decimal.
+    const norm = (rows) => rows.map((r) => ({ ...r, sourceIds: [...r.sourceIds].sort(), trust: Math.round(r.trust * 1e4) / 1e4 }))
       .sort((a, b) => a.id.localeCompare(b.id));
     assert.deepEqual(norm(readFactRows(sqliteMemory)), norm(readFactRows(fileMemory)));
 
@@ -128,15 +137,18 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
   }
 });
 
-test("Backend C: re-appending the same fact upserts via real SQLite INSERT OR REPLACE — no duplicate row, corroboration adds a second Source edge", async () => {
+test("Backend C: a second source asserting one triple writes its own row via real SQLite INSERT OR REPLACE, and the two fold back to one fact", async () => {
   const { dir, handle } = await sqliteHandle();
   try {
     const triple = { subject: "cache", predicate: "IsA", object: "storage-mechanism" };
     const { id: id1 } = await appendFact(handle, { ...triple, provenance: "corpus:seon" });
     const { id: id2 } = await appendFact(handle, { ...triple, provenance: "corpus:conceptnet" });
-    assert.equal(id1, id2);
+    assert.equal(id1, id2, "the public fact id is the triple's, whoever asserts it");
     const m = await loadMemory(handle);
-    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 1, "one Fact individual, not two");
+    const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(facts.length, 2, "one record per asserting source");
+    assert.equal(new Set(facts.map((f) => factGroupId(f.id))).size, 1, "both under the one group");
+    assert.equal(readFactRows(m).length, 1, "and the group folds back to a single fact row");
     const row = readFactRows(m)[0];
     assert.equal(row.sourceIds.length, 2, "both provenance tags materialise as distinct Source edges");
   } finally {
@@ -333,6 +345,152 @@ test("Backend C cross-connection: a second connection's committed write is visib
   } finally {
     closeSqliteMemoryStore(second);
     closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- The `facts` projection ------------------------------------------------
+// Every Fact individual also lands in a `facts` table with real subject /
+// predicate / object / source / trust columns, so the database can answer
+// "which facts are about dog" instead of the caller loading the whole store and
+// scanning it. The JSON blob stays the source of truth; these tests hold the
+// projection to it. The read-path payoff is measured in
+// memory-facts-read-perf.test.mjs.
+
+const factsRows = (handle) => handle.db.prepare("SELECT * FROM facts ORDER BY id").all();
+
+test("the facts projection carries one row per Fact individual, with the triple, its source and its trust in columns", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    await appendFact(handle, { subject: "dog", predicate: "capableOf", object: "bark", provenance: `teach:chat:${SESSION}@${TS1}`, createdAt: TS1 });
+    await appendFacts(handle, [
+      { subject: "cat", predicate: "capableOf", object: "purr", provenance: "corpus:conceptnet /r/CapableOf" },
+      { subject: "sky", predicate: "hasProperty", object: "blue", provenance: "" },
+    ]);
+    await appendRule(handle, {
+      name: "grandparent", kind: RULE_KIND_COMPOSE2, slots: { base1: "parent", base2: "parent" },
+      provenance: `teach:chat:${SESSION}@${TS1}`,
+    });
+    await appendUtterance(handle, { role: "visitor", text: "can a dog bark?", ts: TS1, sessionId: SESSION });
+
+    const rows = factsRows(handle);
+    const memory = await loadMemory(handle);
+    const factRows = readFactRows(memory);
+    assert.equal(rows.length, factRows.length, "a row per Fact — Rules, Sources and Utterances stay out");
+    assert.equal(rows.length, 3);
+
+    const byGroup = new Map(rows.map((r) => [r.triple_hash, r]));
+    for (const fact of factRows) {
+      const row = byGroup.get(fact.id);
+      assert.ok(row, `${fact.id} is projected`);
+      // The record id keys the row; the group key is the public fact id, and the
+      // two diverge exactly at the `@<sourceId>` suffix that says who asserted it.
+      assert.equal(row.id, `${fact.id}@${row.source_id}`, "a record is addressed by its triple AND its source");
+      assert.notEqual(row.id, row.triple_hash);
+      assert.equal(row.subject, fact.subject);
+      assert.equal(row.predicate, fact.predicate);
+      assert.equal(row.object, fact.object);
+      // The COLUMN carries this record's own single-source prior, deliberately
+      // not the group aggregate — that one is recomputed per read.
+      assert.equal(row.trust_score, fact.assertions[0].ownTrust);
+      assert.equal(JSON.parse(row.json).id, row.id, "the blob column round-trips the individual");
+      assert.equal(row.observed_at, null, "nothing supplies an observation time yet");
+      assert.equal(row.superseded_by, null, "every record is a live head");
+    }
+
+    const dog = rows.find((r) => r.subject === "dog");
+    assert.equal(dog.source_id, `src:teach-chat:${SESSION}`);
+    assert.equal(dog.source_type, "teach");
+    assert.equal(dog.created_at, TS1);
+    const cat = rows.find((r) => r.subject === "cat");
+    assert.equal(cat.source_id, "src:corpus:conceptnet");
+    assert.equal(cat.source_type, "corpus");
+    // A fact whose provenance derives no Source still needs a key, so it lands
+    // on the named singleton rather than a NULL.
+    const sky = rows.find((r) => r.subject === "sky");
+    assert.equal(sky.source_id, "src:none");
+    assert.equal(sky.source_type, "");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the facts projection follows corroboration and a retraction: a row per asserting source, none after removeFacts", async () => {
+  const { removeFacts } = await import("../../src/adapters/memory/core.mjs");
+  const { dir, handle } = await sqliteHandle();
+  try {
+    const { id: groupId } = await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: "corpus:conceptnet /r/IsA" });
+    const [before] = factsRows(handle);
+    assert.equal(before.triple_hash, groupId);
+
+    // The same triple from a second source: its own record, sharing the group.
+    await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: `teach:chat:${SESSION}@${TS2}` });
+    const after = factsRows(handle);
+    assert.equal(after.length, 2, "a second source files its own row, never overwriting the first");
+    assert.equal(new Set(after.map((r) => r.triple_hash)).size, 1, "both rows key on the one triple");
+    assert.deepEqual(after.map((r) => r.source_id).sort(), ["src:corpus:conceptnet", `src:teach-chat:${SESSION}`]);
+    // The corpus record is untouched by the corroboration — its own prior is a
+    // property of ITS source, and the strengthening lives in the group fold.
+    const corpus = after.find((r) => r.source_id === "src:corpus:conceptnet");
+    assert.equal(corpus.trust_score, before.trust_score);
+    const [row] = readFactRows(await loadMemory(handle));
+    assert.ok(row.trust > corpus.trust_score, "the folded group reads stronger than either record alone");
+
+    // Retracting by the PUBLIC fact id takes every source's record with it —
+    // a retracted triple cannot leave half its assertions standing.
+    await removeFacts(handle, [groupId]);
+    assert.deepEqual(factsRows(handle), [], "a retracted fact takes its projected rows with it");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a store whose facts table predates the projection is backfilled from the individuals blobs when it is next opened", async () => {
+  const { dir, handle } = await sqliteHandle();
+  const dbPath = handle.dbPath;
+  try {
+    await appendFacts(handle, [
+      { subject: "dog", predicate: "IsA", object: "mammal", provenance: "corpus:conceptnet /r/IsA" },
+      { subject: "cat", predicate: "IsA", object: "mammal", provenance: "corpus:conceptnet /r/IsA" },
+    ]);
+    // What a store written before the projection existed looks like: the
+    // individuals rows are all there, the facts table is empty.
+    handle.db.exec("DELETE FROM facts");
+    assert.deepEqual(factsRows(handle), []);
+    closeSqliteMemoryStore(handle);
+
+    const reopened = await createSqliteMemoryStore(dbPath);
+    try {
+      const rows = factsRows(reopened);
+      assert.equal(rows.length, 2, "opening the store projects the facts it already held");
+      assert.deepEqual(rows.map((r) => r.subject).sort(), ["cat", "dog"]);
+      assert.equal(rows.every((r) => r.source_id === "src:corpus:conceptnet"), true);
+      // Idempotent: a second open of an already-projected store changes nothing.
+      const again = await createSqliteMemoryStore(dbPath);
+      assert.deepEqual(factsRows(again), rows);
+      closeSqliteMemoryStore(again);
+    } finally {
+      closeSqliteMemoryStore(reopened);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a node id written through one sqlite connection is read back by the next one to open the same file", async () => {
+  const { dir, handle } = await sqliteHandle();
+  let second = null;
+  try {
+    assert.equal(await loadNodeId(handle), null, "a store that has never joined a room has no id to report");
+    await saveNodeId(handle, "7f3a9c2e5b1d4a60");
+    assert.equal(await loadNodeId(handle), "7f3a9c2e5b1d4a60");
+    closeSqliteMemoryStore(handle);
+    second = await createSqliteMemoryStore(join(dir, "graph.sqlite"));
+    assert.equal(await loadNodeId(second), "7f3a9c2e5b1d4a60", "the id outlives the connection that minted it");
+  } finally {
+    if (second) closeSqliteMemoryStore(second);
     await rm(dir, { recursive: true, force: true });
   }
 });

@@ -173,7 +173,7 @@ export const CORPUSES = {
     ],
   },
 
-  // PLAN_AGENTS.md Phase 1's "wider general-knowledge seed set" bullet: the
+  // The wider general-knowledge seed set: the
   // three corpuses above are all code-domain-specific (a LANGUAGE or a cloud
   // DOMAIN); this one deliberately is NOT — everyday-knowledge concepts (the
   // natural world, weather, food, common objects) with zero code-domain
@@ -297,6 +297,7 @@ export const CORPUSES = {
         // human-nature
         "dog", "cat", "horse", "cow", "pig", "sheep", "bird", "fish",
         "mouse", "rabbit", "bear", "lion", "tiger", "elephant", "snake",
+        "mole", "vole", "badger", "groundhog", "meerkat",
         "tree", "flower", "grass", "leaf", "root", "seed", "fruit", "water",
         "air", "fire", "earth", "stone", "sand", "gold", "iron", "rain",
         "snow", "wind", "cloud", "sun", "moon", "star", "owl", "wolf",
@@ -313,7 +314,7 @@ export const CORPUSES = {
         "bread", "meat", "milk", "egg", "cheese", "vegetable", "meal",
         "breakfast", "dinner", "drink", "wine", "tea", "coffee", "tongue",
         "tooth", "finger", "toe", "shoulder", "knee", "brain", "lung",
-        "sugar", "salt",
+        "sugar", "salt", "carrot", "lettuce", "tomato",
         // human-mind
         "word", "story", "news", "idea", "thought", "mind", "memory",
         "dream", "belief", "love", "hate", "fear", "joy", "anger", "hope",
@@ -568,6 +569,11 @@ export const CORPUSES = {
       ["ant", "/r/IsA", "insect"],
       ["butterfly", "/r/IsA", "insect"], ["butterfly", "/r/HasProperty", "colorful"],
       ["spider", "/r/IsA", "animal"], ["spider", "/r/HasA", "leg"],
+      ["mole", "/r/IsA", "mammal"], ["mole", "/r/HasProperty", "small"], ["mole", "/r/CapableOf", "dig"],
+      ["vole", "/r/IsA", "rodent"], ["vole", "/r/HasProperty", "small"], ["vole", "/r/CapableOf", "burrow"],
+      ["badger", "/r/IsA", "mammal"], ["badger", "/r/HasProperty", "large"], ["badger", "/r/CapableOf", "dig"],
+      ["groundhog", "/r/IsA", "rodent"], ["groundhog", "/r/HasProperty", "burrowing"], ["groundhog", "/r/CapableOf", "hibernate"],
+      ["meerkat", "/r/IsA", "mammal"], ["meerkat", "/r/HasProperty", "social"], ["meerkat", "/r/CapableOf", "stand_upright"],
       ["river", "/r/IsA", "waterway"], ["river", "/r/CapableOf", "flow"],
       ["ocean", "/r/IsA", "body_of_water"], ["ocean", "/r/HasProperty", "salty"],
 
@@ -643,6 +649,9 @@ export const CORPUSES = {
       ["lung", "/r/PartOf", "body"], ["lung", "/r/UsedFor", "breathing"],
       ["sugar", "/r/IsA", "food"], ["sugar", "/r/HasProperty", "sweet"],
       ["salt", "/r/IsA", "food"], ["salt", "/r/HasProperty", "salty"],
+      ["carrot", "/r/IsA", "vegetable"], ["carrot", "/r/AtLocation", "garden"], ["carrot", "/r/HasProperty", "orange"],
+      ["lettuce", "/r/IsA", "vegetable"], ["lettuce", "/r/AtLocation", "garden"],
+      ["tomato", "/r/IsA", "vegetable"], ["tomato", "/r/AtLocation", "garden"], ["tomato", "/r/HasProperty", "red"],
 
       // ---- human-mind (~70 facts) ----
       ["word", "/r/PartOf", "language"], ["word", "/r/UsedFor", "communicating"],
@@ -719,7 +728,7 @@ export const CORPUSES = {
       nouns: [
         // human-core (+186 words: people, family, common roles)
         "draw", "set", "heavy", "stand", "free", "pack", "dead", "pick",
-        "double", "straight", "cast", "dry", "bank", "stamp", "tender", "fair",
+        "double", "cast", "dry", "bank", "stamp", "tender", "fair",
         "active", "regular", "blue", "hack", "band", "brush", "guard", "master",
         "transfer", "firm", "side", "bull", "mate", "rank", "board", "brace",
         "grade", "better", "course", "natural", "butt", "camp", "crop", "date",
@@ -733,7 +742,7 @@ export const CORPUSES = {
         "steady", "stream", "combine", "company", "convert", "general", "moderate", "alternate",
         "ace", "crab", "flop", "fund", "pair", "rake", "rock", "sick",
         "blade", "cheat", "sport", "caller", "column", "couple", "divine", "pledge",
-        "simple", "sponge", "system", "wanton", "sleeper", "business", "associate", "instrument",
+        "sponge", "system", "wanton", "sleeper", "business", "associate", "instrument",
         "substitute", "gun", "sum", "alto", "best", "buff", "dear", "mass",
         "cream", "creep", "giant", "labor", "pilot", "sneak", "stack", "staff",
         "world", "gutter", "jumper", "labour", "lather", "picket", "reader", "savage",
@@ -852,7 +861,6 @@ export const CORPUSES = {
       ["dead", "/r/HasA", "dead person"],
       ["pick", "/r/IsA", "elite"],
       ["double", "/r/IsA", "actor"],
-      ["straight", "/r/IsA", "person"],
       ["cast", "/r/IsA", "gathering"],
       ["dry", "/r/IsA", "reformer"],
       ["bank", "/r/IsA", "financial institution"],
@@ -968,7 +976,6 @@ export const CORPUSES = {
       ["couple", "/r/IsA", "pair"],
       ["divine", "/r/IsA", "reverend"],
       ["pledge", "/r/IsA", "member"],
-      ["simple", "/r/IsA", "person"],
       ["sponge", "/r/IsA", "learner"],
       ["system", "/r/IsA", "group"],
       ["system", "/r/HasA", "hierarchy"],
@@ -1845,7 +1852,7 @@ export const CORPUSES = {
         "ideal", "noble", "octet", "quack", "saint", "scrag", "shark", "shoal",
         "silly", "skunk", "super", "witch", "zombi", "agency", "anchor", "backup",
         "batter", "buster", "canary", "circus", "dealer", "domain", "doomed", "genius",
-        "gossip", "herald", "hoodoo", "hopper", "immune", "jockey", "legion", "member",
+        "gossip", "herald", "hoodoo", "hopper", "jockey", "legion", "member",
         "nature", "orphan", "parade", "peanut", "pillar", "pirate", "player", "porter",
         "pusher", "putter", "senior", "septet", "sestet", "sextet", "surety", "tapper",
         "tiller", "zombie", "adjunct", "butcher", "captive", "cascade", "chapter", "charity",
@@ -1884,7 +1891,7 @@ export const CORPUSES = {
         "canvasser", "cockscomb", "collector", "comforter", "commander", "companion", "conductor", "crossover",
         "eccentric", "executive", "fledgling", "franchise", "freelance", "incumbent", "mercenary", "moderator",
         "neighbour", "newspaper", "patriarch", "patrician", "portfolio", "quartette", "quintette", "repertory",
-        "secretary", "segregate", "spearhead", "stigmatic", "summation", "transient", "trumpeter", "voluntary",
+        "secretary", "segregate", "spearhead", "summation", "transient", "trumpeter", "voluntary",
         "absolutism", "anthropoid", "apparition", "assemblage", "collective", "contractor", "delinquent", "episcopate",
         "exaltation", "exposition", "illiterate", "judicature", "leadership", "lieutenant", "minimalist", "percussion",
         "profligate", "provincial", "rendezvous", "brotherhood", "determinant", "distributor", "interpreter", "stipendiary",
@@ -3267,7 +3274,6 @@ export const CORPUSES = {
       ["hoodoo", "/r/IsA", "priest"],
       ["priest", "/r/IsA", "spiritual leader"],
       ["hopper", "/r/IsA", "jumper"],
-      ["immune", "/r/IsA", "person"],
       ["jockey", "/r/IsA", "equestrian"],
       ["legion", "/r/IsA", "military unit"],
       ["legion", "/r/HasA", "legionnaire"],
@@ -3755,7 +3761,6 @@ export const CORPUSES = {
       ["friend", "/r/IsA", "actor"],
       ["segregate", "/r/IsA", "actor"],
       ["spearhead", "/r/IsA", "leader"],
-      ["stigmatic", "/r/IsA", "person"],
       ["summation", "/r/IsA", "collection"],
       ["transient", "/r/IsA", "traveler"],
       ["trumpeter", "/r/IsA", "messenger"],

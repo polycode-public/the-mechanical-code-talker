@@ -22,33 +22,38 @@ const attr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop
 const SESSION_A = "0189ffff-0000-7000-8000-00000000aaaa"; // contradicted repeatedly
 const SESSION_B = "0189ffff-0000-7000-8000-00000000bbbb"; // corroborated (never contradicted)
 
+// A functional relation — one subject has one of these — so the resolver table
+// leaves it on the default `contradiction` strategy and a differing object is a
+// real disagreement the reliability tally can count.
+const SINGLE_VALUED = "mgx:father";
+
 test("actor-level trust end-to-end: a contradicted session's Source scores lower than a corroborated session's, and it measurably lowers that session's own facts' trust", async () => {
   const dir = await tmpRepo();
   try {
     const teachA = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: `teach:chat:${SESSION_A}@2026-07-09T00:00:00.000Z`,
+      subject, predicate: SINGLE_VALUED, object, provenance: `teach:chat:${SESSION_A}@2026-07-09T00:00:00.000Z`,
     });
     const teachB = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: `teach:chat:${SESSION_B}@2026-07-09T00:00:00.000Z`,
+      subject, predicate: SINGLE_VALUED, object, provenance: `teach:chat:${SESSION_B}@2026-07-09T00:00:00.000Z`,
     });
     const corpusSays = (subject, object) => appendFact(dir, {
-      subject, predicate: "mgx:hasProperty", object, provenance: "corpus:conceptnet /r/HasProperty",
+      subject, predicate: SINGLE_VALUED, object, provenance: "corpus:conceptnet /r/IsA",
     });
 
     // Session A: 5 taught facts, 3 of which are later contradicted by a
     // (unrelated, non-session-scoped) corpus source — 3 differing-object pairs.
-    await teachA("alpha", "red"); await corpusSays("alpha", "blue");
-    await teachA("beta", "red"); await corpusSays("beta", "blue");
-    await teachA("gamma", "red"); await corpusSays("gamma", "blue");
-    await teachA("delta", "red");   // asserted by A, NEVER itself contradicted
-    await teachA("epsilon", "red"); // asserted by A, NEVER itself contradicted
+    await teachA("alpha", "bruno"); await corpusSays("alpha", "rex");
+    await teachA("beta", "bruno"); await corpusSays("beta", "rex");
+    await teachA("gamma", "bruno"); await corpusSays("gamma", "rex");
+    await teachA("delta", "bruno");   // asserted by A, NEVER itself contradicted
+    await teachA("epsilon", "bruno"); // asserted by A, NEVER itself contradicted
 
     // Session B: 5 taught facts, none ever contradicted.
-    await teachB("zeta", "red");
-    await teachB("eta", "red");
-    await teachB("theta", "red");
-    await teachB("iota", "red");
-    await teachB("kappa", "red");
+    await teachB("zeta", "bruno");
+    await teachB("eta", "bruno");
+    await teachB("theta", "bruno");
+    await teachB("iota", "bruno");
+    await teachB("kappa", "bruno");
 
     const m = await loadMemory(dir);
     const sourceA = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-chat:${SESSION_A}`);
@@ -135,6 +140,77 @@ test("a Fact's and a Source's mgx:updatedAt advance when recomputeFactTrust/reco
 
     assert.ok(sourceUpdated2 > sourceUpdated1, `Source updatedAt advances (${sourceUpdated1} -> ${sourceUpdated2})`);
     assert.ok(factUpdated2 > factUpdated1, `Fact updatedAt advances (${factUpdated1} -> ${factUpdated2})`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+const NODE_CLEAN = "7f3a9c2e5b1d4a60";
+const NODE_JUNK = "6589e595d1fa9a90";
+const peerTag = (nodeId, name) => `teach:peer:${name}#node:${nodeId}@2026-07-30T00:00:00.000Z`;
+
+test("a peer node carries its own track record: an asserting-and-contradicted node's Source scores below a clean node's, and it drags that node's every fact down", async () => {
+  const dir = await tmpRepo();
+  try {
+    const teachFromNode = (nodeId, name) => (subject, object) => appendFact(dir, {
+      subject, predicate: SINGLE_VALUED, object, provenance: peerTag(nodeId, name),
+    });
+    const junkNode = teachFromNode(NODE_JUNK, "scavenger-dial");
+    const cleanNode = teachFromNode(NODE_CLEAN, "amber-fox");
+    const corpusSays = (subject, object) => appendFact(dir, {
+      subject, predicate: SINGLE_VALUED, object, provenance: "corpus:conceptnet /r/HasProperty",
+    });
+
+    await junkNode("alpha", "red"); await corpusSays("alpha", "blue");
+    await junkNode("beta", "red"); await corpusSays("beta", "blue");
+    await junkNode("gamma", "red"); await corpusSays("gamma", "blue");
+    await junkNode("delta", "red");   // asserted by the junk node, never itself contradicted
+    await junkNode("epsilon", "red");
+
+    await cleanNode("zeta", "red");
+    await cleanNode("eta", "red");
+    await cleanNode("theta", "red");
+    await cleanNode("iota", "red");
+    await cleanNode("kappa", "red");
+
+    const m = await loadMemory(dir);
+    const junkSource = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_JUNK}`);
+    const cleanSource = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_CLEAN}`);
+    assert.ok(junkSource && cleanSource, "one Source per peer node exists");
+
+    const junkReliability = Number(attr(junkSource, SOURCE_RELIABILITY_PROP));
+    const cleanReliability = Number(attr(cleanSource, SOURCE_RELIABILITY_PROP));
+    assert.equal(junkReliability, sessionReliabilityFrom({ factsAsserted: 5, factsContradicted: 3 }));
+    assert.equal(cleanReliability, sessionReliabilityFrom({ factsAsserted: 5, factsContradicted: 0 }));
+    assert.ok(junkReliability < 1, "a node whose claims keep getting contradicted drops below neutral");
+    assert.ok(cleanReliability > 1, "a node whose claims stand rises above neutral");
+
+    const rows = readFactRows(m);
+    const junkOwnFactTrust = rows.find((r) => r.subject === "delta")?.trust;
+    const cleanOwnFactTrust = rows.find((r) => r.subject === "zeta")?.trust;
+    assert.ok(
+      junkOwnFactTrust < cleanOwnFactTrust,
+      `the junk node's reputation follows a fact nothing contradicted (${junkOwnFactTrust} < ${cleanOwnFactTrust})`,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a peer node's first-ever fact scores the teach prior nudged by a mildly-positive one-assertion record", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, {
+      subject: "dog", predicate: "mgx:capableOf", object: "bark", provenance: peerTag(NODE_CLEAN, "amber-fox"),
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === `src:teach-node:${NODE_CLEAN}`);
+    assert.equal(Number(attr(source, SOURCE_RELIABILITY_PROP)), sessionReliabilityFrom({ factsAsserted: 1, factsContradicted: 0 }));
+    assert.equal(Number(attr(source, SOURCE_RELIABILITY_PROP)), 1.025);
+
+    const record = m.individuals.find((i) => i.class === "Fact" && i.id.endsWith(`@src:teach-node:${NODE_CLEAN}`));
+    assert.ok(record, "the assertion record is keyed on the peer node's own Source id");
+    assert.equal(Number(attr(record, "mgx:trustScore")), 0.97375, "0.95 teach prior x the 1.025 nudge");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

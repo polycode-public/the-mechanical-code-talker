@@ -2,9 +2,11 @@
 # two-door wardrobe silhouette, now gradient-shaded from its own taught
 # mgx:madeOf value — an antique cabinet reads as wood far more often than
 # metal, but a metal filing cabinet is a real enough alternative reading to
-# carry too. The vertical door-seam and both knobs stay dark overlays
-# rather than a third colour, since a seam and a knob read as "carved
-# detail" regardless of what the carcass itself is made of.
+# carry too. A cornice cap overhangs the doors and two feet lift the case
+# off the ground, both in the same gradient as the carcass; the vertical
+# door-seam and both knobs stay dark overlays rather than a third colour,
+# since a seam and a knob read as "carved detail" regardless of what the
+# carcass itself is made of.
 classes = ["cabinet"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15,12 +17,15 @@ svg = """
       <stop offset="100%" stop-color="{{FILL_DARK}}"/>
     </linearGradient>
   </defs>
-  <rect x="4.5" y="2.5" width="7.2" height="19" rx="1" fill="url(#cabinet-fill)"/>
-  <rect x="12.3" y="2.5" width="7.2" height="19" rx="1" fill="url(#cabinet-fill)"/>
-  <rect x="4.5" y="2.5" width="15" height="1.4" fill="#000000" opacity="0.18"/>
-  <path d="M5.2 3.4 L5.2 20.6" stroke="#ffffff" stroke-width="0.7" opacity="0.35"/>
+  <rect x="4" y="2" width="16" height="1.3" rx="0.4" fill="url(#cabinet-fill)"/>
+  <rect x="4.5" y="2.9" width="7.2" height="18.6" rx="1" fill="url(#cabinet-fill)"/>
+  <rect x="12.3" y="2.9" width="7.2" height="18.6" rx="1" fill="url(#cabinet-fill)"/>
+  <rect x="4.5" y="2.9" width="15" height="1.4" fill="#000000" opacity="0.18"/>
+  <path d="M5.2 3.8 L5.2 21" stroke="#ffffff" stroke-width="0.7" opacity="0.35"/>
   <circle cx="10.6" cy="12" r="0.9" fill="#000000" opacity="0.35"/>
   <circle cx="13.4" cy="12" r="0.9" fill="#000000" opacity="0.35"/>
+  <rect x="5.6" y="21.4" width="1.3" height="1.3" rx="0.3" fill="{{FILL_DARK}}"/>
+  <rect x="17.1" y="21.4" width="1.3" height="1.3" rx="0.3" fill="{{FILL_DARK}}"/>
 </svg>
 """
 

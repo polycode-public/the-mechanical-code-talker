@@ -22,11 +22,11 @@ import {
   reachableCapabilityNames, extractEntity,
 } from "../../src/domain/router/resolver.mjs";
 import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/domain/router/planner.mjs";
-import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
-import { runAgentbench, createRunCtx } from "../../agentbench/run.mjs";
-import { parseCases, COMPLETION_FLOOR } from "../../agentbench/grade.mjs";
+import { resolverDriver } from "../../test-benchmarks/agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx } from "../../test-benchmarks/agentbench/run.mjs";
+import { parseCases, COMPLETION_FLOOR } from "../../test-benchmarks/agentbench/grade.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/cases.jsonl", import.meta.url));
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 async function graphCtx() {
@@ -195,15 +195,16 @@ test("resolver: the synonym/related frame reaches tmct_related via resolveMemory
     assert.equal(r.selected.name, "tmct_related", q);
     assert.deepEqual(r.selected.input, { term: "sofa" }, q);
     assert.ok(r.proof.some((s) => s.pred === "cap:memory-facts" && s.ok), `${q}: proof carries the memory-facts precondition`);
+    assert.ok(r.proof.some((s) => s.pred === "cap:resolves" && s.param === "term" && s.ok), `${q}: proof carries the memory-graph resolves step`);
   }
 });
 
-test("resolver: a term the memory graph holds no synonym/related facts for stays an honest refuse, never a guess", async () => {
+test("resolver: a term the memory graph holds no facts for stays an honest refuse, never a guess", async () => {
   const ctx = SHARED.ctx;
   const r = await resolveOne("another word for zzznotaterm", ["tmct_related"], ctx);
   assert.equal(r.refused, true);
   assert.deepEqual(r.selected, null);
-  assert.match(r.reason, /no synonym\/related facts/);
+  assert.match(r.reason, /memory graph holds no facts/);
 });
 
 test("imperative reach: a bare imperative the grammar+command register both miss ('explain X') binds via the description frame", async () => {

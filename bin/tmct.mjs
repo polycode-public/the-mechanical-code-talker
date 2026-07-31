@@ -467,7 +467,7 @@ async function activatePluggableInput(repoRoot, resolved) {
   }
   if (resolved.manifestEntry) {
     // Preserve the ORIGINAL `--corpus <tier2-id>` wording byte-for-byte
-    // (e2e/init-cli.test.mjs asserts on this exact shape).
+    // (test-e2e/init-cli.test.mjs asserts on this exact shape).
     return `seeded tier-2 corpus "${resolved.manifestEntry.id}" (${resolved.manifestEntry.kind}) — ${seeded.appended} fact(s) added`
       + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${resolved.manifestEntry.file} (${resolved.manifestEntry.license}). `
       + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`;
@@ -559,6 +559,7 @@ async function writeStandaloneViewPage(archetype, rest) {
   const outPath = resolvePath(process.cwd(), strFlag(rest, ["--output", "--out"], `${archetype}.html`));
   let html;
   if (archetype === "sprites") {
+    const engineBundleJs = await buildEngineBundleJs("build-sprites-bundle.mjs");
     const { readSpriteTemplateFiles } = await import("../src/adapters/corpus/sprite-template-files.mjs");
     const { readSpriteLargeTemplateFiles } = await import("../src/adapters/corpus/sprite-large-template-files.mjs");
     const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import("../src/services/sprite-catalog-viz.mjs");
@@ -566,6 +567,8 @@ async function writeStandaloneViewPage(archetype, rest) {
       iconTemplates: readSpriteTemplateFiles(),
       largeTemplates: readSpriteLargeTemplateFiles(),
       factRows: await loadSpriteOntologyFactRows(),
+      spritesBundleAvailable: true,
+      engineBundleJs,
     });
   } else if (archetype === "spider-fly") {
     const engineBundleJs = await buildEngineBundleJs("build-spider-fly-bundle.mjs");
@@ -920,6 +923,43 @@ async function main() {
     // on disk: one copy-paste Bash invocation per tool, rewritten on every init.
     process.stdout.write(`cold-tool catalog: ${await writeToolsCatalog(repoRoot)}\n`);
 
+    // `--with-persona code`: on top of the corpus-vocabulary bias `initRepo` just wrote,
+    // also run the repository INDEXER (`tmct index`'s own machinery) against this repo's
+    // real source, so one command produces a `.tmct/graph.json` backed by the repo itself —
+    // not just a bias preset. `chat --repo` already reads whatever graph is on disk; this
+    // is the onboarding path that puts one there. Failure-tolerant like the corpus seed
+    // above: a repo that can't be indexed (no supported source, or a parse error) degrades
+    // to an initialized-but-graphless repo, never a crashed init.
+    if (personaName === "code") {
+      try {
+        const { indexRepository } = await import("../src/index/index-repo.mjs");
+        const stats = await indexRepository(repoRoot);
+        for (const { pass, message } of stats.gitErrors || []) {
+          process.stderr.write(`tmct init: WARNING git history pass '${pass}' — ${message} (graph built without those edges)\n`);
+        }
+        const perLang = Object.entries(stats.perLang)
+          .map(([lang, s]) => `${lang}: ${s.modules} modules, ${s.symbols} symbols`).join("; ");
+        const kib = (stats.bytes / 1024).toFixed(1);
+        process.stdout.write(
+          `code persona: indexed the repo — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
+          + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
+        );
+        // The capability the graph just unlocked, said out loud — a graphless
+        // repo (no supported source) gets no such promise.
+        if (stats.modules > 0) {
+          process.stdout.write(
+            `indexed ${stats.modules} modules (${stats.symbols} symbols) — code questions now work in \`tmct chat\`: `
+            + `try "which modules import <path>" or "what does <module> do".\n`,
+          );
+        }
+        if (stats.failures?.length) {
+          process.stderr.write(`tmct init: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
+        }
+      } catch (e) {
+        process.stderr.write(`tmct init: code persona indexing skipped (${e?.message || e})\n`);
+      }
+    }
+
     // `--corpus`/`--ontology`/`--lexicon` now mean "activate this bundle and
     // PERSIST that into tmct.toml" — so a second `tmct init` (or the next chat
     // bootstrap) remembers the choice, unlike the old ad hoc path, which had
@@ -1011,6 +1051,14 @@ async function main() {
       `tmct index — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
       + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
     );
+    // Same discoverability line the code-persona init prints: the graph just
+    // unlocked code questions, so say so — but never over an empty graph.
+    if (stats.modules > 0) {
+      process.stdout.write(
+        `indexed ${stats.modules} modules (${stats.symbols} symbols) — code questions now work in \`tmct chat\`: `
+        + `try "which modules import <path>" or "what does <module> do".\n`,
+      );
+    }
     if (stats.failures?.length) {
       process.stderr.write(`tmct index: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
     }
@@ -1271,7 +1319,30 @@ async function main() {
     // an honest "chat unavailable" note instead of the dock (e.g. a fresh
     // checkout before the bundle's first build).
     const memoryAskBundle = await readMemoryAskBundle();
-    await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle }), "utf8");
+    // The digest structure table, embedded so the page reads a term back as a
+    // narrative client-side on refocus (over the store this page carries) — the
+    // same mechanism the demo ledger uses, sharing the memory-ask engine's own
+    // browser digest helper. The initial focus also gets a node-side digest as
+    // the fallback for a page whose engine bundle never loads.
+    const { readDigestStructures, digestTermFromRows } = await import("../src/adapters/corpus/digest-bank.mjs");
+    const { readFactRows: readVizFactRows } = await import("../src/adapters/memory/core.mjs");
+    const digestStructures = readDigestStructures();
+    let focusDigest = null;
+    if (data.focus && data.payload) {
+      const allFactRows = readVizFactRows(data.payload);
+      const focusRows = allFactRows.filter((r) => r.subject === data.focus);
+      const article = focusRows.length ? digestTermFromRows(data.focus, focusRows, allFactRows, { budget: 8 }) : null;
+      if (article && article.paragraphs.length) {
+        focusDigest = {
+          term: data.focus,
+          paragraphs: article.paragraphs,
+          sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+          facts: (article.detail.facts || []).map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+          factCount: article.detail.factCount,
+        };
+      }
+    }
+    await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle, digestStructures, focusDigest }), "utf8");
     process.stdout.write(
       `tmct viz — wrote ${data.meta.shown} fact row(s) around ${data.focus ? `'${data.focus}'` : "no focus"} to ${outPath}\n`,
     );
@@ -1280,6 +1351,59 @@ async function main() {
         `showing ${data.meta.shown} of ${data.meta.total} rows — narrow with --focus <term> or raise --limit\n`,
       );
     }
+    return;
+  }
+
+  if (mode === "digest") {
+    // `tmct digest <term>` — the vocabulary-side digest: turn what the graph
+    // knows about one term into a bounded, readable paragraph, deterministically
+    // (src/domain/digest, wired through corpus/digest-bank.mjs), beside the
+    // code-side `tmct cli digest`. Same repo/backend resolution as `viz`.
+    const rest = process.argv.slice(3);
+    const term = rest.find((a) => !a.startsWith("-"));
+    if (!term) {
+      process.stderr.write("tmct digest — name a term: `tmct digest <term>`\n");
+      process.exitCode = 1;
+      return;
+    }
+    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
+    const { openMemoryBackend, loadMemory, readFactRows, normFactTerm } = await import("../src/adapters/memory/core.mjs");
+    const { digestTermFromRows } = await import("../src/adapters/corpus/digest-bank.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    let rows;
+    try { rows = readFactRows(await loadMemory(memoryDir)); } finally { await closeMemoryStore(); }
+    // Fold a naive plural to its base on BOTH sides so "aardvark" reaches a
+    // stored "aardvarks" and vice versa — the store keeps whichever number the
+    // teaching sentence used.
+    const baseTerm = (s) => {
+      const x = normFactTerm(s);
+      if (x.endsWith("es")) return x.slice(0, -2);
+      if (x.endsWith("s")) return x.slice(0, -1);
+      return x;
+    };
+    const wantedBase = baseTerm(term);
+    const termRows = rows.filter((r) => baseTerm(r.subject) === wantedBase);
+    if (!termRows.length) {
+      process.stdout.write(`I don't have anything stored about "${term}".\n`);
+      return;
+    }
+    // Render under the term's own stored spelling, not the query's — a plural
+    // query ("doctors") reads back as the singular the store holds ("doctor").
+    const subject = termRows[0].subject;
+    const article = digestTermFromRows(subject, termRows, rows, { budget: 12 });
+    if (!article || !article.paragraphs.length) {
+      // No structure bank, or nothing the selector kept — surface the plain
+      // fact count rather than an empty digest.
+      process.stdout.write(`${subject} — ${termRows.length} fact(s) stored. Run \`tmct viz --focus ${subject}\` for the full ledger.\n`);
+      return;
+    }
+    const sources = article.sources.map((s) => s.provenance).filter(Boolean);
+    const out = [`${subject}`, ...article.paragraphs];
+    if (sources.length) out.push("", `Sources: ${[...new Set(sources)].join("; ")}`);
+    out.push(`${article.detail.factCount} fact(s) stored — \`tmct viz --focus ${subject}\` shows them all.`);
+    process.stdout.write(out.join("\n") + "\n");
     return;
   }
 
@@ -1292,7 +1416,8 @@ async function main() {
     const rest = process.argv.slice(3);
     if (rest.includes("--help") || rest.includes("-h")) {
       process.stdout.write(
-        "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n\n" +
+        "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n" +
+        "             plus a capability-router plan verb (POST /v1/plan)\n\n" +
         "Usage:\n" +
         "  tmct serve [--repo <abs>] [--graph <path>] [--config <path>] [--host <h>] [--port <n>]\n\n" +
         "  --repo <abs>   target a repo's graph (<abs>/.tmct/graph.json); default: git root/cwd\n" +
@@ -1301,9 +1426,14 @@ async function main() {
         "  --config <path>  an alternate tmct.toml location (a file or a directory)\n" +
         "  --host <h>     bind address (default 127.0.0.1)\n" +
         "  --port <n>     TCP port (default 8787; 0 picks an ephemeral port)\n\n" +
-        "Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
-        "Response: { id, type:\"message\", role:\"assistant\", content:[...blocks], stop_reason, usage }\n" +
-        "          usage is always { input_tokens: 0, output_tokens: 0 } — tmct is the $0 floor.\n",
+        "POST /v1/messages\n" +
+        "  Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
+        "  Response: { id, type:\"message\", role:\"assistant\", content:[...blocks], stop_reason, usage }\n" +
+        "            usage is always { input_tokens: 0, output_tokens: 0 } — tmct is the $0 floor.\n\n" +
+        "POST /v1/plan\n" +
+        "  Request:  { request: \"<NL request>\", tools?: [\"tmct_impact\", ...] }\n" +
+        "  Response: the capability-router loop result — grounded { driver, calls, proof,\n" +
+        "            composed?, usage } or an in-band honest { refused: true, why }.\n",
       );
       return;
     }
@@ -1318,13 +1448,19 @@ async function main() {
     // REPLACES serve's old cwd-only default (loadConfig had no git-root
     // fallback) with the same git-root-aware default every other subcommand
     // now shares — a deliberate, documented unification, not a regression.
-    const { config } = await resolveRuntimeConfig({ argv: rest });
-    const srv = await startServer({ config, host, port });
+    const { repo, config, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Open the taught store the same env > tmct.toml > default way `tmct plan`
+    // does, so /v1/plan reasons over the taught world/rule records chat wrote —
+    // registered per request and unregistered after, never mutated by serve.
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    const srv = await startServer({ config, host, port, memoryDir });
     process.stdout.write(
-      `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST) — ` +
+      `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST), plan at ${srv.url}/v1/plan (POST) — ` +
       `graph ${srv.config.graphFile} — usage billed $0 — Ctrl+C to stop\n`,
     );
-    const shutdown = async () => { await srv.close(); process.exit(0); };
+    const shutdown = async () => { await srv.close(); await closeMemoryStore(); process.exit(0); };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     return; // the listening server keeps the event loop alive

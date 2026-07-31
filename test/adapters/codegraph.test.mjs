@@ -47,7 +47,7 @@ import {
 } from "../../src/domain/codegraph.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { proseLayerHits } from "../../src/domain/prose.mjs";
-import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../../src/adapters/memory/core.mjs";
+import { appendUtterance, appendFact, factRecordIdsFor, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../../src/adapters/memory/core.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
@@ -123,6 +123,22 @@ test("resolveSymbol: misses invent nothing; ties break on attestation", () => {
   const r = resolveSymbol(graph, "mjs"); // substring of every module label
   assert.equal(r.match.id, "mod:app/lib/a.mjs"); // 2 commit refs → best-attested
   assert.equal(r.candidates[0].id, "mod:app/lib/b.mjs"); // 1 commit ref → next
+});
+
+test("resolveSymbol: a multi-segment path that doesn't exist honestly misses, even when another file shares its basename", () => {
+  const withOtherIndex = parseEntities({
+    individuals: [
+      { id: "mod:examples/ejs/index.js", label: "examples/ejs/index.js", class: "Module" },
+    ],
+  });
+  // "index.js" alone is a legitimate bare-filename basename match.
+  assert.equal(resolveSymbol(withOtherIndex, "index.js").match.id, "mod:examples/ejs/index.js");
+  // "lib/router/index.js" reads as a repo-relative path that isn't in the graph at
+  // all; it must not fuzzy-match onto the unrelated examples/ejs/index.js just
+  // because the last segment happens to match.
+  const miss = resolveSymbol(withOtherIndex, "lib/router/index.js");
+  assert.equal(miss.match, null);
+  assert.deepEqual(miss.candidates, []);
 });
 
 test("impactClosure: reverse closure, diamond collapsed, cycle terminated", () => {
@@ -307,6 +323,18 @@ test("renderSearch: finds the module by defined-symbol name, ranked, compact", (
   assert.match(text, /tmct_describe/);
   assert.match(renderSearch(graph, "nothing-matches-this"), /no module matches/);
   assert.equal(renderSearch(graph, "   "), "empty query");
+});
+
+test("renderSearch/renderMembers/renderSignature/renderCallers: toolNamePrefix replaces the hardcoded tmct_ in follow-up hints, and defaults to tmct_ when omitted", () => {
+  const seonix = { toolNamePrefix: "seonix_" };
+  assert.match(renderSearch(graph, "fnAlpha", seonix), /seonix_describe/);
+  assert.doesNotMatch(renderSearch(graph, "fnAlpha", seonix), /tmct_/);
+  assert.match(renderMembers(graph, graph.byId.get("cls-base"), seonix), /seonix_describe/);
+  assert.match(renderMembers(graph, graph.byId.get("cls-widget"), seonix), /seonix_snippet/);
+  assert.match(renderSignature(graph, graph.byId.get("m-render"), seonix), /seonix_snippet/);
+  assert.match(renderCallers(graph, graph.byId.get("mod:app/lib/f.mjs"), seonix), /seonix_impact/);
+  // omitted toolNamePrefix keeps today's tmct_ hints, byte-identical to before this option existed
+  assert.match(renderSearch(graph, "fnAlpha"), /tmct_describe/);
 });
 
 test("renderSearch kind= switches to symbol search with name/decorator filters", () => {
@@ -1351,14 +1379,18 @@ test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(
     // The Fact → Utterance edges a fold produces, injected in that exact shape rather
     // than driving the whole session-fold pipeline just to prove spiralExpand's OWN
     // traversal mechanics work over the real edge inventory.
+    // appendFact reports the PUBLIC fact id — the group — while the node
+    // holding it is that group's own assertion record, which is what an edge
+    // endpoint has to name.
+    const [factRecordId] = factRecordIdsFor(m, factId);
     m.objectProperties.push({
       predicate: "canonicalisedFrom", prop: "mgx:canonicalisedFrom", count: 1,
-      examples: [{ subject: factId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
+      examples: [{ subject: factRecordId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
     });
 
     const g = parseEntities(m);
     const sessId = `session:${SESSION}`;
-    assert.ok(g.byId.has(uttId) && g.byId.has(factId) && g.byId.has(sessId) && g.byId.has(sourceInd.id), "fixture sanity: every individual exists");
+    assert.ok(g.byId.has(uttId) && g.byId.has(factRecordId) && g.byId.has(sessId) && g.byId.has(sourceInd.id), "fixture sanity: every individual exists");
 
     const results = spiralExpand(g, [], {
       // q: 1 (no hub pruning) — the utterance's hop-1 frontier is only 2 wide (Session + Fact) in
@@ -1371,7 +1403,7 @@ test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(
 
     assert.equal(byNodeId.get(uttId), 0, "the seed itself is included, at hop 0");
     assert.equal(byNodeId.get(sessId), 1, "the Session is reached one hop away via saidInSession");
-    assert.equal(byNodeId.get(factId), 1, "the Fact is reached one hop away via canonicalisedFrom");
+    assert.equal(byNodeId.get(factRecordId), 1, "the Fact is reached one hop away via canonicalisedFrom");
     assert.equal(byNodeId.get(sourceInd.id), 2, "the Source is reached two hops away via statedBy (Utterance -> Fact -> Source)");
   } finally {
     await rm(dir, { recursive: true, force: true });

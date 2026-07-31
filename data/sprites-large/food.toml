@@ -1,7 +1,11 @@
 # food — a loaf at the sprite tier: the generic foodstuff class, a warm
 # cream-to-brown gradient anchored to currentColor rather than the
 # tier's usual neutral white/black mix (an appetising warmth fits food
-# specifically), no material.
+# specifically), no material. A fixed pale crust cap sits across the top
+# third — the one marking bold enough to read as a baked crust rather
+# than a plain mound whichever theme's currentColor renders the body
+# dark, the same fixed-accent-over-a-dark-body technique badger.toml
+# uses for its face.
 classes = ["food"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,12 +16,14 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 75%, #4a2c14)"/>
     </linearGradient>
   </defs>
+  <ellipse cx="12" cy="19.8" rx="8.6" ry="1.3" fill="#000000" opacity="0.18"/>
   <path d="M3.4 15.6 C3.4 10.4 7.2 6.6 12 6.6 C16.8 6.6 20.6 10.4 20.6 15.6 C20.6 19 17 20.6 12 20.6 C7 20.6 3.4 19 3.4 15.6 Z" fill="url(#food-fill)"/>
-  <g stroke="#4a2c14" stroke-width="0.6" opacity="0.35" fill="none" stroke-linecap="round">
+  <path d="M4.6 12.4 C5.6 8.8 8.4 6.6 12 6.6 C15.6 6.6 18.4 8.8 19.4 12.4 C16.6 13.8 13.6 14.4 12 14.4 C10.4 14.4 7.4 13.8 4.6 12.4 Z" fill="#fbe4b8" opacity="0.55"/>
+  <g stroke="#8a5a24" stroke-width="0.4" opacity="0.35" fill="none" stroke-linecap="round">
     <path d="M8 9.4 C7 12 7 15 8 17.6"/>
     <path d="M12 8.6 C11 11.6 11 15.6 12 18.6"/>
     <path d="M16 9.4 C17 12 17 15 16 17.6"/>
   </g>
-  <ellipse cx="8.6" cy="10.4" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="8.6" cy="10.4" rx="3" ry="1.6" fill="#ffffff" opacity="0.4"/>
 </svg>
 """

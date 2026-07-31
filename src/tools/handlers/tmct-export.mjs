@@ -10,13 +10,19 @@ import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
 import { dirname } from "node:path";
 import { loadMemory, openConfiguredMemoryBackend } from "../../adapters/memory/core.mjs";
 
-export async function tmct_export(_args, { config }) {
-  const { dir, close } = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
+export async function tmct_export(_args, { config, memoryBackend = null }) {
+  // Prefer a caller-supplied backend handle (e.g. an already-open session's
+  // memory store) over re-deriving one from config/tmct.toml — re-deriving
+  // can silently land on a different backend than the one the caller is
+  // actually using. A caller-supplied handle is caller-owned, so it is never
+  // closed here; only a backend this call opened itself gets closed.
+  const opened = memoryBackend ? null : await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
+  const dir = memoryBackend || opened.dir;
   try {
     const jsonl = serializeFactsJsonl(await loadMemory(dir));
     return jsonl || "(the memory store holds no facts to export)";
   } finally {
-    await close();
+    if (opened) await opened.close();
   }
 }
 

@@ -1,9 +1,12 @@
-# egg — the spider-and-fly board's laid egg. The plain shell silhouette
-# plus one small carved highlight.
+# egg — the spider-and-fly board's laid egg: the plain shell silhouette,
+# lit from the upper left with a lighter highlight and a darker shadow
+# side so the round shell reads as three-dimensional rather than a flat
+# tinted disc.
 classes = ["egg"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M12 2 C7 2 4 10 4 15.5 C4 20 7.6 22 12 22 C16.4 22 20 20 20 15.5 C20 10 17 2 12 2 Z" fill="currentColor"/>
-  <ellipse cx="9.6" cy="9.5" rx="1.7" ry="2.4" fill="currentColor" opacity="0.28"/>
+  <path d="M12 2 C16 2 19 8.6 19.9 14 C18.4 15.2 16.6 15.8 15 14.6 C16.2 11 15.6 5.4 12 2 Z" fill="color-mix(in srgb, currentColor 65%, black)"/>
+  <ellipse cx="9.4" cy="8.8" rx="1.9" ry="2.8" fill="color-mix(in srgb, currentColor 25%, white)"/>
 </svg>
 """

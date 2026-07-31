@@ -1,6 +1,7 @@
 # grass — a cluster of blades at the sprite tier: each blade its own
 # gradient sliver, no material (a blade's own colour is whatever
-# currentColor sets).
+# currentColor sets). A shadowed clump at the base ties the four
+# blades to one tuft instead of four unrelated slivers.
 classes = ["grass"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,6 +12,7 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 75%, black)"/>
     </linearGradient>
   </defs>
+  <ellipse cx="12.4" cy="20.6" rx="9" ry="1.6" fill="color-mix(in srgb, currentColor 70%, black)" opacity="0.35"/>
   <path d="M4 21 C4 14 6 9 8.4 5.4 C7.4 10.4 7.6 15.8 8.6 21 Z" fill="url(#grass-fill)"/>
   <path d="M9 21 C10 15 10.4 9.4 12 3.4 C12.6 9.6 12.6 15.4 11.8 21 Z" fill="url(#grass-fill)"/>
   <path d="M12.6 21 C13.6 16 15.4 11.2 18.2 7.4 C16.6 12.4 16 17 16.4 21 Z" fill="url(#grass-fill)"/>

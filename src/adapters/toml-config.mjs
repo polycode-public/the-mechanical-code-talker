@@ -102,12 +102,22 @@ export async function normalizeConfig(raw, { configDir } = {}) {
     const arr = Array.isArray(src.graph_files) ? src.graph_files : [src.graph_files];
     cfg.graphFiles = arr.map((p) => resolve(dir, String(p)));
   }
+  // [graph] read_only — a chat session against this repo READS the graph but
+  // writes nothing back into its .tmct/: no per-turn session upsert into
+  // graph.json, no transcript/sidecar logs, no memory droppings. A committed
+  // example fixture sets it so a plain `tmct chat --repo examples/<x>` (no
+  // --ephemeral) can never rewrite the hand-stamped graph. Sparse like the
+  // rest: absent when unset, so "unset" stays distinguishable from "false".
+  const graph = src.graph || {};
+  if (graph.read_only !== undefined) cfg.graph = { readOnly: graph.read_only };
   const corpus = src.corpus || {};
   if (corpus.tier !== undefined) cfg.corpus = { tier: corpus.tier };
   const seed = src.seed || {};
   const seedCfg = {};
   if (seed.enabled !== undefined) seedCfg.enabled = seed.enabled;
   if (seed.limit !== undefined) seedCfg.limit = seed.limit;
+  if (seed.capture_unknown_context !== undefined) seedCfg.captureUnknownContext = seed.capture_unknown_context;
+  if (seed.unknown_context_limit !== undefined) seedCfg.unknownContextLimit = seed.unknown_context_limit;
   if (Object.keys(seedCfg).length) cfg.seed = seedCfg;
 
   // Extension-pack seam (src/services/extensions.mjs): sparse PASS-THROUGH only — the
@@ -127,9 +137,15 @@ export async function normalizeConfig(raw, { configDir } = {}) {
 
   // Research-lane knobs (src/services/research.mjs): sparse PASS-THROUGH,
   // same discipline as [games.*] — the raw `[research]` table
-  // (fanout_limit / depth_limit / min_interval_ms, snake_case) rides through
-  // unmodified; clamping and default-filling is resolveResearchConfig's job.
+  // (fanout_limit / max_depth / max_topics / min_interval_ms, snake_case)
+  // rides through unmodified; clamping and default-filling is
+  // resolveResearchConfig's job.
   if (src.research !== undefined) cfg.research = src.research;
+
+  // Discourse-record knob (src/domain/discourse.mjs): sparse PASS-THROUGH,
+  // same discipline — the raw `[discourse]` table (max_referents) rides
+  // through; default-filling is resolveDiscourseConfig's job.
+  if (src.discourse !== undefined) cfg.discourse = src.discourse;
 
   const idx = src.index || {};
   const index = {};

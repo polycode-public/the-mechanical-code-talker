@@ -11,14 +11,19 @@ import assert from "node:assert/strict";
 import {
   RESEARCH_DEFAULTS,
   RESEARCH_FANOUT_MAX,
+  RESEARCH_MAX_DEPTH,
+  RESEARCH_MAX_TOPICS,
   resolveResearchConfig,
+  clampResearchConfig,
   parseResearchRequest,
   researchProvenanceTag,
   researchTopicKey,
   renderResearchAnswer,
   researchSnapshot,
   researchTurn,
+  relevanceOrder,
 } from "../../src/services/research.mjs";
+import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
 
 const ROW = (title, summary = `${title} is a thing.`) => ({
   term: title.toLowerCase(),
@@ -69,6 +74,13 @@ test("parseResearchRequest reads the start shape, with and without a limit, arti
   assert.deepEqual(parseResearchRequest('research "polar bears" with limit 2'), { kind: "start", topic: "polar bears", limit: 2 });
 });
 
+test("parseResearchRequest reads a depth token, alongside a limit in either order", () => {
+  assert.deepEqual(parseResearchRequest("research owls depth 2"), { kind: "start", topic: "owls", depth: 2 });
+  assert.deepEqual(parseResearchRequest("research owls, limit 3 depth 2"), { kind: "start", topic: "owls", limit: 3, depth: 2 });
+  assert.deepEqual(parseResearchRequest("research owls depth 2, limit 3"), { kind: "start", topic: "owls", limit: 3, depth: 2 });
+  assert.deepEqual(parseResearchRequest("research the roman empire with depth 3"), { kind: "start", topic: "roman empire", depth: 3 });
+});
+
 test("parseResearchRequest reads the queue verbs before the start shape ever sees them", () => {
   assert.deepEqual(parseResearchRequest("research next"), { kind: "next" });
   assert.deepEqual(parseResearchRequest("research continue"), { kind: "next" });
@@ -86,14 +98,25 @@ test("parseResearchRequest declines a non-research line", () => {
 
 // ---- config ----------------------------------------------------------------
 
-test("resolveResearchConfig ships defaults, clamps the fan-out, caps depth at 1, and only ever raises the interval", () => {
+test("resolveResearchConfig ships defaults, clamps the fan-out and depth, caps the node budget, and only ever raises the interval", () => {
   assert.deepEqual(resolveResearchConfig(null), { ...RESEARCH_DEFAULTS });
-  const cfg = resolveResearchConfig({ research: { fanout_limit: 99, depth_limit: 7, min_interval_ms: 250 } });
+  const cfg = resolveResearchConfig({ research: { fanout_limit: 99, depth_limit: 7, max_topics: 999, min_interval_ms: 250 } });
   assert.equal(cfg.fanoutLimit, RESEARCH_FANOUT_MAX, "the fan-out cap holds against a large config value");
-  assert.equal(cfg.depthLimit, 1, "depth clamps to the engineered range");
+  assert.equal(cfg.maxDepth, RESEARCH_MAX_DEPTH, "depth clamps to the engineered ceiling");
+  assert.equal(cfg.maxTopics, RESEARCH_MAX_TOPICS, "the node budget clamps to its ceiling");
   assert.equal(cfg.minIntervalMs, RESEARCH_DEFAULTS.minIntervalMs, "the polite interval never drops below the floor");
   assert.equal(resolveResearchConfig({ research: { min_interval_ms: 5000 } }).minIntervalMs, 5000, "raising it is allowed");
   assert.equal(resolveResearchConfig({ research: { fanout_limit: 0 } }).fanoutLimit, 0, "zero fan-out is a legal choice");
+  assert.equal(resolveResearchConfig({ research: { max_depth: 2 } }).maxDepth, 2, "max_depth is read as the depth knob");
+});
+
+test("clampResearchConfig folds a camelCase partial onto defaults and clamps every knob to its range", () => {
+  assert.deepEqual(clampResearchConfig({}), { ...RESEARCH_DEFAULTS });
+  const cfg = clampResearchConfig({ maxDepth: 9, maxTopics: 0, fanoutLimit: -3 });
+  assert.equal(cfg.maxDepth, RESEARCH_MAX_DEPTH, "depth clamps to its ceiling");
+  assert.equal(cfg.maxTopics, 1, "the node budget clamps to its floor of 1");
+  assert.equal(cfg.fanoutLimit, 0, "a negative fan-out clamps to zero");
+  assert.equal(clampResearchConfig({ maxTopics: NaN }).maxTopics, RESEARCH_DEFAULTS.maxTopics, "a non-finite knob falls back to its default");
 });
 
 // ---- the run mechanics -----------------------------------------------------
@@ -212,6 +235,65 @@ test("config depth_limit 0 and fanout 0 both mean no fan-out: the run completes 
   }
 });
 
+test("a depth-2 run fans out again when a queued topic is fetched: its own lead links enqueue at depth 2, stamped @2, never re-queuing a met topic", async () => {
+  const provider = cannedProvider({
+    articles: {
+      owl: ROW("Owl"), bird: ROW("Bird"), feather: ROW("Feather"), wing: ROW("Wing"),
+    },
+    links: {
+      Owl: ["Bird"],
+      Bird: ["Feather", "Wing", "Owl"], // "Owl" is the run topic — must never re-queue
+    },
+  });
+  const ingest = ingestRecorder(1);
+  const ctx = ctxFor(provider, ingest);
+  const start = await researchTurn("research owl, limit 5 depth 2", ctx);
+  assert.match(start.text, /queued 1 linked topic: Bird following links up to depth 2/);
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Bird"]);
+
+  const step = await researchTurn("research next", ctx);
+  assert.equal(step.miss, false);
+  assert.match(step.text, /^bird —/);
+  // Bird's own lead links joined the queue at depth 2 — Owl (the run topic) did not.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Feather", "Wing"]);
+  assert.equal(ingest.calls[1].tag, "research:owl@1", "the depth-1 topic stamps @1");
+
+  const step2 = await researchTurn("research next", ctx);
+  assert.match(step2.text, /^feather —/);
+  assert.equal(ingest.calls[2].tag, "research:owl@2", "a depth-2 topic stamps the run topic @2");
+  // depth 2 is the ceiling: Feather does not fan out to a depth-3 tier.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Wing"]);
+});
+
+test("the total node budget stops a deep run fetching once grounded+pending reaches the cap, and the progress line says so", async () => {
+  const provider = cannedProvider({
+    articles: { owl: ROW("Owl"), bird: ROW("Bird"), night: ROW("Night"), feather: ROW("Feather") },
+    links: {
+      Owl: ["Bird", "Night", "Feather"],
+      Bird: ["Feather", "Night"],
+    },
+  });
+  const ingest = ingestRecorder(1);
+  const config = resolveResearchConfig({ research: { max_topics: 3 } });
+  const ctx = ctxFor(provider, ingest, { config });
+  // depth 2, generous fan-out, but a node budget of 3: Owl + only 2 more.
+  await researchTurn("research owl, limit 5 depth 2", ctx);
+  const snapAfterStart = researchSnapshot(ctx.holder.state);
+  assert.equal(snapAfterStart.maxTopics, 3);
+  assert.deepEqual(snapAfterStart.pending, ["Bird", "Night"], "the start fan-out is bounded by the budget, not the fan-out cap");
+  assert.equal(snapAfterStart.nodeCapReached, true, "the budget bound the fan-out at the start");
+
+  const step1 = await researchTurn("research next", ctx);
+  // Bird is fetched (grounded == 2), but no new topic is queued: the budget is spent.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Night"]);
+
+  const step2 = await researchTurn("research next", ctx);
+  const snap = researchSnapshot(ctx.holder.state);
+  assert.equal(snap.complete, true);
+  assert.equal(snap.done.length, 3, "exactly the node budget of topics were grounded, no more");
+  assert.match(step2.text, /research on "owl" reached its node budget — 3 topics grounded/);
+});
+
 test("the fan-out never queues the topic itself or a duplicate fold of it", async () => {
   const provider = cannedProvider({
     articles: { owl: ROW("Owl") },
@@ -256,4 +338,58 @@ test("the provenance tag and the cited line render the documented shapes", () =>
     renderResearchAnswer("owl", ROW("Owl", "An owl is a bird.")),
     'owl — An owl is a bird. (source: research article "Owl", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Owl?oldid=42)',
   );
+});
+
+test("relevanceOrder tiers the Volcano lead links: kin sharing the seed's word first, hub common nouns after the fallback tier, the citation last", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"];
+  const ordered = relevanceOrder(titles, "Volcano", nlpAdapter());
+  assert.deepEqual(
+    ordered,
+    ["Active volcano", "East African Rift", "Hawaii", "Earth", "Geology", "ISBN 0-19-960146-4"],
+    "kin (shares \"volcano\") first, then the fallback tier in its own order, then the two common-noun hubs, then the citation",
+  );
+});
+
+test("relevanceOrder tier 0 catches a lexical-token match regardless of case or word position", () => {
+  const ordered = relevanceOrder(["Owl feathers", "Night", "The Great Owl"], "owl", nlpAdapter());
+  assert.deepEqual(ordered.slice(0, 2), ["Owl feathers", "The Great Owl"], "both share the token \"owl\" with the seed, so both land in tier 0, original order preserved");
+  assert.equal(ordered[2], "Night", "the non-matching title still lands after tier 0");
+});
+
+test("relevanceOrder recognizes DOI/ISBN prefixes, bare years and \"Nth century\" as citation-shaped, ranked last", () => {
+  const titles = ["doi:10.1000/xyz", "1969", "19th century", "Bird"];
+  const ordered = relevanceOrder(titles, "owl", nlpAdapter());
+  assert.deepEqual(ordered.slice(0, 1), ["Bird"], "the one non-citation candidate sorts ahead of every citation-shaped one");
+  assert.deepEqual(new Set(ordered.slice(1)), new Set(titles.slice(0, 3)), "all three citation shapes land in the trailing tier");
+});
+
+test("relevanceOrder degrades gracefully with no nlp adapter: tier 2 never fires, so common-noun hubs stay in the fallback tier's original order", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"];
+  const ordered = relevanceOrder(titles, "Volcano", null);
+  assert.deepEqual(
+    ordered,
+    ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"],
+    "with no POS signal, Earth/Geology never separate from the fallback tier — only the lexical and citation tiers still apply",
+  );
+});
+
+test("relevanceOrder never throws when nlp.posTags itself throws, and still degrades that candidate to the fallback tier", () => {
+  const throwingNlp = { posTags() { throw new Error("wink unavailable"); } };
+  assert.doesNotThrow(() => relevanceOrder(["Earth", "Bird"], "owl", throwingNlp));
+  assert.deepEqual(relevanceOrder(["Earth", "Bird"], "owl", throwingNlp), ["Earth", "Bird"]);
+});
+
+test("relevanceOrder is a stable sort within a tier: candidates landing in the same tier keep their original relative order", () => {
+  // Four titles that all fall in the fallback tier (no lexical overlap with the
+  // seed, not citation-shaped, not single-word) — the reorder must never touch
+  // their relative order.
+  const titles = ["Zebra crossing", "Aardvark burrow", "Middle ground", "Beta test"];
+  assert.deepEqual(relevanceOrder(titles, "owl", nlpAdapter()), titles);
+});
+
+test("relevanceOrder never drops or duplicates a candidate", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4", "Magma"];
+  const ordered = relevanceOrder(titles, "Volcano", nlpAdapter());
+  assert.equal(ordered.length, titles.length);
+  assert.deepEqual([...ordered].sort(), [...titles].sort());
 });

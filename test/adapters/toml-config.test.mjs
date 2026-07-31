@@ -4,7 +4,7 @@
 // discipline as every other table normalizeConfig produces (see its own
 // docblock); these tests pin that discipline for `[memory]` specifically,
 // which had no dedicated direct-unit coverage before this batch (only
-// exercised indirectly via e2e/init.test.mjs and test/tools/cli-args.test.mjs).
+// exercised indirectly via test-e2e/init.test.mjs and test/tools/cli-args.test.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -50,6 +50,37 @@ test("normalizeConfig: [memory] backend round-trips through a real tmct.toml on 
 test("normalizeConfig: an unrecognized [memory] backend value still passes through (validation is the consumer's job, not the loader's)", async () => {
   const norm = await normalizeConfig({ memory: { backend: "bogus" } }, { configDir: "/x" });
   assert.equal(norm.memory.backend, "bogus");
+});
+
+// ---- [seed] capture_unknown_context / unknown_context_limit: sparse, same
+// discipline as enabled/limit above — snake_case in the file, camelCase in
+// the normalized shape, present only when the key is actually set.
+
+test("normalizeConfig: [seed] capture_unknown_context alone — cfg.seed = { captureUnknownContext }, no other seed key", async () => {
+  const norm = await normalizeConfig({ seed: { capture_unknown_context: true } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { captureUnknownContext: true });
+});
+
+test("normalizeConfig: [seed] unknown_context_limit alone — cfg.seed = { unknownContextLimit }", async () => {
+  const norm = await normalizeConfig({ seed: { unknown_context_limit: 200 } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { unknownContextLimit: 200 });
+});
+
+test("normalizeConfig: [seed] enabled + capture_unknown_context together — both keys land in cfg.seed", async () => {
+  const norm = await normalizeConfig({ seed: { enabled: true, capture_unknown_context: false } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { enabled: true, captureUnknownContext: false });
+});
+
+test("normalizeConfig: [seed] capture_unknown_context round-trips through a real tmct.toml on disk", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), "[seed]\ncapture_unknown_context = true\n");
+    const raw = await loadTomlConfig(dir);
+    const norm = await normalizeConfig(raw, { configDir: dir });
+    assert.equal(norm.seed.captureUnknownContext, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 // ---- [games.*] / [planning]: sparse raw pass-through, same discipline as

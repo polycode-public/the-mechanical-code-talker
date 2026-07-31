@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitLabOIDCAssumeFromTmctRepoMainOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::000868243177:oidc-provider/gitlab.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "gitlab.com:aud": "https://gitlab.com",
+          "gitlab.com:sub": "project_path:polycode-projects/the-mechanical-code-talker:ref_type:branch:ref:main"
+        }
+      }
+    }
+  ]
+}

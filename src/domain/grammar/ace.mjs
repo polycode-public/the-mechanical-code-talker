@@ -28,7 +28,7 @@
 
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
-  predicateOf, numberOf, classify,
+  predicateOf, numberOf, classify, OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
 } from "./lexicon.mjs";
 import { fuzzyMatchInSet } from "../interpret/fuzzy.mjs";
 
@@ -85,7 +85,15 @@ function local(lexicon, term) {
 const stripDet = (tokens) =>
   tokens.length > 1 && DET.has(tokens[0].toLowerCase()) ? tokens.slice(1) : tokens;
 
-/** Resolve a 1–2 word noun phrase: PROPERNAME | code-ref | NOUN | ADJ NOUN.
+/** A token a compound noun phrase may be built out of: a plain word (never a
+ *  code-shaped ref, a number or a CURIE) that is not a DECLARED proper name —
+ *  a name in a compound slot ("GitLab pipeline") is a structural miss, not a
+ *  compound. Shared by both compound arms of resolveNP below. */
+const compoundableWord = (lexicon, token) =>
+  /^[a-z][a-z'-]*$/i.test(token) && !lookupProperName(lexicon, token);
+
+/** Resolve a noun phrase: PROPERNAME | code-ref | NOUN | ADJ NOUN | NOUN NOUN
+ *  | NOUN of NOUN (the last two opt-in, see `allowCompound`).
  *  Returns { term, individual, extras, unknown } — `term` null on a miss with
  *  the undeclared tokens in `unknown` (empty `unknown` = structurally
  *  unparseable phrase → the caller returns a hard null). `extras` carries the
@@ -149,8 +157,7 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     // DECLARED proper name in either slot ("GitLab pipeline") keeps the
     // structural miss below — a name in the wrong slot, not a compound.
     if (allowCompound
-      && !lookupProperName(lexicon, tokens[0]) && !lookupProperName(lexicon, tokens[1])
-      && /^[a-z][a-z'-]*$/i.test(tokens[0]) && /^[a-z][a-z'-]*$/i.test(tokens[1])) {
+      && compoundableWord(lexicon, tokens[0]) && compoundableWord(lexicon, tokens[1])) {
       const n0 = lookupNoun(lexicon, tokens[0], { singularOnly: false });
       const n1 = lookupNoun(lexicon, tokens[1], { singularOnly });
       if (n0 && n1) {
@@ -161,6 +168,35 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     // wrong slot ("GitLab pipeline") is a structural miss, not an unknown
     const unknown = tokens.filter((t) => !classify(t, lexicon));
     return { term: null, individual: false, extras: [], unknown };
+  }
+  // "NOUN of NOUN" is ONE compound noun ("unit of work", "chain of command",
+  // "conflict of interest"), joined with its own "of" the same way two plain
+  // nouns are joined with a space, so the taught fact and the query side
+  // unify on one term. Opt-in through the same `allowCompound` gate and the
+  // same compoundableWord shape test as the two-noun arm above; the head noun
+  // leads, so an "a"/"an" agrees with IT.
+  //
+  // Which "of" this claims is decided by the head, against the two closed
+  // of-frame vocabularies in lexicon.mjs — the same ones the fact extractor
+  // reads. A CLASSIFIER head is a rewrite of the inner noun rather than a
+  // compound ("a kind of dog" is a dog), and a PARTITIVE head states quantity
+  // or composition rather than a class ("a piece of cake", "a lot of dogs");
+  // both decline here and land on the miss below. The relational reading is
+  // pattern 7's and is claimed before any of this: parseAce routes "the N of N
+  // is VALUE" to parseOfForm, so "the version of tmct is 0.2.0" never reaches
+  // a copula split at all. An inner determiner is likewise out of the shape —
+  // "a piece of the cake" is four tokens and no compound noun carries one.
+  if (tokens.length === 3 && allowCompound && tokens[1].toLowerCase() === "of"
+    && compoundableWord(lexicon, tokens[0]) && compoundableWord(lexicon, tokens[2])) {
+    const head = tokens[0].toLowerCase();
+    const inner = tokens[2].toLowerCase();
+    if (!OF_CLASSIFIER_HEADS.has(head) && !OF_PARTITIVE_HEADS.has(head)) {
+      const headNoun = lookupNoun(lexicon, head, { singularOnly });
+      const innerNoun = lookupNoun(lexicon, inner, { singularOnly: false });
+      if (headNoun && innerNoun) {
+        return { term: `${ns}${head} of ${inner}`, individual: false, noun: headNoun, extras: [], unknown: [] };
+      }
+    }
   }
   // 0 or 3+ tokens: not a fragment NP. Name the undeclared words if any.
   return { term: null, individual: false, extras: [], unknown: tokens.filter((t) => !classify(t, lexicon)) };
@@ -525,8 +561,17 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
 // it is reported back on the command (`corrected`) for the caller to name in
 // its response — a synonym executes silently, a typo fix does not.
 
-const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine"]);
+const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine", "dig", "eat", "put"]);
 const IMPERATIVE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]);
+
+// The object pronouns an imperative object slot may carry ("examine it", "take
+// them", "talk to him"). This parser only MARKS such a slot with the bare
+// pronoun as its term — the antecedent lives in the running world, not the
+// sentence, so binding it to a concrete object is the adventure lane's job (it
+// alone holds the session's FOCUS). Kept out of resolveNP's lexicon gate on
+// purpose: a pronoun is never a declared noun, so without this it rides out as
+// residue and mis-declines as an unknown word.
+export const OBJECT_PRONOUNS = new Set(["it", "them", "him", "her"]);
 
 const VERB_SYNONYMS = new Map([
   ["pick up", "take"], ["pick", "take"], ["grab", "take"],
@@ -603,8 +648,14 @@ function resolveImperativeVerb(toks) {
   return { ...retried, corrected: { from: first, to: fixedFirst } };
 }
 
-/** Resolve one imperative object phrase to its bare lexicon term. */
+/** Resolve one imperative object phrase to its bare lexicon term. A lone
+ *  object pronoun ("it", "them", "him", "her") rides through as its own term
+ *  for the lane to bind against the session focus — never a lexicon lookup,
+ *  never residue. */
 function imperativeNP(lexicon, tokens) {
+  if (tokens.length === 1 && OBJECT_PRONOUNS.has(tokens[0].toLowerCase())) {
+    return { term: tokens[0].toLowerCase(), unknown: [] };
+  }
   const np = resolveNP(lexicon, tokens);
   if (np.term == null) return { term: null, unknown: np.unknown };
   return { term: local(lexicon, np.term), unknown: [] };
@@ -641,15 +692,22 @@ export function parseImperative(sentence, lexicon = loadLexicon()) {
 
   if (verb === "look") {
     if (!rest.length || (rest.length === 1 && lower[0] === "around")) return command({});
-    return null;
+    // "look <object>" — a bare noun after look reads as a close look at that
+    // thing, routed through the same object handler examine/talk share (which
+    // resolves presence and declines an absent thing by name). "look at <x>"
+    // never reaches here — its 2-token synonym prefix already resolved to
+    // examine — so this arm only ever sees the bare-noun form.
+    const object = imperativeNP(lexicon, rest);
+    if (object.term == null) return miss(object.unknown);
+    return command({ object: object.term });
   }
-  if (verb === "examine" || verb === "talk") {
+  if (verb === "examine" || verb === "talk" || verb === "eat") {
     if (!rest.length) return null;
     const object = imperativeNP(lexicon, rest);
     if (object.term == null) return miss(object.unknown);
     return command({ object: object.term });
   }
-  if (verb === "go") {
+  if (verb === "go" || verb === "dig") {
     if (rest.length === 1) {
       if (IMPERATIVE_DIRECTIONS.has(lower[0])) return command({ direction: lower[0] });
       const fuzzyDir = fuzzyMatchInSet(lower[0], [...IMPERATIVE_DIRECTIONS], IMPERATIVE_FUZZY_BOUND);
@@ -667,6 +725,14 @@ export function parseImperative(sentence, lexicon = loadLexicon()) {
     const indirect = imperativeNP(lexicon, rest.slice(toIdx + 1));
     if (object.term == null || indirect.term == null) return miss([...object.unknown, ...indirect.unknown]);
     return command({ object: object.term, indirectObject: indirect.term });
+  }
+  if (verb === "put") {
+    const inIdx = lower.indexOf("in");
+    if (inIdx < 1 || inIdx === rest.length - 1) return null;
+    const object = imperativeNP(lexicon, rest.slice(0, inIdx));
+    const container = imperativeNP(lexicon, rest.slice(inIdx + 1));
+    if (object.term == null || container.term == null) return miss([...object.unknown, ...container.unknown]);
+    return command({ object: object.term, indirectObject: container.term });
   }
   if (verb === "unlock") {
     const withIdx = lower.indexOf("with");

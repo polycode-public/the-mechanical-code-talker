@@ -1,0 +1,62 @@
+# audience-facing-half-left — the center bust turned three-quarters,
+# halfway between audience-facing-left.toml's full profile and
+# audience-with-emotion.toml's front view. The head sits at the midpoint
+# position, the nose wedge projects only half as far past the head's left
+# edge, and a small far eye appears near the head's right edge. The two
+# flanking busts, the ground line and the center bust's own shoulder path
+# keep audience-with-emotion's own exact coordinates, the same as the full
+# profile.
+classes = ["audience"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="audience-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.6">
+    <circle cx="5" cy="12" r="2.3" fill="url(#audience-facing-half-left-fill)"/>
+    <path d="M1.6 21 C1.6 17.6 3 16.1 5 16.1 C7 16.1 8.4 17.6 8.4 21 Z" fill="url(#audience-facing-half-left-fill)"/>
+    <path d="M3.9 16.2 L5 17.1 L6.1 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <g opacity="0.6">
+    <circle cx="19" cy="12" r="2.3" fill="url(#audience-facing-half-left-fill)"/>
+    <path d="M15.6 21 C15.6 17.6 17 16.1 19 16.1 C21 16.1 22.4 17.6 22.4 21 Z" fill="url(#audience-facing-half-left-fill)"/>
+    <path d="M20.1 16.2 L19 17.1 L17.9 16.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  </g>
+  <path d="M8.2 21 C8.2 17 9.8 15.2 12 15.2 C14.2 15.2 15.8 17 15.8 21 Z" fill="url(#audience-facing-half-left-fill)"/>
+  <circle cx="11.76" cy="9.4" r="2.6" fill="url(#audience-facing-half-left-fill)"/>
+  <path d="M9.3 9.0 Q8.8 10.0 9.3 10.6 Z" fill="url(#audience-facing-half-left-fill)"/>
+  <ellipse cx="10.4" cy="9.0" rx="0.22" ry="0.27" fill="#1c1c1c"/>
+  <ellipse cx="13.6" cy="9.0" rx="0.14" ry="0.17" fill="#1c1c1c"/>
+  <path d="M1.6 21 L22.4 21" stroke="currentColor" stroke-width="0.7" opacity="0.3" stroke-linecap="round"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# The center bust's head sits at cx=11.76 cy=9.4 r=2.6 (half the full
+# profile's -0.47 shift), so scale is 0.82 * 2.6 = 2.1. The near eye this
+# file draws sits at (10.4, 9.0). cx = 10.4 + 0.4*2.1 = 11.24,
+# cy = 9.0 + 0.15*2.1 = 9.32.
+[face]
+cx = 11.24
+cy = 9.32
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

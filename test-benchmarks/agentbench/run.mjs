@@ -1,0 +1,365 @@
+// agentbench/run.mjs — the DETERMINISTIC AGENTBENCH runner (sibling of
+// chatbench/run.mjs). Replays every case in agentbench/cases.jsonl through a
+// PLUGGABLE "agent under test" and grades the tool loop on the TOOL-0→TOOL-8
+// tool-use rungs. No LLM, no network — grading is entirely deterministic (grade.mjs).
+//
+// The agent-under-test is a SEAM: a function (request, tools, ctx) => loopResult
+// (see agentbench/driver-stub.mjs). Today the default is the STUB driver (its
+// results are the "stub-driver FLOOR", stamped driver:"stub-floor"); the
+// coordinator swaps in the real resolver/planner/shim driver later behind this
+// exact signature via runAgentbench({ driver }).
+//
+// Determinism: NO Date.now() in recorded output — the run stamp comes from
+// --stamp (default the bench version, read once from package.json at load). Two
+// runs over the same tree + stamp produce byte-identical rows.
+//
+// Usage:
+//   node agentbench/run.mjs [--stamp <label>] [--cases agentbench/cases.jsonl]
+//     [--out agentbench/results/raw/run-<stamp>] [--rung <TOOL-0|TOOL-1|…|TOOL-8>]
+//     [--ladder] [--only <id,id,…>] [--concurrency <n>]  (default 8 — the
+//     case fan-out; rows stay in case order, bytes identical to sequential)
+
+import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { parseCases, gradeCase, effectiveCaseFor, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
+import { stubDriver } from "./driver-stub.mjs";
+import { shimDriver } from "./driver-shim.mjs";
+import { resolverDriver } from "./driver-resolver.mjs";
+import { goalDriver } from "./driver-goal.mjs";
+import { capabilityByName } from "../../src/domain/router/registry.mjs";
+import { resolveMemoryTerm } from "../../src/domain/router/resolver.mjs";
+import { resolveObject } from "../../src/domain/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { resultSetOf } from "./results.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
+import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+
+// The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
+// FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
+// selectTool, reused in-process); `resolver` is the ROUTER BASELINE (Stage 1 +
+// Stage 3 — the resolver/planner, driver:"resolver-0.8.0"), NOT a floor; `goal`
+// is the STAGE-5 goal-reasoner ON TOP of the resolver (C1 first, escalate a C1
+// refusal to the closed-world C2 goal-reasoner — driver:"goal-0.8.1").
+export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resolver: resolverDriver, goal: goalDriver });
+
+// A HARD wall-clock backstop on ONE driver call (coordinator reinforcement 1):
+// the planner's POP/HTN loop has its own MAX_STEPS budget, but a bug that never
+// grounds a sub-goal could still hang the single `await driver(...)` — and
+// runAgentbench is called from test/bench/agentbench.test.mjs, so a wedge would hang
+// the whole ~848-test suite with no failure. This bound turns an overrun into a
+// deterministic FAIL on `terminates:true` instead. The timeout only ever fires
+// on a real hang (a bug); in normal operation it never triggers, so recorded
+// output stays byte-identical (no Date.now enters any row).
+export const DRIVER_TIMEOUT_MS = 20000;
+
+// Bounded fan-out width for the case loop (item D, 0.8.2). Safe because
+// dispatchTool is STATELESS per call: it re-loads the graph through
+// source.fetchEntities (a read-only, file-keyed payload cache — a concurrent
+// first read is a benign same-payload race), parseEntities builds a fresh graph
+// object, the render* layer is pure, and memoryFactRows is a read-only
+// ENOENT-tolerant read — no per-call mutation anywhere on the dispatch path.
+// Rows are written results[i] BY INDEX, so row order (and product.jsonl bytes)
+// is identical to the sequential loop. Override with --concurrency.
+export const DEFAULT_CONCURRENCY = 8;
+
+import { pool, parseFlags } from "../benchlib/bench.mjs";
+export { pool };
+
+// Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
+// caveat banner for each so the real engine is never measured against a
+// mislabeled anchor (coordinator note 2, extended to shim-transport).
+const FLOOR_CAVEAT = Object.freeze({
+  "stub-floor": "the STUB-DRIVER FLOOR — a dumb keyword matcher, not the router baseline.",
+  "shim-transport": "the SHIM-TRANSPORT interface floor (server-http.mjs routing) — the transport/serialization layer, NOT the routing brain. The real anchor is the resolver/planner driver, swapped in later behind driver(request,tools,ctx).",
+});
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = dirname(dirname(HERE));
+export const DEFAULT_CASES = join(HERE, "cases.jsonl");
+export const FIXTURE = join(ROOT, "test", "fixtures", "entities.fixture.json");
+
+// The bench version tracks package.json (read once at load — deterministic per
+// run, no Date.now). Artifacts stamp this; a version bump auto-flows here so the
+// grading record never drifts from the release it measures.
+export const BENCH_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+
+/** The set of every entity LABEL in the ingested fixture — the referential
+ *  authority for the expect.result lint (a static composed-answer literal must
+ *  name only real fixture entities, so a stale literal fails loudly at parse
+ *  time, exactly like the expected-call lint). Pure read; no Date.now. */
+export async function loadFixtureLabels() {
+  const graph = parseEntities(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
+  return new Set(graph.individuals.map((i) => String(i.label)));
+}
+
+/** The conversational-memory fixture the run context seeds beside the code
+ *  graph: a synonym pair plus a relatedTo edge, the facts tmct_related (the
+ *  SKOS view) reads. Terms are deliberately non-code words so no code-graph
+ *  case can collide with them. */
+const memoryFact = (id, subject, predicate, object) => ({
+  id, class: "Fact",
+  attributes: [
+    { prop: "rdf:subject", key: "subject", value: subject },
+    { prop: "rdf:predicate", key: "predicate", value: predicate },
+    { prop: "rdf:object", key: "object", value: object },
+    { prop: "mgx:factProvenance", key: "provenance", value: "corpus:bench-fixture" },
+  ],
+});
+export const MEMORY_FIXTURE = Object.freeze({
+  individuals: [
+    memoryFact("fact:bench-1", "couch", "mgx:synonym", "sofa"),
+    memoryFact("fact:bench-2", "sofa", "mgx:relatedTo", "cushion"),
+  ],
+  objectProperties: [],
+});
+
+/** Build the run context the driver receives. Materializes the ingested fixture
+ *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
+ *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities,
+ *  plus MEMORY_FIXTURE seeded through the configured memory backend so the
+ *  memory-graph capability (tmct_related) can ground a positive case — routed
+ *  by the resolver/goal drivers too, via ctx.resolveMemoryTerm, not only the
+ *  stub floor.
+ *  Returns { ctx, cleanup } — the caller MUST await cleanup(). */
+export async function createRunCtx() {
+  const { dispatchTool } = await import(join(ROOT, "src", "tools", "server.mjs"));
+  const { ingestSchemaDocs } = await import(join(ROOT, "src", "tools", "schema-docs.mjs"));
+  const { ToolError } = await import(join(ROOT, "src", "adapters", "config.mjs"));
+  const { selectTool } = await import(join(ROOT, "src", "services", "chat.mjs"));
+
+  const ingested = ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8")));
+  const graphJson = JSON.stringify(ingested);
+  const dir = await mkdtemp(join(tmpdir(), "tmct-agentbench-"));
+  await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
+  const graphFile = join(dir, ".tmct", "graph.json");
+  await writeFile(graphFile, graphJson);
+  {
+    const { openMemoryBackend, appendFacts } = await import(join(ROOT, "src", "adapters", "memory", "core.mjs"));
+    const backend = await openMemoryBackend(dir, "");
+    const attr = (ind, key) => ind.attributes.find((a) => a.key === key)?.value;
+    await appendFacts(backend.dir, MEMORY_FIXTURE.individuals.map((ind) => ({
+      subject: attr(ind, "subject"), predicate: attr(ind, "predicate"),
+      object: attr(ind, "object"), provenance: attr(ind, "provenance"),
+    })));
+    await backend.close();
+  }
+  const config = { graphFile };
+
+  // The parsed graph, loaded ONCE, so the resolver/planner can BIND entities
+  // (resolveObject — the binding oracle) with the same graph dispatchTool reads.
+  const graph = parseEntities(ingested);
+
+  // resolve(): the driver's binding oracle. Delegates to resolveObject (ask.mjs)
+  // — the resolver's `resolves(param, as)` precondition maps to exactly this.
+  const resolve = (term) => resolveObject(graph, term);
+
+  // dispatch(): the driver's window onto the REAL tool layer. Returns
+  // { ok:true, text, resolved } on success (resolved = the STRUCTURED payload —
+  // the graph entity the call bound, so the planner can thread step-i's result
+  // into step-i+1's args), { ok:false, error } on a ToolError (an unresolvable
+  // entity / honest miss — NOT a crash). Back-compat: the stub/shim drivers read
+  // only `text`, so the extra `resolved` key is inert for them.
+  const dispatch = async (name, input) => {
+    try {
+      const text = await dispatchTool(name, input, { config });
+      // the primary bound arg (symbol/module/class) -> its resolved entity, for
+      // result-threading. A no-arg tool (untested/arch) has no bound entity.
+      const primary = input && (input.symbol ?? input.module ?? input.class ?? input.query);
+      const resolved = primary ? resolve(String(primary)).match : null;
+      // the STRUCTURED result SET (label set) the query produced — the machine-
+      // checkable twin of `text` that the multi-step COMPOSER folds (0.8.1). This
+      // is the structured payload the resolver driver threads to compute the
+      // composed answer grade.mjs value-compares to expect.result.
+      const result = resultSetOf(graph, name, input, resolved);
+      return { ok: true, text, resolved, result };
+    } catch (e) {
+      if (e instanceof ToolError) return { ok: false, error: e.message };
+      throw e; // a real bug, not an honest miss — surface it
+    }
+  };
+
+  // resolveMemoryTerm(): the driver's MEMORY-graph binding oracle, the sibling
+  // of resolve() above — reads the seeded MEMORY_FIXTURE through the same
+  // configured-backend resolution memoryFactRows/tmct_related use (off the
+  // dirname(dirname(graphFile)) repo derivation) so a KINDS.MemoryTerm slot
+  // (tmct_related's `term`) can ground.
+  const resolveMemoryTermCtx = async (term) => {
+    const { openConfiguredMemoryBackend, loadMemory: loadMem, readFactRows: readRows } =
+      await import(join(ROOT, "src", "adapters", "memory", "core.mjs"));
+    const backend = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
+    try {
+      return resolveMemoryTerm(readRows(await loadMem(backend.dir)), term);
+    } finally {
+      await backend.close();
+    }
+  };
+
+  const ctx = { dispatch, resolve, resolveMemoryTerm: resolveMemoryTermCtx, graph, capabilityByName, config, selectTool };
+  return { ctx, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
+
+/** Run one case through the driver → a graded product row (deterministic). The
+ *  driver call is BOUNDED (DRIVER_TIMEOUT_MS): a runaway planner records a
+ *  non-terminating loopResult (an automatic FAIL on `terminates:true`) instead of
+ *  hanging the caller — critically, the ~848-test suite that calls runAgentbench.
+ *  The timeout fires only on a real hang, so normal runs are byte-identical. */
+export async function runCase(caseDef, driver, ctx, stamp) {
+  let timer;
+  const guard = new Promise((resolve) => {
+    timer = setTimeout(
+      () => resolve({ calls: [], refused: false, terminated: false, proof: [], driver: "timeout", why: `driver exceeded ${DRIVER_TIMEOUT_MS}ms — bounded to prevent a suite hang` }),
+      DRIVER_TIMEOUT_MS,
+    );
+  });
+  let loopResult;
+  try {
+    loopResult = await Promise.race([driver(caseDef.request, caseDef.tools, ctx), guard]);
+  } finally {
+    clearTimeout(timer);
+  }
+  const effective = effectiveCaseFor(caseDef, loopResult?.driver);
+  const verdict = gradeCase(effective, loopResult);
+  return {
+    caseId: caseDef.id,
+    rung: caseDef.rung,
+    request: caseDef.request,
+    tools: caseDef.tools,
+    driver: loopResult?.driver ?? "unknown",
+    stamp,
+    version: BENCH_VERSION,
+    expect: caseDef.expect,
+    ...(effective !== caseDef ? { floorExpectApplied: true } : {}),
+    produced: {
+      calls: loopResult?.calls ?? [],
+      refused: Boolean(loopResult?.refused),
+      terminated: Boolean(loopResult?.terminated),
+      proof: loopResult?.proof ?? [],
+      // the EXECUTED, COMPOSED answer (0.8.1) — the folded result set the grader
+      // value-compares to expect.result. Recorded for transcript provenance; an
+      // empty array is a real answer (∅), so guard on !== undefined not truthiness.
+      ...(loopResult?.composed !== undefined ? { composed: loopResult.composed } : {}),
+      ...(loopResult?.why ? { why: loopResult.why } : {}),
+      ...(loopResult?.observed ? { observed: loopResult.observed } : {}),
+    },
+    verdict,
+  };
+}
+
+/** Programmatic entry (unit-testable): grade a set of cases with a given driver.
+ *  Returns { rows, rolled, ladder }. `driver` defaults to the stub floor.
+ *  Cases fan out through pool() at `concurrency` lanes, rows written BY INDEX
+ *  (case order — byte-identical to the sequential loop). Pass `ctx` to reuse a
+ *  caller-owned run context (the caller then owns its cleanup — the test suite's
+ *  shared-ctx path); otherwise a throwaway one is created and cleaned here. */
+export async function runAgentbench(cases, { driver = stubDriver, stamp = BENCH_VERSION, ladder = false, concurrency = DEFAULT_CONCURRENCY, ctx = null } = {}) {
+  const owned = ctx ? null : await createRunCtx();
+  const runCtx = ctx ?? owned.ctx;
+  try {
+    const rows = await pool(cases, concurrency, (caseDef) => runCase(caseDef, driver, runCtx, stamp));
+    const rolled = rollup(rows);
+    return { rows, rolled, ladder: ladder ? ladderGate(rolled) : null };
+  } finally {
+    if (owned) await owned.cleanup();
+  }
+}
+
+function parseArgs(argv) {
+  return parseFlags(argv, {
+    defaults: { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub", concurrency: DEFAULT_CONCURRENCY },
+    flags: {
+      "--stamp": { key: "stamp" },
+      "--cases": { key: "cases" },
+      "--out": { key: "out" },
+      "--rung": { key: "rung", value: (v) => v.toUpperCase() },
+      "--ladder": { key: "ladder", flag: true },
+      "--driver": { key: "driver" },
+      "--concurrency": { key: "concurrency", value: Number },
+      "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+    },
+  });
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  if (!/^[A-Za-z0-9._-]+$/.test(args.stamp)) {
+    console.error("agentbench/run.mjs: --stamp must be a filesystem-safe label (ids never come from Date.now).");
+    return 2;
+  }
+  if (args.rung && !RUNGS.includes(args.rung)) {
+    console.error(`--rung must be one of ${RUNGS.join("|")}`);
+    return 2;
+  }
+  if (!DRIVERS[args.driver]) {
+    console.error(`--driver must be one of ${Object.keys(DRIVERS).join("|")}`);
+    return 2;
+  }
+  if (!Number.isInteger(args.concurrency) || args.concurrency < 1) {
+    console.error("--concurrency must be a positive integer");
+    return 2;
+  }
+
+  const knownLabels = await loadFixtureLabels();
+  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"), { knownLabels });
+  if (errors.length) {
+    console.error(`cases lint failed (${errors.length}):`);
+    for (const e of errors) console.error(`  - ${e}`);
+    return 2;
+  }
+
+  let selected = cases;
+  if (args.rung) selected = selected.filter((c) => c.rung === args.rung);
+  if (args.only) {
+    const known = new Set(cases.map((c) => c.id));
+    const unknown = args.only.filter((id) => !known.has(id));
+    if (unknown.length) { console.error(`--only names unknown case ids: ${unknown.join(", ")}`); return 2; }
+    selected = selected.filter((c) => args.only.includes(c.id));
+  }
+  if (!selected.length) { console.error("no cases selected."); return 2; }
+
+  const { rows, rolled, ladder } = await runAgentbench(selected, { driver: DRIVERS[args.driver], stamp: args.stamp, ladder: args.ladder, concurrency: args.concurrency });
+
+  const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
+  await mkdir(outDir, { recursive: true });
+  const productFile = join(outDir, "product.jsonl");
+  await writeFile(productFile, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+
+  const drivers = [...new Set(rows.map((r) => r.driver))];
+  console.log(`agentbench run ${args.stamp} (version ${BENCH_VERSION}) — ${rows.length} case(s), driver: ${drivers.join(",")}`);
+  for (const d of drivers) {
+    if (FLOOR_CAVEAT[d]) console.log(`NOTE: driver "${d}" rows are ${FLOOR_CAVEAT[d]}`);
+  }
+  console.log("\nmetric pair per rung (gate = 0% hallucination AT ≥50% completion):");
+  console.log(renderRollup(rolled));
+
+  const fails = rows.filter((r) => !r.verdict.pass);
+  if (fails.length) {
+    console.log(`\nnon-passing cases (${fails.length}):`);
+    for (const r of fails) console.log(`  ${r.verdict.hallucinated.length ? "HALLUC" : "FAIL  "} ${r.caseId} [${r.rung}]: ${r.verdict.reasons.join("; ")}`);
+  }
+
+  // the PLAN-vs-RESULT split, made loud: cases that PASS the call-plan but whose
+  // EXECUTED composed answer is still wrong (composing is strictly harder than
+  // routing — the honest delta this release measures).
+  const resultGap = rows.filter((r) => r.verdict.pass && !r.verdict.resultCompleted);
+  if (resultGap.length) {
+    console.log(`\nplan-correct but RESULT-incomplete (${resultGap.length}) — the honest composing gap:`);
+    for (const r of resultGap) console.log(`  RESULT ${r.caseId} [${r.rung}]: ${r.verdict.resultReasons.join("; ")}`);
+  }
+
+  if (ladder) {
+    console.log("\nladder (rungs ascend; first un-gated rung gates the rest):");
+    console.log(`  order: ${ladder.order.join(" → ")}${ladder.gatedAt ? `  — gated at ${ladder.gatedAt}` : "  — all rungs pass the gate"}`);
+    for (const rcpt of ladder.receipts) console.log(`  rung ${rcpt.rung} skipped: ${rcpt.reason}`);
+  }
+
+  console.log(`\nproduct: ${productFile}`);
+  return 0;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = await main();
+}

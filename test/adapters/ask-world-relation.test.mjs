@@ -1,0 +1,181 @@
+// ask-world-relation.test.mjs — the plural, multi-class listing over a WORLD
+// predicate ("list the locations of flies and spiders"), reachable through
+// ask.mjs alone.
+//
+// Two halves. The first drives ask() over a hand-built world payload, so the
+// grammar, the class filter and the honest misses are checked without a game
+// running. The second boots the REAL spider-fly engine, ticks it, and asserts
+// the answer matches foldSpiderFlyState's own placements exactly — the proof
+// that the ask route and the page's fast-path snapshot agree about the board.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { ask, worldRelationGraphPayload } from "../../src/domain/ask.mjs";
+import { WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES } from "../../src/domain/ask-vocab.mjs";
+import { createInMemoryStore, loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
+import { worldFactRows, agentKindOf, isLiveRenderableAgent, WORLD_NAME } from "../../src/domain/spider-fly-world.mjs";
+import { startSpiderFlyGame, runSpiderFlyTick, foldSpiderFlyState } from "../../src/services/spider-fly.mjs";
+
+const BOARD_ROWS = [
+  { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+  { subject: "spider-1", predicate: "mgx:feels", object: "calm" },
+  { subject: "spider-1", predicate: "mgx:mass", object: "15" },
+  { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-1-5" },
+  { subject: "fly-1", predicate: "mgx:feels", object: "calm" },
+  // a later turn moves both and sours the spider's mood
+  { subject: "spider-1@turn4", predicate: "mgx:currently-in", object: "cell-3-3" },
+  { subject: "spider-1@turn4", predicate: "mgx:feels", object: "angry" },
+  { subject: "fly-1@turn4", predicate: "mgx:currently-in", object: "cell-2-4" },
+  // a fly that only ever exists as a turn-stamped subject
+  { subject: "fly-2@turn4", predicate: "mgx:currently-in", object: "cell-9-9" },
+  // board geometry the projection must leave out
+  { subject: "cell-2-2", predicate: "rdf:type", object: "cell" },
+  { subject: "cell-2-2", predicate: "mgx:has-exit-north", object: "cell-2-1" },
+];
+
+const boardGraph = (rows = BOARD_ROWS) =>
+  parseEntities(worldRelationGraphPayload(rows, { classOf: agentKindOf }));
+
+test("world-relation listing: 'list the locations of flies and spiders' answers over mgx:currently-in", () => {
+  const r = ask(boardGraph(), "list the locations of flies and spiders");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.content, "fly-1 is in cell-2-4; fly-2 is in cell-9-9; spider-1 is in cell-3-3.");
+  assert.equal(r.tmct_ask.canonical.machine, "composite(worldRelation)");
+});
+
+test("world-relation listing: the equivalent phrasings all reach the same answer", () => {
+  const graph = boardGraph();
+  const base = ask(graph, "list the locations of flies and spiders").content;
+  for (const q of [
+    "show me the locations of flies and spiders",
+    "list the positions of flies and spiders",
+    "what are the locations of flies and spiders",
+    "give me the whereabouts of flies and spiders",
+    "list the places of spiders and flies",
+    "where are the flies and spiders",
+    "list the locations of flies, spiders",
+  ]) {
+    assert.equal(ask(graph, q).content, base, q);
+  }
+});
+
+test("world-relation listing: the class filter is real — one class lists only its own", () => {
+  const graph = boardGraph();
+  assert.equal(ask(graph, "list the locations of spiders").content, "spider-1 is in cell-3-3.");
+  assert.equal(ask(graph, "where are the flies").content, "fly-1 is in cell-2-4; fly-2 is in cell-9-9.");
+});
+
+test("world-relation listing: a singular 'where is the spider' reads the board, not the code index", () => {
+  const r = ask(boardGraph(), "where is the spider");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.content, "spider-1 is in cell-3-3.");
+});
+
+test("world-relation listing: the mood and mass relations answer the same shape", () => {
+  const graph = boardGraph();
+  assert.equal(ask(graph, "list the moods of flies and spiders").content, "fly-1 feels calm; spider-1 feels angry.");
+  assert.equal(ask(graph, "list the masses of spiders").content, "spider-1 has mass 15.");
+});
+
+test("world-relation listing: a turn-stamped row wins over the starting one, and never leaks as its own class", () => {
+  const payload = worldRelationGraphPayload(BOARD_ROWS, { classOf: agentKindOf });
+  assert.deepEqual(payload.individuals.map((i) => i.id).sort(), ["fly-1", "fly-2", "spider-1"]);
+  assert.deepEqual([...new Set(payload.individuals.map((i) => i.class))].sort(), ["fly", "spider"]);
+  const placements = payload.objectProperties.find((g) => g.prop === "mgx:currently-in").examples;
+  assert.deepEqual(
+    placements.map((e) => `${e.subject}=${e.object}`).sort(),
+    ["fly-1=cell-2-4", "fly-2=cell-9-9", "spider-1=cell-3-3"],
+  );
+});
+
+test("world-relation projection: board geometry stays out — only WORLD_PREDICATES rows are carried", () => {
+  const payload = worldRelationGraphPayload(BOARD_ROWS, { classOf: agentKindOf });
+  assert.ok(!payload.individuals.some((i) => i.id.startsWith("cell-")));
+  for (const group of payload.objectProperties) assert.ok(WORLD_PREDICATES.includes(group.prop), group.prop);
+});
+
+test("world-relation projection: a null from classOf drops the subject entirely", () => {
+  const payload = worldRelationGraphPayload(BOARD_ROWS, {
+    classOf: (id) => (id.startsWith("fly-") ? "fly" : null),
+  });
+  assert.deepEqual(payload.individuals.map((i) => i.id).sort(), ["fly-1", "fly-2"]);
+});
+
+test("world-relation HONEST MISS: a class with no individual in this graph is never fabricated", () => {
+  const graph = boardGraph();
+  assert.equal(ask(graph, "list the locations of dogs").tmct_ask.miss, true);
+  assert.equal(ask(graph, "list the locations of flies and dogs").tmct_ask.miss, true);
+});
+
+test("world-relation HONEST MISS: a real restrictor tail declines rather than silently dropping it", () => {
+  const graph = boardGraph();
+  const r = ask(graph, "list the locations of flies that are hungry");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.notEqual(r.content, ask(graph, "list the locations of flies").content);
+});
+
+test("world-relation HONEST MISS: a relation with no rows misses instead of borrowing another's", () => {
+  const graph = parseEntities(worldRelationGraphPayload(
+    [{ subject: "fly-1", predicate: "mgx:currently-in", object: "cell-1-1" }],
+    { classOf: agentKindOf },
+  ));
+  assert.equal(ask(graph, "list the locations of flies").tmct_ask.miss, false);
+  assert.equal(ask(graph, "list the moods of flies").tmct_ask.miss, true);
+});
+
+test("world-relation listing never intercepts a code-graph question", () => {
+  const graph = parseEntities({
+    individuals: [
+      { id: "m:a", label: "a.mjs", class: "Module" },
+      { id: "m:b", label: "b.mjs", class: "Module" },
+    ],
+    objectProperties: [{ prop: "mgx:importsNamespace", predicate: "imports", examples: [{ subject: "m:a", object: "m:b" }] }],
+  });
+  // "modules" resolves as a class here, but a code graph carries no world
+  // predicate, so the fallback finds nothing and the code answer stands.
+  assert.match(ask(graph, "where is a.mjs defined").content, /a\.mjs/);
+  assert.equal(ask(graph, "list the locations of modules").tmct_ask.miss, true);
+  assert.equal(ask(graph, "which modules import b.mjs").tmct_ask.miss, false);
+});
+
+test("WORLD_RELATIONS: every listing noun maps back to exactly one relation, and none collides with a code entity noun", async () => {
+  const { ENTITY_TO_TYPE } = await import("../../src/domain/ask-vocab.mjs");
+  const seen = new Map();
+  for (const [token, { nouns, predicate, reads }] of Object.entries(WORLD_RELATIONS)) {
+    assert.ok(predicate.startsWith("mgx:"), `${token} should name a stored mgx: predicate`);
+    assert.ok(reads, `${token} needs a sentence phrase`);
+    for (const noun of nouns) {
+      assert.ok(!seen.has(noun), `"${noun}" claimed by both ${seen.get(noun)} and ${token}`);
+      seen.set(noun, token);
+      assert.equal(WORLD_NOUN_TO_RELATION[noun], token);
+      assert.ok(!ENTITY_TO_TYPE[noun], `"${noun}" collides with the code-graph entity noun table`);
+    }
+  }
+});
+
+test("the live spider-fly board answers through ask() and agrees with the engine's own fold", async () => {
+  const memoryDir = createInMemoryStore();
+  await appendFacts(memoryDir, [...worldFactRows()].map((f) => ({
+    subject: f.subject, predicate: f.predicate, object: f.object, provenance: `world:${WORLD_NAME}`,
+  })));
+  await startSpiderFlyGame(memoryDir, { flyCount: 2 });
+  for (let i = 0; i < 4; i += 1) await runSpiderFlyTick(memoryDir, {});
+
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldSpiderFlyState(rows);
+  const graph = parseEntities(worldRelationGraphPayload(rows, {
+    classOf: (id) => (isLiveRenderableAgent(id, state) ? agentKindOf(id) : null),
+  }));
+
+  const expected = [...state.placements.entries()]
+    .filter(([id]) => isLiveRenderableAgent(id, state) && /^(?:spider|fly)-\d+$/.test(id))
+    .map(([id, place]) => `${id} is in ${place.cell}`)
+    .sort();
+
+  const r = ask(graph, "list the locations of flies and spiders");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.ok(expected.length >= 2, "sanity: the ticked board should hold at least a spider and a fly");
+  assert.equal(r.content, `${expected.join("; ")}.`);
+  // an eaten or starved agent is off the board, so it is never named
+  for (const dead of state.removed) assert.ok(!r.content.includes(`${dead} is in`), dead);
+});

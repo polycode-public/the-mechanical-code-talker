@@ -27,7 +27,7 @@ const primedQuestion = params.get("q");
 // Task, then ask "what calls it?" and "where is it defined?" without repeating the
 // name.
 //
-// e2e/pages-demo-history.test.mjs replays these five turns through the real
+// test-e2e/pages-demo-history.test.mjs replays these five turns through the real
 // engine against public/demo-graph.json and asserts each answer verbatim, so an
 // engine change that reworded one fails the suite rather than shipping a page
 // that quotes an answer the product no longer gives.

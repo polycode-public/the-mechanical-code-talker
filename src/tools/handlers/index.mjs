@@ -1,9 +1,10 @@
 // The tool-name → handler registry dispatchTool maps over. One module per tool, so a
 // tool's behaviour has exactly one home and this file only wires names to it.
 //
-// A handler takes (args, ctx) and returns the caller-facing string. ctx carries the
-// already-loaded { graph, svc, config, repoRoot }. A handler marked `ownsGraphLoad`
-// gets { config, source, tel } instead and loads whatever it needs itself.
+// A handler takes (args, ctx) and returns the caller-facing string, or kit.mjs's
+// toolResult({ content, data }) when it already holds the structured form of what that
+// string says. ctx carries the already-loaded { graph, svc, config, repoRoot }. A handler
+// marked `ownsGraphLoad` gets { config, source, tel } instead and loads what it needs.
 
 import { tmct_context } from "./tmct-context.mjs";
 import { tmct_context_more } from "./tmct-context-more.mjs";
@@ -15,6 +16,7 @@ import { tmct_search } from "./tmct-search.mjs";
 import { tmct_members } from "./tmct-members.mjs";
 import { tmct_subclasses } from "./tmct-subclasses.mjs";
 import { tmct_related } from "./tmct-related.mjs";
+import { tmct_sprite } from "./tmct-sprite.mjs";
 import { tmct_architecture } from "./tmct-architecture.mjs";
 import { tmct_exports } from "./tmct-exports.mjs";
 import { tmct_untested } from "./tmct-untested.mjs";
@@ -42,6 +44,7 @@ export const HANDLERS = Object.freeze({
   tmct_members,
   tmct_subclasses,
   tmct_related,
+  tmct_sprite,
   tmct_architecture,
   tmct_exports,
   tmct_untested,

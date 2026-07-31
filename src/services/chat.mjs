@@ -18,10 +18,11 @@
 // loop, src/surfaces/tui/app.mjs's Ink shell).
 
 import { join, dirname } from "node:path";
-import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
+import { dispatchTool, dispatchToolStructured, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
-import { parseEntities, edgesOfKind, moduleCountOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
+import { parseEntities, edgesOfKind, moduleCountOf, packageCounts, modulesOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
+import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
@@ -38,7 +39,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "../domain/interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -52,7 +53,8 @@ import {
 } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpus/wikipedia-live.mjs";
-import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS } from "./research.mjs";
+import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest } from "./research.mjs";
+import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue-store.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
@@ -81,12 +83,6 @@ export { uuidv7 };
 // every existing import site — bin, tui, server-http, index, tests — keeps
 // importing createSession/runChat/SESSION_LOG_DIR/PROMPT from chat.mjs.
 export { createSession, runChat, SESSION_LOG_DIR, PROMPT } from "./chat-session.mjs";
-
-/** dispatchTool("tmct_ask", …) returns the prose answer plus a delimited
- *  machine-readable envelope; the TUI shows the prose only. Reused verbatim
- *  when chat builds the same string from a direct ask() call (the
- *  focus/contextId path), so runTurn parses one envelope shape either way. */
-const ASK_ENVELOPE_DELIM = "\n\n---tmct_ask---\n";
 
 /** The context pronouns a focus can stand in for — a bare `it`/`this`/`that`/`here`
  *  as a command arg reuses the focus, and the ask engine resolves the same words
@@ -126,6 +122,8 @@ const GOAL_BY_KIND = {
   touchesSymbol: "understand commit/change history",
   cochange: "understand change-coupling between modules",
   reexports: "understand a module's public exports/API surface",
+  serves: "understand which component provides or backs another",
+  denotes: "understand which vocabulary term names a code entity",
 };
 const goalNoun = (entityType) => (entityType ? `${String(entityType).toLowerCase()}(s)` : "entities");
 
@@ -255,7 +253,12 @@ function renderNarration(trace, { record, detail, fallbackGoal }) {
  *  renderVerbose) see the exact same text a narrate:false run would have
  *  produced; narrate is purely additive to what's PRINTED, never to what's
  *  REMEMBERED. No-op (returns `result` unchanged, by reference) when `trace`
- *  is null (narrate off) or empty (nothing was traced). */
+ *  is null (narrate off) or empty (nothing was traced).
+ *
+ *  The same trace block also rides the result as its own `narration` field, so
+ *  an embedding caller reads the answer and the trace apart without splitting
+ *  the printed text on NARRATE_MARKER. `answer` keeps the glued form it always
+ *  had — the field is additive, and absent on a turn that traced nothing. */
 function withNarration(result, trace, fallbackGoal) {
   if (!trace || !trace.length) return result;
   const narrative = renderNarration(trace, { record: result.record, detail: result.detail, fallbackGoal });
@@ -263,7 +266,7 @@ function withNarration(result, trace, fallbackGoal) {
   const logLines = Array.isArray(result.logLines)
     ? result.logLines.map((l) => (l === result.answer ? answer : l))
     : result.logLines;
-  return { ...result, answer, logLines };
+  return { ...result, answer, narration: narrative, logLines };
 }
 
 /** A short "Goal (inferred): …" line appended (never prepended) after every
@@ -271,9 +274,12 @@ function withNarration(result, trace, fallbackGoal) {
  *  above. Appending (not prepending) keeps the many tests that pin composed
  *  answers with a start-anchored regex intact.
  *
- *  `result.goal` is set by runAsk and by runCommand's own mk()
- *  (GOAL_BY_COMMAND, below); a plain count or a teach confirmation never
- *  carries the field, so this is a no-op for those turn types by
+ *  `result.goal` is set by runAsk, by runCommand's own mk()
+ *  (GOAL_BY_COMMAND, below), and by the plainTurn call sites that already
+ *  hold a precise goal string (a teach confirmation, a taxonomy/SKOS or
+ *  memory-store lookup, a plan-lane step, and runAsk's own honest-decline
+ *  early returns). A plain numeric count is the one turn type that stays
+ *  silent — it never sets the field, so this is a no-op there by
  *  construction. Also a no-op when `result.goal` is null/empty, so an
  *  unclear turn never grows a "Goal (inferred): unclear" line.
  *
@@ -457,6 +463,7 @@ const COUNT_NOUNS = {
   class: "Class", classes: "Class",
   function: "Function", functions: "Function", func: "Function", funcs: "Function",
   module: "Module", modules: "Module", file: "Module", files: "Module",
+  package: "Package", packages: "Package",
   method: "Method", methods: "Method",
   attribute: "Attribute", attributes: "Attribute",
   variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
@@ -467,18 +474,25 @@ const COUNT_NOUNS = {
 /** class → [singular, plural] display noun, for echoing a count back in English. */
 const CLASS_LABELS = {
   Class: ["class", "classes"], Function: ["function", "functions"],
-  Module: ["module", "modules"], Method: ["method", "methods"],
+  Module: ["module", "modules"], Package: ["package", "packages"],
+  Method: ["method", "methods"],
   Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
   Commit: ["commit", "commits"], Session: ["session", "sessions"],
 };
 const classNoun = (cls, n) => { const [s, p] = CLASS_LABELS[cls] || [cls, `${cls}s`]; return n === 1 ? s : p; };
 
-/** Count individuals of a class in the loaded graph (live, not the header field). */
-const countClass = (graph, cls) => graph.individuals.filter((i) => (i.class || "") === cls).length;
+/** Count individuals of a class in the loaded graph (live, not the header field).
+ *  No individual is ever stored with class "Package" — packages are the
+ *  directories grouping the modules, derived the same way the architecture map
+ *  derives them. */
+const countClass = (graph, cls) => (cls === "Package"
+  ? packageCounts(modulesOf(graph)).size
+  : graph.individuals.filter((i) => (i.class || "") === cls).length);
 
 /** The classes this graph can actually count, as a human list ("classes, functions, …"). */
 function countableKinds(graph) {
   const present = new Set(graph.individuals.map((i) => i.class).filter(Boolean));
+  if (present.has("Module")) present.add("Package");
   return Object.keys(CLASS_LABELS).filter((c) => present.has(c)).map((c) => CLASS_LABELS[c][1]);
 }
 
@@ -870,16 +884,12 @@ const MEMORY_CLASS_PLURALS = {
 const MEMORY_CLASS_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z-]*)\s*(.*)$/i;
 const MEMORY_CLASS_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+(?:all\s+)?([a-z][a-z-]*)\s*(.*)$/i;
 
-/** One display line per stored individual of a class: a Fact reads back through
- *  the same renderFactLine every other fact list uses; the other classes show
- *  their own label. */
-function memoryClassLine(cls, ind, factByLabel) {
-  if (cls === "Fact") {
-    const row = factByLabel.get(ind.id);
-    if (row) return renderFactLine(row);
-  }
-  return String(ind.label || ind.id || "").trim();
-}
+/** One display line per stored individual of a class — its own label. Facts
+ *  never come through here: they are listed per TRIPLE, through the same
+ *  renderFactLine every other fact list uses, because the store holds one
+ *  record per asserting SOURCE and listing those would print a corroborated
+ *  triple once per source that vouched for it. */
+const memoryClassLine = (ind) => String(ind.label || ind.id || "").trim();
 
 /** Recognise "list <memory-class>" (any class) and "how many <meta-class>"
  *  (Session/Source/Rule — Fact/Utterance counts stay with answerMemoryCount) and
@@ -914,11 +924,11 @@ async function answerMemoryClassQuery(memoryDir, query) {
   try { ({ loadMemory, readFactRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
-  const inds = (mem.individuals || []).filter((i) => (i.class || "") === cls);
-  if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.` };
+  const rows = cls === "Fact" ? readFactRows(mem) : null;
+  const inds = rows || (mem.individuals || []).filter((i) => (i.class || "") === cls);
+  if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.`, kind: "count" };
   if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
-  const factByLabel = cls === "Fact" ? new Map(readFactRows(mem).map((r) => [r.id, r])) : new Map();
-  const lines = inds.map((ind) => memoryClassLine(cls, ind, factByLabel));
+  const lines = rows ? rows.map(renderFactLine) : inds.map(memoryClassLine);
   const shown = lines.slice(0, FACT_ANSWER_CAP);
   const rest = lines.slice(FACT_ANSWER_CAP);
   const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
@@ -933,9 +943,35 @@ async function answerMemoryClassQuery(memoryDir, query) {
 // literal quantifier lookup. Placed ahead of it in runTurn: HOW_MANY_ARE_RE
 // reads "there" as a second noun and answers "I was never told a quantifier",
 // stealing the phrasing before a member count ever runs.
-const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*)\s*(.*)$/i;
+const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** Count the taught members of a class named by a plain noun ("how many animals
+/** The longest leading run of `nounRun`'s words that names a class something was
+ *  actually taught about, as `{asked, tail, members}` — its taught members and
+ *  whatever words are left over, joined onto `trailing` as the restrictor tail.
+ *  A class name is a noun PHRASE, not a word ("sprite class", "body of water"),
+ *  so the run is tried longest-first and the shortest reading wins only when no
+ *  longer one is on record. That ordering is what keeps a single-word class
+ *  carrying a restrictor ("list the animals in the graph") reading exactly as it
+ *  did when only the first word was ever considered. */
+async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundle, cache) {
+  const words = String(nounRun || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  if (COUNT_NOUNS[words[0].toLowerCase()]) return null; // a real graph-countable class — the code lanes own it
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir, cache);
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  for (let take = words.length; take >= 1; take -= 1) {
+    const asked = words.slice(0, take).join(" ").toLowerCase();
+    const variants = factTermVariants(normFactTerm, asked);
+    const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
+    if (!members.length) continue; // nothing taught under this reading — try a shorter one
+    return { asked, tail: [words.slice(take).join(" "), String(trailing || "")].filter(Boolean).join(" ").trim(), members };
+  }
+  return null;
+}
+
+/** Count the taught members of a class named by a noun phrase ("how many animals
  *  are there" → every "X is a kind of animal"). Declines (null) for a real
  *  code-countable class (answerCount owns it) or a class nothing was taught
  *  about, so structural counts and the quantifier lane are unaffected. */
@@ -943,22 +979,16 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
   if (!memoryDir) return null;
   const m = String(query).trim().match(TAUGHT_CLASS_COUNT_RE);
   if (!m) return null;
-  if (!DYNAMIC_TAIL_OK_RE.test((m[2] || "").trim())) return null;
-  const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
-  const rows = await factRows(memoryDir, cache);
-  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const variants = factTermVariants(normFactTerm, asked);
-  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
-  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
+  if (!hit) return null;
+  if (!DYNAMIC_TAIL_OK_RE.test(hit.tail)) return null;
   // A member whose SUBJECT is itself a countable graph class ("every class is a
   // component") is an asserted-vocabulary cardinality, not a member enumeration —
   // countFromFacts counts the real class, so defer to it rather than tallying the
   // one class-level fact.
-  if (members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
-  return `${members.length} ${members.length === 1 ? asked.replace(/s$/, "") : asked}.`;
+  if (hit.members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
+  const n = hit.members.length;
+  return `${n} ${n === 1 ? hit.asked.replace(/s$/, "") : hit.asked}.`;
 }
 
 // "list all animals" / "list the animals" — enumerate a taught class's members,
@@ -966,9 +996,9 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
 // leftovers: at scale the definition lane fills its cap with forward corpus facts
 // before the reverse-membership listing ever shows, and the conversational
 // orientation lane claims the bare "list …" phrasing before factReadBack runs.
-const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*)\s*(.*)$/i;
+const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** List the taught members of a class named by a plain noun ("list all animals"
+/** List the taught members of a class named by a noun phrase ("list all animals"
  *  → every "X is a kind of animal"). Declines (null) for a code-countable class
  *  or a class nothing was taught about; declines with a message for a real
  *  restrictor tail rather than answering as if it weren't there. */
@@ -976,16 +1006,9 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   if (!memoryDir) return null;
   const m = String(query).trim().match(MEMBERSHIP_LIST_RE);
   if (!m) return null;
-  const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — the code list lane owns it
-  const tail = (m[2] || "").trim();
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
-  const rows = await factRows(memoryDir, cache);
-  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const variants = factTermVariants(normFactTerm, asked);
-  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
-  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
+  if (!hit) return null;
+  const { asked, tail, members } = hit;
   if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
     return {
       text: `I can list the ${asked}, but not the "${tail}" part of that question — `
@@ -1073,6 +1096,17 @@ const CAPABILITY_PHRASES = [
   /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
   /^(?:what(?:'s|s|\s+is)|give me|show me|gimme) the big picture(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
+  // "give me an overview" / "an overview" — the plain-word sibling of "the
+  // big picture" just above. Without a closed entry the word "overview"
+  // prose-matches real symbols in an indexed graph (moduleOverviewText) and
+  // the describe rescue dumps that symbol's card. The detailed forms ("give
+  // me a detailed overview of X") carry a mandatory "detailed"+of-term and
+  // stay with the completions rescue, untouched by this anchor. An explicit
+  // of-this-repo tail is NOT matched here: that names the repo as the
+  // subject, so ARCH_OVERVIEW_PHRASES answers it with the architecture map
+  // instead of this card.
+  /^(?:(?:can|could|would) you\s+)?(?:give me|show me|gimme)\s+an overview(?:\s+here)?\??$/i,
+  /^an overview(?:\s+please)?\??$/i,
   // "what have we got here"/"what've we got here" — a casual, self-answering
   // opener (matches after a leading "so" strips via LEADING_CONNECTIVE_RE,
   // leaving this as the bare remainder).
@@ -1087,14 +1121,26 @@ const CAPABILITY_PHRASES = [
   // anything nameable. Answered the same as any other vague opener: sure,
   // here's what I can help with.
   /^can i ask (?:you\s+)?something(?:\s+random)?\??$/i,
+  // The same orientation request with the SUBJECT flipped to "I" — "what can I
+  // ask you" rather than "what can you do". Every entry above reads "you" as
+  // the subject, so the flipped phrasings matched nothing and the bare "I"
+  // token went to the code-graph lane as a module name. The optional
+  // about-tail reuses META_ORIENT_RE's own closed self-referential noun list,
+  // so "what questions can I ask about <a real module>" is untouched.
+  /^what can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
+  /^what questions can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
+  /^what (?:kind|kinds|sort|sorts|type|types) of questions can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
  *  state, never the code-graph deflection. */
 const IDENTITY_PHRASES = [
-  /^who are you\??$/i, /^what (is|are|r) (this|you)\??$/i,
+  // The optional adverb ("what EVEN is this thing", "what REALLY is this") is
+  // emphasis on the same question — without it the casual spelling missed the
+  // closed set entirely and the bare "this"/"I" token went to the graph lane.
+  /^who are you\??$/i, /^what (?:even |really |actually )?(is|are|r) (this|you)\??$/i,
   /^what('?s| is) your name\??$/i, /^what exactly are you\??$/i,
-  /^(tell me about|introduce) yourself\??$/i, /^what is this thing\??$/i,
+  /^(tell me about|introduce) yourself\??$/i, /^what (?:even |really |actually )?is this thing\??$/i,
   /^what am i (talking|speaking|chatting) (to|with)\??$/i,
   /^you are what\??$/i, /^what thing (are|is) you\??$/i,
   // "explain [to me|please]* what (you are|this is)" in EITHER word order — a
@@ -1222,6 +1268,34 @@ function aiIdentityMatch(raw) {
   const text = String(raw);
   if (AI_IDENTITY_PHRASES.some((re) => re.test(text))) return true;
   return splitClauses(text).some((clause) => AI_IDENTITY_PHRASES.some((re) => re.test(clause)));
+}
+
+/** The self-referential tail a casual identity question trails after a comma
+ *  ("what even is this thing, like what does it do?"). It names no term at all
+ *  — "it"/"this"/"you" is the thing already asked about in the first clause —
+ *  so it adds nothing to answer and only has to be RECOGNIZED, not routed. */
+const SELF_REFERENTIAL_TAIL_RE = /^(?:like\s+|so\s+|and\s+)?what (?:does|do|can) (?:it|this|you|u) do\??$/i;
+
+/** IDENTITY_PHRASES matched against the raw turn, its preamble-peeled twin, or
+ *  a comma-joined identity clause trailed only by self-referential filler.
+ *
+ *  The peeled check mirrors what CAPABILITY_PHRASES' own dispatch already does
+ *  ("hello there, what am I talking to?" is an exact identity question behind a
+ *  greeting frame, and every entry is anchored, so the frame alone sank it).
+ *
+ *  The clause check is deliberately narrower than aiIdentityMatch's: it splits
+ *  on commas/"and" (conversationalClauses), which a real graph question can sit
+ *  on the far side of, so a match requires the FIRST clause to be an identity
+ *  question AND every later clause to be self-referential filler. "what is
+ *  this, and which modules import walk.mjs" therefore stays a graph query. */
+function identityPhraseMatch(raw) {
+  const text = String(raw);
+  const anchored = (s) => IDENTITY_PHRASES.some((re) => re.test(s));
+  if (anchored(text) || anchored(applyPreambleFrames(text))) return true;
+  const clauses = conversationalClauses(applyPreambleFrames(text).trim());
+  if (clauses.length < 2) return false;
+  return anchored(clauses[0].replace(/[?.!]+$/, ""))
+    && clauses.slice(1).every((c) => SELF_REFERENTIAL_TAIL_RE.test(c));
 }
 
 /** "Do you have feelings/emotions" — with no closed-set match, this would
@@ -1549,15 +1623,8 @@ const BYE = new Set([
   "bye", "goodbye", "quit", "exit", "see ya", "see you", "cya", "later", "farewell",
   "peace", "peace out", "im off", "i'm off", "gtg", "gotta go", "catch you later",
   "farewell then",
-  // "gtg thx" — the SAME "gtg" farewell above, immediately followed by a
-  // thanks word with no delimiter between them (so farewellOrThanksSignal's
-  // comma/semicolon clause split never sees two clauses to work with).
-  // Whole-phrase entry rather than a general "bye word + thanks word, no
-  // delimiter" mechanism — closed and hand-curated, this exact reported
-  // phrasing only.
-  "gtg thx",
   // "good day to you" deliberately does NOT live here: it's a formal-register
-  // GREETING, not a farewell. foldedBye is checked before GREET in
+  // GREETING, not a farewell. farewellClause is checked before GREET in
   // conversationalTurn, so having it here would silently end the session on
   // a plain formal greeting — every turn piped after it dropped with no log
   // entry, a worse outcome than any wall.
@@ -1663,15 +1730,39 @@ const CLAUSE_SPLIT_RE = /\s*[,;]\s*(?:and\s+)?|\s+and\s+/;
 function conversationalClauses(q) {
   return q.split(CLAUSE_SPLIT_RE).map((c) => c.trim()).filter(Boolean);
 }
-/** BYE match tolerant of informal reduplication ("bye bye", "no no" — general,
- *  not specific to any one word): a clause consisting of the SAME word twice
- *  folds to one instance before the ordinary closed/collapsed BYE lookup.
- *  Shared by the single-clause whole-line check and the multi-clause scan
- *  below, so "bye bye" resolves the same way whether or not a comma follows it. */
-function foldedBye(clause) {
+/** A thanks phrase and a bye phrase butted together with NO delimiter between
+ *  them, in either order ("gtg thx", "thanks bye"). conversationalClauses
+ *  splits on a comma, semicolon or a standalone "and", so these lines arrive
+ *  as one clause and match neither closed set whole. Splitting at each word
+ *  boundary and matching the two halves against their own sets keeps both
+ *  halves closed — no new literal, and no phrase is recognized here that
+ *  isn't already recognized alone. Without this the leading thanks word reads
+ *  as a bare subject noun and the farewell reads as its verb, so "thanks bye"
+ *  parses as a habitual-teach ("a thank can bye"). */
+function gluedThanksBye(clause) {
+  const words = clause.split(/\s+/).filter(Boolean);
+  for (let split = 1; split < words.length; split += 1) {
+    const head = words.slice(0, split).join(" ");
+    const tail = words.slice(split).join(" ");
+    const headIsBye = !!closedOrCollapsed(head, BYE, BYE_COLLAPSED);
+    const tailIsBye = !!closedOrCollapsed(tail, BYE, BYE_COLLAPSED);
+    const headIsThanks = !!closedOrCollapsed(head, THANKS, THANKS_COLLAPSED);
+    const tailIsThanks = !!closedOrCollapsed(tail, THANKS, THANKS_COLLAPSED);
+    if ((headIsBye && tailIsThanks) || (headIsThanks && tailIsBye)) return true;
+  }
+  return false;
+}
+/** Does this clause end the session? The closed BYE set, or informal
+ *  reduplication of one of its entries ("bye bye", "no no" — general, not
+ *  specific to any one word), or a thanks word glued to a bye word. Shared by
+ *  the single-clause whole-line check and the multi-clause scan below, so
+ *  "bye bye" resolves the same way whether or not a comma follows it. Bye wins
+ *  over thanks: a farewell should end the session even alongside gratitude. */
+function farewellClause(clause) {
   if (closedOrCollapsed(clause, BYE, BYE_COLLAPSED)) return true;
   const folded = clause.match(REPEATED_WORD_RE);
-  return !!(folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED));
+  if (folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED)) return true;
+  return gluedThanksBye(clause);
 }
 /** Closing-filler clauses — the CONTENT half of a farewell/thanks sentence
  *  ("thanks, that's everything for now") that isn't itself gratitude or bye
@@ -1725,7 +1816,7 @@ function farewellOrThanksSignal(raw, q) {
     const rawClause = clauses[i];
     const ackMatch = rawClause.match(ACK_LEAD_RE);
     const clause = ackMatch ? ackMatch[1].trim() : rawClause;
-    if (foldedBye(clause)) { byeHit = true; break; }
+    if (farewellClause(clause)) { byeHit = true; break; }
     const deIntensified = clause.replace(THANKS_HELP_TAIL_RE, "").replace(TRAILING_INTENSIFIER_RE, "").trim();
     if (thanksClauseIdx < 0 && closedOrCollapsed(deIntensified, THANKS, THANKS_COLLAPSED)) thanksClauseIdx = i;
   }
@@ -1863,9 +1954,9 @@ function conversationalTurn(line, ctx) {
       ...(end ? { end: true } : {}),
     }, ctx.trace);
   };
-  if (foldedBye(q)) {
+  if (farewellClause(q)) {
     note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
-    note(ctx.trace, "lane: conversational — farewell (BYE closed set, incl. bare reduplication e.g. \"bye bye\")");
+    note(ctx.trace, "lane: conversational — farewell (BYE closed set, incl. bare reduplication e.g. \"bye bye\" and a thanks word glued to a bye word e.g. \"thanks bye\")");
     return mk(t(T_FAREWELL), { end: true });
   }
   {
@@ -1968,7 +2059,7 @@ function conversationalTurn(line, ctx) {
       { lane: "help" },
     );
   }
-  if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
+  if (identityPhraseMatch(raw)) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_SELF), { lane: "help" });
@@ -2026,7 +2117,7 @@ export { moduleCountOf };
 /** A KNOWN-empty code graph: a loaded graph object with 0 modules. A null graph
  *  (a bare runTurn that wasn't handed one) is "unknown", NOT empty — the empty
  *  orientation/greeting only fires when we actually hold an empty graph. */
-const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
+export const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
 
 /** LIVE orientation examples: the example queries on the orientation card name
  *  entities from the LOADED graph — the sorted-first Module label and the
@@ -2085,7 +2176,12 @@ const ORIENTATION_EMPTY_FALLBACK = "I'm tmct — a deterministic, offline chat a
  *  branch uses, so there is exactly one copy of that wording to keep in sync, not
  *  two hand-duplicated strings. */
 function orientationText(graph, templates, vocabHint) {
-  if (noCodeGraph(graph)) {
+  // A null (never-loaded) graph reads as "unknown, not empty" to noCodeGraph,
+  // which is the right call for the greeting/orientation CARD — but there is no
+  // entity count to render from one either, so the empty wording is the only
+  // truthful thing left to say. Without this the entity tally below threw on a
+  // graph-less runTurn.
+  if (!graph || noCodeGraph(graph)) {
     return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? ORIENTATION_EMPTY_FALLBACK;
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
@@ -2149,6 +2245,8 @@ const MISS_EXAMPLES = {
   define: ['"where is <name> defined"', '"where is <name> mentioned"'],
   meaning: ['"what is a <ClassName>"', '"what does <term> mean"'],
   count: ['"how many classes are there"', '"how many modules are there"'],
+  serve: ['"what does <name> serve"', '"what serves <name>"'],
+  denote: ['"what does <name> denote"', '"what denotes <name>"'],
 };
 const MISS_DEFAULT = ['"which modules import <name>"', '"what calls <name>"'];
 
@@ -2160,6 +2258,8 @@ function tailoredExamples(q) {
   const has = (re) => re.test(q);
   if (has(/\bimport/)) return MISS_EXAMPLES.import;
   if (has(/\bexport/)) return MISS_EXAMPLES.export;
+  if (has(/\bserv(?:e|es|ed|ing|ice)\b/)) return MISS_EXAMPLES.serve;
+  if (has(/\bdenot(?:e|es|ed|ing|ation)\b/)) return MISS_EXAMPLES.denote;
   if (has(/\b(?:calls?|caller|callee)\b/)) return MISS_EXAMPLES.call;
   if (has(/\b(?:tests?|cover|covering|tested)\b/)) return MISS_EXAMPLES.test;
   if (has(/\b(?:inherit|subclass|extends?|superclass|hierarchy|base class|parent class)\b/)) return MISS_EXAMPLES.inherit;
@@ -2204,7 +2304,14 @@ const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+
 // stayed null) before ever trying the unknown-subject/object mint fallbacks
 // below — the SAME sentence typed without the period worked. Mirrors
 // UNKNOWN_SUBJECT_RE's own identical tolerance, added for the same reason.
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?[.!?]*$/i;
+// This is the gate that decides whether a bare declarative becomes a teach
+// payload at all, so a complement narrower than UNKNOWN_SUBJECT_RE's own object
+// capture kept a multi-word class name out of the mint fallbacks downstream no
+// matter how wide their captures were. A multi-word complement is admitted ONLY
+// behind an article — "is A unit of work" names a class, while the article-less
+// "is nice today" / "are fast animals" is ordinary prose that happens to carry a
+// copula, and admitting THAT grounds filler sentences as facts.
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:(?:a |an )[\w-]+(?: [\w-]+){0,2}|[\w-]+)(?: too)?[.!?]*$/i;
 /** "X is <comparative> than Y" — the comparative teach/ask surface. The
  *  comparative slot is closed by SHAPE (-er word, better/worse, or a
  *  more/less + adjective pair), never a hand-list of adjectives. */
@@ -2712,7 +2819,7 @@ const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessi
 /** Reify one teach-lane fact + confirm (shared by the property and ownership
  *  frames). Lazy + failure-tolerated: a write failure degrades to null (the
  *  teach-miss text stands), never a crash. */
-async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "" }) {
+async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "", observedAt = "", dateText = "" }) {
   try {
     const { appendFact, normFactTerm } = await import("../adapters/memory/core.mjs");
     const s = normFactTerm(subject);
@@ -2722,9 +2829,13 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
       subject: s, predicate, object: o,
       provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
       ...(quantifier ? { quantifier } : {}),
+      ...(observedAt ? { observedAt } : {}),
     });
     const phrase = predicatePhrase(predicate);
-    return { text: `noted — remembered: ${s} ${phrase} ${o}`, via: "assert", miss: false };
+    // The dated-teach frame's own echo: the user typed the date, so the
+    // acknowledgment shows it was registered rather than silently dropped.
+    const dateSuffix = observedAt && dateText ? ` (as of ${dateText})` : "";
+    return { text: `noted — remembered: ${s} ${phrase} ${o}${dateSuffix}`, via: "assert", miss: false };
   } catch {
     return null;
   }
@@ -2734,6 +2845,20 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
 // are Ys", "your X is a/an Y", "X is Y", "a few Xs are Ys") + "how many Xs
 // are Ys" recall. Deliberately NARROW: only the SUBJECT gets a free pass past
 // parseAce's closed lexicon-noun gate, never the OBJECT. ----
+
+/** Singular nouns that already END in a bare sibilant "-s" and so form their
+ *  plural with "-es" (bus -> buses, gas -> gases, lens -> lenses). When a
+ *  "-ses" word strips two letters onto one of these, the "-es" was the plural
+ *  marker and the stem is correct; every OTHER "-ses" word kept a silent "-e"
+ *  and singularizes by stripping one letter (see singularizeSurface). Doubled
+ *  "-ss" stems (class, glass, boss) are caught by pattern, so only single-"s"
+ *  stems need listing here. */
+const BARE_SIBILANT_S_NOUNS = new Set([
+  "bus", "gas", "plus", "minus", "surplus", "lens", "bias", "atlas", "canvas",
+  "virus", "bonus", "campus", "census", "chorus", "circus", "focus", "status",
+  "iris", "genius", "sinus", "walrus", "cactus", "fungus", "radius", "nucleus",
+  "alias", "crocus", "abacus", "syllabus", "octopus", "platypus",
+]);
 
 /** Naive plural → singular fold for the "some/a few Xs are Ys" surface forms
  *  (mirrors factTermVariants' own naive -es/-s stripping, below, but returns
@@ -2752,10 +2877,26 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
 function singularizeSurface(word) {
   const w = String(word || "").trim();
   if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
-  if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
+  if (/[a-z]ses$/i.test(w)) {
+    // "-ses" is genuinely ambiguous. A base already ending in "-se" just adds
+    // "-s" (collapse -> collapses, cause -> causes, rose -> roses), so the
+    // singular strips ONE letter. A base ending in a bare sibilant "-s" adds
+    // "-es" (bus -> buses, class -> classes, lens -> lenses), so the singular
+    // strips TWO. Spelling alone can't separate every pair, so strip two only
+    // when the two-char strip lands on a doubled "-ss" or a known bare-sibilant
+    // "-s" noun; otherwise the base kept its silent "-e" and one letter comes
+    // off. The other "-es" endings (-xes/-zes/-ches/-shes) keep the plain
+    // two-char strip below.
+    const stem = w.slice(0, -2);
+    if (/ss$/i.test(stem) || BARE_SIBILANT_S_NOUNS.has(stem.toLowerCase())) return stem;
+    return w.slice(0, -1);
+  }
+  if (/(xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
   if (/[a-z]s$/i.test(w) && !/(?:ss|ous)$/i.test(w)) return w.slice(0, -1);
   return w;
 }
+
+export { singularizeSurface };
 
 /** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
  *  fallback recognizes (group 2 = X, group 4 = Y); group 1 (when present)
@@ -2771,7 +2912,11 @@ function singularizeSurface(word) {
  *  and unknownObjectFallback's own docblocks) — a proper noun that happens to
  *  end in "s" ("redis") naively strips to "redi" if singularized on an "is"
  *  sentence, where no such fold is ever needed.
- *  Y (the object) is a single token, same as parseAce's own copula fragments;
+ *  Y (the object) is ONE TO THREE tokens, so a natural multi-word class name
+ *  ("every Function is a unit of work") reaches the mint instead of failing
+ *  the match outright and falling to the grammar wall; the greedy quantifier
+ *  plus the end anchor keep a longer trailing phrase ("rex is a dog in the
+ *  garden") rejected exactly as before.
  *  X (the subject) is ONE OR TWO tokens, to cover a natural 2-word noun
  *  phrase ("vulcan gizmo is a tool"), the same class of gap OWNS_TEACH_RE's
  *  own object needed widening for, above. The greedy quantifier tries the
@@ -2796,7 +2941,7 @@ function singularizeSurface(word) {
  *  captures themselves are unaffected (`[\w-]+` never included the period in
  *  the first place), so this only widens WHICH sentences reach the match,
  *  never what gets captured out of one that already did. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)[.!?]*$/i;
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+(?:\s+[\w-]+){0,2})[.!?]*$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
@@ -2851,22 +2996,27 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
 }
 
 /** Shared "is this term grounded in ANY sense" aggregate — a static lexicon
- *  word (any part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, OR
- *  a term already anchored by a previously taught isa-family fact
- *  (isGroundedByFact, above). Used by unknownObjectFallback's subject/object
- *  groundedness checks below, where no part-of-speech branching follows —
- *  just "known or not". (unknownSubjectFallback's own object-known check,
- *  above/below, stays narrower and NOUN-specific — see its own comment — so
- *  an object that's merely a known ADJECTIVE doesn't get misrouted into the
- *  class/subClassOf branch instead of the property branch.) */
-async function isGroundedTerm(term, lex, memoryDir, cache = null) {
+ *  word (any part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, a
+ *  term already anchored by a previously taught isa-family fact
+ *  (isGroundedByFact, above), OR — when a code graph is supplied — a symbol
+ *  the code graph itself resolves (resolveSymbol, codegraph.mjs — the SAME
+ *  resolver /describe/`/members`/`/subclasses` already use, so "known to
+ *  describe" and "known to teach" can never disagree). Used by
+ *  unknownObjectFallback's subject/object groundedness checks below, where no
+ *  part-of-speech branching follows — just "known or not". (unknownSubjectFallback's
+ *  own object-known check, above/below, stays narrower and NOUN-specific — see
+ *  its own comment — so an object that's merely a known ADJECTIVE doesn't get
+ *  misrouted into the class/subClassOf branch instead of the property branch.) */
+async function isGroundedTerm(term, lex, memoryDir, cache = null, graph = null) {
   const raw = String(term ?? "").trim();
   if (!raw) return false;
   if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
   const { classify } = await import("../domain/grammar/lexicon.mjs");
   if (classify(raw, lex)) return true;
+  if (graph && resolveSymbol(graph, raw)?.match) return true;
   return isGroundedByFact(raw, memoryDir, cache);
 }
+export { isGroundedTerm };
 
 /** The "both sides ungrounded" grounding NUDGE: reuses teachSuggestion's own
  *  "compute a hint, APPEND it to the existing honest-miss message, never
@@ -2888,15 +3038,15 @@ async function isGroundedTerm(term, lex, memoryDir, cache = null) {
  *  unchanged) whenever the payload doesn't fit the shape, or at least one
  *  side IS already grounded — a DIFFERENT, more specific reason it declined,
  *  where this nudge would be actively unhelpful noise. */
-async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null) {
+async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, graph = null) {
   if (!memoryDir) return "";
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
   const [, , subjectRaw, , objectRaw] = m;
   const { loadLexicon } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache)) return "";
-  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache)) return "";
+  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return "";
+  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return "";
   // Chaining the second term UNDER the first's now-grounded proper name
   // ("every man is a john") is technically accepted by the grammar (once
   // "john" is grounded, ANY term can be taught as a kind of it), but reads as
@@ -2938,7 +3088,7 @@ async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null) {
  *  the SUBJECT, not about the "remember that" wrapper). Only the "every"
  *  determiner records a quantifier (point 3: "a"/bare/"your" read as one
  *  specific entity, not a class-level generalization). */
-async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
+async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -2981,14 +3131,14 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
-      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
     });
   }
   if (lookupAdjective(lex, objectRaw)) {
     // property assertions are about ONE specific entity — never a quantifier,
     // even when phrased with "every" (point 3).
     return teachFact(memoryDir, sessionId, {
-      subject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+      subject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, observedAt, dateText,
     });
   }
   return null; // Y unknown too — decline honestly, never guess
@@ -3048,6 +3198,12 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  tagging surprise, degrades to a null tag treated as "no signal" (never a
  *  decline) — matching every other optional-adapter path in this file. */
 async function objectReadsAsNonNoun(word) {
+  // A MULTI-WORD complement only ever reaches here from behind an article, so
+  // it is a noun phrase by construction and the adjective question doesn't
+  // arise. Asking wink anyway tags the joined string as one opaque token and
+  // reads back nonsense ("key value store" → ADJ), which then diverted a plain
+  // class claim into the property lane.
+  if (/\s/.test(String(word || "").trim())) return false;
   try {
     const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
@@ -3059,7 +3215,7 @@ async function objectReadsAsNonNoun(word) {
     return false;
   }
 }
-async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false }, cache = null) {
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false, graph = null, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3073,9 +3229,9 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
   if (!/^(?:every|each|all|any)$/i.test((det || "").trim()) && !classIntent) return null; // class-level mint needs a universal quantifier or an explicit kind-of infix
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
+  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
-  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache);
+  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph);
   if (objectGrounded) return null; // object already known — nothing to mint
   if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
@@ -3104,7 +3260,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
     ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
     : subjectRaw;
   return teachFact(memoryDir, sessionId, {
-    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
   });
 }
 
@@ -3157,7 +3313,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
  *  otherwise provide. "the cache is bespoke" and "Mary is female" both carry
  *  one of those signals (the leading "the", and capitalization,
  *  respectively); "module is banana" carries none. */
-async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
+async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph = null, observedAt, dateText }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3190,13 +3346,13 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // a noun-shaped Y was already minted as a class upstream and never reaches
   // this point.
   const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
-  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache))
+  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph))
     && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
     const classSubject = /^are$/i.test(verb)
       ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
       : subjectRaw;
     return teachFact(memoryDir, sessionId, {
-      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every",
+      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every", observedAt, dateText,
     });
   }
   // Subject-side groundedness — strip a leading "the"/"a"/"an" first
@@ -3217,7 +3373,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const subjectGrounded = capitalized || factGrounded || genericAnchor || lexiconGrounded;
   if (!subjectGrounded) return null; // no deliberate-entity signal — never a guessed mint
   return teachFact(memoryDir, sessionId, {
-    subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+    subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, observedAt, dateText,
   });
 }
 
@@ -3857,8 +4013,27 @@ const HABITUAL_VERB_EXCLUDE = new Set([
   "please", "thanks", "kindly", "anyway", "though", "indeed", "maybe",
   "perhaps", "still", "too", "also", "instead", "now", "then", "here", "there",
 ]);
+/** Sentence-initial ordinal/temporal discourse adverbs — the "First", "Then",
+ *  "Next" … that thread a narrative across sentences without belonging to the
+ *  clause they lead. A closed set: a connective in this slot carries sequence,
+ *  not content, so stripping it lets "First a cell grows." read as the same
+ *  capability teach the bare "a cell grows." already does. */
+const LEADING_DISCOURSE_ADVERBS = [
+  "first", "second", "third", "then", "next", "finally",
+  "later", "meanwhile", "afterward", "afterwards",
+];
+const LEADING_DISCOURSE_ADVERB_RE = new RegExp(
+  `^(?:${LEADING_DISCOURSE_ADVERBS.join("|")})\\b\\s*,?\\s+`, "i",
+);
+/** Strip one leading ordinal/temporal discourse adverb (case-insensitive,
+ *  optional trailing comma) from the start of `text`, leaving the clause that
+ *  followed it. A word not in the closed set, or one with no clause after it,
+ *  is left untouched. */
+export function stripLeadingDiscourseAdverb(text) {
+  return String(text || "").trim().replace(LEADING_DISCOURSE_ADVERB_RE, "");
+}
 function matchBareHabitualTeach(text) {
-  const t = String(text || "").trim();
+  const t = stripLeadingDiscourseAdverb(String(text || "").trim());
   const plural = t.match(/^(?:all\s+|every\s+)?([\w-]+s)\s+([a-z][\w-]*)[.!?]*$/i);
   if (plural && !STRUCT_WORDS.has(plural[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(plural[2].toLowerCase()) && !/[^s]s$/i.test(plural[2])) {
     const subject = singularizeSurface(plural[1].toLowerCase());
@@ -4123,7 +4298,7 @@ const NEGATIVE_UNIVERSAL_TEACH_RE = /^no\s+([\w-]+)\s+(is|are)\s+(?:an?\s+)?(?:(
 /** The mint (or the reflexive refusal) for a NEGATIVE_UNIVERSAL_TEACH_RE
  *  match, shared by teachLane and the ACE-path reflexive gate: null when the
  *  sentence isn't this shape. */
-async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
+async function negativeUniversalTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
   const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_TEACH_RE);
   if (!m || !memoryDir) return null;
   const plural = m[2].toLowerCase() === "are";
@@ -4137,7 +4312,7 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
   }
   const { DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
   const stored = await teachFact(memoryDir, sessionId, {
-    subject, predicate: DISJOINT_PREDICATE, object,
+    subject, predicate: DISJOINT_PREDICATE, object, observedAt, dateText,
   });
   if (!stored) {
     return {
@@ -4164,13 +4339,13 @@ const NEGATIVE_UNIVERSAL_CAN_TEACH_RE = /^no\s+([\w-]+)\s+can\s+([a-z][\w-]*)[.!
 /** The mint for a NEGATIVE_UNIVERSAL_CAN_TEACH_RE match, mirroring
  *  negativeUniversalTeach's own shape: null when the sentence isn't this
  *  shape. */
-async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId }) {
+async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
   const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_CAN_TEACH_RE);
   if (!m || !memoryDir) return null;
   const subject = singularizeSurface(m[1]);
   const verb = m[2].toLowerCase();
   const stored = await teachFact(memoryDir, sessionId, {
-    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb,
+    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb, observedAt, dateText,
   });
   if (!stored) {
     return {
@@ -4233,7 +4408,26 @@ async function teachExclusionReason(sentence) {
 }
 export { teachExclusionReason };
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG, observedAt = "", dateText = "" }) {
+  // THE DATED TEACH FRAME — "<sentence> as of <date>" carries an explicit
+  // mgx:observedAt past the same shapes this lane already teaches. Tried
+  // ONCE, recursively, on the suffix-stripped text, the same
+  // "rewrap and recurse into this same lane" idiom the conjunction pre-pass
+  // below already uses. A miss on the stripped text falls through to the
+  // untouched ORIGINAL query below — a question that happens to end in
+  // "as of 2019" must keep asking, never get silently rewritten (see
+  // datedTeachSuffix's own docblock) — and a dated teach that fails to parse
+  // must never fall back to storing the same sentence undated.
+  if (!observedAt && memoryDir) {
+    const suffix = datedTeachSuffix(String(query));
+    if (suffix) {
+      const dated = await teachLane(suffix.stripped, {
+        memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig,
+        observedAt: suffix.observedAt, dateText: suffix.dateText,
+      });
+      if (dated && !dated.miss) return dated;
+    }
+  }
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
   // corrupt TEACH_RE's own match, so strip it first. applyPreambleFrames is
@@ -4349,7 +4543,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, observedAt, dateText });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -4507,7 +4701,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const positive = priorRows.find((r) => r.subject === negSubject && r.predicate === SUBCLASS_PREDICATE && r.object === negObject);
       if (positive) {
         const stored = await teachFact(memoryDir, sessionId, {
-          subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject,
+          subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject, observedAt, dateText,
         });
         if (stored) {
           return {
@@ -4569,13 +4763,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     }
   }
 
-  // MID-PLAN BOARD TEACH — a locative fact about a piece the LIVE plan's
-  // moves touch is declined naming the plan, never accepted-then-ignored:
-  // the plan's board rides @step snapshots, so a base-fact write here would
-  // be confirmed ("noted — remembered") and then contradicted by the very
-  // next "next". Scoped to the locative teach shape over the plan's own
-  // pieces; every other teach (new vocabulary, new pieces, rules) is
-  // untouched, and with no live plan nothing changes at all.
+  // MID-PLAN BOARD TEACH — a locative fact about a piece the LIVE plan's moves
+  // touch is accepted and the plan is re-searched from the moved board, never
+  // confirmed-then-contradicted by the next move. The change is written as a
+  // NEW whole-board @step snapshot layer (never a base fact — a base write here
+  // would sit under the standing snapshots and trip the contradictory-board
+  // check on the next solve), then the goal is re-searched from the board as it
+  // now stands. Scoped to the locative teach shape over the plan's own pieces;
+  // every other teach (new vocabulary, new pieces, rules) is untouched, and
+  // with no live plan nothing changes at all.
   {
     const livePlan = planHolder?.state && !planHolder.state.done
       && Array.isArray(planHolder.state.actions) && planHolder.state.actions.length
@@ -4583,13 +4779,49 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const boardSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     const board = livePlan ? boardSrc.match(BOARD_TEACH_LOCATIVE_RE) : null;
     if (board && memoryDir && !QUESTION_LEAD_RE.test(boardSrc)) {
-      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
       const planPieces = new Set(livePlan.actions.flatMap((a) => [normFactTerm(a.subject), normFactTerm(a.target)]));
       if (planPieces.has(normFactTerm(board[1])) || planPieces.has(normFactTerm(board[4]))) {
+        const { maxSnapshotStep } = await import("../domain/domain.mjs");
+        const { factRows, domain, state } = await loadPlanContext(memoryDir);
+        // The single-placement change over the current fold: same subject and
+        // predicate, new object. Written as the whole mutated board under a
+        // fresh @step layer, so stateFromFacts reads it as the live board and no
+        // base fact is left to contradict the next solve.
+        const subject = normFactTerm(board[1]);
+        const predicate = `mgx:${board[2].toLowerCase()}-${board[3].toLowerCase()}`;
+        const object = normFactTerm(board[4]);
+        const mutated = state.filter((r) => !(r.subject === subject && r.predicate === predicate));
+        mutated.push({ subject, predicate, object });
+        const layer = maxSnapshotStep(factRows, domain) + 1;
+        for (const r of mutated) {
+          await appendFact(memoryDir, {
+            subject: `${r.subject}@step${layer}`, predicate: r.predicate, object: r.object,
+            provenance: `plan:${sessionId || "chat"}:teach-replan:step${layer}`,
+          });
+        }
         const at = livePlan.cursor > 0 ? `step ${livePlan.cursor} of ${livePlan.actions.length}` : `0 of ${livePlan.actions.length} moves made`;
+        const goalText = livePlan.goalText ?? livePlan.goalTexts?.join("; ") ?? "the held goal";
+        const remembered = `noted — remembered: "${board[0]}".`;
+        const replan = await solveHeldGoals({ memoryDir, planHolder, gameConfig });
+        if (replan.plan) {
+          const moves = replan.plan.actions.map((a, i) => `${i + 1}. ${a.label}`).join("; ");
+          return {
+            text: `${remembered} That changes the board the live plan was standing on (${at}, toward: ${goalText}), so I replanned from the board as it now stands: ${moves}. Say "next" to make move 1.`,
+            via: "plan", miss: false,
+          };
+        }
+        // The write STANDS, but nothing reaches the goal from the moved board:
+        // the old plan is dropped (goals kept, plan reset) and the failed replan
+        // is named, never a silent success.
+        const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
+        planHolder.state = {
+          goals: livePlan.goals, goalTexts: livePlan.goalTexts,
+          actions: null, states: null, stepGoals: null, cursor: 0, done: false,
+        };
         return {
-          text: `a plan is live (${at}, toward: ${livePlan.goalText ?? livePlan.goalTexts?.join("; ") ?? "the held goal"}) — I won't change the board mid-plan: the plan's moves write board@step snapshots, and "${board[0]}" would sit under them, silently contradicted by the next move. Say "forget the goal" first, re-teach the board, then "solve it" to replan.`,
-          via: "teach-miss", miss: true,
+          text: `${remembered} That changes the board the live plan was standing on (${at}, toward: ${goalText}) — from this new board no plan reaches the goal within ${maxDepth} moves, so the old plan is dropped. Re-teach the board or say "forget the goal".`,
+          via: "plan", miss: false,
         };
       }
     }
@@ -4603,8 +4835,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const negUniversalSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     if (memoryDir && !QUESTION_LEAD_RE.test(negUniversalSrc)
       && !(await hasMidSentenceInterrogative(negUniversalSrc))) {
-      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId })
-        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId });
+      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId, observedAt, dateText })
+        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId, observedAt, dateText });
       if (negUniversal) return negUniversal;
     }
   }
@@ -4628,19 +4860,25 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
     && (wrapped || /^[A-Z]/.test(own[1]) || /^[A-Z]/.test(own[2]))) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1],
+      subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1], observedAt, dateText,
     });
     if (stored) return stored;
   }
   // PASSIVE ownership — "<X> is owned by <Name>". Same bare-form gate as the
-  // active shape just above: a Capitalized owner
-  // name AND no interrogative lead, so "is TaskController owned by anyone"
-  // (a genuine yes/no QUESTION, handled by factReadBack instead) never lands
-  // a bogus fact here.
+  // active shape just above, reading EITHER side and requiring no
+  // interrogative lead, so "is TaskController owned by anyone" (a genuine
+  // yes/no QUESTION, handled by factReadBack instead) never lands a bogus
+  // fact here. Reading both sides matters as much as it does for the active
+  // shape, and the SUBJECT side gets the path test too: "src/domain/
+  // lexicon.mjs is owned by antony" states ownership just as plainly as a
+  // capitalized owner does, while "the car is owned by john" still declines.
   const ownPassive = ownSrc.match(OWNS_PASSIVE_TEACH_RE);
-  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion && (wrapped || /^[A-Z]/.test(ownPassive[2]))) {
+  const ownPassiveSubject = ownPassive?.[1]?.trim() ?? "";
+  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && (wrapped || /^[A-Z]/.test(ownPassive[2]) || /^[A-Z]/.test(ownPassiveSubject)
+      || MODULE_PATH_RE.test(ownPassiveSubject))) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2],
+      subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4653,7 +4891,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const relatedTo = ownSrc.match(RELATED_TO_TEACH_RE);
   if (relatedTo && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: relatedTo[1], predicate: "mgx:relatedTo", object: relatedTo[2],
+      subject: relatedTo[1], predicate: "mgx:relatedTo", object: relatedTo[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4669,7 +4907,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
   if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
+      subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4681,14 +4919,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const genitive = ownSrc.match(GENITIVE_RELATION_TEACH_RE);
   if (genitive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: genitive[1], predicate: await generalVerbPredicate(genitive[3]), object: genitive[2],
+      subject: genitive[1], predicate: await generalVerbPredicate(genitive[3]), object: genitive[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
   const genitiveRev = ownSrc.match(GENITIVE_RELATION_TEACH_REV_RE);
   if (genitiveRev && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1],
+      subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4703,7 +4941,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     ? await matchRelationalVerbTeach(ownSrc) : null;
   if (relVerb) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object,
+      subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object, observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -4723,7 +4961,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const hasMethod = ownSrc.match(TEACH_HAS_METHOD_RE);
   if (hasMethod && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`,
+      subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`, observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -5026,7 +5264,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const rendersAs = ownSrc.match(RENDERS_AS_TEACH_RE);
   if (rendersAs && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
-      subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2],
+      subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2], observedAt, dateText,
     });
     if (stored) return stored;
   }
@@ -5044,7 +5282,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (wrapped && memoryDir && !QUESTION_LEAD_RE.test(wrapped) && !(await hasMidSentenceInterrogative(wrapped))) {
     const gv = await generalVerbTeach(wrapped);
     if (gv) {
-      const stored = await teachFact(memoryDir, sessionId, gv);
+      const stored = await teachFact(memoryDir, sessionId, { ...gv, observedAt, dateText });
       if (stored) return stored;
     }
   } else if (!wrapped && memoryDir && !QUESTION_LEAD_RE.test(correctMisspellings(raw))
@@ -5096,16 +5334,16 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       if (canShape && canSingular !== canShape.subject) {
         let canLex = lexicon;
         if (!canLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
-        if (await isGroundedTerm(canSingular, canLex, memoryDir, cache)) {
+        if (await isGroundedTerm(canSingular, canLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb,
+            subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb, observedAt, dateText,
           });
           if (stored) return stored;
         }
       }
       const gv = await generalVerbTeach(raw);
       if (gv) {
-        const stored = await teachFact(memoryDir, sessionId, gv);
+        const stored = await teachFact(memoryDir, sessionId, { ...gv, observedAt, dateText });
         if (stored) return stored;
       }
     }
@@ -5144,7 +5382,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const compPredicate = `mgx:${comp[2].toLowerCase().replace(/\s+/g, "-")}-than`;
       const stored = await teachFact(memoryDir, sessionId, {
         subject: comp[1].trim(), predicate: compPredicate,
-        object: comp[3].trim().replace(/[.!?]+$/, ""),
+        object: comp[3].trim().replace(/[.!?]+$/, ""), observedAt, dateText,
       });
       if (stored) return stored;
     }
@@ -5163,7 +5401,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const pred = `mgx:${pp[2].toLowerCase()}-${pp[3].toLowerCase()}`;
         const stored = await teachFact(memoryDir, sessionId, {
           subject: pp[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
-          object: participleObject(pp[4]),
+          object: participleObject(pp[4]), observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -5178,11 +5416,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const subject = np[1].trim();
         const relPred = `mgx:${np[4].toLowerCase()}-${np[5].toLowerCase()}`;
         const isaStored = await teachFact(memoryDir, sessionId, {
-          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]),
+          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]), observedAt, dateText,
         });
         const relStored = await teachFact(memoryDir, sessionId, {
           subject, predicate: negated ? negatedPredicate(relPred) : relPred,
-          object: participleObject(np[6]),
+          object: participleObject(np[6]), observedAt, dateText,
         });
         const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
         if (isaStored && relStored) return { text: `noted — remembered both: ${stripNoted(isaStored.text)}; and ${stripNoted(relStored.text)}`, via: "assert", miss: false };
@@ -5195,7 +5433,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         const pred = `mgx:same-${same[3].toLowerCase()}-as`;
         const stored = await teachFact(memoryDir, sessionId, {
           subject: same[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
-          object: same[2].trim(),
+          object: same[2].trim(), observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -5204,7 +5442,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
       // universal success, so every caller (this loop AND the top-level
       // declarative-sentence dispatch in runTurn) gets it uniformly.
-      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache });
+      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache, observedAt, dateText });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
     }
     // CAPABILITY over a GROUNDED subject — "penguins swim" (habitual) or "a
@@ -5224,9 +5462,9 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // every query-side variant fold) uses; a proper noun that only looks
       // plural ("redis") falls back to its own spelling.
       for (const subj of new Set([singularizeSurface(habitualTeach.subject), habitualTeach.subject])) {
-        if (await isGroundedTerm(subj, habLex, memoryDir, cache)) {
+        if (await isGroundedTerm(subj, habLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb,
+            subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb, observedAt, dateText,
           });
           if (stored) return stored;
         }
@@ -5238,14 +5476,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // wrapped surface (payload is already unwrapped either way) — see
     // unknownSubjectFallback's own docblock for the exact narrowing rules
     // (object must still be known, etc.).
-    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache);
+    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, observedAt, dateText }, cache);
     if (fallback) return fallback;
     // MIRROR mint fallback: the known-subject/unknown-object asymmetry —
     // tried right after the unknown-subject case declines, so a subject the
     // STATIC lexicon (or a prior taught fact) already grounds can mint a
     // brand-new object term. See unknownObjectFallback's own docblock for the
     // exact narrowing rules (the "both sides ungrounded" safety guard, etc.).
-    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent }, cache);
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent, graph, observedAt, dateText }, cache);
     if (objectFallback) return objectFallback;
     // ADJECTIVE-MINT fallback: tried right after unknownObjectFallback
     // declines, so a grounded subject (static
@@ -5254,7 +5492,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // docblock for the exact narrowing rules (the "both sides ungrounded"
     // safety guard, and why this must be a standalone function rather than
     // nested inside unknownSubjectFallback).
-    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache);
+    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph, observedAt, dateText }, cache);
     if (adjectiveFallback) return adjectiveFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
@@ -5264,7 +5502,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const prop = wrapped.match(TEACH_PROPERTY_RE);
       if (prop && !PLACE_ADVERB_OBJECT_RE.test(prop[2])) {
         const stored = await teachFact(memoryDir, sessionId, {
-          subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2],
+          subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2], observedAt, dateText,
         });
         if (stored) return stored;
       }
@@ -5317,7 +5555,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // Grounding NUDGE: APPENDED, never a replacement, exactly like "did" above
   // — see ungroundedPairHint's own docblock for why this is scoped to the
   // "both sides ungrounded, fits the X is/are Y shape" case only.
-  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache);
+  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache, graph);
   return {
     text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
       + `words I know.${did}${groundingHint} Type /memory to see what I already remember.`,
@@ -5336,7 +5574,7 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // do" needs the noun OPTIONAL after "this" (kept REQUIRED after "the") or it
 // falls through to MODULE_ORIENT_RE, which fails to resolve "this" as an
 // entity and hits the raw grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:(?:start|begin|get\s+started|get\s+going)(?:\s+(?:with|on)\s+(?:this|it))?|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 /** A bare "what is in here"/"what's in here"/"whats in here" — the SAME
  *  orientation intent as META_ORIENT_RE's own
  *  "what's in this repo"-shaped members, just phrased with the CONTEXT_WORDS
@@ -5384,17 +5622,19 @@ async function memorySummary(memoryDir, graph) {
 // #2(e) MODULE-GRAIN OVERVIEW. META_ORIENT_RE (above) can't match a module
 // path/symbol name, so "what does app/lib/a.mjs do" needs its own lane.
 // CASE-PRESERVING: reads the ORIGINAL query text, never metaLane's lowercased `q`.
-/** A trailing intensifier/filler adverb tacked onto "do"/"does" ("what does the
- *  store module do exactly?", "...do exactly", "what X does really") — the
- *  closed-form anchor below requires "do"/"does" to be the LAST word before
- *  the optional "?", so this one extra word past it would otherwise hit the
- *  raw grammar wall even though the shared FILLER_WORDS/normalizeQuery pass
- *  (used elsewhere in the file) never sees this lane's case-preserving text
- *  at all. Mirrors MODULE_ORIENT_POLITENESS_RE
- *  just below: closed, optional, single-lane blast radius — a bare "what does
- *  X do" still matches with this suffix empty. */
-const TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
-const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
+/** One intensifier/filler adverb sitting either side of "do"/"does" ("what does
+ *  the store module do exactly?", "what does tasks.mjs actually do
+ *  internally", "what X does really") — the closed-form anchors below pin
+ *  "do"/"does" against the term on one side and the optional "?" on the
+ *  other, so either extra word would hit the raw grammar wall even though the
+ *  shared FILLER_WORDS/normalizeQuery pass (used elsewhere in the file) never
+ *  sees this lane's case-preserving text at all. Mirrors
+ *  MODULE_ORIENT_POLITENESS_RE just below: closed, optional, single-lane blast
+ *  radius — a bare "what does X do" still matches with both slots empty. The
+ *  PRE-verb slot also keeps an adverb out of the term capture, so
+ *  "tasks.mjs actually" never reaches entity resolution as one name. */
+const ORIENT_ADVERB_SLOT_RE = "(?:\\s+(?:exactly|really|actually|truly|anyway|internally|properly))?";
+const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+do${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
 /** The SUBJECT-FIRST word order of the SAME question ("what saveStore does" vs
  *  "what does saveStore do") — a perfectly natural alternate phrasing of an
  *  ALREADY-recognized intent that would otherwise hit the raw grammar wall
@@ -5404,7 +5644,18 @@ const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVE
  *  UNIQUE graph entity or this lane declines) is what keeps this loose an
  *  ending safe — a syntactic match against a term that isn't a real entity
  *  simply falls through unchanged, same as every other lane in this file. */
-const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
+const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+does${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
+/** "whats X do" / "what's X do" / "what is X do" — the CONTRACTED phrasing of
+ *  "what does X do", where the auxiliary collapses into the "what's"/"whats"
+ *  opener and "do" trails the term. MODULE_ORIENT_RE's own "does BEFORE the
+ *  term" anchor never sees it, and MODULE_ORIENT_SVO_RE needs a literal "what "
+ *  (with a space) so the bare "whats" spelling escapes that too. Safe to end
+ *  this loosely because the lane's exact-unique resolveEntity gate below is
+ *  still the sole authority — same argument as MODULE_ORIENT_SVO_RE: a term
+ *  that is not a real unique entity (a pronoun subject "whats it do", a
+ *  non-word) simply declines. The "what(?:'s|s|\s+is)" opener mirrors
+ *  MODULE_PURPOSE_RE's tolerance for the apostrophe-less "whats" contraction. */
+const MODULE_ORIENT_IS_DO_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+do${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
 // Purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
@@ -5474,7 +5725,7 @@ async function moduleOrientLane(query, { graph }) {
   // (stripFillerWords already eats "please"/"could you" as filler; the politeness
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE) || q.match(MODULE_ORIENT_IS_DO_RE);
   // "what does src/core/store.mjs do" already reached the overview; the bare
   // path and "what is <path>" did not, so the same module answered one
   // phrasing and walled two. Both are claimed here rather than in ask.mjs,
@@ -5495,9 +5746,24 @@ async function moduleOrientLane(query, { graph }) {
   // to end in a module path would be claimed here.
   const tailLooksLikePath = !!(m || identityMatch) && phraseWords.length > 1 && MODULE_PATH_RE.test(pathTail);
   // The identity phrasing ("what is <term>") only ever claims a path-shaped
-  // term — bare, or with modifier words ahead of a path-shaped tail; the
-  // orient/purpose phrasings carry their own anchors.
-  if (!m && !MODULE_PATH_RE.test(bare) && !tailLooksLikePath) return null;
+  // term — bare, or with modifier words ahead of a path-shaped tail — or,
+  // below, a bare extensionless module basename.
+  //
+  // "what is codegraph": both siblings of that question already resolve the
+  // module ("what is codegraph.mjs" via MODULE_PATH_RE, "describe codegraph"
+  // via resolveSymbol's basename tier), so the extensionless identity form
+  // resolves by the same evidence — exact basename-stem equality against
+  // exactly ONE module. The gate stays strict: a single bare word with no
+  // article (an articled "what is a dog" keeps its vocabulary reading), and
+  // any tie or non-module term declines unchanged.
+  if (!m && !MODULE_PATH_RE.test(bare) && !tailLooksLikePath) {
+    if (!identityMatch || !/^[\w$][\w$.-]*$/.test(identityMatch)) return null;
+    const stemLc = bare.toLowerCase();
+    const stemHits = graph.individuals.filter((i) => i.class === "Module"
+      && String(i.label).toLowerCase().split("/").pop().replace(/\.[a-z0-9]+$/, "") === stemLc);
+    if (stemHits.length !== 1) return null;
+    return { text: moduleOverviewText(graph, stemHits[0]), via: "meta" };
+  }
   const ent = await resolveEntity(graph, m ? phrase : bare);
   if (ent) {
     const ind = graph.byId?.get?.(ent.id);
@@ -5861,7 +6127,7 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
             || (f.predicate === `tmct:${adjective}` && f.object === "true"))) || null;
       }
     }
-    lines.push(`${objEnt.label} ${adjective} — ${propHit ? `yes (source: ${propHit.provenance})` : "I have no fact saying so"}`);
+    lines.push(`${objEnt.label} ${adjective} — ${propHit ? `yes (source: ${citationProvenance(propHit.provenance)})` : "I have no fact saying so"}`);
   }
   const verdict = lines.join("; ");
   return { text: holds ? `${verdict}. ${subjEnt.label} does ${split.verb} ${objEnt.label}.` : `${verdict} — the premise doesn't hold.` };
@@ -5871,6 +6137,10 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
  *  WALL_MISS_RE: the suppression keys on the PREVIOUS answer matching it, so this
  *  text self-limits — a third consecutive miss re-offers the tailored hint. */
 const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every query shape.";
+/** The graph-less bootstrap wall's opening line — shared with the teach-offer
+ *  collapse below, which treats this wall (like the shortened generic wall)
+ *  as text a term-specific offer REPLACES rather than stacks under. */
+const NO_GRAPH_BOOTSTRAP_WALL_LEAD = "I can't answer that as a code question — no code graph is loaded in this session.";
 
 /** The orientation-repeat one-liner. The conversational
  *  orientation branch sits OUTSIDE the composed-only wall-shortening gate (it
@@ -5924,7 +6194,7 @@ export async function helpText() {
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
-    ["research <topic> [limit N]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop"],
+    ["research <topic> [limit N] [depth D]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -6266,6 +6536,14 @@ function splitMetaPredicate(term) {
   return { subject: t, predicate: null };
 }
 
+// A peer-taught tag's `#node:<id>` segment keys the fact (PLAN_FACT.md) but is
+// never meant for a reader — strip it wherever provenance is cited in prose,
+// mirroring the same stable-node-id-is-not-shown rule chat-page-viz.mjs's own
+// node roster already applies.
+function citationProvenance(provenance) {
+  return provenance.replace(/#node:[0-9a-f]+/g, "");
+}
+
 /** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
  *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
  *  source cited, not "i learned: …" — that phrase over-claims and anthropomorphises
@@ -6277,7 +6555,7 @@ function splitMetaPredicate(term) {
  *  that it's lower-confidence, so a distinct, honest hedge ("possibly: …")
  *  applies here instead. Provenance stays VERBATIM in every case. */
 function renderFactLine(f) {
-  const cite = f.provenance ? ` (source: ${f.provenance})` : "";
+  const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
   // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
   // natural frames — both are things the operator SAID, so both read first-person.
   if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
@@ -6361,6 +6639,37 @@ function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
   return { lines, grouped };
 }
 
+// A subject-scan term answer longer than this many flat fact lines leads with a
+// deterministic digest paragraph (src/domain/digest) and holds the full list
+// behind the escape; a shorter answer is already readable as a list.
+const DIGEST_READBACK_THRESHOLD = 8;
+
+/** The digest lead for a subject-scan term answer: a bounded narrative first
+ *  (selection, sentence structures, composition — all deterministic, no model),
+ *  the full fact list held behind the "show the facts"/"more" escape. `termRows`
+ *  are the term's own fact rows, `allRows` the whole store the statistics scan
+ *  over, `lines` the already-rendered flat fact list the escape reveals.
+ *
+ *  Returns { text, pending } or null. Null when the structure bank is
+ *  unavailable (the in-browser dock stubs the filesystem loader out) or the
+ *  selector kept nothing renderable, so the caller falls back to the flat list —
+ *  the same graceful degradation the construction banks take in a browser
+ *  bundle. Deterministic; the digest reads only stored facts. */
+async function termDigestReadBack(term, termRows, allRows, lines) {
+  let digestTermFromRows;
+  try { ({ digestTermFromRows } = await import("../adapters/corpus/digest-bank.mjs")); }
+  catch { return null; }
+  let article;
+  try { article = digestTermFromRows(term, termRows, allRows); }
+  catch { return null; }
+  if (!article || !article.paragraphs.length) return null;
+  const sources = [...new Set((article.sources || []).map((s) => s.provenance).filter(Boolean))];
+  const sourceLine = sources.length ? `(sources: ${sources.join("; ")})\n` : "";
+  const escape = `Say 'show the facts' for all ${lines.length} stored facts.`;
+  const text = `${article.paragraphs.join("\n\n")}\n\n${sourceLine}${escape}`;
+  return { text, pending: { items: lines, noun: "facts" } };
+}
+
 /** "a"/"an" for a term, through the SAME grammar-rules.toml "article" rule and
  *  finish.mjs's beginsWithVowelSound every other agreement site in this file
  *  uses — never a hardcoded "a", which is ungrammatical for a vowel-initial
@@ -6402,7 +6711,7 @@ function isaPolarityReply(hit, negHit) {
  *  inconsistency as a derivation — so neither side wins, same discipline as
  *  isaPolarityReply's both-sides verdict. */
 function isaInconsistencyRefusal(posFact, disjointFact) {
-  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   return {
     text: `you've told me both ${cite(posFact)} and ${cite(disjointFact)} — together those contradict, and I won't derive an answer from an inconsistency. `
       + `To settle it, say "forget that ${posFact.subject} is ${indefiniteArticleFor(posFact.object)} ${posFact.object}".`,
@@ -6421,7 +6730,7 @@ function isaInconsistencyRefusal(posFact, disjointFact) {
  *  premise's object — sound for any chain length, though today's only caller
  *  (the live cax-sco/scm-sco chase below) ever passes exactly two. */
 function renderIsaChain(premises) {
-  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   const first = premises[0];
   const last = premises[premises.length - 1];
   return `${premises.map(step).join("; ")}; so ${first.subject} is a ${last.object}`;
@@ -6529,7 +6838,7 @@ function suggestibleSubjectPhrase(subject) {
  *  take the article. */
 const QUANTIFIER_LEAD_RE = /^(?:every|each|all|any)\s+/i;
 
-function factTermVariants(normFactTerm, term) {
+export function factTermVariants(normFactTerm, term) {
   const t = normFactTerm(term);
   const v = new Set();
   // The ask frames glue a quantifier onto the subject and looked up "every
@@ -6885,6 +7194,16 @@ const LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|a
  *  to the ordinary BARE_WHATIS_RE handling untouched. */
 const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
 
+/** "what parameters does a person sprite take" / "what materials does a bed
+ *  accept" — the object-fronted property question, where the property noun
+ *  leads and the verb closes. It reads the same folded verb-plus-noun predicates
+ *  the teach path already mints (mgx:take-parameter, mgx:accept-material,
+ *  mgx:offer-variant), so the predicate is recovered from the sentence's own two
+ *  ends rather than from a table of known property words: m[1] is the noun,
+ *  m[2] the subject, m[3] the verb. Consumed by factAnswer's (a-pre6) reader,
+ *  which diverts only on a real stored hit. */
+const OBJECT_FRONTED_PROPERTY_RE = /^what\s+([a-z][\w-]*)\s+(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+([a-z][a-z-]*)\s*[?.!]*$/i;
+
 // CAN_ASK_RE's remaining paraphrase-ladder siblings, all over the same
 // mgx:capableOf facts:
 //  - DO_VERB_ASK_RE: the do-support yes/no ("do birds fly", "does a dog
@@ -6904,6 +7223,7 @@ const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_S
 //    the named kind via a direct isa-family fact.
 const DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
 const WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
+const WHAT_CANNOT_VERB_RE = /^what\s+(?:cannot|can't|cant|can\s+not)\s+(.+?)[?.!\s]*$/i;
 const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
 
 /** The negative surface of a yes/no question asks the SAME question as its
@@ -6924,13 +7244,22 @@ const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(
  *  trying the raw question first would take a garbage bind over the good one. */
 function positiveQuestionSurface(q) {
   const s = String(q || "")
-    .replace(/^(?:can't|cannot|can not)\s+/i, "can ")
+    .replace(/^(?:can't|cannot|can not|cant)\s+/i, "can ")
     .replace(/^(?:doesn't|does not)\s+/i, "does ")
     .replace(/^(?:don't|do not)\s+/i, "do ")
     .replace(/^(?:didn't|did not)\s+/i, "did ")
     .replace(/\s+(?:not|never)\s+/i, " ");
   return s.replace(/\s+/g, " ").trim();
 }
+/** A negated surface ("can a dog not bark") is answered by the positive
+ *  reader (see positiveQuestionSurface's docblock), but a bare yes/no lead
+ *  then reads as agreeing with the asked polarity — drop the lead and let
+ *  the cited fact carry the real polarity on its own. */
+function withoutPolarityLead(reply) {
+  const text = String(reply.text || "").replace(/^(?:yes|no) — /i, "");
+  return text === reply.text ? reply : { ...reply, text };
+}
+const collapsedSurface = (q) => String(q || "").replace(/\s+/g, " ").trim();
 
 /** Cite an isa chain the way (b3b) already cites one — each step as its own
  *  phrase plus verbatim source. Shared so the inherited-capability answers and
@@ -6940,7 +7269,7 @@ function renderIsaCite(chain, facts) {
     (f) => f.predicate === step.predicate && f.subject === step.subject && f.object === step.object,
   ));
   if (!steps.length || !steps.every(Boolean)) return null;
-  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
 }
 
 /** THE capability answer — every reader that asks "can X do Y" renders through
@@ -7214,8 +7543,8 @@ function withDeducedGoal(res, envelope, query) {
 }
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  let normFactTerm; let normFactPredicate;
+  try { ({ normFactTerm, normFactPredicate } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
 
   // (a-pre) "what is used for riding" / "what can be used for riding" / "what
@@ -7328,7 +7657,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       if (declined) return declined;
       const steps = order.slice(0, -1).map((n, i) => pairs.find((f) => f.subject === n && f.object === order[i + 1]));
       if (steps.every(Boolean)) {
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
         return { text: `${order[0]} — ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
       }
     }
@@ -7370,6 +7699,35 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const variants = factTermVariants(normFactTerm, whatIsPrepQ[2].replace(/^(?:an?|the)\s+/i, "").trim());
     const hits = (await factRows(memoryDir, cache)).filter(
       (f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && f.predicate.endsWith(`-${prep}`) && variants.has(f.object),
+    );
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (a-pre6) "what parameters does a person sprite take" — the object-fronted
+  // property question over a folded verb-plus-noun predicate. Both ends of the
+  // sentence carry half the predicate the teach path minted, so the verb and the
+  // noun are rejoined into mgx:<verb>-<noun> and looked up directly; the noun is
+  // tried through its own plural variants, since a question asks for "parameters"
+  // where the stored predicate names one "parameter". Checked before (a) for the
+  // same reason as its siblings above — the leading "what …" would otherwise be
+  // claimed as one literal term to define — and hit-gated the same way, so a
+  // sentence of this shape with nothing on record falls through untouched.
+  const propertyQ = q.match(OBJECT_FRONTED_PROPERTY_RE);
+  if (propertyQ) {
+    const verb = propertyQ[3].toLowerCase();
+    const subjectVariants = factTermVariants(normFactTerm, propertyQ[2]);
+    const predicates = new Set(
+      [...factTermVariants(normFactTerm, propertyQ[1])].map((noun) => normFactPredicate(`mgx:${verb}-${noun.replace(/\s+/g, "-")}`)),
+    );
+    const hits = (await factRows(memoryDir, cache)).filter(
+      (f) => predicates.has(normFactPredicate(f.predicate)) && subjectVariants.has(normFactTerm(f.subject)),
     );
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
@@ -7437,7 +7795,29 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // matched against fact subjects, and — the actual bug — the result is
     // FILTERED to just that one predicate (mgx:usedFor) instead of every
     // relation about the subject undifferentiated.
-    const { subject, predicate } = splitMetaPredicate(metaTerm);
+    const split = splitMetaPredicate(metaTerm);
+    const { predicate } = split;
+    // A leading article survives the T5/BARE_WHATIS capture ("what is the car
+    // used for" → "the car") — stripped the same way normFactTerm strips it,
+    // so the article never decides whether the subject matches.
+    let subject = split.subject.replace(/^(?:the|an?)\s+/i, "").trim() || split.subject;
+    // A predicate-shaped ask whose subject is the session anaphor ("what is
+    // it used for") resolves against the standing focus, exactly as the
+    // IS_ADJECTIVE/ISA yes/no readers resolve theirs. With no focus standing
+    // the pronoun is named and declined (the cold-pronoun voice) — never a
+    // fact lookup on the literal word "it", and never a teach-offer for it.
+    let focusSubstituted = false;
+    if (predicate && IS_ADJECTIVE_PRONOUN_RE.test(subject)) {
+      if (!focusLabel) {
+        const tail = String(FACT_PREDICATE_PHRASES[predicate] || "").replace(/^(?:is|are)\s+/, "");
+        return {
+          text: `not sure what "${subject.toLowerCase()}" refers to yet — name the subject directly, e.g. "what is a <name>${tail ? ` ${tail}` : ""}".`,
+          replace: miss, miss: true, selfContainedMiss: true,
+        };
+      }
+      subject = focusLabel;
+      focusSubstituted = true;
+    }
     const variants = factTermVariants(normFactTerm, subject);
     // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
     // bias-weighted ranking below needs each hit's sourceIds to resolve which
@@ -7446,16 +7826,30 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // back where it's hidden or that it's the objective (WORLD_INTERNAL_PREDICATES).
     const subjectHits = (await factRows(memoryDir, cache))
       .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate));
-    let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
+    // Matched through normFactPredicate, so a fact stored under a minted
+    // spelling of the same relation ("mgx:used-for", from the participle
+    // teach frame, in a store written before the spellings converged) is
+    // found by the curated spelling it means.
+    let hits = predicate ? subjectHits.filter((f) => normFactPredicate(f.predicate) === predicate) : subjectHits;
+    // A bare "what is X" answered ONLY by corpus-weak ConceptNet association(s)
+    // is the hedged "possibly: X is related to Y" guess, not a definition — treated
+    // as no hit at all so the honest-miss cascade below (teach lane, reference-pack/
+    // Wikipedia fallback) still gets a turn, instead of the hedge silently standing
+    // in as "already answered". A predicate-specific ask ("X used for") is untouched:
+    // scoped to the SAME undifferentiated shape the reference-pack fallback serves.
+    if (!predicate && hits.length && !hits.some(isRealGrounding)) hits = [];
     if (!hits.length) {
-      // The subject itself is known, but not under this specific relation —
-      // an honest, specific "no" rather than falling through to the generic
-      // "isn't a term in this graph's own vocabulary" wall (which would be
-      // actively misleading here: the subject IS a known term).
-      if (predicate && subjectHits.length) {
+      // The subject itself is known — as a fact subject, or as the standing
+      // focus a pronoun just resolved to — but not under this specific
+      // relation: an honest, specific "no" rather than falling through to
+      // the generic "isn't a term in this graph's own vocabulary" wall
+      // (which would be actively misleading here: the subject IS a known
+      // term).
+      if (predicate && (subjectHits.length || focusSubstituted)) {
         return {
           text: `I don't have any "${FACT_PREDICATE_PHRASES[predicate]}" facts about ${subject}.`,
           replace: miss,
+          ...(subjectHits.length ? {} : { miss: true }),
         };
       }
       // The term names nothing as a fact SUBJECT, but may exist only as the
@@ -7463,7 +7857,9 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       // ishmael"): surface those reverse relations rather than missing, the same
       // facts "what do you know about X" would list.
       if (!predicate) {
-        const objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        let objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        // Same corpus-weak-only demotion as the subject-side hits above.
+        if (objectHits.length && !objectHits.some(isRealGrounding)) objectHits = [];
         if (objectHits.length) {
           const objLines = objectHits.map(renderFactLine);
           const objShown = objLines.slice(0, FACT_ANSWER_CAP);
@@ -7478,7 +7874,17 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
     // trust-desc, byte-identical to before this feature existed.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const { lines, grouped } = senseSplitFactList(hits, await factRows(memoryDir, cache), variants);
+    const allRows = await factRows(memoryDir, cache);
+    const { lines, grouped } = senseSplitFactList(hits, allRows, variants);
+    // A long undifferentiated "what is X" leads with the digest — a bounded
+    // narrative over the same facts — and holds the full list behind the escape.
+    // It wins over the sense-split grouping here: the digest's own selector
+    // filters the mis-sensed branch that grouping would otherwise surface as its
+    // own block. Falls back to grouping/flat when the digest is unavailable.
+    const digested = (!predicate && lines.length > DIGEST_READBACK_THRESHOLD)
+      ? await termDigestReadBack(subject, hits, allRows, lines)
+      : null;
+    if (digested) return { ...digested, replace: miss };
     if (grouped) return { ...grouped, replace: miss };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
@@ -7607,11 +8013,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // capabilityReply). Mirrors the ISA_ASK_RE block just above on the "never a
   // guessed no" discipline: a "no" here is a REMEMBERED negative, never the
   // absence of a positive.
-  const can = positiveQuestionSurface(q).match(CAN_ASK_RE);
+  const surfacedCan = positiveQuestionSurface(q);
+  const can = surfacedCan.match(CAN_ASK_RE);
   if (can) {
     const facts = await factRows(memoryDir, cache);
     const canUniversal = can[1];
-    const reply = capabilityReply(can[2], can[3], facts);
+    let reply = capabilityReply(can[2], can[3], facts);
+    if (reply && surfacedCan !== collapsedSurface(q)) reply = withoutPolarityLead(reply);
     // Quantified ("can all/every X ..."): the stored facts are generic, and a
     // bare "yes" would claim universality the memory can't support — the same
     // hedge the do-support surface applies, echoing the quantifier as typed.
@@ -7711,7 +8119,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // (falls through instead): the shape is looser than (b2)'s, so a do-lead
   // question some later reader owns must keep its turn. The can't-confirm
   // branch is additionally miss-gated for the same reason.
-  const doAsk = positiveQuestionSurface(q).match(DO_VERB_ASK_RE);
+  const surfacedDo = positiveQuestionSurface(q);
+  const doAsk = surfacedDo.match(DO_VERB_ASK_RE);
   if (doAsk) {
     const facts = await factRows(memoryDir, cache);
     const universal = !!doAsk[1];
@@ -7719,7 +8128,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, doAsk[3]);
     // the SAME resolver (b2) answers through, so "do penguins fly" and "can a
     // penguin fly" can never disagree in one session
-    const reply = capabilityReply(doAsk[2], doAsk[3], facts);
+    let reply = capabilityReply(doAsk[2], doAsk[3], facts);
+    if (reply && surfacedDo !== collapsedSurface(q)) reply = withoutPolarityLead(reply);
     if (reply && universal) {
       // Echo the quantifier as typed ("every dog", "all dogs") — "all dog"
       // for a singular every-question is a garbled echo.
@@ -7827,7 +8237,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         if (!chain || chain.length < 2) return renderFactLine(f);
         const steps = chain.map(rowForStep);
         if (!steps.every(Boolean)) return renderFactLine(f);
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
         return `${renderFactLine(f)} — via: ${cite}`;
       });
       const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -7836,6 +8246,28 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const preamble = inKind.length ? "" : `nothing I remember ties these to "${whichCan[1]}", but:\n`;
       return { text: preamble + shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
     }
+  }
+
+  // (b3c-neg) "what cannot fly" — the negative twin of (b3c): every stored
+  // mgxneg:capableOf fact whose OBJECT matches. A matched shape with NO
+  // stored negatives returns a definitive memory miss rather than falling
+  // through — the conversational catch-all downstream misread this surface
+  // as small talk and answered with the identity card.
+  const cannotVerb = q.match(WHAT_CANNOT_VERB_RE);
+  if (cannotVerb && cannotVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
+    const negVariants = factTermVariants(normFactTerm, cannotVerb[1]);
+    const negHits = (await factRows(memoryDir, cache)).filter(
+      (f) => f.predicate === "mgxneg:capableOf" && negVariants.has(f.object),
+    );
+    if (negHits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(negHits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+    return { text: `nothing I remember says anything cannot ${cannotVerb[1].trim()}.`, replace: true, miss: true };
   }
 
   // (b3c) "what can fly" — the unrestricted reverse-by-verb sibling of (b3b):
@@ -7993,6 +8425,16 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // besides. The adventure's own where/openness readers answer the legitimate
     // in-game questions from the world fold.
     hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate));
+    // A corpus-weak-only result set (every hit resolved ONLY through
+    // ConceptNet's /r/RelatedTo tier) still composes its hedged "possibly"
+    // lines below exactly as before — this reader's whole job is showing
+    // those, weak or not, so they're never suppressed from the text. But the
+    // result is flagged `weakOnly` so the shared honest-miss cascade (the
+    // reference-pack/Wikipedia fallback, below in runAsk) still gets a turn
+    // instead of the hedge silently standing in as "already answered" —
+    // mirroring isRealGrounding's other two call sites without breaking this
+    // one's own job.
+    const weakOnly = hits.length > 0 && !hits.some(isRealGrounding);
     // A genuinely empty result here is a real miss: "what do you know about
     // the last commit" needs a TEACH-OFFER, not a bare wall — added as a LATE
     // runTurn-level addition, below, alongside the sibling "what is X" offer,
@@ -8043,11 +8485,16 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
       + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
     const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  " });
-    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}` };
+    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}`, ...(weakOnly ? { weakOnly: true } : {}) };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
-    return { text: `${header}\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
+    return {
+      text: `${header}\n${shown.join("\n")}${extra}`,
+      replace: true,
+      ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}),
+      ...(weakOnly ? { weakOnly: true } : {}),
+    };
   }
   return null;
 }
@@ -8198,7 +8645,7 @@ const CARD_EXISTENCE_ASK_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$
 /** The 4 pattern-5 cardinality-restriction predicates buildCardinalityRestrictions
  *  reconstructs from — owl:onProperty (shared scaffolding with someValuesFrom
  *  restrictions too) is added alongside this set by each reader below, not
- *  folded into it here, mirroring infbench/grade.mjs's own identically-named
+ *  folded into it here, mirroring test-benchmarks/infbench/grade.mjs's own identically-named
  *  set + separate owl:onProperty handling. */
 const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
 /** "who owns <X>" / "who maintains <X>" — the closed ownership read-back over
@@ -8269,6 +8716,14 @@ const HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i
  *  cascade/orientation nudge that already handles it. */
 const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
 const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+/** A backtracked subject that is really a cross-turn temporal comparison —
+ *  a bindable form followed by a comparison word ("that before chat.mjs
+ *  was", from "was that before chat.mjs was touched"). The comparison lane
+ *  owns the closed-participle family; a cousin with a participle outside
+ *  that set still lands here, and offering to teach a fact about "that
+ *  before chat.mjs was" is a category error, so the property readers
+ *  decline it the way they decline a personal-pronoun subject. */
+const BINDABLE_COMPARISON_SUBJECT_RE = /^(?:it|this|that)(?:\s+one)?\s+(?:before|after)\b/i;
 /** IS_ADJECTIVE_YESNO_RE's
  *  subject capture is unbounded/unrestricted (see its own docblock above), so
  *  a pronoun-subject IDENTITY question ("are you happy", "are you like
@@ -8485,12 +8940,25 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         // "you", so `subject` itself would already carry the pronoun verbatim).
         if (subject && !/^there\b/i.test(subject) && !envelope?.parsed
           && !IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject)
+          && !BINDABLE_COMPARISON_SUBJECT_RE.test(rawSubject)
           && !PLACE_ADVERB_OBJECT_RE.test(emptyIsAdj[2].trim())) {
           return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
         }
       }
     }
-    return null;
+    // An isa-shaped FIRST turn on a pristine store falls THROUGH to the isa
+    // reader below rather than taking the empty-store bail-out: that reader's
+    // body tolerates rows=[] end-to-end (every derived array is empty) and
+    // lands on the specific "I don't know X at all yet — teach me" closer, so
+    // the very first "is X a Y" no longer hits the generic grammar wall just
+    // because nothing has been taught yet. The graph inherits-bridge above
+    // already answers the code-entity direct/converse cases before this point.
+    // A leading "there" subject is existential ("is there a class called X"),
+    // which ISA_ASK_RE also matches but a LATER existence lane owns and answers
+    // better — it keeps the bail-out, mirroring this block's own emptyIsAdj
+    // "there" exclusion above. Every OTHER empty-store shape keeps the bail-out.
+    const fallThroughIsa = qHedge.match(ISA_ASK_RE) || matchWhyIsa(q);
+    if (!((fallThroughIsa && !/^there\b/i.test(fallThroughIsa[1].trim())) || CONFIRM_TAG_RE.test(q))) return null;
   }
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
   const byTrust = (a, b) => b.trust - a.trust;
@@ -8812,7 +9280,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
                   const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
                   if (seenAlias.has(key)) continue;
                   seenAlias.add(key);
-                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${citationProvenance(af.provenance)})` : ""}`);
                 }
               }
               return `${node.entity} — ${parts.join("; ")}`;
@@ -8991,7 +9459,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
           const chain = [posFact, ...(objFact ? [objFact] : [])].map(renderFactLine).join("; ");
           return {
-            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${disjointFact.provenance})` : ""} `
+            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${citationProvenance(disjointFact.provenance)})` : ""} `
               + `— so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
             replace: true,
           };
@@ -9347,7 +9815,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveCardinalityAtLeast(cardSubClassEdges, cardinalityRestrictionEdges, s, o, m, {}));
       if (witness) {
         const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
-        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        const cite = restrictionFact?.provenance ? ` (source: ${citationProvenance(restrictionFact.provenance)})` : "";
         const kindWord = witness.kind === "exactly" ? "exactly" : "at least";
         const plural = (w, n) => `${w}${n === 1 ? "" : "s"}`;
         // Premise-derived trust for THIS
@@ -9396,7 +9864,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveMaxCardinalityZeroDenial(cardSubClassEdges, cardinalityRestrictionEdges, s, o, {}));
       if (witness) {
         const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
-        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        const cite = restrictionFact?.provenance ? ` (source: ${citationProvenance(restrictionFact.provenance)})` : "";
         // Same discipline as the
         // cardinality-monotonicity reader just above (see its own comment).
         const cardPremiseTrusts = [
@@ -9533,7 +10001,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // this whole reader decline HONESTLY — no fact lookup, no teach-offer —
     // and fall through to whatever handles identity/small-talk questions
     // instead, rather than special-casing a return here.
-    const subject = IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject) ? null
+    const subject = IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject) || BINDABLE_COMPARISON_SUBJECT_RE.test(rawSubject) ? null
       : IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
     const adjective = isAdj[2].trim().toLowerCase();
     if (subject) {
@@ -9961,6 +10429,14 @@ const STACCATO_LEAKED_CONNECTIVES = new Set(["and", "also", "so", "then", "now"]
  *  named `edithistory`) is never mistaken for the pronoun. */
 const PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
 
+/** The referring pronouns an EMBEDDED "what about X, <wh-clause>" swap replaces
+ *  — CONTEXT_WORDS (it/this/that/here) plus the personal pronouns
+ *  PRONOUN_IN_QUERY_RE deliberately omits (he/she/they/them): the embedded
+ *  clause's own subject/object, not a prior-turn antecedent, so a subject
+ *  pronoun like "he" that never appears in a code-graph query still has to be
+ *  swappable here. */
+const EMBEDDED_PRONOUN_RE = /\b(?:it|this|that|here|he|she|they|them)\b/i;
+
 /** DISCOURSE CONTINUATION: "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -9971,6 +10447,32 @@ function discourseRewrite(query, last) {
   let newSubj;
   if (m) {
     newSubj = m[1].trim();
+    // An embedded question spliced into the "what about" subject ("what about
+    // the store, what it do") must NEVER be substituted into the prior turn's
+    // shape — that inherits the prior turn's DIRECTION onto a question asking
+    // the opposite ("who uses store.mjs" then "…what it do" would answer "who
+    // uses the store"). Split on the interior wh-clause and re-read the
+    // remainder against a CLOSED micro-set; a clause outside it is an honest
+    // miss, never the prior-turn substitution below. A comma NOT followed by a
+    // wh-word ("what about the store, please") never matches and keeps its
+    // ordinary swap.
+    const embedded = newSubj.match(/^(.+?),\s*(what|who|which|where|how)\b\s*(.*)$/i);
+    if (embedded) {
+      const embSubj = embedded[1].trim();
+      const wh = embedded[2].toLowerCase();
+      const rest = embedded[3].trim();
+      // "what [it/this/that/he/she] do(es)" → the module overview of the new
+      // subject, which MODULE_ORIENT_RE serves verbatim.
+      if (wh === "what" && /^(?:he|she|it|this|that)?\s*do(?:es)?$/i.test(rest)) {
+        return `what does ${embSubj} do`;
+      }
+      // A wh-clause carrying its OWN pronoun ("what does it call") → swap that
+      // pronoun for the new subject and ask the clause standalone.
+      if (EMBEDDED_PRONOUN_RE.test(rest)) {
+        return `${wh} ${rest.replace(EMBEDDED_PRONOUN_RE, () => embSubj)}`;
+      }
+      return null;
+    }
   } else {
     const sm = String(query).match(STACCATO_SWAP_RE);
     const cand = sm?.[1]?.trim();
@@ -10269,14 +10771,37 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   return { text: `${def} (source: corpus/seon)`, term };
 }
 
+/** True when `f` carries a source better than the ConceptNet `/r/RelatedTo`
+ *  corpus-weak tier — or no recorded source type at all (the conservative,
+ *  pre-existing read for legacy rows). A fact resolved ONLY by corpus-weak
+ *  source(s) is the hedged "possibly: X is related to Y" guess, not an
+ *  actual definition; callers treat it as no grounding at all rather than an
+ *  answer, so it can never by itself skip the honest-miss cascade below
+ *  (the teach lane, the reference-pack/Wikipedia fallback). Shared by the
+ *  bare "what is X" reader, the "what do you know about X" reader (both in
+ *  factAnswerReaders) and the learn-on-miss gate (cleanMissPackKey/
+ *  cleanMissLiveKey) so none of them can ever disagree. */
+function isRealGrounding(f) {
+  const types = f.sourceTypes || [];
+  return types.length === 0 || types.some((t) => t !== "corpusWeak");
+}
+
 // ---- learn-on-miss: the shipped child + reference packs behind the cleanest miss ----
+
+/** A remembered fact naming `term` is real grounding only when SOME source
+ *  behind it outranks the ConceptNet `/r/RelatedTo` corpus-weak tier — see
+ *  isRealGrounding just above. */
+function hasNonWeakGrounding(rows, variants) {
+  return rows.some((f) => (variants.has(f.subject) || variants.has(f.object)) && isRealGrounding(f));
+}
 
 /** The learn-on-miss gate, shared by the child-pack hook, the articled
  *  reference hook and the bare-form fallback so the three can never disagree.
  *  Passes only on the CLEANEST miss: a definition-shaped term the lexicon
- *  knows, resolving to no graph entity and no remembered fact — then, and
- *  only then, may a pack provider be consulted. Null means the turn proceeds
- *  byte-identically to a pack-less run. */
+ *  knows, resolving to no graph entity and no fact grounded above the
+ *  corpus-weak tier — then, and only then, may a pack provider be
+ *  consulted. Null means the turn proceeds byte-identically to a pack-less
+ *  run. */
 async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!term || !memoryDir) return null;
   let key = null;
@@ -10290,7 +10815,7 @@ async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   const variants = factTermVariants(normFactTerm, term);
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
-  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  if (hasNonWeakGrounding(rows, variants)) return null;
   // A taught RULE that owns this term outranks any pack load: surfacing
   // unrelated conceptnet content over the user's own taught concept is worse
   // than the honest miss the decline leaves standing.
@@ -10318,10 +10843,10 @@ async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, c
 }
 
 /** The LIVE variant of cleanMissPackKey — the same resolveEntity and
- *  remembered-fact checks, but through cleanMissLiveTerm, which drops the
- *  lexicon-membership wall: a word the lexicon has never met is exactly what
- *  the live lookup exists for. Null means the turn proceeds byte-identically
- *  to a live-off run. */
+ *  above-corpus-weak grounding checks, but through cleanMissLiveTerm, which
+ *  drops the lexicon-membership wall: a word the lexicon has never met is
+ *  exactly what the live lookup exists for. Null means the turn proceeds
+ *  byte-identically to a live-off run. */
 async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!term || !memoryDir) return null;
   let key = null;
@@ -10333,7 +10858,7 @@ async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
   const variants = factTermVariants(normFactTerm, term);
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
-  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  if (hasNonWeakGrounding(rows, variants)) return null;
   return key;
 }
 
@@ -10603,9 +11128,33 @@ const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|the
 const DESCRIBE_GRAIN_WORD_RE = new RegExp(
   `^(?:(?:the|a|an)\\s+)?(.+?)\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i",
 );
+/** A LEADING noise phrase glued onto the captured term by an outer bridge, the
+ *  mirror of the trailing grain word DESCRIBE_GRAIN_WORD_RE strips. "give me
+ *  the context for src/core/store.mjs" reaches this lane as "describe context
+ *  for src/core/store.mjs" (normalize.mjs's show/give-me frame rewrites the
+ *  whole tail into the term), and every resolver downstream then reads
+ *  "context" as part of the name. Closed list, and the term still has to
+ *  resolve afterwards, so a phrase that leaves nothing resolvable simply
+ *  declines to the ordinary miss.
+ *
+ *  The "everything i need ..." branch is the same shape with a purpose clause
+ *  instead of a bare noun: "give me everything i need to change X"/"...for X"
+ *  both reach here as "describe everything i need to change X"/"describe
+ *  everything i need for X". The "to <verb...>" purpose clause is never split
+ *  word-by-word (a multi-word clause like "to work on X" would mis-split into
+ *  a captured verb plus a dangling remainder) — the greedy `.*\s` instead
+ *  always backtracks to the LAST whitespace run in the match, so the whole
+ *  clause strips as one unit and only the trailing symbol/path survives. */
+const DESCRIBE_LEADING_NOISE_RE =
+  /^(?:(?:the\s+)?(?:context|details|detail|info|information|background)\s+(?:for|on|about|of|around)\s+|everything\s+i(?:'d|\s+would)?\s+need\s+(?:to\s+.*\s|for\s+))/i;
+function stripDescribeLeadingNoise(term) {
+  const stripped = String(term || "").replace(DESCRIBE_LEADING_NOISE_RE, "").trim();
+  return stripped || String(term || "").trim();
+}
+
 async function describeGrainRescue(graph, term) {
   if (!graph) return null;
-  const m = String(term || "").trim().match(DESCRIBE_GRAIN_WORD_RE);
+  const m = stripDescribeLeadingNoise(term).match(DESCRIBE_GRAIN_WORD_RE);
   if (!m) return null;
   const [, head, grainWord] = m;
   const expectedClass = ENTITY_TO_TYPE[grainWord.toLowerCase()];
@@ -10635,6 +11184,11 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // "describe about X" (a doubled verb) leaves a redundant leading "about "
   // glued to the captured term.
   term = term.replace(/^about\s+/i, "");
+  // "give me the context for X" arrives bridged into "describe context for X".
+  // Cleaned once here so the grain rescue, the /describe dispatch and the
+  // focus-setting resolveEntity below all read the same clean term — the
+  // answer was already right without this, but the focus never updated.
+  term = stripDescribeLeadingNoise(term);
   // A trailing bare discourse tag ("describe Record then") glued onto the
   // captured term, same class of gap stripTrailingDiscourseTag (ask-vocab.mjs)
   // already fixes for the meta-whatis vocab lane.
@@ -10918,7 +11472,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   const definition = (await seonDefinitions()).get(term) ?? null;
   if (!definition) return null;
   // The runChat shell hands the loaded graph straight in; the pure runTurn(config)
-  // path (tests, chatbench) does not, so load it the same way dispatchTool does when
+  // path (tests, test-benchmarks/chatbench) does not, so load it the same way dispatchTool does when
   // it's missing. Failure-tolerated: no loadable graph → no concept force.
   let g = graph;
   if (!g && config && source) {
@@ -10973,12 +11527,6 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
   return null;
 }
 
-/** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
- *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
- *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
- *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
- *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
- *  normal answer, never a crash. */
 /** Load the taught domain for the plan lane: fact rows + rule rows compiled
  *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
  *  the caller may have just written snapshot rows this same turn. */
@@ -11207,7 +11755,57 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   const wantsSolve = PLAN_SOLVE_RE.test(q);
   const wantsLegal = LEGAL_MOVES_RE.test(q);
   if (!wantsSolve && !wantsLegal) return null;
+  if (wantsSolve) return solveHeldGoals({ memoryDir, planHolder, gameConfig });
 
+  // "what moves are legal now" — one ply off the current board, no search.
+  let ctx;
+  try {
+    ctx = await loadPlanContext(memoryDir);
+  } catch (err) {
+    return { text: `I can't read the taught domain: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence", note: "plan lane — domain load failed" };
+  }
+  const { domain, state } = ctx;
+  if (!domain.actions.length) {
+    return {
+      text: `no action rules taught yet — teach the game first (e.g. "you can move a disk onto a peg").`,
+      via: "plan", deduced: "plan a move sequence (no action rules yet)", note: "plan lane — honest decline: no action rules",
+    };
+  }
+  if (!state.length) {
+    return {
+      text: `no current state taught yet — state the board first (e.g. "disk-1 rests on peg-a").`,
+      via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
+    };
+  }
+  const { movesFromRules, PlanBudgetError } = await import("../domain/domain.mjs");
+  let moves;
+  try {
+    moves = movesFromRules(state, domain, { scope: "taught" });
+  } catch (err) {
+    if (err instanceof PlanBudgetError) {
+      return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
+    }
+    throw err;
+  }
+  if (!moves.length) {
+    return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
+  }
+  const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
+  return {
+    text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
+    via: "plan", deduced: "list the legal moves from the current state",
+    note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
+  };
+}
+
+/** Search the taught rules for a shortest sequence to the held goal(s) from the
+ *  CURRENT board fold (the newest @stepK snapshot, else the taught board).
+ *  Mints the plan onto planHolder.state and returns the plan-found reply on
+ *  success; on any missing precondition or an unreachable goal it returns the
+ *  matching honest decline and leaves planHolder.state untouched. Shared by the
+ *  plan lane's "solve it" and by the two drift sites that re-search after the
+ *  board moves under a live plan. */
+async function solveHeldGoals({ memoryDir, planHolder, gameConfig = DEFAULT_GAME_CONFIG }) {
   let ctx;
   try {
     ctx = await loadPlanContext(memoryDir);
@@ -11227,30 +11825,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
       via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
     };
   }
-  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
-
-  if (wantsLegal) {
-    let moves;
-    try {
-      moves = movesFromRules(state, domain, { scope: "taught" });
-    } catch (err) {
-      if (err instanceof PlanBudgetError) {
-        return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
-      }
-      throw err;
-    }
-    if (!moves.length) {
-      return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
-    }
-    const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
-    return {
-      text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
-      via: "plan", deduced: "list the legal moves from the current state",
-      note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
-    };
-  }
-
-  // "solve it" — the full search.
+  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError, maxSnapshotStep } = await import("../domain/domain.mjs");
   if (!planHolder.state?.goals?.length) {
     return {
       text: `no goal set yet — teach one first (e.g. "the goal is that every disk rests on peg-c").`,
@@ -11367,8 +11942,13 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   // instead of an honest miss — see PLAN_WHY_SHORTEST_RE's own call site.
   const becauseText = `you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}`
     + `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}.`;
+  // The snapshot layer a fresh plan's step writes stack ABOVE: 0 on an
+  // untouched board, K after a prior plan left @stepK rows standing. Without it
+  // a replan's step 1 would write @step1 below the standing @stepK layer and be
+  // read as stale by stateFromFacts (which prefers the newest snapshot).
+  const stepBase = maxSnapshotStep(factRows, domain);
   planHolder.state = {
-    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText,
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText, stepBase,
   };
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
   // A piece with no taught position is an ASSUMPTION the plan silently makes
@@ -11404,23 +11984,27 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
 /** Execute the active plan's next move: append the successor snapshot's rows
  *  as @stepK facts, advance the cursor, and on the final step re-read the
  *  store and confirm the goal from the WRITTEN facts (never assumed). */
-async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
+async function executePlanStep(planHolder, { memoryDir, sessionId = "", gameConfig = DEFAULT_GAME_CONFIG }) {
   const ps = planHolder.state;
   const k = ps.cursor + 1;
+  // The snapshot index the board rows are written under: it stacks above any
+  // layer standing when the plan was minted (stepBase), while k stays the plan's
+  // own 1-of-N move counter. On a fresh board stepBase is 0 and snap === k.
+  const snap = (ps.stepBase ?? 0) + k;
   const action = ps.actions[ps.cursor];
   const rows = ps.states[k];
   const { appendFact, loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
   for (const row of rows) {
     await appendFact(memoryDir, {
-      subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
-      provenance: `plan:${sessionId || "chat"}:step${k}`,
+      subject: `${row.subject}@step${snap}`, predicate: row.predicate, object: row.object,
+      provenance: `plan:${sessionId || "chat"}:step${snap}`,
     });
   }
   planHolder.state = { ...ps, cursor: k };
   const boardLine = rows.map((r) => `${r.subject} ${predicatePhrase(r.predicate)} ${r.object}`).join("; ");
   if (k < ps.actions.length) {
     return {
-      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}`,
+      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}`,
       deduced: ps.stepGoals[k] ? ps.stepGoals[k] : `continue the plan (step ${k + 1} of ${ps.actions.length})`,
     };
   }
@@ -11432,12 +12016,31 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const domain = compileDomain(factRows, readRuleRows(payload));
   const finalState = stateFromFacts(factRows, domain);
   const holds = compileGoal(ps.goals, domain, { scope: "taught" })(finalState);
+  const movedLine = `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}`;
+  if (holds) {
+    planHolder.state = { ...planHolder.state, done: true };
+    return {
+      text: `${movedLine}\n\ndone — ${ps.goalText} (checked against board@step${snap}'s written facts, not assumed).`,
+      deduced: `goal reached — ${ps.goalText} (${k} of ${k} steps)`,
+    };
+  }
+  // The final board doesn't reach the goal — the plan or the board drifted.
+  // Before settling for the miss, re-search from the board as it now stands: a
+  // found plan is disclosed and held (never a silent success), a miss keeps the
+  // honest failure and names the failed replan.
+  const replan = await solveHeldGoals({ memoryDir, planHolder, gameConfig });
+  if (replan.plan) {
+    const moves = replan.plan.actions.map((a, i) => `${i + 1}. ${a.label}`).join("; ");
+    return {
+      text: `${movedLine}\n\nBUT the goal does NOT hold against the written facts — the state drifted, so I replanned from board@step${snap}: ${moves}. Say "next" to continue.`,
+      deduced: "plan finished but the goal check failed — replanned from the drifted board",
+    };
+  }
+  const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
   planHolder.state = { ...planHolder.state, done: true };
   return {
-    text: holds
-      ? `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\ndone — ${ps.goalText} (checked against board@step${k}'s written facts, not assumed).`
-      : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
-    deduced: holds ? `goal reached — ${ps.goalText} (${k} of ${k} steps)` : "plan finished but the goal check failed",
+    text: `${movedLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again — I looked for a new plan from board@step${snap} and found none within ${maxDepth} moves.`,
+    deduced: "plan finished but the goal check failed",
   };
 }
 
@@ -11626,7 +12229,45 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+/** "was that before logger.mjs was touched" — a singular bindable form, a
+ *  comparison word, and an embedded passive clause. The closed participle set
+ *  is the touch family the when-question path answers; anything else keeps
+ *  the honest miss. */
+const TEMPORAL_COMPARISON_RE = /^(?:was|is)\s+(this one|that one|it|this|that)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
+
+/** "were those before logger.mjs was touched" — the plural sibling of
+ *  TEMPORAL_COMPARISON_RE. A plural bindable form (`those`/`them`/`these`)
+ *  binds a `set` referent a listing/filter answer established, and the
+ *  comparison runs over the whole set: each member is dated from the graph,
+ *  and the answer quantifies (all / none / M of N) rather than forcing one
+ *  date. A set whose members are not all datable refuses, the same honest
+ *  miss the singular lane takes on an undated referent. */
+const PLURAL_TEMPORAL_COMPARISON_RE = /^(?:were|are)\s+(those|them|these)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
+
+/** ARCHITECTURE-OVERVIEW intent — "show me the architecture", "what is the
+ *  architecture of this repo": the whole-repo map the /arch command renders.
+ *  A closed phrase set, because the literal word "architecture" is also a
+ *  plausible SYMBOL substring in many graphs (renderArchitecture,
+ *  tmct_architecture) — the symbol-describe rescues would otherwise resolve
+ *  the word to one such symbol and dump its definition card instead of the
+ *  map. Every phrasing here names the architecture as a TOPIC (an article,
+ *  an of-this-repo tail, or an overview/map noun); a query that NAMES a
+ *  symbol ("describe renderArchitecture") never matches. */
+const ARCH_OVERVIEW_LEAD = "(?:(?:can|could|would)\\s+you\\s+(?:please\\s+)?)?(?:(?:show|give)\\s+(?:me|us)\\s+|describe\\s+|explain\\s+|what(?:'s|s|\\s+is)\\s+)?";
+const ARCH_OVERVIEW_OF_REPO = "(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code)";
+const ARCH_OVERVIEW_TAIL = `(?:\\s+${ARCH_OVERVIEW_OF_REPO})?`;
+const ARCH_OVERVIEW_PHRASES = [
+  // Article-carried: "the architecture" alone, or wrapped/tailed.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}the\\s+architecture(?:\\s+(?:overview|map|diagram))?${ARCH_OVERVIEW_TAIL}(?:\\s+here)?\\??$`, "i"),
+  // Article-less: anchored by the of-this-repo tail or the overview/map noun instead.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}architecture\\s+(?:${ARCH_OVERVIEW_OF_REPO}|overview|map|diagram)\\??$`, "i"),
+  // Architecture-less: the topic noun stands in for the word, so the of-this-repo
+  // tail is REQUIRED here. A bare "give me an overview" names no subject and
+  // falls through to the ordinary lanes.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
+];
+
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
   // the honest-miss tail below points a browser/adventure miss at the teach
@@ -11636,9 +12277,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
   // ask()'s `prev`. Prefers the FULL id set (`allIds`) over `matches`, since a
   // concept-force listing caps `matches` at MAX_EXAMPLES.
-  const prev = (last?.detail?.allIds && last.detail.allIds.length)
+  let prev = (last?.detail?.allIds && last.detail.allIds.length)
     ? last.detail.allIds.filter(Boolean)
     : (last?.detail?.matches || []).map((m) => m?.id).filter(Boolean);
+  // A count erases its own matches to [], so the previous turn carries no id
+  // set for the next "which of those" to narrow. When the carry is empty, fall
+  // back to the session record: a standing `set` referent that "those" binds
+  // keeps a narrowed set alive across a counting hop. No same-turn plural tie
+  // is reachable yet (no lane registers two set referents in one turn), so this
+  // probe needs no tie refusal.
+  if (!prev.length && discourseHolder) {
+    const boundSet = bindDiscourseForm(discourseHolder.record, "those");
+    if (boundSet?.referent?.ids?.length) prev = boundSet.referent.ids.filter(Boolean);
+  }
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
@@ -11655,6 +12306,140 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       .replace(/^(?:and|so|then|also)\s+/i, "")
       .replace(/how many\s+/i, "how many of those ");
   }
+  // TEMPORAL COMPARISON ACROSS TURNS — "was that before logger.mjs was
+  // touched": a singular bindable form, a comparison word, and an embedded
+  // passive clause. The form binds against the session's discourse record (a
+  // dated referent a previous answer established), the embedded clause runs
+  // fresh through the same when-question path a standalone turn takes, and
+  // the two ISO dates compare with both sides cited. Checked BEFORE the ask
+  // engine (the same precedence RENAME_HISTORY_RE takes, below) so the
+  // sentence never reaches the keyword-spot strategy's multi-token patient
+  // guard. A form this shape that CANNOT compose still ends here, with a
+  // specific miss naming what's missing (no referent for the form, an
+  // undated referent, no graph, an undatable clause) — falling through used
+  // to hand the sentence to the teach-offer cascade, which read "that before
+  // X was" as a subject to learn facts about.
+  {
+    const cmp = String(query).trim().match(TEMPORAL_COMPARISON_RE);
+    if (cmp) {
+      const [, form, cmpOp, clauseSubject, participle] = cmp;
+      const verb = participle.toLowerCase();
+      const temporalGoal = "compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)";
+      const refMiss = (text) => {
+        note(trace, `goal: ${temporalGoal}`);
+        note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" could not compose a comparison; a specific miss names why, never the teach-offer cascade`);
+        return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
+      };
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form, { tieRefuses: true }) : null;
+      if (bound?.tie) {
+        const options = joinOr(bound.tie.map((r) => r.label));
+        return refMiss(`"${form}" could mean ${options} — which do you mean?`);
+      }
+      if (!bound?.referent) {
+        return refMiss(`I don't have a referent for "${form}" yet — nothing answered earlier in this conversation binds it. Ask about the event first (e.g. "when was ${clauseSubject} last ${verb}"), then ask the comparison again.`);
+      }
+      const refDay = String(bound.referent.attrs?.date || "").slice(0, 10);
+      if (!refDay) {
+        return refMiss(`"${form}" refers to ${bound.referent.label}, but I have no date on record for it — so I can't place it before or after ${clauseSubject} was ${verb}.`);
+      }
+      if (!graph) {
+        return refMiss(`"${form}" refers to ${bound.referent.label} (${refDay}), but I need a code graph to date when ${clauseSubject} was last ${verb} — no code graph is loaded.`);
+      }
+      const { ask } = await import("../domain/ask.mjs");
+      const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+      const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+      const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+      const clauseDay = freshCommit?.class === "Commit"
+        ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+        : "";
+      if (!clauseDay) {
+        return refMiss(`"${form}" refers to ${bound.referent.label} (${refDay}), but I couldn't date when ${clauseSubject} was last ${verb} in this index — so I can't compare the two.`);
+      }
+      const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
+      const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
+      const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
+      note(trace, `goal: ${temporalGoal}`);
+      note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
+      const turn = plainTurn(query, text, { via: "composed", miss: false, focus, goal: temporalGoal });
+      const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
+      turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+      return turn;
+    }
+  }
+  // TEMPORAL COMPARISON OVER A PLURAL ANTECEDENT — "were those before
+  // logger.mjs was touched": the plural sibling of the block above. `those`
+  // binds a `set` referent a prior listing/filter established, and the whole
+  // set is compared against the freshly read clause date. Each member is dated
+  // from the graph (the set referent carries member ids, not per-member dates,
+  // so the dates are read here the same way the clause is read fresh), and the
+  // answer quantifies over the set — all, none, or M of N — rather than
+  // forcing the set onto a single date. A set whose members are not all
+  // datable refuses honestly, and an unbound form, an undatable clause, or a
+  // missing graph keep today's miss, the same specific declines the singular
+  // lane makes. Checked here, before the ask engine, for the same reason the
+  // singular lane is: otherwise "those before logger.mjs was" reaches the
+  // keyword-spot strategy as multi-token patient wreckage and the teach-offer
+  // cascade reads it as a subject to learn facts about.
+  {
+    const cmp = String(query).trim().match(PLURAL_TEMPORAL_COMPARISON_RE);
+    if (cmp) {
+      const [, form, cmpOp, clauseSubject, participle] = cmp;
+      const verb = participle.toLowerCase();
+      const temporalGoal = "compare a prior answer's dated set against a freshly read event (cross-turn temporal composition over a plural antecedent)";
+      const refMiss = (text) => {
+        note(trace, `goal: ${temporalGoal}`);
+        note(trace, `lane: PLURAL_TEMPORAL_COMPARISON_RE — "${form}" could not compose a set comparison; a specific miss names why, never the teach-offer cascade`);
+        return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
+      };
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form, { tieRefuses: true }) : null;
+      if (bound?.tie) {
+        const options = joinOr(bound.tie.map((r) => r.label));
+        return refMiss(`"${form}" could mean ${options} — which set do you mean?`);
+      }
+      if (!bound?.referent) {
+        return refMiss(`I don't have a set for "${form}" yet — nothing answered earlier in this conversation binds it. Ask for the set first (e.g. "what changed before <commit>"), then ask the comparison again.`);
+      }
+      const set = bound.referent;
+      const total = set.ids.length;
+      if (!graph) {
+        return refMiss(`"${form}" refers to ${set.label}, but I need a code graph to date its members and when ${clauseSubject} was last ${verb} — no code graph is loaded.`);
+      }
+      const dateOfId = (id) => {
+        const ind = graph.byId?.get?.(id);
+        return ind ? String((ind.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10) : "";
+      };
+      const memberDates = set.ids.map(dateOfId);
+      const undated = memberDates.filter((d) => !d).length;
+      if (undated) {
+        return refMiss(`"${form}" refers to ${set.label}, but not every member carries a date I can compare — ${undated} of the ${total} have no date on record, so I can't place the set before or after ${clauseSubject} was ${verb}.`);
+      }
+      const { ask } = await import("../domain/ask.mjs");
+      const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+      const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+      const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+      const clauseDay = freshCommit?.class === "Commit"
+        ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+        : "";
+      if (!clauseDay) {
+        return refMiss(`"${form}" refers to ${set.label}, but I couldn't date when ${clauseSubject} was last ${verb} in this index — so I can't compare the set to it.`);
+      }
+      const before = cmpOp.toLowerCase() === "before";
+      const satisfied = memberDates.filter((d) => before ? d < clauseDay : d > clauseDay).length;
+      const relation = before ? "came before" : "came after";
+      const tail = `${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay})`;
+      const text = satisfied === total
+        ? `Yes — all ${set.label} ${relation} ${tail}.`
+        : satisfied === 0
+          ? `No — none of the ${set.label} ${relation} ${tail}.`
+          : `Partly — ${satisfied} of the ${set.label} ${relation} ${tail}; the other ${total - satisfied} did not.`;
+      note(trace, `goal: ${temporalGoal}`);
+      note(trace, `lane: PLURAL_TEMPORAL_COMPARISON_RE — "${form}" bound ${set.label} (${total} dated members) through the discourse record; ${satisfied}/${total} ${relation} the freshly read clause (${clauseDay})`);
+      const turn = plainTurn(query, text, { via: "composed", miss: false, focus, goal: temporalGoal });
+      const cited = [...set.ids.map((id) => graph.byId?.get?.(id)), freshCommit].filter(Boolean);
+      turn.detail = { traversal: `discourse ${set.ref} (${total} members) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+      return turn;
+    }
+  }
   // RENAME HISTORY — "what was X called before" and its siblings. The index
   // records current names only, and without this gate "called" fuzzes onto
   // the calls relation ("before" simply drops), so the reply read as fluent
@@ -11669,7 +12454,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "goal: recover a name history the index does not record (honest decline)");
       note(trace, "lane: RENAME_HISTORY_RE — the index carries no rename data, so the calls-relation misread is refused by name");
       return plainTurn(query, `I can't say what ${ent ? ent.label : `"${term}"`} was called before — this index records current names only, no rename history. ${named}${ent ? ` here; "who touched ${ent.label}" lists its recorded commits` : ""}.`, {
-        via: "miss", miss: true, focus,
+        via: "miss", miss: true, focus, goal: "recover a name history the index does not record (honest decline)",
       });
     }
   }
@@ -11681,10 +12466,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   {
     const wikiTerm = wikipediaAskTerm(query);
     if (wikiTerm) {
-      note(trace, "goal: read what Wikipedia says about a named term (explicit source request)");
+      const wikiGoal = "read what Wikipedia says about a named term (explicit source request)";
+      note(trace, `goal: ${wikiGoal}`);
       if (!liveReference) {
         note(trace, "lane: WIKIPEDIA ASK — the explicit request needs the network opt-in; live Wikipedia is off");
-        return plainTurn(query, `live Wikipedia is off, so I won't reach the network. Turn it on with /wiki on (it fetches from en.wikipedia.org), then ask again.`, { via: "miss", miss: true, focus });
+        return plainTurn(query, `live Wikipedia is off, so I won't reach the network. Turn it on with /wiki on (it fetches from en.wikipedia.org), then ask again.`, { via: "miss", miss: true, focus, goal: wikiGoal });
       }
       let liveKey = null;
       try { liveKey = cleanMissLiveTerm(wikiTerm, lexicon ?? undefined); } catch { liveKey = null; }
@@ -11692,10 +12478,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (live) {
         await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
         note(trace, `lane: WIKIPEDIA ASK — answered from a live en.wikipedia.org lookup, cited (article "${live.article.title}", revid ${live.article.revid})`);
-        return plainTurn(query, live.text, { via: "reference", miss: false, focus });
+        return plainTurn(query, live.text, { via: "reference", miss: false, focus, goal: wikiGoal });
       }
       note(trace, "lane: WIKIPEDIA ASK — no matching live article (no title, timeout, throttle, or drift-guard reject)");
-      return plainTurn(query, `I couldn't reach a matching Wikipedia article for "${wikiTerm}" just now.`, { via: "miss", miss: true, focus });
+      return plainTurn(query, `I couldn't reach a matching Wikipedia article for "${wikiTerm}" just now.`, { via: "miss", miss: true, focus, goal: wikiGoal });
     }
   }
   // COLLECTIVE PLURAL SUBJECT — see COLLECTIVE_FORWARD_RE. Members are the
@@ -11721,9 +12507,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         const text = labels.length
           ? `the ${stem} here are ${memberList} — together they ${verb}: ${joinList(labels)}.`
           : `the ${stem} here are ${memberList} — none of them has ${verb} edges in the index.`;
-        note(trace, `goal: read a forward relation over a module GROUP (${members.length} members), unioned with the set disclosed`);
+        const groupGoal = `read a forward relation over a module GROUP (${members.length} members), unioned with the set disclosed`;
+        note(trace, `goal: ${groupGoal}`);
         note(trace, `lane: COLLECTIVE_FORWARD_RE — "${stem}" resolved to ${members.length} modules; answered the union, never a silent single best-match`);
-        const turn = plainTurn(query, text, { via: "composed", miss: !labels.length, focus });
+        const turn = plainTurn(query, text, { via: "composed", miss: !labels.length, focus, goal: groupGoal });
         turn.detail = { traversal: `${verb} edges unioned over ${memberList}`, matches: [...union.keys()].map((id) => graph.byId?.get?.(id)).filter(Boolean) };
         return turn;
       }
@@ -11748,7 +12535,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         note(trace, "goal: recover a move history the index does not record (premise denied, current location cited)");
         note(trace, "lane: MOVE_HISTORY_RE — no move data exists; the current location answers with the premise named");
         return plainTurn(query, `this index records current locations only, so I can't confirm ${ent.label} moved anywhere.${located}`, {
-          via: "composed", miss: false, focus,
+          via: "composed", miss: false, focus, goal: "recover a move history the index does not record (premise denied, current location cited)",
         });
       }
     }
@@ -11766,7 +12553,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `lane: DECISION_RECALL_RE — routed to the folded-session recall surface, ${recalled ? "a relevant block answered" : "nothing relevant folded (honest miss)"}`);
       return plainTurn(query, recalled
         ?? `I don't have a recorded decision about "${term}" — I keep facts and session transcripts, and nothing folded mentions deciding on it. "what did i ask before" lists the last session's questions.`, {
-        via: recalled ? "recall" : "miss", miss: !recalled, focus,
+        via: recalled ? "recall" : "miss", miss: !recalled, focus, goal: "recall a decision from the conversation record (session-recall surface)",
       });
     }
   }
@@ -11778,7 +12565,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const summary = await recallSummary(memoryDir);
     note(trace, summary ? "source: memory/fold.mjs recallSummary" : "intermediate: no folded session blocks yet — nothing to recall");
     return plainTurn(query, summary ?? "nothing to recall yet — no earlier session has been folded into memory.", {
-      via: "recall", miss: !summary, focus,
+      via: "recall", miss: !summary, focus, goal: "recall what was discussed earlier (explicit recall phrasing)",
     });
   }
   // An explicit "this file"/"that module" kind-noun scope signal is collapsed
@@ -11805,19 +12592,25 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let answer;
   let envelope = null;
   try {
-    let text;
-    if (graph && (focus?.id || prev.length)) {
-      // Direct ask() when EITHER a focus is set (thread it as contextId so "it"
-      // binds) OR the previous turn produced a set to refer back to (thread it as
-      // `prev` for the anaphora node). Builds the SAME delimited envelope dispatchTool
-      // emits, so the parse below is identical either way.
+    let content;
+    if (graph?.individuals?.length || (graph && (focus?.id || prev.length))) {
+      // Direct ask() whenever the caller HANDED US a graph with something in it.
+      // The focus/prev pair is threaded through it (contextId so "it" binds, prev
+      // for the anaphora node), but neither is what earns the direct call: a
+      // caller that passes a real graph means that graph, and the tmct_ask branch
+      // below reads the CONFIG's graph instead — which an in-process session (a
+      // page's own world facts, say) has no file for. Gating on history alone
+      // refused every cold turn against a perfectly good graph and only started
+      // answering once a focus happened to be set.
       const { ask } = await import("../domain/ask.mjs");
       const r = ask(graph, askQuery, { contextId: effectiveContextId, prev });
-      text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
+      content = r.content;
+      envelope = r.tmct_ask;
     } else {
-      text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
+      const r = await dispatchToolStructured("tmct_ask", { query: askQuery }, { config, source, tel });
+      content = r.content;
+      envelope = r.data ?? null;
     }
-    const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
     // ask.mjs is shared with the web GUI surface (src/surfaces/web), whose
     // graph view really does have clickable nodes to select — its own
     // "click a node first, or name it directly" wording is correct THERE,
@@ -11832,7 +12625,17 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       /needs a selected node to refer to — click a node first, or name it directly\.$/,
       "isn't resolved to anything yet — name the term directly, or ask a question that resolves one first.",
     );
-    if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
+    // Typed discourse referents the answer established (the ask envelope's
+    // additive `discourse` field, emitted beside the eval where the answer's
+    // content is still typed) register into the session's record here — the
+    // one point both ask paths (direct call and dispatchToolStructured) converge.
+    if (discourseHolder && Array.isArray(envelope?.discourse)) {
+      for (const { lane, bound, ...spec } of envelope.discourse) {
+        discourseHolder.record = registerReferent(discourseHolder.record, {
+          ...spec, from: { turn: discourseHolder.record.turn, lane, query: askQuery },
+        }, { bound: !!bound });
+      }
+    }
   } catch (e) {
     const thrown = String(e?.message || e);
     // A graph-less session's ask dispatch fails reading the never-configured
@@ -11855,7 +12658,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
       // A browser session has no `tmct init in a repo` to reach for, so its
       // fallback drops that CLI-only remedy and keeps just the teach pointer.
-      ? `I can't answer that as a code question — no code graph is loaded in this session. ${vocabHint
+      ? `${NO_GRAPH_BOOTSTRAP_WALL_LEAD} ${vocabHint
         || (browser
           ? "I can still remember and answer taught facts (try \"every bug is an issue\")."
           : "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one.")}`
@@ -11957,6 +12760,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let via = "composed";
   let recordMiss = miss;
   let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
+  // Set when the memory-facts lane (W4, below) answered from a corpus-weak-only
+  // hit set (factAnswer's KNOW_ABOUT_RE reader, `weakOnly`) — the hedged
+  // "possibly" answer still stands as `answer`, but `via` is deliberately left
+  // at "composed" so the honest-miss cascade further down still gets a turn,
+  // and this flag lets the LEARN-ON-MISS PACKS lane resolve a reference-pack
+  // term for THIS query shape (which metaTermOf alone never recognizes).
+  let factLaneWeakOnly = false;
   // scm-svf1/cardinality-monotonicity/
   // cax-maxc0's LIVE proof chases (factReadBack) have no persisted Fact to
   // attach trust.mjs's entailed hook to, so they compute
@@ -12011,10 +12821,32 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `goal: ${deduced} (revised — the raw \"what else\" phrasing was recognized directly, not the relaxed/reparsed envelope)`);
     }
   }
+  // (0a) ARCHITECTURE OVERVIEW — see ARCH_OVERVIEW_PHRASES. Answered here,
+  // before the meta/orientation lanes and long before the symbol-resolve
+  // rescues (4d), so the closed architecture phrasings reach the map instead
+  // of a literal-token symbol card or the vocabulary-touch teach offer.
+  if (!handled && miss && graph && !noCodeGraph(graph)) {
+    // The RAW text is tried alongside the peeled one: applyPreambleFrames'
+    // show/give-me bridge rewrites "show me the architecture" into "describe
+    // architecture", which drops the article this closed set anchors on.
+    const archRaw = correctMisspellings(String(query).trim());
+    const archPeeled = applyPreambleFrames(archRaw);
+    if (ARCH_OVERVIEW_PHRASES.some((re) => re.test(archRaw) || re.test(archPeeled))) {
+      try {
+        const archText = await dispatchTool("tmct_architecture", {}, { config, source, tel });
+        if (archText) {
+          answer = archText; via = "meta"; recordMiss = false; handled = true;
+          deduced = "understand the overall architecture (package/module boundaries)";
+          note(trace, `goal: ${deduced} (revised — a closed architecture-overview phrasing was recognized directly)`);
+          note(trace, "lane: (0a) ARCHITECTURE OVERVIEW — routed to the whole-repo architecture map (/arch), never a literal symbol lookup on the word \"architecture\"");
+        }
+      } catch { /* the tool couldn't load a graph — the ordinary lanes decide */ }
+    }
+  }
   // (1) #2 META/SELF: bare self/session questions ("what do you know", "what is this
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
-  if (miss) {
+  if (!handled && miss) {
     const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus });
     if (meta) {
       // A lane may answer with a better-worded decline (the module-orient
@@ -12055,6 +12887,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const staccatoSwapMatch = String(query).match(STACCATO_SWAP_RE);
   const isStaccatoSwap = !!(last?.query && staccatoSwapMatch && NAME_TOKEN_RE.test(staccatoSwapMatch[1]?.trim() || ""));
   const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query))) || isStaccatoSwap;
+  // A bare vague-touch OPENER ("wat about validate", "tell me about store.mjs")
+  // whose term resolves to a UNIQUE graph entity is a genuine describe request,
+  // not small talk — defer past the conversational card so describeWrapperAnswer
+  // (4d, below) serves its module/entity overview. Distinct from
+  // isWhatAboutContinuation above, which needs a prior turn: this fires on the
+  // FIRST turn too, and covers the "tell me about"/"explain" surfaces
+  // vagueTouchTermOf reads. resolveEntity already declines on ambiguity, so an
+  // ambiguous or unknown term ("wat about xyzzy") keeps today's orientation card.
+  const vagueTouchTerm = graph ? vagueTouchTermOf(String(query)) : null;
+  const isVagueTouchResolvable = !!(vagueTouchTerm && await resolveEntity(graph, vagueTouchTerm));
   // Same exemption for "describe it"/"tell me about that" — needs the SAME
   // deferral to reach describeWrapperAnswer's focus-aware pronoun resolution.
   // Gated on an actual standing focus, same honest-decline discipline as
@@ -12166,7 +13008,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips
@@ -12218,7 +13060,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // same divert-only-on-a-real-hit treatment as the reverse predicates
   // above.
   const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
-    || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
+    || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery)
+    || WHAT_CANNOT_VERB_RE.test(gateQuery);
   // A bare "who is/was <name>" (no relational tail) is as short as the
   // vocabulary openers above and trips isConversational's word-count catch-all
   // the same way — factReadBack's bare-who reader surfaces the person's stored
@@ -12311,6 +13154,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
+  let selfContainedMiss = false;
   if (bareMetaHit?.reference) {
     // The bare-form reference hit mirrors (4h): the cited answer replaces the
     // miss, the turn is no longer recorded as one, and the article's grounded
@@ -12434,9 +13278,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // (the isa ladder's "I can't confirm that" closers) — the turn record
       // keeps miss=true and via stays untouched, so miss-rate metrics and
       // recall's own miss-gated lanes see it exactly like the wall it replaced.
-      if (!fact.miss) {
+      // One flagged `selfContainedMiss` already names its own recovery, so
+      // the empty-graph orientation pointer below stays off it — a pronoun
+      // decline with an index pointer under it is two answers to one turn.
+      if (fact.selfContainedMiss) selfContainedMiss = true;
+      // A `weakOnly` hit (the "what do you know about X" reader's
+      // corpus-weak-only hedge) is shown as `answer` above like any other
+      // fact-lane hit, but doesn't count as REAL grounding — via/recordMiss
+      // stay untouched so the honest-miss cascade below (the reference-pack
+      // lane in particular) still gets a turn at replacing the hedge with a
+      // real answer, exactly the discipline isRealGrounding's other two call
+      // sites already apply.
+      if (!fact.miss && !fact.weakOnly) {
         via = "fact";
         recordMiss = false;
+      } else if (fact.weakOnly) {
+        factLaneWeakOnly = true;
       }
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
       if (typeof fact.trust === "number") entailedTrust = fact.trust; // live-chase trust (see the `entailedTrust` declaration above)
@@ -12557,7 +13414,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph });
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       if (!taught.miss) dialogueLaneOverride = "teach";
@@ -12648,6 +13505,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, tel });
     if (described) {
       answer = described.text; via = described.miss ? "miss" : "describe"; recordMiss = !!described.miss;
+      // The composed engine's failed parse above (`via` was still "composed"
+      // to reach this lane at all) can have deduced a goal/canonical for a
+      // DIFFERENT reading it never resolved — e.g. "give me everything i need
+      // to change X" bag-of-words-matches "change" as a touches verb and
+      // deduces subject="describe everything i need". This rescue answers a
+      // different question, so that stale interpretation must not survive
+      // into its answer (same staleness the FUZZY-VERB DECLINE lane guards
+      // against, below).
+      canonical = null; deduced = null;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
       note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
       // Carry the resolved entity forward as the new focus, same class-gated
@@ -12734,13 +13600,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // pack's article speak, cited as before. Both packs missing leaves the
   // honest miss byte-identical.
   if (miss && recordMiss && via === "composed" && memoryDir) {
-    const refTerm = metaTermOf(query, envelope);
+    // metaTermOf only recognizes the "what is X"/"define X" shapes — a
+    // "what do you know about X" query only reaches this lane at all when
+    // its own reader (above) answered with a corpus-weak-only hedge
+    // (factLaneWeakOnly), so the KNOW_ABOUT_RE term is resolved directly the
+    // same way the TEACH-OFFER lane below already does for that shape.
+    const refTerm = metaTermOf(query, envelope)
+      || (factLaneWeakOnly ? expandContractions(String(query).trim()).match(KNOW_ABOUT_RE)?.[1]?.trim() : null);
     const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
     const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache, synthesisBudget }) : null;
     if (learned) {
       const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
         ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
-      if (fact && !fact.miss) {
+      if (fact && !fact.miss && !fact.weakOnly) {
         answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
         via = "fact";
         recordMiss = false;
@@ -12782,6 +13654,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // WALL KINDNESS: a second consecutive wall collapses to a one-liner whose
   // text does NOT match WALL_MISS_RE — self-limiting, so a third consecutive
   // miss re-offers the tailored hint instead of droning.
+  let genericWallMiss = false;
   if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
     const repeat = last?.answer && WALL_MISS_RE.test(String(last.answer));
     // A GRAPH-LESS session's wall must not hand a vocabulary question a list
@@ -12792,17 +13665,64 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
         : shortMissHint(query));
     via = "miss";
+    genericWallMiss = true;
     note(trace, `lane: (5) SHORT TAILORED MISS — every lane above declined; ${repeat ? "REPEAT collapsed to one-liner (wall kindness)" : "the full grammar wall was shortened + tailored to the query's keywords"}`);
+  }
+  // TEACH-OFFER (computed first, applied after the polish below): a "what is
+  // X" miss where X is genuinely unknown EVERYWHERE — not a real graph
+  // entity, not a schema/vocab term, and not already in memory. Computed
+  // ahead of the empty-graph polish because the two are alternative
+  // recoveries for the same dead-end: a miss that is about to offer the
+  // teach lane must not ALSO grow an index-this-repo pointer, or one
+  // unparsed turn stacks three separate messages.
+  let teachOffer = null;
+  if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
+    // "what do you know about X" is its OWN sibling shape — checked FIRST,
+    // without a resolveEntity(graph) gate: it's inherently a MEMORY question,
+    // so "nothing yet, teach me" is appropriate even when X is also a real
+    // graph entity.
+    // Contraction-expanded, so "what's X" earns the same offer "what is X"
+    // does. Both shapes below anchor on the written-out copula.
+    const offerSrc = expandContractions(String(query).trim());
+    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
+    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
+    // A term that LEADS with a bindable anaphor ("it used for", from an
+    // unresolved "what is it used for") is a pronoun that failed to bind,
+    // not a teachable subject — offering to learn facts about it would echo
+    // the garble back as an invitation to store it.
+    const anaphorLedTerm = offerTerm && /^(?:it|this|that|these|those|them)\b/i.test(offerTerm.trim());
+    if (offerTerm && !anaphorLedTerm) {
+      let normFactTerm;
+      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
+      if (normFactTerm) {
+        const cleanTerm = normFactTerm(offerTerm);
+        const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
+        if (!ent) {
+          const variants = factTermVariants(normFactTerm, offerTerm);
+          // A corpus-weak-only match (ConceptNet's /r/RelatedTo hedge) is not
+          // real grounding — same isRealGrounding discipline as the bare
+          // "what is X" reader and the learn-on-miss gate, so a term with
+          // nothing but a loose association still gets the "teach me" offer
+          // rather than being silently counted as already known.
+          const known = hasNonWeakGrounding(await factRows(memoryDir, cache), variants);
+          if (!known) teachOffer = unknownVocabTermOffer(cleanTerm);
+        }
+      }
+    }
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
   // dead-end (an honest empty, the short miss, the bootstrap note) carries the
-  // exit toward a real graph, unless it already points there. Only when
-  // genuinely empty. The CLI keeps the --repo/example pointer verbatim; a
-  // browser or a live adventure has no such command to reach for, so each gets
-  // a teach-forward pointer (and the adventure also names the world asides that
-  // are guaranteed to hit).
+  // exit toward a real graph, unless it already points there — or unless the
+  // turn already names its own recovery (a self-contained decline, or a
+  // teach-offer about to land). Only when genuinely empty. The CLI keeps the
+  // --repo/example pointer verbatim; a browser or a live adventure has no
+  // such command to reach for, so each gets a teach-forward pointer (and the
+  // adventure also names the world asides that are guaranteed to hit).
+  // A live adventure keeps its polish even beside a teach-offer: the world
+  // asides ("look", "talk to the butler") are guidance the offer can't carry.
   const adventureLive = !!planHolder?.state?.adventure;
-  if (recordMiss && (via === "composed" || via === "miss")
+  if (recordMiss && (via === "composed" || via === "miss") && !selfContainedMiss
+      && (adventureLive || !teachOffer)
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
     if (adventureLive) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>". Or ask the world: "look", "where is the key", "talk to the butler".)`;
@@ -12815,36 +13735,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
     }
   }
-  // TEACH-OFFER: a "what is X" miss where X is genuinely unknown EVERYWHERE —
-  // not a real graph entity, not a schema/vocab term, and not already in
-  // memory — gets a short offer appended UNDER the existing miss text, never
-  // replacing it.
-  if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
-    // "what do you know about X" is its OWN sibling shape — checked FIRST,
-    // without a resolveEntity(graph) gate: it's inherently a MEMORY question,
-    // so "nothing yet, teach me" is appropriate even when X is also a real
-    // graph entity.
-    // Contraction-expanded, so "what's X" earns the same offer "what is X"
-    // does. Both shapes below anchor on the written-out copula.
-    const offerSrc = expandContractions(String(query).trim());
-    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
-    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
-    if (offerTerm) {
-      let normFactTerm;
-      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
-      if (normFactTerm) {
-        const cleanTerm = normFactTerm(offerTerm);
-        const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
-        if (!ent) {
-          const variants = factTermVariants(normFactTerm, offerTerm);
-          const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
-          if (!known) {
-            answer = `${answer}\n${unknownVocabTermOffer(cleanTerm)}`;
-            note(trace, `intermediate: TEACH-OFFER — "${cleanTerm}" is unknown to both the graph and memory, so the miss got an offer to learn appended`);
-          }
-        }
-      }
-    }
+  if (teachOffer) {
+    // On a GENERIC wall (the shortened "couldn't read that", or the
+    // graph-less bootstrap wall) the offer IS the whole answer — the wall
+    // names no term, so keeping it above the offer stacks two messages
+    // where one carries everything. A receipt-bearing specific miss keeps
+    // the offer appended beneath it, unchanged.
+    const genericWall = genericWallMiss || answer.startsWith(NO_GRAPH_BOOTSTRAP_WALL_LEAD);
+    answer = genericWall ? teachOffer : `${answer}\n${teachOffer}`;
+    note(trace, `intermediate: TEACH-OFFER — the term is unknown to both the graph and memory, so the miss ${genericWall ? "collapsed to the offer to learn" : "got an offer to learn appended"}`);
   }
   // COLLISION RESTORE (pairs with relaxedTeachCollision, above): if nothing in
   // the would-miss cascade actually stored/answered anything, fall back to
@@ -12955,7 +13854,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null, goal = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
@@ -12967,6 +13866,10 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
       canonical,
     },
     focus,
+    // Absent by default, so an untouched plainTurn call stays trailer-free.
+    // A caller that already holds a precise goal string passes it here, and
+    // withGoalLine appends the "Goal (inferred): …" line for that turn.
+    ...(goal ? { goal } : {}),
   };
 }
 
@@ -13253,9 +14156,20 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   if (name === "plan") {
     note(trace, "goal: plan/execute a compound or maintenance-goal request over the graph (the capability router)");
     if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
-    if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
+    // A KNOWN-EMPTY code graph is nothing to plan over, and it is what every
+    // memory-graph page and an un-pointed CLI session actually holds: each of
+    // its parameter slots would bind against an index with no entities in it.
+    // Where there is a memory store, hand the planner that instead — that is
+    // buildCapabilityPlanCtx's memory-only mode, where world facts bind and a
+    // code-graph capability refuses by naming the graph it hasn't got. Only a
+    // graph with something in it plans as a code graph. `source` travels with
+    // it: this turn reuses what it already holds and never loads one mid-turn.
+    const planGraph = graph && !noCodeGraph(graph) ? graph : null;
+    if (!planGraph && !memoryDir) return mk("no graph loaded — /plan needs a code graph or a memory store to plan over.", { miss: true });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../domain/router/drive.mjs");
-    const planCtx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, source, tel, graph, memoryDir });
+    const planCtx = await buildCapabilityPlanCtx({
+      ...capabilityPlanDeps(), config, source: planGraph ? source : null, tel, graph: planGraph, memoryDir,
+    });
     try {
       const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
       if (result.refused) {
@@ -13425,22 +14339,34 @@ async function everySentenceTeaches(sentences, lexicon) {
   }
 }
 
-async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
+async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null, observedAt: observedAtIn = "", dateText: dateTextIn = "" }) {
   // A trailing "?" marks a question, and a question never writes — the ACE
   // fragment happily parses "dog have tail?" as the declarative it is not,
   // which stored a Fact at teach trust over a FLOW-0 vocabulary question.
   if (/\?\s*$/.test(String(line).trim())) return null;
   try {
+    // THE DATED TEACH FRAME — "<sentence> as of <date>". A caller that
+    // already resolved a date (teachLane, recursing into its own
+    // assertCandidates loop with the suffix already stripped) passes
+    // observedAt/dateText straight through; the standalone entry point (the
+    // top-level declarative-sentence dispatch in runTurn) probes `line`
+    // itself. Either way the ACE parse below runs on `probeLine` — the
+    // suffix-stripped text when a date was found, `line` unchanged otherwise
+    // — so an ordinary sentence's behavior never changes.
+    const suffix = observedAtIn ? null : datedTeachSuffix(line);
+    const probeLine = suffix ? suffix.stripped : line;
+    const observedAt = observedAtIn || suffix?.observedAt || "";
+    const dateText = dateTextIn || suffix?.dateText || "";
     const { parseAce, parseAceAmbiguous } = await import("../domain/grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
     // a bare runTurn (no handle) lazy-loads the cached core lexicon. The lexicon is
     // immutable, so sharing one reference across concurrent handles is re-entrant.
     let lex = lexicon;
     if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
-    const ambiguous = parseAceAmbiguous(line, lex);
+    const ambiguous = parseAceAmbiguous(probeLine, lex);
     if (ambiguous) {
       const { normFactTerm } = await import("../adapters/memory/core.mjs");
-      const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
+      const answer = renderAmbiguousAssert(probeLine, ambiguous, normFactTerm);
       // Genuinely ambiguous — no single triple was committed, so the canonical
       // form is every surviving reading's own would-be triple set, same idiom
       // as ask.mjs's canonicalOf() for a parse-level tie.
@@ -13450,9 +14376,9 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
           .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
           .join(", ")).join(" | "),
       };
-      return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
+      return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
     }
-    const parse = parseAce(line, lex);
+    const parse = parseAce(probeLine, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("../domain/grammar/assert.mjs");
     const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
@@ -13469,10 +14395,11 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         { command: "assert", via: "teach-miss", miss: true, focus });
     }
     const ts = new Date().toISOString();
-    const res = await assertSentence(memoryDir, line, {
+    const res = await assertSentence(memoryDir, probeLine, {
       lexicon: lex,
       provenance: { source: "chat", sessionId, ts },
       appendFact,
+      ...(observedAt ? { observedAt } : {}),
     });
     if (!res || !res.ids?.length) return null;
     // A plain universal "every X is a Y" ALSO records the "every" quantifier
@@ -13480,12 +14407,13 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     // lane. Gated on the literal typed determiner: only "every" reads as a
     // class-level generalization. Best-effort: the base fact is already
     // durably stored either way, so a failure here is swallowed.
-    if (/^every\s+/i.test(String(line).trim())) {
+    if (/^every\s+/i.test(String(probeLine).trim())) {
       const triple = res.triples.find((t) => t.predicate === "rdfs:subClassOf");
       if (triple) {
         try {
           await appendFact(memoryDir, {
             subject: triple.subject, predicate: "rdfs:subClassOf", object: triple.object, quantifier: "every",
+            ...(observedAt ? { observedAt } : {}),
           });
         } catch { /* best-effort — the base fact is already stored either way */ }
       }
@@ -13517,7 +14445,10 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         if (para) paraphraseSuffix = ` (${para})`;
       } catch { /* best-effort — the literal confirmation above is already correct either way */ }
     }
-    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}${paraphraseSuffix}`;
+    // The dated-teach frame's own echo: the user typed the date, so the
+    // acknowledgment shows it was registered rather than silently dropped.
+    const dateSuffix = observedAt && dateText ? ` (as of ${dateText})` : "";
+    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}${paraphraseSuffix}${dateSuffix}`;
     // The canonical restatement of what was committed — `machine` is the same
     // fact(s) in the compact notation ask.mjs's canonicalOf() uses for
     // query-side parses, so both lanes share one consistent syntax.
@@ -13527,7 +14458,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
         .join(", "),
     };
-    return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
+    return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
   } catch {
     return null; // grammar unavailable / write failed — fall through to the engine
   }
@@ -13553,7 +14484,11 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
 // the same pending state. Any other (real) query produces a fresh `last` without
 // `pending`, so the remainder is naturally cleared — no stale continuation. ----
 const PAGE = 32;
-const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on)\b[.!?]*$/i;
+// "show the facts"/"show the chains" are the digest read-back's own escape
+// (the digest holds the full fact list — chains included, since the flat lines
+// carry their is-a ancestry — on the same pending remainder), folded in here so
+// they page the held list exactly as "more" does.
+const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on|show(?: me)? the facts|show the chains)\b[.!?]*$/i;
 
 /** The impact-intent gate — "what would break if I change X" and its natural
  *  neighbours, routed to the same /impact closure. Sibling of normalize.mjs's
@@ -13613,6 +14548,10 @@ function matchImpactIntent(line) {
   return null;
 }
 const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? ""));
+// A discourse tie lists its options with a short Oxford-comma "or" join,
+// deliberately not the resolver's longer numbered ambiguity format.
+const joinOr = (a) => (a.length > 2 ? `${a.slice(0, -1).join(", ")}, or ${a[a.length - 1]}`
+  : a.length === 2 ? `${a[0]} or ${a[1]}` : (a[0] ?? ""));
 
 /** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
  *  plain turn whose `detail.pending` carries what's still unseen (null when the batch
@@ -13933,11 +14872,18 @@ const LIST_KNOWN_KINDS_RE = /^list\s+(?:the\s+|all\s+(?:the\s+)?)?(?!facts?\b|th
 // conditional over a NAMED subject or an arbitrary property is a rule, not a
 // subclass fact, and stays outside this frame.
 const UNIVERSAL_CONDITIONAL_RE = /^if\s+(?:something|somebody|someone|anything)\s+is\s+an?\s+([\w-]+)\s*,?\s*(?:then\s+)?(?:it|they)\s+(?:is|are)\s+an?\s+([\w-]+)[.!?\s]*$/i;
-function rewriteVocabOpener(line) {
+function rewriteVocabOpener(line, { adventureLive = false } = {}) {
   let m = line.match(DESIRE_ABOUT_RE) || line.match(TELL_ABOUT_VARIANT_RE);
   if (m) return `tell me about ${m[1].trim()}`;
   m = line.match(UNIVERSAL_CONDITIONAL_RE);
   if (m) return `every ${m[1]} is ${indefiniteArticleFor(m[2])} ${m[2]}`;
+  // "what <noun> do you know [about]" shares its surface form with a live
+  // adventure's own personal-knowledge asides ("what food do you know
+  // about") — those ask what the CHARACTER has learned in-world, not for
+  // the taught CLASS's members, so this closed-set enumeration rewrite
+  // stands down while a world is live and leaves the line for the
+  // adventure lane to recognise (or not) on its own terms.
+  if (adventureLive) return null;
   m = line.match(KNOWN_KINDS_RE) || line.match(LIST_KNOWN_KINDS_RE);
   if (m) {
     const noun = teachableSubjectOf(m[1]);
@@ -14139,7 +15085,60 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, _noSplit = false } = {}) {
+/** Commands whose answer is SERVED SOURCE TEXT — lines read byte-for-byte off a
+ *  file on disk, which a caller may paste straight into an edit. The prose
+ *  grammar rules rewrite real code into code that no longer parses: a spread
+ *  (`...base`) and an optional chain (`?.`) both read as runs of terminal
+ *  punctuation and collapse to a single character. So the whole answer goes to
+ *  finish() as ONE protected `code` span and comes back untouched. */
+const SOURCE_RENDERING_COMMANDS = new Set(["context", "snippet"]);
+
+/** finish() a dispatched turn, byte-protecting a served-source answer. A
+ *  producer that segmented its own answer keeps its own segments; everything
+ *  else is masked and grammar-corrected exactly as before. */
+function finishTurn(result, ctx) {
+  const preSegmented = Array.isArray(result?.segments) && result.segments.length > 0;
+  if (!preSegmented && typeof result?.answer === "string"
+      && SOURCE_RENDERING_COMMANDS.has(result?.record?.command)) {
+    return finish({ ...result, segments: [{ type: "code", text: result.answer }] }, ctx);
+  }
+  return finish(result, ctx);
+}
+
+/** An uncached readFactRows() snapshot of the memory store — one half of the
+ *  before/after pair a turn's `factsTouched` diff is taken over. Deliberately
+ *  bypasses the turn's factRowsCache: the cache is invalidated by only some
+ *  write paths, and a diff read through it would miss the very writes it exists
+ *  to report. Null (rather than []) when there is no store or it won't load, so
+ *  the caller can tell "nothing to diff" from "diffed, nothing moved". */
+async function factRowSnapshot(memoryDir) {
+  if (!memoryDir) return null;
+  try { return readStoredFactRows(await loadMemoryStore(memoryDir)); } catch { return null; }
+}
+
+/** The Fact rows this turn wrote, diffed against the snapshot taken before it.
+ *  Empty when the turn had no store to write to, or wrote nothing. */
+async function factsTouchedSince(memoryDir, before) {
+  if (!before) return [];
+  const after = await factRowSnapshot(memoryDir);
+  if (!after) return [];
+  const { touchedFactRows } = await import("../domain/memory/touched-facts.mjs");
+  return touchedFactRows(before, after);
+}
+
+/** Run one turn and report which Fact rows it wrote, as `factsTouched` beside
+ *  the answer/record/logLines every caller already reads. The dispatch itself
+ *  is dispatchTurn, below; this wrapper exists so the field lands on EVERY
+ *  return path (dispatched, conversational, multi-sentence) from one place. */
+export async function runTurn(input, options = {}) {
+  const memoryDir = options?.memoryDir ?? null;
+  const before = await factRowSnapshot(memoryDir);
+  const result = await dispatchTurn(input, options);
+  if (!result || typeof result !== "object") return result;
+  return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
+}
+
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player" } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -14159,7 +15158,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
   const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
   const preRewriteLine = rewriteEntryPointQuestion(indirectLine) || rewriteProveThat(indirectLine)
-    || rewriteVocabOpener(indirectLine) || indirectLine;
+    || rewriteVocabOpener(indirectLine, { adventureLive: Boolean(planState?.adventure) }) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
@@ -14204,7 +15203,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
   const planHolder = { state: planState };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
+  // The session's typed discourse record rides the same holder pattern,
+  // threaded turn-to-turn beside focus and last. Registration happens where
+  // an answer's typed content is in hand (runAsk, off the ask envelope's
+  // `discourse` referents); the caller re-threads whatever comes back.
+  const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -14212,7 +15216,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // what the shell prints. The narrate block is applied AFTER `last` is
   // captured from the PRE-narration finished result.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
-    const finished = attachDialogueAct(finish(result, { graph }), trace);
+    const finished = attachDialogueAct(finishTurn(result, { graph }), trace);
     // The logged transcript echo is ALWAYS the verbatim user line — no dispatch
     // path's internal rewrite (the indirect-request wrapper, the vocab-opener /
     // cleft / ESL rewrites, a discourse substitution) may leak into what the
@@ -14248,10 +15252,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       detail: finished.detail ?? null,
       grounded: finished.record?.miss ? (last?.grounded ?? null) : finished.answer,
     };
+    // Every dispatched turn advances the discourse record's turn counter —
+    // the counter is the registration ordinal that makes a same-turn tie
+    // detectable, so it moves once, here, on the one path every dispatched
+    // turn shares. Conversational turns bypass withLast and leave the record
+    // untouched, exactly as they leave `last`.
+    discourseHolder.record = advanceDiscourseTurn(discourseHolder.record);
     // Goal/canonical lines append onto the PRE-narration `finished` result
     // `nextLast` was captured from, so a narrated turn still gets both short
     // lines up top plus the full trace block after.
-    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast };
+    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",
@@ -14289,7 +15299,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // otherwise read as a declarative or an orientation ask.
   {
     const advTurn = await adventureTurn(workingLine, {
-      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine,
+      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder, actingSubject,
     });
     if (advTurn) {
       note(trace, `lane: ${advTurn.note}`);
@@ -14342,16 +15352,27 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     }
   }
 
-  // RESEARCH — "research <topic>[, limit N]" runs a Simple English Wikipedia
-  // queue through the same ingest path a live-Wikipedia rescue uses: depth 0
-  // now, the lead section's linked topics queued for "research next" (which
-  // the web pages' auto-play button submits turn by turn). The explicit
+  // RESEARCH — "research <topic>[, limit N][, depth D]" runs a Simple English
+  // Wikipedia queue through the same ingest path a live-Wikipedia rescue uses:
+  // depth 0 now, the lead section's linked topics queued for "research next"
+  // (which the web pages' auto-play button submits turn by turn), and each of
+  // those fanning out again while the run's depth knob allows, up to its total
+  // node budget. The explicit
   // request is the network consent for its own fetches — unlike the
   // clean-miss rescue, which fires on an ordinary question and so stays
   // behind /wiki on. Queue state threads turn-to-turn as researchState, the
   // same way planState does.
   {
-    const researchHolder = { state: researchState };
+    // A fresh CLI session carries no in-memory queue, so a research-family line
+    // arriving with none resumes the queue persisted under .tmct/ — that is
+    // what makes "research next"/"status"/"stop" work across process restarts.
+    // The gate keeps ordinary turns off the disk (only a parsed research line
+    // loads), and a store with no path (the browser) simply reads back null.
+    let priorResearchState = researchState;
+    if (!priorResearchState && parseResearchRequest(workingLine)) {
+      priorResearchState = await loadResearchQueue(memoryDir);
+    }
+    const researchHolder = { state: priorResearchState };
     const resolvedResearchConfig = researchConfig ?? RESEARCH_DEFAULTS;
     const rTurn = await researchTurn(workingLine, {
       holder: researchHolder,
@@ -14372,6 +15393,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       result.lane = "research";
       const snapshot = researchSnapshot(researchHolder.state);
       if (snapshot) result.record.research = snapshot;
+      // Write-through: persist the queue this turn just mutated (start, next,
+      // skip), and clear the file when it ended (stop, or a failed start that
+      // left no run). A store with no path no-ops, so the browser is untouched.
+      await saveResearchQueue(memoryDir, researchHolder.state);
       const rec = withLast(result, rTurn.goal);
       rec.planState = planHolder.state;
       rec.researchState = researchHolder.state;
@@ -14400,10 +15425,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   if (memoryDir && PLAN_NEXT_RE.test(workingLine)
       && planHolder.state && !planHolder.state.done
       && Array.isArray(planHolder.state.actions) && planHolder.state.cursor < planHolder.state.actions.length) {
-    const step = await executePlanStep(planHolder, { memoryDir, sessionId });
+    const step = await executePlanStep(planHolder, { memoryDir, sessionId, gameConfig: resolvedGameConfig });
     note(trace, `goal: ${step.deduced}`);
     note(trace, "lane: PLAN NEXT — executed the active plan's next move as an @stepK snapshot write");
-    const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus });
+    const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus, goal: step.deduced });
     stepTurn.lane = "imperative";
     const rec = withLast(stepTurn, step.deduced);
     rec.planState = planHolder.state;
@@ -14424,7 +15449,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     if (follow) {
       note(trace, `goal: ${follow.deduced}`);
       note(trace, `lane: ${follow.note}`);
-      const rec = withLast(plainTurn(workingLine, follow.text, { via: "plan", focus }), follow.deduced);
+      const rec = withLast(plainTurn(workingLine, follow.text, { via: "plan", focus, goal: follow.deduced }), follow.deduced);
       rec.planState = planHolder.state;
       return rec;
     }
@@ -14479,17 +15504,21 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         && await everySentenceTeaches(sentences.slice(0, -1), lexicon);
       const finalIsPayload = endsInPlanTrigger || teachesThenAsks;
       if (finalIsPayload || await everySentenceTeaches(sentences, lexicon)) {
-        let f = focus; let l = last; let ps = planHolder.state;
+        let f = focus; let l = last; let ps = planHolder.state; let d = discourseHolder.record;
         const receipts = [];
         let finalRec = null;
+        // dispatchTurn, not runTurn: the OUTER wrapper's before/after snapshot
+        // already spans every sentence, so a per-sentence diff would only pay
+        // for a narrower answer to the same question.
         for (const sentence of sentences) {
-          const r = await runTurn(sentence, {
+          const r = await dispatchTurn(sentence, {
             config, source, graph, focus: f, last: l, memoryDir, sessionId, env, lexicon,
-            narrate: false, vocabHint, tel, biasByBundle, planState: ps, _noSplit: true,
+            narrate: false, vocabHint, tel, biasByBundle, planState: ps, discourse: d, _noSplit: true,
           });
           f = r.focus ?? f;
           l = r.last ?? l;
           if ("planState" in r) ps = r.planState;
+          if ("discourse" in r) d = r.discourse;
           finalRec = r;
           receipts.push(String(r.answer ?? "").split("\n")[0]);
         }
@@ -14512,6 +15541,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         combined.planState = ps;
         combined.focus = f;
         combined.last = l;
+        combined.discourse = d;
         // Each per-sentence turn recorded only its OWN sentence; the transcript
         // echo and the turn record must quote the whole multi-sentence line the
         // user actually typed, not just its last sentence.
@@ -14544,7 +15574,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "goal: teach/remember a new fact (bare declarative taxonomy)");
       note(trace, "lane: bareTaxonomyTeach — hyphenated-instance or article-led kind-of declarative, stored before the ask engine could parse it as a question");
       const taxonomyTurn = plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus });
-      if (!taxonomy.miss) taxonomyTurn.lane = "teach";
+      if (!taxonomy.miss) { taxonomyTurn.lane = "teach"; taxonomyTurn.goal = "teach/remember a new fact"; }
       return withLast(taxonomyTurn, "teach/remember a new fact");
     }
   }
@@ -14589,6 +15619,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
       const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
+      // A bare numeric count ("1 source.") stays silent, matching every other
+      // count lane's tested contract — only a real list enumeration gets the
+      // trailer. answerMemoryClassQuery serves both shapes through one lane.
+      if (!memClass.miss && memClass.kind !== "count") turn.goal = goal;
       if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
       return withLast(turn, goal);
     }
@@ -14614,6 +15648,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMembershipList — matched a bare 'list <noun>' over taught isa-facts whose OBJECT is that class");
       const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus });
+      if (!memberList.miss) turn.goal = goal;
       if (memberList.pending) turn.detail = { traversal: null, matches: [], pending: memberList.pending };
       return withLast(turn, goal);
     }

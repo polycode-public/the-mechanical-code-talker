@@ -7,12 +7,12 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dispatchTool, TOOLS } from "../../src/tools/server.mjs";
+import { dispatchTool, dispatchToolStructured, TOOLS } from "../../src/tools/server.mjs";
 import { HANDLERS } from "../../src/tools/handlers/index.mjs";
 import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
 import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
-import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
+import { appendFact, openConfiguredMemoryBackend, createInMemoryStore } from "../../src/adapters/memory/core.mjs";
 import { ingestText } from "../../src/services/extract-facts.mjs";
 
 const fixture = JSON.parse(
@@ -178,6 +178,40 @@ test("tmct_ask answers a structural query and appends the machine envelope", asy
   assert.match(text, /---tmct_ask---/);
 });
 
+test("tmct_ask through dispatchToolStructured: the envelope arrives as data, the prose stays clean", async () => {
+  const { content, data } = await dispatchToolStructured("tmct_ask", { query: "which modules import a.mjs" }, { config, source: stubSource });
+  assert.doesNotMatch(content, /---tmct_ask---/, "a structured caller reads prose, never the in-band block");
+  assert.equal(data.miss, false);
+  assert.equal(data.mechanical, true);
+  assert.ok(data.matches.length > 0, "the typed matches a page would render");
+  for (const m of data.matches) {
+    assert.equal(typeof m.id, "string");
+    assert.equal(typeof m.label, "string");
+  }
+});
+
+test("the two dispatch entries are two views of one answer: the flat string is content + the delimited data", async () => {
+  const text = await call("tmct_ask", { query: "which modules import a.mjs" });
+  const { content, data } = await dispatchToolStructured("tmct_ask", { query: "which modules import a.mjs" }, { config, source: stubSource });
+  assert.equal(text, `${content}\n\n---tmct_ask---\n${JSON.stringify(data, null, 2)}`);
+});
+
+test("a prose-only tool answers dispatchToolStructured with the same string and no data", async () => {
+  const { content, data } = await dispatchToolStructured("tmct_describe", { symbol: "a.mjs" }, { config, source: stubSource });
+  assert.equal(content, await call("tmct_describe", { symbol: "a.mjs" }), "byte-identical to the string entry");
+  assert.equal(data, undefined, "nothing structured to add is a real answer, not a failure");
+});
+
+test("dispatchToolStructured rejects an unknown tool the same way, without touching the graph", async () => {
+  let loads = 0;
+  const countingSource = { fetchEntities: async () => { loads += 1; return fixture; } };
+  await assert.rejects(
+    dispatchToolStructured("tmct_nope", {}, { config, source: countingSource }),
+    (e) => { assert.ok(e instanceof ToolError); assert.match(e.message, /unknown tool/); return true; },
+  );
+  assert.equal(loads, 0);
+});
+
 test("unknown symbol → clean ToolError with a suggestion, no stack in the message", async () => {
   await assert.rejects(
     call("tmct_describe", { symbol: "zz-no-such-thing" }),
@@ -297,6 +331,21 @@ test("tmct_export dumps the memory store's every fact as JSONL, provenance on ea
     const gizmo = records.find((r) => r.subject === "gizmo");
     assert.deepEqual(gizmo, { subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA" });
     assert.ok(records.every((r) => r.provenance.length > 0), "every exported line carries its provenance");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_export prefers a caller-supplied memoryBackend over re-deriving one from config", async () => {
+  // Two distinct backends: the config-derived sqlite store (from repoWithMemoryFacts,
+  // holding "gizmo"/"software") and a separate in-memory store the caller opened
+  // itself (holding "explicit-fact"). tmct_export must read from the SUPPLIED
+  // backend when one is passed, never from the one config.graphFile would derive.
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  const explicitBackend = createInMemoryStore();
+  try {
+    await appendFact(explicitBackend, { subject: "explicit-fact", predicate: "rdfs:subClassOf", object: "thing", provenance: "test:explicit" });
+    const out = await dispatchTool("tmct_export", {}, { config: memConfig, source: stubSource, memoryBackend: explicitBackend });
+    const records = out.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    assert.deepEqual(records.map((r) => r.subject), ["explicit-fact"], "reads the supplied backend's facts, not the config-derived store's");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

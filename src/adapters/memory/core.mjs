@@ -24,16 +24,38 @@ import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdF
 // a single import site for read/write plus identity.
 export { normFactTerm, normFactPredicate, factIdForTriple } from "../../domain/hash.mjs";
 import {
-  computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP,
+  computeTrust, computeAssertionGroupTrust, computeAssertionGroupTrustBase,
+  assertionPrior, sessionReliabilityFrom,
+  TRUST_SCORE_PROP, TRUST_INPUTS_PROP, PROV_CLASS_BY_SOURCE_TYPE,
   CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource,
 } from "../../domain/memory/trust.mjs";
+import {
+  resolutionStrategyFor, resolveSiblingGroups, MERGE_PREDICATES,
+  RESOLUTION_MERGE, RESOLUTION_CONTRADICTION, RESOLUTION_LATEST_OBSERVATION_WINS,
+} from "../../domain/memory/resolution.mjs";
 
 // The createdAt/updatedAt vocabulary and the provenance-tag Source parser live
 // with the trust layer (they are its inputs); re-exported here so store
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
+import {
+  planHeadRollup, planChainRollup, mergeRollups,
+  isHeadRollupId, isChainRollupId, isRollupId, headRollupTypeOf,
+  isAbsorbedSource, absorbedSourceIds,
+  ROLLUP_PRIOR_PROP, ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_COUNT_PROP,
+  CHAIN_ROLLUP_THRESHOLD,
+} from "../../domain/memory/compaction.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
+
+// The rollup vocabulary and its tuning constants live with the compaction
+// layer; re-exported here so store consumers keep one import site.
+export {
+  GROUP_ROLLUP_THRESHOLD, ROLLUP_KEEP_PER_TYPE, CHAIN_ROLLUP_THRESHOLD, CHAIN_KEEP_DEPTH,
+  ROLLUP_SOURCE_IDS_PROP, ROLLUP_RECORD_IDS_PROP, ROLLUP_COUNT_PROP,
+  ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_PRIOR_PROP,
+  headRollupIdFor, chainRollupIdFor, isHeadRollupId, isChainRollupId, isRollupId,
+} from "../../domain/memory/compaction.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -62,6 +84,8 @@ export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (
 // per-session Source instead (`${ID}:<sessionId>`, sourceIdFor below).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
 const TEACH_SOURCE_ID = "src:teach-chat";
+// One Source per peer NODE, keyed by the stable id its relabeled tag carries.
+const TEACH_NODE_SOURCE_ID = "src:teach-node";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -80,6 +104,10 @@ const MEMORY_VOCABULARY = [
   { prop: "rdf:predicate", note: "reified fact: the triple's predicate term" },
   { prop: "rdf:object", note: "reified fact: the triple's object term" },
   { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
+  { prop: "mgx:sourceId", note: "the assertion key a Fact record is filed under — the Source id of the ONE party asserting it, which is also the @-suffix of the record's own id. `src:none` when no tag names a Source, so every record has a key rather than a hole" },
+  { prop: "mgx:observedAt", note: "OPTIONAL valid time: when the asserting party WITNESSED the claim, as against mgx:createdAt's transaction time (when this store recorded it). A stale article read today loses to an eyewitness report from yesterday. Stored only when a caller supplies one — never fabricated, never backfilled" },
+  { prop: "mgx:supersedes", note: "the record id(s) this one replaced when its own source re-asserted the triple with a newer embedded timestamp. A space-joined LIST; absent, never empty, until the first supersession" },
+  { prop: "mgx:supersededBy", note: "the record id(s) that replaced this one. Its presence is what makes a record a demoted leaf rather than a live head, and the group fold skips it: a source's past belief is not a second vote for the present one. A LIST, because one source with two live replicas can fork before they sync" },
   { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
   { prop: "mgx:factJustification", note: "an entailed Fact's supporting premise fact ids: ' | '-separated environments, one space-separated premise-id list per independent derivation, capped by syllogise's maxEnvironments knob; a value with no ' | ' is a single environment" },
   { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') — the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md §2/§3" },
@@ -172,6 +200,26 @@ export function createInMemoryStore() {
   return { backend: BACKEND_MEMORY, payload: emptyMemory() };
 }
 
+/** Assign `seedPayload` onto `memoryDir`'s own payload — spread over the
+ *  store's own (possibly empty) payload rather than replacing it outright,
+ *  so a partial seed (individuals and objectProperties only) still carries
+ *  the classes/prefixes scaffolding the write path recounts, and a later
+ *  teach turn works regardless of what the seed carries. A no-op when
+ *  `seedPayload` is null/undefined — a browser session with nothing to seed
+ *  keeps its own fresh empty payload untouched. */
+export function applySeedPayload(memoryDir, seedPayload) {
+  if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+}
+
+/** A structurally independent copy of a memory payload — `structuredClone`
+ *  where available, falling back to a JSON round-trip for an environment
+ *  without it. Returns null for a null/undefined `payload`, so a caller can
+ *  seed a fresh session with "no seed yet" rather than an empty object. */
+export function cloneMemoryPayload(payload) {
+  if (!payload) return null;
+  try { return structuredClone(payload); } catch { return JSON.parse(JSON.stringify(payload)); }
+}
+
 // ---- Backend C — SQLite: a live node:sqlite connection, per-row
 // INSERT/REPLACE/DELETE diffed against what's already stored (write cost
 // proportional to what changed, not total store size). Reads are cached on
@@ -184,7 +232,380 @@ CREATE TABLE IF NOT EXISTS individuals (id TEXT PRIMARY KEY, ord INTEGER NOT NUL
 CREATE TABLE IF NOT EXISTS relations (prop TEXT PRIMARY KEY, ord INTEGER NOT NULL, predicate TEXT, count INTEGER);
 CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, object TEXT NOT NULL, subject_label TEXT, object_label TEXT, extra TEXT, PRIMARY KEY (prop, subject, object));
 CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
+CREATE TABLE IF NOT EXISTS facts (
+  id            TEXT PRIMARY KEY,
+  triple_hash   TEXT NOT NULL,
+  subject       TEXT NOT NULL,
+  predicate     TEXT NOT NULL,
+  object        TEXT NOT NULL,
+  source_id     TEXT NOT NULL,
+  source_type   TEXT NOT NULL,
+  trust_score   REAL NOT NULL,
+  created_at    TEXT NOT NULL,
+  observed_at   TEXT,
+  superseded_by TEXT,
+  json          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS facts_by_triple_hash       ON facts(triple_hash);
+CREATE INDEX IF NOT EXISTS facts_by_subject_predicate ON facts(subject, predicate);
+CREATE INDEX IF NOT EXISTS facts_by_predicate_object  ON facts(predicate, object);
+CREATE INDEX IF NOT EXISTS facts_current              ON facts(triple_hash, source_id, superseded_by);
+CREATE TABLE IF NOT EXISTS fact_heads (
+  triple_hash  TEXT PRIMARY KEY,
+  trust_base   REAL NOT NULL,
+  inputs_json  TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS fact_object_supersessions (
+  subject     TEXT NOT NULL,
+  predicate   TEXT NOT NULL,
+  ord         INTEGER NOT NULL,
+  from_id     TEXT NOT NULL,
+  to_id       TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  PRIMARY KEY (subject, predicate, ord)
+);
 `;
+
+// ---- The `facts` projection ------------------------------------------------
+// `facts` holds one queryable row per Fact individual, written in the SAME
+// transaction as the `individuals` row it mirrors. The JSON blob stays the
+// single source of truth — the columns exist so a reader can ask the database
+// for "every fact about dog" instead of loading the whole store and scanning
+// it in JS, the same discipline `individuals` already applies to its own
+// `class`/`label` columns. Plain portable SQL: the schema above works
+// unchanged against Postgres/MySQL/Aurora, so a cloud relational backend
+// inherits the read path rather than reinventing it.
+
+// A Fact whose provenance tag maps to no Source at all still needs a key, so
+// it projects onto this singleton rather than a NULL.
+const NO_SOURCE_ID = "src:none";
+
+const OBSERVED_AT_PROP = "mgx:observedAt";      // valid time: when the asserting party witnessed the claim
+const SOURCE_ID_PROP = "mgx:sourceId";          // the assertion key this record is filed under
+const SUPERSEDES_PROP = "mgx:supersedes";       // the id(s) this record replaced; absent until the first supersession
+const SUPERSEDED_BY_PROP = "mgx:supersededBy";  // the id(s) that replaced this record; absent on a live head
+
+/** The Source key a Fact's provenance union projects onto: the first tag that
+ *  derives one, since the tags of one fact are asserted in arrival order and
+ *  the earliest is its primary source. `src:none` when no tag parses. */
+function primarySourceOf(provenance) {
+  for (const tag of String(provenance || "").split(" | ")) {
+    if (!tag) continue;
+    const info = sourceIdFor(provenanceTagToSource(tag));
+    if (info) return info;
+  }
+  return { id: NO_SOURCE_ID, type: "" };
+}
+
+// ---- One record per ASSERTION, not one per triple --------------------------
+// A Fact's identity is `<groupId>@<sourceId>`: the content-addressed triple hash
+// every reader still calls "the fact id", plus the Source key of the ONE party
+// asserting it. Two sources asserting the same triple hold two records sharing
+// a group; the same source re-asserting resolves onto its own lineage. The
+// group id stays the public id — it is what a justification premise list, a
+// citation and `tmct inspect` all print — so nothing outside this file has to
+// learn the record id at all.
+
+/** The group (triple) id a record id belongs to: everything before the first
+ *  `@`. A record id with no `@` is its own group, which is what a hand-built
+ *  fixture and a not-yet-migrated store both still look like. */
+export function factGroupId(recordId) {
+  const id = String(recordId || "");
+  const at = id.indexOf("@");
+  return at < 0 ? id : id.slice(0, at);
+}
+
+/** The assertion key one provenance tag derives — the SAME closed derivation
+ *  Source individuals already use, with the `src:none` singleton standing in
+ *  for a tag that parses to no Source at all. Under this model every record
+ *  needs a key, so the null case gets a name rather than a hole. */
+function assertionSourceFor(tag) {
+  return sourceIdFor(provenanceTagToSource(tag)) || { id: NO_SOURCE_ID, type: "" };
+}
+
+/** Split a provenance string into one group per Source id, keeping each group's
+ *  own tags in arrival order. Normally one tag per group; two only when both
+ *  derive the SAME Source (`corpus:conceptnet /r/IsA` and `child:conceptnet:dog`
+ *  both key on `src:corpus:conceptnet`). An empty provenance still yields one
+ *  group, under `src:none`, so the fact keeps a record. */
+function groupTagsBySource(provenance) {
+  const groups = new Map();
+  for (const raw of String(provenance || "").split(" | ")) {
+    const tag = raw.trim();
+    if (!tag) continue;
+    const { id, type } = assertionSourceFor(tag);
+    const group = groups.get(id) || { sourceId: id, sourceType: type, tags: [] };
+    if (!group.tags.includes(tag)) group.tags.push(tag);
+    groups.set(id, group);
+  }
+  if (!groups.size) groups.set(NO_SOURCE_ID, { sourceId: NO_SOURCE_ID, sourceType: "", tags: [] });
+  return [...groups.values()];
+}
+
+/** The instant a source's own tag(s) EMBED — the origin's assertion moment, and
+ *  the only clock supersession is allowed to read. `pick` is Math.max for a
+ *  live write ("when did this source last say it") and Math.min for the
+ *  migration ("when did this source first say it"). "" when no tag carries one,
+ *  which is the common corpus case. */
+function embeddedTagTimestamp(tags, pick = Math.max) {
+  let best = "";
+  let bestAt = null;
+  for (const tag of tags || []) {
+    const ts = provenanceTagToSource(tag)?.createdAt || "";
+    const at = Date.parse(ts);
+    if (!Number.isFinite(at)) continue;
+    if (bestAt === null || pick(at, bestAt) === at) { best = ts; bestAt = at; }
+  }
+  return best;
+}
+
+/** When a record says it was asserted: its tag's own embedded timestamp, else
+ *  the caller's explicit createdAt. This is the recency clock — separate from
+ *  the supersession clock above on purpose. A caller's createdAt is THIS
+ *  store's transaction stamp; letting it order supersession would turn every
+ *  re-import that passes a later createdAt into a new version and quietly break
+ *  first-write-wins. Only what the origin embedded can order the origin. */
+function assertionTimestampFor(tags, fallback = "", pick = Math.max) {
+  return embeddedTagTimestamp(tags, pick) || (Number.isFinite(Date.parse(fallback)) ? String(fallback) : "");
+}
+
+/** Does an incoming assertion replace this source's own current record?
+ *  A genuinely newer embedded timestamp does; an exact re-delivery never does,
+ *  which is what keeps a re-seed and a duplicate mesh delivery no-ops. Both
+ *  sides must carry a real embedded timestamp — an unstamped corpus row
+ *  asserted a second time is the same hop saying the same thing, not a new
+ *  version. The one tie-break: at equal instants a record carrying an
+ *  observation time supersedes the same record without one, since only the
+ *  origin could have supplied that field, so presence can only add information. */
+function supersedesPriorAssertion(incoming, prior) {
+  const a = Date.parse(incoming.assertedAt);
+  const b = Date.parse(prior.assertedAt);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (a > b) return true;
+  return a === b && !!incoming.observedAt && !prior.observedAt;
+}
+
+/** The `facts` bind values for a Fact individual, in column order. `json` is
+ *  the already-serialized blob the `individuals` row stores, passed in so the
+ *  two rows can never disagree about the same individual. */
+function factProjectionValues(ind, json) {
+  const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value || "";
+  // Every tag on one record derives the same Source, so the record's own
+  // provenance settles its type; the stored key wins on the id, since a
+  // `src:none` record has no tag to re-derive it from.
+  const source = primarySourceOf(attr("mgx:factProvenance"));
+  // A collection in the blob; the column carries the common-case single
+  // successor, so a reader can filter for live heads without opening the JSON.
+  const supersededBy = attr(SUPERSEDED_BY_PROP).split(" ").filter(Boolean)[0] || null;
+  // A pool-1 summary has no tag to re-derive a type from and no Source of its
+  // own: it stands for many absorbed sources of ONE type, which its id carries,
+  // and its trust contribution is the noisy-OR base over what it absorbed.
+  // Both belong in the columns, so a per-type SQL read sees a compacted group
+  // exactly as it sees an uncompacted one.
+  const rollupType = headRollupTypeOf(ind.id);
+  return [
+    ind.id,
+    factGroupId(ind.id),
+    attr("rdf:subject"), attr("rdf:predicate"), attr("rdf:object"),
+    attr(SOURCE_ID_PROP) || source.id, rollupType || source.type,
+    Number(attr(rollupType ? ROLLUP_PRIOR_PROP : TRUST_SCORE_PROP)) || 0,
+    attr(CREATED_AT_PROP),
+    attr(OBSERVED_AT_PROP) || null,
+    supersededBy,
+    json,
+  ];
+}
+
+const FACT_PROJECTION_UPSERT_SQL =
+  "INSERT OR REPLACE INTO facts(id, triple_hash, subject, predicate, object, source_id, source_type, trust_score, created_at, observed_at, superseded_by, json)"
+  + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+/** Project every Fact individual a store already holds into an empty `facts`
+ *  table — what a store written before the projection existed needs, once.
+ *  Runs at open so a read-only session gets the columns too. Cheap to skip: a
+ *  projected store answers the first probe with a row and returns. */
+function backfillFactsProjection(db) {
+  if (db.prepare("SELECT id FROM facts LIMIT 1").get()) return;
+  if (!db.prepare("SELECT id FROM individuals WHERE class = ? LIMIT 1").get(FACT_CLASS)) return;
+  const upsertFact = db.prepare(FACT_PROJECTION_UPSERT_SQL);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of db.prepare("SELECT json FROM individuals WHERE class = ?").all(FACT_CLASS)) {
+      upsertFact.run(...factProjectionValues(JSON.parse(row.json), row.json));
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+const individualAttr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value || "";
+const individualKey = (ind, key) => (ind?.attributes || []).find((a) => a?.key === key)?.value || "";
+const subjectPredicateKey = (subject, predicate) => `${subject}\u0000${predicate}`;
+
+// ---- Derived-local tables: `fact_heads` and `fact_object_supersessions` -----
+// Both are breadcrumbs over a computation that is already correct without them,
+// and both are LOCAL: they are never replicated, never exported, and never
+// reachable from a wire fact. Replicating a derived aggregate would manufacture
+// exactly the merge conflicts one-record-per-assertion removes, and recency
+// makes any shipped aggregate stale on arrival.
+//
+// `fact_heads` stores a group's aggregate BASE — the noisy-OR with the time
+// axis removed — plus the per-record audit trail it was folded from. A reader
+// replays that trail through the same aggregate at its own `now`, so the decay
+// lands at the reading moment exactly as it does when the group is folded from
+// scratch. A head that baked recency in would be wrong the moment it was
+// written, which is why the column holds a base and not a score.
+
+/** The replayable audit trail a head stores: the four fields the group
+ *  aggregate actually folds, and nothing that depends on when it was written. */
+function headInputsFrom(assertions) {
+  return (assertions || []).map((a) => ({
+    sourceId: a.sourceId || "",
+    sourceType: a.sourceType || "",
+    ownTrust: a.ownTrust,
+    assertedAt: a.assertedAt || "",
+  }));
+}
+
+// Symbol-keyed, so it is invisible to JSON.stringify and dropped by
+// structuredClone — a payload carrying the index cannot leak it into a
+// snapshot, an export, or the wire even by accident.
+const FACT_HEADS = Symbol("materialised fact_heads index");
+
+/** Attach a materialised head index to a payload, for readFactRows to consume.
+ *  A payload without one folds every group itself, which is the same answer. */
+export function attachFactHeads(payload, heads) {
+  if (payload && heads) payload[FACT_HEADS] = heads;
+  return payload;
+}
+
+export const factHeadsOf = (payload) => payload?.[FACT_HEADS] || null;
+
+const FACT_HEAD_UPSERT_SQL =
+  "INSERT OR REPLACE INTO fact_heads(triple_hash, trust_base, inputs_json, updated_at) VALUES (?, ?, ?, ?)";
+
+/** Every materialised head in a store, as the groupId -> head map
+ *  readFactRows consumes. */
+function readFactHeadIndex(db) {
+  const heads = new Map();
+  for (const row of db.prepare("SELECT triple_hash, trust_base, inputs_json FROM fact_heads").all()) {
+    heads.set(row.triple_hash, { trustBase: row.trust_base, inputs: JSON.parse(row.inputs_json) });
+  }
+  return heads;
+}
+
+/** Re-materialise the head of every group this write touched, inside the
+ *  caller's own open transaction — the same discipline the per-record trust
+ *  recompute already follows, re-keyed from "the sources on one fact" to "the
+ *  records in one group".
+ *
+ *  Only touched groups are recomputed, and that is exact rather than thrifty: a
+ *  base carries no recency, so nothing but a change to a group's own records can
+ *  move it. Reading the group back inside the transaction is also what makes a
+ *  second writer correct — it folds over whatever is committed by then, not over
+ *  the payload it happened to arrive with. */
+function recomputeFactHeads(db, ctx, touchedGroups, headIndex) {
+  const upsert = db.prepare(FACT_HEAD_UPSERT_SQL);
+  const drop = db.prepare("DELETE FROM fact_heads WHERE triple_hash = ?");
+  const updatedAt = nowIso();
+  for (const groupId of touchedGroups) {
+    const members = ctx.groups.get(groupId);
+    // Every record of the group is gone (a retraction) or every one of them is
+    // demoted — either way there is no live aggregate left to stand for.
+    if (!members?.length) {
+      drop.run(groupId);
+      headIndex?.delete(groupId);
+      continue;
+    }
+    const inputs = headInputsFrom(foldFactGroup(groupId, members, ctx).assertions);
+    const trustBase = computeAssertionGroupTrustBase(inputs).score;
+    upsert.run(groupId, trustBase, JSON.stringify(inputs), updatedAt);
+    headIndex?.set(groupId, { trustBase, inputs });
+  }
+}
+
+/** Materialise a head for every group a store already holds — what a store
+ *  written before the table existed needs, once. Guarded exactly like the
+ *  `facts` projection backfill beside it: a store that already has heads, or
+ *  has no facts at all, returns without touching anything. */
+function backfillFactHeads(handle) {
+  const db = handle.db;
+  if (db.prepare("SELECT triple_hash FROM fact_heads LIMIT 1").get()) return;
+  if (!db.prepare("SELECT id FROM individuals WHERE class = ? LIMIT 1").get(FACT_CLASS)) return;
+  const ctx = factFoldContext(buildSqlitePayloadFromRows(handle));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    recomputeFactHeads(db, ctx, ctx.groups.keys(), null);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+// `fact_object_supersessions` records the OTHER shape supersession takes. A
+// same-source re-assertion supersedes by re-keying its own record, a real
+// replicated chain. A latest-observation-wins winner changing is different in
+// kind: the old room and the new one are different objects, so they are
+// different content-addressed groups, and an id can never be reassigned onto
+// different content the way the same-source case reuses its own slot. What is
+// recordable there is an EDGE between the two groups' own stable ids.
+//
+// It is a breadcrumb, not an authority. Every fact behind it is already fully
+// replicated and the resolution already runs correctly without it, so recording
+// "A used to be current, B is now" changes nothing about how the winner is
+// chosen. It is written lazily, only when a resolution actually finds the winner
+// has moved — a pair that resolves the same way a thousand times running holds
+// one row, and the first row a pair ever gets seeds the chain with an empty
+// `from_id` because nothing preceded it.
+
+/** Record the cross-object supersession edge for every (subject, predicate)
+ *  this write touched whose winner has moved since the last one recorded. */
+function recordObjectSupersessions(db, ctx, touchedPairs) {
+  const latest = db.prepare(
+    "SELECT ord, to_id FROM fact_object_supersessions WHERE subject = ? AND predicate = ? ORDER BY ord DESC LIMIT 1",
+  );
+  const insert = db.prepare(
+    "INSERT INTO fact_object_supersessions(subject, predicate, ord, from_id, to_id, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+  const recordedAt = nowIso();
+  for (const pairKey of touchedPairs) {
+    const [subject, predicate] = pairKey.split("\u0000");
+    if (resolutionStrategyFor(predicate) !== RESOLUTION_LATEST_OBSERVATION_WINS) continue;
+    const groupIds = ctx.groupsByPair.get(pairKey) || [];
+    if (groupIds.length < 2) continue; // one object is a state, not a succession
+    const rows = groupIds.map((groupId) => {
+      const row = foldFactGroup(groupId, ctx.groups.get(groupId), ctx);
+      row.trust = computeAssertionGroupTrust(row.assertions).score;
+      return row;
+    });
+    if (new Set(rows.map((r) => r.object)).size < 2) continue;
+    const winner = resolveSiblingGroups(rows, RESOLUTION_LATEST_OBSERVATION_WINS)?.winner?.id;
+    if (!winner) continue;
+    const prior = latest.get(subject, predicate);
+    if (prior?.to_id === winner) continue; // nothing moved — the breadcrumb is already there
+    insert.run(subject, predicate, (prior?.ord ?? -1) + 1, prior?.to_id || "", winner, recordedAt);
+  }
+}
+
+/** The recorded cross-object supersession chain — "what changed to what" for a
+ *  (subject, predicate), oldest first. The walk a view AT a past instant would
+ *  consume; empty for any backend that keeps no derived tables. */
+export function readObjectSupersessions(handle, { subject, predicate } = {}) {
+  if (!isSqliteHandle(handle)) return [];
+  const where = subject && predicate ? " WHERE subject = ? AND predicate = ?" : "";
+  const args = where ? [subject, predicate] : [];
+  return handle.db
+    .prepare(`SELECT subject, predicate, ord, from_id, to_id, recorded_at FROM fact_object_supersessions${where} ORDER BY subject, predicate, ord`)
+    .all(...args)
+    .map((r) => ({
+      subject: r.subject, predicate: r.predicate, ord: r.ord,
+      fromId: r.from_id, toId: r.to_id, recordedAt: r.recorded_at,
+    }));
+}
 
 // Edge keys with dedicated columns; any other key round-trips via `extra`.
 const STD_EDGE_KEYS = new Set(["subject", "object", "subjectLabel", "objectLabel"]);
@@ -217,7 +638,10 @@ export async function createSqliteMemoryStore(dbPath) {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec(SQLITE_DDL);
-  return { backend: BACKEND_SQLITE, db, dbPath };
+  backfillFactsProjection(db);
+  const handle = { backend: BACKEND_SQLITE, db, dbPath };
+  backfillFactHeads(handle);
+  return handle;
 }
 
 /** Close a Backend C handle's connection. A no-op for anything else (so a
@@ -281,9 +705,15 @@ function readSqlitePayload(handle) {
   if (handle.cachedPayload && handle.cachedDataVersion !== dataVersion) handle.cachedPayload = null;
   if (!handle.cachedPayload) {
     handle.cachedPayload = buildSqlitePayloadFromRows(handle);
+    // The head index rides the same cache lifecycle as the payload it indexes,
+    // so another connection's commit invalidates both together and the two can
+    // never describe different stores.
+    handle.cachedFactHeads = readFactHeadIndex(handle.db);
     handle.cachedDataVersion = dataVersion;
   }
-  return cloneJson(handle.cachedPayload);
+  // Attached AFTER the clone: structuredClone drops symbol-keyed properties, so
+  // the index has to be put back on each returned payload rather than copied.
+  return attachFactHeads(cloneJson(handle.cachedPayload), handle.cachedFactHeads);
 }
 
 /** The actual SQL reconstruction — unchanged from the pre-cache implementation,
@@ -418,7 +848,14 @@ function persistSqlitePayload(handle, payload) {
     const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
     let nextOrd = maxOrd + 1;
     const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
+    const upsertFact = db.prepare(FACT_PROJECTION_UPSERT_SQL);
     const seenIds = new Set();
+    // Every group and every (subject, predicate) this write reaches, so the two
+    // derived tables are re-materialised for exactly what moved and nothing
+    // else. A group whose records are all untouched cannot have moved: its base
+    // carries no recency, so only its own records can change it.
+    const touchedGroups = new Set();
+    const touchedPairs = new Set();
     for (const ind of payload.individuals || []) {
       seenIds.add(ind.id);
       const json = JSON.stringify(ind);
@@ -426,14 +863,35 @@ function persistSqlitePayload(handle, payload) {
       if (existing && existing.json === json) continue; // unchanged — skip the write entirely (cache already matches)
       const ord = existing ? existing.ord : nextOrd++;
       upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
+      // The queryable projection of the blob just written, same transaction —
+      // every write path that reaches a Fact (teach, corpus seed, entailment,
+      // migration, a trust recompute) lands here, so none can leave the two
+      // out of step.
+      if (ind.class === FACT_CLASS) {
+        upsertFact.run(...factProjectionValues(ind, json));
+        touchedGroups.add(factGroupId(ind.id));
+        touchedPairs.add(subjectPredicateKey(individualKey(ind, "subject"), individualKey(ind, "predicate")));
+      }
       if (cache) cacheUpsertIndividual(cache, ind);
     }
-    // Removal (no appendX function in this file ever removes an individual
-    // today — dead code path in practice, kept for correctness): a cheap
-    // index-only scan of the primary-key column only, never the JSON payload.
+    // Removal (what removeFacts' retraction lands as — every append path only
+    // ever adds): a cheap index-only scan of the primary-key column, never the
+    // JSON payload.
     const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
+    const deleteFact = db.prepare("DELETE FROM facts WHERE id = ?");
+    const getFact = db.prepare("SELECT triple_hash, subject, predicate FROM facts WHERE id = ?");
     for (const row of db.prepare("SELECT id FROM individuals").all()) {
-      if (!seenIds.has(row.id)) deleteInd.run(row.id);
+      if (seenIds.has(row.id)) continue;
+      // Read the projection before dropping it: a retracted record's own group
+      // and (subject, predicate) still have to be re-materialised, and once the
+      // row is gone there is nothing left to read them off.
+      const gone = getFact.get(row.id);
+      if (gone) {
+        touchedGroups.add(gone.triple_hash);
+        touchedPairs.add(subjectPredicateKey(gone.subject, gone.predicate));
+      }
+      deleteInd.run(row.id);
+      deleteFact.run(row.id); // a no-op for a non-Fact id; keeps the projection from outliving its blob
     }
     if (cache) cacheDropIndividualsExcept(cache, seenIds);
 
@@ -488,6 +946,14 @@ function persistSqlitePayload(handle, payload) {
     }
     if (cache) cacheDropGroupsExcept(cache, seenProps);
 
+    // The derived tables, re-materialised in the SAME transaction as the
+    // records they summarise, so no reader can ever see one without the other.
+    if (touchedGroups.size) {
+      const ctx = factFoldContext(payload);
+      recomputeFactHeads(db, ctx, touchedGroups, handle.cachedFactHeads);
+      recordObjectSupersessions(db, ctx, touchedPairs);
+    }
+
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -496,6 +962,7 @@ function persistSqlitePayload(handle, payload) {
     // actually committed to SQLite — never trust it silently. Drop it so the
     // next loadMemory() call does an honest full rebuild instead.
     handle.cachedPayload = undefined;
+    handle.cachedFactHeads = undefined;
     throw e;
   }
 }
@@ -583,8 +1050,8 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
  *  append creates the file). The result is a raw entities payload;
  *  parseEntities() loads it. */
 export async function loadMemory(dir) {
-  if (isMemoryHandle(dir)) return migrateLegacyFactIds(dir.payload);
-  if (isSqliteHandle(dir)) return migrateLegacyFactIds(readSqlitePayload(dir));
+  if (isMemoryHandle(dir)) return migrateStoredMemory(dir.payload);
+  if (isSqliteHandle(dir)) return migrateStoredMemory(readSqlitePayload(dir));
   let text;
   try {
     text = await readFile(memoryGraphFile(dir), "utf8");
@@ -592,8 +1059,13 @@ export async function loadMemory(dir) {
     if (e?.code === "ENOENT") return emptyMemory();
     throw e;
   }
-  return migrateLegacyFactIds(JSON.parse(text));
+  return migrateStoredMemory(JSON.parse(text));
 }
+
+/** The lazy on-load migrations, in order: heal a pre-widening fact id first, so
+ *  the assertion re-key that follows content-addresses off the current one.
+ *  Both are pure payload transforms and both converge to no-ops. */
+const migrateStoredMemory = (payload) => migrateFactAssertionKeys(migrateLegacyFactIds(payload));
 
 // A Fact id written before factIdFor widened to 64 bits — `fact:` + exactly 8
 // hex. A current id is 16 hex, so this anchored test never matches one, and a
@@ -645,6 +1117,138 @@ function migrateLegacyFactIds(payload) {
   return payload;
 }
 
+/**
+ * Re-key every pre-assertion-model Fact — one record per TRIPLE, its provenance
+ * a cross-source `" | "` union — into one record per (triple, source), in
+ * place, on load. Same slot and same contract as the two migrations above:
+ * a pure payload transform, deterministic, and a no-op on a migrated store (a
+ * record id carries `@`, so the scan below never picks one up twice).
+ *
+ * Every OTHER reference to the bare id — a mgx:factJustification premise list,
+ * derived_from, an edge endpoint like canonicalisedFrom — is left exactly as it
+ * was. A bare `fact:<hash>` IS the group id under this model, so those
+ * references keep resolving and the public fact id survives the migration.
+ * Only the statedBy edges move, because those are per-record by definition.
+ */
+function migrateFactAssertionKeys(payload) {
+  if (!Array.isArray(payload?.individuals)) return payload;
+  const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+  const legacyStatedBy = new Map(); // legacy fact id -> its own statedBy edges
+  for (const e of statedGroup?.examples || []) {
+    if (!e?.subject) continue;
+    const list = legacyStatedBy.get(e.subject);
+    if (list) list.push(e);
+    else legacyStatedBy.set(e.subject, [e]);
+  }
+  const replaced = new Set();
+  const legacyRecords = new Map(); // legacy fact id -> the record ids it became
+  const records = [];
+  const carriedEdges = [];
+  const individuals = [];
+  for (const ind of payload.individuals) {
+    if (ind?.class !== FACT_CLASS || String(ind.id || "").includes("@")) { individuals.push(ind); continue; }
+    const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value || "";
+    const s = attr("rdf:subject");
+    const p = attr("rdf:predicate");
+    const o = attr("rdf:object");
+    if (!s || !p || !o) { individuals.push(ind); continue; } // no readable triple to re-key on
+    const groupId = factIdFor(s, p, o);
+    const legacyCreated = attr(CREATED_AT_PROP);
+    const provenance = attr("mgx:factProvenance");
+    const edges = legacyStatedBy.get(ind.id) || [];
+    const groups = provenance ? groupTagsBySource(provenance) : [];
+    // A store can carry a statedBy edge whose Source no surviving tag names —
+    // an early write, or a provenance string that was never backfilled. The
+    // edge is the attribution in that case, so it earns its own tagless record
+    // rather than being scrubbed along with the row it hung off.
+    for (const e of edges) {
+      if (!groups.some((g) => g.sourceId === e.object)) groups.push({ sourceId: e.object, sourceType: "", tags: [] });
+    }
+    if (!groups.length) groups.push({ sourceId: NO_SOURCE_ID, sourceType: "", tags: [] });
+    const emitted = [];
+    for (const group of groups) {
+      const record = {
+        id: `${groupId}@${group.sourceId}`,
+        label: ind.label,
+        class: FACT_CLASS,
+        derived_from: cloneJson(ind.derived_from) || [],
+        mentions: cloneJson(ind.mentions) || [],
+        attributes: [
+          { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+          { prop: "rdf:subject", key: "subject", value: s },
+          { prop: "rdf:predicate", key: "predicate", value: p },
+          { prop: "rdf:object", key: "object", value: o },
+          // This source's own FIRST assertion of the triple, so a record's
+          // createdAt keeps meaning "when this hop said it", never "when the
+          // legacy row happened to be written".
+          { prop: CREATED_AT_PROP, key: "createdAt", value: assertionTimestampFor(group.tags, legacyCreated, Math.min) || legacyCreated || nowIso() },
+          { prop: SOURCE_ID_PROP, key: "sourceId", value: group.sourceId },
+          ...(group.tags.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: group.tags.join(" | ") }] : []),
+          // Triple-level values, duplicated onto every sibling: a few bytes
+          // each, and it keeps every record readable on its own.
+          ...(attr("mgx:hasProseTokens") ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: attr("mgx:hasProseTokens") }] : []),
+          ...(attr("mgx:factQuantifier") ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: attr("mgx:factQuantifier") }] : []),
+          // The justification explains the ENTAILMENT, not the corroborators,
+          // so it rides only the entailed record.
+          ...(group.sourceType === "entailed" && attr("mgx:factJustification")
+            ? [{ prop: "mgx:factJustification", key: "justification", value: attr("mgx:factJustification") }] : []),
+        ],
+      };
+      individuals.push(record);
+      records.push(record);
+      emitted.push(record.id);
+      if (group.sourceId !== NO_SOURCE_ID) {
+        const prior = edges.find((e) => e?.object === group.sourceId);
+        carriedEdges.push({
+          ...(prior || {}), subject: record.id, object: group.sourceId,
+          subjectLabel: record.label, objectLabel: sourceLabel(group.sourceId),
+        });
+      }
+    }
+    replaced.add(ind.id);
+    legacyRecords.set(ind.id, emitted);
+  }
+  if (!replaced.size) return payload;
+
+  // The legacy row's statedBy edges named a fact that no longer exists; each
+  // record inherits the one edge that is actually its own, keeping that edge's
+  // original createdAt so a migration never resets when a source first spoke.
+  if (statedGroup) {
+    statedGroup.examples = (statedGroup.examples || []).filter((e) => !replaced.has(e?.subject));
+    statedGroup.examples.push(...carriedEdges);
+    statedGroup.count = statedGroup.examples.length;
+  } else if (carriedEdges.length) {
+    payload.objectProperties = payload.objectProperties || [];
+    payload.objectProperties.push({ predicate: "statedBy", prop: STATED_BY_PROP, count: carriedEdges.length, examples: carriedEdges });
+  }
+
+  // Every OTHER edge that named a re-keyed fact — canonicalisedFrom, derivedFrom
+  // — is redrawn onto the records now holding that triple. An edge endpoint has
+  // to be a node a graph walker can dereference, so unlike a justification
+  // premise list (which is a reference to the TRIPLE, and resolves through the
+  // group id readFactRows still reports) it cannot be left pointing at a group.
+  for (const group of payload.objectProperties || []) {
+    if (group?.prop === STATED_BY_PROP || !group?.examples?.length) continue;
+    const redrawn = [];
+    for (const e of group.examples) {
+      const subjects = replaced.has(e?.subject) ? (legacyRecords.get(e.subject) || []) : [e?.subject];
+      const objects = replaced.has(e?.object) ? (legacyRecords.get(e.object) || []) : [e?.object];
+      for (const subject of subjects) {
+        for (const object of objects) redrawn.push({ ...e, subject, object });
+      }
+    }
+    group.examples = redrawn;
+    group.count = redrawn.length;
+  }
+  payload.individuals = individuals;
+  buildMemoryIndex(payload);
+  // The add-only, idempotent path that already exists: rebuild each record's
+  // Source, its statedBy edge, and its own single-source trust.
+  for (const record of records) syncFactSources(payload, record);
+  recountClasses(payload);
+  return payload;
+}
+
 /** Persist a mutated payload back to `dir`: an atomic file write (Backend A),
  *  a no-op assignment (Backend B, already the live object), or a diffed
  *  per-row SQL write (Backend C, persistSqlitePayload). */
@@ -692,6 +1296,44 @@ export async function saveSyllogiseState(dir, state) {
   await atomicWriteJson(file, state);
 }
 
+// ---- Node id: the stable per-store P2P identity, a second sidecar ----------
+// 16 hex, minted the first time a store joins a room and never regenerated.
+// Persisted beside the store rather than inside the graph so it survives a
+// store that gets re-seeded, and so nothing about it ever replicates: a node
+// id is this store's own name for itself, not a fact about the world.
+
+export const NODE_ID_REL = join(MEMORY_DIR_REL, "node-id.json");
+const SQLITE_NODE_ID_KEY = "nodeId";
+
+/** This store's node id, or null when it has never joined a room. */
+export async function loadNodeId(dir) {
+  if (isMemoryHandle(dir)) return dir.nodeId || null;
+  if (isSqliteHandle(dir)) {
+    const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_NODE_ID_KEY);
+    return row?.v ? JSON.parse(row.v).nodeId || null : null;
+  }
+  try {
+    return JSON.parse(await readFile(join(dir, NODE_ID_REL), "utf8")).nodeId || null;
+  } catch (e) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+/** Record this store's node id — atomic file write (Backend A), a handle field
+ *  (Backend B), or a meta-table row (Backend C). Callers mint through
+ *  resolveStoreNodeId, which never overwrites an id a store already holds. */
+export async function saveNodeId(dir, nodeId) {
+  if (isMemoryHandle(dir)) { dir.nodeId = nodeId; return; }
+  if (isSqliteHandle(dir)) {
+    dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_NODE_ID_KEY, JSON.stringify({ nodeId }));
+    return;
+  }
+  const file = join(dir, NODE_ID_REL);
+  await mkdir(dirname(file), { recursive: true });
+  await atomicWriteJson(file, { nodeId });
+}
+
 /** Fresh read -> mutate -> atomic write. Serialized per call; every public
  *  append goes through here, including the lazy legacy-provenance migration
  *  and actor-level Source reliability recompute. `fn` may be async (the
@@ -708,10 +1350,20 @@ function buildMemoryIndex(payload) {
   const individualsById = new Map();
   const sourcesById = new Map();
   const statedByBySubject = new Map();
+  // groupId -> the record ids asserting that triple, so a write can ask "is
+  // anyone asserting this yet" and an edge can resolve a group id to the real
+  // nodes behind it, both without a scan.
+  const factRecordsByGroup = new Map();
   for (const ind of payload.individuals || []) {
     if (!ind?.id) continue;
     individualsById.set(ind.id, ind);
     if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
+    if (ind.class === FACT_CLASS) {
+      const groupId = factGroupId(ind.id);
+      const held = factRecordsByGroup.get(groupId);
+      if (held) held.push(ind.id);
+      else factRecordsByGroup.set(groupId, [ind.id]);
+    }
   }
   const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
   for (const e of statedGroup?.examples || []) {
@@ -720,7 +1372,7 @@ function buildMemoryIndex(payload) {
     if (list) list.push(e.object);
     else statedByBySubject.set(e.subject, [e.object]);
   }
-  payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject };
+  payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject, factRecordsByGroup };
   return payload[MEMORY_INDEX];
 }
 
@@ -766,6 +1418,12 @@ function sourceIdFor(desc) {
   switch (desc?.kind) {
     case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
+    // One Source per peer NODE, keyed on the stable id the tag carries rather
+    // than the display name beside it: names are user-chosen and collidable, so
+    // two peers who picked the same one would otherwise collapse into a single
+    // Source and corroborate each other for free. Scores at the teach tier —
+    // a peer teaching is still a person telling us something.
+    case "teachNode": return { id: `${TEACH_NODE_SOURCE_ID}:${desc.nodeId}`, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "corpusWeak": return { id: `src:corpus-weak:${desc.name}`, type: "corpusWeak" };
@@ -786,25 +1444,6 @@ function sourceIdFor(desc) {
 }
 
 const sourceLabel = (id) => String(id).replace(/^src:/, "");
-
-// The read-side of the Source split ontology/tmct-core.ttl declares. tmct:Source
-// is one flat class over a sourceType key whose values fall into all three of
-// PROV's disjoint top classes; this maps each stored sourceType to its read-side
-// subclass and PROV top class. Nothing on disk changes — sourceType is already
-// stored on every Source — so this is derivation, not migration.
-const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
-  operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
-  corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  reference: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  referenceLive: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  optimisticExtract: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
-  entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
-});
 
 /** The read-side PROV subclass and top class a Source's mgx:sourceType maps to,
  *  or null for an unrecognised type (never force-fit). Mirrors the Source-split
@@ -878,6 +1517,36 @@ function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   setAttr(fact, UPDATED_AT_PROP, "updatedAt", new Date(nowMs).toISOString());
 }
 
+/** Materialise ONE assertion record's own trust: its single source's effective
+ *  prior, and nothing else. No recency and no corroboration are folded in here
+ *  — recency belongs to the reading moment, and corroboration is a property of
+ *  the GROUP, computed fresh over its live heads by readFactRows. The entailed
+ *  hook still lands write-time, because only the writer knows the premises: a
+ *  derivation is worth its weakest premise times the rule's confidence. */
+function recomputeAssertionTrust(payload, record, nowMs = Date.now(), trustOpts = {}) {
+  const [sourceId] = statedByObjectsFor(payload, record.id);
+  const source = sourceId ? sourcesByIdMap(payload)[sourceId] : null;
+  const sourceType = (source?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "";
+  let own = assertionPrior(sourceType, source);
+  if (sourceType === "entailed" && Array.isArray(trustOpts?.premiseTrusts) && trustOpts.premiseTrusts.length) {
+    const ruleConfidence = typeof trustOpts.ruleConfidence === "number" ? trustOpts.ruleConfidence : 1;
+    own = Math.max(0, Math.min(1, Math.min(...trustOpts.premiseTrusts) * ruleConfidence));
+  }
+  const createdAt = (record.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
+  setAttr(record, TRUST_SCORE_PROP, "trustScore", String(own));
+  setAttr(record, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify({ sourceType, sourceId: sourceId || "", createdAt }));
+  setAttr(record, UPDATED_AT_PROP, "updatedAt", new Date(nowMs).toISOString());
+}
+
+/** Re-materialise one individual's stored trust. A Fact is an assertion record
+ *  and carries its own single source's prior; a Rule still carries the blended
+ *  multi-source score computeTrust has always given it, since a Rule is not
+ *  keyed per assertion and has no group to fold. */
+function rematerialiseTrust(payload, ind, nowMs, trustOpts) {
+  if (ind?.class === FACT_CLASS) recomputeAssertionTrust(payload, ind, nowMs, trustOpts);
+  else recomputeFactTrust(payload, ind, nowMs, trustOpts);
+}
+
 /** Reconcile a Fact's Sources + statedBy edges with its (unchanged, compat)
  *  mgx:factProvenance string, then recompute its trust. ADD-only over
  *  deterministic Source ids and upsertEdge's subject>object dedupe, so it is
@@ -897,7 +1566,7 @@ function syncFactSources(payload, fact, nowMs = Date.now(), trustOpts = {}) {
       subject: fact.id, object: sid, subjectLabel: fact.label, objectLabel: sourceLabel(sid),
     });
   }
-  recomputeFactTrust(payload, fact, nowMs, trustOpts);
+  rematerialiseTrust(payload, fact, nowMs, trustOpts);
 }
 
 /** Lazy, idempotent migration of the legacy provenance union (step (b)): any
@@ -922,11 +1591,20 @@ function migrateLegacyProvenance(payload) {
   if (changed) recountClasses(payload);
 }
 
-/** A session-scoped operator/teach Source id (Part B2's `${SINGLETON}:<sessionId>`
- *  shape) — the only Source kind actor-level reliability applies to; a corpus/
- *  web/provider/entailed Source has no "session" to hold a track record for. */
+/** A Source id that names one actor and can therefore hold a track record —
+ *  the `${SINGLETON}:<id>` shape, for a local operator/teach session or for a
+ *  peer NODE across the mesh. A corpus/web/provider/entailed Source names a
+ *  document or a derivation, so there is no actor to score.
+ *
+ *  A peer node counts for the same reason a local session does, and it is the
+ *  reason this matters most: a node that asserts junk drags its own every-fact
+ *  prior toward half, so minting fresh identities to corroborate yourself stops
+ *  being free the moment any of those claims is contradicted. */
 const isSessionScopedSourceId = (id) =>
-  typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
+  typeof id === "string"
+  && (id.startsWith(`${OPERATOR_SOURCE_ID}:`)
+    || id.startsWith(`${TEACH_SOURCE_ID}:`)
+    || id.startsWith(`${TEACH_NODE_SOURCE_ID}:`));
 
 /**
  * Recompute + materialise mgx:sourceReliability on every session-scoped
@@ -970,26 +1648,54 @@ function recomputeSourceReliability(payload) {
   for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
   for (const id of affected) {
     const ind = idx ? idx.individualsById.get(id) : payload.individuals.find((i) => i?.id === id);
-    if (ind) recomputeFactTrust(payload, ind);
+    if (ind) rematerialiseTrust(payload, ind);
   }
 }
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable).
  *  Returns the stored reference — callers should index THAT, not `ind`. */
+/**
+ * Two rollup summaries at one id JOIN instead of overwriting: union the ids
+ * they absorbed, then re-derive count, bounds and prior from that union. This
+ * is what lets two peers that compacted the same group at different moments
+ * converge — union, min and max are all joins, so the result is the same in
+ * either order and applying it twice changes nothing. Re-writing a summary that
+ * already holds everything the incoming one does is therefore a no-op, which is
+ * why compaction's own write can go through this path unchanged.
+ *
+ * Everything that is not a summary keeps plain last-write-wins.
+ */
+function joinIfRollup(payload, prior, incoming) {
+  if (!isRollupId(incoming?.id)) return incoming;
+  const sourceType = headRollupTypeOf(incoming.id);
+  if (!sourceType) return mergeRollups(prior, incoming);
+  const sources = sourcesByIdMap(payload);
+  return mergeRollups(prior, incoming, { priorFor: (sid) => assertionPrior(sourceType, sources[sid]) });
+}
+
 function upsertIndividual(payload, ind) {
   const idx = memoryIndexOf(payload);
   if (idx) {
     const prior = idx.individualsById.get(ind.id);
     if (prior) {
-      Object.assign(prior, ind);
+      Object.assign(prior, joinIfRollup(payload, prior, ind));
       return prior;
     }
     payload.individuals.push(ind);
     idx.individualsById.set(ind.id, ind);
+    if (ind.class === FACT_CLASS) {
+      const groupId = factGroupId(ind.id);
+      const held = idx.factRecordsByGroup.get(groupId);
+      if (held) held.push(ind.id);
+      else idx.factRecordsByGroup.set(groupId, [ind.id]);
+    }
     return ind;
   }
   const i = payload.individuals.findIndex((x) => x?.id === ind.id);
-  if (i >= 0) { payload.individuals[i] = ind; return ind; }
+  if (i >= 0) {
+    payload.individuals[i] = joinIfRollup(payload, payload.individuals[i], ind);
+    return payload.individuals[i];
+  }
   payload.individuals.push(ind);
   return ind;
 }
@@ -1047,7 +1753,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
  *  and sampled the way graph-build.mjs counts the code classes. */
 function recountClasses(payload) {
   const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
-  payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
+  payload.classes = (payload.classes || []).filter((c) => !names.includes(c?.name));
   for (const name of names) {
     const of = payload.individuals.filter((i) => i?.class === name);
     if (of.length) payload.classes.push({ name, count: of.length, sample: of.slice(0, 3).map((i) => i.label) });
@@ -1146,60 +1852,402 @@ export async function appendCanonicalisedFromEdges(dir, links) {
   if (!links?.length) return;
   await mutateMemory(dir, (payload) => {
     for (const l of links) {
-      upsertEdge(payload, { predicate: "canonicalisedFrom", prop: CANONICALISED_FROM_PROP }, {
-        subject: l.factId, object: l.uttId, subjectLabel: l.factLabel, objectLabel: l.uttLabel,
-      });
+      // Callers name the fact the way every citation does — by its group id.
+      // An edge has to land on a node a walker can dereference, so it resolves
+      // to the records asserting that triple; each one really was canonicalised
+      // from the same utterance.
+      for (const factId of factRecordIdsFor(payload, l.factId)) {
+        upsertEdge(payload, { predicate: "canonicalisedFrom", prop: CANONICALISED_FROM_PROP }, {
+          subject: factId, object: l.uttId, subjectLabel: l.factLabel, objectLabel: l.uttLabel,
+        });
+      }
     }
   });
 }
 
-/** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual.
- *  Same (s,p,o) -> same id -> upsert, never a duplicate. `premiseTrusts`/
- *  `ruleConfidence` optionally engage trust.mjs's entailed hook. Validated
- *  against ontology/memory-shapes.ttl (memory/shacl.mjs) before the write.
- *  Returns { id }. */
-export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
+/** Every record id asserting one triple, in payload order. The bridge between
+ *  the PUBLIC fact id (the group) and the individuals actually holding it, so a
+ *  caller that names a fact the way every citation and premise list does still
+ *  reaches real nodes. Empty for a triple nothing asserts. */
+export function factRecordIdsFor(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  if (idx) return (idx.factRecordsByGroup.get(groupId) || []).slice();
+  return (payload?.individuals || [])
+    .filter((i) => i?.class === FACT_CLASS && factGroupId(i.id) === groupId)
+    .map((i) => i.id);
+}
+
+/** The assertion groups one write lands, given the triple it targets. Normally
+ *  one per Source its provenance names. The `src:none` singleton is the
+ *  exception: it exists so a fact nobody can be credited for still HAS a
+ *  record, so it is minted only when the triple has no record at all yet. A
+ *  provenance-less write onto an already-asserted triple names no new source,
+ *  so it files no second, unattributable sibling beside the real ones — its
+ *  triple-level payload lands through restateFactGroup instead. */
+function assertionGroupsFor(payload, groupId, provenance) {
+  const groups = groupTagsBySource(provenance);
+  if (groups.length === 1 && groups[0].sourceId === NO_SOURCE_ID) {
+    if (factRecordIdsFor(payload, groupId).length) return [];
+  }
+  // A source this group has already compacted away stays compacted. Every
+  // delivery path for a fact lands here, so this is where a late or re-synced
+  // copy of an absorbed assertion is recognized and dropped rather than
+  // inserted — without it the next sync resurrects everything compaction just
+  // folded, which is what makes deleting from a replicated set hard at all.
+  const rollups = headRollupsFor(payload, groupId);
+  if (!rollups.length) return groups;
+  return groups.filter((group) => !isAbsorbedSource(rollups, group.sourceId));
+}
+
+/** A group's pool-1 summaries, one per compacted source type. Reads the index
+ *  directly rather than through factRecordIdsFor, because this runs on EVERY
+ *  fact write and nearly always finds nothing — the common case must not pay
+ *  for an array copy. */
+function headRollupsFor(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  const ids = idx ? idx.factRecordsByGroup.get(groupId) : factRecordIdsFor(payload, groupId);
+  const rollups = [];
+  for (const id of ids || []) {
+    if (!isHeadRollupId(id)) continue;
+    const record = storedIndividual(payload, id);
+    if (record) rollups.push(record);
+  }
+  return rollups;
+}
+
+/**
+ * Apply a provenance-less write to the records a triple already has. Naming no
+ * source, it asserts nothing new — but it can still carry triple-level payload
+ * that belongs on the records already there, which is how a caller re-states a
+ * derivation's premises without claiming to be a fresh witness.
+ *
+ * Premise environments are a property of the TRIPLE, and readFactRows unions
+ * them across the group, so a re-statement REPLACES the group's whole view of
+ * them. That is what lets a retraction actually prune one: writing to a single
+ * record would leave a sibling rule's copy behind and the union would put it
+ * straight back. They land where they already live when anything holds them,
+ * since a justification explains an entailment, not the corroborators beside it.
+ *
+ * Returns the record ids it touched.
+ */
+function restateFactGroup(payload, groupId, { quantifier, environments }) {
+  const live = factRecordIdsFor(payload, groupId)
+    .map((id) => storedIndividual(payload, id))
+    .filter((record) => record && !(record.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP));
+  const touched = new Set();
+  if (environments) {
+    const carriers = live.filter((r) => (r.attributes || []).some((a) => a?.prop === "mgx:factJustification"));
+    for (const record of carriers.length ? carriers : live) {
+      setAttr(record, "mgx:factJustification", "justification", environments.map((e) => e.join(" ")).join(" | "));
+      touched.add(record.id);
+    }
+  }
+  if (quantifier) {
+    for (const record of live) {
+      // first-write-wins, exactly as a tagged re-assert treats it
+      if ((record.attributes || []).some((a) => a?.prop === "mgx:factQuantifier")) continue;
+      setAttr(record, "mgx:factQuantifier", "quantifier", quantifier);
+      touched.add(record.id);
+    }
+  }
+  return [...touched];
+}
+
+/** How deep this source's own chain for this triple already runs: the version
+ *  counts how many times the source has replaced its own record here, so the
+ *  first demotion is `#v1` and the oldest leaf keeps the lowest number. Read
+ *  off the head's own backward link, which is O(1) and always names the leaf
+ *  immediately behind it. */
+function nextChainVersion(head) {
+  let deepest = 0;
+  const behind = (head.attributes || []).find((a) => a?.prop === SUPERSEDES_PROP)?.value || "";
+  for (const id of behind.split(" ").filter(Boolean)) {
+    const m = /#v([1-9][0-9]*)$/.exec(id);
+    if (m) deepest = Math.max(deepest, Number(m[1]));
+  }
+  return deepest + 1;
+}
+
+/**
+ * Plan ONE source's assertion of one triple: the record it wants to write, plus
+ * the demotion that implies when the source is replacing its own earlier belief.
+ * Pure — nothing lands until applyFactAssertion — so the SHACL gate gets to
+ * reject a malformed record while the payload is still untouched.
+ *
+ * Three outcomes, and only the first writes anything new:
+ *   - a source this triple has never heard from: a fresh record;
+ *   - the same source, genuinely newer: a new HEAD at the same stable id, the
+ *     record it replaces kept whole under `#v<n>` and linked both ways;
+ *   - the same source saying the same thing again: its tags union onto the head
+ *     and its first write's stamps stand. An exact re-delivery changes nothing,
+ *     which is what keeps a re-seed and a duplicate mesh path idempotent.
+ */
+function planFactAssertion(payload, spec) {
+  const { groupId, s, p, o, label, tokens, group, createdAt, observedAt, quantifier, environments } = spec;
+  const recordId = `${groupId}@${group.sourceId}`;
+  const idx = memoryIndexOf(payload);
+  const head = idx ? idx.individualsById.get(recordId) : payload.individuals.find((x) => x?.id === recordId);
+  const headAttr = (prop) => (head?.attributes || []).find((a) => a?.prop === prop)?.value || "";
+  const headTags = headAttr("mgx:factProvenance").split(" | ").filter(Boolean);
+  const incoming = { assertedAt: embeddedTagTimestamp(group.tags), observedAt };
+
+  let demote = null;
+  let tags = group.tags;
+  let createdAtVal = incoming.assertedAt || createdAt || nowIso();
+  let observedAtVal = observedAt;
+  let supersedes = [];
+  let quantifierVal = quantifier;
+
+  if (head) {
+    const current = { assertedAt: embeddedTagTimestamp(headTags), observedAt: headAttr(OBSERVED_AT_PROP) };
+    if (supersedesPriorAssertion(incoming, current)) {
+      demote = { head, id: `${recordId}#v${nextChainVersion(head)}` };
+      supersedes = [demote.id];
+    } else {
+      tags = [...new Set([...headTags, ...group.tags])];
+      createdAtVal = headAttr(CREATED_AT_PROP) || createdAtVal;
+      observedAtVal = observedAt || headAttr(OBSERVED_AT_PROP);
+      supersedes = headAttr(SUPERSEDES_PROP).split(" ").filter(Boolean);
+    }
+    // A re-assert carrying no quantifier never SILENTLY erases one already
+    // recorded — the same first-write-wins discipline createdAt keeps.
+    quantifierVal = quantifier || headAttr("mgx:factQuantifier");
+  }
+
+  const candidate = {
+    id: recordId, label, class: FACT_CLASS,
+    derived_from: [], mentions: [],
+    attributes: [
+      { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+      { prop: "rdf:subject", key: "subject", value: s },
+      { prop: "rdf:predicate", key: "predicate", value: p },
+      { prop: "rdf:object", key: "object", value: o },
+      { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+      { prop: SOURCE_ID_PROP, key: "sourceId", value: group.sourceId },
+      ...(tags.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: tags.join(" | ") }] : []),
+      ...(observedAtVal ? [{ prop: OBSERVED_AT_PROP, key: "observedAt", value: observedAtVal }] : []),
+      ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
+      ...(quantifierVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: quantifierVal }] : []),
+      ...(environments ? [{ prop: "mgx:factJustification", key: "justification", value: environments.map((e) => e.join(" ")).join(" | ") }] : []),
+      ...(supersedes.length ? [{ prop: SUPERSEDES_PROP, key: "supersedes", value: supersedes.join(" ") }] : []),
+    ],
+  };
+  return { candidate, demote };
+}
+
+/** Drop a triple's `src:none` record once a real source asserts it. The
+ *  singleton exists so a fact nobody can be credited for still HAS a record; it
+ *  contributes no Source, no statedBy edge and no trust, so the moment someone
+ *  can be credited it is pure clutter. Cheap: the O(1) index check fails for
+ *  nearly every write, and only a group that actually holds a placeholder pays
+ *  for the removal. */
+function absorbAnonymousRecord(payload, groupId) {
+  const anonymousId = `${groupId}@${NO_SOURCE_ID}`;
+  const idx = memoryIndexOf(payload);
+  if (idx ? !idx.individualsById.has(anonymousId) : !payload.individuals.some((i) => i?.id === anonymousId)) return;
+  payload.individuals = payload.individuals.filter((i) => i?.id !== anonymousId);
+  if (!idx) return;
+  idx.individualsById.delete(anonymousId);
+  const held = (idx.factRecordsByGroup.get(groupId) || []).filter((id) => id !== anonymousId);
+  if (held.length) idx.factRecordsByGroup.set(groupId, held);
+  else idx.factRecordsByGroup.delete(groupId);
+}
+
+/** Land a planned assertion. The demoted record is never deleted and never
+ *  rewritten: it moves to its own id carrying the same bytes, plus the forward
+ *  link that makes it a leaf rather than a head. Returns every record id this
+ *  touched, so the caller reconciles Sources and trust once per record. */
+function applyFactAssertion(payload, { candidate, demote }) {
+  const touched = [];
+  if (!candidate.id.endsWith(`@${NO_SOURCE_ID}`)) absorbAnonymousRecord(payload, factGroupId(candidate.id));
+  if (demote) {
+    const leaf = { ...demote.head, id: demote.id, attributes: (demote.head.attributes || []).map((a) => ({ ...a })) };
+    setAttr(leaf, SUPERSEDED_BY_PROP, "supersededBy", candidate.id);
+    upsertIndividual(payload, leaf); // before the head is overwritten in place
+    touched.push(leaf.id);
+  }
+  upsertIndividual(payload, candidate);
+  touched.push(candidate.id);
+  return touched;
+}
+
+/** The stored individual for a record id — upsertIndividual replaces in place,
+ *  so callers must reconcile against what the payload actually holds. */
+function storedIndividual(payload, id) {
+  const idx = memoryIndexOf(payload);
+  return idx ? idx.individualsById.get(id) : payload.individuals.find((x) => x?.id === id);
+}
+
+/** Remove absorbed records and scrub any edge that named them, mirroring
+ *  removeFacts' own discipline. An orphaned Source is left in place: a source
+ *  whose assertion was compacted is still a real source with a track record. */
+function dropAbsorbedRecords(payload, ids) {
+  const drop = new Set(ids);
+  if (!drop.size) return;
+  payload.individuals = (payload.individuals || []).filter((ind) => !drop.has(ind?.id));
+  for (const group of payload.objectProperties || []) {
+    const before = group.examples || [];
+    const after = before.filter((e) => !drop.has(e?.subject) && !drop.has(e?.object));
+    if (after.length === before.length) continue;
+    group.examples = after;
+    group.count = after.length;
+  }
+  const idx = memoryIndexOf(payload);
+  if (!idx) return;
+  for (const id of drop) {
+    idx.individualsById.delete(id);
+    idx.statedByBySubject.delete(id);
+    const groupId = factGroupId(id);
+    const held = (idx.factRecordsByGroup.get(groupId) || []).filter((x) => x !== id);
+    if (held.length) idx.factRecordsByGroup.set(groupId, held);
+    else idx.factRecordsByGroup.delete(groupId);
+  }
+}
+
+/**
+ * Bound one triple's record growth, on the write that grew it. Two pools, two
+ * triggers, two summaries, never mixed:
+ *
+ *   - pool 1 absorbs the OLDEST live heads of one source TYPE once that type
+ *     holds GROUP_ROLLUP_THRESHOLD of them, keeping the newest
+ *     ROLLUP_KEEP_PER_TYPE intact. Its summary carries a prior, because every
+ *     head it absorbed was a live vote in the group fold and dropping that
+ *     contribution would silently under-trust the compacted answer.
+ *   - pool 2 absorbs the OLDEST demoted leaves of ONE source's own chain once
+ *     that chain holds CHAIN_ROLLUP_THRESHOLD of them, keeping the newest
+ *     CHAIN_KEEP_DEPTH. Its summary carries no prior: a demoted leaf counts for
+ *     nothing while it stands, and compacting it must not change that.
+ *
+ * A head absorbed by pool 1 takes its own chain with it. The chain is reachable
+ * only through the head, so once the head is summarized its history answers no
+ * question this model asks, and leaving it behind would orphan it.
+ *
+ * Returns the record ids it absorbed rather than removing them, so a batch that
+ * compacts many groups pays for one sweep of the payload instead of one per
+ * group. Groups are independent, so a still-present absorbed record can never
+ * affect another group's planning.
+ */
+function compactFactGroup(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  const ids = (idx ? idx.factRecordsByGroup.get(groupId) : factRecordIdsFor(payload, groupId)) || [];
+  // Nearly every fact has no summary in either pool, and the record count says
+  // so before anything else is read: pool 2 has the lower trigger, so a group
+  // under it can fire neither pool.
+  if (ids.length < CHAIN_ROLLUP_THRESHOLD) return [];
+
+  const headsByType = new Map();
+  const leavesBySource = new Map();
+  const headRollupByType = new Map();
+  const chainRollupBySource = new Map();
+  for (const id of ids.slice()) {
+    const record = storedIndividual(payload, id);
+    if (!record) continue;
+    const attrOf = (prop) => (record.attributes || []).find((a) => a?.prop === prop)?.value || "";
+    if (isHeadRollupId(id)) { headRollupByType.set(headRollupTypeOf(id), record); continue; }
+    if (isChainRollupId(id)) { chainRollupBySource.set(attrOf(SOURCE_ID_PROP), record); continue; }
+    const provenance = attrOf("mgx:factProvenance");
+    const source = primarySourceOf(provenance);
+    const tags = provenance.split(" | ").filter(Boolean);
+    const entry = {
+      id,
+      sourceId: attrOf(SOURCE_ID_PROP) || source.id,
+      assertedAt: assertionTimestampFor(tags, attrOf(CREATED_AT_PROP)),
+      record,
+    };
+    if (attrOf(SUPERSEDED_BY_PROP)) {
+      const chain = leavesBySource.get(entry.sourceId);
+      if (chain) chain.push(entry);
+      else leavesBySource.set(entry.sourceId, [entry]);
+      continue;
+    }
+    // src:none stands for "no source at all" — it has no type, so it belongs to
+    // no per-type pool and is never compacted.
+    if (!source.type) continue;
+    const heads = headsByType.get(source.type);
+    if (heads) heads.push(entry);
+    else headsByType.set(source.type, [entry]);
+  }
+
+  const sources = sourcesByIdMap(payload);
+  const absorbed = [];
+
+  for (const [sourceType, heads] of headsByType) {
+    const plan = planHeadRollup({
+      groupId, sourceType, heads,
+      existing: headRollupByType.get(sourceType) || null,
+      priorFor: (sid) => assertionPrior(sourceType, sources[sid]),
+    });
+    if (!plan) continue;
+    upsertIndividual(payload, plan.rollup);
+    absorbed.push(...plan.absorbed);
+    for (const sourceId of plan.absorbedSourceIds) {
+      for (const leaf of leavesBySource.get(sourceId) || []) absorbed.push(leaf.id);
+      leavesBySource.delete(sourceId);
+      const chainRollup = chainRollupBySource.get(sourceId);
+      if (chainRollup) absorbed.push(chainRollup.id);
+      chainRollupBySource.delete(sourceId);
+    }
+  }
+
+  for (const [sourceId, leaves] of leavesBySource) {
+    const plan = planChainRollup({
+      groupId, sourceId, leaves,
+      existing: chainRollupBySource.get(sourceId) || null,
+    });
+    if (!plan) continue;
+    upsertIndividual(payload, plan.rollup);
+    absorbed.push(...plan.absorbed);
+    // Keep the chain walkable backward: the oldest leaf still standing points
+    // at the summary rather than at a record that no longer exists. A walk that
+    // reaches it and needs a point inside the absorbed span gets the summary's
+    // own bounds, never a fabricated instant.
+    const rewired = storedIndividual(payload, plan.rewire);
+    if (rewired) setAttr(rewired, SUPERSEDES_PROP, "supersedes", plan.rollup.id);
+  }
+
+  return absorbed;
+}
+
+/** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual —
+ *  one record per asserting SOURCE, all of them sharing the content-addressed
+ *  group id this returns. Same (s,p,o) from the same source resolves onto that
+ *  source's own lineage, never a duplicate. `premiseTrusts`/`ruleConfidence`
+ *  optionally engage trust.mjs's entailed hook; `observedAt` records when the
+ *  asserting party WITNESSED the claim, which is not when this store heard it.
+ *  Validated against ontology/memory-shapes.ttl (memory/shacl.mjs) before the
+ *  write. Returns { id } — the group id, the public fact id every reader uses. */
+export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", observedAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
   const p = normFactPredicate(predicate);
   const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
-  const id = factIdFor(s, p, o);
+  const groupId = factIdFor(s, p, o);
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);
   await mutateMemory(dir, async (payload) => {
-    const prior = payload.individuals.find((x) => x?.id === id);
-    const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-    // The mgx:factProvenance union stays BYTE-IDENTICAL (a compat shim readers
-    // still key on); the Source edges below are DERIVED from it, purely additive.
-    const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
-    const createdAtVal = firstWriteCreatedAt(prior, createdAt); // first-write-wins
-    // first-write-wins for the quantifier too (a re-assert with none, e.g. a
-    // plain re-teach, never SILENTLY erases an already-recorded quantifier).
-    const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
-    const qVal = q || priorQ;
-    const candidate = {
-      id, label: labelOf(text), class: FACT_CLASS,
-      derived_from: [], mentions: [],
-      attributes: [
-        { prop: "rdf:type", key: "type", value: "rdf:Statement" },
-        { prop: "rdf:subject", key: "subject", value: s },
-        { prop: "rdf:predicate", key: "predicate", value: p },
-        { prop: "rdf:object", key: "object", value: o },
-        { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-        ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
-        ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
-        ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
-      ],
-    };
-    await assertIndividualValid(candidate); // the SHACL gate -- throws, never writes, on a violation
-    upsertIndividual(payload, candidate);
-    // Derive Source individuals + statedBy edges from the provenance union and
-    // (re)materialise this fact's trust — the live half of steps (b)/(c).
-    syncFactSources(payload, payload.individuals.find((x) => x?.id === id), undefined, { premiseTrusts, ruleConfidence });
+    const groups = assertionGroupsFor(payload, groupId, normText(provenance));
+    for (const id of groups.length ? [] : restateFactGroup(payload, groupId, { quantifier: q })) {
+      syncFactSources(payload, storedIndividual(payload, id), undefined, { premiseTrusts, ruleConfidence });
+    }
+    for (const group of groups) {
+      const plan = planFactAssertion(payload, {
+        groupId, s, p, o, label: labelOf(text), tokens, group, createdAt, observedAt, quantifier: q,
+      });
+      await assertIndividualValid(plan.candidate); // the SHACL gate -- throws, never writes, on a violation
+      for (const id of applyFactAssertion(payload, plan)) {
+        // Derive the Source individual + statedBy edge from this record's own
+        // tag(s) and materialise its single-source trust. The entailed hook
+        // rides the new head only; a demoted leaf keeps the trust it earned.
+        syncFactSources(payload, storedIndividual(payload, id), undefined,
+          id === plan.candidate.id ? { premiseTrusts, ruleConfidence } : undefined);
+      }
+    }
+    // After the Sources exist, so a summary can price what it absorbs.
+    dropAbsorbedRecords(payload, compactFactGroup(payload, groupId));
     recountClasses(payload);
   });
-  return { id };
+  return { id: groupId };
 }
 
 /** Normalize appendFacts' `justification` input — either a flat premise-id
@@ -1249,6 +2297,7 @@ export async function appendFacts(dir, facts) {
       tokens: proseTokensFor({ doc: text }),
       provenance: normText(f?.provenance),
       createdAt: f?.createdAt || "",
+      observedAt: f?.observedAt || "",
       quantifier: normText(f?.quantifier),
       premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : undefined,
       ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : undefined,
@@ -1258,66 +2307,48 @@ export async function appendFacts(dir, facts) {
   const ids = [];
   if (!prepared.length) return { ids, appended: 0, skipped };
   await mutateMemory(dir, (payload) => {
-    // id → individual index for O(1) upsert (the array grows to thousands).
-    // When mutateMemory already built the Symbol-keyed lookup index, reuse
-    // THAT Map directly (same object) instead of rescanning payload.individuals
-    // a second time — every `byId.set` below then also keeps
-    // idx.individualsById correct for upsertSource/recomputeSourceReliability's
-    // later lookups in this same mutation, with no extra write.
-    const idx = memoryIndexOf(payload);
-    const byId = idx ? idx.individualsById : new Map(payload.individuals.map((i) => [i?.id, i]));
     const touched = [];
     const seen = new Set();
     const trustOptsById = new Map();
     for (const f of prepared) {
-      const prior = byId.get(f.id);
-      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-      // Same as appendFact: the mgx:factProvenance union stays byte-identical (a
-      // compat shim); the Source edges below are DERIVED from it, purely additive.
-      const provs = [...new Set([...priorProv.split(" | "), f.provenance].filter(Boolean))];
-      const createdAtVal = firstWriteCreatedAt(prior, f.createdAt); // first-write-wins
-      // first-write-wins for the quantifier too — same discipline as appendFact.
-      const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
-      const qVal = f.quantifier || priorQ;
-      const ind = {
-        id: f.id, label: labelOf(f.text), class: FACT_CLASS,
-        derived_from: [], mentions: [],
-        attributes: [
-          { prop: "rdf:type", key: "type", value: "rdf:Statement" },
-          { prop: "rdf:subject", key: "subject", value: f.s },
-          { prop: "rdf:predicate", key: "predicate", value: f.p },
-          { prop: "rdf:object", key: "object", value: f.o },
-          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-          ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
-          ...(f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : []),
-          ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
-          ...(f.environments ? [{ prop: "mgx:factJustification", key: "justification", value: f.environments.map((e) => e.join(" ")).join(" | ") }] : []),
-        ],
-      };
-      // Upsert via the shared helper — O(1) via the index (Object.assign in
-      // place when `prior` exists, push+index when it's new), same as every
-      // other upsert path now. Previously this did its own inline
-      // `payload.individuals.indexOf(prior)` array scan on a re-assert within
-      // the same batch — an O(n) fallback that could still blow up a batch
-      // heavy with within-file duplicate triples; upsertIndividual has no
-      // such case left.
-      const stored = upsertIndividual(payload, ind);
-      byId.set(f.id, stored);
-      ids.push(f.id);
-      if (!seen.has(f.id)) { seen.add(f.id); touched.push(f.id); }
-      // Last-prepared-row-wins per id for the trust hook opts (mirrors the
-      // provenance/quantifier/ind upsert above, which is also last-wins per id
-      // within one batch — a duplicate id inside the same call is rare, but
-      // when it happens the SAME single-write-per-id discipline applies here).
-      if (f.premiseTrusts !== undefined || f.ruleConfidence !== undefined) {
-        trustOptsById.set(f.id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+      const groups = assertionGroupsFor(payload, f.id, f.provenance);
+      // Naming no source, this write asserts nothing new — but its premise
+      // environments and quantifier still belong on the records already there.
+      for (const id of groups.length ? [] : restateFactGroup(payload, f.id, { quantifier: f.quantifier, environments: f.environments })) {
+        if (!seen.has(id)) { seen.add(id); touched.push(id); }
+        if (f.premiseTrusts !== undefined || f.ruleConfidence !== undefined) {
+          trustOptsById.set(id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+        }
       }
+      for (const group of groups) {
+        const plan = planFactAssertion(payload, {
+          groupId: f.id, s: f.s, p: f.p, o: f.o, label: labelOf(f.text), tokens: f.tokens,
+          group, createdAt: f.createdAt, observedAt: f.observedAt, quantifier: f.quantifier,
+          environments: f.environments,
+        });
+        for (const id of applyFactAssertion(payload, plan)) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          touched.push(id);
+        }
+        // Last-prepared-row-wins per record for the trust hook opts (mirroring
+        // the upsert above, which is also last-wins within one batch), and only
+        // ever on the head — a demoted leaf keeps the trust it earned.
+        if (f.premiseTrusts !== undefined || f.ruleConfidence !== undefined) {
+          trustOptsById.set(plan.candidate.id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+        }
+      }
+      ids.push(f.id); // the group id — the public fact id, one per prepared triple
     }
-    // Reconcile each touched fact's Sources + trust once (add-only, idempotent),
-    // then recount classes a SINGLE time at the end. trustOptsById threads the
-    // entailed hook (recomputeFactTrust, above) per fact — absent for a fact
-    // that didn't declare premiseTrusts, so its trust is unchanged from before.
-    for (const id of touched) syncFactSources(payload, byId.get(id), undefined, trustOptsById.get(id));
+    // Reconcile each touched record's Source + trust once (add-only,
+    // idempotent), then recount classes a SINGLE time at the end.
+    for (const id of touched) syncFactSources(payload, storedIndividual(payload, id), undefined, trustOptsById.get(id));
+    // After the Sources exist, so a summary can price what it absorbs, and once
+    // per touched GROUP rather than once per prepared row — a batch that
+    // asserts the same triple many times compacts it once.
+    const absorbed = [];
+    for (const groupId of new Set(ids)) absorbed.push(...compactFactGroup(payload, groupId));
+    dropAbsorbedRecords(payload, absorbed);
     recountClasses(payload);
   });
   return { ids, appended: ids.length, skipped };
@@ -1711,79 +2742,225 @@ export async function resolveRelationChaseReverse(memory, name, objectTerm, help
 // trust and cites provenance WITHOUT re-walking the graph shape.
 
 /**
- * Resolve every reified Fact in a loaded memory payload into a row carrying its
- * Source ids + source-type multiset, the legacy provenance string (compat), and
- * the cached trust score. Pure. The exported seam the chat/answer layer consumes
- * for trust-weighted fact ranking.
+ * Fold every reified Fact in a loaded memory payload into one row per TRIPLE —
+ * the group of assertion records sharing a content-addressed group id, one
+ * record per asserting source. Pure. The exported seam the chat/answer layer
+ * consumes for trust-weighted fact ranking.
+ *
+ * The row surface is deliberately the one every reader already parses: `id` is
+ * the bare group id, `provenance` the ' | '-joined union of the members' tags,
+ * `sourceIds`/`sourceTypes` the union as before. `assertions` is the addition —
+ * the per-record hop list, for a reader that wants to see WHICH source said it
+ * and when rather than one blended number.
+ *
+ * The fold reads live HEADS only. A record its own source has since superseded
+ * is that source's PAST belief, not a second vote for the present one; folding
+ * it back in would let one source's edit history inflate its own corroboration.
+ * Demoted records stay walkable through mgx:supersedes/mgx:supersededBy, which
+ * answers "what did this source used to say", never "what do I trust now".
  */
-export function readFactRows(memory) {
-  const individuals = memory?.individuals || [];
-  const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
-  const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-  const byFact = new Map();
-  for (const e of statedGroup?.examples || []) {
-    if (!byFact.has(e.subject)) byFact.set(e.subject, []);
-    byFact.get(e.subject).push(e.object);
-  }
+export function readFactRows(memory, opts = {}) {
+  const ctx = factFoldContext(memory);
+  // A materialised head, when the backend keeps one, replaces the group's own
+  // fold with the audit trail that fold was last built from — the same records,
+  // read back instead of re-derived. It carries no recency by construction, so
+  // the aggregate below still lands at THIS reading moment either way; a store
+  // that has never materialised a head for this group (a fresh in-memory store,
+  // a hand-built fixture, a backend with no head table) simply folds it.
+  const heads = factHeadsOf(memory);
   const rows = [];
-  for (const ind of individuals) {
-    if (ind?.class !== FACT_CLASS) continue;
-    const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
-    const sourceIds = byFact.get(ind.id) || [];
-    const sourceTypes = sourceIds
-      .map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value)
-      .filter(Boolean);
-    const justificationRaw = get("justification");
-    // ' | '-separated environments, one premise-id list per independent
-    // derivation; a legacy value with no ' | ' parses as one environment.
-    const environments = [];
-    if (justificationRaw) {
-      for (const chunk of justificationRaw.split(" | ")) {
-        const env = chunk.split(" ").filter(Boolean);
-        if (env.length) environments.push(env);
-      }
-    }
-    const justification = [];
-    const seenPremise = new Set();
-    for (const env of environments) {
-      for (const id of env) {
-        if (seenPremise.has(id)) continue;
-        seenPremise.add(id);
-        justification.push(id);
-      }
-    }
-    rows.push({
-      id: ind.id,
-      subject: get("subject"), predicate: get("predicate"), object: get("object"),
-      provenance: get("provenance"), // legacy compat string, verbatim
-      quantifier: get("quantifier"), // "" unless a plural class-membership teach set one
-      sourceIds, sourceTypes,
-      trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
-      // `environments`: every persisted premise set (empty unless entailed);
-      // `justification`: their deduped union in first-occurrence order, for
-      // readers that only need "which premises does this fact cite at all".
-      environments,
-      justification,
-    });
+  for (const [id, members] of ctx.groups) {
+    const row = foldFactGroup(id, members, ctx);
+    const head = heads?.get(id);
+    // Computed fresh, never stored: recency is a function of the reading
+    // moment, so a stored aggregate is stale by pure passage of time.
+    row.trust = computeAssertionGroupTrust(head ? head.inputs : row.assertions, opts).score;
+    rows.push(row);
   }
   return rows;
 }
 
-/** Retract Fact individuals by id — a real DELETE (syllogise.mjs's
- *  retractability mechanism). Scrubs any edge referencing the id as subject
- *  or object; an orphaned Source is left in place (not a GC pass). Unknown
- *  ids are silently skipped. Returns { removed } (may be smaller than input). */
+/** Everything a group fold reads out of a payload, gathered in one pass: each
+ *  triple group's live head records, the groups each (subject, predicate)
+ *  carries, and the two lookups a record's own source resolves through.
+ *
+ *  Shared by the read fold and by the head materialisation below, deliberately:
+ *  a stored aggregate and a computed one folded from different inputs is the
+ *  failure a materialised table invites, and one shared builder is what keeps
+ *  the two from ever drifting apart. */
+function factFoldContext(memory) {
+  const individuals = memory?.individuals || [];
+  const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
+  const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+  const statedByRecord = new Map();
+  for (const e of statedGroup?.examples || []) {
+    if (!statedByRecord.has(e.subject)) statedByRecord.set(e.subject, []);
+    statedByRecord.get(e.subject).push(e.object);
+  }
+
+  const groups = new Map();
+  for (const ind of individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    if ((ind.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP)) continue; // a demoted leaf, not a head
+    if (isChainRollupId(ind.id)) continue; // a summary of one source's demoted history, which was never a vote
+    const groupId = factGroupId(ind.id);
+    const group = groups.get(groupId);
+    if (group) group.push(ind);
+    else groups.set(groupId, [ind]);
+  }
+
+  const groupsByPair = new Map();
+  for (const [groupId, members] of groups) {
+    // Codepoint order on the record id, which sorts by source key — the same
+    // locale-free determinism the P2P layer's own sort insists on, so two peers
+    // holding the same records read the same row.
+    members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const key = subjectPredicateKey(individualKey(members[0], "subject"), individualKey(members[0], "predicate"));
+    const held = groupsByPair.get(key);
+    if (held) held.push(groupId);
+    else groupsByPair.set(key, [groupId]);
+  }
+
+  return {
+    groups,
+    groupsByPair,
+    statedByRecord,
+    sourceTypeOf: (id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "",
+  };
+}
+
+/** One triple group folded into its row, minus the aggregate trust — that is
+ *  the caller's, because it is the only part that depends on when you ask. */
+function foldFactGroup(id, heads, ctx) {
+  const { statedByRecord, sourceTypeOf } = ctx;
+  const attrOf = individualAttr;
+  const keyOf = individualKey;
+
+  const assertions = [];
+  const sourceIds = [];
+  const sourceTypes = [];
+  const tags = new Set();
+  const environments = [];
+  const seenEnvironment = new Set();
+  let quantifier = "";
+  for (const head of heads) {
+    // A pool-1 summary joins the fold as ONE pseudo-record standing for every
+    // head it absorbed: its noisy-OR base is their combined contribution, and
+    // its recency comes from the newest assertion time it absorbed, so the
+    // decay still happens at the reading moment rather than being baked in.
+    // The sources it absorbed stay in the union a reader renders — they did
+    // vouch for this triple, and the summary is where that record now lives.
+    if (isHeadRollupId(head.id)) {
+      const rollupType = headRollupTypeOf(head.id);
+      const absorbed = absorbedSourceIds(head);
+      for (const sid of absorbed) {
+        if (sourceIds.includes(sid)) continue;
+        sourceIds.push(sid);
+        if (rollupType) sourceTypes.push(rollupType);
+      }
+      assertions.push({
+        id: head.id, sourceId: "", sourceType: rollupType,
+        provenance: "",
+        createdAt: attrOf(head, ROLLUP_EARLIEST_PROP),
+        ownTrust: Number(attrOf(head, ROLLUP_PRIOR_PROP)) || 0,
+        assertedAt: attrOf(head, ROLLUP_LATEST_PROP),
+        rollup: {
+          count: Number(attrOf(head, ROLLUP_COUNT_PROP)) || absorbed.length,
+          sourceIds: absorbed,
+          earliest: attrOf(head, ROLLUP_EARLIEST_PROP),
+          latest: attrOf(head, ROLLUP_LATEST_PROP),
+        },
+      });
+      continue;
+    }
+    const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
+    for (const tag of headTags) tags.add(tag);
+    const [statedBy] = statedByRecord.get(head.id) || [];
+    const sourceId = statedBy || attrOf(head, SOURCE_ID_PROP);
+    const sourceType = sourceTypeOf(sourceId);
+    // src:none stands for "no Source at all", so it stays out of the union a
+    // reader renders and out of the corroboration count, exactly as an
+    // unattributable fact has always read.
+    if (statedBy && !sourceIds.includes(statedBy)) {
+      sourceIds.push(statedBy);
+      if (sourceType) sourceTypes.push(sourceType);
+    }
+    const createdAt = attrOf(head, CREATED_AT_PROP);
+    const observedAt = attrOf(head, OBSERVED_AT_PROP);
+    assertions.push({
+      id: head.id, sourceId, sourceType,
+      provenance: headTags.join(" | "),
+      createdAt,
+      ...(observedAt ? { observedAt } : {}),
+      ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
+      assertedAt: assertionTimestampFor(headTags, createdAt),
+    });
+    quantifier = quantifier || keyOf(head, "quantifier");
+    // ' | '-separated environments, one premise-id list per independent
+    // derivation; a legacy value with no ' | ' parses as one environment.
+    for (const chunk of keyOf(head, "justification").split(" | ")) {
+      const env = chunk.split(" ").filter(Boolean);
+      if (!env.length) continue;
+      const key = env.join(" ");
+      if (seenEnvironment.has(key)) continue;
+      seenEnvironment.add(key);
+      environments.push(env);
+    }
+  }
+  const justification = [];
+  const seenPremise = new Set();
+  for (const env of environments) {
+    for (const premise of env) {
+      if (seenPremise.has(premise)) continue;
+      seenPremise.add(premise);
+      justification.push(premise);
+    }
+  }
+  return {
+    id,
+    subject: keyOf(heads[0], "subject"), predicate: keyOf(heads[0], "predicate"), object: keyOf(heads[0], "object"),
+    // The compat union string readers already parse, codepoint-sorted so it
+    // does not depend on which order the records happened to arrive in.
+    provenance: [...tags].sort().join(" | "),
+    quantifier, // "" unless a plural class-membership teach set one
+    sourceIds, sourceTypes,
+    // `environments`: every persisted premise set (empty unless entailed);
+    // `justification`: their deduped union in first-occurrence order, for
+    // readers that only need "which premises does this fact cite at all".
+    environments,
+    justification,
+    // The hop list the blended number is folded from — one entry per source
+    // that asserted this triple, each with its own time and its own weight.
+    assertions,
+  };
+}
+
+/** Retract facts by id — a real DELETE (syllogise.mjs's retractability
+ *  mechanism). A GROUP id retracts the triple: every source's record for it,
+ *  demoted leaves included, since retracting "dogs bark" cannot leave half its
+ *  assertions standing. A single record id retracts just that record. Scrubs
+ *  any edge referencing a removed id as subject or object; an orphaned Source
+ *  is left in place (not a GC pass). Unknown ids are silently skipped. Returns
+ *  { removed } — the ids asked for that matched, so it may be smaller than the
+ *  input and is never longer than it. */
 export async function removeFacts(dir, ids) {
   const idSet = new Set((ids || []).filter(Boolean));
   const removed = [];
   if (!idSet.size) return { removed };
   await mutateMemory(dir, (payload) => {
+    const removedSet = new Set();
+    const matched = new Set();
     payload.individuals = (payload.individuals || []).filter((ind) => {
-      if (ind?.class === FACT_CLASS && idSet.has(ind.id)) { removed.push(ind.id); return false; }
-      return true;
+      if (ind?.class !== FACT_CLASS) return true;
+      const groupId = factGroupId(ind.id);
+      const asked = idSet.has(ind.id) ? ind.id : (idSet.has(groupId) ? groupId : "");
+      if (!asked) return true;
+      matched.add(asked);
+      removedSet.add(ind.id);
+      return false;
     });
+    for (const id of matched) removed.push(id);
     if (!removed.length) return; // honest no-op — nothing matched, no write needed beyond this
-    const removedSet = new Set(removed);
     for (const group of payload.objectProperties || []) {
       const before = group.examples || [];
       group.examples = before.filter((e) => !removedSet.has(e?.subject) && !removedSet.has(e?.object));
@@ -1803,32 +2980,37 @@ export const CAPABLE_OF_PREDICATE = "mgx:capableOf";
 
 /** Predicates whose real-world semantics allow many objects at once ("a dog
  *  has legs" AND "a dog has a tail"; "a bird can fly" AND "a bird can sing"),
- *  so a second object is a second fact, never a disagreement. A closed list:
- *  every predicate outside it keeps the full contradiction contract. Each
- *  entry's negative twin joins it — "a penguin cannot fly" and "a penguin
- *  cannot sing" are two claims, not a self-contradiction. */
-export const MULTI_VALUED_PREDICATES = new Set(
-  [HAS_A_PREDICATE, CAPABLE_OF_PREDICATE].flatMap((p) => [p, negatedPredicate(p)]),
-);
+ *  so a second object is a second fact, never a disagreement. Derived from the
+ *  resolver table's `merge` row, so the two can never say different things. */
+export const MULTI_VALUED_PREDICATES = MERGE_PREDICATES;
 
 /** Facts that CONTRADICT: same (subject, predicate), different object, each
  *  above the trust floor. Returns groups (trust-desc) so callers surface both,
- *  never silently pick one. Same (s,p,o) is corroboration, not contradiction,
- *  and a MULTI_VALUED_PREDICATES predicate never contradicts on object count. */
+ *  never silently pick one.
+ *
+ *  Two stages, and only the second one is here. Stage 1 — the records inside
+ *  one triple group — is readFactRows' own fold: same (s,p,o) is corroboration,
+ *  and a group is internally agreeing by construction. Stage 2 is this: across
+ *  the OBJECTS one (subject, predicate) carries, under the resolver table.
+ *  A merge predicate never reports; a state or registration predicate reports
+ *  only what its own clock could not order (the resolver's trust and codepoint
+ *  tie-breaks — see resolveSiblingGroups), so ordinary succession stops reading
+ *  as disagreement; every other predicate keeps the full keep-both contract. */
 export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
   const rows = readFactRows(memory).filter((r) => r.trust >= floor);
   const byKey = new Map();
   for (const r of rows) {
-    if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
+    if (resolutionStrategyFor(r.predicate) === RESOLUTION_MERGE) continue;
     const key = `${r.subject} ${r.predicate}`;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
   }
   const out = [];
   for (const group of byKey.values()) {
-    if (new Set(group.map((r) => r.object)).size > 1) {
-      out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
-    }
+    if (new Set(group.map((r) => r.object)).size < 2) continue;
+    const strategy = resolutionStrategyFor(group[0].predicate);
+    if (strategy !== RESOLUTION_CONTRADICTION && !resolveSiblingGroups(group, strategy).contested) continue;
+    out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
   }
   return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
 }

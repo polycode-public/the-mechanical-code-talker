@@ -1,31 +1,37 @@
-# garden — a cultivated bed of flowers behind a low border at the
-# sprite tier: rows of small blooms distinguish it from park's own
-# single shade tree.
+# garden — fixed soil rows under colourful blooms and a gravel path,
+# since a garden bed's own dirt and its flowers carry real colours a
+# theme has no business tinting. This is one of the few sprites that
+# also has to sit on the mud demo's own soil and leaf grounds, so the
+# path and blooms stay bright enough to read against dark earth.
 classes = ["garden"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
     <linearGradient id="garden-wash" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+      <stop offset="0%" stop-color="#7a5230"/>
+      <stop offset="100%" stop-color="#4a3018"/>
     </linearGradient>
   </defs>
-  <rect x="2" y="15" width="20" height="6.6" fill="url(#garden-wash)"/>
-  <path d="M2 15 L4 12 L20 12 L22 15 Z" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.5"/>
-  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
-    <line x1="6.4" y1="13.6" x2="6.4" y2="17.2"/>
-    <line x1="11.4" y1="12.6" x2="11.4" y2="16.8"/>
-    <line x1="16.4" y1="13.6" x2="16.4" y2="17.2"/>
+  <path d="M2 21 L4 12 L20 12 L22 21 Z" fill="url(#garden-wash)" stroke="#3a2412" stroke-width="0.6"/>
+  <path d="M9.4 12 L8 21 M14.6 12 L16 21" fill="none" stroke="#c9b48a" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+  <g stroke="#3a2412" stroke-width="0.3" opacity="0.5">
+    <path d="M4.6 15 L20.2 15"/>
+    <path d="M5.2 18 L19.6 18"/>
   </g>
-  <g fill="currentColor">
-    <circle cx="6.4" cy="12.4" r="1.7"/>
-    <circle cx="11.4" cy="11.2" r="1.9"/>
-    <circle cx="16.4" cy="12.4" r="1.7"/>
+  <g stroke="#4a7a34" stroke-width="0.9" stroke-linecap="round">
+    <line x1="6.4" y1="14.4" x2="6.4" y2="10.4"/>
+    <line x1="11.4" y1="13.4" x2="11.4" y2="9"/>
+    <line x1="16.4" y1="14.4" x2="16.4" y2="10.4"/>
   </g>
-  <g fill="#ffffff" opacity="0.4">
-    <circle cx="5.8" cy="11.8" r="0.5"/>
-    <circle cx="10.8" cy="10.6" r="0.5"/>
-    <circle cx="15.8" cy="11.8" r="0.5"/>
+  <g>
+    <circle cx="6.4" cy="9.8" r="1.7" fill="#c9302c"/>
+    <circle cx="11.4" cy="8.4" r="1.9" fill="#c9a227"/>
+    <circle cx="16.4" cy="9.8" r="1.7" fill="#7a4a94"/>
+  </g>
+  <g fill="#ffffff" opacity="0.45">
+    <circle cx="5.8" cy="9.2" r="0.45"/>
+    <circle cx="10.8" cy="7.8" r="0.5"/>
+    <circle cx="15.8" cy="9.2" r="0.45"/>
   </g>
 </svg>
 """

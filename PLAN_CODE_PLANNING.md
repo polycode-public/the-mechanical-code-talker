@@ -1,0 +1,673 @@
+# PLAN_CODE_PLANNING.md — planning over code states, and the still-open rule-synthesis spike
+
+> **Status.** Extracted from `PLAN_CODE.md` on 2026-07-24 as part of `archive/PLAN_REPO_INDEX.md` Phase 6
+> (the original document is now `archive/PLAN_CODE.md`, banner and all). This doc keeps the two
+> pieces of the old plan that stay in tmct: **Track 1** (`test-benchmarks/synthbench/`, SHIPPED 2026-07-08 —
+> unchanged by the move, and this doc still owns it) and **Track 5** (planning over code states,
+> the headline proposal). Tracks 2-4 (JS program repair, from-scratch JS snippet synthesis,
+> HTML/CSS synthesis) and the accompanying fifty-year survey moved to seonix as
+> `PLAN_CODE_SYNTHESIS.md`, since they synthesize over a target codebase and seonix already owns
+> the benchmarking harness and MCP tool surface that grades that shape of work.
+>
+> **Component status, whole arc:**
+> - Track 1 (`test-benchmarks/synthbench/`, §2) — **SHIPPED** 2026-07-08. Unchanged by this move.
+> - §2.1 (loading a synthesized rule into the product path) — the scoping spike is **DONE**
+>   (§2.1.1: read path, store shape, admission gate, provenance, a three-stage proposal); the
+>   build itself (stage 1, read-only admission) is **PROPOSED**.
+> - Track 5 §3.1-§3.3 (state, operator catalogue, planner) — **SHIPPED** 2026-07-24 as
+>   `src/domain/codeplan/` (graph-delta.mjs, graph-predicates.mjs, operators.mjs, planner.mjs);
+>   each section below carries its Landed note.
+> - Track 5 §3.4-§3.5 (adaptor, verification tiers) — **PROPOSED**, design only.
+> - Track 5 §3.6 (re-index) — its dependency, `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractor, is
+>   **SHIPPED** (merged 2026-07-24, tmct 3.0.0). Wiring the re-index call into the plan-act-verify
+>   loop itself is still **PROPOSED**.
+> - Track 5 §3.7 (first milestone) — the fixture (`examples/tiny-webapp-src`) is **SHIPPED**; the
+>   planned two-step refactor it describes is **PROPOSED**.
+
+**Ground rules.** tmct's constitution: no LLM in the product path, ever (`CLAUDE.md`). Synthesis
+and transformation here mean **search + verification over closed grammars and closed operator
+catalogues**, never a language model guessing code. LLMs and coding assistants ARE permitted
+offline — authoring and curating rule bases, operator catalogues, corpora, and test oracles that
+ship as reviewed static data — the same posture as the eval harness. A synthesized or transformed
+artifact must read exactly like a hand-written one and passes the same review as any PR. §4's
+survey shows this division of labour (assistants author offline, a deterministic engine executes
+in the product) is now the visible industry direction, not a private constraint.
+
+---
+
+## 1. Baseline — what exists today for Track 1 and Track 5
+
+- **`test-benchmarks/synthbench/`** — Track 1's shipped harness: `phrasing/` (a `PHRASING_FRAMES`
+  template-generalization synthesizer over `src/domain/interpret/normalize.mjs`'s frame table)
+  and `rules/` (`cases.jsonl`, `enumerate.mjs`: the bounded `GOAL_RULE` field-grammar
+  enumerator, `oracle.mjs`: verification through the real engine, `synthesize.mjs`: the CEGIS
+  loop). Reproduces both hand-written `GOAL_RULES` byte-for-byte and synthesized one novel rule,
+  0% call fabrication, held-out-checked.
+- **`src/domain/router/`** — the substrate Track 1 synthesizes into: `registry.mjs` (closed
+  `KINDS`, namely `Symbol`/`Module`/`Class`/`Query`/`Kind`/`Package`, and `PRECOND` vocabularies;
+  every built-in capability `readOnly: true`), `goal-reasoner.mjs` (`GOAL_RULES` with two live
+  entries, `coverage-invariant` and `cochange-risk-invariant`; `applicableRules`/`goalReason`
+  both take an optional `ruleSet` param whose only overriding caller is the synthesis oracle),
+  `resolver.mjs` (`backwardChain`), `planner.mjs`, `set-algebra.mjs`, `taught.mjs`
+  (`capabilityFromActionRules` — taught action families registered `readOnly: false` but never
+  auto-dispatched). Invokable via `tmct plan "<request>"` (`bin/tmct.mjs`), chat's `/plan`, and
+  the `./plan` library export.
+- **The planning lane** — `src/domain/planning.mjs` (`findActionPath`/`findReachableSet`:
+  bounded, cycle-safe BFS over on-demand successors), `src/domain/domain.mjs`
+  (`movesFromRules`, `compileGoal`), `src/adapters/memory/core.mjs` (the four taught action-rule
+  kinds: `RULE_KIND_ACTION_SIGNATURE`/`_PRECOND`/`_EFFECT`/`_CONSTRAINT`). The Hanoi/
+  river-crossing lane in `src/services/chat.mjs` runs the full loop live: taught action
+  families, plan moves written as `board@step` snapshots, and a mid-plan write guard that
+  refuses base-state mutation while a plan is live. Corpus: `test/corpus/planning.jsonl`.
+- **The code graph** — `src/domain/codegraph.mjs` (pure query logic over the typed `entities`
+  payload at `.tmct/graph.json`), `src/domain/ask.mjs` (the mechanical NL query engine over a
+  loaded graph), `src/adapters/repository-interface.mjs` (versioned contract,
+  `INTERFACE_VERSION = "1.1.0"`: 16 services, closed `MISS_REASONS`, OWL-grounded),
+  `src/adapters/graph-build.mjs` (`buildEntities` — the reference producer of the graph shape),
+  `ontology/tmct-core.ttl` (code-entity classes and predicates, term-aligned with seonix).
+- **Parsing — no longer the open gap it was.** `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractors
+  (`src/index/`, the `tmct index` CLI verb) merged 2026-07-24 (tmct 3.0.0): `buildEntities` now
+  has a real caller, and a repo's own `.tmct/graph.json` can be produced from its own source.
+  C#/Java stay in seonix, registered through the same backend seam. Track 5 §3.6's re-index
+  dependency is met for JS — what remains there is wiring the re-index call into the
+  plan-act-verify loop, not producing the graph in the first place.
+- **The sandbox, for Track 5's slice.** Track 5's verify stage runs a fixture's own test suite in
+  a subprocess (§5, below) — no browser sandbox needed. Tracks 2-4's Playwright-based sandbox
+  need moved to seonix with those tracks (`PLAN_CODE_SYNTHESIS.md`), where it stays pinned in
+  `devDependencies` there.
+
+---
+
+## 2. Track 1 (SHIPPED 2026-07-08) — synthesizing a `GOAL_RULE` or `PHRASING_FRAMES` entry
+
+The record, compressed; the code in `test-benchmarks/synthbench/` is the reference.
+
+- **Shape.** A `GOAL_RULE` is closed data: `focusClass` over the registry's `KINDS`, `modes`
+  over `{scoped, global}`, `subGoals` over the topics `backwardChain` can reach, `compose` over
+  `set-algebra.mjs`'s three exported ops. Low thousands of candidates, fully enumerable. The
+  `PHRASING_FRAMES` warm-up is the same species one order smaller: generalize a varying span
+  into a capture group against a closed set of anchor-phrase families.
+- **Oracle.** A candidate is DATA run by the SAME trusted engine every hand-written rule runs
+  through: clone `GOAL_RULES`, pass via the `ruleSet` param, call the real
+  `applicableRules`/`goalReason`, value-compare `calls`/`composed`/`proof` to static `expect`
+  literals (`test-benchmarks/agentbench/grade.mjs`'s zero-fabrication posture — compare to pinned literals,
+  never re-derive). No sandbox: no untrusted code ever executes.
+- **CEGIS.** A failing example is a counter-example that prunes the enumeration on the next
+  pass. Exit bar met: a novel rule synthesized at 0% fabrication against held-out examples,
+  fields reading as a plausible hand-authored entry.
+
+One backward-compatible product change shipped with it: the `ruleSet` param on
+`goalReason`/`applicableRules`, default preserving every existing caller.
+
+This track is the repo's local proof of the survey's central claim (§4): a closed grammar plus
+a trusted verification oracle turns "code generation" into bounded search, with no model in the
+loop. Track 5 generalizes exactly this posture from router data to code.
+
+### 2.1 Open — synthesized rules in the product path (spike first)
+
+Track 1 is harness-side. `test-benchmarks/synthbench/rules/` synthesizes a novel `GOAL_RULE` deterministically at
+0% fabrication, but nothing in the product path loads a synthesized rule: `goal-reasoner.mjs` runs
+its two hand-written entries, and the `ruleSet` param's only overriding caller is the synthesis
+oracle itself.
+
+The oracle and the enumerator exist, so the missing piece is not machinery. It is the surface: what
+a taught-in-chat synthesis should look like, when a synthesized rule is allowed to fire against a
+user's own graph, and how its provenance reads back. That is a scoping spike before it is a build.
+
+#### 2.1.1 The spike's findings (scoping deliverable)
+
+**What loading a synthesized rule into the product path would touch.** The read path is short and
+already parameterised, so this is a surface question, not an engine one:
+
+- **The dispatch call site.** The product path reaches `goalReason` at one place —
+  `src/domain/router/drive.mjs` (the `goalReason(request, tools, ctx, { driver: GOAL_DRIVER })`
+  call). It passes no `ruleSet`, so it runs the frozen built-in `GOAL_RULES`
+  (`src/domain/router/goal-reasoner.mjs`). Loading a synthesized rule means giving `drive.mjs` a
+  rule set that is `GOAL_RULES` plus the vetted synthesized entries — the only functional change at
+  the call site, and it is a one-argument change the `ruleSet` param was designed for (Track 1's one
+  backward-compatible product change, §2).
+- **Where a synthesized rule lives at rest.** `GOAL_RULES` is a committed, frozen constant. A
+  synthesized rule is not authored in source, so it needs a store: the natural home is the on-disk
+  memory (`.tmct/`, the OWL-labelled graph the taught action families already use), read at session
+  start the way taught facts and rules are. That reuses `src/adapters/memory/core.mjs`'s Rule
+  individuals — a `GOAL_RULE` is closed data (focusClass over the registry `KINDS`, modes, subGoals,
+  compose), so a `RULE_KIND_GOAL_RULE` sibling of the existing rule kinds can carry it under the same
+  content-addressing, SHACL and provenance discipline, with no new persistence layer.
+- **The compile/merge step.** `drive.mjs` would read the persisted synthesized rules, run each
+  through the SAME oracle gate the harness uses (`test-benchmarks/synthbench/rules/oracle.mjs` — `passesExample`
+  against the rule's pinned labelled examples) before admitting it, then hand `goalReason` the merged
+  set. Admission is a verification, not a trust: a rule that no longer reproduces its own labelled
+  examples against the current engine is dropped and counted, never fired — the honest-miss ethos
+  applied to the rule base itself.
+- **Provenance read-back.** `goalReason` already returns a proof/receipt. A synthesized rule that
+  fires must mark its provenance so the receipt reads "grounded via a synthesized rule (from these
+  labelled examples, admitted by the oracle on <engine version>)", distinct from a hand-written
+  rule's line. The provenance tag lands on the Rule individual at synthesis time and rides the
+  proof out, so a user can always see that a synthesized rule, not a shipped one, answered them.
+
+**The risk surface.**
+
+- **A synthesized rule is data through trusted code, not executed code.** It is the same posture as
+  Track 1's oracle (§2): no sandbox, because nothing untrusted ever runs — the rule is a closed
+  `GOAL_RULE` record dispatched by the unmodified engine.
+- **Coverage bleed is the real risk.** A synthesized rule admitted against its own labelled examples
+  could still fire on a request those examples never covered and produce a plausible-but-unintended
+  dispatch. The mitigation is the same one the harness already enforces: a synthesized rule is
+  admitted only for the focusClass/mode its examples pin, and its subGoals must backward-chain to a
+  capability in the live toolset (`groundableInToolset`), so a rule can never borrow coverage it was
+  not verified for. Held-out examples stay mandatory.
+- **Rule-set determinism.** Two synthesized rules that both match one request would make dispatch
+  order-dependent. `applicableRules` already refuses on more than one applicable rule (an ambiguous
+  meta-goal is an honest miss, not a pick), so the existing ambiguity guard covers this — but the
+  admission step must preserve it, never silently prefer a synthesized rule over a built-in one.
+- **Provenance integrity.** A synthesized rule whose provenance tag is lost would read back as a
+  hand-written rule. The tag is part of the Rule individual's content address, so a rule that lost
+  its tag is a different (and un-admitted) rule — the store's own discipline protects this.
+
+**Staged proposal (each stage separately shippable, none crosses the source-editing line).**
+
+1. **Read-only admission, off by default.** Add the `RULE_KIND_GOAL_RULE` store shape and a
+   `drive.mjs` path that reads persisted synthesized rules, oracle-gates them, and merges them into
+   the dispatch rule set behind a flag that defaults off. Ship with the provenance tag and the
+   receipt line. Nothing synthesizes yet; a hand-placed synthesized rule (from `test-benchmarks/synthbench/rules/`)
+   is the test fixture.
+2. **Teach-in-chat synthesis.** Wire the enumerator + oracle (`test-benchmarks/synthbench/rules/synthesize.mjs`) to a
+   chat surface: a user gives labelled examples ("when I ask X, call Y"), the loop synthesizes a rule
+   that reproduces them at 0% fabrication or honestly reports no rule found, and — on success —
+   persists it as a `RULE_KIND_GOAL_RULE` with provenance. Still gated by stage 1's admission on
+   every load.
+3. **Default-on, with the audit surface.** Once the receipt, the ambiguity guard and the held-out
+   discipline have miles on them, turn admission on by default and add a `tmct`-side listing of which
+   synthesized rules are live, their labelled examples, and their last admission result — the rule
+   base as auditable as any committed corpus.
+
+The whole spike stays inside the constitution: no model is in the synthesis loop (the enumerator is
+bounded search, the oracle is the real engine), and every synthesized rule is as reviewable as a
+hand-written one — Track 1's proof, carried from the harness into the product path.
+
+---
+
+## 3. Track 5 (headline proposal) — planning over code states
+
+The operator's target: use the classical-planning machinery tmct already ships to plan over
+**code states**. A code change is a PLAN. Its actions are **language-neutral code
+transformations** — operators with preconditions and effects over the code graph. The plan
+moves between code states. A language-specific **adaptor** materialises each abstract step into
+concrete edits. A **verifier** runs the result through real tests. The graph is **re-indexed**,
+and the next step plans from the observed state. Every stage below names which tmct pieces
+exist, which are partial, and which are new; §3.1-§3.3 are being implemented in a concurrent
+workstream against `examples/tiny-webapp-src` — see the status block at the top of this doc for
+the current line, and update it in place as each slice lands.
+
+### 3.1 The state: code-graph snapshots, deltas as effects
+
+The planning state is the typed `entities` payload the repo already queries — modules, classes,
+functions, and the `imports`/`calls`/`contains`/`defines`/`tests` edges
+(`codegraph.mjs`/`repository-interface.mjs`), plus the verification status of the working tree
+(which test tiers are green). An action's **declared effect is a graph delta**: entity adds/
+removes and edge adds/removes, exactly the add/del effect lists taught action families already
+carry (`RULE_KIND_ACTION_EFFECT`, `src/adapters/memory/core.mjs`). Plan search projects
+snapshots without touching the base state, the same way the Hanoi lane projects `board@step`
+snapshots and guards the base against mid-plan mutation (`src/services/chat.mjs`'s mid-plan
+write guard). The state key for cycle detection canonicalizes the graph delta, not the source
+text — two orderings of independent steps that reach the same graph are one state.
+
+Exists today: the action-rule kinds, `findActionPath` over projected snapshots, the @step
+snapshot pattern, the mid-plan guard. Partial: a canonical state key for graph-shaped states
+(`planning.mjs`'s `defaultStateKey` JSON-stringifies; a graph state needs sorted, delta-based
+canonicalization). New: the graph-delta effect vocabulary itself (a closed set of
+add/del-entity, add/del-edge, retitle-entity effect tokens over the ontology's classes and
+predicates).
+
+Landed: `src/domain/codeplan/graph-delta.mjs` — the code-graph state (entities + edges), the
+five-token closed effect vocabulary (`EFFECT_OPS`) over the closed `ENTITY_CLASSES` /
+`EDGE_PREDICATES` sets, `applyGraphEffect`/`applyGraphEffects` (pure, fail-loud on an ill-formed
+delta), the path-independent `canonicalStateKey`, `diffGraphStates`/`effectsEqual` for the tier-1
+declared-vs-observed ledger (§3.5), and `graphStateFromEntities` to read a state out of a loaded
+graph payload. Tests: `test/domain/codeplan-graph-delta.test.mjs`.
+
+### 3.2 The operator catalogue: transformations as taught action families
+
+Each transformation operator is one taught action family, slot for slot:
+
+| Action-rule slot | For a code transformation |
+|---|---|
+| signature | the graph shape it applies to ("a function entity contained by a module") |
+| precondition | applicability as graph predicates — Opdyke's behavior-preservation preconditions (1992), machine-checked against the graph: rename requires no name collision in scope; move requires the move not create an import cycle; inline requires a single definition and no recursion at the site |
+| effect | the graph delta (§3.1), deterministic and declared before execution |
+| constraint | the standing goal-state constraint: every currently-green test stays green |
+
+The starting catalogue, drawn from the refactoring literature's settled core (Opdyke 1992;
+Fowler 1999) plus the semantic-patch family (§4.4): **rename**, **extract-function**,
+**inline**, **move** (entity between modules), **wrap** (guard/decorator around a call
+boundary), **add-parameter** (with default, call sites updated), **delete-dead** (no inbound
+`calls`/`imports` edges), **split-module**, and **apply-semantic-patch** (a taught
+pattern→replacement pair, comby/ast-grep-shaped, promoted to a first-class operator so
+project-specific transformations join the same catalogue without new engine code). Operators
+are TAUGHT — authored offline (by the operator, or by a coding assistant whose output is
+reviewed and committed like any rule data), stored as action-rule facts, never hardcoded. This
+is Draco/KIDS/PAR's rule-base architecture with the historical authoring bottleneck paid by
+assistants (§4.10).
+
+Exists today: the taught-action-family machinery end to end (`taught.mjs`,
+`capabilityFromActionRules`, teach-and-plan through chat). New: the catalogue content, and the
+signature/precondition vocabulary extended from world-state facts to graph predicates (the
+`PRECOND` pattern in `registry.mjs` is the template: a small closed predicate vocabulary,
+resolver-checked).
+
+Landed: `src/domain/codeplan/graph-predicates.mjs` — the closed, resolver-checked precondition
+vocabulary (`GRAPH_PRECONDITIONS`): no-name-collision, move-introduces-no-import-cycle,
+single-definition, no-self-recursion, no-inbound-dependencies, each a pure predicate over graph
+shape. `src/domain/codeplan/operators.mjs` — the catalogue as reviewable data (`CODE_OPERATORS`):
+signature (graph shape), named preconditions, declared graph-delta effect, and the coverage
+constraint. Grounders for rename / create-module / move / delete-dead expand a catalogue entry
+plus a goal-derived parameter pool into legal moves; inline, extract-function, add-parameter,
+wrap, split-module and apply-semantic-patch are catalogue entries carrying their
+signature/preconditions and awaiting a grounder. `codeGraphMoves` is the deterministic
+`applyActions` for the planner, pruning any move that would drop test coverage. An entity id is a
+stable node identity (a move swaps its `defines` edge, keeping the id) so the adaptor (§3.4) owns
+the path/id materialisation. Tests: `test/domain/codeplan-operators.test.mjs`.
+
+### 3.3 The planner: bounded BFS to a graph-predicate goal
+
+The goal is a graph predicate set, same species as `compileGoal`'s goal specs: "function
+`parseRow` lives in `src/parse.mjs`; every former call site imports the new path; tests stay
+green." `findActionPath` searches operator applications over projected graph snapshots, bounded
+depth, shortest plan first, honest miss on exhaustion — no new search engine. Precondition
+pruning does the real work (never propose a rename into a collision; never move into a cycle),
+exactly as it does for Hanoi.
+
+Where **e-graphs and equality saturation** (§4.7) enter: two plan prefixes that reach
+equivalent graph states should merge, and semantically-equal materialisations of one abstract
+step form an equivalence class. An e-graph over abstract code states — egg/egglog-style, with
+deterministic cost-based extraction — is the natural upgrade path when the operator catalogue
+grows past what plain BFS with a canonical state key handles. Not stage-1 machinery; named here
+so the state representation (deltas, canonical keys) is chosen to be e-class-friendly from the
+start.
+
+Exists today: `findActionPath`, `compileGoal`, the honest-miss discipline. New: goal predicates
+over graph shape; later, the e-graph layer.
+
+Landed: `src/domain/codeplan/planner.mjs` — the closed goal-predicate vocabulary
+(`GOAL_PREDICATES`: entity-titled, entity-in-module, entity-absent, edge-present, edge-absent),
+`compileCodeGoal` (their conjunction as one state predicate), `deriveContext` (the goal-derived
+parameter pool that keeps operator enumeration bounded), and `planCodeChange` — `findActionPath`
+over `codeGraphMoves`, keyed by `canonicalStateKey`, shortest plan first, `null` on an honest
+miss, with a per-step receipt (operator, binding, declared effect, before/after snapshot). Tested
+over the committed tiny-webapp fixture graph (read immutably): a three-step rename-then-move
+refactor of `parseRow` is found and byte-deterministic on re-run, and two honest misses hold — a
+rename into a locked-in sibling collision, and deleting a still-called entity — both return
+`null`, never a guess. Tests: `test/domain/codeplan-planner.test.mjs`.
+
+### 3.4 The adaptor: language-specific materialisation
+
+An abstract step ("rename `f` to `parseRow` in module `m`") is language-neutral. The
+**adaptor** turns it into concrete edits for one language: for JS, the list of exact text
+edits across the defining module and every importer, computed from the graph's own edge set.
+The adaptor is deterministic given (abstract step, graph, source text). One adaptor per
+language; JS first, since the repo, its fixtures, and its test estate are JS. tmct's own
+language scope is JS/TS and Python (`archive/PLAN_REPO_INDEX.md` phase 3), so those are the adaptors
+that ship here — and, as with the index backends, the adaptor contract stays language-neutral
+so a consumer can register one for a language tmct doesn't carry. The operator layer above it
+never learns what language a step will be materialised into: that is the whole point of
+planning over graph states rather than over source text. The adaptor's contract mirrors
+`repository-interface.mjs`: a versioned, typed service with closed miss reasons ("site not
+found", "source drifted since index") rather than best-effort edits.
+
+**The jittering question, both readings designed.** The operator's phrase "possibly jittering
+at that stage" admits two readings:
+
+- **(a) Bounded variation among semantically-equal materialisations, verifier-selected.** The
+  adaptor emits an ORDERED list of k candidate spellings of the same abstract edit (declaration
+  vs arrow form, import placement, formatting variants), and the verifier takes the first that
+  passes all tiers. Deterministic: the candidate order is fixed by the adaptor, the selector is
+  the verifier, nothing is ever random in the product. Equality saturation gives this its
+  formal footing — the candidates are one e-class, extraction is cost-ordered.
+- **(b) Just-in-time materialisation.** The plan stays abstract until execution. Each step is
+  materialised only when reached, against the freshly re-indexed graph — so drift between the
+  planned snapshot and the observed state is caught at materialisation time, and the loop
+  replans instead of editing against a stale picture.
+
+**Recommendation: build (b) first; add (a) later inside the adaptor.** Reading (b) is
+structural — it IS the plan-act-observe-replan loop the repo already runs for hidden state
+(`PLAN_GUESS_NUMBER.md`'s posture), and it is what makes the mid-plan re-index (§3.6) safe
+rather than decorative. Reading (a) is an adaptor feature, not a loop change: it needs (b)'s
+verifier-in-the-loop to exist before "verifier-selected" means anything, and until the catalogue
+is big enough for spelling variants to matter, k=1 is the right k. Both readings keep the
+product deterministic; neither ever samples.
+
+Exists today: nothing edits source (by standing policy, tmct only reads). This stage is a new
+capability category — the first that lets tmct modify a source artifact. Partial precedent:
+`src/adapters/source-slice.mjs` locates source ranges for entities, which is the read half of
+site location.
+
+### 3.5 Verification tiers
+
+Track 1's oracle posture, extended: run candidates through the real, unmodified engine — here,
+the real toolchain and the real test suite, never a simulation of them.
+
+| Tier | Check | Cost |
+|---|---|---|
+| 0 | the edited file re-parses (the adaptor's own parser pass) | ms |
+| 1 | re-index, then compare **observed** graph delta to the step's **declared** effect — the predicted-vs-actual ledger, per step | sub-second |
+| 2 | blast-radius tests: the tests reachable from the touched entities via the graph's own `tests`/`calls` edges (the graph makes "blast radius" computable instead of judged) | seconds |
+| 3 | the fixture repo's full suite, at plan completion | as costed |
+
+Tier 1 is the code-state version of an asymmetry Track 2's design also leans on (§4.9): source
+effects are declarable, behavioral effects are only observable. A tier-1 mismatch (the edit
+changed graph shape beyond its declared delta) aborts the plan and replans from observed state —
+a miss, never a guess. GumTree-class tree diffing (§4.9) is the candidate instrument if tier 1
+needs finer grain than graph-delta comparison.
+
+Exists today: the test estate and blast-radius discipline (`CLAUDE.md`), the
+predictions-vs-actuals ledger pattern (chatbench). New: the tier harness itself.
+
+### 3.6 Re-index, then plan the next step
+
+After a verified step, the graph is rebuilt from the edited source and the next step plans from
+the OBSERVED state. `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractor (`tmct index`, feeding
+`buildEntities` in `graph-build.mjs`) SHIPPED 2026-07-24 (tmct 3.0.0) — Track 5's re-index
+dependency is met for the milestone's JS fixture. What remains here is wiring the re-index call
+into the plan-act-verify loop itself: after each step's verification tiers (§3.5) pass, invoke
+`tmct index` (or the equivalent library call) against the fixture, and feed the fresh graph back
+into the next step's planning. That wiring, not the extractor, is this stage's remaining work.
+
+### 3.7 First end-to-end milestone (small enough to demo)
+
+**Status: the fixture is shipped; the two-step refactor through it is proposed.** The fixture
+(`examples/tiny-webapp-src/` and its two `callsSymbol` edges into `parseRow`) shipped with the
+repo-index branch, proven by `test/index/example-fixtures.test.mjs`. The milestone itself —
+planning, materialising, and verifying a refactor through it — remains this section's open work.
+
+**A planned two-step refactor on a small JS fixture repo, materialised through the JS adaptor,
+verified by the fixture's own test suite, graph re-indexed between steps.** The fixture is
+`examples/tiny-webapp-src/` (5 plain JS modules, no npm dependency, its own `node --test` suite):
+step 1 **rename** `parseRow` (`lib/parse.mjs`), which has exactly two call sites — `lib/store.mjs`'s
+`loadRows` and `app.mjs`'s `previewFirstRow`, confirmed as the graph's two `callsSymbol` edges into
+it by `test/index/example-fixtures.test.mjs`; step 2 **move** it to a sibling module, importers
+updated. The demo artifact is the plan receipt, `tmct plan`-style: the goal predicate, each
+step's operator, its checked preconditions, its declared vs observed graph delta, and the tier
+results — ending with the fixture suite green and the graph's answer to "where is `parseRow`
+defined" reflecting the move. Exit bar: byte-deterministic re-run (same fixture, same catalogue,
+same plan, same edits), honest miss demonstrated on a poisoned variant (a collision that fails
+rename's precondition), and one mid-plan drift demonstrated and caught by tier 1.
+
+Staging within the milestone: (i) effect vocabulary + canonical state key; (ii) catalogue of
+two operators as taught families; (iii) planner goal predicates; (iv) JS adaptor for those two
+operators; (v) verification tiers 0-3 on the fixture; (vi) re-index via the ported JS
+extractor; (vii) the receipt. Each is separately testable; none touches tmct's own product
+`dependencies`.
+
+---
+
+## 4. The survey — fifty years of non-LLM program generation and transformation
+
+This section covers what each family does, where it went, and which historical stalls are
+revivable now that coding assistants and abundant compute can author and curate the rule bases,
+oracles, and corpora that were the bottleneck. That third question is the one this survey exists
+to answer. Bibliography in §7.
+
+### 4.1 Transformational programming (1970s-90s)
+
+Burstall & Darlington (1977) refined clear specifications into efficient programs via
+meaning-preserving rewrite rules plus strategies guiding their application. CIP (Munich,
+1985) built an entire wide-spectrum language around the idea. Draco (Neighbors, 1980) organized
+it by DOMAIN: a library of domain languages and transformation catalogues, reuse through
+refinement. KIDS and Specware (Kestrel) mechanized algorithm design from algebraic
+specifications; Specware still exists. The Programmer's Apprentice (Rich & Waters, MIT,
+1976-91) represented programs in a language-independent **plan calculus** over a curated
+library of clichés — the closest historical ancestor of Track 5's language-neutral operator
+layer. **Why it stalled:** every system needed a hand-authored knowledge base (rules, domain
+theories, cliché libraries) whose construction cost outran its payoff — the knowledge-
+acquisition bottleneck, named as such at the time — plus search guidance that only experts
+could supply. **Revivability: high, and it is the thesis of this plan.** The artifacts these
+systems starved for (catalogues, preconditions, domain theories) are exactly what assistants
+now author cheaply offline, and what a deterministic engine can execute exactly as these
+systems intended. The plan calculus's language-independence + per-language materialisation is
+Track 5's architecture, re-based on a graph the repo already ships.
+
+### 4.2 Deductive and planning-based synthesis (1969-)
+
+Green (1969) framed synthesis as theorem proving; Manna & Waldinger (1980) made it a deductive
+tableau where the proof's constructive content is the program. **Why it stalled:** proof burden
+and limited automation; it survives where solvers got strong — Leon, Synquid (Polikarpova
+2016), Suslik for heap programs. **Revivability: moderate, indirect.** tmct should not prove
+programs; it should keep the family's real bequest, the artifact-as-receipt: every Track 5 plan
+carries its deduction (preconditions checked, effects declared) the way `tmct plan` already
+carries proofs. Planning-based synthesis proper (actions with preconditions/effects over
+states) is not stalled at all — it is tmct's shipped Hanoi lane, and Track 5 applies it to code
+states.
+
+### 4.3 Term rewriting and transformation languages (1980s-)
+
+ASF+SDF, TXL (Cordy, 1991), Stratego/XT → Spoofax (Visser, 2008-; documentation actively
+maintained through 2025), Rascal (Klint et al., 2009-). Programs are terms; transformations
+are rewrite rules under explicit strategies. **Where it lives today:** language workbenches,
+DSL engineering, research infrastructure — never mass adoption, because each language needed a
+grammar and each task a rule set, all hand-authored. **Revivability: high, largely already
+happening under a different name.** tree-sitter amortized the grammar cost across languages
+once; ast-grep (§4.4) is strategic term rewriting reborn on top of it, with agents now writing
+the rules. For tmct the lesson is architectural: rules + strategies separated, rules as data —
+which is what taught action families already are.
+
+### 4.4 Semantic patches and codemods (2006-) — the family that never stalled
+
+Coccinelle (Padioleau et al., 2008) applies SmPL semantic patches across the Linux kernel to
+this day — C-only, but the proof that a closed patch language plus a deterministic engine
+scales to millions of lines. comby (Van Tonder & Le Goues, 2019): language-neutral structural
+matching, no per-language parser, at the cost of syntax awareness. ast-grep: multi-language
+AST pattern matching/rewriting via tree-sitter, Rust, repo-scale fast; MIT-licensed as of
+2026; used by CodeRabbit, Vercel Turbo, Vue tooling. jscodeshift (2015, JS-only) and its 2026
+successor JSSG (JavaScript ast-grep). OpenRewrite: **Lossless Semantic Trees** — type-attributed,
+format-preserving — and a 10,000+ recipe library across 10+ languages (Java-centric,
+expanding); recipes are deterministic and repeatable by design; per-language LSTs, not
+language-neutral. Language-neutral vs per-language, plainly: comby is neutral (textual-
+structural), ast-grep is multi-language via per-grammar tree-sitter, Coccinelle/jscodeshift are
+single-language, OpenRewrite is per-language with deep semantics. **This family is today's
+industrially winning non-LLM transformation technology**, and its July-2026 state (§4.11) is
+the strongest external validation of tmct's constitution available.
+
+### 4.5 Refactoring theory (1991-)
+
+Griswold (1991) automated meaning-preserving restructuring; Opdyke (1992) defined refactorings
+as operations with **behavior-preservation preconditions** — some undecidable in general,
+checked conservatively; Fowler (1999) catalogued them into the vocabulary every IDE ships.
+**Where it lives:** every IDE's rename/extract/move, executed deterministically millions of
+times a day — the quiet, total victory of non-LLM transformation. **Revivability: not needed;
+adoption is the point.** Track 5's catalogue (§3.2) IS Opdyke's preconditions re-expressed as
+graph predicates in taught action families.
+
+### 4.6 Graph rewriting on program graphs (1990s-)
+
+PROGRES, GrGen.NET, and the plan calculus treated programs as graphs and transformations as
+graph rewrite rules with application conditions. **Why it stalled:** schema and rule authoring
+cost, and competition from tree-based tools closer to source text. **Revivability: high for
+tmct specifically** — tmct already owns an OWL-typed program graph and queries it; Track 5's
+effects-as-graph-deltas is graph rewriting with the schema cost already paid by
+`tmct-core.ttl`.
+
+### 4.7 E-graphs and equality saturation (2009-) — an open frontier
+
+Peggy (Tate et al., 2009) introduced equality saturation for optimization; egg (Willsey et
+al., POPL 2021) made e-graphs fast and extensible; egglog (Zhang et al., PLDI 2023) unified
+them with Datalog. Ruler (Nandi et al., OOPSLA 2021) and Enumo (OOPSLA 2023) **infer rewrite
+rules automatically** — the rule base authored by search itself, validated by SMT/fuzzing:
+5.8× smaller rulesets 25× faster than the CVC4-based approach, matching domain experts in an
+end-to-end study. 2025-26: DialEgg (CGO 2025) drives MLIR optimization dialect-agnostically
+through egglog; contextual/relational equality saturation extends conditioning on term
+position; egglog runs inside industrial mathematical-optimization tooling (JijModeling, 2026).
+**Never stalled — currently compounding.** For Track 5: the equivalence structure for both
+plan-state merging and adaptor variation (§3.3, §3.4a), and Ruler's pattern (rules inferred,
+solver-validated, human-reviewed) is a second non-assistant route to growing the operator
+catalogue.
+
+### 4.8 Superoptimization and solver-aided synthesis (1987-)
+
+Massalin (1987) brute-forced shortest instruction sequences; STOKE (Schkufza et al., 2013)
+made the search stochastic; Souper (Sasnauskas et al., 2017) synthesizes LLVM peephole
+optimizations with an SMT verifier. Sketch (Solar-Lezama, 2006) and Rosette (Torlak & Bodik,
+2013) let a human write the skeleton and a solver fill holes — alive and well (FPGA technology
+mapping via sketches, 2024). **Why the pure-search end stalled:** exponential spaces and
+verification cost at scale. **Revivability: in progress externally** — 2026 work uses LLMs
+offline to generalize Souper-style peepholes and to synthesize equality-saturation strategies,
+with solvers still the gate: the author/verify split again. For tmct the transferable posture
+is candidate-generation-plus-trusted-verifier, which Track 1 already ships.
+
+### 4.9 PBE, APR, SBSE, and semantic diff (supporting families)
+
+FlashFill (Gulwani, 2011) and PROSE: version-space algebras over closed DSLs, shipped to
+hundreds of millions of Excel users — the strongest deployment proof that closed-grammar
+synthesis works when the domain is right. APR: GenProg (2009, genetic), PAR/TBar (2013/2019,
+closed template catalogues from human fixes), Nopol (SMT for conditionals); overfitting named
+and measured (Qi et al., 2015; Smith et al., 2015); random search competitive with genetic (Qi
+et al., 2014) — the space definition matters more than the strategy. The field's current LLM
+tilt does not retire the template catalogues: TBar remains the reference baseline. SBSE/genetic
+improvement: GIN v2 and PyGGI 2.0 keep language-independent mutation search alive;
+refactoring-as-search has industrial case studies (ToSEM 2016). Semantic diff: GumTree (Falleri
+et al., 2014; scaled and improved ICSE 2024), Difftastic, diffsitter, RefactoringMiner-based AST
+diffing (ToSEM 2024) — instrumentation for Track 5's tier-1 declared-vs-observed check (§3.5).
+
+### 4.10 The revivable dead-ends, summarized
+
+One stall recurs across §4.1, §4.3, §4.6, and APR's template family: **the knowledge was the
+bottleneck, not the engine.** Transformation catalogues, domain theories, cliché libraries,
+grammars, fix templates, oracles, labeled corpora: all hand-authored, all expensive, each
+system dying or plateauing when its knowledge base stopped growing. That cost has now
+collapsed: coding assistants author rules/recipes/operators offline at marginal cost, and
+compute makes wide validation (fuzzing, SMT, test sweeps, Ruler-style rule inference) cheap.
+The engines these fields built (deterministic, auditable, replayable) were never the weak
+part. The revival move is therefore: keep the engines' discipline, refill their knowledge
+bases with assistant-authored, human-reviewed, statically-committed data. That is tmct's
+existing corpus posture applied to code, and Track 5 is its concrete instance.
+
+### 4.11 The frontier as of July 2026
+
+- **Moderne/OpenRewrite agent-assisted recipe authoring (2026):** CLI-embedded skills let
+  Claude Code, Cursor, Copilot, Codex and others author deterministic OpenRewrite recipes; the
+  agent proposes, the human guides, the deterministic engine executes at estate scale. Their
+  own framing: probabilistic assistants suggest file-by-file, deterministic recipes land
+  identically across 100,000 repos.
+- **Codemod platform (2026):** campaigns orchestrating multi-step deterministic
+  transformations; `npx codemod ai` has an agent write the ast-grep YAML rule, the
+  deterministic runtime executes and validates; ESLint's own migrations now ship as codemods
+  (ESLint blog, July 2026).
+- **ReaComp (arXiv, May 2026):** compiles LLM reasoning traces offline into standalone
+  symbolic PBE solvers — no LLM calls at test time, deterministic, 91.3% on PBEBench-Lite,
+  beating LLMs with test-time scaling. The clearest published instance of "assistant authors
+  the solver, product runs without it."
+- **Equality saturation:** DialEgg (CGO 2025), contextual equality saturation, egglog in
+  industrial optimization tooling (2026), LLM-guided strategy synthesis for equality
+  saturation (arXiv 2026) — strategies proposed offline, saturation engine deterministic.
+- **Peephole generalization (arXiv 2026):** LLMs generalize solver-verified superoptimizer
+  rewrites into reusable compiler rules — again offline authoring, solver gate.
+
+The pattern across all five: the industry is converging on the split tmct adopted by
+constitution — models author and curate offline; deterministic, reviewable engines execute in
+the product. tmct is not swimming against the current here; it is early to the destination.
+
+---
+
+## 5. The sandbox, tmct's slice
+
+Track 1 and Track 5's planning/enumeration need no sandbox at all — candidates are data through
+trusted code, and plan search is pure projection. Track 5's verify stage (§3.5, tiers 2-3) is
+the one part of this doc that executes real code: the fixture's own test suite, via its own
+runner, in a subprocess. That is the mildest form of an execution surface — no browser, no new
+dependency, just a subprocess running `node --test` (and `python3 -m unittest`, once a Python
+fixture joins the milestone) against a fixture repo tmct already ships. Tracks 2-4's need for a
+full browser sandbox (Playwright, running arbitrary candidate JS and rendering arbitrary
+candidate DOM/CSS) moved to seonix with those tracks — see `PLAN_CODE_SYNTHESIS.md`.
+
+## 6. Risk profile
+
+Every built-in registry capability reads the graph (`readOnly: true`, hardcoded). Taught action
+families cross that line for world state only, never auto-dispatched. Track 5 is the first
+capability category in tmct that generates or MODIFIES a source artifact — a first for the
+product's ethos, not an incremental feature.
+
+| Track | Scope | Sandbox | New surface |
+|---|---|---|---|
+| 1 | shipped 2026-07-08 | none | none (data through trusted code) |
+| 5 | plan + materialise + verify + re-index over a FIXTURE repo | subprocess test runs | first source-editing capability (adaptor); depends on `archive/PLAN_REPO_INDEX.md`'s JS extractor (now shipped) |
+
+Tracks 2-4's risk profiles (candidate JS/HTML/CSS execution in Playwright, edits to real
+existing functions) moved to seonix with those tracks; see `PLAN_CODE_SYNTHESIS.md`.
+
+Risks carried forward, still live for Track 5: search spaces grow with every catalogue entry
+added, fastest where verification is fuzziest; no LLM in any search loop, even offline
+authoring aids, because a harness that ships artifacts into `src/` is transitively the product
+path; determinism pinned (one toolchain, one test runner, no seeded randomness anywhere in the
+loop); every output as auditable as hand-written code, reviewed like any PR.
+
+## 7. Bibliography
+
+Historical families:
+- Burstall & Darlington, "A Transformation System for Developing Recursive Programs", JACM 1977. https://dl.acm.org/doi/10.1145/321992.321996
+- Bauer et al., The Munich Project CIP, LNCS 183, 1985.
+- Neighbors, "The Draco Approach to Constructing Software from Reusable Components", 1984.
+- Smith, "KIDS: A Semiautomatic Program Development System", 1990; Kestrel Specware. https://www.slideserve.com/mya/mechanized-algorithm-design-in-kids-specware-and-planware
+- Rich & Waters, "The Programmer's Apprentice: A Research Overview", IEEE Computer 1988. https://dspace.mit.edu/handle/1721.1/6054
+- Green, "Application of Theorem Proving to Problem Solving", IJCAI 1969.
+- Manna & Waldinger, "A Deductive Approach to Program Synthesis", TOPLAS 1980. https://dl.acm.org/doi/10.1145/357084.357090
+- Cordy, TXL, 1991-; Visser, Stratego/XT 0.17, 2008 (Spoofax docs maintained through 2025). https://spoofax.dev/background/stratego/
+- Klint, van der Storm, Vinju, "RASCAL: A DSL for Source Code Analysis and Manipulation", SCAM 2009. https://www.researchgate.net/publication/220703689
+- Opdyke, "Refactoring Object-Oriented Frameworks", PhD thesis, UIUC 1992. https://www.laputan.org/pub/papers/opdyke-thesis.pdf
+- Griswold, "Program Restructuring as an Aid to Software Maintenance", PhD thesis, UW 1991.
+- Fowler, Refactoring, 1999.
+- Massalin, "Superoptimizer: A Look at the Smallest Program", ASPLOS 1987.
+- Schkufza, Sharma, Aiken, "Stochastic Superoptimization" (STOKE), ASPLOS 2013.
+- Sasnauskas et al., "Souper: A Synthesizing Superoptimizer", 2017. https://arxiv.org/pdf/1711.04422
+- Solar-Lezama, Sketch, 2006; Torlak & Bodik, Rosette, 2013. https://docs.racket-lang.org/rosette-guide/ch_essentials.html
+- Polikarpova et al., Synquid, PLDI 2016; Leon deductive synthesis/repair. https://arxiv.org/pdf/1611.07625
+- Gulwani, "Automating String Processing in Spreadsheets" (FlashFill), POPL 2011; Microsoft PROSE.
+- Weimer et al., GenProg, ICSE 2009; Kim et al., PAR, ICSE 2013; Liu et al., "TBar: Revisiting Template-based Automated Program Repair", ISSTA 2019. https://dl.acm.org/doi/10.1145/3293882.3330577
+- Qi et al., "The Strength of Random Search on Automated Program Repair", ICSE 2014; Qi et al., 2015 and Smith et al., 2015 (patch overfitting); Xin & Reiss, DiffTGen, ISSTA 2017.
+- Xuan et al., Nopol (SMT-based condition repair), TSE 2016.
+- Zhang & Shasha, tree edit distance, SIAM J. Comput. 1989; DeMillo, Lipton & Sayward, mutation testing, 1978; Budd & Angluin, equivalent mutants, 1982.
+- Falleri et al., GumTree, ASE 2014; "Fine-grained, Accurate and Scalable Source Differencing", ICSE 2024. https://dl.acm.org/doi/10.1145/3597503.3639148
+- AST diff benchmark and refactoring-aware differ, ToSEM 2024. https://dl.acm.org/doi/10.1145/3696002
+- Erol, Hendler & Nau, HTN planning, 1994; Cheeseman, Kanefsky & Taylor, phase transitions, IJCAI 1991; Acar et al., self-adjusting computation, 2002; Hammer et al., Adapton, PLDI 2014.
+- Padioleau et al., "Documenting and Automating Collateral Evolutions in Linux Device Drivers" (Coccinelle), EuroSys 2008.
+- Van Tonder & Le Goues, "Lightweight Multi-language Syntax Transformation with Parser Parsing Combinators" (comby), PLDI 2019. https://comby.dev
+
+E-graphs and rule inference:
+- Tate et al., "Equality Saturation: A New Approach to Optimization" (Peggy), POPL 2009.
+- Willsey et al., "egg: Fast and Extensible Equality Saturation", POPL 2021. https://dl.acm.org/doi/10.1145/3434304
+- Zhang et al., "Better Together: Unifying Datalog and Equality Saturation" (egglog), PLDI 2023. https://dl.acm.org/doi/abs/10.1145/3591239
+- Nandi et al., "Rewrite Rule Inference Using Equality Saturation" (Ruler), OOPSLA 2021. https://arxiv.org/abs/2108.10436 — and Enumo, OOPSLA 2023.
+- "DialEgg: Dialect-Agnostic MLIR Optimizer using Equality Saturation with Egglog", CGO 2025. https://dl.acm.org/doi/abs/10.1145/3696443.3708957
+- Contextual/relational equality saturation, e-graphs community, 2025. https://egraphs.org/meeting/2025-08-21-dialegg
+
+The 2025-2026 frontier:
+- Moderne, "AI-Powered Recipe Authoring with Agent Skills and OpenRewrite", 2026. https://moderne.ai/blog/ai-powered-openrewrite-recipe-authoring-with-claude-skill
+- OpenRewrite docs: Lossless Semantic Trees; Recipes. https://docs.openrewrite.org/concepts-and-explanations/lossless-semantic-trees
+- "The Open Source, Deterministic Engine Maintaining Java's Next 30 Years", JAVAPRO, 2026-02-04. https://javapro.io/2026/02/04/the-open-source-deterministic-engine-maintaining-javas-next-30-years/
+- Codemod platform + JSSG (JavaScript ast-grep), 2026. https://github.com/codemod/codemod ; https://codemod.com/blog/jssg
+- ESLint, "Automating ESLint migrations with Codemod", 2026-07. https://eslint.org/blog/2026/07/eslint-codemod-migrations/
+- ast-grep tool comparison. https://ast-grep.github.io/advanced/tool-comparison.html
+- "ReaComp: Compiling LLM Reasoning into Symbolic Solvers for Efficient Program Synthesis", arXiv 2605.05485, 2026. https://arxiv.org/abs/2605.05485
+- "LLM-Guided Strategy Synthesis for Scalable Equality Saturation", arXiv 2604.17364, 2026. https://arxiv.org/pdf/2604.17364
+- "Leveraging Large Language Models for Generalizing Peephole Optimizations", arXiv 2603.18477, 2026. https://arxiv.org/pdf/2603.18477
+- Gin v2 (genetic improvement microframework); PyGGI 2.0, ESEC/FSE 2019. https://github.com/gintool/gin
+
+### Critical files for implementation
+
+- <repo-checkout>/src/domain/planning.mjs
+- <repo-checkout>/src/domain/domain.mjs
+- <repo-checkout>/src/adapters/memory/core.mjs
+- <repo-checkout>/src/domain/router/registry.mjs
+- <repo-checkout>/src/domain/router/goal-reasoner.mjs
+- <repo-checkout>/src/domain/router/planner.mjs
+- <repo-checkout>/src/domain/router/resolver.mjs
+- <repo-checkout>/src/domain/router/set-algebra.mjs
+- <repo-checkout>/src/domain/router/taught.mjs
+- <repo-checkout>/src/domain/codegraph.mjs
+- <repo-checkout>/src/domain/ask.mjs
+- <repo-checkout>/src/adapters/repository-interface.mjs
+- <repo-checkout>/src/adapters/graph-build.mjs
+- <repo-checkout>/src/adapters/source-slice.mjs
+- <repo-checkout>/src/domain/interpret/normalize.mjs
+- <repo-checkout>/test-benchmarks/synthbench/rules/oracle.mjs
+- <repo-checkout>/test-benchmarks/agentbench/grade.mjs
+- <repo-checkout>/test/corpus/planning.jsonl
+- <repo-checkout>/archive/PLAN_REPO_INDEX.md

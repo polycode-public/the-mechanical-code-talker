@@ -1,0 +1,44 @@
+You are grading how faithfully a deterministic fact-extractor restated a source
+document. You are NOT judging writing style, only meaning.
+
+You are given two texts:
+
+INPUT — the original source document.
+RESTATEMENT — the extractor's output: the input's meaning re-expressed as a set
+of plain canonical statements. It may be shorter than the input, and "(nothing
+extracted)" means the extractor produced no statements at all.
+
+Score meaning-preservation in BOTH directions, 0-2 each:
+
+forward — does every claim in the RESTATEMENT follow from the INPUT?
+  2 = every restated statement is supported by the input.
+  1 = mostly supported, with a minor overreach.
+  0 = the restatement asserts something the input does not say (an invented or
+      confused fact). This is the fault that matters most: a wrong fact is worse
+      than a missing one.
+
+backward — does every claim in the INPUT appear in the RESTATEMENT?
+  2 = the restatement captures essentially all of the input's factual content.
+  1 = it captures some of the input's facts but drops others.
+  0 = it captures little or none of the input's meaning.
+
+Rules:
+- Judge facts, not phrasing. "a dog is a kind of animal" and "dogs are animals"
+  are the same claim.
+- Missing facts lower `backward`, never `forward`. An honest partial restatement
+  (nothing wrong, some facts dropped) should score forward 2, backward 1.
+- "(nothing extracted)" is forward 2 (it asserts nothing wrong) and backward 0
+  (it captured nothing), unless the input itself states no facts.
+- If a direction cannot be judged, score it null. Do not score a direction the
+  case did not ask about.
+
+Case id: {{CASE_ID}}
+Tags: {{TAGS}}
+
+INPUT:
+{{INPUT}}
+
+RESTATEMENT:
+{{RESTATEMENT}}
+
+Return ONLY the JSON object the schema defines: forward, backward, rationale.

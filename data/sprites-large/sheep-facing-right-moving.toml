@@ -1,0 +1,72 @@
+# sheep-facing-right-moving — sheep-facing-left-moving.toml's mid-stride
+# profile mirrored across the canvas midline (every shape wrapped in one
+# translate-then-flip group), the same way sheep-facing-right.toml mirrors
+# its own plain left twin.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored.
+classes = ["sheep"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="sheep-facing-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g stroke="#3a352f" stroke-width="1.5" stroke-linecap="round">
+      <line x1="9" y1="17" x2="10.4" y2="19.4"/>
+      <line x1="11.4" y1="17.6" x2="12.8" y2="20"/>
+      <line x1="16.4" y1="18.8" x2="15.2" y2="22.2"/>
+      <line x1="18.8" y1="18.2" x2="17.6" y2="21.6"/>
+    </g>
+    <g fill="url(#sheep-facing-right-moving-fill)">
+      <circle cx="11.2" cy="13" r="3.4"/>
+      <circle cx="15" cy="11.4" r="3.8"/>
+      <circle cx="18.5" cy="12.8" r="3"/>
+      <circle cx="12.8" cy="15.8" r="3.6"/>
+      <circle cx="17" cy="15.8" r="3.2"/>
+      <circle cx="21" cy="14" r="1.2"/>
+    </g>
+    <g stroke="color-mix(in srgb, currentColor 40%, black)" stroke-width="0.4" opacity="0.35" fill="none" stroke-linecap="round">
+      <path d="M12 10.8 C12.6 10.2 13.4 10.2 14 10.6"/>
+      <path d="M16 9.4 C16.6 9 17.4 9.1 17.9 9.6"/>
+      <path d="M18.6 11.4 C19.1 11 19.8 11.1 20.2 11.6"/>
+    </g>
+    <ellipse cx="5.8" cy="9.4" rx="0.75" ry="1.05" fill="#3a352f" transform="rotate(15 5.8 9.4)"/>
+    <ellipse cx="2.2" cy="9.8" rx="1.1" ry="1.5" fill="#3a352f" transform="rotate(-20 2.2 9.8)"/>
+    <ellipse cx="4" cy="13" rx="2.6" ry="2.2" fill="#3a352f"/>
+    <ellipse cx="15" cy="9.6" rx="2.3" ry="1.4" fill="#ffffff" opacity="0.3"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# sheep-facing-left-moving.toml's anchor reflected across the canvas
+# midline (cx = 24 - 4), same as sheep-facing-right.toml's own plain twin.
+[face]
+cx = 20
+cy = 13
+scale = 1.56
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -77,6 +77,30 @@ test("ingestSchemaDocs: appends one SchemaClass + one SchemaPredicate individual
   const cochangeDoc = schemaPredicates.find((i) => i.label === "cochange");
   assert.ok(cochangeDoc, "cochange must be queryable by its human-facing kind name, not just its raw prop token");
   assert.equal(cochangeDoc.attributes.find((a) => a.key === "token").value, "mgx:changeCoupledWith");
+  // the provider-declared kinds are documented too, so "what does serves mean"
+  // answers from the schema even in a graph that carries no such edge
+  for (const [kind, token] of [["serves", "mgx:serves"], ["denotes", "mgx:denotes"]]) {
+    const doc = schemaPredicates.find((i) => i.label === kind);
+    assert.ok(doc, `${kind} is queryable by its human-facing kind name`);
+    assert.equal(doc.attributes.find((a) => a.key === "token").value, token);
+  }
+});
+
+test("every schema individual publishes its definition under the mgx:schemaDoc prop, which is what the meta lane keys on", () => {
+  const e = fakeEntities();
+  ingestSchemaDocs(e);
+  const vocabNodes = e.individuals.filter((i) => i.class === "SchemaClass" || i.class === "SchemaPredicate");
+  assert.equal(vocabNodes.length, CLASS_DOCS.length + PREDICATE_DOCS.length);
+  for (const node of vocabNodes) {
+    const def = node.attributes.find((a) => a.prop === "mgx:schemaDoc");
+    assert.ok(def && def.value, `${node.label} publishes no mgx:schemaDoc definition`);
+  }
+  // The plain `doc` KEY is shared with a code entity's docstring (seon:hasDoc),
+  // so the prop is the part that identifies a vocabulary node. A definition-shaped
+  // attribute is the gate, not the class name — which is how a graph can declare
+  // its own documented individual class and have "what is X" answer for it.
+  const codeEntity = { attributes: [{ prop: "seon:hasDoc", key: "doc", value: "Render the widget." }] };
+  assert.equal(codeEntity.attributes.some((a) => a.prop === "mgx:schemaDoc"), false);
 });
 
 test("ingestSchemaDocs: real code individuals are never displaced, and the real Module individual is untouched", () => {

@@ -1,4 +1,4 @@
-// chatbench-graded tests — the graded benchmark's harness (chatbench/GRADED.md):
+// chatbench-graded tests — the graded benchmark's harness (test-benchmarks/chatbench/GRADED.md):
 // (a) graded-pool.jsonl lint (schema, unique ids, grade/construction enums,
 //     cell coverage matching GRADED_MATRIX, frontier discipline);
 // (b) the sampling machinery (stratified seeded draws, the dual draw's
@@ -9,7 +9,7 @@
 //     subsets replayed through the REAL engine as deterministic, judge-free
 //     unit tests (grade promotion per the operator: reliably-passing lower
 //     grades become always-run tests). Promoting a future grade = adding its
-//     band name to the PROMOTED_GRADES array in chatbench/graded.mjs.
+//     band name to the PROMOTED_GRADES array in test-benchmarks/chatbench/graded.mjs.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -22,17 +22,17 @@ import {
   computeAgreement, renderAgreementTable, gradeReliability, ladderGate,
   gradedRollup, isProductiveRow, isTemplateLane, bandScore, templateLaneLint,
   timingBucket, timingRollup, renderTimings,
-} from "../../chatbench/graded.mjs";
+} from "../../test-benchmarks/chatbench/graded.mjs";
 import {
   parseCases, summarizeTier1, runTurnsCase, runSessionCase, createRunnerDeps,
   runGradedDraw,
-} from "../../chatbench/run.mjs";
+} from "../../test-benchmarks/chatbench/run.mjs";
 
 // The per-run sample size a cell draws: its CELL_SAMPLE override (census cells,
 // grown for dual-draw reliability) else the MIN_PER_CELL floor.
 const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 
-// chatbench/graded-pool.jsonl is the smaller GO-TO default (138 cases,
+// test-benchmarks/chatbench/graded-pool.jsonl is the smaller GO-TO default (138 cases,
 // started at 10/CEFR-grade plus the folded-in frozen v1 core, grown since via
 // append-only construction-coverage additions — SKILL_BENCHMARK_CEFR_ENGLISH.md
 // §1). The tests below validate the
@@ -40,7 +40,7 @@ const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 // the stratified-sampling algorithm's behavior against a real ~10x-run-size
 // pool) — those invariants apply to the untouched full pool, preserved at
 // graded-pool-max.jsonl, not the go-to default.
-const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool-max.jsonl", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/graded-pool-max.jsonl", import.meta.url));
 
 const poolText = await readFile(POOL_FILE, "utf8");
 const { cases: pool, errors: poolErrors } = parseCases(poolText);

@@ -23,13 +23,19 @@
 //   3. sentence fragment     — bare term is >= 4 underscore-words on EITHER
 //                              endpoint ("taloned_grip_of_owl",
 //                              "worlds_largest_interconnected_network_of_networks")
-//   4. definitional phrase   — /r/DefinedAs whose object is >= 3 words
+//   4. trailing-preposition fragment — bare term is a 2-3 underscore-word
+//                              endpoint whose LAST word is a preposition
+//                              ("pot_in") — a truncated crowd-sourced
+//                              prepositional-phrase fragment, not a concept
+//   5. known misspelling     — bare endpoint is in a small, hand-curated
+//                              KNOWN_MISSPELLINGS set ("vessle")
+//   6. definitional phrase   — /r/DefinedAs whose object is >= 3 words
 //                              (real DefinedAs is a synonym: cpu->processor)
-//   5. opinion object        — /r/IsA or /r/DefinedAs whose object is one of a
+//   7. opinion object        — /r/IsA or /r/DefinedAs whose object is one of a
 //                              small, evidence-based OPINION set (adjectives /
 //                              value words that never name a class)
 //
-// Rules 1-3 apply to every relation (they only ever remove junk); 4-5 are the
+// Rules 1-5 apply to every relation (they only ever remove junk); 6-7 are the
 // definitional band the sims flagged. Stats land on stderr; JSONL on stdout.
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -46,6 +52,19 @@ export const OPINION_OBJECTS = new Set([
   "elegance", "evil", "gloom", "unreality", "universalism", "dumb", "free", "junk",
 ]);
 
+// A short, closed preposition set. A 2-3 underscore-word endpoint ending in
+// one of these ("pot_in") is a truncated crowd-sourced prepositional-phrase
+// fragment, not a standalone concept.
+const TRAILING_PREPOSITIONS = new Set(["in", "on", "at", "of", "for", "with", "to", "from", "by"]);
+
+// Evidence-based: crowd-sourced misspellings seen in the committed slice.
+// Kept explicit (not a spellcheck dependency — wink-nlp carries no spellcheck
+// signal, so a general heuristic here would risk cutting a legitimate but
+// unfamiliar word) so it never cuts anything but a confirmed typo.
+export const KNOWN_MISSPELLINGS = new Set([
+  "vessle",
+]);
+
 /** Why this row is noise, or null to keep it. Pure function of the row shape. */
 export function cutReason(row) {
   const s = bareTerm(row.start);
@@ -53,7 +72,12 @@ export function cutReason(row) {
   for (const t of [s, e]) {
     if (/^\d+$/.test(t)) return "numeric-endpoint";
     if (t.length <= 1) return "single-char-endpoint";
-    if (words(t) >= 4) return "sentence-fragment";
+    const parts = t.split("_").filter(Boolean);
+    if (parts.length >= 4) return "sentence-fragment";
+    if (parts.length >= 2 && parts.length <= 3 && TRAILING_PREPOSITIONS.has(parts[parts.length - 1])) {
+      return "trailing-preposition-fragment";
+    }
+    if (KNOWN_MISSPELLINGS.has(t)) return "known-misspelling";
   }
   if (row.rel === "/r/DefinedAs" && words(e) >= 3) return "definitional-phrase";
   if ((row.rel === "/r/IsA" || row.rel === "/r/DefinedAs") && OPINION_OBJECTS.has(e)) return "opinion-object";

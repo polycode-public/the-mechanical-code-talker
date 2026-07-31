@@ -1,4 +1,6 @@
-# mountain — jagged snow-capped peaks at the sprite tier.
+# mountain — jagged snow-capped peaks at the sprite tier, each peak
+# split into a lit and a shadowed face so the range reads as faceted
+# rock rather than a flat zigzag silhouette at 40px.
 classes = ["mountain"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -9,6 +11,10 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M2 20 L8.4 8.6 L12 14 L15.4 7 L22 20 Z" fill="url(#mountain-wash)" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M2 20 L8.4 8.6 L8.4 20 Z" fill="#ffffff" opacity="0.12"/>
+  <path d="M8.4 8.6 L12 14 L12 20 L8.4 20 Z" fill="#000000" opacity="0.13"/>
+  <path d="M12 14 L15.4 7 L15.4 20 L12 20 Z" fill="#ffffff" opacity="0.1"/>
+  <path d="M15.4 7 L22 20 L15.4 20 Z" fill="#000000" opacity="0.1"/>
   <path d="M15.4 7 L17.6 11 L13.6 11.4 Z" fill="#ffffff" opacity="0.55"/>
   <path d="M8.4 8.6 L9.8 11 L7 11.4 Z" fill="#ffffff" opacity="0.5"/>
   <path d="M4 20 L8.4 11.6" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>

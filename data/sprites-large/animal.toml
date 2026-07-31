@@ -1,9 +1,12 @@
 # animal — the sprite-tier root fallback, deliberately still the plainest
 # shape in the set (per the icon tier's own convention: an unregistered
 # species should read as "some animal", never suggest one the taxonomy
-# never named) — just a gradient body and two soft highlight patches rather
-# than any material, since a fallback with no known species has no known
-# material either.
+# never named) — a gradient body, four legs, two rounded ears, a short tail
+# and a muzzle bump so it reads as a generic quadruped rather than a
+# blob-on-a-blob, but no fixed markings: a fallback with no known species
+# gets no species-specific colour, coat pattern or material either. The eye
+# is fixed near-black the way every creature in this pack fixes its own —
+# an anatomical feature, not an identity marking.
 classes = ["animal"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,13 +17,21 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <ellipse cx="12" cy="13" rx="7" ry="4.4" fill="url(#animal-fill)"/>
-  <circle cx="12" cy="7" r="3.4" fill="url(#animal-fill)"/>
-  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-    <line x1="7" y1="17" x2="7" y2="21"/>
-    <line x1="17" y1="17" x2="17" y2="21"/>
+  <path d="M5.4 16.6 C3.4 16.2 2.8 18.4 4.6 19 C5 18.1 5.2 17.3 5.4 16.6 Z" fill="url(#animal-fill)"/>
+  <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <line x1="7.4" y1="16.4" x2="7" y2="21.4"/>
+    <line x1="11" y1="17.2" x2="10.8" y2="21.6"/>
+    <line x1="14.4" y1="17.2" x2="14.8" y2="21.6"/>
+    <line x1="17.6" y1="16.4" x2="18.2" y2="21.4"/>
   </g>
-  <ellipse cx="9.4" cy="10.8" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.3"/>
-  <ellipse cx="10.4" cy="5.8" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="12.4" cy="13.6" rx="7" ry="4.6" fill="url(#animal-fill)"/>
+  <circle cx="9.6" cy="7" r="3.2" fill="url(#animal-fill)"/>
+  <ellipse cx="7.4" cy="8.4" rx="1.7" ry="1.3" fill="url(#animal-fill)"/>
+  <path d="M7.2 4.4 C6.2 3 6.4 1.4 7.6 1 C8 2.4 8.2 3.6 8.2 4.8 Z" fill="url(#animal-fill)"/>
+  <path d="M12.2 4.4 C13.2 3 13 1.4 11.8 1 C11.4 2.4 11.2 3.6 11.2 4.8 Z" fill="url(#animal-fill)"/>
+  <circle cx="6.6" cy="8.2" r="0.6" fill="#1c1c1c"/>
+  <circle cx="6.45" cy="7.98" r="0.2" fill="#ffffff" opacity="0.8"/>
+  <ellipse cx="10.4" cy="10.8" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="8.4" cy="5.8" rx="1" ry="0.7" fill="#ffffff" opacity="0.35"/>
 </svg>
 """

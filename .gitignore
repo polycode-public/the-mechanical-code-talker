@@ -57,6 +57,11 @@ tmct.toml
 # ephemerally, so nothing else is ever written under them).
 !test/fixtures/repos/**/tmct.toml
 
+# ...and the bundled examples: each ships a committed tmct.toml carrying
+# [graph] read_only = true, so a plain `tmct chat --repo examples/<x>` reads the
+# committed graph without ever writing a session back into it.
+!examples/**/tmct.toml
+
 # scripts/extract-persona-sources.mjs's own output — a maintainer curation
 # WORKSHEET (candidates for hand-review), regenerated on demand from the two
 # locally-cloned reference repos, never the final committed content itself
@@ -76,17 +81,25 @@ public/ledger.html
 public/plan.html
 public/spider-fly.html
 public/adventure.html
+public/mud.html
 public/chat.html
 public/sprites.html
+public/sprites-adventure-props.html
+public/sprites-person-roles.html
+public/sprites-objects.html
+public/sprites-emotions.html
 public/code.html
 public/ingest.html
+public/research.html
 public/chat-browser.bundle.js
 public/spider-fly-browser.bundle.js
 public/adventure-browser.bundle.js
+public/mud-browser.bundle.js
 public/plan-browser.bundle.js
 public/ledger-browser.bundle.js
 public/sprites-browser.bundle.js
 public/ingest-browser.bundle.js
+public/research-browser.bundle.js
 public/code-explorer.bundle.js
 public/chat-seed.json
 public/reference-pack/
@@ -106,7 +119,7 @@ public/*.br
 # committed — the electron/ shell (main + preload) is the only committed part.
 electron/renderer/
 
-# e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
+# test-e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
 # a human/agent to look at, regenerated fresh on every run, never a golden
 # image compared pixel-to-pixel and never committed.
 .screenshots/

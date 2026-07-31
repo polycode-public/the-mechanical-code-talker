@@ -1,12 +1,16 @@
 # container — the generic fallback for any container with no sprite of
 # its own (see cabinet/portrait for Ashcombe Hall's own two): a solid
-# chest silhouette with a carved lid-seam and a latch highlight.
+# chest silhouette with a carved lid-seam and a latch plate with its own
+# keyhole cut into it, so "container" reads as a locked chest rather than
+# a plain crate.
 classes = ["container"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M3 10 L5 5 H19 L21 10 Z" fill="currentColor"/>
   <rect x="3" y="10" width="18" height="10" rx="1.2" fill="currentColor"/>
-  <rect x="3" y="10" width="18" height="1.6" fill="currentColor" opacity="0.35"/>
-  <rect x="10.6" y="9.2" width="2.8" height="2.6" rx="0.5" fill="currentColor" opacity="0.85"/>
+  <rect x="3" y="10" width="18" height="1.8" fill="color-mix(in srgb, currentColor 70%, black)"/>
+  <rect x="10" y="9" width="4" height="3.2" rx="0.5" fill="color-mix(in srgb, currentColor 55%, black)"/>
+  <circle cx="12" cy="10.4" r="0.55" fill="color-mix(in srgb, currentColor 20%, white)"/>
+  <path d="M11.8 10.9 L12.2 10.9 L12.45 12 L11.55 12 Z" fill="color-mix(in srgb, currentColor 20%, white)"/>
 </svg>
 """

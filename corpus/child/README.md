@@ -20,7 +20,7 @@ Layout (mirrors corpus/reference/):
   budgets, the acceptance metrics, and a sha256 for every emitted file.
 - `LICENSE-NOTICE` — CC-BY-SA 4.0; read it before reusing these files.
 
-47267 terms, 93161 keyed facts. Built 2026-07-18.
+46883 terms, 92638 keyed facts. Built 2026-07-24.
 
 Predicates are already mapped into tmct's vocabulary
 (conceptnet-map.toml): `rdfs:subClassOf`, `mgx:capableOf`,
@@ -63,7 +63,7 @@ acceptance test — the plan's hand-counted baseline drifted once). Numbers belo
 are for this committed pack:
 
 ```
-Measured over this pack: 69620 facts
+Measured over this pack: 69140 facts
   kinds of bird            1881  [abbott's booby, abyssinian woodpecker, acadian flycatcher, accipiter, acorn woodpecker, acridotheres, acrocephalus, actitis, adélie penguin, african black duck, african cuckoo hawk, african finfoot, african fish eagle, african marsh harrier, african penguin, african pygmy goose, african sacred ibis, african skimmer, aix, akiapola au]
   capabilities on birds    71  [bird can attempt to fly, chicken can become food, bird can build nest, bird can call with chirps, bird can chirp, bird can eat grasshopper, bird can experience flight, bird can eye fish, bird can fall from sky, bird can fly, bird can fly high, bird can head south, bird can kill fish, bird can land on beach, bird can land on branch, bird can land on tree, bird can learn to fly, bird can listen to insect, bird can person's pet, bird can pet]
   things that can fly      39  [animals, ants, bat, bats, bats and birds, bee, beetles, bird, butterfly, doves, dragon, dragonfly, flies, frisbee, geese, gnat, goose, helicoptors, hoatzins, insects]

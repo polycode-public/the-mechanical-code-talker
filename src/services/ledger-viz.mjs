@@ -15,13 +15,53 @@
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, countLabel, TOKENS } from "./viz-theme.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
+import { bfsLevels } from "../domain/planning.mjs";
+import { pluralOf } from "../domain/inflect.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const LEDGER_ROW_LIMIT_DEFAULT = 20000;
+
+// The ledger reads as an observability dashboard (dense stat tiles, bar
+// panels, a log-style fact stream) rather than an editorial page, so its
+// chrome runs the system sans everywhere instead of THEME_TOKENS_CSS's
+// serif body face; MONO_STACK still carries every metric, label, and log row.
+const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+
+// This page pins a dark, New-Relic-style dashboard register in BOTH site
+// themes — a deliberate departure from THEME_TOKENS_CSS's light/dark switch,
+// which every other generated page still follows. --taught/--corpus/--entail/
+// --alert stay the shared semantic provenance tokens; here they're pinned to
+// their dark-theme-friendly values, read straight off viz-theme.mjs's own
+// exported TOKENS.dark table so this page's palette can never drift from the
+// one every other generated page's dark mode uses. The tier alphas (.35/.65/1)
+// match TOKENS's own tier scale; the four "soft" tints use higher alphas than
+// THEME_TOKENS_CSS's shared soft tokens on purpose — this dashboard chrome
+// wants a more visible tint against its always-dark background than the
+// light/dark-switching pages need, so those four alphas stay page-specific.
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+const DASH_DARK_CHROME_CSS = (() => {
+  const t = TOKENS.dark;
+  const [taught, corpus, entail] = [hexRgb(t.taught), hexRgb(t.corpus), hexRgb(t.entail)];
+  return `
+  :root { color-scheme: dark; }
+  body {
+    --bg: ${t.bg}; --ink: ${t.ink}; --muted: ${t.muted}; --line: ${t.line}; --card: ${t.card};
+    --taught: ${t.taught}; --corpus: ${t.corpus}; --entail: ${t.entail}; --alert: ${t.alert};
+    --taught-t1: rgba(${taught},.35); --taught-t2: rgba(${taught},.65); --taught-t3: rgba(${taught},1);
+    --corpus-t1: rgba(${corpus},.35); --corpus-t2: rgba(${corpus},.65); --corpus-t3: rgba(${corpus},1);
+    --entail-t1: rgba(${entail},.35); --entail-t2: rgba(${entail},.65); --entail-t3: rgba(${entail},1);
+    --taught-soft: rgba(${taught},.14); --corpus-soft: rgba(${corpus},.14);
+    --entail-soft: rgba(${entail},.16); --alert-soft: rgba(${hexRgb(t.alert)},.16);
+  }
+`;
+})();
 
 /** Read the checked-in browser memory-ask-engine bundle
  *  (`src/surfaces/web/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
@@ -105,13 +145,16 @@ const trustTierFor = (trust) => (trust >= 0.85 ? 3 : trust >= 0.5 ? 2 : 1);
  *  build-demo-site.mjs consumes directly). Returns
  *  { rows, terms, edges, focus, contradictions, worthALook, payload, meta }. */
 export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = LEDGER_ROW_LIMIT_DEFAULT } = {}) {
-  const individuals = payload?.individuals || [];
-  const indById = new Map(individuals.map((i) => [i?.id, i]));
   const factRows = readFactRows(payload);
 
   const rows = factRows.map((r) => {
-    const ind = indById.get(r.id);
-    const createdAt = (ind?.attributes || []).find((a) => a?.key === "createdAt")?.value || "";
+    // A row is now a GROUP of one-or-more per-source assertion records
+    // (PLAN_FACT.md's re-key), so there is no single individual to join
+    // against by r.id any more — r.id is the group's own id, distinct from
+    // every member record's id. The newest assertion's own createdAt is what
+    // "when was this learned" means for a row the ledger already sorts
+    // newest-first.
+    const createdAt = (r.assertions || []).reduce((newest, a) => (a.createdAt > newest ? a.createdAt : newest), "");
     return {
       id: r.id, s: r.subject, p: r.predicate, o: r.object,
       phrase: phraseFor(r.predicate),
@@ -407,7 +450,7 @@ function dashboardHtml(stats, { fresh = false } = {}) {
   const total = s.totalFacts || 0;
   const freshCls = fresh ? " fresh" : "";
   if (!total) {
-    return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></section>`;
+    return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics"><div class="kpirow"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></div></section>`;
   }
   const terms = s.totalTerms || 0;
   const qualityCls = s.contradictionCount > 0 ? " tile-alert" : "";
@@ -415,33 +458,42 @@ function dashboardHtml(stats, { fresh = false } = {}) {
   const predicatesHtml = s.predicates?.length
     ? microbarsHtml(s.predicates.map((p) => ({ label: p.phrase || p.predicate, count: p.count })))
     : `<span class="tile-sub">none yet</span>`;
+  // Two explicit-column grids — a 4-up KPI row, then a 2-up row of bar-chart
+  // tiles — instead of one auto-fill grid: auto-fill's column count depends
+  // on viewport width, so a wide-tile mid-row wrap used to strand empty
+  // tracks on the right of both rows. Both stay `.tile` (the dashboard-strip
+  // e2e test counts six of them under `.dash`, whatever their sub-grid).
   return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics">
-    <div class="tile">
-      <span class="tile-label">facts.total</span>
-      <span class="tile-value">${total}</span>
-      <span class="tile-sub">${terms} term${terms === 1 ? "" : "s"} tracked</span>
+    <div class="kpirow">
+      <div class="tile">
+        <span class="tile-label">facts.total</span>
+        <span class="tile-value">${total}</span>
+        <span class="tile-sub">${countLabel(terms, "term")} tracked</span>
+      </div>
+      <div class="tile tile-tier">
+        <span class="tile-label">facts.by-tier</span>
+        ${tierTileHtml(s.byProv || {}, total)}
+      </div>
+      <div class="tile">
+        <span class="tile-label">graph.avg-degree</span>
+        <span class="tile-value">${(s.density || 0).toFixed(1)}</span>
+        <span class="tile-sub">facts per term</span>
+      </div>
+      <div class="tile${qualityCls}">
+        <span class="tile-label">data.quality</span>
+        <span class="tile-value">${s.contradictionCount || 0}</span>
+        <span class="tile-sub">${s.contradictionCount === 1 ? "term" : pluralOf("term")} with more than one answer</span>
+      </div>
     </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">facts.by-tier</span>
-      ${tierTileHtml(s.byProv || {}, total)}
-    </div>
-    <div class="tile">
-      <span class="tile-label">graph.avg-degree</span>
-      <span class="tile-value">${(s.density || 0).toFixed(1)}</span>
-      <span class="tile-sub">facts per term</span>
-    </div>
-    <div class="tile${qualityCls}">
-      <span class="tile-label">data.quality</span>
-      <span class="tile-value">${s.contradictionCount || 0}</span>
-      <span class="tile-sub">term${s.contradictionCount === 1 ? "" : "s"} with more than one answer</span>
-    </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">corpus.bundles</span>
-      <div class="bundlebars">${bundlesHtml}</div>
-    </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">predicate.top</span>
-      <div class="bundlebars">${predicatesHtml}</div>
+    <div class="barpanels">
+      <div class="tile tile-bars">
+        <span class="tile-label">corpus.bundles</span>
+        <div class="bundlebars">${bundlesHtml}</div>
+      </div>
+      <div class="tile tile-bars">
+        <span class="tile-label">predicate.top</span>
+        <div class="bundlebars">${predicatesHtml}</div>
+      </div>
     </div>
   </section>`;
 }
@@ -500,22 +552,22 @@ function sparkCaptionHtml(stats) {
  *  self-contained document with no external requests. Only
  *  scripts/build-demo-site.mjs, which builds the sibling bundle itself
  *  first, passes `true`. The dock's own runtime code below ALSO gates on
- *  `typeof tmctLedger !== "undefined"` regardless — the two checks answer
+ *  `typeof tmct !== "undefined"` regardless — the two checks answer
  *  different questions (did this render even offer the reference; did the
  *  browser actually manage to load it), and both must hold for the live
  *  path to run. */
-export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false } = {}) {
-  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false } });
+export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false, focusDigest = null, digestStructures = [] } = {}) {
+  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false }, focusDigest: focusDigest || null, digestStructures: Array.isArray(digestStructures) ? digestStructures : [] });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
-  const title = `tmct ledger — ${shown} fact${shown === 1 ? "" : "s"}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
+  const title = `tmct ledger — ${countLabel(shown, "fact")}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
   const bundleStr = typeof memoryAskBundle === "string" ? memoryAskBundle : "";
   const hasMemChat = bundleStr.length > 0;
   // The placeholder is honest: the canonical exchange only when its terms are
   // really in this payload, otherwise a real term from this graph. Left as
   // the query-only wording even when the live bundle is offered — the dock's
   // own script swaps it for a teach-aware placeholder the moment it confirms
-  // tmctLedger actually loaded (never claimed ahead of that confirmation).
+  // the live engine actually loaded (never claimed ahead of that confirmation).
   // The example term skips anything under 3 characters — the SAME floor the
   // dock's own miss-tips apply below — so a graph whose highest-degree term
   // is a short stopword-shaped fragment (init:large corpora carry plenty:
@@ -526,7 +578,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
     ? "who is the grandfather of ishmael"
     : (exampleTerm ? `ask the graph… e.g. what is ${exampleTerm.term}` : "ask the graph…");
   // The paste-and-drop ingest panel plus the JSONL export ride the LIVE
-  // engine (window.tmctLedger): both teach into and read the dock's own
+  // engine (window.tmct): both teach into and read the dock's own
   // session store, so they appear only where that bundle is offered — the
   // demo site, never the CLI's self-contained tmct viz page.
   const ingestHtml = ledgerBundleAvailable
@@ -534,7 +586,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
           <button type="button" id="ingestToggle" class="dockbtn">ingest text&hellip;</button>
           <button type="button" id="exportFacts" class="dockbtn">export facts</button>
         </div>
-        <div class="researchrow" title="Fetches the topic from Simple English Wikipedia into this graph, then queues the topics its lead section links to — each queued topic runs as its own dock turn, paced politely. Asking is the network consent for these fetches.">
+        <div class="researchrow" title="Fetches the topic from Simple English Wikipedia into this graph, then queues the topics its lead section links to. Each queued topic runs as its own dock turn, paced politely. Asking is the network consent for these fetches.">
           <label for="researchTopic" class="mono">research:</label>
           <input id="researchTopic" type="text" autocomplete="off" spellcheck="false"
             placeholder="a topic, e.g. owls" aria-label="Topic to research on Simple English Wikipedia">
@@ -544,7 +596,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </div>
         <div class="ingestpanel" id="ingestPanel" hidden>
           <textarea id="ingestText" spellcheck="false" aria-label="Text to ingest into the graph"
-            placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph; the rest are skipped honestly."></textarea>
+            placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph. The rest are skipped."></textarea>
           <div class="ingestrow">
             <button type="button" class="dockbtn" id="ingestBrowse">browse&hellip;</button>
             <input type="file" id="ingestFile" accept=".txt,.md,text/plain,text/markdown" hidden>
@@ -562,7 +614,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </form>
         ${ingestHtml}
       </div>`
-    : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
+    : `<div class="chat chat-off"><p class="chatnote">Chat unavailable. Run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -570,6 +622,9 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!--
   The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
   first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
@@ -584,47 +639,52 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 -->
 <style>
 ${THEME_TOKENS_CSS}
+${DASH_DARK_CHROME_CSS}
   html { background: var(--bg); }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${DASH_SANS_STACK}; font-size: 15px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 1080px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; }
-  h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
+  main { max-width: 1200px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin-bottom: .9rem; }
   button { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
-  button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
-  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .5rem 0; margin-bottom: 1.1rem; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; border-radius: 4px; }
+  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; margin-bottom: 1.1rem; }
   .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; font-size: .78rem; }
   .crumbs .sep { color: var(--muted); }
-  .crumb { font-family: ${MONO_STACK}; font-size: .74rem; padding: .12rem .5rem; border: 1px solid var(--line); border-radius: 99px; background: var(--card); }
+  .crumb { font-family: ${MONO_STACK}; font-size: .74rem; padding: .12rem .5rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); }
   .crumb[aria-current="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .search { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
-  .search input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; width: 170px; }
+  .search input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; width: 170px; }
   .search .miss { font-size: .72rem; color: var(--alert); font-family: ${MONO_STACK}; }
-  .dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: .6rem; margin: 0 0 1.1rem; }
-  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem .6rem; display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
-  .tile-wide { grid-column: span 2; }
-  .tile-alert { border-color: var(--alert); }
+  /* Two explicit-column grids instead of one auto-fill grid: a 4-up KPI row,
+     then a 2-up row of bar-chart tiles, so both rows fill the container's
+     full width at any viewport rather than stranding a leftover track. */
+  .dash { display: flex; flex-direction: column; gap: .6rem; margin: 0 0 1.1rem; }
+  .kpirow { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
+  .barpanels { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+  @media (max-width: 700px) { .kpirow { grid-template-columns: repeat(2, 1fr); } .barpanels { grid-template-columns: 1fr; } }
+  .tile { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 6px; padding: .6rem .75rem .65rem; display: flex; flex-direction: column; gap: .18rem; min-width: 0; }
+  .tile-alert { border-left-color: var(--alert); }
   .tile-label { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
-  .tile-value { font-family: ${MONO_STACK}; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile-value { font-family: ${MONO_STACK}; font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
   .tile-alert .tile-value { color: var(--alert); }
   .tile-sub { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
-  .tierbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin-top: .3rem; }
+  .tierbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin-top: .35rem; }
   .tseg { height: 100%; }
   .tseg.t-taught { background: var(--taught); } .tseg.t-corpus { background: var(--corpus); } .tseg.t-entail { background: var(--entail); }
   .tierlegend { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin-top: .35rem; font-family: ${MONO_STACK}; font-size: .65rem; }
   .tleg.t-taught { color: var(--taught); } .tleg.t-corpus { color: var(--corpus); } .tleg.t-entail { color: var(--entail); }
-  .bundlebars { display: flex; flex-direction: column; gap: .22rem; margin-top: .35rem; }
-  .bbar { display: grid; grid-template-columns: minmax(0,1fr) 3.4rem 1.6rem; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; }
+  .bundlebars { display: flex; flex-direction: column; gap: .26rem; margin-top: .4rem; }
+  .bbar { display: grid; grid-template-columns: minmax(0,1fr) 3.4rem 1.6rem; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .7rem; }
   .bblabel { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bbtrack { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
-  .bbfill { display: block; height: 100%; background: var(--ink); opacity: .55; border-radius: 99px; }
+  .bbfill { display: block; height: 100%; background: var(--ink); opacity: .6; border-radius: 99px; }
   .bbn { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   .sparkwrap { margin-top: .5rem; }
   .spark { display: block; width: 100%; height: 44px; }
   .spark .fill { fill: var(--muted); opacity: .18; stroke: none; }
   .spark .line { fill: none; stroke: var(--ink); stroke-width: 1.4; }
   .spark .dot { fill: var(--ink); }
-  .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 230px; gap: 1.3rem; grid-template-areas: "rail ledger aside"; }
+  .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 240px; gap: 1.1rem; grid-template-areas: "rail ledger aside"; align-items: start; }
   .rail { grid-area: rail; } .ledger { grid-area: ledger; } .aside { grid-area: aside; }
   @media (max-width: 880px) { .app { grid-template-columns: 1fr; grid-template-areas: "ledger" "aside" "rail"; } .search { margin-left: 0; } }
   .rail h2, .aside h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 1rem 0 .4rem; }
@@ -639,14 +699,28 @@ ${THEME_TOKENS_CSS}
   .seg.on.neutral { background: var(--ink); color: var(--bg); } .seg.on.neutral .n { color: var(--bg); }
   .seg.on.c-taught { background: var(--taught); } .seg.on.c-corpus { background: var(--corpus); } .seg.on.c-entail { background: var(--entail); }
   .d-taught { background: var(--taught); } .d-corpus { background: var(--corpus); } .d-entail { background: var(--entail); }
-  .focuscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; margin-bottom: 1rem; }
+  .focuscard { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .85rem 1rem; margin-bottom: 1rem; }
   .focuscard .term { font-size: 1.35rem; font-weight: 700; }
   .focuscard .klass, .focuscard .stats { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .focuscard .focusdigest { margin-top: .7rem; font-size: .92rem; line-height: 1.5; }
+  .focuscard .focusdigest p { margin: 0 0 .4rem; }
+  .focuscard .focusdigest .dgsrc { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); margin-top: .2rem; }
+  .focuscard .focusdigest .dgfacts { margin-top: .5rem; }
+  .focuscard .focusdigest .dgfacts > summary { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--corpus); cursor: pointer; }
+  .focuscard .focusdigest .dgfacts[open] > summary { margin-bottom: .35rem; }
+  .focuscard .focusdigest .dgfactlist { border-top: 1px solid var(--line); }
+  .focuscard .focusdigest .dgfact { font-size: .72rem; padding: .22rem 0; border-bottom: 1px solid var(--line); word-break: break-word; }
+  .focuscard .focusdigest .dgfact:last-child { border-bottom: none; }
   .group { margin: 1.1rem 0; }
   .group h3 { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h3::after { content: ""; flex: 1; border-top: 1px solid var(--line); transform: translateY(-.2em); }
-  .rows { display: flex; flex-direction: column; gap: .35rem; }
-  .row { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 0 8px 8px 0; padding: .45rem .75rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .5rem; font-size: .95rem; }
+  /* The fact stream reads as a dense query-result log: full-width rows, a
+     hairline between each, a provenance-colored left rail, no per-row card
+     chrome. */
+  .rows { display: flex; flex-direction: column; }
+  .row { background: transparent; border: none; border-left: 3px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; padding: .42rem .7rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .5rem; font-family: ${MONO_STACK}; font-size: .82rem; }
+  .rows .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--line); }
   .row.p-taught.t3 { border-left-color: var(--taught-t3); } .row.p-taught.t2 { border-left-color: var(--taught-t2); } .row.p-taught.t1 { border-left-color: var(--taught-t1); }
   .row.p-corpus.t3 { border-left-color: var(--corpus-t3); } .row.p-corpus.t2 { border-left-color: var(--corpus-t2); } .row.p-corpus.t1 { border-left-color: var(--corpus-t1); }
   .row.p-entail.t3 { border-left-color: var(--entail-t3); } .row.p-entail.t2 { border-left-color: var(--entail-t2); } .row.p-entail.t1 { border-left-color: var(--entail-t1); }
@@ -657,18 +731,18 @@ ${THEME_TOKENS_CSS}
   .prov.p-taught { color: var(--taught); background: var(--taught-soft); }
   .prov.p-corpus { color: var(--corpus); background: var(--corpus-soft); }
   .prov.p-entail { color: var(--entail); background: var(--entail-soft); }
-  .contra { border: 1px solid var(--alert); border-radius: 10px; padding: .5rem; margin-top: .35rem; }
+  .contra { border: 1px solid var(--alert); border-radius: 6px; padding: .5rem; margin-top: .35rem; }
   .contra .label { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--alert); margin: 0 0 .35rem .2rem; }
-  .empty { color: var(--muted); font-size: .9rem; border: 1px dashed var(--line); border-radius: 8px; padding: .8rem 1rem; }
+  .empty { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 6px; padding: .8rem 1rem; }
   .looks { display: flex; flex-direction: column; gap: .45rem; }
-  .look { display: block; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; font-size: .8rem; width: 100%; }
+  .look { display: block; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .65rem; font-size: .8rem; width: 100%; }
   .look:hover { border-color: var(--ink); }
   .look .tag { display: block; font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; margin-bottom: .18rem; }
   .look.k-taught .tag { color: var(--taught); } .look.k-alert .tag { color: var(--alert); } .look.k-hub .tag { color: var(--corpus); }
-  .mapwrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .45rem; margin-top: .45rem; }
+  .mapwrap { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .45rem; margin-top: .45rem; }
   .mapwrap canvas { display: block; width: 100%; height: 160px; cursor: pointer; }
   .mapnote { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .3rem .2rem 0; }
-  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .65rem .85rem; margin-bottom: 1rem; }
+  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .65rem .85rem; margin-bottom: 1rem; }
   .chatlog { display: flex; flex-direction: column; gap: .45rem; max-height: 220px; overflow-y: auto; }
   .chatlog:empty { display: none; }
   .chatlog .u { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--muted); }
@@ -701,6 +775,7 @@ ${THEME_TOKENS_CSS}
   .ingeststatus { font-size: .68rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) {
     .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; }
+    .row { transition: background-color .1s ease; }
     /* A live teach re-render swaps the dash section wholesale (dashboardHtml
        is called again in full — see the inline script below), so the "this
        just changed" signal has to be an animation on the fresh markup itself,
@@ -715,7 +790,6 @@ ${THEME_TOKENS_CSS}
 <body>
 <main>
   <div class="eyebrow"><span>tmct &middot; memory ledger</span><span id="counts"></span></div>
-  <h1>A graph you can read</h1>
   ${dashboardHtml(stats)}
   <div class="topbar">
     <nav class="crumbs" id="crumbs" aria-label="Focus trail"></nav>
@@ -774,6 +848,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // escapeHtml/pct by their real names) resolve without a second copy.
   const escapeHtml = esc;
   const pct = ${pct.toString()};
+  // pluralOf underlies countLabel's own default-parameter lookup — spliced
+  // ahead of it so that lookup resolves the same way it does node-side.
+  const pluralOf = ${pluralOf.toString()};
+  const countLabel = ${countLabel.toString()};
+  const bfsLevels = ${bfsLevels.toString()};
   const tierTileHtml = ${tierTileHtml.toString()};
   const microbarsHtml = ${microbarsHtml.toString()};
   const dashboardHtml = ${dashboardHtml.toString()};
@@ -788,7 +867,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // LEDGER (declared "let" in the embed script above this one — a classic,
   // non-module script's top-level bindings are reachable as bare identifiers
   // by every later script tag in the document, never as window.LEDGER; see
-  // e2e/pages-ledger.test.mjs's own note on this) and its indexes start as
+  // test-e2e/pages-ledger.test.mjs's own note on this) and its indexes start as
   // the server-rendered snapshot but are REASSIGNED wholesale after a live
   // teach (applyLedgerData, below) — a successful teach through the dock
   // changes the underlying graph, and the page has to show that, not keep
@@ -806,6 +885,29 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   let focus = LEDGER.focus;
   let trail = focus ? [{ term: focus, label: null }] : [];
   const sel = { prov: new Set(), fam: new Set(), rec: new Set() };
+
+  // The store the client-side digest reads. Defaults to the page's embedded
+  // PAYLOAD (a static viz page never changes it); once a live dock session
+  // exists it points at that session's store, which teach/research grow in
+  // place, so a digest of a just-taught term reads the fresh facts.
+  let getLivePayload = () => PAYLOAD;
+  // The browser digest helper, from whichever engine this page loaded — the
+  // demo ledger's live one or the committed query-only one the CLI viz page
+  // inlines. Both publish it in the same place now, so there is one lookup
+  // rather than two. Null before either loads, and the focus card then keeps
+  // whatever server-computed digest it shipped.
+  const digestHelper = () =>
+    (typeof tmct !== "undefined" && tmct.page && tmct.page.digestTermFromPayloadBrowser) || null;
+  // The digest for one term, computed live in the browser from the embedded
+  // structure table, or null when no structures were embedded, no engine has
+  // loaded, or the term holds nothing to compose.
+  function clientDigest(term) {
+    const structures = LEDGER.digestStructures;
+    const helper = digestHelper();
+    if (!term || !helper || !structures || !structures.length) return null;
+    try { return helper(getLivePayload(), term, structures, { budget: 8 }); }
+    catch { return null; }
+  }
 
   const recOf = (r) => {
     const t = Date.parse(r.createdAt);
@@ -862,10 +964,28 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     const srcs = new Set(all.map((r) => r.src.split(" | ")[0]));
     const dates = all.map((r) => r.createdAt).filter(Boolean).sort();
     const klass = all.find((r) => r.s === focus && r.family === "is-a");
+    // The digest paragraph recomputes client-side on every focus, from the
+    // embedded structure table over the current store — so a refocus reads the
+    // new term back rather than losing the card. The server-computed focus
+    // digest is the fallback for the initial focus alone, kept for a page whose
+    // engine bundle never loads (its client digest would come back null).
+    const dg = clientDigest(focus)
+      || ((focus === LEDGER.focus && LEDGER.focusDigest && LEDGER.focusDigest.paragraphs && LEDGER.focusDigest.paragraphs.length) ? LEDGER.focusDigest : null);
+    const dgFacts = (dg && Array.isArray(dg.facts)) ? dg.facts : [];
+    const factsEscapeHtml = dgFacts.length
+      ? '<details class="dgfacts"><summary>show the facts (' + dgFacts.length + ')</summary><div class="dgfactlist">' +
+        dgFacts.map((f) => '<div class="dgfact"><span class="mono">' + esc(String(f.subject || "")) + " " + esc(String(f.predicate || "")) + " " + esc(String(f.object || "")) + "</span></div>").join("") +
+        "</div></details>"
+      : "";
+    const digestHtml = dg
+      ? '<div class="focusdigest">' + dg.paragraphs.map((p) => "<p>" + esc(p) + "</p>").join("") +
+        (dg.sources && dg.sources.length ? '<p class="dgsrc">(sources: ' + esc(dg.sources.join("; ")) + ")</p>" : "") +
+        factsEscapeHtml + "</div>"
+      : "";
     let html = '<div class="focuscard"><div class="term">' + esc(focus) + "</div>" +
       '<div class="klass">' + (klass ? esc(klass.phrase + " " + klass.o) : "no class recorded") + "</div>" +
-      '<div class="stats">' + all.length + " facts &middot; " + srcs.size + " source" + (srcs.size === 1 ? "" : "s") +
-      (dates.length ? " &middot; first " + esc(dates[0].slice(0, 10)) + " &middot; last " + esc(dates[dates.length - 1].slice(0, 10)) : "") + "</div></div>";
+      '<div class="stats">' + countLabel(all.length, "fact") + " &middot; " + countLabel(srcs.size, "source") +
+      (dates.length ? " &middot; first " + esc(dates[0].slice(0, 10)) + " &middot; last " + esc(dates[dates.length - 1].slice(0, 10)) : "") + "</div>" + digestHtml + "</div>";
     const bracketed = new Set();
     for (const fam of FAMS) {
       const rows = mine.filter((r) => r.family === fam && !bracketed.has(r.id));
@@ -882,7 +1002,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       for (const [, grp] of groupsHere) {
         if (grp.length < 2) continue;
         grp.forEach((r) => bracketed.add(r.id));
-        inner += '<div class="contra"><p class="label">more than one answer on record &mdash; shown, never merged</p><div class="rows">' + grp.map(rowHtml).join("") + "</div></div>";
+        inner += '<div class="contra"><p class="label">more than one answer on record, shown, not merged</p><div class="rows">' + grp.map(rowHtml).join("") + "</div></div>";
       }
       html += '<div class="group"><h3>' + esc(FAM_LABEL[fam]) + '</h3><div class="rows">' + inner + "</div></div>";
     }
@@ -900,7 +1020,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       looks.push({ cls: "k-taught", tag: "newest teach", target: w.newestTaught.term, body: r ? esc(r.s + " " + r.phrase + " " + r.o) : esc(w.newestTaught.term) });
     }
     if (w.contradictions && w.contradictions.count) {
-      looks.push({ cls: "k-alert", tag: w.contradictions.count + " with more than one answer", target: w.contradictions.firstFocusTerm, body: '<span class="mono">' + esc(w.contradictions.firstFocusTerm) + "</span> has answers that differ &mdash; read both" });
+      looks.push({ cls: "k-alert", tag: w.contradictions.count + " with more than one answer", target: w.contradictions.firstFocusTerm, body: '<span class="mono">' + esc(w.contradictions.firstFocusTerm) + "</span> has answers that differ. Read both." });
     }
     if (w.biggestHub) {
       looks.push({ cls: "k-hub", tag: "biggest hub", target: w.biggestHub.term, body: '<span class="mono">' + esc(w.biggestHub.term) + "</span> touches " + w.biggestHub.degree + " facts" });
@@ -927,13 +1047,16 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     if (!focus) return;
     const color = { taught: cssVar("--taught"), corpus: cssVar("--corpus"), entailed: cssVar("--entail"), entail: cssVar("--entail") };
     const lineC = cssVar("--line"), inkC = cssVar("--ink");
-    const hop1 = new Set(), hop2 = new Set();
-    for (const e of LEDGER.edges) { if (e.s === focus) hop1.add(e.o); if (e.o === focus) hop1.add(e.s); }
-    hop1.delete(focus);
-    for (const e of LEDGER.edges) {
-      if (hop1.has(e.s) && e.o !== focus && !hop1.has(e.o)) hop2.add(e.o);
-      if (hop1.has(e.o) && e.s !== focus && !hop1.has(e.s)) hop2.add(e.s);
-    }
+    const neighborsOf = (term) => {
+      const out = [];
+      for (const e of LEDGER.edges) {
+        if (e.s === term) out.push(e.o);
+        else if (e.o === term) out.push(e.s);
+      }
+      return out;
+    };
+    const [hop1Level, hop2Level] = bfsLevels(focus, neighborsOf, { maxDepth: 2 });
+    const hop1 = new Set(hop1Level || []), hop2 = new Set(hop2Level || []);
     const cx = w / 2, cy = h / 2, r1 = 42, r2 = 68;
     const pos = { [focus]: { x: cx, y: cy } };
     const place = (set, r) => { const a = [...set].sort(); a.forEach((t, i) => { const ang = (2 * Math.PI * i) / a.length - Math.PI / 2; pos[t] = { x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang) }; }); };
@@ -1000,6 +1123,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       rows: freshData.rows, terms: freshData.terms, edges: freshData.edges,
       focus: freshData.focus, contradictions: freshData.contradictions,
       worthALook: freshData.worthALook, meta: freshData.meta,
+      // The embedded structure table is build-time data a re-derivation never
+      // recomputes; carry it across so a digest of the just-taught term still
+      // has a table to compose from. The stale server focusDigest is dropped —
+      // the client recompute over the grown store supersedes it.
+      digestStructures: LEDGER.digestStructures,
     };
     rebuildIndexes();
     el("dash").outerHTML = dashboardHtml(freshData.stats, { fresh: true });
@@ -1012,9 +1140,9 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   }
 
   // ---- the chat dock: LIVE teach+ask over the sibling ledger-browser.bundle.js
-  // (window.tmctLedger) when the demo build offered it AND it actually
-  // loaded; falls back to the read-only tmctMemoryAsk engine below —
-  // unchanged from before this page could teach at all — otherwise.
+  // (window.tmct) when the demo build offered it AND it actually
+  // loaded; falls back to the read-only engine below, which publishes the
+  // same surface as a stand-in and says so through tmct.fallback.
   // bin/tmct.mjs's own \`tmct viz\` output never offers the live bundle
   // (renderLedgerHtml's own ledgerBundleAvailable defaults false there), so
   // this branch is simply never reachable on a CLI-generated page.
@@ -1022,7 +1150,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const chatForm = el("chatform");
-  if (chatForm && typeof tmctLedger !== "undefined" && typeof tmctLedger.createLedgerSession === "function") {
+  if (chatForm && typeof tmct !== "undefined" && !tmct.fallback) {
     const log = el("chatlog");
     const chatqEl = el("chatq");
     chatqEl.placeholder = 'ask or teach the graph\\u2026 e.g. "blue is a peg"';
@@ -1057,7 +1185,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             import("./vendor/wink.js"),
             winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          tmctLedger.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+          tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn("tmct ledger: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
@@ -1070,7 +1198,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     async function ensureSession() {
       if (session) return session;
       await tryLoadWink();
-      session = await tmctLedger.createLedgerSession({ seedPayload: PAYLOAD });
+      session = await tmct.open({ seedPayload: PAYLOAD });
+      // From here the live store is the source of truth for the digest, so a
+      // digest of a term taught this session reads its fresh facts — the store
+      // grows in place, so this one closure stays current.
+      getLivePayload = () => session.memoryDir.payload;
       return session;
     }
 
@@ -1084,15 +1216,15 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       chatqEl.disabled = true;
       withLock(async () => {
         try {
-          const s = await ensureSession();
-          const result = await s.turn(q);
+          const live = await ensureSession();
+          const result = await tmct.turn(q);
           const record = result.record;
           const taught = !!record && record.miss === false && (record.via === "assert" || record.via === "retract");
           const body = esc(result.answer).replace(/\\n/g, "<br>");
           pending.className = "a" + (taught ? " taught" : (record && record.miss ? " miss" : ""));
           pending.innerHTML = taught ? '<span class="tag">taught</span>' + body : body;
           if (taught) {
-            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
             applyLedgerData(fresh);
           } else if (!(record && record.miss)) {
             // Only a genuine answer (never a miss) tries to resolve a
@@ -1101,7 +1233,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             // ordinary English word (e.g. "run", if the graph happens to
             // hold it), and resolveAnsweredTerm has no way to tell that
             // apart from the term genuinely being discussed.
-            const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmctLedger.normFactTerm);
+            const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmct.page.normFactTerm);
             if (hit) refocusWithLabel(hit, q);
           }
         } catch {
@@ -1116,7 +1248,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
 
     // ---- ingest + export: bring your own text, take the graph away ---------
     // The ingest panel runs pasted/dropped/browsed text through the SAME dock
-    // session, one sentence at a time (tmctLedger.splitSentences, then
+    // session, one sentence at a time (tmct.page.splitSentences, then
     // s.turn), keeping only the sentences the recognizer grounds — then
     // re-derives the whole ledger so the new facts can be examined in place.
     // Export serializes that same session store to canonical JSONL.
@@ -1152,16 +1284,16 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         withLock(async () => {
           try {
             const s = await ensureSession();
-            const sentences = tmctLedger.splitSentences(text);
+            const sentences = tmct.page.splitSentences(text);
             let grounded = 0;
             for (const sentence of sentences) {
-              const r = await s.turn(sentence);
+              const r = await tmct.turn(sentence);
               if (r.record && r.record.miss === false && r.record.via === "assert") grounded += 1;
             }
-            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(s.memoryDir.payload, {});
             applyLedgerData(fresh);
             const skipped = sentences.length - grounded;
-            statusEl.textContent = sentences.length + " sentence" + (sentences.length === 1 ? "" : "s")
+            statusEl.textContent = countLabel(sentences.length, "sentence")
               + ", " + grounded + " added" + (skipped ? ", " + skipped + " skipped" : "");
           } catch {
             statusEl.textContent = "something went wrong ingesting that";
@@ -1178,7 +1310,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         withLock(async () => {
           try {
             const s = await ensureSession();
-            const jsonl = await tmctLedger.exportFactsJsonl(s.memoryDir);
+            const jsonl = await tmct.page.exportFactsJsonl(s.memoryDir);
             const blob = new Blob([jsonl], { type: "application/x-ndjson" });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -1213,7 +1345,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         researchPlayBtn.setAttribute("aria-pressed", String(st.playing));
         researchStatusEl.textContent = !researchQueue ? ""
           : researchQueue.complete
-            ? 'research "' + researchQueue.topic + '" complete \\u2014 ' + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s")
+            ? 'research "' + researchQueue.topic + '" complete \\u2014 ' + countLabel(researchQueue.done.length, "topic")
             : researchQueue.done.length + " done \\u00b7 " + researchQueue.pending.length + " queued";
       }
 
@@ -1224,8 +1356,8 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         const pending = addLine("a pending", "researching\\u2026");
         return withLock(async () => {
           try {
-            const s = await ensureSession();
-            const result = await s.turn(q);
+            const live = await ensureSession();
+            const result = await tmct.turn(q);
             const missed = !result.record || Boolean(result.record.miss);
             pending.className = "a" + (missed ? " miss" : "");
             pending.innerHTML = esc(result.answer).replace(/\\n/g, "<br>");
@@ -1233,7 +1365,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
               researchQueue = result.research;
               renderResearchControls();
               if (!missed) {
-                const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+                const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
                 applyLedgerData(fresh);
               }
             }
@@ -1276,9 +1408,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         else researchTicker.play();
       });
     }
-  } else if (chatForm && typeof tmctMemoryAsk !== "undefined") {
-    const memHandle = tmctMemoryAsk.createInMemoryStore();
-    memHandle.payload = PAYLOAD;
+  } else if (chatForm && typeof tmct !== "undefined") {
+    // The query-only dock. One session over the page's own embedded payload,
+    // and every line goes to tmct.ask — the cascade that used to be chained
+    // here by hand now lives behind that one call.
+    const opened = tmct.open({ payload: PAYLOAD });
     const log = el("chatlog");
     const addLine = (cls, html) => {
       const d = document.createElement("div");
@@ -1293,20 +1427,16 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       input.value = "";
       addLine("u", esc(q));
       (async () => {
-        let fact = null;
-        try { fact = await tmctMemoryAsk.factAnswer(memHandle, q, null, true, {}); } catch { fact = null; }
-        // runAsk's own cascade is factAnswer ?? factReadBack; chain the same
-        // way when the bundle exposes the second reader (relation chases —
-        // "who is the grandfather of ishmael" — live there, not in factAnswer).
-        if (!(fact && fact.text) && typeof tmctMemoryAsk.factReadBack === "function") {
-          try { fact = await tmctMemoryAsk.factReadBack(memHandle, q, null, true, null); } catch { fact = null; }
-        }
-        if (fact && fact.text) {
-          addLine("a", esc(fact.text).replace(/\\n/g, "<br>"));
+        await opened;
+        let answer = null;
+        let data = null;
+        try { ({ answer, data } = await tmct.ask(q)); } catch { answer = null; data = null; }
+        if (answer) {
+          addLine("a", esc(answer).replace(/\\n/g, "<br>"));
           // Same formatting contract as chat's withGoalLine: capitalized,
           // full-stop-terminated, rendered only when the engine deduced one.
-          if (fact.goal) addLine("a goal", "Goal (inferred): " + esc(fact.goal.charAt(0).toUpperCase() + fact.goal.slice(1)) + ".");
-          const hit = resolveAnsweredTerm(fact.text, q, LEDGER.terms, tmctMemoryAsk.normFactTerm);
+          if (data && data.goal) addLine("a goal", "Goal (inferred): " + esc(data.goal.charAt(0).toUpperCase() + data.goal.slice(1)) + ".");
+          const hit = resolveAnsweredTerm(answer, q, LEDGER.terms, tmct.page.normFactTerm);
           if (hit) refocusWithLabel(hit, q);
         } else {
           const tips = LEDGER.terms.filter((t) => t.term.length >= 3).slice(0, 2)

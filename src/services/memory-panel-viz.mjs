@@ -49,6 +49,30 @@ export function statsSummaryLine(stats, bandLabel) {
     : stats.total + " starter facts loaded";
 }
 
+/** Drop every asset the site's service worker has cached, and unregister the
+ *  worker itself, so the next load reads the shipped files off the network.
+ *  A page's own taught-facts store lives in IndexedDB, a different store
+ *  entirely — clearing that alone would still re-seed from whatever copy of
+ *  chat-seed.json the worker cached, which is the whole reason this exists.
+ *  Best-effort throughout: a browser with no Cache Storage, no worker, or a
+ *  storage call that throws just leaves the caller to reload as before.
+ *  Pure of this module's scope, so it stays `.toString()`-splice safe. */
+export async function clearSiteAssetCaches() {
+  try {
+    if (globalThis.caches) {
+      for (const key of await caches.keys()) {
+        if (key.startsWith("tmct-precache-")) await caches.delete(key);
+      }
+    }
+  } catch { /* the reload still re-reads whatever the worker will serve */ }
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+  } catch { /* an un-unregisterable worker still has an empty cache now */ }
+}
+
 /** Fetch `url` reading the body as a stream, reporting (loadedBytes,
  *  totalBytes) after every chunk — total is 0 when the response carries no
  *  Content-Length. Resolves to a Blob of the whole body. Falls back to a
@@ -156,4 +180,42 @@ export function renderStatsPanelInto(panelEl, stats, opts) {
       panelEl.appendChild(note);
     }
   }
+}
+
+/** The boot statusline while the big engine assets stream in — byte-identical
+ *  across research-viz.mjs and ingest-viz.mjs, each commenting that it uses
+ *  "the same aggregator" as the other. `parts` is an array of { loaded, total }
+ *  byte counts (total 0 when a response carried no Content-Length); with no
+ *  usable total the line shows loaded bytes alone rather than inventing a
+ *  denominator. Self-contained, `.toString()`-splice safe. */
+export function loadProgressLine(parts) {
+  const mb = (n) => (n / 1048576).toFixed(1);
+  let loaded = 0;
+  let total = 0;
+  let totalKnown = true;
+  for (const p of parts || []) {
+    loaded += (p && p.loaded) || 0;
+    if (p && p.total > 0) total += p.total;
+    else totalKnown = false;
+  }
+  return totalKnown && total > 0
+    ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
+    : "loading the engine… " + mb(loaded) + " MB";
+}
+
+/** One learned/grounded fact as its three canonical cells, plus whichever of
+ *  the two per-page provenance fields the caller's fact objects carry: `source`
+ *  (research.html's source key, e.g. "taught"/"seed:conceptnet" — used for the
+ *  tone dot) and `provenance` (ingest.html's raw ' | '-joined tag string —
+ *  shown verbatim). Both default to "" when the fact object doesn't carry
+ *  that field, so either page reads back only the one it populated. Pure,
+ *  `.toString()`-splice safe. */
+export function factTripleParts(fact) {
+  return {
+    subject: String((fact && fact.subject) || ""),
+    predicate: String((fact && fact.predicate) || ""),
+    object: String((fact && fact.object) || ""),
+    source: String((fact && fact.source) || ""),
+    provenance: String((fact && fact.provenance) || ""),
+  };
 }

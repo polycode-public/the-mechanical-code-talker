@@ -1,0 +1,855 @@
+// research-viz.mjs — research.html, the graph-BUILDING page: a self-contained
+// document shaped exactly like ingest-viz.mjs/chat-page-viz.mjs's own
+// page-builders — one inlined <style> importing viz-theme.mjs's shared tokens,
+// behaviour as an inlined IIFE — running the research engine
+// (research-browser.bundle.js's globalThis.tmct) by same-origin
+// relative paths.
+//
+// One in-memory graph grows three ways, each visible on the page:
+//   1. research a term — submits "research <topic>" (the Simple English
+//      Wikipedia lane) and steps its "research next" queue.
+//   2. teach by telling — an ordinary teach turn ("a beagle is a kind of dog").
+//   3. ingest documents — paste/drop text through the ingest recognizer.
+// A highlights panel shows the facts just learned and the best-connected terms.
+// The "ask the graph" box is scoped BY SOURCE: a checkbox per source (taught,
+// ingested, research, each seeded corpus band), and the ask runs against only
+// the checked sources — or the whole store when every box is checked. Each
+// source lists the facts it added, so its learning history is on the page too.
+//
+// renderResearchHtml() is pure: no I/O, deterministic output for identical
+// input. scripts/build-demo-site.mjs calls it directly and writes the result to
+// public/research.html, after research-browser.bundle.js already exists.
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { fetchWithProgress, loadProgressLine, factTripleParts } from "./memory-panel-viz.mjs";
+import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
+import { loadWinkVendor } from "./viz-boot.mjs";
+import { cloneMemoryPayload } from "../adapters/memory/core.mjs";
+
+const DEFAULT_TITLE = "the-mechanical-code-talker — research";
+
+// research.html reads as ledger.html's dashboard sibling (dense stat/control
+// panels, monospace metrics), so it runs the same system sans + forced dark
+// chrome — see ledger-viz.mjs's own DASH_SANS_STACK/DASH_DARK_CHROME_CSS for
+// the fuller rationale. Kept as a separate copy rather than a shared import:
+// each generated-page builder is a standalone, self-contained module (no
+// cross-page runtime dependency), matching every sibling page builder here.
+const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+const DASH_DARK_CHROME_CSS = `
+  :root { color-scheme: dark; }
+  body {
+    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --line: #2B3036; --card: #1C2126;
+    --taught: #5FBE8B; --corpus: #6C93BF; --entail: #D9A554; --alert: #D08070;
+    --taught-t1: rgba(95,190,139,.35); --taught-t2: rgba(95,190,139,.65); --taught-t3: rgba(95,190,139,1);
+    --corpus-t1: rgba(108,147,191,.35); --corpus-t2: rgba(108,147,191,.65); --corpus-t3: rgba(108,147,191,1);
+    --entail-t1: rgba(217,165,84,.35); --entail-t2: rgba(217,165,84,.65); --entail-t3: rgba(217,165,84,1);
+    --taught-soft: rgba(95,190,139,.14); --corpus-soft: rgba(108,147,191,.14);
+    --entail-soft: rgba(217,165,84,.16); --alert-soft: rgba(208,128,112,.16);
+  }
+`;
+
+/** The human label + short colour key for one source snapshot entry
+ *  ({ key, band }). A seed band folds to a readable corpus name; the three
+ *  growth sources get their own words. Pure and `.toString()`-splice safe. */
+export function sourceLabelFor(source) {
+  const BANDS = {
+    human: "human persona", "human-medium": "human persona", "human-large": "human persona",
+    seon: "SEON ontology", conceptnet: "ConceptNet",
+    "tier2-aws": "AWS", "tier2-python": "Python", "tier2-java": "Java", "wordnet-xl": "WordNet",
+  };
+  const key = (source && source.key) || "";
+  if (key === "taught") return { label: "taught by telling", tone: "taught" };
+  if (key === "ingest") return { label: "ingested documents", tone: "ingest" };
+  if (key === "research") return { label: "wikipedia research", tone: "research" };
+  if (key === "other") return { label: "derived / other", tone: "seed" };
+  const band = (source && source.band) || "";
+  return { label: (BANDS[band] || band || "seed") + " (seed corpus)", tone: "seed" };
+}
+
+/** The self-contained research page. Pure — the same output for the same
+ *  input every time; every piece of state is computed live in the browser once
+ *  the sibling research bundle loads. `digestStructures` are the pre-parsed
+ *  [[structure]] rows of the digest sentence-structure bank, embedded so the
+ *  page can digest a term client-side over its grown store (no TOML parser in
+ *  the browser); an empty list leaves the digest panel degrading to an honest
+ *  "no digest available" the same way the node stub does. */
+export function renderResearchHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "" } = {}) {
+  const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<!--
+  The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
+  first-party bundle (built by scripts/build-wink-vendor.mjs), one cached copy
+  for every page, no CDN. The research engine needs wink to split and parse the
+  sentences it grounds; a failed load degrades to the curated tiers, never an
+  error.
+-->
+<style>
+${THEME_TOKENS_CSS}
+${DASH_DARK_CHROME_CSS}
+  html, body { min-height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${DASH_SANS_STACK}; font-size: 15px; line-height: 1.5; }
+  .mono { font-family: ${MONO_STACK}; }
+  button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
+  a { color: var(--corpus); }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 1.1rem 1.1rem 3rem; }
+
+  /* A brand block on the left and a small stat-readout panel on the right —
+     the readout fills the row instead of one status line stranded beside a
+     wide gap, and it doubles as the boot-progress display. */
+  header.topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.4rem; flex-wrap: wrap; padding: .6rem 0 1rem; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; }
+  .brand { display: flex; flex-direction: column; gap: .3rem; max-width: 640px; }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .subtitle { font-size: .92rem; color: var(--ink); opacity: .82; max-width: 58ch; }
+  .statuspanel { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
+  .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
+  .statuspanel .stat-label { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .statuspanel .stat-value { font-family: ${MONO_STACK}; font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+  /* the live total is what this page is actually growing, so it carries the
+     panel's emphasis — the seed count beside it never moves after boot. */
+  .statuspanel .stat-facts { padding-right: 1.1rem; border-right: 1px solid var(--line); }
+  .statuspanel .stat-facts .stat-value { font-size: 1.15rem; font-weight: 600; }
+  .enginenote { margin: -.5rem 0 1.2rem; padding: .55rem .8rem; border: 1px solid var(--alert); border-radius: 6px; background: var(--alert-soft); color: var(--alert); font-family: ${MONO_STACK}; font-size: .78rem; }
+  .enginenote[hidden] { display: none; }
+
+  h2.band { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 1.6rem 0 .7rem; border-bottom: 1px solid var(--line); padding-bottom: .35rem; }
+
+  /* the three ways to grow the graph, as one control-bar row of panels: a
+     hairline grid gap (painted by the shared background) separates them
+     instead of individual card borders, and each carries a top accent in
+     its own tone color. Stacks on a narrow screen. */
+  .grow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .grow .card { background: var(--card); border-top: 2px solid var(--line); padding: .9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+  .grow .card.card-research { border-top-color: var(--corpus); }
+  .grow .card.card-taught { border-top-color: var(--taught); }
+  .grow .card.card-ingest { border-top-color: var(--entail); }
+  .grow .card h3 { margin: 0; font-size: .95rem; font-weight: 600; }
+  .grow .card .hint { font-size: .76rem; color: var(--muted); margin: 0; }
+  .grow .card .tone { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; vertical-align: baseline; }
+  .tone-taught { background: var(--taught); } .tone-ingest { background: var(--entail); }
+  .tone-research { background: var(--corpus); } .tone-seed { background: var(--muted); }
+
+  .grow input[type="text"], .grow textarea { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .8rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .55rem; }
+  .grow textarea { resize: vertical; min-height: 5.5rem; line-height: 1.5; }
+  .grow input::placeholder, .grow textarea::placeholder { color: var(--muted); }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .btn { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .8rem; background: var(--card); }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .card .note { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); min-height: 1rem; }
+  .optionToggle { display: inline-flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
+  .optionToggle input { margin: 0; accent-color: var(--corpus); }
+  .knobs { display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
+  .knob { display: inline-flex; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .knob input[type="number"] { width: 3.4rem; font-family: ${MONO_STACK}; font-size: .74rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .25rem .35rem; text-align: right; }
+
+  /* highlights + ask, two columns */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; }
+
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: .9rem 1rem 1rem; background: var(--card); }
+  .panel h3 { margin: 0 0 .6rem; font-size: .9rem; font-weight: 600; }
+  .panel .empty { color: var(--muted); font-size: .8rem; margin: .3rem 0; }
+
+  /* recently-learned: a dense feed of the facts just grounded. */
+  .fact { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: .45rem; align-items: baseline; padding: .3rem .3rem; margin: 0 -.3rem; border-radius: 4px; border-bottom: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .76rem; }
+  .fact:last-child { border-bottom: none; }
+  .fact:hover { background: var(--line); }
+  .fact .dot { width: 7px; height: 7px; border-radius: 50%; align-self: center; }
+  .fact .subj { color: var(--ink); word-break: break-word; }
+  .fact .pred { color: var(--corpus); white-space: nowrap; }
+  .fact .obj { color: var(--ink); word-break: break-word; }
+
+  /* best-connected terms: a top-N ranked list (a mini bar chart), styled as
+     ledger.html's own predicate.top panel so the two pages read as siblings.
+     Each row keeps the "chip tapchip" contract the page's click handling and
+     its own e2e coverage rely on; the ranked-bar look rides inside it. */
+  .chips { display: flex; flex-direction: column; gap: .2rem; }
+  .chip { font-family: ${MONO_STACK}; font-size: .74rem; border: 1px solid var(--line); border-radius: 99px; padding: .2rem .6rem; background: var(--bg); }
+  .chip.tapchip { cursor: pointer; display: grid; grid-template-columns: 1.5rem minmax(0,1fr) 4.6rem 3.6rem; align-items: center; gap: .5rem; width: 100%; text-align: left; border: none; border-radius: 4px; padding: .3rem .4rem; background: none; }
+  .chip.tapchip:hover { background: var(--line); }
+  .chip .rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip .term { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .track { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
+  .chip .fill { display: block; height: 100%; background: var(--ink); opacity: .6; border-radius: 99px; }
+  .chip .deg { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* the term digest: a narrative card, its sources, and the flat fact list one
+     click away behind "show the facts". */
+  .digestpanel .hint { font-size: .78rem; color: var(--muted); margin: 0 0 .55rem; }
+  .digestout { min-height: 1.4rem; }
+  .digestout .empty { color: var(--muted); font-size: .82rem; margin: .2rem 0; }
+  .digestout .miss { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 6px; padding: .55rem .7rem; }
+  .dgcard { border: 1px solid var(--line); border-radius: 6px; padding: .7rem .85rem .8rem; background: var(--bg); }
+  .dgterm { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: .4rem; }
+  .dgcard p { margin: 0 0 .5rem; font-size: .95rem; }
+  .dgcard p:last-of-type { margin-bottom: 0; }
+  .dgsrc { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); word-break: break-word; }
+  .dgfacts { margin-top: .6rem; }
+  .dgfacts > summary { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--corpus); cursor: pointer; list-style: revert; }
+  .dgfacts[open] > summary { margin-bottom: .35rem; }
+  .dgfacts .factlist { border-top: 1px solid var(--line); }
+
+  /* ask, scoped by source */
+  .askRow { display: flex; gap: .5rem; margin: .2rem 0 .7rem; }
+  .askRow input { flex: 1; min-width: 0; font-family: inherit; font-size: .92rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .45rem .7rem; }
+  #answer { font-size: .9rem; white-space: pre-wrap; word-break: break-word; padding: .55rem .7rem; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); min-height: 1.4rem; }
+  #answer.miss { color: var(--muted); border-style: dashed; }
+  .sourcesHead { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin: .2rem 0 .5rem; }
+  .sourcesHead .toggleAll { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .12rem .5rem; background: var(--bg); }
+
+  /* scope by source: a filterable table — a header row names the columns,
+     then one row per source with its own checkbox, count, and history. */
+  .sourceTableHead { display: flex; justify-content: space-between; padding: 0 .3rem .3rem; font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: .2rem; }
+  details.source { border-bottom: 1px solid var(--line); }
+  details.source:last-of-type { border-bottom: none; }
+  details.source > summary { list-style: none; display: flex; align-items: center; gap: .5rem; padding: .35rem .3rem; margin: 0 -.3rem; border-radius: 4px; cursor: pointer; font-family: ${MONO_STACK}; font-size: .78rem; }
+  details.source > summary:hover { background: var(--line); }
+  details.source > summary::-webkit-details-marker { display: none; }
+  details.source > summary .srcLabel { flex: 1; display: inline-flex; align-items: center; gap: .4rem; }
+  details.source > summary input { margin: 0; accent-color: var(--corpus); }
+  details.source > summary .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  details.source > summary .caret { color: var(--muted); font-size: .7rem; }
+  .srcHistory { padding: .1rem 0 .6rem 1.4rem; }
+  .srcHistory .empty { font-size: .74rem; }
+
+  .toolsRow { display: flex; gap: .5rem; margin-top: 1.2rem; flex-wrap: wrap; }
+  .toolsRow .btn { font-size: .7rem; }
+
+  @media (max-width: 820px) {
+    .grow { grid-template-columns: 1fr; }
+    .cols { grid-template-columns: 1fr; }
+    .chip.tapchip { grid-template-columns: 1.5rem minmax(0,1fr) 3.2rem; }
+    .chip.tapchip .track { display: none; }
+    .statuspanel .stat { min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .fact, .chip.tapchip, details.source > summary { transition: background-color .1s ease; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <span class="eyebrow">the-mechanical-code-talker &middot; research</span>
+        <span class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</span>
+      </div>
+      <div class="statuspanel" id="statusPanel" aria-live="polite">
+        <div class="stat stat-facts"><span class="stat-label">facts in the graph</span><span class="stat-value" id="statFacts">&mdash;</span></div>
+        <div class="stat"><span class="stat-label">seed</span><span class="stat-value" id="statSeed">&mdash;</span></div>
+        <div class="stat"><span class="stat-label">engine</span><span class="stat-value" id="statEngine">booting&hellip;</span></div>
+      </div>
+    </header>
+    <div class="enginenote" id="engineNote" hidden></div>
+
+    <h2 class="band">grow the graph</h2>
+    <section class="grow">
+      <div class="card card-research">
+        <h3><span class="tone tone-research"></span>research a term</h3>
+        <p class="hint">Fetches the topic from Simple English Wikipedia and stores the facts it grounds, then queues the topics its lead section links to. Asking is the consent for these fetches.</p>
+        <div class="row">
+          <input id="researchTopic" type="text" autocomplete="off" spellcheck="false" placeholder="a topic, e.g. owls" aria-label="Topic to research">
+          <button type="button" class="btn primary" id="researchGo" disabled>research</button>
+          <button type="button" class="btn" id="researchNext" hidden>research next</button>
+          <button type="button" class="btn" id="researchPlay" aria-pressed="false" hidden>play</button>
+        </div>
+        <div class="knobs">
+          <label class="knob" title="How many topics one research run may fetch and store in total (the first topic counts as one). A deep run stops fetching once it reaches this budget.">
+            max nodes <input id="researchNodes" type="number" min="1" max="50" step="1" value="12" inputmode="numeric" aria-label="Maximum response nodes">
+          </label>
+          <label class="knob" title="How deep the link fan-out follows: depth 1 is the topic's own lead links, depth 2 those topics' links, and so on. Applies to the next run you start.">
+            max depth <input id="researchDepth" type="number" min="1" max="3" step="1" value="1" inputmode="numeric" aria-label="Maximum node depth">
+          </label>
+        </div>
+        <p class="note" id="researchNote"></p>
+      </div>
+      <div class="card card-taught">
+        <h3><span class="tone tone-taught"></span>teach by telling</h3>
+        <p class="hint">Type a plain fact and it's stored if the recognizer can ground it, for example &ldquo;a beagle is a kind of dog&rdquo; or &ldquo;a dog has a tail&rdquo;. An unrecognized sentence is skipped.</p>
+        <div class="row">
+          <input id="teachInput" type="text" autocomplete="off" spellcheck="false" placeholder="a beagle is a kind of dog" aria-label="A fact to teach">
+          <button type="button" class="btn primary" id="teachGo" disabled>teach</button>
+        </div>
+        <p class="note" id="teachNote"></p>
+      </div>
+      <div class="card card-ingest">
+        <h3><span class="tone tone-ingest"></span>ingest documents</h3>
+        <p class="hint">Paste or drop text. It keeps only the sentences it can ground as facts and skips the rest, using the same recognizer the ingest page runs.</p>
+        <textarea id="ingestText" spellcheck="false" placeholder="Paste a paragraph or drop a .txt/.md file here." aria-label="Text to ingest"></textarea>
+        <div class="row">
+          <button type="button" class="btn primary" id="ingestGo" disabled>ingest</button>
+          <button type="button" class="btn" id="ingestBrowse">browse&hellip;</button>
+          <input type="file" id="ingestFile" accept=".txt,.md,text/plain,text/markdown" hidden>
+          <label class="optionToggle" title="On a miss, also tries a copula or known relation verb flanked by two resolvable entities as a low-trust candidate, tagged optimistic-extract, below every curated source.">
+            <input type="checkbox" id="fuzzyToggle"> fuzzy tier
+          </label>
+        </div>
+        <p class="note" id="ingestNote"></p>
+      </div>
+    </section>
+
+    <h2 class="band">highlights</h2>
+    <div class="cols">
+      <div class="panel">
+        <h3>recently learned</h3>
+        <div id="recentList"><p class="empty">Nothing learned yet this session. Research a term, teach a fact, or ingest some text above.</p></div>
+      </div>
+      <div class="panel">
+        <h3>best-connected terms</h3>
+        <div class="chips" id="hubsList"><p class="empty">The graph's hubs appear here as it grows.</p></div>
+      </div>
+    </div>
+
+    <h2 class="band">read a term back</h2>
+    <div class="panel digestpanel">
+      <p class="hint">Pick a term the graph knows. It reads back a short narrative built from the facts it holds, with each source named. The narrative is deterministic and never a guess. The full fact list stays one click away behind &ldquo;show the facts&rdquo;.</p>
+      <div class="askRow">
+        <input id="digestInput" type="text" autocomplete="off" spellcheck="false" placeholder="a term the graph knows, e.g. dog" aria-label="A term to read back as a digest" disabled>
+        <button type="button" class="btn primary" id="digestGo" disabled>digest</button>
+      </div>
+      <div id="digestOut" class="digestout" aria-live="polite"><p class="empty">Ask for a digest, or click a term under &ldquo;best-connected terms&rdquo; above.</p></div>
+    </div>
+
+    <h2 class="band">ask the graph</h2>
+    <div class="cols">
+      <div class="panel">
+        <h3>ask a question</h3>
+        <div class="askRow">
+          <input id="askInput" type="text" autocomplete="off" spellcheck="false" placeholder="what is a dog" aria-label="Ask the graph a question" disabled>
+          <button type="button" class="btn primary" id="askGo" disabled>ask</button>
+        </div>
+        <div id="answer" aria-live="polite">Ask the graph a question. The answer is drawn only from the sources you check on the right.</div>
+      </div>
+      <div class="panel">
+        <div class="sourcesHead">
+          <h3 style="margin:0">scope by source</h3>
+          <button type="button" class="toggleAll" id="toggleAll">all / none</button>
+        </div>
+        <div class="sourceTableHead" aria-hidden="true"><span>source</span><span>facts</span></div>
+        <div id="sourcesList"><p class="empty">loading sources&hellip;</p></div>
+      </div>
+    </div>
+
+    <div class="toolsRow">
+      <button type="button" class="btn" id="exportFacts" disabled>export facts (JSONL)</button>
+      <button type="button" class="btn" id="resetBtn">reset the graph</button>
+    </div>
+  </div>
+
+<script src="./research-browser.bundle.js"></script>
+<script>
+(function () {
+  "use strict";
+  const loadProgressLine = ${loadProgressLine.toString()};
+  const sourceLabelFor = ${sourceLabelFor.toString()};
+  const factTripleParts = ${factTripleParts.toString()};
+  const fetchWithProgress = ${fetchWithProgress.toString()};
+  const createTicker = ${createTicker.toString()};
+  const prefersReducedMotion = ${prefersReducedMotion.toString()};
+  const loadWinkVendor = ${loadWinkVendor.toString()};
+  const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
+  const el = (id) => document.getElementById(id);
+  // The digest sentence-structure bank, pre-parsed at build time — the browser
+  // has no TOML parser, so the page carries the table the client-side digest
+  // composes from.
+  const DIGEST_STRUCTURES = ${digestStructuresJson};
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
+
+  // The header's stat panel replaces one status line: "seed" carries the
+  // fact-count readout (boot progress, then the final count), "engine"
+  // carries the wink-nlp load result. engineNote is a separate banner for
+  // the one case that needs more room than a stat value: the whole engine
+  // bundle failing to load.
+  // The build's own content hash for the seed. It rides in the URL this page
+  // fetches the seed by, so the service worker's cache-first read can only
+  // ever return the copy this page asked for. Empty in a build with no seed.
+  const SEED_STAMP = ${JSON.stringify(seedStamp)};
+  const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+
+  const statFactsEl = el("statFacts");
+  const statSeedEl = el("statSeed");
+  const statEngineEl = el("statEngine");
+  const engineNoteEl = el("engineNote");
+  let session = null;
+  let researchQueue = null;   // the engine's latest research snapshot, null when no run stands
+  const checkedSources = new Set(); // source keys currently checked for the ask
+
+  // ---- boot --------------------------------------------------------------
+  const progressParts = {};
+  let progressActive = true;
+  function noteProgress(key, loaded, total) {
+    progressParts[key] = { loaded: loaded, total: total };
+    if (progressActive) statEngineEl.textContent = loadProgressLine(Object.values(progressParts));
+  }
+
+  const loadWink = loadWinkVendor({ register: (factory) => window.tmct.page.registerWinkModel(factory) });
+
+  let seedPayload = null;
+  let seedFacts = 0;
+  async function fetchSeed() {
+    try {
+      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
+      seedPayload = JSON.parse(await blob.text());
+      seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
+    } catch (err) {
+      seedPayload = null;
+      console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
+    }
+  }
+  async function newSession() {
+    return window.tmct.open({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
+  }
+
+  // The curated reference pack provider, same fetch seam chat.html registers,
+  // so a research/teach miss can still reach a shipped article where one exists.
+  let packIndexPromise = null;
+  function fetchPackIndex() {
+    if (!packIndexPromise) {
+      packIndexPromise = fetch("./reference-pack/index.json").then((res) => (res.ok ? res.json() : null)).catch(() => null);
+    }
+    return packIndexPromise;
+  }
+  const fetchPackProvider = {
+    async lookup(normTerm) {
+      const index = await fetchPackIndex();
+      const id = index && index.terms ? index.terms[String(normTerm || "")] : null;
+      if (!id) return null;
+      try {
+        const res = await fetch("./reference-pack/articles/" + id + ".json");
+        return res.ok ? await res.json() : null;
+      } catch { return null; }
+    },
+  };
+
+  async function boot() {
+    if (!window.tmct) {
+      engineNoteEl.hidden = false;
+      engineNoteEl.textContent = "The research engine did not load. Run npm run demo:build, then reload this page.";
+      statSeedEl.textContent = "—";
+      statEngineEl.textContent = "unavailable";
+      return;
+    }
+    const [winkStatus] = await Promise.all([loadWink(), fetchSeed()]);
+    progressActive = false;
+    window.tmct.page.registerReferencePackProvider(fetchPackProvider);
+    session = await newSession();
+    const winkPart = winkStatus === "loaded" ? "wink-nlp loaded" : "wink-nlp unavailable, curated tiers only";
+    statSeedEl.textContent = seedPayload ? seedFacts.toLocaleString() + " facts" : "no seed";
+    statEngineEl.textContent = winkPart + " · ready";
+    enableInputs();
+    await refresh();
+  }
+
+  function enableInputs() {
+    el("researchGo").disabled = false;
+    el("teachGo").disabled = false;
+    el("ingestGo").disabled = false;
+    el("askInput").disabled = false;
+    el("askGo").disabled = false;
+    el("digestInput").disabled = false;
+    el("digestGo").disabled = false;
+    el("exportFacts").disabled = false;
+  }
+
+  // ---- refresh the panels from one snapshot ------------------------------
+  async function refresh() {
+    if (!session) return;
+    let snap;
+    try { snap = await window.tmct.page.researchSnapshot(session.memoryDir, session.sessionIds); }
+    catch (err) { console.warn("tmct research: snapshot failed", err); return; }
+    const total = (snap.sources || []).reduce((sum, source) => sum + (Number(source.count) || 0), 0);
+    statFactsEl.textContent = total.toLocaleString();
+    renderRecent(snap.recent);
+    renderHubs(snap.hubs);
+    renderSources(snap.sources, snap.history);
+  }
+
+  function factRow(fact) {
+    const parts = factTripleParts(fact);
+    const tone = sourceLabelFor({ key: parts.source, band: parts.source.indexOf("seed:") === 0 ? parts.source.slice(5) : "" }).tone;
+    const row = document.createElement("div");
+    row.className = "fact";
+    const dot = document.createElement("span");
+    dot.className = "dot tone-" + tone;
+    const subj = document.createElement("span"); subj.className = "subj"; subj.textContent = parts.subject;
+    const pred = document.createElement("span"); pred.className = "pred"; pred.textContent = parts.predicate;
+    const obj = document.createElement("span"); obj.className = "obj"; obj.textContent = parts.object;
+    row.appendChild(dot); row.appendChild(subj); row.appendChild(pred); row.appendChild(obj);
+    return row;
+  }
+
+  function renderRecent(recent) {
+    const box = el("recentList");
+    box.textContent = "";
+    if (!recent || !recent.length) {
+      const p = document.createElement("p"); p.className = "empty";
+      p.textContent = "Nothing learned yet this session. Research a term, teach a fact, or ingest some text above.";
+      box.appendChild(p);
+      return;
+    }
+    for (const fact of recent) box.appendChild(factRow(fact));
+  }
+
+  // A top-N ranked bar list, styled after ledger.html's own predicate.top
+  // panel so the two pages' widgets read as siblings. Each row keeps the
+  // page's "chip tapchip" contract (its click-to-digest behaviour and its
+  // own e2e coverage key off those two classes); the rank/track/fill bar
+  // rides inside it.
+  function renderHubs(hubs) {
+    const box = el("hubsList");
+    box.textContent = "";
+    if (!hubs || !hubs.length) {
+      const p = document.createElement("p"); p.className = "empty";
+      p.textContent = "The graph's hubs appear here as it grows.";
+      box.appendChild(p);
+      return;
+    }
+    const max = hubs.reduce((m, h) => Math.max(m, h.degree), 0) || 1;
+    hubs.forEach((hub, i) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip tapchip";
+      chip.setAttribute("aria-label", "read a digest of " + hub.term);
+      const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = String(i + 1).padStart(2, "0");
+      const term = document.createElement("span"); term.className = "term"; term.textContent = hub.term;
+      const track = document.createElement("span"); track.className = "track";
+      const fill = document.createElement("span"); fill.className = "fill"; fill.style.width = ((hub.degree / max) * 100).toFixed(1) + "%";
+      track.appendChild(fill);
+      const deg = document.createElement("span");
+      deg.className = "deg";
+      deg.textContent = hub.degree + (hub.degree === 1 ? " fact" : " facts");
+      chip.appendChild(rank); chip.appendChild(term); chip.appendChild(track); chip.appendChild(deg);
+      chip.addEventListener("click", () => { el("digestInput").value = hub.term; digest(); });
+      box.appendChild(chip);
+    });
+  }
+
+  function renderSources(sources, history) {
+    const box = el("sourcesList");
+    box.textContent = "";
+    // Keep the checked set current: default a brand-new source to checked, drop
+    // any source that has vanished.
+    const present = new Set();
+    for (const s of sources || []) {
+      present.add(s.key);
+      if (!checkedSources.has(s.key + ":seen")) { checkedSources.add(s.key); checkedSources.add(s.key + ":seen"); }
+    }
+    for (const k of [...checkedSources]) {
+      const base = k.replace(/:seen$/, "");
+      if (!present.has(base)) checkedSources.delete(k);
+    }
+    if (!sources || !sources.length) {
+      const p = document.createElement("p"); p.className = "empty";
+      p.textContent = "No facts yet. Grow the graph above, then scope your question here.";
+      box.appendChild(p);
+      return;
+    }
+    for (const s of sources) {
+      const info = sourceLabelFor(s);
+      const det = document.createElement("details");
+      det.className = "source";
+      const sum = document.createElement("summary");
+      const labelWrap = document.createElement("span");
+      labelWrap.className = "srcLabel";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = checkedSources.has(s.key);
+      cb.setAttribute("data-key", s.key);
+      cb.addEventListener("click", (e) => e.stopPropagation());
+      cb.addEventListener("change", () => {
+        if (cb.checked) checkedSources.add(s.key); else checkedSources.delete(s.key);
+      });
+      const dot = document.createElement("span");
+      dot.className = "tone tone-" + info.tone;
+      dot.style.cssText = "display:inline-block;width:8px;height:8px;border-radius:50%";
+      const name = document.createElement("span");
+      name.textContent = info.label;
+      labelWrap.appendChild(cb); labelWrap.appendChild(dot); labelWrap.appendChild(name);
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = s.count + (s.count === 1 ? " fact" : " facts");
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      caret.textContent = "history";
+      sum.appendChild(labelWrap); sum.appendChild(count); sum.appendChild(caret);
+      det.appendChild(sum);
+      const hist = document.createElement("div");
+      hist.className = "srcHistory";
+      const rows = (history && history[s.key]) || [];
+      if (!rows.length) {
+        const p = document.createElement("p"); p.className = "empty";
+        p.textContent = "no facts recorded from this source yet.";
+        hist.appendChild(p);
+      } else {
+        for (const row of rows) hist.appendChild(factRow(row));
+      }
+      det.appendChild(hist);
+      box.appendChild(det);
+    }
+  }
+
+  el("toggleAll").addEventListener("click", () => {
+    const boxes = [...el("sourcesList").querySelectorAll('input[type="checkbox"]')];
+    const anyUnchecked = boxes.some((b) => !b.checked);
+    for (const b of boxes) {
+      b.checked = anyUnchecked;
+      const key = b.getAttribute("data-key");
+      if (anyUnchecked) checkedSources.add(key); else checkedSources.delete(key);
+    }
+  });
+
+  // ---- ask, scoped by source ---------------------------------------------
+  async function ask() {
+    const q = el("askInput").value.trim();
+    if (!q || !session) return;
+    const boxes = [...el("sourcesList").querySelectorAll('input[type="checkbox"]')];
+    const checked = boxes.filter((b) => b.checked).map((b) => b.getAttribute("data-key"));
+    // Every box checked (or none present) -> ask the whole store; a subset ->
+    // scope to those keys. No box checked -> honest miss, nothing to ask.
+    const allChecked = boxes.length > 0 && checked.length === boxes.length;
+    const answerEl = el("answer");
+    if (boxes.length && checked.length === 0) {
+      answerEl.className = "miss";
+      answerEl.textContent = "No source is checked. Check at least one on the right to ask against it.";
+      return;
+    }
+    answerEl.className = "";
+    answerEl.textContent = "thinking…";
+    let res;
+    try { res = await tmct.ask(q, { sources: allChecked ? null : checked }); }
+    catch (err) { res = { answer: "", miss: true }; }
+    if (res.miss || !res.answer) {
+      answerEl.className = "miss";
+      const scope = allChecked ? "any checked source" : "the " + checked.length + " checked source" + (checked.length === 1 ? "" : "s");
+      answerEl.textContent = "No grounded answer from " + scope + ". It abstains rather than guess.";
+    } else {
+      answerEl.className = "";
+      answerEl.textContent = res.answer;
+    }
+  }
+  el("askGo").addEventListener("click", ask);
+  el("askInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ask(); } });
+
+  // ---- digest a term: the narrative read-back over the grown store ---------
+  function renderDigestFact(fact) {
+    const row = document.createElement("div");
+    row.className = "fact";
+    const dot = document.createElement("span"); dot.className = "dot tone-seed";
+    const subj = document.createElement("span"); subj.className = "subj"; subj.textContent = String(fact.subject || "");
+    const pred = document.createElement("span"); pred.className = "pred"; pred.textContent = String(fact.predicate || "");
+    const obj = document.createElement("span"); obj.className = "obj"; obj.textContent = String(fact.object || "");
+    row.appendChild(dot); row.appendChild(subj); row.appendChild(pred); row.appendChild(obj);
+    return row;
+  }
+  function renderDigest(term, view) {
+    const box = el("digestOut");
+    box.textContent = "";
+    if (!view) {
+      const p = document.createElement("p"); p.className = "miss";
+      p.textContent = 'No grounded digest for "' + term + '". Nothing is stored about it, or nothing the digest could compose. It abstains rather than guess.';
+      box.appendChild(p);
+      return;
+    }
+    const card = document.createElement("div"); card.className = "dgcard";
+    const head = document.createElement("div"); head.className = "dgterm mono"; head.textContent = view.term || term;
+    card.appendChild(head);
+    for (const para of view.paragraphs) {
+      const p = document.createElement("p"); p.textContent = para; card.appendChild(p);
+    }
+    if (view.sources && view.sources.length) {
+      const src = document.createElement("p"); src.className = "dgsrc";
+      src.textContent = "(sources: " + view.sources.join("; ") + ")";
+      card.appendChild(src);
+    }
+    const facts = view.facts || [];
+    if (facts.length) {
+      const det = document.createElement("details"); det.className = "dgfacts";
+      const sum = document.createElement("summary");
+      sum.textContent = "show the facts (" + view.factCount + ")";
+      det.appendChild(sum);
+      const list = document.createElement("div"); list.className = "factlist";
+      for (const f of facts) list.appendChild(renderDigestFact(f));
+      det.appendChild(list);
+      card.appendChild(det);
+    }
+    box.appendChild(card);
+  }
+  async function digest() {
+    const term = el("digestInput").value.trim();
+    if (!term || !session) return;
+    const box = el("digestOut");
+    box.textContent = "";
+    const wait = document.createElement("p"); wait.className = "empty"; wait.textContent = "reading it back…";
+    box.appendChild(wait);
+    let view = null;
+    try { view = await session.digest(term); } catch { view = null; }
+    renderDigest(term, view);
+  }
+  el("digestGo").addEventListener("click", digest);
+  el("digestInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); digest(); } });
+
+  // ---- grow: teach by telling --------------------------------------------
+  async function teach() {
+    const q = el("teachInput").value.trim();
+    if (!q || !session) return;
+    const note = el("teachNote");
+    note.textContent = "…";
+    let res;
+    try { res = await tmct.turn(q); } catch { res = null; }
+    if (res && res.record && res.record.via === "assert" && !res.record.miss) {
+      note.textContent = "stored: " + (res.answer || "remembered.");
+      el("teachInput").value = "";
+    } else {
+      note.textContent = res && res.answer ? res.answer : "not a recognized fact shape, nothing stored.";
+    }
+    await refresh();
+  }
+  el("teachGo").addEventListener("click", teach);
+  el("teachInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); teach(); } });
+
+  // ---- grow: ingest documents --------------------------------------------
+  async function ingest() {
+    const text = el("ingestText").value.trim();
+    if (!text || !session) return;
+    const note = el("ingestNote");
+    note.textContent = "reading…";
+    let summary;
+    try { summary = await session.ingest(text, { optimistic: el("fuzzyToggle").checked }); }
+    catch (err) { note.textContent = "something went wrong reading that."; return; }
+    note.textContent = summary.sentences + " sentence" + (summary.sentences === 1 ? "" : "s")
+      + " read, " + summary.recognized + " grounded, " + summary.skipped + " skipped.";
+    await refresh();
+  }
+  el("ingestGo").addEventListener("click", ingest);
+  el("ingestBrowse").addEventListener("click", () => el("ingestFile").click());
+  el("ingestFile").addEventListener("change", async () => {
+    const file = el("ingestFile").files && el("ingestFile").files[0];
+    el("ingestFile").value = "";
+    if (!file) return;
+    try { el("ingestText").value = await file.text(); }
+    catch { el("ingestNote").textContent = "couldn't read that file."; }
+  });
+
+  // ---- grow: research a term + its queue ----------------------------------
+  const RESEARCH_TICK_MS = 2400;
+  const researchTicker = createTicker({
+    onTick: async () => { await researchStep("research next"); },
+    hasNext: () => Boolean(researchQueue && !researchQueue.complete),
+    onRender: renderResearchControls,
+    waitMs: RESEARCH_TICK_MS,
+  });
+
+  function renderResearchControls(tickState) {
+    const state = tickState || researchTicker.getState();
+    const active = Boolean(researchQueue && !researchQueue.complete);
+    el("researchNext").hidden = !active;
+    el("researchPlay").hidden = !active;
+    el("researchPlay").textContent = state.playing ? "pause" : "play";
+    el("researchPlay").setAttribute("aria-pressed", String(state.playing));
+    const note = el("researchNote");
+    if (!researchQueue) { /* leave whatever the last turn's note said */ }
+    else {
+      const depth = researchQueue.maxDepth || 1;
+      const budget = researchQueue.maxTopics || 0;
+      const knobs = " (depth " + depth + (budget ? ", budget " + budget : "") + ")";
+      const capped = researchQueue.nodeCapReached ? " · node budget reached" : "";
+      if (researchQueue.complete) {
+        note.textContent = 'research "' + researchQueue.topic + '" complete · '
+          + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s") + " grounded" + knobs + capped + ".";
+      } else {
+        note.textContent = 'research "' + researchQueue.topic + '": '
+          + researchQueue.done.length + " done · " + researchQueue.pending.length + " queued" + knobs + capped + ".";
+      }
+    }
+  }
+
+  // Read the two node knobs off the page and hand them to the session for the
+  // NEXT run started. A run already going keeps the knobs it captured.
+  function applyResearchConfig() {
+    if (!session || !session.setResearchConfig) return;
+    session.setResearchConfig({
+      maxTopics: parseInt(el("researchNodes").value, 10),
+      maxDepth: parseInt(el("researchDepth").value, 10),
+    });
+  }
+
+  async function researchStep(line) {
+    if (!session) return;
+    let res;
+    try { res = await tmct.turn(line); } catch { res = null; }
+    if (res && res.research !== undefined) {
+      researchQueue = res.research;
+      renderResearchControls();
+    } else if (res && res.answer) {
+      el("researchNote").textContent = res.answer.split("\\n")[0];
+    }
+    await refresh();
+    return res;
+  }
+
+  async function startResearch() {
+    const topic = el("researchTopic").value.trim();
+    if (!topic || !session) return;
+    applyResearchConfig();
+    el("researchTopic").value = "";
+    el("researchNote").textContent = 'researching "' + topic + '"…';
+    const previous = researchQueue;
+    await researchStep("research " + topic);
+    const fresh = Boolean(researchQueue && !researchQueue.complete && (!previous || previous.complete || previous.topic !== researchQueue.topic));
+    if (fresh && !prefersReducedMotion() && !researchTicker.getState().playing) researchTicker.play();
+  }
+  el("researchGo").addEventListener("click", startResearch);
+  el("researchTopic").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); startResearch(); } });
+  el("researchNext").addEventListener("click", () => researchStep("research next"));
+  el("researchPlay").addEventListener("click", () => {
+    if (researchTicker.getState().playing) researchTicker.pause(); else researchTicker.play();
+  });
+
+  // ---- tools --------------------------------------------------------------
+  el("exportFacts").addEventListener("click", async () => {
+    if (!session || !window.tmct.page.exportFactsJsonl) return;
+    let jsonl;
+    try { jsonl = await window.tmct.page.exportFactsJsonl(session.memoryDir); }
+    catch { return; }
+    const blob = new Blob([jsonl], { type: "application/x-ndjson" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "tmct-facts.jsonl";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  el("resetBtn").addEventListener("click", async () => {
+    researchTicker.pause();
+    researchQueue = null;
+    checkedSources.clear();
+    session = await newSession();
+    el("teachNote").textContent = "";
+    el("ingestNote").textContent = "";
+    el("researchNote").textContent = "";
+    el("answer").className = "";
+    el("answer").textContent = "Ask the graph a question. The answer is drawn only from the sources you check on the right.";
+    renderResearchControls();
+    await refresh();
+  });
+
+  window.tmctResearchReady = boot().catch((err) => {
+    console.error("tmct research failed to boot", err);
+    engineNoteEl.hidden = false;
+    engineNoteEl.textContent = "The research page failed to start (" + (err && err.message ? err.message : err) + ").";
+  });
+})();
+</script>
+</body>
+</html>
+`;
+}

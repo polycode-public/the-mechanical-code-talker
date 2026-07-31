@@ -2,11 +2,14 @@
 // a title bar (graph source, Open graph…/Open repo…), an explorer sidebar
 // reading each import/call/contains edge back as a plain sentence, a chat
 // centre over the same graph with a rail of suggested questions, and a status
-// bar carrying the graph's own counts. The chat session seeds BOTH the loaded
-// code graph and chat.html's general-knowledge bands (./chat-seed.json,
-// fetched lazily at runtime), so one conversation answers "what is a queue"
-// and "what imports src/core/model.mjs" alike — and degrades to graph-only
-// when the seed asset is unavailable.
+// bar carrying the graph's own counts. Clicking a term asks the engine what
+// relates to it (askRelatedFacts, over tmct_ask) and renders the answer, so the
+// sidebar and the chat put the same question to the same place.
+//
+// The chat session seeds BOTH the loaded code graph and chat.html's
+// general-knowledge bands (./chat-seed.json, fetched lazily at runtime), so one
+// conversation answers "what is a queue" and "what imports src/core/model.mjs"
+// alike — and degrades to graph-only when the seed asset is unavailable.
 //
 // The derivations are pure so the shell, the packaging scripts, and the unit
 // tests all share one code path; renderCodeExplorerHtml builds one
@@ -18,24 +21,14 @@
 
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { generateCodeHints } from "../domain/code-explorer-hints.mjs";
+import { phraseForRelation } from "../domain/ask-vocab.mjs";
+import { fetchWithProgress } from "./memory-panel-viz.mjs";
 
-// Third-person verb for each stored relation kind, symbol grain folded onto its
-// coarse sibling. A kind with no row here reads back as itself, never breaking
-// the sentence.
-const EDGE_PHRASE = new Map([
-  ["imports", "imports"],
-  ["calls", "calls"], ["callsSymbol", "calls"],
-  ["contains", "contains"],
-  ["defines", "defines"],
-  ["inherits", "inherits from"],
-  ["tests", "tests"],
-  ["touches", "touches"], ["touchesSymbol", "touches"],
-  ["cochange", "co-changes with"],
-  ["reexports", "re-exports"],
-]);
-
+// Third-person verb for each stored relation kind, symbol grain folded onto
+// its coarse sibling — derived from ask-vocab.mjs's own RELATIONS table
+// rather than a second hand-curated relation-verb table.
 export function edgePhrase(kind) {
-  return EDGE_PHRASE.get(String(kind || "")) || String(kind || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  return phraseForRelation(kind);
 }
 
 // Both packagers (build-electron-app.mjs, build-demo-site.mjs) place
@@ -114,10 +107,89 @@ export function computeCodeExplorerData(payload, opts = {}) {
   return { payload, ledger, hints, focus: ledger.focus || focus, meta: { title: opts.title || "code graph" } };
 }
 
+// ---- client script pieces, spliced into CLIENT_JS below -------------------
+// Named module functions so the page's own source reads as a list of calls
+// into real, unit-tested code rather than an inlined block. Each is written
+// to survive a `.toString()` round trip into a browser `<script>` tag: no
+// closure over this module's own scope, only its parameters and whichever
+// sibling below it is also spliced into the same page script.
+
+/** One line naming the loaded graph's own size: individual/edge counts, then
+ *  up to four of its most common classes. */
+export function statsSummaryLine(ledgerStats) {
+  var parts = [ledgerStats.individuals + " individuals", ledgerStats.edges + " edges"];
+  var cls = ledgerStats.classes.slice(0, 4).map(function (c) { return c[1] + " " + c[0]; });
+  return parts.concat(cls).join("  ·  ");
+}
+
+/** Every fact the chat can draw on: the graph's own edges plus whatever the
+ *  general-knowledge seed has counted so far. */
+export function factTotalText(edges, seedFacts) {
+  return (edges + seedFacts).toLocaleString();
+}
+
+export function rowKey(row) { return JSON.stringify([row.s, row.kind, row.o]); }
+
+/** The sidebar's rows: the engine's own answer about the focus when it
+ *  grounded one, the row list's plain filter otherwise, then whatever
+ *  neither named — a fold over the rest of the graph. */
+export function focusRowsHtml(data, related) {
+  var focus = data.focus;
+  var rows = data.ledger.rows;
+  var grounded = Boolean(related && related.grounded);
+  var near = grounded ? related.rows : rows.filter(function (r) { return r.s === focus || r.o === focus; });
+  var nearKeys = {};
+  near.forEach(function (r) { nearKeys[rowKey(r)] = true; });
+  var rest = rows.filter(function (r) { return !nearKeys[rowKey(r)]; });
+  var ordered = near.concat(rest);
+  return ordered.map(function (r) {
+    var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
+    return '<li class="row' + hot + '">'
+      + '<button class="term" data-term="' + escapeHtml(r.s) + '">' + escapeHtml(r.s) + '</button> '
+      + '<span class="verb">' + escapeHtml(r.phrase) + '</span> '
+      + '<button class="term" data-term="' + escapeHtml(r.o) + '">' + escapeHtml(r.o) + '</button>'
+      + '</li>';
+  }).join("") || (grounded
+    ? '<li class="row muted">nothing in this graph relates to ' + escapeHtml(focus) + '.</li>'
+    : '<li class="row muted">no edges in this graph.</li>');
+}
+
+export function hintsHtml(hints) {
+  return hints.map(function (h) {
+    return '<button class="hint" data-q="' + escapeHtml(h.text) + '" title="' + escapeHtml(h.rationale) + '">'
+      + escapeHtml(h.text) + '</button>';
+  }).join("") || '<span class="muted">nothing to suggest for this graph.</span>';
+}
+
+export function turnHtml(role, text) {
+  return '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + escapeHtml(text) + '</span>';
+}
+
+export function chatEmptyStateHtml(hasEngine) {
+  return hasEngine
+    ? '<p class="chat-empty-head">Ask the graph, or ask it anything</p>'
+      + '<p>Ask about the code graph on the left, or about anything its general knowledge covers, like “what is a queue”.</p>'
+      + '<p class="chat-empty-hint">Try one of the questions below, or type your own.</p>'
+    : '<p class="chat-empty-head">Static view</p>'
+      + '<p>This page shows a fixed snapshot of the graph. The live chat is not available here.</p>';
+}
+
+export function mbText(n) { return (n / 1048576).toFixed(1); }
+
+/** How many of the seed's own individuals are facts — the general-knowledge
+ *  half of the fact-total pill. */
+export function seedFactsFromPayload(payload) {
+  return (payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
+}
+
+export function seedLoadingNote(loadedBytes, totalBytes) {
+  return "loading general knowledge… " + mbText(loadedBytes) + (totalBytes ? " of " + mbText(totalBytes) : "") + " MB";
+}
+
 const CLIENT_JS = String.raw`
 (function () {
   var DATA = window.__CODE_EXPLORER__;
-  var api = window.tmctCodeExplorer || null;
+  var api = window.tmct ? window.tmct.page : null;
   var els = {
     focus: document.getElementById("focus-name"),
     ledger: document.getElementById("ledger"),
@@ -129,44 +201,60 @@ const CLIENT_JS = String.raw`
     dockNote: document.getElementById("dock-note"),
     source: document.getElementById("source-name"),
     seedStatus: document.getElementById("seed-status"),
+    factTotal: document.getElementById("fact-total-value"),
   };
   var session = null;
 
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  var escapeHtml = ${escapeHtml.toString()};
+  var rowKey = ${rowKey.toString()};
+  var statsSummaryLine = ${statsSummaryLine.toString()};
+  var factTotalText = ${factTotalText.toString()};
+  var focusRowsHtml = ${focusRowsHtml.toString()};
+  var hintsHtml = ${hintsHtml.toString()};
+  var turnHtml = ${turnHtml.toString()};
+  var chatEmptyStateHtml = ${chatEmptyStateHtml.toString()};
 
   function renderStats(data) {
-    var s = data.ledger.stats;
-    var parts = [s.individuals + " individuals", s.edges + " edges"];
-    var cls = s.classes.slice(0, 4).map(function (c) { return c[1] + " " + c[0]; });
-    els.stats.textContent = parts.concat(cls).join("  ·  ");
+    els.stats.textContent = statsSummaryLine(data.ledger.stats);
+    renderFactTotal(data);
   }
 
-  function renderFocusRows(data) {
-    var focus = data.focus;
-    var rows = data.ledger.rows;
-    var near = rows.filter(function (r) { return r.s === focus || r.o === focus; });
-    var rest = rows.filter(function (r) { return r.s !== focus && r.o !== focus; });
-    var ordered = near.concat(rest);
-    els.ledger.innerHTML = ordered.map(function (r) {
-      var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
-      return '<li class="row' + hot + '">'
-        + '<button class="term" data-term="' + esc(r.s) + '">' + esc(r.s) + '</button> '
-        + '<span class="verb">' + esc(r.phrase) + '</span> '
-        + '<button class="term" data-term="' + esc(r.o) + '">' + esc(r.o) + '</button>'
-        + '</li>';
-    }).join("") || '<li class="row muted">no edges in this graph.</li>';
-    els.focus.textContent = focus || "—";
+  // Everything the chat can answer from: the graph's own edges plus the
+  // general-knowledge seed, which arrives later and re-renders this.
+  function renderFactTotal(data) {
+    if (!els.factTotal) return;
+    var edges = (data && data.ledger && data.ledger.stats && data.ledger.stats.edges) || 0;
+    els.factTotal.textContent = factTotalText(edges, seedState.facts);
+  }
+
+  // "What relates to the focus", put to the engine. askRelatedFacts asks
+  // tmct_ask one question per relation kind the loaded graph carries, in both
+  // directions, and hands back the answers' own typed rows — the same ask()
+  // this page's chat turns reach, so the panel and the conversation answer one
+  // question one way. Null on the static page, which has no engine to ask.
+  function askRelated(focus) {
+    if (!api || !api.askRelatedFacts || !focus) return null;
+    try {
+      return api.askRelatedFacts(DATA.payload, focus);
+    } catch (e) {
+      console.warn("tmct code explorer: the related-facts ask failed, splitting the row list instead", e);
+      return null;
+    }
+  }
+
+  // The engine's answer whenever it grounded one. The row list's own split is
+  // what is left when there is no engine (the static page) or when every
+  // question came back parsed as something else — an identifier that is
+  // itself a relation verb reads as a question about the verb. Whatever the
+  // neighbourhood did not already name follows, in degree order: a bulk view
+  // of the rest of the graph, which is a fold and not a question.
+  function renderFocusRows(data, related) {
+    els.ledger.innerHTML = focusRowsHtml(data, related);
+    els.focus.textContent = data.focus || "—";
   }
 
   function renderHints(data) {
-    els.hints.innerHTML = data.hints.map(function (h) {
-      return '<button class="hint" data-q="' + esc(h.text) + '" title="' + esc(h.rationale) + '">'
-        + esc(h.text) + '</button>';
-    }).join("") || '<span class="muted">nothing to suggest for this graph.</span>';
+    els.hints.innerHTML = hintsHtml(data.hints);
   }
 
   function focusOn(term) {
@@ -178,22 +266,29 @@ const CLIENT_JS = String.raw`
 
   function mountView(data) {
     renderStats(data);
-    renderFocusRows(data);
+    renderFocusRows(data, askRelated(data.focus));
     renderHints(data);
   }
 
+  function clearEmptyState() {
+    var e = document.getElementById("chat-empty");
+    if (e) e.remove();
+  }
+
   function appendTurn(role, text) {
+    clearEmptyState();
     var div = document.createElement("div");
     div.className = "turn turn-" + role;
-    div.innerHTML = '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + esc(text) + '</span>';
+    div.innerHTML = turnHtml(role, text);
     els.log.appendChild(div);
     els.log.scrollTop = els.log.scrollHeight;
   }
 
-  function appendNote(text) {
+  function renderEmptyState() {
     var div = document.createElement("div");
-    div.className = "turn turn-note";
-    div.textContent = text;
+    div.className = "chat-empty";
+    div.id = "chat-empty";
+    div.innerHTML = chatEmptyStateHtml(Boolean(api));
     els.log.appendChild(div);
   }
 
@@ -203,27 +298,17 @@ const CLIENT_JS = String.raw`
   // readSeed under the desktop shell (a file:// page cannot fetch). The
   // status bar narrates the load; a missing or failing seed leaves the chat
   // graph-only and says so, never broken.
+  // The build's own content hash for the seed rides in the URL, so the service
+  // worker's cache-first read can only return the copy this page asked for.
+  // Empty under the desktop shell, which reads the seed off disk instead.
+  var SEED_QUERY = DATA.seedStamp ? "?b=" + DATA.seedStamp : "";
   var seedState = { status: api ? "loading" : "absent", payload: null, facts: 0 };
   function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
-  function mbText(n) { return (n / 1048576).toFixed(1); }
 
-  async function fetchTextWithProgress(url, onProgress) {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    var total = Number(res.headers.get("content-length")) || 0;
-    if (!res.body || !res.body.getReader) return res.text();
-    var reader = res.body.getReader();
-    var chunks = [];
-    var loaded = 0;
-    for (;;) {
-      var step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      loaded += step.value.byteLength;
-      onProgress(loaded, total);
-    }
-    return new Blob(chunks).text();
-  }
+  var mbText = ${mbText.toString()};
+  var fetchWithProgress = ${fetchWithProgress.toString()};
+  var seedFactsFromPayload = ${seedFactsFromPayload.toString()};
+  var seedLoadingNote = ${seedLoadingNote.toString()};
 
   async function loadSeed() {
     try {
@@ -232,22 +317,24 @@ const CLIENT_JS = String.raw`
         seedNote("loading general knowledge…");
         text = await window.tmctDesktop.readSeed();
       } else {
-        text = await fetchTextWithProgress("./chat-seed.json", function (loaded, total) {
-          seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
+        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
+          seedNote(seedLoadingNote(loaded, total));
         });
+        text = await seedBlob.text();
       }
       if (text) {
         seedState.payload = JSON.parse(text);
-        seedState.facts = (seedState.payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
+        seedState.facts = seedFactsFromPayload(seedState.payload);
         seedState.status = "ready";
         seedNote("general knowledge: " + seedState.facts + " facts");
+        renderFactTotal(DATA);
         return;
       }
     } catch (e) {
       console.warn("tmct code explorer: chat-seed unavailable, continuing graph-only", e);
     }
     seedState.status = "absent";
-    seedNote("graph-only — general knowledge unavailable");
+    seedNote("graph-only, general knowledge unavailable");
   }
   var seedPromise = api ? loadSeed() : Promise.resolve();
 
@@ -315,6 +402,7 @@ const CLIENT_JS = String.raw`
           window.__CODE_EXPLORER__ = DATA;
           if (updateSource && els.source) els.source.textContent = picked.name || "(loaded graph)";
           els.log.innerHTML = "";
+          renderEmptyState();
           mountView(DATA);
         }
       } finally { btn.disabled = false; }
@@ -324,12 +412,11 @@ const CLIENT_JS = String.raw`
   wirePicker("open-repo", "openRepo", true);
 
   if (!api) {
-    if (els.dockNote) els.dockNote.textContent = "static view — the live chat is unavailable on this page.";
+    if (els.dockNote) els.dockNote.textContent = "static view, live chat unavailable here.";
     if (els.input) els.input.disabled = true;
     seedNote("static view");
-  } else {
-    appendNote("Ask about this code graph — or anything its general knowledge covers, like “what is a queue”.");
   }
+  renderEmptyState();
 
   mountView(DATA);
 })();
@@ -344,7 +431,7 @@ const CLIENT_JS = String.raw`
  * pointing at the desktop app's README section — the desktop shell itself
  * renders this page too and passes `false`, since it has nothing to point at.
  */
-export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false } = {}) {
+export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false, seedStamp = "" } = {}) {
   const payloadJson = embedJson(data.payload);
   const dataJson = embedJson({ ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta });
 
@@ -354,6 +441,9 @@ export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailabl
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tmct code explorer</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <style>
 ${THEME_TOKENS_CSS}
 * { box-sizing: border-box; }
@@ -366,6 +456,11 @@ body { margin: 0; overflow: hidden; background: var(--bg); color: var(--ink); fo
 .titlebar h1 { font-size: 0.95rem; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
 .titlebar .sub { color: var(--muted); font-size: 0.76rem; font-family: ${MONO_STACK}; }
 .titlebar .sub a { color: var(--corpus); }
+/* the fact count sits in the titlebar, not the footer status bar: it is what
+   the chat can actually answer from, and the footer is where a wrong number
+   goes unread. */
+.titlebar .factpill { display: inline-flex; align-items: baseline; gap: 0.34rem; font-family: ${MONO_STACK}; font-size: 0.62rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--entail); border-radius: 99px; padding: 0.14rem 0.7rem; background: var(--entail-soft); white-space: nowrap; }
+.titlebar .factpill-value { font-size: 0.9rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 .titlebar .pickers { margin-left: auto; display: flex; gap: 0.45rem; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.5; }
@@ -394,13 +489,16 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
 .turn-you .said { font-family: ${MONO_STACK}; font-size: 0.84rem; }
 .turn-tmct { border-left: 2px solid var(--entail); padding-left: 0.7rem; }
 .turn-tmct .said { white-space: pre-wrap; }
-.turn-note { color: var(--muted); font-style: italic; font-size: 0.85rem; }
-.suggest { flex: none; border-top: 1px solid var(--line); padding: 0.45rem 1.1rem 0.1rem; }
+.chat-empty { margin: auto; max-width: 26rem; text-align: center; color: var(--muted); }
+.chat-empty-head { color: var(--ink); font-weight: 600; font-size: 1.05rem; margin: 0 0 0.5rem; }
+.chat-empty p { margin: 0.3rem 0; line-height: 1.55; font-size: 0.92rem; }
+.chat-empty-hint { font-size: 0.82rem; }
+.suggest { flex: none; border-top: 1px solid var(--line); padding: 0.65rem 1.1rem 0.4rem; }
 .suggest-label { font-family: ${MONO_STACK}; font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
-.hints { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 5.6rem; overflow-y: auto; padding: 0.35rem 0 0.45rem; }
+.hints { display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 5.6rem; overflow-y: auto; padding: 0.45rem 0 0.55rem; }
 .hint { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 0.24rem 0.7rem; font-size: 0.8rem; color: var(--ink); text-align: left; }
 .hint:hover { border-color: var(--entail); }
-#chat-form { flex: none; display: flex; gap: 0.5rem; padding: 0.55rem 1.1rem 0.8rem; border-top: 1px solid var(--line); }
+#chat-form { flex: none; display: flex; gap: 0.5rem; padding: 0.75rem 1.1rem 0.9rem; border-top: 1px solid var(--line); }
 #chat-input { flex: 1; min-width: 0; font: inherit; font-size: 0.92rem; padding: 0.5rem 0.65rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
 #chat-form button { background: var(--entail); color: var(--card); font-weight: 600; border: none; border-radius: 4px; padding: 0.5rem 1rem; font-size: 0.9rem; }
 
@@ -419,6 +517,9 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
     <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1 2.3a5.8 5.8 0 0 1 1.9.8L13.3 2l.7.7-1.1 2.4c.4.6.6 1.2.8 1.9L16 8l-2.3 1a5.8 5.8 0 0 1-.8 1.9l1.1 2.4-.7.7-2.4-1.1a5.8 5.8 0 0 1-1.9.8L8 16l-1-2.3a5.8 5.8 0 0 1-1.9-.8L2.7 14l-.7-.7 1.1-2.4a5.8 5.8 0 0 1-.8-1.9L0 8l2.3-1c.2-.7.4-1.3.8-1.9L2 2.7l.7-.7 2.4 1.1A5.8 5.8 0 0 1 7 2.3L8 0zm0 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z"/></svg>
     <h1>tmct code explorer</h1>
     <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
+    <span class="factpill" id="fact-total" aria-live="polite" title="every fact this page's chat can draw on — the code graph's own edges plus the general-knowledge seed once it lands">
+      <span class="factpill-value" id="fact-total-value">&mdash;</span> facts loaded
+    </span>
     ${showDesktopLink ? `<span class="sub">Also available as a <a href="${DESKTOP_APP_URL}">desktop app</a>.</span>` : ""}
     <div class="pickers">
       <button id="open-graph">Open graph…</button>
@@ -453,7 +554,7 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
     <span id="seed-status"></span>
   </footer>
 </div>
-<script>window.__CODE_EXPLORER__ = Object.assign({ payload: ${payloadJson} }, ${dataJson});</script>
+<script>window.__CODE_EXPLORER__ = Object.assign({ payload: ${payloadJson}, seedStamp: ${JSON.stringify(seedStamp)} }, ${dataJson});</script>
 ${winkLoaderInline ? `<script>\n${embedScriptText(winkLoaderInline)}\n</script>` : ""}
 ${bundleInline ? `<script>\n${embedScriptText(bundleInline)}\n</script>` : ""}
 ${bundleAvailable && !bundleInline ? `<script src="./code-explorer.bundle.js"></script>` : ""}

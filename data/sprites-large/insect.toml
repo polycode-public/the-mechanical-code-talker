@@ -1,6 +1,9 @@
 # insect — the generic bug at the sprite tier: a segmented gradient
 # body with thin flat legs and antennae, distinct from the spider's own
-# eight-legged silhouette, no material.
+# eight-legged silhouette. No species markings on purpose (this is the
+# unidentified-bug fallback, the same restraint animal.toml uses for the
+# unidentified-species fallback) — only a fixed pair of compound eyes,
+# since any real insect has visible eyes regardless of which one it is.
 classes = ["insect"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -16,6 +19,10 @@ svg = """
   <circle cx="12" cy="4.8" r="2.2" fill="url(#insect-fill)"/>
   <path d="M11 3.2 L8.4 1" stroke="currentColor" stroke-width="0.7" opacity="0.6" stroke-linecap="round" fill="none"/>
   <path d="M13 3.2 L15.6 1" stroke="currentColor" stroke-width="0.7" opacity="0.6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="10.6" cy="4.6" rx="0.9" ry="1.1" fill="#1c1c1c" transform="rotate(-20 10.6 4.6)"/>
+  <ellipse cx="13.4" cy="4.6" rx="0.9" ry="1.1" fill="#1c1c1c" transform="rotate(20 13.4 4.6)"/>
+  <circle cx="10.4" cy="4.3" r="0.22" fill="#ffffff" opacity="0.8"/>
+  <circle cx="13.6" cy="4.3" r="0.22" fill="#ffffff" opacity="0.8"/>
   <path d="M9.6 15 L12.4 15.6 L9.6 16.2" fill="#000000" opacity="0.16"/>
   <g stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round">
     <path d="M9 11 L3.4 9"/><path d="M9.4 14 L3 14"/><path d="M9.8 17.4 L4 19.6"/>

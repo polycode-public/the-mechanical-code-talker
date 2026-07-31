@@ -24,18 +24,18 @@ import {
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
   callMatches, callsMatch, gradeCase, effectiveCaseFor, rollup, ladderGate, sameSet, sameCandidates,
-} from "../../agentbench/grade.mjs";
-import { stubDriver } from "../../agentbench/driver-stub.mjs";
-import { shimDriver } from "../../agentbench/driver-shim.mjs";
-import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
-import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
+} from "../../test-benchmarks/agentbench/grade.mjs";
+import { stubDriver } from "../../test-benchmarks/agentbench/driver-stub.mjs";
+import { shimDriver } from "../../test-benchmarks/agentbench/driver-shim.mjs";
+import { resolverDriver } from "../../test-benchmarks/agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../../test-benchmarks/agentbench/run.mjs";
 import {
   resultSetOf, untestedModules, impactLabels, testsForLabels, membersLabels, callersLabels,
   intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching,
-} from "../../agentbench/results.mjs";
+} from "../../test-benchmarks/agentbench/results.mjs";
 import { COMMANDS } from "../../src/services/chat.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/cases.jsonl", import.meta.url));
 
 // ONE shared run context for the whole file (0.8.2 speed insurance): every
 // consumer here is READ-ONLY over the materialized fixture graph, so the
@@ -78,9 +78,13 @@ test("registry: every capability carries its store's safety-gate precondition �
     );
   }
   // the memory-graph view answers with or without a code-map graph, so it
-  // carries memory-facts INSTEAD of graph-loaded, never both.
+  // carries memory-facts INSTEAD of graph-loaded, never both — plus the
+  // resolves gate that binds its term slot in the memory graph.
   const related = preconditionsOf("tmct_related").map((p) => p.pred);
-  assert.deepEqual(related, [PRECOND.memoryFacts]);
+  assert.deepEqual(related, [PRECOND.memoryFacts, PRECOND.resolves]);
+  const relatedResolves = preconditionsOf("tmct_related").find((p) => p.pred === PRECOND.resolves);
+  assert.equal(relatedResolves.param, "term");
+  assert.equal(relatedResolves.as, KINDS.MemoryTerm);
 });
 
 test("registry: accessors resolve — byName / preconditionsOf / effectsOf / parametersOf", () => {

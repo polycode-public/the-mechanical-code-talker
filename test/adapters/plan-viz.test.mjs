@@ -3,11 +3,30 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { computeBlocksLayout, renderPlanHtml } from "../../src/services/plan-viz.mjs";
+import { escapeHtml, countLabel } from "../../src/services/viz-theme.mjs";
 
 function embeddedJson(html, name) {
   const m = new RegExp(`const ${name} = (.*);`).exec(html);
   assert.ok(m, `const ${name} = ...; not found in the rendered page`);
   return JSON.parse(m[1]);
+}
+
+// Pulls a `.toString()`-spliced helper (`const NAME = function ... ;`) back out
+// of the rendered page and evaluates it, by brace-counting rather than a
+// single-line regex, since the spliced function body spans several lines.
+function splicedFunction(html, name) {
+  const marker = `const ${name} = `;
+  const start = html.indexOf(marker);
+  assert.ok(start !== -1, `${marker}...; not found in the rendered page`);
+  const bodyStart = start + marker.length;
+  let depth = 0, sawBrace = false, i = bodyStart;
+  for (; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "{") { depth++; sawBrace = true; }
+    else if (ch === "}") { depth--; if (sawBrace && depth === 0) { i++; break; } }
+  }
+  assert.equal(html[i], ";", `${marker}...; should end with a semicolon`);
+  return new Function(`return (${html.slice(bodyStart, i)});`)();
 }
 
 const R = (subject, object) => ({ subject, predicate: "mgx:rest-on", object });
@@ -179,6 +198,35 @@ test("renderPlanHtml: embeds the plan, goal strings, facts, and phase brackets",
   assert.ok(plan.phases[0].label.includes("disk-3"));
   assert.ok(html.includes("Goal (inferred)"));
   assert.ok(html.includes("board@step"));
+});
+
+test("the client-side facts renderer escapes &, <, >, \", and ' via the shared escapeHtml helper", () => {
+  const html = renderPlanHtml(layoutArgs);
+  assert.ok(
+    /plan\.facts\[step\]\.map\(\(f\) => escapeHtml\(f\)\)/.test(html),
+    "facts interpolation should call escapeHtml rather than an ad hoc partial replace chain",
+  );
+  const clientEscapeHtml = splicedFunction(html, "escapeHtml");
+  const dangerous = `Tom & Jerry <b>"quoted"</b> it's`;
+  assert.equal(
+    clientEscapeHtml(dangerous),
+    'Tom &amp; Jerry &lt;b&gt;&quot;quoted&quot;&lt;/b&gt; it&#39;s',
+  );
+  // Spliced from the very same helper the rest of the page uses server-side,
+  // not a lookalike reimplementation.
+  assert.equal(clientEscapeHtml(dangerous), escapeHtml(dangerous));
+});
+
+test("the live re-solve status line uses the shared countLabel helper, not a hand-rolled plural", () => {
+  const html = renderPlanHtml(layoutArgs);
+  assert.ok(
+    html.includes('countLabel(n, "disk", "disks")'),
+    "the resolve-button status line should call countLabel rather than an ad hoc n === 1 ternary",
+  );
+  const clientCountLabel = splicedFunction(html, "countLabel");
+  assert.equal(clientCountLabel(1, "disk", "disks"), "1 disk");
+  assert.equal(clientCountLabel(3, "disk", "disks"), "3 disks");
+  assert.equal(clientCountLabel(1, "disk", "disks"), countLabel(1, "disk", "disks"));
 });
 
 test("a puzzle that declares no sizes gets no phase brackets, rather than an arbitrary pivot", () => {

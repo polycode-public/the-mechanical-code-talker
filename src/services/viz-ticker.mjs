@@ -117,3 +117,25 @@ export function prefersReducedMotion() {
     ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
     : false;
 }
+
+/** A FIFO queue of async jobs that never overlap — the same primitive
+ *  mud-viz.mjs (`tickChain`/`serializeTick`) and adventure-viz.mjs/
+ *  spider-fly-viz.mjs (`lock`/`withLock`) each wrote under a different name,
+ *  for the same reason in all three: a ticker, a chat dock and (mud's case)
+ *  an editor sync all touch the same in-memory store, and any two calls
+ *  overlapping could race the same write.
+ *
+ *  Returns `{ run }`. `run(fn)` chains `fn` onto the queue and returns a
+ *  promise for `fn`'s own settlement — a rejection propagates to THAT
+ *  caller, but never poisons the queue for the jobs queued after it (the
+ *  internal chain swallows the rejection once it has been handed back).
+ *  Self-contained, `.toString()`-splice safe. */
+export function createSerialQueue() {
+  let chain = Promise.resolve();
+  function run(fn) {
+    const settled = chain.then(fn, fn);
+    chain = settled.catch(() => {});
+    return settled;
+  }
+  return { run };
+}

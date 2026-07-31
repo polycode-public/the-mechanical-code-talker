@@ -1,0 +1,72 @@
+# dog-facing-right — dog-facing-left.toml's profile mirrored across the
+# canvas midline (every shape wrapped in one translate-then-flip group), so
+# the two directions stay geometrically identical twins. The mirror flips
+# the lit corner of the shared gradient along with the pose, which reads as
+# the same figure turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["dog"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="dog-facing-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="13.6" cy="15" rx="6.2" ry="4.2" fill="url(#dog-facing-right-fill)"/>
+    <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="8.4" y1="18.4" x2="8.2" y2="21.6"/>
+      <line x1="11.2" y1="19.2" x2="11.2" y2="22"/>
+      <line x1="15.4" y1="19.2" x2="15.6" y2="22"/>
+      <line x1="18.2" y1="18.2" x2="18.6" y2="21.4"/>
+    </g>
+    <g fill="url(#dog-facing-right-fill)">
+      <ellipse cx="8.2" cy="21.9" rx="0.9" ry="0.55"/>
+      <ellipse cx="11.2" cy="22.2" rx="0.9" ry="0.55"/>
+      <ellipse cx="15.6" cy="22.2" rx="0.9" ry="0.55"/>
+      <ellipse cx="18.6" cy="21.7" rx="0.9" ry="0.55"/>
+    </g>
+    <path d="M19.4 12.8 C22.2 11.4 22.8 14.4 20.4 15.4 Z" fill="url(#dog-facing-right-fill)"/>
+    <circle cx="6.6" cy="9" r="3.6" fill="url(#dog-facing-right-fill)"/>
+    <path d="M6.2 7.9 L2.6 8.9 L6.2 10.5 Z" fill="url(#dog-facing-right-fill)"/>
+    <path d="M4.2 6.6 L2.2 3.2 L6 5 Z" fill="url(#dog-facing-right-fill)"/>
+    <path d="M9 6.4 L11 3.2 L7.4 4.9 Z" fill="url(#dog-facing-right-fill)"/>
+    <ellipse cx="7.8" cy="8.4" rx="1" ry="1.3" fill="#000000" opacity="0.22"/>
+    <ellipse cx="2.9" cy="8.9" rx="0.62" ry="0.5" fill="#1c1c1c"/>
+    <ellipse cx="5.2" cy="7.9" rx="0.55" ry="0.6" fill="#1c1c1c"/>
+    <ellipse cx="10.4" cy="12.6" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.28"/>
+    <ellipse cx="5.6" cy="6.9" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.32"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "right"
+
+# dog-facing-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 6.1); cy and scale are the mirror's own invariants. Because the
+# fragment sits outside the flip group, these are plain unflipped canvas
+# coordinates.
+[face]
+cx = 17.9
+cy = 8.25
+scale = 2.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

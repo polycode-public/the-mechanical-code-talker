@@ -9,6 +9,10 @@
 // typed service object (the Repository Interface) and hands both to the handler.
 // Each tool answers one question in ONE compact call so the caller need not
 // Read/Grep. Errors reach the caller as clean tool errors — message only, never a stack.
+//
+// Two entries, one dispatch: dispatchTool hands back the caller-facing string, and
+// dispatchToolStructured hands back { content, data } for a caller that wants the
+// answer's structure rather than its sentence (a page rendering rows, the router).
 
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -19,6 +23,7 @@ import { ask } from "../domain/ask.mjs";
 import { createGraphService } from "../adapters/providers/graph-service.mjs";
 import { loadGraph } from "./graph-load.mjs";
 import { HANDLERS } from "./handlers/index.mjs";
+import { isToolResult } from "./handlers/kit.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -32,6 +37,7 @@ setConstructionBanks(readConstructionFiles);
 
 export { loadGraph } from "./graph-load.mjs";
 export { buildContextBundle } from "./handlers/tmct-context.mjs";
+export { ASK_ENVELOPE_DELIM } from "./handlers/tmct-ask.mjs";
 
 // Tiered tool surface: the hot tools carry full descriptions/schemas in this
 // catalog; every COLD tool (describe/members/impact/history/…) is still served
@@ -44,7 +50,7 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-export async function dispatchTool(name, args, { config, source = defaultSource, tel = null, ingest = null } = {}) {
+async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null, graph: suppliedGraph = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
@@ -52,13 +58,43 @@ export async function dispatchTool(name, args, { config, source = defaultSource,
   const handle = HANDLERS[name];
   // `ingest` is the recognizer seam a caller in the service layer injects (the
   // tool layer sits UNDER services and must not import one, so a tool that needs
-  // the chat recognizer receives it here rather than importing it).
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest });
-  const graph = await loadGraph(config, source);
+  // the chat recognizer receives it here rather than importing it). `memoryBackend`
+  // is the same kind of seam for a caller that already holds an open memory-store
+  // handle (e.g. a session's own `memoryDir`) — a handler that reads the
+  // conversational memory store (tmct_export) prefers it over re-deriving a
+  // backend from config when one is supplied; every other caller leaves it null
+  // and gets today's re-derive-from-config behaviour unchanged.
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, graph: suppliedGraph });
+  // `graph` is the third seam of the same kind: a caller that ALREADY holds a
+  // parsed graph hands it over instead of making the tool layer load one. A
+  // browser session is the case that needs it — its graph is built in memory
+  // (a seed payload, or a live board projected through worldRelationGraphPayload)
+  // and there is no config or file behind it to load from.
+  const graph = suppliedGraph || await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed to
   // createGraphService so svc.snippet()/svc.context() are usable directly, and on to the
-  // handlers that do their own safe source reads.
-  const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
-  return handle(args, { graph, svc, config, repoRoot });
+  // handlers that do their own safe source reads. A supplied graph has no repo on
+  // disk behind it, so those reads are off rather than pointed at a path that
+  // isn't there.
+  const repoRoot = config?.graphFile ? dirname(dirname(config.graphFile)) : null;
+  const svc = createGraphService(graph, { sourceAccess: Boolean(repoRoot), repoRoot, readFile, tel, ask });
+  return handle(args, { graph, svc, config, repoRoot, memoryBackend });
+}
+
+/** The caller-facing string for one tool call. A handler that returns a structured
+ *  result is flattened to its `text` here, so every existing string caller (the chat
+ *  surface, the CLI `cli <tool>` route, the HTTP shim) is unaffected by a handler
+ *  gaining structure. */
+export async function dispatchTool(name, args, ctx = {}) {
+  const out = await runHandler(name, args, ctx);
+  return isToolResult(out) ? out.text : out;
+}
+
+/** The same call, answered as `{ content, data }`: `content` is the prose, `data` the
+ *  render-ready structure the handler already computed on its way to it. `data` is
+ *  undefined for a tool whose answer is prose and nothing else, which is most of the
+ *  cold set — an absent `data` is a real answer, not a failure. */
+export async function dispatchToolStructured(name, args, ctx = {}) {
+  const out = await runHandler(name, args, ctx);
+  return isToolResult(out) ? { content: out.content, data: out.data } : { content: out, data: undefined };
 }

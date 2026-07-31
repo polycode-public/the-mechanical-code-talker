@@ -1,0 +1,18 @@
+{
+  "uninformativeClassMaxShare": 0.35,
+  "uninformativeClassMinSubjects": 12,
+  "entailedDepthPenalty": 0.2,
+  "minoritySensePenalty": 0.5,
+  "minScore": 0.05,
+  "groupSplitThreshold": 4,
+  "openerConceptCount": 2,
+  "maxObjectsPerBodySentence": 4,
+  "maxBodySentences": 4,
+  "closerRootCount": 2,
+  "budget": {
+    "chatReply": 5,
+    "researchPanel": 10,
+    "cliDigest": 12,
+    "ledgerTerm": 8
+  }
+}

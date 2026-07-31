@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateIndividual, assertIndividualValid } from "../../src/adapters/memory/shacl.mjs";
 import {
-  appendFact, appendRule, loadMemory,
+  appendFact, appendRule, factGroupId, loadMemory,
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
 } from "../../src/adapters/memory/core.mjs";
 
@@ -181,7 +181,7 @@ test("appendFact: a well-formed fact (including one with NO provenance) writes f
   try {
     const { id } = await appendFact(dir, { subject: "module", predicate: "tmct:imports", object: "test" });
     const m = await loadMemory(dir);
-    assert.ok(m.individuals.some((i) => i.id === id), "the fact landed in the graph despite carrying no provenance");
+    assert.ok(m.individuals.some((i) => factGroupId(i.id) === id), "the fact landed in the graph despite carrying no provenance");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -279,7 +279,7 @@ test("appendFact re-teach (upsert of an existing fact) with no provenance on the
     const second = await appendFact(dir, { subject: "module", predicate: "tmct:imports", object: "test" }); // no provenance this time
     assert.equal(first.id, second.id, "same (s,p,o) still upserts to the same id");
     const m = await loadMemory(dir);
-    assert.ok(m.individuals.some((i) => i.id === first.id));
+    assert.ok(m.individuals.some((i) => factGroupId(i.id) === first.id));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

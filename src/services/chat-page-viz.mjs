@@ -2,7 +2,7 @@
 // document shaped exactly like spider-fly-viz.mjs/adventure-viz.mjs's own
 // page-builders — one inlined <style> importing viz-theme.mjs's shared
 // tokens, behaviour as an inlined IIFE — running the full chat engine
-// (chat-browser.bundle.js's globalThis.tmctChat, chat-seed.json,
+// (chat-browser.bundle.js's globalThis.tmct, chat-seed.json,
 // public/reference-pack/) by same-origin relative paths. The same
 // relationship spider-fly-viz.mjs's own inlined chat dock has with
 // createSpiderFlySession: both call the shared session.turn(line), neither
@@ -16,7 +16,7 @@
 // chip is read straight off the SAME "(source: ...)" citation chat.mjs's own
 // factPhrase/renderFactLine convention already appends to most answers (see
 // e.g. `dog is a kind of animal (source: corpus:conceptnet ...)` — already
-// asserted by e2e/pages-chat-fullscreen.test.mjs against this page), never a
+// asserted by test-e2e/pages-chat-fullscreen.test.mjs against this page), never a
 // second provenance computation against memory internals: `provBucketFor`
 // (ledger-viz.mjs) is spliced in unmodified and applied to whatever citation
 // text the answer already carries, so this page's chip and the ledger's own
@@ -29,10 +29,14 @@
 // to public/chat.html, after chat-browser.bundle.js/chat-seed.json already
 // exist (both built earlier in that same script, for the embedded widget).
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import {
+  SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
+  shareMessageFor, replyMessageFor, whatsAppShareUrl, isProbablyMobile, copyTextToClipboard, flashCopyTip,
+} from "./share-overlay-viz.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
-import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
@@ -93,6 +97,266 @@ export function provenanceChipFor(answer, record, bucketFor) {
 }
 
 /**
+ * One connection state as something a person can read: the headline word, the
+ * sentence under it, and the tone the page styles it by.
+ *
+ * The tones matter as much as the words. `sharing` and `answering` are
+ * open-ended BY DESIGN — until a blob is pasted nothing is in flight, so there
+ * is no network activity to time out on, and they get the calm "waiting" tone
+ * rather than error styling. `failed` is the opposite case: both blobs were
+ * exchanged and ICE gave up, which is a real fault and reads as one.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function wireStateLabel(state) {
+  switch (state) {
+    case "sharing":
+      return {
+        tone: "waiting",
+        pill: "waiting",
+        word: "waiting for their reply",
+        note: "nothing is in flight yet. this stays live as long as you leave the tab open.",
+      };
+    case "answering":
+      return {
+        tone: "waiting",
+        pill: "reply sent",
+        word: "send your reply back",
+        note: "they connect the moment they paste it. leave this tab open.",
+      };
+    case "connecting":
+      return {
+        tone: "working",
+        pill: "connecting",
+        word: "connecting",
+        note: "both halves are exchanged. this settles either way in a few seconds.",
+      };
+    case "connected":
+      return {
+        tone: "live",
+        pill: "connected",
+        word: "connected",
+        note: "what you teach from here reaches every node below, and theirs reaches you.",
+      };
+    case "failed":
+      return {
+        tone: "failed",
+        pill: "can't connect",
+        word: "couldn't connect",
+        note: "your two machines couldn't find a path to each other. a public STUN server helps with most networks, but some firewalls or strict NATs still block it.",
+      };
+    default:
+      return {
+        tone: "idle",
+        pill: "not shared",
+        word: "not shared",
+        note: "this browser holds the only copy of what you teach it.",
+      };
+  }
+}
+
+/**
+ * One wire message as a row for the traffic tape: its type, which colour
+ * family it belongs to, and the one number or name worth showing beside it.
+ *
+ * The families reuse the page's own provenance colours rather than inventing a
+ * fourth palette — facts crossing the wire wear the same green as the "taught"
+ * chip they will end up carrying, bulk state wears the corpus blue, and the
+ * introductions that get two peers talking wear the entailed amber.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function tapeRowFor(direction, message) {
+  const type = message && typeof message.type === "string" ? message.type : "unknown";
+  const FAMILIES = {
+    op: "facts",
+    "sync-response": "facts",
+    "sync-request": "state",
+    hello: "greeting",
+    "peer-list": "greeting",
+    "intro-offer": "signal",
+    "intro-answer": "signal",
+  };
+  const count = (list, one, many) => {
+    const n = Array.isArray(list) ? list.length : 0;
+    return n + " " + (n === 1 ? one : many);
+  };
+  let detail = "";
+  if (type === "op" || type === "sync-response") detail = count(message.facts, "fact", "facts");
+  else if (type === "peer-list") detail = count(message.peers, "node", "nodes");
+  else if (type === "hello") detail = String(message.displayName || "");
+  else if (type === "intro-offer" || type === "intro-answer") detail = String(message.to || "").slice(0, 8);
+  return { type: type, direction: direction, detail: detail, family: FAMILIES[type] || "link" };
+}
+
+/**
+ * The wire tape's own clock stamp for a message as it arrives —
+ * `HH:MM:SS.mmm`, local time, zero-padded.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function tapeClock() {
+  const at = new Date();
+  const pad = (n, width) => String(n).padStart(width, "0");
+  return pad(at.getHours(), 2) + ":" + pad(at.getMinutes(), 2) + ":" + pad(at.getSeconds(), 2) + "." + pad(at.getMilliseconds(), 3);
+}
+
+/**
+ * The node list: every peer this graph knows about, each with the node name it
+ * chose, the timestamp of the most recent fact it contributed, and that fact
+ * itself (`lastFact` — subject/predicate/object, null before any lands), most
+ * recently active first.
+ *
+ * Activity is read off the provenance the wire already carries. A fact a peer
+ * broadcast arrives tagged `teach:peer:<their node name>#node:<their id>@<ts>`,
+ * so the tag names both who contributed it and when — no separate activity
+ * ledger to keep. The `#node:` segment is identity and never reaches the
+ * screen; a tag from a peer old enough not to carry one is just a name. This
+ * node's own row reads its local `teach:`/`ace:` tags instead, because a fact
+ * never leaves here relabelled in its own store.
+ *
+ * `nameFor` and `latestTimestampOf` are injected (the room's own
+ * `displayNameFor` and the P2P layer's `latestProvenanceTimestamp`) rather
+ * than imported, so this stays `.toString()`-splice safe — the same discipline
+ * provenanceChipFor's injected `bucketFor` holds.
+ */
+export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor, latestTimestampOf }) {
+  const activeByName = new Map();
+  const factByName = new Map();
+  const factAtByName = new Map();
+  let mineLastActive = null;
+  let mineLastFact = null;
+  let mineLastFactAt = null;
+  // The P2P layer's own bookkeeping rows (names, claims, waves, who invited
+  // whom) key on raw node ids, and the roster's rule is that no id ever
+  // reaches the screen — they still count as activity, they just never show
+  // as "last shared". The fact keeps its own newest-timestamp race, apart
+  // from activity, so a fresh wave can never mask an older real fact.
+  const BOOKKEEPING = ["mgx:worldName", "mgx:nodeName", "mgx:playedBy", "mgx:waved", "mgx:invitedBy"];
+  const factOf = (row) => (BOOKKEEPING.indexOf(row.predicate) >= 0
+    ? null
+    : { subject: row.subject, predicate: row.predicate, object: row.object });
+  for (const row of factRows || []) {
+    for (const segment of String(row.provenance || "").split(" | ")) {
+      if (!segment) continue;
+      const at = latestTimestampOf(segment);
+      if (at === null) continue;
+      const fact = factOf(row);
+      if (segment.indexOf("teach:peer:") === 0) {
+        const marker = segment.lastIndexOf("@");
+        if (marker < 0) continue;
+        const label = segment.slice("teach:peer:".length, marker);
+        // Everything from the `#` on is the origin's stable node id, which
+        // keys the fact but is never shown: the roster matches on the name a
+        // peer chose, and that is the part before it.
+        const node = label.indexOf("#node:");
+        const name = node < 0 ? label : label.slice(0, node);
+        const prior = activeByName.get(name);
+        if (prior === undefined || at > prior) activeByName.set(name, at);
+        const factPrior = factAtByName.get(name);
+        if (fact && (factPrior === undefined || at > factPrior)) {
+          factAtByName.set(name, at);
+          factByName.set(name, fact);
+        }
+      } else if (segment.indexOf("teach:") === 0 || segment.indexOf("ace:") === 0) {
+        if (mineLastActive === null || at > mineLastActive) mineLastActive = at;
+        if (fact && (mineLastFactAt === null || at > mineLastFactAt)) {
+          mineLastFactAt = at;
+          mineLastFact = fact;
+        }
+      }
+    }
+  }
+  const rows = [{
+    peerId: myPeerId,
+    name: myDisplayName,
+    connected: true,
+    isSelf: true,
+    lastActiveAt: mineLastActive,
+    lastFact: mineLastFact,
+  }];
+  for (const peer of peers || []) {
+    const name = nameFor(peer.peerId);
+    rows.push({
+      peerId: peer.peerId,
+      name: name,
+      connected: Boolean(peer.connected),
+      isSelf: false,
+      lastActiveAt: activeByName.has(name) ? activeByName.get(name) : null,
+      lastFact: factByName.has(name) ? factByName.get(name) : null,
+    });
+  }
+  rows.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
+  return rows;
+}
+
+/**
+ * A node's monogram: the first letter of each of the two words its name is
+ * made of ("mossy-acorn" -> "ma"), falling back to the first two characters
+ * of anything that isn't shaped that way. Never empty, so a row never draws
+ * a blank circle.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function nodeInitials(name) {
+  const words = String(name || "").split(/[^a-z0-9]+/i).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toLowerCase();
+  if (words.length === 1) return words[0].slice(0, 2).toLowerCase();
+  return "??";
+}
+
+/**
+ * How long ago a node's most recent fact landed, relative to `nowMs`: "now"
+ * under 5s, otherwise the whole seconds/minutes/hours/days, coarsest unit
+ * that still reads as one number. `at` null/undefined (a peer with no
+ * activity yet) reads as an em dash rather than a bogus duration.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function relativeWhen(at, nowMs) {
+  if (at === null || at === undefined) return "—";
+  const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
+  if (seconds < 5) return "now";
+  if (seconds < 60) return seconds + "s";
+  if (seconds < 3600) return Math.round(seconds / 60) + "m";
+  if (seconds < 86400) return Math.round(seconds / 3600) + "h";
+  return Math.round(seconds / 86400) + "d";
+}
+
+/**
+ * The invite link: this page's own address carrying the offer blob, the world
+ * id and the world's name. Any query or fragment the current address already
+ * had is dropped, so inviting from a page that was itself opened from an
+ * invite mints a clean link rather than stacking two offers.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function inviteLinkFor(pageUrl, { blob, world, worldName }) {
+  const url = new URL(String(pageUrl));
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("offer", blob);
+  url.searchParams.set("world", world);
+  if (worldName) url.searchParams.set("name", worldName);
+  return url.toString();
+}
+
+/**
+ * The invite an address carries, or null when it carries none. The world id
+ * and name are read here only to show the joiner what they were invited to
+ * before anything runs — the offer blob's own envelope is what actually
+ * decides, and it wins wherever the two disagree.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function inviteParamsFrom(search) {
+  const params = new URLSearchParams(String(search || ""));
+  const offer = params.get("offer");
+  if (!offer) return null;
+  return { offer: offer, world: params.get("world") || "", worldName: params.get("name") || "" };
+}
+
+/**
  * The boot statusline while the big assets stream in — "loading the engine…
  * X MB / Y MB", aggregated across every asset currently downloading. `parts`
  * is an array of { loaded, total } byte counts (total 0 when the response
@@ -115,6 +379,26 @@ export function loadProgressLine(parts) {
   return totalKnown && total > 0
     ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
     : "loading the engine… " + mb(loaded) + " MB";
+}
+
+/**
+ * The "researched this session" panel's own reading of a settled research
+ * turn's answer — the passage it read and where it read it, straight off
+ * research.mjs's own `renderResearchAnswer` shape (`term — summary (source:
+ * research article "title", Simple English Wikipedia, CC BY-SA 4.0 — url)`),
+ * never a second fetch: the citation text is already the retrieved passage,
+ * this just pulls its pieces apart for display. Returns null on anything
+ * else (a miss, a status/stop reply, or text that doesn't open this way) —
+ * an honest "nothing to show" rather than a guessed passage.
+ *
+ * Self-contained, `.toString()`-splice safe — the same discipline every
+ * other pure export in this module holds.
+ */
+export function parseResearchAnswer(answer) {
+  const text = String(answer || "");
+  const m = /^(.*?) — ([\s\S]*?) \(source: research article "([^"]+)", Simple English Wikipedia, CC BY-SA 4\.0 — (\S+)\)/.exec(text);
+  if (!m) return null;
+  return { term: m[1], passage: m[2], title: m[3], url: m[4] };
 }
 
 /**
@@ -152,10 +436,18 @@ export function transcriptMarkdown(turns, meta, headerMd, turnMd) {
 }
 
 /** The self-contained "talk to it" full-screen page. Pure — the same output
- *  for the same `title` every time; every other piece of state (the session,
- *  every message, every chip) is computed live in the browser once the
- *  sibling chat bundle loads, exactly as the embedded widget already works. */
-export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
+ *  for the same `title`/`digestStructures` every time; every other piece of
+ *  state (the session, every message, every chip) is computed live in the
+ *  browser once the sibling chat bundle loads, exactly as the embedded widget
+ *  already works. `digestStructures` are the pre-parsed [[structure]] rows of
+ *  the digest sentence-structure bank, embedded so a long answer can lead
+ *  with a composed digest instead of the flat fact list — the same table
+ *  research.html/ledger.html already embed, fed here to the chat bundle's own
+ *  live digest-bank twin (see chat-browser-entry.mjs) rather than to a
+ *  client-side digest panel of this page's own; an empty list degrades to the
+ *  flat list exactly as before this page could digest at all. */
+export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "" } = {}) {
+  const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   const legendHtml = PROV_LEGEND.map(
     ([key, label]) => `<span class="legend-item"><i class="dot dot-${provKey(key)}"></i>${escapeHtml(label)}</span>`,
   ).join("");
@@ -166,6 +458,9 @@ export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!--
   The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
   first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
@@ -186,16 +481,25 @@ ${THEME_TOKENS_CSS}
      stacked), so this page keeps working exactly as before, just inside one
      more layer. */
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; overflow: hidden; }
-  .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  /* position: relative so the wave burst can anchor to the conversation
+     column; main.chatMain scrolls, and a burst anchored inside it would
+     scroll away mid-wave. */
+  .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; position: relative; }
   .mono { font-family: ${MONO_STACK}; }
+  /* every display rule below would otherwise beat the hidden attribute, and a
+     hidden-but-displayed overlay still swallows clicks meant for the page. */
+  [hidden] { display: none !important; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   a { color: var(--corpus); }
 
-  .topbar { flex: 0 0 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  /* brand, then the controls, then the legend pushed to the far right — the
+     legend is passive and takes whatever room is left, so the controls never
+     get folded onto a second line by a wide one. */
+  .topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
-  .legend { display: flex; gap: .8rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .legend { display: flex; gap: .8rem; margin-left: auto; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
   .legend-item { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
   .dot-taught { background: var(--taught); } .dot-corpus { background: var(--corpus); } .dot-entail { background: var(--entail); }
@@ -272,7 +576,7 @@ ${THEME_TOKENS_CSS}
 
   /* the provenance stats panel: what this session's memory holds, docked to
      the right of the chat column (a real layout column, not an overlay) —
-     re-rendered after boot and after every turn from window.tmctChat's own
+     re-rendered after boot and after every turn from window.tmct's own
      memoryStats(), never a second provenance computation. */
   .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; }
   .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
@@ -286,15 +590,84 @@ ${THEME_TOKENS_CSS}
   .statsPanel .forget-btn:hover { color: var(--ink); }
   .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
 
+  /* the "researched this session" panel: its own section under the memory
+     stats, filled from window.tmct.page.researchedFactRows() plus each
+     settled research turn's own answer text — the passage tmct actually
+     read, the article it read it from, and the facts that passage grounded.
+     A sibling section, not folded into #statsPanelStats — that div's own
+     re-render (renderStatsPanelInto) clears and rebuilds its children on
+     every turn, which would wipe this section's own history too if it lived
+     inside it. */
+  #researchedPanel:not(:empty) { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+  .statsPanel .researched-item { margin: 0 0 .9rem; padding-bottom: .8rem; border-bottom: 1px dashed var(--line); }
+  .statsPanel .researched-item:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+  .statsPanel .researched-title { display: block; color: var(--ink); font-weight: 600; }
+  .statsPanel .researched-passage { display: block; color: var(--muted); margin: .3rem 0; }
+  .statsPanel .researched-link { display: inline-block; margin: 0 0 .3rem; }
+  .statsPanel .researched-facts { margin: .3rem 0 0; padding-left: 1.1rem; }
+  .statsPanel .researched-facts li { margin: .12rem 0; }
+  .statsPanel .researched-none { color: var(--muted); font-style: italic; margin: .3rem 0 0; }
+
+  /* ---- the page chrome's network controls -------------------------------
+     The connection's state belongs in the chrome, not only in a rail that a
+     narrow window hides: the pill, the wave, the invite and the help link stay
+     reachable at every width. */
+  /* The composer is already this page's most familiar-chat element — a pill
+     input and a round send button. The chrome's controls take the same shape,
+     so the page's networking reads as ordinary chat furniture rather than as
+     an instrument bolted on. */
+  /* the live fact count, in the topbar rather than the statusline: it is the
+     one number that says what this session actually knows, and a small line of
+     grey mono under the composer is where a wrong one goes unnoticed. Reads as
+     a pill like its neighbours, with the number itself at reading size. */
+  .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
+  .fact-pill .fact-pill-value { font-size: .96rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
+  .chrome { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+  .chrome-btn { font-family: ${SERIF_STACK}; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .75rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; line-height: 1.35; }
+  .chrome-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .chrome-btn.share { color: var(--ink); }
+  .chrome-btn.help, .chrome-btn.icon { width: 1.7rem; height: 1.7rem; justify-content: center; padding: 0; }
+  .chrome-btn .hand { font-size: .9rem; line-height: 1; }
+
+  .state-pill { display: inline-flex; align-items: center; gap: .4rem; font-family: ${SERIF_STACK}; font-size: .8rem; line-height: 1.35; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .78rem; background: var(--card); white-space: nowrap; }
+  .state-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+  .state-pill[data-tone="waiting"] .pill-dot, .state-pill[data-tone="working"] .pill-dot { background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
+  .state-pill[data-tone="working"] .pill-dot { animation-duration: .9s; }
+  .state-pill[data-tone="live"] { color: var(--taught); border-color: var(--taught-t1); }
+  .state-pill[data-tone="live"] .pill-dot { background: var(--taught); }
+  .state-pill[data-tone="failed"] { color: var(--alert); border-color: var(--alert); }
+  .state-pill[data-tone="failed"] .pill-dot { background: var(--alert); }
+
+  @keyframes wire-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+  @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
+
+  /* a wave, on every page it reaches: the waver's node name, over the
+     conversation, for as long as the wave is recent. Anchored under the
+     topbar, where a chat app puts a presence toast — the foot of the column
+     belongs to the composer, and a burst there lands behind it. */
+  .waveBurst { position: absolute; left: 50%; top: 3.4rem; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: .3rem; pointer-events: none; }
+  .wave-pill { display: flex; align-items: center; gap: .45rem; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: .3rem .9rem .3rem .7rem; font-family: ${SERIF_STACK}; font-size: .85rem; color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); animation: wave-rise .3s ease-out; }
+  .wave-pill .hand { display: inline-block; font-size: 1rem; transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; }
+  /* a wave aimed at you, specifically: the same pill, insistently louder. */
+  .wave-pill--you { border-color: var(--taught); box-shadow: 0 4px 14px rgba(0, 0, 0, .16), 0 0 0 3px var(--taught-soft); font-weight: 600; }
+  @keyframes wave-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 1360px) {
+    /* the legend is decorative and the controls are not, so the legend goes
+       first rather than folding the controls onto a second row. */
+    .legend { display: none; }
+  }
   @media (max-width: 860px) {
     .statsPanel { display: none; }
   }
   @media (max-width: 560px) {
-    .legend { display: none; }
     .bubble { max-width: 92%; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
+    .state-pill .pill-dot { animation: none; transition: none; }
+    .wave-pill, .wave-pill .hand { animation: none; }
   }
 
   /* print: the WHOLE transcript, not the scrolled-into-view slice — the
@@ -310,17 +683,40 @@ ${THEME_TOKENS_CSS}
     main.chatMain { overflow: visible; height: auto; }
     .messages { min-height: 0; }
     form.composer, .statusline, .statsPanel, .legend { display: none; }
+    .shareOverlay, .waveBurst, .chrome, .copyTip { display: none; }
   }
+${SHARE_OVERLAY_CSS}
 </style>
 </head>
 <body>
+${shareOverlayHtml({ withTape: true })}
   <div class="chatCol">
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">the-mechanical-code-talker</span>
       </div>
+      <div class="chrome">
+        <span class="fact-pill" id="factPill" aria-live="polite"
+          title="every fact this session's memory holds right now — the starter memory it shipped with plus anything you have taught, researched or ingested">
+          <span class="fact-pill-value" id="factPillValue">&mdash;</span> facts
+        </span>
+        <button type="button" class="state-pill" id="statePill" data-tone="idle"
+          title="the shared-world connection; click to open the network panel">
+          <i class="pill-dot"></i><span id="statePillWord">not shared</span>
+        </button>
+        <button type="button" class="chrome-btn icon" id="waveBtn"
+          title="wave to everyone connected to this graph" aria-label="wave to everyone connected to this graph">
+          <span class="hand">&#128075;</span>
+        </button>
+        <button type="button" class="chrome-btn share" id="shareBtn" title="copy a link that invites one person into this graph">
+          invite
+        </button>
+        <a class="chrome-btn help" href="./help.html#chat" target="_blank" rel="noopener"
+          title="how this page works, in a new tab" aria-label="help, opens in a new tab">?</a>
+      </div>
       <div class="legend" aria-hidden="true">${legendHtml}</div>
     </header>
+    <div class="waveBurst" id="waveBurst" aria-live="polite"></div>
     <main class="chatMain">
       <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation"></div>
     </main>
@@ -361,8 +757,9 @@ ${THEME_TOKENS_CSS}
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
   </div>
-  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory">
-    <p class="empty">loading memory stats&hellip;</p>
+  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory and research">
+    <div id="statsPanelStats"><p class="empty">loading memory stats&hellip;</p></div>
+    <div id="researchedPanel"></div>
   </aside>
 <script src="./chat-browser.bundle.js"></script>
 <script>
@@ -371,16 +768,37 @@ ${THEME_TOKENS_CSS}
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
   const loadProgressLine = ${loadProgressLine.toString()};
+  const parseResearchAnswer = ${parseResearchAnswer.toString()};
   const sessionLogTimeOfDay = ${sessionLogTimeOfDay.toString()};
   const sessionLogHeaderMarkdown = ${sessionLogHeaderMarkdown.toString()};
   const sessionLogTurnMarkdown = ${sessionLogTurnMarkdown.toString()};
   const transcriptMarkdown = ${transcriptMarkdown.toString()};
   const bandLabelFor = ${bandLabelFor.toString()};
   const statsSummaryLine = ${statsSummaryLine.toString()};
+  const clearSiteAssetCaches = ${clearSiteAssetCaches.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
+  const wireStateLabel = ${wireStateLabel.toString()};
+  const tapeRowFor = ${tapeRowFor.toString()};
+  const nodeRowsFor = ${nodeRowsFor.toString()};
+  const nodeInitials = ${nodeInitials.toString()};
+  const inviteLinkFor = ${inviteLinkFor.toString()};
+  const inviteParamsFrom = ${inviteParamsFrom.toString()};
+  const tapeClock = ${tapeClock.toString()};
+  const relativeWhen = ${relativeWhen.toString()};
+  const shareStepStates = ${shareStepStates.toString()};
+  const activeWaves = ${activeWaves.toString()};
+  const offerBlobIn = ${offerBlobIn.toString()};
+  const peerTerm = ${peerTerm.toString()};
+  const shareMessageFor = ${shareMessageFor.toString()};
+  const replyMessageFor = ${replyMessageFor.toString()};
+  const whatsAppShareUrl = ${whatsAppShareUrl.toString()};
+  const isProbablyMobile = ${isProbablyMobile.toString()};
+  const copyText = ${copyTextToClipboard.toString()};
+  const flashTip = ${flashCopyTip.toString()};
+  const DIGEST_STRUCTURES = ${digestStructuresJson};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -390,7 +808,9 @@ ${THEME_TOKENS_CSS}
   const inputEl = el("composerInput");
   const sendBtn = el("composerSend");
   const statusEl = el("status");
-  const statsPanelEl = el("statsPanel");
+  const factPillValueEl = el("factPillValue");
+  const statsPanelEl = el("statsPanelStats");
+  const researchedPanelEl = el("researchedPanel");
   const wikiModeFieldset = el("wikiMode");
   const wikiModeRadios = Array.prototype.slice.call(wikiModeFieldset.querySelectorAll('input[type="radio"]'));
   const synthSliderEl = el("synthSlider");
@@ -568,7 +988,7 @@ ${THEME_TOKENS_CSS}
         })(),
         stallGuard(),
       ]);
-      window.tmctChat.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+      window.tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
       winkStatus = "loaded";
     } catch (err) {
       winkStatus = "unavailable";
@@ -591,11 +1011,18 @@ ${THEME_TOKENS_CSS}
     }
   }
 
+  // The build's own content hash for the seed. It rides in the URL this page
+  // fetches the seed by, so the service worker's cache-first read can only
+  // ever return the copy this page asked for. Empty in a build that had no
+  // seed to hash (the desktop shell's own render).
+  const SEED_STAMP = ${JSON.stringify(seedStamp)};
+  const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+
   let seedPayload = null;
   let seedFacts = 0;
   async function fetchSeed() {
     try {
-      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
       seedPayload = JSON.parse(await blob.text());
       seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
     } catch (err) {
@@ -607,13 +1034,14 @@ ${THEME_TOKENS_CSS}
     if (!seedPayload) return null;
     try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
   };
-  function newSession() {
-    return window.tmctChat.createChatSession({
+  async function newSession() {
+    return window.tmct.open({
       seedPayload: cloneSeed(),
       vocabSeeded: Boolean(seedPayload),
       liveReference: liveReferenceForMode(checkedWikiMode()),
       synthesisBudget: readSynthBudget(),
       onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+      digestStructures: DIGEST_STRUCTURES,
     });
   }
 
@@ -641,23 +1069,26 @@ ${THEME_TOKENS_CSS}
   };
 
   // ---- persistence: what you taught it survives a reload, on this device -
-  // Best-effort IndexedDB (window.tmctChat.openPersistedStore): the whole
+  // Best-effort IndexedDB (window.tmct.page.openPersistedStore): the whole
   // Backend-B payload snapshots after each teach turn, debounced so a burst
   // of teaching costs one multi-MB write, not one per fact. The stamp ties a
-  // snapshot to this deploy (site version) AND this seed (fact count) — either
-  // changing discards the snapshot in favour of the fresh seed.
+  // snapshot to this deploy (site version) AND this seed (its fact count and
+  // content hash) — any of them changing discards the snapshot in favour of
+  // the fresh seed.
   let persist = null;
   let saveTimer = null;
   let restoredCount = 0;
   let siteVersion = "dev";
+  let lastStatsTotal = null;
   window.tmctChatLastSave = null;
+  window.tmct.lastSave = null;
 
   function scheduleSave() {
     if (!persist) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = null;
-      const session = window.tmctChatSession;
+      const session = window.tmct.session;
       if (!session) return;
       const started = performance.now();
       let snapshot;
@@ -667,7 +1098,10 @@ ${THEME_TOKENS_CSS}
         try { snapshot = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
       }
       persist.save(snapshot).then((saved) => {
-        if (saved) window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+        if (saved) {
+          window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+          window.tmct.lastSave = window.tmctChatLastSave;
+        }
       });
     }, 500);
   }
@@ -677,14 +1111,18 @@ ${THEME_TOKENS_CSS}
     saveTimer = null;
     if (persist) await persist.clear();
     restoredCount = 0;
-    window.tmctChatSession = newSession();
-    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    // The room holds the OLD session's store, so it can't outlive the swap —
+    // it would keep merging peers' facts into a store nothing reads any more.
+    // Rejoining is a fresh invite, which is what a dropped node needs anyway.
+    dropRoom();
+    await newSession();
+    const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
     addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
   }
 
   // ---- memory stats: the boot message's own numbers, and the docked panel -
-  // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
+  // Both read window.tmct.page.memoryStats(memoryDir) (chat-browser-entry.mjs)
   // — one computation, reused, so the boot line and the panel can never
   // disagree with each other about what this session's memory holds.
   // bandLabelFor/statsSummaryLine/renderStatsPanelInto are the shared
@@ -697,15 +1135,109 @@ ${THEME_TOKENS_CSS}
    *  rather than blanking it. */
   async function renderStatsPanel(stats) {
     if (!stats) {
-      if (!window.tmctChatSession || !window.tmctChat.memoryStats) return;
-      try { stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir); }
+      if (!window.tmct.session || !window.tmct.page.memoryStats) return;
+      try { stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir); }
       catch { return; }
     }
+    lastStatsTotal = Number(stats.total || 0);
+    factPillValueEl.textContent = lastStatsTotal.toLocaleString();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       onForget: persist ? forgetEverything : null,
       persistNote: "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
     });
+  }
+
+  // ---- researched this session: what "research <topic>" has actually read
+  // and grounded so far — each entry pairs the passage a settled research
+  // turn's own answer cites (parseResearchAnswer, off the SAME "(source:
+  // research article ...)" text the chat bubble already shows) with the real
+  // facts that turn stored, read back through window.tmct.
+  // researchedFactRows(memoryDir) rather than re-deriving them from the
+  // answer text — the citation names WHERE tmct read, the fact rows name
+  // WHAT it kept, and this panel never invents either from the other.
+  const researchedEntries = [];
+  const researchedFactKeysSeen = new Set();
+
+  function renderResearchedPanel() {
+    researchedPanelEl.textContent = "";
+    researchedPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "researched this session" }));
+    if (!researchedEntries.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = 'nothing yet — ask it to "research <a topic>" and what it reads, with the passage and the facts it grounded, lands here.';
+      researchedPanelEl.appendChild(empty);
+      return;
+    }
+    for (const entry of researchedEntries.slice(-8).reverse()) {
+      const item = document.createElement("div");
+      item.className = "researched-item";
+      const title = document.createElement("span");
+      title.className = "researched-title";
+      title.textContent = entry.title || "(untitled)";
+      item.appendChild(title);
+      if (entry.passage) {
+        const passage = document.createElement("span");
+        passage.className = "researched-passage";
+        passage.textContent = entry.passage;
+        item.appendChild(passage);
+      }
+      if (entry.url) {
+        const link = document.createElement("a");
+        link.className = "researched-link";
+        link.href = entry.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "source \\u2197";
+        item.appendChild(link);
+      }
+      if (entry.facts.length) {
+        const list = document.createElement("ul");
+        list.className = "researched-facts";
+        for (const fact of entry.facts) {
+          const li = document.createElement("li");
+          li.textContent = fact.subject + " " + fact.predicate + " " + fact.object;
+          list.appendChild(li);
+        }
+        item.appendChild(list);
+      } else {
+        const none = document.createElement("p");
+        none.className = "researched-none";
+        none.textContent = "no new fact grounded from this passage.";
+        item.appendChild(none);
+      }
+      researchedPanelEl.appendChild(item);
+    }
+  }
+
+  /** After a settled, non-miss research turn: read back the facts that turn
+   *  actually stored (a set-diff against every research fact seen so far, so
+   *  a later step never re-lists an earlier one's facts) and pair them with
+   *  this turn's own cited passage. A turn that grounded nothing new (an
+   *  empty article, or a re-fetch of an already-known one) still gets its
+   *  own entry — the passage was still read, even where nothing new stuck. */
+  async function noteResearchLearned(result) {
+    if (result.research === undefined || !result.record || result.record.miss) return;
+    if (!window.tmct.page.researchedFactRows || !window.tmct.session) return;
+    let rows;
+    try { rows = await window.tmct.page.researchedFactRows(window.tmct.session.memoryDir); }
+    catch { return; }
+    const newFacts = [];
+    for (const row of rows) {
+      const key = row.subject + "|" + row.predicate + "|" + row.object;
+      if (researchedFactKeysSeen.has(key)) continue;
+      researchedFactKeysSeen.add(key);
+      newFacts.push(row);
+    }
+    const parsed = parseResearchAnswer(result.answer);
+    if (!parsed && !newFacts.length) return;
+    researchedEntries.push({
+      title: parsed ? parsed.title : "",
+      passage: parsed ? parsed.passage : "",
+      url: parsed ? parsed.url : "",
+      facts: newFacts,
+    });
+    renderResearchedPanel();
   }
 
   // "supplement" (typed /wiki supplement only) has no radio; the statusline
@@ -724,9 +1256,12 @@ ${THEME_TOKENS_CSS}
       : winkStatus === "unavailable"
         ? "wink-nlp unavailable — curated + fuzzy tiers only (still zero guesses, zero LLM)"
         : "wink-nlp: loading\\u2026";
-    const liveReference = window.tmctChatSession ? window.tmctChatSession.liveReference : liveReferenceForMode(checkedWikiMode());
+    const liveReference = window.tmct.session ? window.tmct.session.liveReference : liveReferenceForMode(checkedWikiMode());
     const livePart = "live wikipedia: " + liveStatusWord(liveReference);
-    statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart;
+    const netPart = room
+      ? " \\u00b7 world \\u201c" + worldName + "\\u201d: " + wireStateLabel(room.state).word
+      : "";
+    statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart + netPart;
   }
 
   // A "/wiki on|off|supplement|always" turn flips the session's own state;
@@ -734,7 +1269,7 @@ ${THEME_TOKENS_CSS}
   // "supplement" clears every radio (it has none of its own) rather than
   // leaving a stale mode checked.
   function mirrorWikiModeFromSession() {
-    const session = window.tmctChatSession;
+    const session = window.tmct.session;
     if (!session || typeof session.liveReference === "undefined") return;
     const liveReference = session.liveReference;
     const mode = liveReference === "always" ? "always" : liveReference === true ? "miss" : liveReference === false ? "off" : null;
@@ -745,8 +1280,8 @@ ${THEME_TOKENS_CSS}
   wikiModeFieldset.addEventListener("change", function () {
     const mode = checkedWikiMode();
     writeWikiMode(mode);
-    if (window.tmctChatSession && window.tmctChatSession.setLiveReference) {
-      window.tmctChatSession.setLiveReference(liveReferenceForMode(mode));
+    if (window.tmct.session && window.tmct.session.setLiveReference) {
+      window.tmct.session.setLiveReference(liveReferenceForMode(mode));
     }
     renderStatus();
   });
@@ -755,15 +1290,15 @@ ${THEME_TOKENS_CSS}
     const n = Number(synthSliderEl.value);
     synthValueEl.textContent = String(n);
     writeSynthBudget(n);
-    if (window.tmctChatSession && window.tmctChatSession.setSynthesisBudget) {
-      window.tmctChatSession.setSynthesisBudget(n);
+    if (window.tmct.session && window.tmct.session.setSynthesisBudget) {
+      window.tmct.session.setSynthesisBudget(n);
     }
   });
 
   let busy = true;
   function setBusy(v) {
     busy = v;
-    const ready = Boolean(window.tmctChatSession);
+    const ready = Boolean(window.tmct.session);
     inputEl.disabled = v || !ready;
     sendBtn.disabled = v || !ready;
   }
@@ -774,14 +1309,14 @@ ${THEME_TOKENS_CSS}
   // bubble, settle, persist, stats. Resolves once the turn has settled (the
   // ticker awaits it before pacing the next step).
   async function submitLine(q) {
-    if (!q || busy || !window.tmctChatSession) return null;
+    if (!q || busy || !window.tmct.session) return null;
     addUserBubble(q);
     transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
     const pendingRow = addPendingAssistantBubble();
     setBusy(true);
     let result = null;
     try {
-      result = await window.tmctChatSession.turn(q);
+      result = await window.tmct.turn(q);
       settleAssistantBubble(pendingRow, result.answer, result.record);
       // Persist on ANY store write, not just a teach turn: a learn-on-miss
       // load (a child pack, a reference or live-Wikipedia article, a
@@ -789,8 +1324,14 @@ ${THEME_TOKENS_CSS}
       // were lost on reload when only via==="assert" saved. Commands write
       // nothing, so they stay out. The save is debounced, so a read-through
       // that changed nothing costs at most one coalesced write.
-      if (result.record && result.record.via !== "command") scheduleSave();
+      if (result.record && result.record.via !== "command") {
+        scheduleSave();
+        // Whatever this turn wrote goes out to every connected node. The room
+        // diffs the store itself, so a turn that stored nothing costs nothing.
+        if (room) room.afterLocalChange().catch(function () { /* a dead channel reports itself through its own close */ });
+      }
       await renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
+      await noteResearchLearned(result);
     } catch (err) {
       settleAssistantBubble(pendingRow,
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
@@ -811,8 +1352,17 @@ ${THEME_TOKENS_CSS}
   composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = inputEl.value.trim();
-    if (!q || busy || !window.tmctChatSession) return;
+    if (!q || busy || !window.tmct.session) return;
     inputEl.value = "";
+    const lowered = q.toLowerCase();
+    if (lowered === "wave" || lowered === "/wave") {
+      addUserBubble(q);
+      transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
+      addSystemLine("you waved — everyone connected to this graph sees it.");
+      waveNow();
+      inputEl.focus();
+      return;
+    }
     submitLine(q).then(() => inputEl.focus());
   });
 
@@ -866,7 +1416,7 @@ ${THEME_TOKENS_CSS}
 
   researchGoBtn.addEventListener("click", () => {
     const topic = researchTopicEl.value.trim();
-    if (!topic || busy || !window.tmctChatSession) return;
+    if (!topic || busy || !window.tmct.session) return;
     researchTopicEl.value = "";
     submitLine("research " + topic);
   });
@@ -887,7 +1437,7 @@ ${THEME_TOKENS_CSS}
   // @media print stylesheet above to un-pin the message column so every
   // turn reaches paper.
   el("exportMd").addEventListener("click", () => {
-    const sessionId = (window.tmctChatSession && window.tmctChatSession.sessionId) || "";
+    const sessionId = (window.tmct.session && window.tmct.session.sessionId) || "";
     const md = transcriptMarkdown(transcript, { version: siteVersion, sessionId: sessionId }, sessionLogHeaderMarkdown, sessionLogTurnMarkdown);
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -906,11 +1456,11 @@ ${THEME_TOKENS_CSS}
   // subject/predicate/object/provenance shape the extract and memory-export
   // CLI paths emit), so what you taught leaves in the standard shape.
   el("exportFacts").addEventListener("click", async () => {
-    const session = window.tmctChatSession;
-    if (!session || !window.tmctChat.exportFactsJsonl) return;
+    const session = window.tmct.session;
+    if (!session || !window.tmct.page.exportFactsJsonl) return;
     let jsonl;
     try {
-      jsonl = await window.tmctChat.exportFactsJsonl(session.memoryDir);
+      jsonl = await window.tmct.page.exportFactsJsonl(session.memoryDir);
     } catch (err) {
       statusEl.textContent = "couldn't export the facts (" + (err && err.message ? err.message : err) + ")";
       return;
@@ -927,7 +1477,7 @@ ${THEME_TOKENS_CSS}
   });
 
   // "ingest file" feeds a whole .txt/.md through the SAME session, one
-  // sentence at a time (window.tmctChat.splitSentences, then session.turn),
+  // sentence at a time (window.tmct.page.splitSentences, then session.turn),
   // teaching every sentence the recognizer grounds and skipping the rest
   // honestly — the same pipeline the ingest page runs, reaching the chat's own
   // memory so the taught facts answer questions straight away.
@@ -935,8 +1485,8 @@ ${THEME_TOKENS_CSS}
   el("ingestInput").addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
-    const session = window.tmctChatSession;
-    if (!file || busy || !session || !window.tmctChat.splitSentences) return;
+    const session = window.tmct.session;
+    if (!file || busy || !session || !window.tmct.page.splitSentences) return;
     let text;
     try {
       text = await file.text();
@@ -944,20 +1494,23 @@ ${THEME_TOKENS_CSS}
       addSystemLine("couldn't read that file (" + (err && err.message ? err.message : err) + ").");
       return;
     }
-    const sentences = window.tmctChat.splitSentences(text);
+    const sentences = window.tmct.page.splitSentences(text);
     if (!sentences.length) { addSystemLine("nothing to ingest in " + file.name + "."); return; }
     setBusy(true);
     statusEl.textContent = "ingesting " + file.name + "\\u2026";
     let grounded = 0;
     try {
       for (const sentence of sentences) {
-        const result = await session.turn(sentence);
+        const result = await tmct.turn(sentence);
         if (result.record && result.record.via === "assert" && !result.record.miss) grounded += 1;
       }
     } catch (err) {
       addSystemLine("something went wrong ingesting " + file.name + " (" + (err && err.message ? err.message : err) + ").");
     }
-    if (grounded) scheduleSave();
+    if (grounded) {
+      scheduleSave();
+      if (room) room.afterLocalChange().catch(function () { /* a dead channel reports itself through its own close */ });
+    }
     const skipped = sentences.length - grounded;
     addSystemLine("ingested " + file.name + " \\u2014 " + sentences.length + " sentence"
       + (sentences.length === 1 ? "" : "s") + " read, " + grounded + " fact"
@@ -969,28 +1522,774 @@ ${THEME_TOKENS_CSS}
     inputEl.focus();
   });
 
-  // "reset to seed" is the full re-initialisation: drop the persisted payload
-  // outright and reload, so boot re-seeds from the page's shipped seed as if on
-  // a first visit. Harder than "forget everything", which only swaps the live
+  // "reset to seed" is the full re-initialisation: drop everything this device
+  // holds and reload, so boot re-seeds from the page's shipped seed as if on a
+  // first visit. Harder than "forget everything", which only swaps the live
   // session — this trusts nothing in memory and re-fetches the seed asset.
+  //
+  // Both stores go, not just the payload: what you taught lives in IndexedDB,
+  // and the seed asset itself lives in the service worker's Cache Storage. A
+  // reset that cleared only the first would re-seed straight back out of a
+  // cached copy of an older seed, which is exactly what it promises not to do.
   el("reinitStore").addEventListener("click", async () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     if (persist) await persist.clear();
+    await clearSiteAssetCaches();
     window.location.reload();
   });
 
+  // ---- the shared world: nodes, the wire, and the two-paste handshake -----
+  // Every piece of networking arrives from ./vendor/p2p.js, the site's own
+  // shared P2P asset, imported the first time it is actually wanted rather
+  // than at boot — a visitor who never shares never waits for it. The room
+  // owns signaling, the mesh and the merge; this block owns what a person
+  // sees and clicks, and nothing else.
+  const netPanelEl = el("netPanel");
+  const nodeNameInputEl = el("nodeNameInput");
+  const worldNameInputEl = el("worldNameInput");
+  const wireStateEl = el("wireState");
+  const wireStateWordEl = el("wireStateWord");
+  const wireStateNoteEl = el("wireStateNote");
+  const statePillEl = el("statePill");
+  const statePillWordEl = el("statePillWord");
+  const shareLinkEl = el("shareLink");
+  const inviteSummaryEl = el("inviteSummary");
+  const webShareBtnEl = el("webShareBtn");
+  const waShareBtnEl = el("waShareBtn");
+  const replyShareBtnEl = el("replyShareBtn");
+  const replyWaBtnEl = el("replyWaBtn");
+  const joinShareBtnEl = el("joinShareBtn");
+  const joinWaBtnEl = el("joinWaBtn");
+  const replyBoxEl = el("replyBox");
+  const replyProblemEl = el("replyProblem");
+  const replyOutEl = el("replyOut");
+  const nodeListEl = el("nodeList");
+  const nodeEmptyEl = el("nodeEmpty");
+  const nodeCountEl = el("nodeCount");
+  const tapeEl = el("tape");
+  const tapeEmptyEl = el("tapeEmpty");
+  const tapeMeterEl = el("tapeMeter");
+  const tapeTotalEl = el("tapeTotal");
+  const waveBurstEl = el("waveBurst");
+  const joinCardEl = el("joinCard");
+  const joinWorldEl = el("joinWorld");
+  const joinEyebrowEl = el("joinEyebrow");
+  const joinBodyEl = el("joinBody");
+  const joinBtn = el("joinBtn");
+  const joinProblemEl = el("joinProblem");
+  const joinReplyWrapEl = el("joinReplyWrap");
+  const joinReplyEl = el("joinReply");
+  const joinDismissBtn = el("joinDismiss");
+  const shareBtn = el("shareBtn");
+  const waveBtn = el("waveBtn");
+  const copyReplyBtn = el("copyReplyBtn");
+  const joinCopyBtn = el("joinCopyBtn");
+
+  const P2P_ASSET = "./vendor/p2p.js";
+  const NODE_NAME_KEY = "tmct.chat.nodeName";
+  // Not the IndexedDB store beside it: that record is stamped with the site
+  // version and the seed, and is dropped whenever either moves. A node id has
+  // to outlive a deploy, because peers have already keyed this node's facts
+  // on it.
+  const NODE_ID_KEY = "tmct.chat.nodeId";
+  const invite = inviteParamsFrom(window.location.search);
+
+  let p2p = null;
+  let p2pLoad = null;
+  let room = null;
+  let myPeerId = null;
+  let myNodeId = "";
+  let myDisplayName = "";
+  let worldId = "";
+  let worldName = "";
+  let waveTimer = null;
+  let nodeClockTimer = null;
+  let channelCount = 0;
+  let mintedBlob = "";
+
+  // Which seat this page occupies in the handshake — "idle" until something
+  // happens, "sponsor" once an invite is minted here, "joiner" once an invite
+  // is opened here. The overlay's CSS reads it to decide which calls to
+  // action stand at each step; entry distinguishes an invite that arrived
+  // as a link (the hero card owns the reply) from one pasted in as text
+  // (step 4's own slot owns it).
+  function setOverlayRole(role, entry) {
+    netPanelEl.dataset.role = role;
+    netPanelEl.dataset.entry = entry || "";
+  }
+
+  function loadP2p() {
+    if (!p2pLoad) {
+      p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
+      p2pLoad.catch(function (err) {
+        noteTape("note", "fault", "networking unavailable", err && err.message ? err.message : String(err));
+      });
+    }
+    return p2pLoad;
+  }
+  window.tmctP2pLoad = loadP2p;
+
+  function readStoredNodeName() {
+    try { return localStorage.getItem(NODE_NAME_KEY) || ""; } catch { return ""; }
+  }
+  function writeStoredNodeName(name) {
+    try { localStorage.setItem(NODE_NAME_KEY, name); } catch { /* private mode — the name still holds for this visit */ }
+  }
+
+  async function ensureIdentity() {
+    const mod = await loadP2p();
+    if (!myPeerId) myPeerId = mod.generatePeerId();
+    if (!myNodeId) {
+      try { myNodeId = localStorage.getItem(NODE_ID_KEY) || ""; } catch { myNodeId = ""; }
+      if (!myNodeId) {
+        myNodeId = mod.generateNodeId();
+        try { localStorage.setItem(NODE_ID_KEY, myNodeId); } catch { /* private mode — this visit still has an id, it just won't outlive the tab */ }
+      }
+    }
+    if (!myDisplayName) {
+      myDisplayName = readStoredNodeName() || mod.generateDisplayName();
+      nodeNameInputEl.value = myDisplayName;
+    }
+    if (!worldId) worldId = invite && invite.world ? invite.world : mod.generateWorldId();
+    if (!worldName) {
+      worldName = invite && invite.worldName ? invite.worldName : mod.generateDisplayName();
+      worldNameInputEl.value = worldName;
+    }
+  }
+
+  // The one place a transport gets made, which makes it the one place every
+  // message crossing one can be seen. The room asks for transports through
+  // this factory and never learns it is being watched.
+  function instrumentedTransport() {
+    const transport = p2p.createTransport();
+    const channel = "ch" + (++channelCount);
+    transport.onMessage(function (message) { noteWire("in", message, channel); });
+    transport.onOpen(function () { noteTape("note", "link", "channel open", channel); });
+    transport.onClose(function () { noteTape("note", "link", "channel closed", channel); });
+    return {
+      createOffer: function () {
+        return transport.createOffer().then(function (sdp) { noteTape("note", "signal", "offer minted", channel); return sdp; });
+      },
+      createAnswerFor: function (offerSdp) {
+        return transport.createAnswerFor(offerSdp).then(function (sdp) { noteTape("note", "signal", "answer minted", channel); return sdp; });
+      },
+      completeWithAnswer: function (answerSdp) {
+        noteTape("note", "signal", "answer accepted", channel);
+        return transport.completeWithAnswer(answerSdp);
+      },
+      send: function (message) { transport.send(message); noteWire("out", message, channel); },
+      onMessage: function (fn) { transport.onMessage(fn); },
+      onOpen: function (fn) { transport.onOpen(fn); },
+      onClose: function (fn) { transport.onClose(fn); },
+      close: function () { transport.close(); },
+      get connectionState() { return transport.connectionState; },
+    };
+  }
+
+  async function ensureRoom() {
+    if (room) return room;
+    const mod = await loadP2p();
+    await ensureIdentity();
+    if (!window.tmct.session) await window.tmctChatReady;
+    if (!window.tmct.session) throw new Error("the chat engine didn't finish booting");
+    room = mod.createP2pRoom({
+      memoryDir: window.tmct.session.memoryDir,
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      myNodeId: myNodeId,
+      worldId: worldId,
+      worldName: worldName,
+      transportFactory: instrumentedTransport,
+      syncableFacts: mod.chatSyncableFacts,
+    });
+    room.onStateChanged(function (state) {
+      noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
+      // The overlay exists to make one connection. The moment the channel is
+      // open its work is done — the lights come back up, and the pill in the
+      // chrome is the way back in.
+      if (state === "connected") {
+        joinCardEl.hidden = true;
+        closeNetPanel();
+        flashTip(statePillEl, "connected \\u2014 you're sharing live");
+      }
+      renderWire();
+      renderStatus();
+    });
+    room.onPeersChanged(function () { renderNodes(); renderStatus(); });
+    room.onFactsChanged(function (payload) {
+      noteTape("note", "facts", "merged", payload.merged + (payload.merged === 1 ? " fact" : " facts"));
+      renderStatsPanel();
+      renderNodes();
+      renderWaves();
+    });
+    await room.start();
+    // The world's name is written into the graph the moment the room starts,
+    // and this version retracts nothing — so the field stops taking edits.
+    worldNameInputEl.readOnly = true;
+    worldNameInputEl.title = "written into the graph when this world started";
+    window.tmctP2pRoom = room;
+    noteTape("note", "link", "world " + worldName, myDisplayName);
+    renderWire();
+    renderNodes();
+    renderStatus();
+    if (!nodeClockTimer) nodeClockTimer = setInterval(renderNodes, 10000);
+    return room;
+  }
+
+  function dropRoom() {
+    if (!room) return;
+    room.close();
+    room = null;
+    window.tmctP2pRoom = null;
+    clearInterval(nodeClockTimer);
+    nodeClockTimer = null;
+    shareLinkEl.value = "";
+    replyOutEl.value = "";
+    mintedBlob = "";
+    setOverlayRole("idle", "");
+    noteTape("note", "link", "world closed", worldName);
+    renderWire();
+    renderNodes();
+  }
+
+  // ---- the wire tape: every message, as it happens ------------------------
+  const TAPE_CAP = 240;
+  const TAPE_FAMILY_COLOR = {
+    facts: "var(--taught)",
+    state: "var(--corpus)",
+    greeting: "var(--entail)",
+    signal: "var(--entail-t1)",
+    fault: "var(--alert)",
+    link: "var(--muted)",
+  };
+  const tapeCounts = new Map();
+  let wireMessageCount = 0;
+
+  function pushTape(entry) {
+    // The meter counts real wire messages only; the tape below shows those
+    // plus the local notes (state changes, a channel opening) that explain
+    // them. Folding notes into the counts would make "12 op" mean two things.
+    if (entry.dir !== "note") {
+      wireMessageCount += 1;
+      tapeCounts.set(entry.type, (tapeCounts.get(entry.type) || 0) + 1);
+    }
+    tapeEmptyEl.hidden = true;
+    const row = document.createElement("li");
+    row.className = "tape-row";
+    row.dataset.dir = entry.dir;
+    row.dataset.family = entry.family;
+    row.dataset.type = entry.type;
+    const bar = document.createElement("i");
+    bar.className = "tape-bar";
+    const clock = document.createElement("span");
+    clock.className = "tape-clock";
+    clock.textContent = tapeClock();
+    const type = document.createElement("span");
+    type.className = "tape-type";
+    type.textContent = entry.type;
+    const detail = document.createElement("span");
+    detail.className = "tape-detail";
+    detail.textContent = entry.detail || "";
+    row.appendChild(bar);
+    row.appendChild(clock);
+    row.appendChild(type);
+    row.appendChild(detail);
+    tapeEl.insertBefore(row, tapeEl.firstChild);
+    while (tapeEl.childElementCount > TAPE_CAP) tapeEl.removeChild(tapeEl.lastElementChild);
+    renderTapeMeter();
+  }
+
+  function noteWire(direction, message, channel) {
+    const row = tapeRowFor(direction, message);
+    pushTape({ dir: direction, family: row.family, type: row.type, detail: row.detail || channel });
+  }
+  function noteTape(dir, family, type, detail) {
+    pushTape({ dir: dir, family: family, type: type, detail: detail });
+  }
+
+  function renderTapeMeter() {
+    tapeTotalEl.textContent = wireMessageCount + (wireMessageCount === 1 ? " message" : " messages");
+    tapeMeterEl.textContent = "";
+    const counted = [...tapeCounts.entries()].sort(function (a, b) { return b[1] - a[1]; });
+    for (const pair of counted) {
+      const item = document.createElement("span");
+      item.className = "meter-item";
+      item.dataset.type = pair[0];
+      const bar = document.createElement("i");
+      bar.className = "meter-bar";
+      bar.style.background = TAPE_FAMILY_COLOR[tapeRowFor("in", { type: pair[0] }).family] || "var(--muted)";
+      const label = document.createElement("span");
+      label.textContent = pair[0];
+      const count = document.createElement("span");
+      count.className = "meter-n";
+      count.textContent = String(pair[1]);
+      item.appendChild(bar);
+      item.appendChild(label);
+      item.appendChild(count);
+      tapeMeterEl.appendChild(item);
+    }
+  }
+
+  // ---- what a person sees: state, the ladder, nodes, waves ----------------
+  function renderWire() {
+    const label = wireStateLabel(room ? room.state : "idle");
+    wireStateEl.dataset.tone = label.tone;
+    wireStateWordEl.textContent = label.word;
+    wireStateNoteEl.textContent = label.note;
+    statePillEl.dataset.tone = label.tone;
+    statePillWordEl.textContent = label.pill;
+    statePillEl.title = label.note;
+    netPanelEl.dataset.tone = label.tone;
+    renderSteps();
+  }
+
+  function renderSteps() {
+    const states = shareStepStates({
+      role: netPanelEl.dataset.role,
+      state: room ? room.state : "idle",
+      hasReply: Boolean(replyOutEl.value),
+    });
+    for (const step of states) {
+      const item = el("step-" + step.key);
+      if (item) item.dataset.status = step.status;
+    }
+  }
+
+  // The scene's two browser cards: this one wears the node's own name, the
+  // far one wears the first peer's the moment there is one to name.
+  function renderScene() {
+    el("sceneYouName").textContent = myDisplayName || "you";
+    const peers = room ? room.peers() : [];
+    const first = peers.find(function (p) { return p.connected; }) || peers[0];
+    el("sceneThemName").textContent = first ? room.displayNameFor(first.peerId) : "your friend";
+  }
+
+  function renderNodes() {
+    if (!room || !p2p) {
+      nodeCountEl.textContent = "";
+      nodeListEl.textContent = "";
+      nodeEmptyEl.hidden = false;
+      renderScene();
+      return;
+    }
+    const rows = nodeRowsFor({
+      peers: room.peers(),
+      factRows: room.factRows(),
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      nameFor: room.displayNameFor,
+      latestTimestampOf: p2p.latestProvenanceTimestamp,
+    });
+    const nowMs = Date.now();
+    const wavers = new Set(activeWaves(room.factRows(), nowMs).map(function (w) { return w.waver; }));
+    nodeCountEl.textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
+    nodeListEl.textContent = "";
+    for (const entry of rows) {
+      const item = document.createElement("li");
+      item.className = "node-row";
+      item.dataset.self = String(entry.isSelf);
+      item.dataset.away = String(!entry.connected);
+      item.dataset.peer = entry.peerId;
+      item.dataset.waving = String(wavers.has(peerTerm(entry.peerId)));
+      const avatar = document.createElement("span");
+      avatar.className = "node-avatar";
+      avatar.textContent = nodeInitials(entry.name);
+      avatar.title = entry.connected ? "connected" : "away — closed the tab or dropped offline; everything it contributed stays";
+      const dot = document.createElement("i");
+      dot.className = "node-dot";
+      avatar.appendChild(dot);
+      const hand = document.createElement("span");
+      hand.className = "node-hand";
+      hand.textContent = "👋";
+      avatar.appendChild(hand);
+      const name = document.createElement("span");
+      name.className = "node-name";
+      name.textContent = entry.name;
+      const when = document.createElement("span");
+      when.className = "node-when";
+      when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
+      when.title = entry.lastActiveAt
+        ? "last contributed a fact at " + new Date(entry.lastActiveAt).toLocaleTimeString()
+        : "has contributed no fact yet";
+      const fact = document.createElement("span");
+      fact.className = "node-fact";
+      if (entry.lastFact) {
+        const line = entry.lastFact.subject + " " + String(entry.lastFact.predicate || "").replace(/^[a-z0-9_-]+:/i, "") + " " + entry.lastFact.object;
+        fact.textContent = line;
+        fact.title = "last shared: " + line;
+      } else {
+        fact.textContent = "nothing shared yet";
+      }
+      const waveOne = document.createElement("button");
+      waveOne.type = "button";
+      waveOne.className = "node-wave-btn";
+      waveOne.textContent = "👋";
+      waveOne.title = entry.isSelf ? "wave at everyone" : "wave at " + entry.name + " — they see it as a fact arriving";
+      waveOne.setAttribute("aria-label", waveOne.title);
+      waveOne.addEventListener("click", function () { waveAt(entry.isSelf ? null : entry.peerId, waveOne); });
+      item.appendChild(avatar);
+      item.appendChild(name);
+      item.appendChild(when);
+      item.appendChild(waveOne);
+      item.appendChild(fact);
+      nodeListEl.appendChild(item);
+    }
+    nodeEmptyEl.hidden = rows.length > 1;
+    renderScene();
+  }
+
+  // A wave is a fact like any other, so it reaches every page through the
+  // same merge every other fact does; "currently waving" is a recency read
+  // over that fact, never stored state. Nothing here is a second live-update
+  // path — onFactsChanged is what wakes it, and the timer below only lets a
+  // wave stop rendering once its window has passed. The fact's object names
+  // the audience: the presence scope is everyone, a peer term is one node —
+  // and a wave aimed at this node says so to its face.
+  function renderWaves() {
+    if (!room) return;
+    const nowMs = Date.now();
+    const myTerm = peerTerm(myPeerId);
+    const nameByTerm = new Map([[myTerm, myDisplayName]]);
+    for (const peer of room.peers()) nameByTerm.set(peerTerm(peer.peerId), room.displayNameFor(peer.peerId));
+    const waves = activeWaves(room.factRows(), nowMs).filter(function (w) { return nameByTerm.has(w.waver); });
+    waveBurstEl.textContent = "";
+    for (const wave of waves) {
+      const pill = document.createElement("div");
+      pill.className = "wave-pill" + (wave.target === myTerm ? " wave-pill--you" : "");
+      const hand = document.createElement("span");
+      hand.className = "hand";
+      hand.textContent = "👋";
+      const label = document.createElement("span");
+      const who = nameByTerm.get(wave.waver);
+      label.textContent = !wave.target ? who + " waved at everyone"
+        : wave.target === myTerm ? who + " is waving at you"
+          : nameByTerm.has(wave.target) ? who + " is waving at " + nameByTerm.get(wave.target)
+            : who + " waved";
+      pill.appendChild(hand);
+      pill.appendChild(label);
+      waveBurstEl.appendChild(pill);
+    }
+    const wavers = new Set(waves.map(function (w) { return w.waver; }));
+    for (const item of nodeListEl.children) {
+      item.dataset.waving = String(wavers.has(peerTerm(item.dataset.peer)));
+    }
+    clearTimeout(waveTimer);
+    if (waves.length) waveTimer = setTimeout(renderWaves, 1000);
+  }
+
+  async function waveAt(targetPeerId, anchor) {
+    try {
+      const active = await ensureRoom();
+      await active.wave("peer:" + myPeerId, targetPeerId ? "peer:" + targetPeerId : null);
+      const audience = targetPeerId ? (active.displayNameFor(targetPeerId) || "one node") : "everyone";
+      noteTape("note", "facts", "waved", audience);
+      renderNodes();
+      renderWaves();
+      if (anchor) flashTip(anchor, "you waved at " + audience);
+    } catch (err) {
+      addSystemLine("couldn't wave (" + (err && err.message ? err.message : err) + ").");
+    }
+  }
+  function waveNow() { return waveAt(null, null); }
+
+  // ---- the overlay itself: the lights go down, the handshake takes the room
+  function openNetPanel() {
+    netPanelEl.hidden = false;
+    const card = netPanelEl.querySelector(".so-card");
+    if (card) card.focus({ preventScroll: true });
+  }
+  function closeNetPanel() {
+    netPanelEl.hidden = true;
+  }
+  el("netPanelClose").addEventListener("click", closeNetPanel);
+  netPanelEl.addEventListener("click", function (e) {
+    if (e.target === netPanelEl) closeNetPanel();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !netPanelEl.hidden) closeNetPanel();
+  });
+  statePillEl.addEventListener("click", function () {
+    if (netPanelEl.hidden) openNetPanel();
+    else closeNetPanel();
+  });
+  if (isProbablyMobile()) netPanelEl.classList.add("so-mobile");
+  // The blobs are made to be copied whole — a click selects everything, so a
+  // manual copy can never take half a code.
+  for (const boxId of ["shareLink", "replyOut", "joinReply"]) {
+    el(boxId).addEventListener("focus", function (e) { e.target.select(); });
+  }
+
+  function renderInviteShare() {
+    const factsPart = lastStatsTotal === null ? "" : " \\u00b7 " + lastStatsTotal.toLocaleString() + " facts travel when they join";
+    inviteSummaryEl.textContent = "invites one person into \\u201c" + worldName + "\\u201d" + factsPart;
+    const message = shareMessageFor({ worldName: worldName, link: shareLinkEl.value, thing: "graph" });
+    waShareBtnEl.href = whatsAppShareUrl(message);
+    webShareBtnEl.hidden = !navigator.share;
+  }
+
+  function renderReplyShare() {
+    const message = replyMessageFor({ worldName: worldName, blob: replyOutEl.value });
+    replyWaBtnEl.href = whatsAppShareUrl(message);
+    joinWaBtnEl.href = whatsAppShareUrl(message);
+    replyShareBtnEl.hidden = !navigator.share;
+    joinShareBtnEl.hidden = !navigator.share;
+  }
+
+  async function mintInvite(anchor) {
+    try {
+      const active = await ensureRoom();
+      const minted = await active.startSharing();
+      mintedBlob = minted.blob;
+      shareLinkEl.value = inviteLinkFor(window.location.href, { blob: minted.blob, world: worldId, worldName: worldName });
+      setOverlayRole("sponsor", "");
+      renderInviteShare();
+      replyProblemEl.hidden = true;
+      renderWire();
+      openNetPanel();
+      await copyText(shareLinkEl.value);
+      flashTip(anchor, "link copied — send it to one person");
+    } catch (err) {
+      addSystemLine("couldn't create an invite (" + (err && err.message ? err.message : err) + ").");
+    }
+  }
+
+  shareBtn.addEventListener("click", async function () {
+    shareBtn.disabled = true;
+    try {
+      await mintInvite(shareBtn);
+    } finally {
+      shareBtn.disabled = false;
+    }
+  });
+  for (const mintId of ["mintInviteBtn", "remintBtn"]) {
+    el(mintId).addEventListener("click", async function () {
+      const btn = el(mintId);
+      btn.disabled = true;
+      try {
+        await mintInvite(btn);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  el("copyLinkBtn").addEventListener("click", async function () {
+    await copyText(shareLinkEl.value);
+    flashTip(el("copyLinkBtn"), "link copied — send it to one person");
+  });
+  el("copyCodeBtn").addEventListener("click", async function () {
+    await copyText(mintedBlob);
+    flashTip(el("copyCodeBtn"), "code copied — they paste it under step 3 on their page");
+  });
+  webShareBtnEl.addEventListener("click", function () {
+    navigator.share({
+      title: "join \\u201c" + worldName + "\\u201d",
+      text: shareMessageFor({ worldName: worldName, link: shareLinkEl.value, thing: "graph" }),
+    }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+  });
+  function shareReplyViaSheet() {
+    navigator.share({
+      title: "my reply to \\u201c" + worldName + "\\u201d",
+      text: replyMessageFor({ worldName: worldName, blob: replyOutEl.value }),
+    }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+  }
+  replyShareBtnEl.addEventListener("click", shareReplyViaSheet);
+  joinShareBtnEl.addEventListener("click", shareReplyViaSheet);
+
+  // The other way in: an invite that arrived as text rather than as a link.
+  // The same paste box reads a whole link or a bare code — telling them
+  // apart by looking is cheaper than asking anyone to.
+  el("inviteBtn").addEventListener("click", async function () {
+    const problem = el("inviteProblem");
+    const pasted = el("inviteBox").value.trim();
+    if (!pasted) {
+      problem.textContent = "paste the invite you were sent, then try again";
+      problem.hidden = false;
+      return;
+    }
+    if (room) {
+      problem.textContent = "this graph is already shared. reload the page first, then open the invite.";
+      problem.hidden = false;
+      return;
+    }
+    const blob = offerBlobIn(pasted);
+    const mod = await loadP2p();
+    const decoded = mod.decodeInviteBlob(blob);
+    if (decoded.error || decoded.value.kind !== "offer") {
+      problem.textContent = decoded.error
+        ? "this invite looks cut short — ask for it to be sent again"
+        : "that's a reply, not an invite — it belongs under step 5, on the page that sent the invite";
+      problem.hidden = false;
+      return;
+    }
+    // The world id has to be the invite's before the room is opened: a room
+    // that minted its own would refuse the invite as belonging elsewhere.
+    await ensureIdentity();
+    worldId = decoded.value.world || worldId;
+    if (decoded.value.worldName) {
+      worldName = decoded.value.worldName;
+      worldNameInputEl.value = worldName;
+    }
+    try {
+      const active = await ensureRoom();
+      const outcome = await active.acceptInvite(blob);
+      if (outcome && outcome.error) {
+        problem.textContent = outcome.message;
+        problem.hidden = false;
+        noteTape("note", "fault", "invite rejected", outcome.error);
+        return;
+      }
+      problem.hidden = true;
+      el("inviteBox").value = "";
+      replyOutEl.value = outcome.blob;
+      setOverlayRole("joiner", "paste");
+      renderReplyShare();
+      renderWire();
+      await copyText(outcome.blob);
+      flashTip(copyReplyBtn, "reply copied — send it back the same way");
+    } catch (err) {
+      problem.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+      problem.hidden = false;
+    }
+  });
+
+  el("waveAllBtn").addEventListener("click", function () { waveAt(null, el("waveAllBtn")); });
+
+  // The inviter's page has exactly one paste target, so there is no wrong box
+  // to choose. A rejected paste keeps its text so the copy can be fixed.
+  el("replyBtn").addEventListener("click", async function () {
+    let active = room;
+    if (!active) {
+      try { active = await ensureRoom(); } catch { return; }
+    }
+    const outcome = await active.completeInvite(replyBoxEl.value);
+    if (outcome && outcome.error) {
+      replyProblemEl.textContent = outcome.message;
+      replyProblemEl.hidden = false;
+      noteTape("note", "fault", "reply rejected", outcome.error);
+      return;
+    }
+    replyProblemEl.hidden = true;
+    replyBoxEl.value = "";
+    // The box stays open on purpose. If two people opened the same link, the
+    // second reply still arrives, and it needs somewhere to land so the page
+    // can say the invite has already been used rather than swallowing it.
+    renderWire();
+  });
+
+  copyReplyBtn.addEventListener("click", async function () {
+    await copyText(replyOutEl.value);
+    flashTip(copyReplyBtn, "reply copied");
+  });
+
+  function commitNodeName() {
+    const name = nodeNameInputEl.value.trim();
+    if (!name || name === myDisplayName) {
+      nodeNameInputEl.value = myDisplayName;
+      return;
+    }
+    myDisplayName = name;
+    writeStoredNodeName(name);
+    if (!room) { renderNodes(); return; }
+    room.setMyDisplayName(name)
+      .then(function () { noteTape("note", "facts", "renamed", name); renderNodes(); })
+      .catch(function () { /* the name still holds locally; the next broadcast carries it */ });
+  }
+  nodeNameInputEl.addEventListener("change", commitNodeName);
+  worldNameInputEl.addEventListener("change", function () {
+    if (worldNameInputEl.readOnly) return;
+    const name = worldNameInputEl.value.trim();
+    if (name) worldName = name;
+    worldNameInputEl.value = worldName;
+  });
+
+  waveBtn.addEventListener("click", waveNow);
+
+  // ---- joining: the hero card, one button, nothing running until pressed --
+  async function prepareJoinCard() {
+    setOverlayRole("joiner", "link");
+    joinCardEl.hidden = false;
+    joinWorldEl.textContent = invite.worldName || "a shared graph";
+    renderSteps();
+    openNetPanel();
+    joinBtn.focus();
+    const mod = await loadP2p();
+    const decoded = mod.decodeInviteBlob(invite.offer);
+    if (decoded.error || decoded.value.kind !== "offer") {
+      joinBtn.hidden = true;
+      joinEyebrowEl.textContent = "this link didn't arrive in one piece";
+      joinWorldEl.textContent = invite.worldName || "an invitation";
+      joinBodyEl.textContent = decoded.error
+        ? "Part of the link was lost on the way here. Ask for it to be sent again, and check the whole thing travels."
+        : "That link carries a reply rather than an invite. It belongs in the box on the page that sent the invite.";
+      joinDismissBtn.textContent = "start talking on your own";
+      return;
+    }
+    if (decoded.value.world) invite.world = decoded.value.world;
+    if (decoded.value.worldName) {
+      invite.worldName = decoded.value.worldName;
+      joinWorldEl.textContent = decoded.value.worldName;
+    }
+  }
+
+  joinBtn.addEventListener("click", async function () {
+    joinBtn.disabled = true;
+    try {
+      const active = await ensureRoom();
+      const outcome = await active.acceptInvite(invite.offer);
+      if (outcome && outcome.error) {
+        joinProblemEl.textContent = outcome.message;
+        joinProblemEl.hidden = false;
+        noteTape("note", "fault", "invite rejected", outcome.error);
+        joinBtn.disabled = false;
+        joinBtn.textContent = "try again";
+        return;
+      }
+      joinProblemEl.hidden = true;
+      joinReplyEl.value = outcome.blob;
+      replyOutEl.value = outcome.blob;
+      joinReplyWrapEl.hidden = false;
+      joinBtn.textContent = "reply created";
+      joinDismissBtn.textContent = "close this and start talking";
+      renderReplyShare();
+      renderWire();
+      await copyText(outcome.blob);
+      flashTip(joinCopyBtn, "reply copied — send it back the same way");
+    } catch (err) {
+      joinProblemEl.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+      joinProblemEl.hidden = false;
+      joinBtn.disabled = false;
+    }
+  });
+
+  joinCopyBtn.addEventListener("click", async function () {
+    await copyText(joinReplyEl.value);
+    flashTip(joinCopyBtn, "reply copied");
+  });
+  joinDismissBtn.addEventListener("click", closeNetPanel);
+
+  renderWire();
+  renderTapeMeter();
+  if (invite) {
+    prepareJoinCard().catch(function (err) {
+      joinProblemEl.textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";
+      joinProblemEl.hidden = false;
+      joinBtn.hidden = true;
+    });
+  }
+
   async function boot() {
-    if (!window.tmctChat) {
+    if (!window.tmct) {
       statusEl.textContent = "the chat engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
       inputEl.placeholder = "chat engine unavailable";
       return;
     }
     await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
-    window.tmctChat.registerReferencePackProvider(fetchPackProvider);
-    if (window.tmctChat.openPersistedStore) {
-      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts });
+    window.tmct.page.registerReferencePackProvider(fetchPackProvider);
+    if (window.tmct.page.openPersistedStore) {
+      persist = window.tmct.page.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
     }
     const savedRecord = persist ? await persist.load() : null;
     const initialMode = readWikiMode();
@@ -999,17 +2298,18 @@ ${THEME_TOKENS_CSS}
     synthSliderEl.value = String(readSynthBudget());
     synthValueEl.textContent = synthSliderEl.value;
     if (savedRecord && savedRecord.payload) {
-      window.tmctChatSession = window.tmctChat.createChatSession({
+      await window.tmct.open({
         seedPayload: savedRecord.payload,
         vocabSeeded: true,
         liveReference: liveReferenceForMode(initialMode),
         synthesisBudget: readSynthBudget(),
         onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+        digestStructures: DIGEST_STRUCTURES,
       });
     } else {
-      window.tmctChatSession = newSession();
+      await newSession();
     }
-    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
     const restoredNote = savedRecord
       ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
@@ -1018,16 +2318,33 @@ ${THEME_TOKENS_CSS}
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats, bandLabelFor)
       + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
-    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmctChat.vocabExampleHint(false);
+    // A restored session may already carry earlier research facts (they
+    // persist with everything else this session taught) — seed the
+    // seen-set from them so a later research turn only reports what's
+    // actually new, without fabricating passages for a visit this page
+    // was never open to read.
+    if (window.tmct.page.researchedFactRows) {
+      try {
+        const existingResearch = await window.tmct.page.researchedFactRows(window.tmct.session.memoryDir);
+        for (const row of existingResearch) researchedFactKeysSeen.add(row.subject + "|" + row.predicate + "|" + row.object);
+      } catch { /* best-effort seeding only — a fresh session has none to seed */ }
+    }
+    renderResearchedPanel();
+    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmct.page.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
     inputEl.focus();
+    // Off the boot path on purpose: this fetches the shared P2P asset so the
+    // rail can show a real node name and world name before anyone clicks
+    // anything. A failure here costs sharing, never the chat.
+    ensureIdentity().then(renderNodes).catch(function () { /* the tape already carries the reason */ });
   }
 
   window.tmctChatReady = boot().catch((err) => {
     console.error("tmct chat failed to boot", err);
     statusEl.textContent = "the chat failed to start (" + (err && err.message ? err.message : err) + ")";
   });
+  window.tmct.ready = window.tmctChatReady;
 })();
 </script>
 </body>

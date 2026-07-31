@@ -29,6 +29,13 @@ const OPTIONAL_ADAPTER_STUBS = {
   "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\nexport const setConstructionBanks = () => {};\n",
   "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",
+  // tmct_sprite is a cold (CLI-only) tool, but dispatchTool's handler registry
+  // imports every handler statically, so its fs+TOML loaders are link-time
+  // reachable here even though nothing in this bundle ever calls it. Both
+  // modules' own headers already declare "never imported by a browser entry"
+  // as the intended invariant; this restores it rather than changing it.
+  "corpus/sprite-template-files.mjs": "export const SPRITE_TEMPLATES_DIR = \"\";\nexport const readSpriteTemplateFiles = () => [];\n",
+  "corpus/sprite-large-template-files.mjs": "export const SPRITE_LARGE_TEMPLATES_DIR = \"\";\nexport const readSpriteLargeTemplateFiles = () => [];\n",
 };
 
 /** Build public/plan-browser.bundle.js into `outDir` (default the repo's own

@@ -1,0 +1,57 @@
+# son-facing-half-right-moving — son-facing-half-left-moving.toml's stride
+# mirrored across the canvas midline, the same mirror-not-redraw rule every
+# right-facing file in this pack follows.
+classes = ["son"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="son-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#son-facing-half-right-moving-fill)">
+      <path d="M9.4 14.9 C8.1 14.3 6.9 15 6.5 17 C6.35 18.1 6.9 18.9 7.8 18.7 C7.9 17.1 8.3 15.9 9.6 15.2 Z"/>
+      <path d="M14.6 14.9 C16.4 15.3 18.1 16.8 18.3 19.1 C18.35 20.1 17.6 20.7 16.7 20.2 C16.5 18.3 15.9 16.5 14.3 15.8 Z"/>
+      <path d="M7.7 21 C7.5 16.8 9.4 14.7 11.7 14.7 C14.4 14.7 16.2 16.1 15.7 19.6 C15.5 20.7 14.5 20.7 13.7 20.1 Z"/>
+      <path d="M10.8 11.4 L13.2 11.4 L13 14.6 L11 14.6 Z"/>
+    </g>
+    <ellipse cx="10.2" cy="18" rx="1.1" ry="1.6" fill="#ffffff" opacity="0.1"/>
+    <circle cx="11.68" cy="8.2" r="3.6" fill="url(#son-facing-half-right-moving-fill)"/>
+    <path d="M8.3 7.66 Q7.54 9.06 8.3 9.82 Z" fill="url(#son-facing-half-right-moving-fill)"/>
+    <ellipse cx="9.83" cy="7.65" rx="0.31" ry="0.36" fill="#1c1c1c"/>
+    <ellipse cx="14.19" cy="7.6" rx="0.2" ry="0.24" fill="#1c1c1c"/>
+    <path d="M9.3 15.3 C8.3 16 7.6 17.2 7.4 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 15.3 C15.7 16 16.4 17.2 16.6 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M9.48 6.95 C10.08 6.45 10.78 6.25 11.68 6.35" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 12.98
+cy = 8.1
+scale = 2.97
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

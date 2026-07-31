@@ -1,8 +1,12 @@
-# car — a body and two wheels at the sprite tier, the body carrying one
-# taught mgx:madeOf gradient across the two plausible treatments (metal
-# panels, a plastic-bodied toy car); the wheels stay dark-tone overlays,
-# the windshield a plain white-opacity overlay rather than a new fixed
-# hue, the same conventions every other sprite here follows.
+# car — a body-over-wheelarch build at the sprite tier: the two wheels sit
+# recessed under arches cut from the body silhouette rather than just
+# bolted to its underside, the body carrying one taught mgx:madeOf
+# gradient across the two plausible treatments (metal panels, a
+# plastic-bodied toy car); the headlight is a fixed pale accent (a lamp's
+# own colour, not the bodywork's), the same reasoning as train.toml's
+# window glass; the windshield stays a plain white-opacity overlay rather
+# than a new fixed hue, the same convention every other sprite here
+# follows.
 classes = ["car"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,9 +18,12 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M3.5 16.4 L4.8 11.2 C5.2 9.8 6.4 9 8 9 H16 C17.6 9 18.8 9.8 19.2 11.2 L20.5 16.4 Z" fill="url(#car-fill)"/>
+  <path d="M4.6 14.6 A2.8 2.8 0 0 1 10.2 14.6 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
+  <path d="M13.8 14.6 A2.8 2.8 0 0 1 19.4 14.6 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
   <path d="M7.6 9 L9 6.2 H15 L16.4 9 Z" fill="url(#car-fill)"/>
   <path d="M9.4 6.8 L8.4 9 H15.6 L14.6 6.8 Z" fill="#ffffff" opacity="0.5"/>
   <path d="M4.4 14.4 L19.6 14.4" stroke="#ffffff" stroke-width="0.6" opacity="0.35"/>
+  <ellipse cx="19.6" cy="12.4" rx="1" ry="0.8" fill="#fbe8a6"/>
   <circle cx="7.4" cy="16.6" r="2.2" fill="{{FILL_DARK}}"/>
   <circle cx="16.6" cy="16.6" r="2.2" fill="{{FILL_DARK}}"/>
   <circle cx="7.4" cy="16.6" r="0.9" fill="#000000" opacity="0.5"/>

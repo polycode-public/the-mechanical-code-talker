@@ -1,23 +1,34 @@
-# museum — a classical facade at the sprite tier: a pediment over a row
-# of columns and steps, distinct from library's own book spines.
+# museum — a classical facade whose whole identity is its own pale stone:
+# a pediment over fluted columns and steps, with a fixed crimson banner
+# hung between two of the columns. Stone and banner are fixed because a
+# museum's own marble read and its hung exhibition banner are the two
+# cues that separate it from library's book-spine identity, not a colour
+# a theme should carry.
 classes = ["museum"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="museum-wash" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
+    <linearGradient id="museum-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eee6d4"/>
+      <stop offset="100%" stop-color="#b7ab90"/>
+    </linearGradient>
+    <linearGradient id="museum-pediment" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5eedd"/>
+      <stop offset="100%" stop-color="#cbbf9f"/>
     </linearGradient>
   </defs>
-  <path d="M3 8.6 L12 3.4 L21 8.6 Z" fill="url(#museum-wash)" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-  <g fill="currentColor" opacity="0.85">
-    <rect x="5.4" y="9.4" width="1.8" height="9.2"/>
-    <rect x="9.2" y="9.4" width="1.8" height="9.2"/>
-    <rect x="13" y="9.4" width="1.8" height="9.2"/>
-    <rect x="16.8" y="9.4" width="1.8" height="9.2"/>
+  <path d="M3 8.6 L12 3.4 L21 8.6 Z" fill="url(#museum-pediment)" stroke="#8a7c5c" stroke-width="1"/>
+  <rect x="4.4" y="9.4" width="15.2" height="9.2" fill="url(#museum-wash)"/>
+  <g fill="#8a7c5c">
+    <rect x="5.4" y="9.4" width="1.6" height="9.2"/>
+    <rect x="9.2" y="9.4" width="1.6" height="9.2"/>
+    <rect x="13" y="9.4" width="1.6" height="9.2"/>
+    <rect x="16.8" y="9.4" width="1.6" height="9.2"/>
   </g>
-  <rect x="3.6" y="18.6" width="16.8" height="1.6" fill="url(#museum-wash)" stroke="currentColor" stroke-width="1"/>
-  <rect x="2.6" y="20.2" width="18.8" height="1.6" fill="url(#museum-wash)" stroke="currentColor" stroke-width="1"/>
-  <path d="M4 8.4 L12 4" stroke="#ffffff" stroke-width="0.6" opacity="0.35" fill="none" stroke-linecap="round"/>
+  <rect x="3.6" y="18.6" width="16.8" height="1.6" fill="url(#museum-wash)" stroke="#8a7c5c" stroke-width="0.7"/>
+  <rect x="2.6" y="20.2" width="18.8" height="1.6" fill="url(#museum-wash)" stroke="#8a7c5c" stroke-width="0.7"/>
+  <path d="M10.6 9.4 H13.4 V15.6 L12 14.6 L10.6 15.6 Z" fill="#8c2a2a"/>
+  <path d="M10.6 9.4 H13.4 L12.8 10.2 H11.2 Z" fill="#6e1f1f"/>
+  <path d="M4 8.4 L12 4" stroke="#ffffff" stroke-width="0.6" opacity="0.4" fill="none" stroke-linecap="round"/>
 </svg>
 """

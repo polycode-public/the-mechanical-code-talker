@@ -1,5 +1,7 @@
 # vehicle — the generic fallback for any vehicle with no sprite of its own:
-# a plain car silhouette gradient-shaded from its own taught mgx:madeOf
+# a wheeled box with the wheels sunk into real cut wells (not just bolted
+# under a flat base, the same body-over-wheelarch idiom car.toml uses) and
+# a fixed pale headlamp, gradient-shaded from its own taught mgx:madeOf
 # value, spanning metal, plastic and wood so an old cart reads as plausibly
 # as a car.
 classes = ["vehicle"]
@@ -13,8 +15,11 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M3.6 15.4 C3.6 13 5 12.4 7 12.4 L8.6 9.2 C9.2 8.2 10 7.8 11.2 7.8 H15 C16.2 7.8 17 8.2 17.6 9.2 L19.2 12.4 C21 12.4 20.4 13 20.4 15.4 Z" fill="url(#vehicle-fill)"/>
+  <path d="M5 14.8 A2.6 2.6 0 0 1 10.2 14.8 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
+  <path d="M13.8 14.8 A2.6 2.6 0 0 1 19 14.8 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
   <path d="M9.6 9 L10.6 12.2 H17 L15.6 9 Z" fill="#000000" opacity="0.22"/>
   <path d="M9.9 9.4 L10.7 11.8" stroke="#ffffff" stroke-width="0.5" opacity="0.35"/>
+  <ellipse cx="19.2" cy="11.6" rx="0.9" ry="0.7" fill="#fbe8a6"/>
   <circle cx="7.6" cy="16" r="2.2" fill="#1a1a1a"/>
   <circle cx="16.6" cy="16" r="2.2" fill="#1a1a1a"/>
   <circle cx="7.6" cy="16" r="0.9" fill="#7a7a7a"/>

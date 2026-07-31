@@ -1,0 +1,75 @@
+# poodle-facing-half-left — the poodle turned three-quarters, halfway between
+# poodle-facing-left.toml's full profile and poodle-with-emotion.toml's front
+# view. The head sits at the midpoint position, the leading pompom tuft and
+# nose project only half as far past the head's own edge, and a small far
+# eye now shows past the near eye alongside it — the cue that reads as a
+# turned head rather than a flat profile. The body, legs and tail keep the
+# profile file's own geometry, shifted right by the same amount the head
+# moved.
+classes = ["poodle"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="poodle-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="16.7" cy="15.2" rx="6.2" ry="4.6" fill="url(#poodle-facing-half-left-fill)"/>
+  <ellipse cx="14.5" cy="13.4" rx="1.8" ry="1.3" fill="#000000" opacity="0.18"/>
+  <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+    <line x1="12.5" y1="19" x2="12.3" y2="21.8"/>
+    <line x1="14.9" y1="19.6" x2="14.9" y2="22.2"/>
+    <line x1="18.9" y1="19.6" x2="18.9" y2="22.2"/>
+    <line x1="21.3" y1="19" x2="21.5" y2="21.8"/>
+  </g>
+  <g fill="url(#poodle-facing-half-left-fill)">
+    <circle cx="12.3" cy="20.8" r="1"/>
+    <circle cx="14.9" cy="21.4" r="1"/>
+    <circle cx="18.9" cy="21.4" r="1"/>
+    <circle cx="21.5" cy="20.8" r="1"/>
+  </g>
+  <rect x="22" y="14.2" width="2.2" height="6" rx="1.1" fill="url(#poodle-facing-half-left-fill)"/>
+  <circle cx="23.1" cy="13.2" r="1.5" fill="url(#poodle-facing-half-left-fill)"/>
+  <circle cx="8.5" cy="8.8" r="4" fill="url(#poodle-facing-half-left-fill)"/>
+  <g fill="url(#poodle-facing-half-left-fill)">
+    <circle cx="5.3" cy="5.8" r="1.6"/>
+    <circle cx="8.3" cy="4.1" r="1.7"/>
+    <circle cx="10.9" cy="5.2" r="1.1"/>
+  </g>
+  <ellipse cx="4.7" cy="9.5" rx="0.5" ry="0.42" fill="#1c1c1c"/>
+  <ellipse cx="7.7" cy="7.9" rx="0.5" ry="0.6" fill="#1c1c1c"/>
+  <ellipse cx="10.4" cy="8.2" rx="0.3" ry="0.37" fill="#1c1c1c"/>
+  <ellipse cx="9.5" cy="6.5" rx="1" ry="0.8" fill="#ffffff" opacity="0.32"/>
+  <ellipse cx="13.1" cy="12.4" rx="2.6" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Half scale is 0.825 * head radius 4 = 3.3, the same ratio
+# bear-facing-half-left.toml used between its own full-profile and half
+# scales. The near eye drawn above sits at (7.7, 7.9); reusing the same
+# offset-to-scale ratio (0.4, 0.15) the profile file used gives cx = 7.7 +
+# 0.4*3.3 = 9.02 and cy = 7.9 + 0.15*3.3 = 8.395, rounded to the values below,
+# landing the shared face fragment's own near eye on top of the drawn one.
+[face]
+cx = 9.0
+cy = 8.4
+scale = 3.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

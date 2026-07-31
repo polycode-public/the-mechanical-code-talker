@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "2.11.5",
+  "tmctVersion": "4.1.1",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -16,7 +16,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "8855b5229a5f51593835c34bf8390379f2a9903d0da942ed5dc46a8e11ce341d"
+      "sha256": "079bf697ffae775782152572e93695980ceb6064eb4657bce26a6a3e3a4d3bcb"
     },
     {
       "page": "spider-fly",
@@ -29,7 +29,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "aa273dc33523d43ac28cd5c68a9bede82b250b3432173c19459f9207b921c47a"
+      "sha256": "8a2f2cbb82cc4b7742183820f746d17f8ff90b3dd79fe2f5945c4066c70f9d53"
     },
     {
       "page": "plan",
@@ -42,7 +42,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "b10c7abcf3991c8eb37e91c9c6bef8bbb3bc85c08ee87a4aa1967f627da85cc0"
+      "sha256": "864367dda026f0048c5b1f14a104a63d8fc2cb5e8d7fd4b9e4fbf2148a3a93a8"
     },
     {
       "page": "adventure",
@@ -55,7 +55,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "91a44d751cdf63916ba5fbdcc5ffca131bcb6ae7a780f4063b087398768fc735"
+      "sha256": "7f008936165d838f3259bb5b712dc9bfbf43898c296b2454d443354754c06b31"
     },
     {
       "page": "ledger",
@@ -68,7 +68,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "7bb210c845a6e8cd5e76e8d3cf921977b754540a6e0392921e829349532f995f"
+      "sha256": "591b403bfb673d1d02adc584ec8edbb40d00782a18dc9eff02240de4e4b3f136"
     },
     {
       "page": "code",
@@ -81,7 +81,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "4235dbd9e9774743dc1cc3626383b17c4e377933c2f51d88aede78611ba476bf"
+      "sha256": "9a5d9f5a8a31f7a8aa4e22a6ebf6e1d5ea5fbb2a3524e4590bf63bfd6ac7e433"
     },
     {
       "page": "ingest",
@@ -94,7 +94,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "b98c2fb1a8ee7351f42a6e1ee683d5cfa1806b09ac326eb83fc63e64e53712c6"
+      "sha256": "21201ab727d0da0d84e6522b706e57ec1c3fe2685addfa55db490e58c5bf0d76"
     },
     {
       "page": "sprites",
@@ -107,7 +107,33 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "c8cebf69b4d36e71c6f1729021b388af871af4240af1b509eaab53b692e7778f"
+      "sha256": "3548e273849a7ccf9657f846cdac58f71fae2467974c0e0742ee93af317fb592"
+    },
+    {
+      "page": "research",
+      "file": "research.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "78ab8d354d7487b77ef068035c4d0f81f8a5e229c99aa139304f2d71988ee698"
+    },
+    {
+      "page": "mud",
+      "file": "mud.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "03acda18b8c668e04a45ac6d97701660dfb1f88a24f297d1ce08e1984ab9d6ca"
     }
   ]
 }

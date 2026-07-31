@@ -62,6 +62,55 @@ export function kindNounAnaphoraHint(text) {
   return m ? (ENTITY_TO_TYPE[m[2].toLowerCase()] || null) : null;
 }
 
+// ---- the dated teach frame: "<sentence> as of <date>" ----
+
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/** A closed trailing suffix, not a grammar change: three accepted date forms
+ *  ("as of 2019", "as of 2019-03-01", "as of march 2019"), anchored to the
+ *  end of input with trailing punctuation tolerated. "as of" only — "as at",
+ *  "back in", and bare "in 2019" stay out (the last is ambiguous with
+ *  locatives: "the dog is in 2019" vs "the meeting is in room 4"). */
+const DATED_TEACH_SUFFIX_RE =
+  /\s+as\s+of\s+((?:19|20)\d{2}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(?:19|20)\d{2})\s*[.!?]*$/i;
+
+/** Read-only probe: does `text` carry a trailing "as of <date>" suffix? A hit
+ *  returns `{ stripped, observedAt, dateText }` — `stripped` is the sentence
+ *  with the suffix removed (exactly the shape the teach lanes already parse),
+ *  `dateText` the matched date phrase verbatim (for the acknowledgment echo),
+ *  and `observedAt` the ISO instant the date names, always Date.parse-able.
+ *  No hit, or a suffix with nothing left to teach, returns null. Same
+ *  read-only-probe shape as kindNounAnaphoraHint above — a helper a teach
+ *  lane consults, never a mutation of normalizeQuery's own text->text path.
+ *
+ *  The stored instant is the START of the named period (a bare year ->
+ *  <yyyy>-01-01T00:00:00.000Z; month+year -> the 1st of that month; a full
+ *  date -> that day, all at midnight UTC) — the CONSERVATIVE reading for
+ *  latest-observation-wins: it can under-claim how recent the observation
+ *  was, never over-claim it. */
+export function datedTeachSuffix(text) {
+  const s = String(text || "");
+  const m = DATED_TEACH_SUFFIX_RE.exec(s);
+  if (!m) return null;
+  const stripped = s.slice(0, m.index).trim();
+  if (!stripped) return null;
+  const dateText = m[1];
+  const isoForm = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(dateText);
+  let observedAt;
+  if (isoForm) {
+    const [, year, month, day] = isoForm;
+    observedAt = `${year}-${month || "01"}-${day || "01"}T00:00:00.000Z`;
+  } else {
+    const [, monthName, year] = /^([a-z]+)\s+(\d{4})$/i.exec(dateText);
+    const monthNum = String(MONTH_NAMES.indexOf(monthName.toLowerCase()) + 1).padStart(2, "0");
+    observedAt = `${year}-${monthNum}-01T00:00:00.000Z`;
+  }
+  return { stripped, observedAt, dateText };
+}
+
 // Every relation verb phrase, as one longest-first alternation — feeds the
 // DOES-X-VERB-ANYTHING-ELSE frame below without hardcoding a parallel list.
 const VERB_ALTERNATION = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
@@ -110,10 +159,10 @@ const INTERROGATIVE_LEAD_RE = /^(?:which|what|who|whose|where|when|why|how)\b/i;
  *  untouched so that working path keeps it. Two shapes: a plural kind noun in
  *  tail position, or a bare (det +) singular kind noun and nothing else. */
 const LISTING_TAIL_KINDS = new Set([
-  "modules", "files", "functions", "methods", "classes", "attributes", "fields",
+  "modules", "files", "packages", "functions", "methods", "classes", "attributes", "fields",
   "properties", "variables", "globals", "commits", "changes", "tests", "members",
 ]);
-const BARE_KIND_RE = /^(?:all\s+|the\s+)?(?:module|file|function|method|class|attribute|field|property|variable|global|commit|change|test|member)\??$/i;
+const BARE_KIND_RE = /^(?:all\s+|the\s+)?(?:module|file|package|function|method|class|attribute|field|property|variable|global|commit|change|test|member)\??$/i;
 const isListingRemainder = (rest) => {
   if (BARE_KIND_RE.test(rest)) return true;
   const words = rest.replace(/\?+\s*$/, "").trim().split(/\s+/);
@@ -186,6 +235,12 @@ const EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2}
  *  untouched, a relation/interrogative remainder unwraps to itself, anything
  *  else bridges to "describe <thing>". */
 const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
+/** An "everything I need [to <verb>|for X]" remainder always bridges to
+ *  "describe <thing>", even when its purpose clause happens to contain a
+ *  relation verb ("everything I need to change X") — RELATION_VERB_RE's
+ *  bag-of-words probe would otherwise misread that verb as making the
+ *  remainder itself an already-relational clause. */
+const EVERYTHING_I_NEED_RE = /^everything\s+i(?:'d|\s+would)?\s+need\b/i;
 
 /** Leading STACCATO connective before an ALREADY well-formed question ("and
  *  what imports it") -> the question alone. Gated on the remainder starting
@@ -196,6 +251,12 @@ const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
  *  noise-strip layer never drops. */
 const LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
 const QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
+/** A bare relative-clause remainder ("the tests that cover it"), the shape an
+ *  anaphoric follow-up takes when it names a thing instead of asking outright.
+ *  Anchored on a determiner and a short head noun so a mid-clause boolean
+ *  branch ("and are tested", "and call Y") never reaches it. */
+const RELATIVE_CLAUSE_LEAD_RE =
+  /^(?:the|its|their|his|her|our|my)\s+[\w'-]+(?:\s+[\w'-]+){0,2}\s+(?:that|which|who)\s+\S/i;
 
 /** A topic-switch/self-interruption preamble ("actually never mind, <Q>"),
  *  repeating so a stack of markers peels in one pass. Distinct from
@@ -248,7 +309,9 @@ export function applyPreambleFrames(text) {
     if (m) {
       const rest = m[1].trim();
       if (!isListingRemainder(rest)) {
-        q = (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest)) ? rest : `describe ${rest}`;
+        const isRelationClause = !EVERYTHING_I_NEED_RE.test(rest)
+          && (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest));
+        q = isRelationClause ? rest : `describe ${rest}`;
       }
     }
     m = q.match(LEADING_CONNECTIVE_RE);
@@ -261,6 +324,7 @@ export function applyPreambleFrames(text) {
         INTERROGATIVE_LEAD_RE.test(rest) || QUESTION_AUX_LEAD_RE.test(rest)
         || TOPIC_SWITCH_PREAMBLE_RE.test(rest) || ACK_PREAMBLE_RE.test(rest)
         || HEDGE_ADVERB_PREAMBLE_RE.test(rest) || BROWSING_PREAMBLE_RE.test(rest)
+        || RELATIVE_CLAUSE_LEAD_RE.test(rest)
       ) q = rest;
     }
     if (q === before) break;

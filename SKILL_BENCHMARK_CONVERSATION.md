@@ -68,10 +68,10 @@ This skill has **three modes**, sharing the same discipline (§1):
 
 ---
 
-## 0. The load-bearing idea
+## 0. The core idea
 
 tmct's promise (item 1) is a **tolerant** surface that **guides you toward precision**. The failure
-mode is not a wrong answer — it is a **dead-end**: a turn that neither answers nor nudges, so the
+mode is not a wrong answer. It is a **dead-end**: a turn that neither answers nor nudges, so the
 conversation stops. A dead-end is any turn whose reply is one of:
 
 - the grammar wall ("couldn't parse this as a graph question. Try: …"),
@@ -240,12 +240,13 @@ to flow.
 
 ### 2.1 The FLOW ladder — a bounded, named flow-complexity ladder
 
-The **FLOW ladder** (`FLOW-0…FLOW-6`) is CONVERSATION's own scale, drawn from conversational
-complexity — distinct from CHATBENCH's CEFR, INFBENCH's `INF-1…INF-8`, and AGENTBENCH's
-`TOOL-0…TOOL-8`. It is **bounded by construction**: there is no open `FLOW-7`. FLOW-6 (the messy
-real user) is the top, and new complexity that doesn't fit an existing tier grows that tier's
-content — it does not add a rung. The ladder is the ruler; being bounded is what lets it produce a
-position and a gate.
+The **FLOW ladder** (`FLOW-0…FLOW-6`, plus two horizon rungs) is CONVERSATION's own scale, drawn
+from conversational complexity — distinct from CHATBENCH's CEFR, INFBENCH's `INF-1…INF-8`, and
+AGENTBENCH's `TOOL-0…TOOL-8`. Its **surface-messiness axis tops at FLOW-6** (the messy real user):
+new messiness that doesn't fit an existing tier grows that tier's content, it does not add a rung.
+Above FLOW-6 sit two **capability-depth horizon rungs** (FLOW-7, FLOW-8), defined ahead of design so
+the scale extends just past what the plan docs anticipate. The ladder is the ruler; a defined top is
+what lets it produce a position and a gate.
 
 - **FLOW-0 — Bootstrap: before any graph, the identity surface.** No `--repo`, a bare `tmct chat` in
   an empty dir. Greetings, identity ("who are you", "what are you", "are you an AI/ChatGPT"), help/
@@ -267,6 +268,21 @@ position and a gate.
   later, mix with graph truth; the honest "I don't know that yet" that offers to learn.
 - **FLOW-6 — The messy real user.** typos, politeness frames, topic switches, "no wait", vague
   openers, "what can you tell me about this repo" — the conversation a stranger actually has.
+- **FLOW-7 — Typed cross-turn discourse record (DRT-lite).** a query whose meaning composes across
+  several prior ANSWERS through a typed record that tracks entities and relations turn to turn, past
+  the prev-set anaphora the lanes already carry (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part A). Row 19 of the compositional
+  corpus lane (cross-turn temporal composition) is its standing acceptance test.
+- **FLOW-8 — Nested other-minds dialogue.** talking about what ANOTHER agent believes — a believer
+  of beliefs, not only a first-order belief about the world. The spider-fly false-belief world is the
+  world-side floor; this rung grades holding that nesting in conversation (`SKILL_BENCHMARK_AGI_SCALES.md`'s
+  other-minds depth scale).
+
+FLOW-7 and FLOW-8 sit above the ratcheting FLOW-0→FLOW-6 ladder, not inside it: the ratchet gate
+(below) still runs FLOW-0→FLOW-6, and these two carry no frozen `test/chatflow-*.test.mjs`
+regressions yet — a horizon rung's cases get authored when its capability lands (DRT-lite / R1 for
+FLOW-7, other-minds nesting for FLOW-8), the same defer-until-buildable discipline the other three
+benches hold for their top rungs. The AGI won't sit in this sandbox; these two rungs are where its
+discourse-side depth would register.
 
 #### The ratchet criterion (mechanical, per tier)
 
@@ -564,12 +580,17 @@ Report structure:
 - **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
   that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
   guess wearing a helpful voice — score it a dead-end if it would fail (§0).
-- **Don't invent new farewell test cases.** Don't add cases that test elaborate goodbye or thanks phrasing.
-  A short, clear close beats a clever one, and stretching the closing-phrase matcher to cover more
-  wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
-  farewell dead-end, note it and move on rather than generalizing the matcher further (operator
-  decision, 2026-07-10). This is about not INVENTING new farewell cases to chase, not a bar on fixing
-  a real bug where a non-farewell gets MISREAD as one — that's an ordinary dead-end, route it normally.
+- **Don't chase irregular sign-offs at all — invented or organically found.** Don't add cases that
+  test elaborate goodbye or thanks phrasing, and don't route one that turns up on its own either
+  (operator decision, 2026-07-10, hardened 2026-07-27 after a persona sweep re-surfaced the same
+  class — "thanks, that's all for now" and its siblings — as a dead-end worth chasing). A short,
+  clear close beats a clever one; stretching the closing-phrase matcher to cover more wording adds
+  ambiguity about when the conversation actually ends, for a class of input that's low-value to
+  chase indefinitely. If a round turns up an irregular-sign-off dead-end, note it in the report and
+  stop there — no `NEXT.md` item, no routing, no further sweep effort on that class. This is about
+  irregular SIGN-OFFS specifically, not a bar on fixing a real bug where a non-farewell gets
+  MISREAD as one (a false match, not a missed match) — that's an ordinary dead-end, route it
+  normally.
 - **Delegate long-running work under the coordinator model.** Persona-sweep mode (§3.4) is the
   clearest example of this — every persona's CHAT step is an independent, parallel background
   sub-agent , which is also why it's the default single-run mode (§3's capped sprint is

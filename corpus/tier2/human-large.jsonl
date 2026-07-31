@@ -438,7 +438,6 @@
 {"start":"/c/en/hoodoo","rel":"/r/IsA","end":"/c/en/priest","weight":1,"surfaceText":"[[hoodoo]] IsA [[priest]]"}
 {"start":"/c/en/priest","rel":"/r/IsA","end":"/c/en/spiritual leader","weight":1,"surfaceText":"[[priest]] IsA [[spiritual leader]]"}
 {"start":"/c/en/hopper","rel":"/r/IsA","end":"/c/en/jumper","weight":1,"surfaceText":"[[hopper]] IsA [[jumper]]"}
-{"start":"/c/en/immune","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[immune]] IsA [[person]]"}
 {"start":"/c/en/jockey","rel":"/r/IsA","end":"/c/en/equestrian","weight":1,"surfaceText":"[[jockey]] IsA [[equestrian]]"}
 {"start":"/c/en/legion","rel":"/r/IsA","end":"/c/en/military unit","weight":1,"surfaceText":"[[legion]] IsA [[military unit]]"}
 {"start":"/c/en/legion","rel":"/r/HasA","end":"/c/en/legionnaire","weight":1,"surfaceText":"[[legion]] HasA [[legionnaire]]"}
@@ -926,7 +925,6 @@
 {"start":"/c/en/friend","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[friend]] IsA [[actor]]"}
 {"start":"/c/en/segregate","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[segregate]] IsA [[actor]]"}
 {"start":"/c/en/spearhead","rel":"/r/IsA","end":"/c/en/leader","weight":1,"surfaceText":"[[spearhead]] IsA [[leader]]"}
-{"start":"/c/en/stigmatic","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[stigmatic]] IsA [[person]]"}
 {"start":"/c/en/summation","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[summation]] IsA [[collection]]"}
 {"start":"/c/en/transient","rel":"/r/IsA","end":"/c/en/traveler","weight":1,"surfaceText":"[[transient]] IsA [[traveler]]"}
 {"start":"/c/en/trumpeter","rel":"/r/IsA","end":"/c/en/messenger","weight":1,"surfaceText":"[[trumpeter]] IsA [[messenger]]"}

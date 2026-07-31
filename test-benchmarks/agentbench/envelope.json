@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": {
+    "agentbenchVersion": "4.1.1",
+    "drivers": [
+      "goal-0.8.1",
+      "resolver-0.8.0"
+    ],
+    "stamp": "4.1.1",
+    "caseCount": 68
+  },
+  "ladder": {
+    "rungs": [
+      "TOOL-0",
+      "TOOL-1",
+      "TOOL-2",
+      "TOOL-3",
+      "TOOL-4",
+      "TOOL-5",
+      "TOOL-6",
+      "TOOL-7",
+      "TOOL-8"
+    ],
+    "rungReached": "TOOL-8",
+    "gatedAt": null
+  },
+  "capability": {
+    "maxContextTokens": null,
+    "maxContextTokensMeasured": false,
+    "structuredOk": true,
+    "toolsOk": true
+  },
+  "metrics": {
+    "overall": {
+      "planCompletion": 1,
+      "resultCompletion": 1,
+      "hallucinationRate": 0,
+      "gatePass": true
+    },
+    "byRung": {
+      "TOOL-0": {
+        "n": 8,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-1": {
+        "n": 14,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-2": {
+        "n": 7,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-3": {
+        "n": 6,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-4": {
+        "n": 7,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-5": {
+        "n": 9,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-6": {
+        "n": 11,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-7": {
+        "n": 3,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "TOOL-8": {
+        "n": 3,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      }
+    }
+  },
+  "notes": [
+    "rungReached is the highest TOOL-0..TOOL-8 rung with an unbroken gate-PASS chain from TOOL-0 (0% hallucination AT >=50% completion, agentbench/grade.mjs COMPLETION_FLOOR) — see agentbench/grade.mjs ladderGate()/highestGatePassRung().",
+    "toolsOk is false iff any produced call across the run named an undeclared or unknown-registry tool (the 'declared tools only, refuse otherwise' invariant). structuredOk is false iff any produced call had an unknown or missing argument against its declared schema. Both derive from src/domain/router/call-validator.mjs's hallucination taxonomy, not a hand-set guess.",
+    "maxContextTokens is not measured by AGENTBENCH today; it is intentionally left null rather than copying a downstream calibration's hand-set figure (that copy is exactly the drift this envelope exists to prevent).",
+    "Regenerate with `node agentbench/generate-envelope.mjs` after any AGENTBENCH-affecting change; the output is deterministic (no Date.now) so a clean re-run over an unchanged tree is byte-identical."
+  ]
+}

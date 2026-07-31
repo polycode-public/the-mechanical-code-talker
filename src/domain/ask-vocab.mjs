@@ -164,7 +164,101 @@ export const RELATIONS = {
       "exporting",
     ],
   },
+  // serves/denotes classify edges a PROVIDER declares (mgx:serves / mgx:denotes).
+  // tmct's own indexer emits neither, so they are absent from a graph it built
+  // and answer honestly empty there; a provider graph that carries them gets the
+  // same one-hop traversal every other kind gets, instead of only /describe's
+  // kind-agnostic edge walk.
+  serves: {
+    bare: "serve",
+    comment: "subject provides or backs the object — a handler serving a route, a module serving a surface (mgx:serves).",
+    verbs: [
+      "serves", "serve",
+      // gerund (g-drop normalization)
+      "serving",
+    ],
+  },
+  denotes: {
+    bare: "denote",
+    comment: "subject names the object — a glossary/lexicon term denoting a code entity (mgx:denotes).",
+    verbs: [
+      "denotes", "denote",
+      // gerund (g-drop normalization)
+      "denoting",
+    ],
+  },
 };
+
+// ---- world relations: the predicates a WORLD graph stores about its own
+// individuals, as opposed to RELATIONS above, which is a code vocabulary —
+// a module imports a module, a commit touches a file, and none of its verbs
+// name where a thing is or how it feels. A game board, a burrow and a manor
+// all record those, in the same `mgx:` predicates, so the words for them are
+// curated once here.
+//
+// Each entry is keyed by its stored predicate and carries the LISTING NOUNS a
+// question reaches it by ("the locations of…", "the moods of…") plus `reads`,
+// the third-person phrase one subject's answer is written in. No `verbs` list
+// and no VERB_TO_KIND entry: these answer a listing over a named set, not the
+// "does X <verb> Y" shapes RELATIONS' verbs compile to, and folding them in
+// would put "is in" into the code grammar's own verb table. ----
+
+export const WORLD_RELATIONS = Object.freeze({
+  placement: Object.freeze({
+    predicate: "mgx:currently-in",
+    comment: "individual -> place: where the subject is right now.",
+    nouns: Object.freeze(["location", "locations", "position", "positions", "place", "places", "whereabouts", "room", "rooms"]),
+    reads: "is in",
+  }),
+  mood: Object.freeze({
+    predicate: "mgx:feels",
+    comment: "individual -> mood word: how the subject feels right now.",
+    nouns: Object.freeze(["mood", "moods", "feeling", "feelings", "emotion", "emotions"]),
+    reads: "feels",
+  }),
+  mass: Object.freeze({
+    predicate: "mgx:mass",
+    comment: "individual -> number: the subject's current mass.",
+    nouns: Object.freeze(["mass", "masses", "weight", "weights"]),
+    reads: "has mass",
+  }),
+});
+
+/** listing noun -> WORLD_RELATIONS key ("locations" -> "placement"). */
+export const WORLD_NOUN_TO_RELATION = Object.freeze(Object.fromEntries(
+  Object.entries(WORLD_RELATIONS).flatMap(([token, { nouns }]) => nouns.map((n) => [n, token])),
+));
+
+/** Every stored world predicate, for a caller projecting fact rows into a
+ *  graph `ask` can traverse. */
+export const WORLD_PREDICATES = Object.freeze(
+  Object.values(WORLD_RELATIONS).map((r) => r.predicate),
+);
+
+// The regular English 3rd-person-singular suffix rule (the same regular
+// -s/-es/-ies shape src/domain/inflect.mjs's own `pluralOf` applies to a
+// noun) — not imported from there, since inflect.mjs sits downstream of
+// interpret/normalize.mjs, which imports THIS module: importing it back
+// here would be a real circular dependency, not just a style choice.
+function thirdPersonSingular(w) {
+  if (/(?:[sxz]|ch|sh)$/i.test(w)) return `${w}es`;
+  if (/[^aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
+  return `${w}s`;
+}
+
+/** The third-person-singular sentence phrase for a stored relation `kind`
+ *  ("inherits" -> "inherits from", "cochange" -> "co-changes with"), derived
+ *  from RELATIONS' own `bare` infinitive rather than a second hand-curated
+ *  verb table. A symbol-grain kind ("callsSymbol", "touchesSymbol") reads its
+ *  coarse sibling's phrase; an unrecognized kind falls back to a plain
+ *  camelCase split. */
+export function phraseForRelation(kind) {
+  const key = String(kind || "");
+  const entry = RELATIONS[key] || (key.endsWith("Symbol") && RELATIONS[key.slice(0, -6)]) || null;
+  if (!entry) return key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  const [head, ...rest] = entry.bare.split(" ");
+  return [thirdPersonSingular(head), ...rest].join(" ");
+}
 
 /** The closed set of reverse `inherits` verb phrasings a strategy checks to
  *  decide whether to swap subject/object. The three "the"-definite forms are
@@ -287,6 +381,10 @@ export const ENTITY_TO_TYPE = Object.freeze({
   method: "Method", methods: "Method",
   class: "Class", classes: "Class",
   module: "Module", modules: "Module", mod: "Module", mods: "Module", file: "Module", files: "Module",
+  // "Package" is a pseudo-type like "Change" below: no node is ever stored
+  // with that class. ask.mjs derives packages from module labels, the same
+  // derivation the architecture map uses.
+  package: "Package", packages: "Package",
   attribute: "Attribute", attributes: "Attribute", field: "Attribute", fields: "Attribute",
   variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
   // "Change" is a pseudo-type, not a node class: ask.mjs's traverse() reads it
@@ -315,6 +413,38 @@ export const PASSIVE_PARTICIPLE_TO_KIND = Object.freeze({
   contained: "contains",
   exported: "reexports", "re-exported": "reexports", exposed: "reexports",
   touched: "touches", changed: "touches", modified: "touches", edited: "touches", updated: "touches",
+});
+
+// ---- stacked reduced-relative clauses: a "<participle> <preposition>" bigram
+// that opens a reduced relative modifying a head noun ("classes INHERITED FROM
+// Widget DEFINED IN c.mjs"). Each entry names the relation kind and which role
+// the following term fills:
+//   role "object" — the surface is active-disguised, the preposition marks the
+//     relation's OBJECT, so the answer is the SUBJECTS pointing at the term (a
+//     reverse traversal): "inherited from Widget" -> the classes that inherit
+//     Widget.
+//   role "agent"  — a genuine passive whose "by"/"in" marks the AGENT, so the
+//     answer is the term's own FORWARD targets: "defined in c.mjs" -> what
+//     c.mjs defines.
+// Only consulted by parseStackedReducedRelative, which requires TWO such
+// bigrams on one head noun; a single reduced relative keeps its existing route.
+// Naming senses and directionally-ambiguous bigrams ("imported from", "used
+// in/for", "called <name>") are deliberately absent so they stay honest misses.
+export const REDUCED_RELATIVE_CLAUSES = Object.freeze({
+  "inherited from": { kind: "inherits", role: "object" },
+  "extended from": { kind: "inherits", role: "object" },
+  "subclassed from": { kind: "inherits", role: "object" },
+  "defined in": { kind: "defines", role: "agent" },
+  "declared in": { kind: "defines", role: "agent" },
+  "contained in": { kind: "contains", role: "agent" },
+  "imported by": { kind: "imports", role: "agent" },
+  "called by": { kind: "calls", role: "agent" },
+  "used by": { kind: "uses", role: "agent" },
+  "tested by": { kind: "tests", role: "agent" },
+  "covered by": { kind: "tests", role: "agent" },
+  "touched by": { kind: "touches", role: "agent" },
+  "changed by": { kind: "touches", role: "agent" },
+  "exported by": { kind: "reexports", role: "agent" },
 });
 
 // ---- normalization: contractions/informal spellings expanded before parsing,

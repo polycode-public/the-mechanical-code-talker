@@ -1,22 +1,31 @@
-# office — a tall building at the sprite tier: a rigid uniform window
-# grid marks it distinct from hotel's own pennant-and-lobby massing.
+# office — a tower whose walls a theme owns like any generic building in
+# this pack, marked by its own rigid glass grid and one window still lit
+# with a monitor's blue-white glow after hours. The glass and its glow
+# are fixed since a pane's own colour is real, not the wall's to shade.
 classes = ["office"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="office-wash" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
+    <linearGradient id="office-wash" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 36%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 65%, black)"/>
     </linearGradient>
+    <radialGradient id="office-glow" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#8fe0ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#8fe0ff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
   <rect x="6.4" y="2.6" width="11.2" height="18.4" fill="url(#office-wash)" stroke="currentColor" stroke-width="1.3"/>
-  <g fill="#000000" opacity="0.2">
+  <g fill="#bcdcec" stroke="#3d5a68" stroke-width="0.2">
     <rect x="8" y="4.8" width="1.8" height="1.8"/><rect x="11" y="4.8" width="1.8" height="1.8"/><rect x="14" y="4.8" width="1.8" height="1.8"/>
-    <rect x="8" y="8" width="1.8" height="1.8"/><rect x="11" y="8" width="1.8" height="1.8"/><rect x="14" y="8" width="1.8" height="1.8"/>
+    <rect x="8" y="8" width="1.8" height="1.8"/><rect x="14" y="8" width="1.8" height="1.8"/>
     <rect x="8" y="11.2" width="1.8" height="1.8"/><rect x="11" y="11.2" width="1.8" height="1.8"/><rect x="14" y="11.2" width="1.8" height="1.8"/>
     <rect x="8" y="14.4" width="1.8" height="1.8"/><rect x="11" y="14.4" width="1.8" height="1.8"/><rect x="14" y="14.4" width="1.8" height="1.8"/>
   </g>
-  <rect x="10.4" y="17.8" width="3.2" height="3.2" fill="#000000" opacity="0.26"/>
+  <circle cx="11.9" cy="8.9" r="1.8" fill="url(#office-glow)"/>
+  <rect x="11" y="8" width="1.8" height="1.8" fill="#eaffff"/>
+  <rect x="10.4" y="17.8" width="3.2" height="3.2" fill="#3a2c1c"/>
   <path d="M7.4 3.6 L7.4 20.4" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
 </svg>
 """

@@ -13,6 +13,7 @@ import {
 import { worldFactRows, cellId, perimeterCells, isInWebBlock, parseCellId } from "../../src/domain/spider-fly-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
+import { EXPRESSION_PALETTE } from "../../src/domain/sprite-expressions.mjs";
 
 // ---- the state fold -----------------------------------------------------------
 
@@ -640,6 +641,8 @@ test("runSpiderFlyTick: a spider avoids another spider believed visible, even wi
     assert.equal(tick.agents["spider-2"].cell, "cell-5-7", "moves away from spider-1 symmetrically (south)");
     assert.match(tick.agents["spider-1"].goal, /avoiding spider-2/);
     assert.match(tick.agents["spider-2"].goal, /avoiding spider-1/);
+    assert.equal(tick.agents["spider-1"].mood, "scared", "backing off a rival reads as fear, not the predatory focus of a chase");
+    assert.equal(tick.agents["spider-2"].mood, "scared");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -658,6 +661,7 @@ test("runSpiderFlyTick: a fly inside an active web cannot move, even with a spid
     const tick = await runSpiderFlyTick(dir);
     assert.equal(tick.agents["fly-1"].cell, "cell-2-2", "webbed — stays put despite a visible spider it would otherwise flee");
     assert.match(tick.agents["fly-1"].goal, /trapped in an active web/);
+    assert.equal(tick.agents["fly-1"].mood, "scared", "pinned in a web with a spider in sight is the sharpest form of the same fear");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -674,6 +678,7 @@ test("runSpiderFlyTick: a spider with no fly in sight builds a web at its held c
     const tick1 = await runSpiderFlyTick(dir); // turn 1: no fly anywhere — holds and builds
     assert.equal(tick1.agents["spider-1"].cell, "cell-6-6");
     assert.match(tick1.agents["spider-1"].goal, /building a web/);
+    assert.equal(tick1.agents["spider-1"].mood, "calm", "holding position and spinning is the no-strong-emotion baseline");
     assert.deepEqual(tick1.activeWebs.map((w) => w.cell), ["cell-6-6"]);
     assert.equal(tick1.activeWebs[0].builtAtTurn, 1);
 
@@ -807,6 +812,7 @@ test("runSpiderFlyTick: a carried fly self-heals to independent movement the tic
     // this one too, same as it would "avoiding spider-1" or "chasing
     // spider-1" for any other agent.
     assert.equal(tick1.agents["fly-1"].goal, "spider-1 is gone — re-evaluating.");
+    assert.equal(tick1.agents["fly-1"].mood, "calm", "the scrubbed goal takes the mood with it — nothing is chasing it any more");
     assert.equal(tick1.agents["spider-1"], undefined, "the starved captor is gone from this tick's own agents");
 
     const tick2 = await runSpiderFlyTick(dir);
@@ -834,6 +840,144 @@ test("runSpiderFlyTick: every live agent's returned entry carries a plan array a
     }
     assert.equal(tick.agents["spider-1"].belief["fly-1"], "cell-5-2", "the spider's belief about fly-1 matches what it can actually see this turn");
     assert.equal(tick.agents["fly-1"].belief["spider-1"], "cell-2-2", "the fly's belief about spider-1 matches what it can actually see this turn");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- mood: a written fact, not a renderer's re-reading of the goal prose ------
+//
+// The mood word used to be recovered downstream by prefix-matching the goal
+// sentence this engine renders. `moodFromGoalProse` is that derivation, kept
+// here as the oracle the written fact has to agree with, so moving the word
+// from parsed prose to a real mgx:feels row cannot silently change what a
+// single agent feels.
+
+function moodFromGoalProse(agent, kind) {
+  const goal = agent?.goal || "";
+  if (kind === "spider") {
+    if (goal.startsWith("just ate")) return "happy";
+    if (goal.startsWith("carrying") || goal.startsWith("chasing") || goal.startsWith("co-located with")) return "angry";
+    if (goal.startsWith("avoiding")) return "scared";
+    return "calm";
+  }
+  if (kind === "fly") {
+    if (
+      goal.startsWith("evading")
+      || goal.startsWith("being carried by")
+      || goal.startsWith("just caught by")
+      || goal.startsWith("trapped in an active web")
+    ) return "scared";
+    return "calm";
+  }
+  return "calm";
+}
+
+test("startSpiderFlyGame puts a starting mood on record for every agent it mints", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-start-mood-"));
+  try {
+    await startSpiderFlyGame(dir, { flyCount: 2 });
+    const rows = readFactRows(await loadMemory(dir));
+    const feels = rows.filter((r) => r.predicate === "mgx:feels");
+    assert.deepEqual(
+      feels.map((r) => `${r.subject}=${r.object}`).sort(),
+      ["fly-1=calm", "fly-2=calm", "spider-1=calm"],
+      "an agent has a mood from the moment it exists, and nothing has a goal yet on turn 0",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick appends each live agent's mood as that turn's own mgx:feels fact, beside its placement", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-mood-fact-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-5-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "10" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.equal(tick.agents["spider-1"].mood, "angry", "a spider closing on a fly it can see");
+    assert.equal(tick.agents["fly-1"].mood, "scared", "a fly with that spider in sight");
+
+    const rows = readFactRows(await loadMemory(dir));
+    const feelsFor = (subject) => rows.filter((r) => r.subject === subject && r.predicate === "mgx:feels").map((r) => r.object);
+    assert.deepEqual(feelsFor("spider-1@turn1"), ["angry"]);
+    assert.deepEqual(feelsFor("fly-1@turn1"), ["scared"]);
+    const placementProvenance = rows.find((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:currently-in").provenance;
+    const moodProvenance = rows.find((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:feels").provenance;
+    assert.equal(moodProvenance, placementProvenance, "the mood is this turn's fact on the same footing as the placement, same provenance tag");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the mood a spider ends the tick on is what goes on record — happy after an eat, not the angry it was mid-chase", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-mood-eat-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "12" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "8" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
+    assert.equal(tick.agents["spider-1"].mood, "happy");
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.deepEqual(
+      rows.filter((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:feels").map((r) => r.object),
+      ["happy"],
+      "one mood per agent per turn, and it is the post-ecology one",
+    );
+    assert.ok(
+      !rows.some((r) => r.subject === "fly-1@turn1" && r.predicate === "mgx:feels"),
+      "the eaten fly left the board this tick, so no mood is recorded for it",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("every mood the engine emits over a real run is a curated expression word, and matches what the goal prose used to be parsed into", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-mood-golden-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    // The same starting board the bounded-chase test uses: fly-1 exactly at the
+    // spider's vision edge, so the chase, the catch and the eat all really run.
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-6-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: String(FLY_INITIAL_MASS) },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const seen = new Set();
+    let checked = 0;
+    for (let i = 0; i < 15; i += 1) {
+      const tick = await runSpiderFlyTick(dir);
+      for (const [id, agent] of Object.entries(tick.agents)) {
+        const kind = id.replace(/-\d+$/, "");
+        assert.ok(EXPRESSION_PALETTE[agent.mood], `${id} turn ${tick.turn}: "${agent.mood}" is not a curated expression word`);
+        assert.equal(agent.mood, moodFromGoalProse(agent, kind), `${id} turn ${tick.turn}: mood disagrees with its own goal line "${agent.goal}"`);
+        seen.add(agent.mood);
+        checked += 1;
+      }
+      const rows = readFactRows(await loadMemory(dir));
+      for (const [id, agent] of Object.entries(tick.agents)) {
+        assert.ok(
+          rows.some((r) => r.subject === `${id}@turn${tick.turn}` && r.predicate === "mgx:feels" && r.object === agent.mood),
+          `${id} turn ${tick.turn}: the returned mood is not on record in the store`,
+        );
+      }
+    }
+    assert.ok(checked >= 15, "the run really exercised the oracle rather than ending after a turn or two");
+    assert.ok(seen.size >= 3, `a chase, an escape and a hold all happened over 15 turns — saw only ${[...seen].join(", ")}`);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

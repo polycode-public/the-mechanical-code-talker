@@ -6,7 +6,7 @@ skill is the standing style guide. It has two jobs: make prose read as if a pers
 the supporting evidence out of the way so reader-facing surfaces stay short enough that someone
 actually reads them.
 
-**Scope: everything written for a human reader** — the Pages homepage, the README, the design docs,
+**Scope: everything written for a human reader** — the homepage, the README, the design docs,
 the benchmark write-ups, the other skill docs, code comments, and the assistant's own chat responses.
 Plain, direct sentences carry more authority than decorated ones, and they match the voice tmct's
 docs already use: honest, terse, lowercase-y, no marketing.
@@ -16,7 +16,7 @@ fought gobbledygook since 1979 (plainenglish.co.uk). Section 2 adds the LLM-voic
 of them.
 
 > **Use it whenever you draft or edit human-facing text** in this repo: `README.md`,
-> `public/index.html` (the GitLab Pages homepage, also the landing surface), the `PLAN_*.md` design
+> `public/index.html` (the homepage at tmct.polycode.co.uk, also the landing surface), the `PLAN_*.md` design
 > docs, the `BENCHMARK_CEFR_ENGLISH_<version>.md` / `BENCHMARK_INFERENCE_<version>.md` / `BENCHMARK_AGENT_<version>.md` /
 > `BENCHMARK_CONVERSATION_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,
 > and chat.
@@ -96,7 +96,7 @@ Default to short declarative sentences a person would write. Say the thing once,
 
 ## 3. Proofs and evidence: keep the shop window short
 
-Reader-facing surfaces (the Pages homepage, the README) sell the idea. They are not the place to
+Reader-facing surfaces (the homepage, the README) sell the idea. They are not the place to
 prove it. Someone landing on the page wants to know what tmct does and how to try it, in that order,
 before they hit any methodology. Bury the value under proof apparatus and they leave.
 

@@ -1,7 +1,8 @@
-# dinner — a food scene at the sprite tier: a plate carrying a seared
-# main and a small cluster of peas, every colour fixed to what the food
-# actually is rather than drawn from a taught mgx:madeOf material, the
-# same call bread/breakfast/cheese/coffee/drink make.
+# dinner — a food scene at the sprite tier: an ellipse plate carrying a
+# seared main with grill marks and a small cluster of peas, every colour
+# fixed to what the food actually is rather than drawn from a taught
+# mgx:madeOf material, the same call bread/breakfast/cheese/coffee/drink
+# make, with a fork and knife flanking the plate.
 classes = ["dinner"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,12 +13,23 @@ svg = """
       <stop offset="100%" stop-color="#b7a47c"/>
     </linearGradient>
   </defs>
-  <circle cx="12" cy="13" r="8.6" fill="url(#dinner-fill)"/>
-  <circle cx="12" cy="13" r="8.6" fill="none" stroke="#b7a47c" stroke-width="0.8" opacity="0.5"/>
-  <ellipse cx="10.6" cy="14" rx="4.4" ry="3.2" fill="#a9714a"/>
-  <ellipse cx="10.6" cy="13" rx="4.4" ry="3" fill="#c78e5b"/>
-  <circle cx="15.6" cy="9.6" r="1.6" fill="#5a9450"/>
+  <ellipse cx="12" cy="14.2" rx="9.2" ry="6.6" fill="url(#dinner-fill)"/>
+  <ellipse cx="12" cy="13.6" rx="6.8" ry="4.7" fill="none" stroke="#b7a47c" stroke-width="0.7" opacity="0.5"/>
+  <ellipse cx="10.4" cy="15" rx="4.4" ry="3.2" fill="#a9714a"/>
+  <ellipse cx="10.4" cy="14" rx="4.4" ry="3" fill="#c78e5b"/>
+  <g stroke="#7a4e2e" stroke-width="0.4" opacity="0.35" stroke-linecap="round">
+    <path d="M7.4 13.4 L13.2 13.4"/>
+    <path d="M7.6 15 L13.4 15"/>
+  </g>
+  <circle cx="15.6" cy="9.8" r="1.6" fill="#5a9450"/>
   <circle cx="17.6" cy="11.6" r="1.4" fill="#6ba85c"/>
-  <circle cx="16.8" cy="8" r="1.2" fill="#5a9450"/>
+  <circle cx="16.8" cy="8.2" r="1.2" fill="#5a9450"/>
+  <g stroke="#8a8378" stroke-width="0.85" stroke-linecap="round" fill="none">
+    <path d="M4.3 11.8 L4.1 14.6"/>
+    <path d="M5.1 11.8 L5.1 14.6"/>
+    <path d="M5.9 11.8 L5.7 14.6"/>
+    <path d="M4.9 14.6 L4.3 20.8"/>
+    <path d="M19.7 11.6 C20.5 12.2 20.5 13.6 19.7 14.2 L19.2 20.8"/>
+  </g>
 </svg>
 """

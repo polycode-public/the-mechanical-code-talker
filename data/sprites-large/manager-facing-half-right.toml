@@ -1,0 +1,69 @@
+# manager-facing-half-right — manager-facing-half-left.toml's three-quarter
+# turn mirrored across the canvas midline (every shape wrapped in one
+# translate-then-flip group), so the two directions stay geometrically
+# identical twins. {{FACE}} sits outside the flip group, the same rule the
+# full profile pair uses, so a resolved expression never reads
+# back-to-front.
+classes = ["manager"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="manager-facing-half-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="manager-facing-half-right-board" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#c9a06a"/>
+      <stop offset="100%" stop-color="#8a6a3c"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#manager-facing-half-right-fill)">
+      <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+      <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+      <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+      <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+    </g>
+    <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+    <rect x="14.6" y="13.6" width="4.6" height="6.4" rx="0.5" fill="url(#manager-facing-half-right-board)"/>
+    <rect x="16.2" y="13" width="1.4" height="1.1" rx="0.3" fill="#8a8f99"/>
+    <path d="M15.4 15.4 L18.4 15.4 M15.4 16.6 L18.4 16.6 M15.4 17.8 L17.4 17.8" stroke="#5a4426" stroke-width="0.5" opacity="0.55"/>
+    <path d="M10.2 9.8 C10.6 11 11.2 12 12 12.4 C12.8 12 13.4 11 13.8 9.8" fill="none" stroke="#3a5a8a" stroke-width="0.4" opacity="0.85"/>
+    <rect x="11.1" y="12.2" width="1.8" height="2.4" rx="0.2" fill="#f4f1ea" stroke="#3a5a8a" stroke-width="0.15"/>
+    <circle cx="11.7" cy="6.6" r="3.3" fill="url(#manager-facing-half-right-fill)"/>
+    <path d="M8.6 6.1 Q7.9 7.4 8.6 8.1 Z" fill="url(#manager-facing-half-right-fill)"/>
+    <ellipse cx="10" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+    <ellipse cx="14" cy="6.05" rx="0.18" ry="0.22" fill="#1c1c1c"/>
+    <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+    <path d="M9.3 4.2 C10.0 3.6 10.8 3.4 11.7 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-right"
+
+# manager-facing-half-left.toml's anchor reflected across the canvas
+# midline (cx = 24 - 11.08); cy and scale are the mirror's own invariants,
+# since the fragment sits outside the flip group and never itself gets
+# flipped.
+[face]
+cx = 12.92
+cy = 6.51
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

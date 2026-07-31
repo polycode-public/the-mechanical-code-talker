@@ -64,16 +64,20 @@ async function minSeedTime(n, tag, trials = 5) {
 
 test("appendFacts: an 8x bigger batch takes well under 8x-squared as long — O(n) seeding, not O(n^2)", async () => {
   // 2,000 vs 16,000 facts (8x). Linear seed cost predicts ~8x wall-clock;
-  // O(n^2) predicts up to ~64x. A 12x ceiling on the MIN-of-5 measurement for
-  // each size still catches a real quadratic regression by a wide margin
-  // while being robust to machine contention (see minSeedTime's own comment).
+  // O(n^2) predicts up to ~64x. The ceiling sits at 20x: min-of-5 filters most
+  // contention, but the ratio still amplifies what's left — the LARGE batch
+  // runs long enough that every one of its trials can overlap a busy moment
+  // while the small batch catches a quiet one, which is how a correct
+  // implementation measured 12.72x on a loaded CI runner. 20x keeps the whole
+  // quadratic band (64x and up) well outside, so the discriminator loses
+  // nothing that matters.
   const smallMs = await minSeedTime(2000, "perf-small");
   const largeMs = await minSeedTime(16000, "perf-large");
 
   const ratio = smallMs > 0 ? largeMs / smallMs : (largeMs > 0 ? Infinity : 1);
   assert.ok(
-    ratio < 12,
+    ratio < 20,
     `16000-fact batch's best-of-5 took ${largeMs}ms vs 2000-fact batch's best-of-5 ${smallMs}ms ` +
-      `(${ratio.toFixed(2)}x) — expected well under 12x for O(n) seeding`,
+      `(${ratio.toFixed(2)}x) — expected well under 20x for O(n) seeding`,
   );
 });

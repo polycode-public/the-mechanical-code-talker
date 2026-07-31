@@ -1,0 +1,6 @@
+# feeling — an abstract concept with no honest single physical picture, so
+# this sprite is the ubiquitous emoji for it rather than an invented scene.
+# No gradient, no material — an emoji already carries its own colour and
+# detail; adding either would just fight the glyph's own rendering.
+classes = ["feeling"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><text x="12" y="18" font-size="19" text-anchor="middle">💗</text></svg>"""

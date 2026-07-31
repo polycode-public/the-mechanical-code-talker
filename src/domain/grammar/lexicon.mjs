@@ -43,6 +43,24 @@ export const QUANTIFIERS = Object.freeze({
   exactly: "owl:cardinality",
 });
 
+// The two closed head vocabularies that say what an "of" between two nouns is
+// DOING, so every reader of the of-frame decides it the same way instead of
+// each growing its own list. A CLASSIFIER head reads THROUGH to the inner noun
+// — "a kind of dog" is a dog, "a type of mammal" is a mammal — so the phrase
+// is a rewrite of the inner noun, never a term of its own. A PARTITIVE head
+// states quantity or composition — "a piece of cake", "a lot of dogs", "a body
+// of ice" — so the phrase names no class at all. Anything else ("unit of
+// work", "chain of command") is a compound noun the of belongs to.
+/** Of-frame heads that read through to the inner noun. */
+export const OF_CLASSIFIER_HEADS = Object.freeze(new Set([
+  "type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus",
+]));
+/** Of-frame heads that state quantity or composition, not a class. */
+export const OF_PARTITIVE_HEADS = Object.freeze(new Set([
+  "body", "mass", "group", "collection", "set", "series", "number", "amount",
+  "piece", "part", "lot", "pair", "bunch", "pile",
+]));
+
 const NUMBER_WORDS = Object.freeze({
   one: 1, two: 2, three: 3, four: 4, five: 5,
   six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -147,6 +165,19 @@ export function loadLexicon(extra, ns = DEFAULT_NS) {
   }
   coreCacheByNs.set(ns, lex);
   return lex;
+}
+
+/** `lexicon` with `names` additionally declared as proper names. The noun,
+ *  verb and adjective maps are SHARED with the base lexicon rather than
+ *  re-ingested — a caller that re-declares on every turn (a live game world
+ *  minting ids as it is played) would otherwise rebuild nine thousand core
+ *  entries to add half a dozen. Proper names outrank every other category, so
+ *  a name with no dictionary reading of its own ("groundhog-1", "carrot-2")
+ *  resolves as itself instead of dying as an undeclared word. */
+export function withProperNames(lexicon, names) {
+  const properNames = new Map(lexicon.properNames);
+  for (const name of names) properNames.set(String(name).toLowerCase(), String(name));
+  return { ...lexicon, properNames };
 }
 
 /** Noun lookup with plural folding; returns the entry ({lemma, property?}) or

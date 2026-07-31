@@ -1,0 +1,71 @@
+# doctor-facing-left-moving — doctor-facing-left.toml's profile caught
+# mid-stride. The head, nose wedge and eye hold their profile shape and
+# position exactly, since a head does not change shape mid-stride. The
+# coat and stethoscope stay as authored — a coat doesn't change shape
+# mid-stride either. What moved is the arm silhouettes (one swung forward
+# and raised, the other trailing back) and the leg/hem line (one side
+# lifted clear of the ground, stepping forward).
+classes = ["doctor"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="doctor-facing-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="doctor-facing-left-moving-coat" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#d9d6cc"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#doctor-facing-left-moving-fill)">
+    <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+    <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+    <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#doctor-facing-left-moving-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#doctor-facing-left-moving-fill)"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M7.2 14.6 C6.4 16.5 6 18.5 6 21 L18 21 C18 18.5 17.6 16.5 16.8 14.6 C15.6 15.7 13.9 16.3 12 16.3 C10.1 16.3 8.4 15.7 7.2 14.6 Z" fill="url(#doctor-facing-left-moving-coat)"/>
+  <path d="M9.6 13.3 L12 16.3 L10.6 21 L8.8 21 L9.1 15.2 Z" fill="#d9d6cc"/>
+  <path d="M14.4 13.3 L12 16.3 L13.4 21 L15.2 21 L14.9 15.2 Z" fill="#f2f0e8"/>
+  <path d="M12 16.3 L12 21" stroke="#c7c3b8" stroke-width="0.35" opacity="0.6"/>
+  <circle cx="12" cy="17.6" r="0.35" fill="#b7b3a8"/>
+  <circle cx="12" cy="19.4" r="0.35" fill="#b7b3a8"/>
+  <path d="M9.4 13 C9.4 15.2 9.8 16.6 10.8 17.2 C11.8 17.8 13 17.4 13.3 16.2" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.75" stroke-linecap="round"/>
+  <circle cx="13.6" cy="16.4" r="0.9" fill="currentColor" opacity="0.85"/>
+  <circle cx="9.4" cy="13" r="0.6" fill="currentColor" opacity="0.85"/>
+  <path d="M9 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 10.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

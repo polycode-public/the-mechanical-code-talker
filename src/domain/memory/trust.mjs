@@ -25,6 +25,33 @@ function parseChatTagRest(rest) {
   return { createdAt, ...(sessionId ? { sessionId } : {}) };
 }
 
+/** The segment a relabeled peer tag carries its origin's stable node id in.
+ *  Chosen so the shipped parser above needs no change to tolerate it: it takes
+ *  everything between the first `:` and the `@` as one opaque session slot, so
+ *  a reader that predates this segment reads `<name>#node:<id>` whole and still
+ *  keys on something node-unique. */
+const PEER_NODE_MARKER = "#node:";
+const PEER_TAG_PREFIX = "peer:";
+
+/** `peer:<displayName>#node:<nodeId>@<ts>` — the wire shape a broadcasting peer
+ *  relabels its own teach/operator tags into. The node id is the origin's
+ *  stable identity and the only part that keys the Source; the display name is
+ *  user-chosen, mutable and collidable, so it records who to SHOW, not who it
+ *  is — the same discipline `child:`'s term and `world:`'s turn segments hold.
+ *  Null for anything without the segment, so an older peer tag falls through to
+ *  the plain teach parse unchanged. */
+function parsePeerNodeTagRest(rest) {
+  if (!rest.startsWith(PEER_TAG_PREFIX)) return null;
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const marker = beforeAt.indexOf(PEER_NODE_MARKER);
+  if (marker < 0) return null;
+  const nodeId = beforeAt.slice(marker + PEER_NODE_MARKER.length);
+  if (!nodeId) return null;
+  return { kind: "teachNode", nodeId, displayName: beforeAt.slice(PEER_TAG_PREFIX.length, marker), createdAt };
+}
+
 /**
  * Parse one legacy provenance TAG into a Source descriptor over the closed
  * kind set (the kinds SOURCE_PRIOR scores):
@@ -40,8 +67,23 @@ function parseChatTagRest(rest) {
  *      same tier the hand-written tier2 corpus already scores at; the :turnN
  *      segment a snapshot write carries records when, not who, and is not
  *      part of the Source identity)
+ *   mud:<character>[:epochE][:turnN][:gone] -> { kind:"corpus", name:"mud:<character>" }
+ *     (one character's own testimony in a multi-character world — what it told
+ *      someone, what it examined for itself, and with `:gone` what it saw leave
+ *      the world. Same tier as the world, but one Source per character; the
+ *      `mud:` prefix in the name keeps that Source apart from a world of the
+ *      same literal name. The trailing segments say which run of the world it
+ *      was, when, and what — none of them says who, so none is part of the
+ *      Source identity)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
+ *   teach:peer:<name>#node:<id>@<ts>
+ *                              -> { kind:"teachNode", nodeId:<id>, displayName:<name>, createdAt:<ts> }
+ *     (a peer's own tag, relabeled for the wire by whichever node authored it.
+ *      The node id keys the Source; the display name is presentation only. A
+ *      peer tag with no `#node:` segment predates the segment and parses as a
+ *      plain "teach" whose session slot is the whole name — which is what lets
+ *      old and new readers share one wire.)
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
  *   reference:<pack>:<article>[@revid] -> { kind:"reference", pack, article }
  *     (split on the first two colons only; the article keeps any @revid and
@@ -98,10 +140,23 @@ export function provenanceTagToSource(tag) {
   // authored shipped content scored at the corpus tier; the per-turn tail is
   // dropped from the id so every write of one world corroborates one Source.
   if (head.startsWith("world:")) return { kind: "corpus", name: head.slice("world:".length).split(":")[0] || "unknown" };
+  // mud:<character>[:epochE][:turnN] — one character's own testimony inside a multi-
+  // character world: what it told another character, and what it saw for
+  // itself. Same corpus tier as the world it stands in, but a Source per
+  // CHARACTER, so every claim an animal makes over a whole game accumulates on
+  // that animal's own track record rather than the world's. The name keeps the
+  // `mud:` prefix so `src:corpus:mud:<character>` can never collide with a
+  // `world:<name>` Source that happens to share the literal name.
+  if (head.startsWith("mud:")) return { kind: "corpus", name: `mud:${head.slice("mud:".length).split(":")[0] || "unknown"}` };
   if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
+    const rest = head.slice("teach:".length);
+    // teach:peer:<name>#node:<id>@<ts> — a peer's own relabeled tag off the
+    // wire, keyed on the node id rather than the name beside it.
+    const peerNode = parsePeerNodeTagRest(rest);
+    if (peerNode) return peerNode;
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
-    return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
+    return { kind: "teach", ...parseChatTagRest(rest) };
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
@@ -127,6 +182,36 @@ export const SOURCE_PRIOR = Object.freeze({
   optimisticExtract: 0.35,
   entailed: 0.3,
 });
+
+// The read-side of the Source split ontology/tmct-core.ttl declares. tmct:Source
+// is one flat class over a sourceType key whose values fall into all three of
+// PROV's disjoint top classes; this maps each stored sourceType to its read-side
+// subclass and PROV top class. Nothing on disk changes — sourceType is already
+// stored on every Source — so this is derivation, not migration. It lives beside
+// SOURCE_PRIOR because both are tables over the same closed type set, and both
+// the ontology reader in core.mjs and the observation-time chain in
+// resolution.mjs read it.
+export const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
+  operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  reference: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  referenceLive: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  optimisticExtract: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
+});
+
+/** The source types that assert as a live agent rather than as a document or a
+ *  derivation — the prov:Agent rows above, derived so the two can never drift.
+ *  An agent asserting a claim is witnessing it, which is the whole reason the
+ *  observation-time chain lets these fall back to their own assertion time. */
+export const AGENT_SOURCE_TYPES = new Set(
+  Object.entries(PROV_CLASS_BY_SOURCE_TYPE).filter(([, v]) => v.prov === "prov:Agent").map(([t]) => t),
+);
 
 const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENCY_FLOOR = 0.9; // recency multiplier stays within [0.9, 1.0]
@@ -211,6 +296,106 @@ export function computeTrust(fact, sourcesById = {}, opts = {}) {
     recency: round(recency),
   };
   return { score, inputs };
+}
+
+/** One assertion record's OWN effective prior: its single source's type prior,
+ *  nudged by that source's own reliability, clamped to [0,1]. A write-time
+ *  constant — recency is deliberately absent, because recency is a function of
+ *  the READING moment, not the writing one, and a stored number that bakes it
+ *  in is already wrong by the time anyone reads it. `source` is that record's
+ *  own Source individual; an absent/unknown one reads as the neutral 1.0. */
+export function assertionPrior(sourceType, source) {
+  const p = (SOURCE_PRIOR[sourceType] ?? 0) * sourceReliabilityOf(source);
+  return round(Math.max(0, Math.min(1, p)));
+}
+
+/** The most any ONE source type's corroboration can contribute to a group,
+ *  however many sources of that type assert the triple. Identities are free to
+ *  mint in a mesh with no central authority, so identity COUNT on its own must
+ *  never buy certainty: a thousand cooperating peers asymptote here instead of
+ *  climbing to 1. `operator` is uncapped, because the person holding the store
+ *  is the one authority this model trusts outright; an unrecognised type is
+ *  uncapped too, since there is no prior to derive a ceiling from.
+ *
+ *  The (prior + 1) / 2 formula is a starting guess. It has not been measured or
+ *  tuned against real corroboration or abuse data, and it is meant to be
+ *  revisited once such data exists. */
+export function aggregateCeilingFor(sourceType) {
+  if (sourceType === "operator") return 1;
+  const prior = SOURCE_PRIOR[sourceType];
+  if (prior === undefined) return 1;
+  return (prior + 1) / 2;
+}
+
+/**
+ * Trust for one assertion GROUP — every live head sharing a triple hash, one
+ * record per asserting source. Noisy-OR over each record's own effective prior,
+ * each decayed by ITS OWN assertion time rather than the group's first write:
+ * every hop ages separately, so a fresh assertion is no longer dragged down by
+ * an old corpus record's timestamp beside it.
+ *
+ * The noisy-OR runs per source TYPE first, each type's aggregate is clamped to
+ * that type's own ceiling, and the clamped aggregates then combine across
+ * types. So same-type corroboration asymptotes at its ceiling, while
+ * cross-type corroboration still climbs past any single type's: an independent
+ * corpus record and an independent peer say more together than either alone.
+ *
+ * The ceiling bounds what CORROBORATION adds, so it never drags a type below
+ * its own strongest single record. One record is testimony, not agreement, and
+ * the Sybil lever this caps is minting extra asserters — an entailed
+ * conclusion whose premise-derived trust already sits above the entailed
+ * ceiling, or a peer whose track record has earned it a prior above the teach
+ * ceiling, keeps what it scored on its own.
+ *
+ * `records` supplies `{ ownTrust, assertedAt, sourceId?, sourceType? }` per
+ * head. Deterministic given the same inputs and `opts.now`. Returns
+ * { score, inputs }, inputs in the per-record order it was handed.
+ */
+export function computeAssertionGroupTrust(records, opts = {}) {
+  const now = typeof opts.now === "number" ? opts.now : Date.now();
+  const heads = Array.isArray(records) ? records : [];
+  const byType = new Map();
+  const inputs = [];
+  for (const r of heads) {
+    const recency = recencyNudge(r?.assertedAt, now, opts.halfLifeMs);
+    const own = Math.max(0, Math.min(1, Number(r?.ownTrust) || 0));
+    const sourceType = r?.sourceType || "";
+    const contribution = Math.max(0, Math.min(1, own * recency));
+    const bucket = byType.get(sourceType) || { complement: 1, strongest: 0 };
+    bucket.complement *= 1 - contribution;
+    bucket.strongest = Math.max(bucket.strongest, contribution);
+    byType.set(sourceType, bucket);
+    inputs.push({ sourceId: r?.sourceId || "", sourceType, ownTrust: own, recency: round(recency) });
+  }
+  let complement = 1;
+  for (const [sourceType, bucket] of byType) {
+    const ceiling = Math.max(aggregateCeilingFor(sourceType), bucket.strongest);
+    complement *= 1 - Math.min(1 - bucket.complement, ceiling);
+  }
+  return { score: heads.length ? round(Math.min(1, 1 - complement)) : 0, inputs };
+}
+
+/** A half-life that decays nothing: `age / Infinity` is 0, so every record's
+ *  multiplier comes out at exactly 1 and computeAssertionGroupTrust returns the
+ *  same noisy-OR with the time axis removed. */
+export const NO_DECAY_HALF_LIFE = Infinity;
+
+/**
+ * The recency-free BASE of an assertion group's aggregate — the only part of it
+ * that a store can materialise and keep.
+ *
+ * Recency is a function of the READING moment, so an aggregate with the decay
+ * folded in is already wrong by the time anyone reads it back: it would have to
+ * be rewritten on every tick of the clock to stay true. What survives storage is
+ * the part that only changes when the group's own records change. A reader takes
+ * this base's audit trail and runs the same aggregate again at its own `now`,
+ * which is where the decay belongs and the only place it can be right.
+ *
+ * `records` is the same per-record shape computeAssertionGroupTrust folds —
+ * `{ ownTrust, assertedAt, sourceId?, sourceType? }`. Returns { score, inputs }.
+ */
+export function computeAssertionGroupTrustBase(records) {
+  return computeAssertionGroupTrust(records, { halfLifeMs: NO_DECAY_HALF_LIFE });
 }
 
 // Laplace/"add-k" pseudo-count: without it a single data point would saturate

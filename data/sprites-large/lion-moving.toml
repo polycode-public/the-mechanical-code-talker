@@ -1,0 +1,66 @@
+# lion-moving — lion-with-emotion.toml's front view caught mid-stride. The
+# mane, ears, body, head and tail keep that file's own shape and position,
+# since a mane doesn't change shape mid-stride; only the four legs stagger
+# into a prowling gait viewed front-on. Chosen only when the instance's own
+# mgx:pose fact says "moving" with no facing fact at all, so this is the
+# centre view still, just no longer standing still.
+classes = ["lion"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="lion-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.4" cy="15.6" rx="6.4" ry="4.4" fill="url(#lion-moving-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="8.6" y1="18.4" x2="8.2" y2="21.2"/>
+    <line x1="11.4" y1="19.8" x2="12.2" y2="22.4"/>
+    <line x1="14.6" y1="18.4" x2="14.2" y2="21.2"/>
+    <line x1="18.2" y1="19.8" x2="19" y2="22.4"/>
+  </g>
+  <g fill="color-mix(in srgb, currentColor 55%, black)">
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(40 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(80 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(120 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(160 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(200 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(240 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(280 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(320 7.6 8)"/>
+  </g>
+  <circle cx="7.6" cy="8" r="4.2" fill="url(#lion-moving-fill)"/>
+  <path d="M5.2 5.4 L4.6 3.4 L6.6 4.8 Z" fill="url(#lion-moving-fill)"/>
+  <path d="M10 5.4 L10.6 3.4 L8.6 4.8 Z" fill="url(#lion-moving-fill)"/>
+  <path d="M19.6 13 C22.6 12.2 23.8 15.2 21.2 16.6 C20.1 15.9 19.3 14.5 19.2 13.3 Z" fill="url(#lion-moving-fill)"/>
+  <ellipse cx="10" cy="12.8" rx="2.6" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="6" cy="6.4" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# lion-with-emotion.toml's own front-facing anchor, unchanged: this is
+# still the centre view.
+[face]
+cx = 7.6
+cy = 8
+scale = 4.2
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

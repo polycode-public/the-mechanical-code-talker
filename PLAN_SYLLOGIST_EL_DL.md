@@ -37,8 +37,8 @@ and branching order), $0 per query.
 ## The failure edge today — explicit examples
 
 Each example: what the graph holds, what the user asks, what happens today, and where it
-lands after delivery. "Today" behavior is the honest miss wall unless stated otherwise —
-which is correct behavior, but these are all questions whose answers genuinely follow
+lands after delivery. "Today" behavior is the honest miss wall unless stated otherwise,
+which is correct behavior, but these are all questions whose answers follow
 from what tmct was told.
 
 **E1 — nested existential classification (falls to EL).**
@@ -174,7 +174,7 @@ stages.
   impossible.
 - **Trust for case-split proofs.** A disjunction-derived fact rests on all branches; the
   premise set for trust is the union. Decided before stage 3, not during.
-- **Open-world honesty is load-bearing.** The CLINC out-of-scope result
+- **Open-world honesty is why the CLINC result holds.** The CLINC out-of-scope result
   (`PLAN_NLU_BENCHMARKS.md`) is won by refusing what tmct can't ground. Nothing in
   phase 0 or the provers may introduce closed-world assumptions outside explicitly
   enumerated (`oneOf`) or explicitly negated knowledge.

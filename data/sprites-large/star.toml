@@ -1,6 +1,9 @@
 # star — a five-point outline with its own small glow and one sparkle
-# accent at a single point, distinguishing it from sun.toml's full ring of
-# rays; fixed warm-gold colour for the same reason sun.toml stays fixed.
+# accent at a single point, distinguishing it from sun.toml's full ring
+# of rays; fixed warm-gold colour for the same reason sun.toml stays
+# fixed. Four triangular overlays fanning from the centre to alternating
+# points read as gem facets, so the point survives being a flat pentagon
+# at 40px.
 classes = ["star"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -17,6 +20,10 @@ svg = """
   </defs>
   <circle cx="12" cy="12" r="8.6" fill="url(#star-glow)"/>
   <path d="M12 2.4 L14.2 9.4 L21.4 9.4 L15.6 13.6 L17.8 20.6 L12 16.4 L6.2 20.6 L8.4 13.6 L2.6 9.4 L9.8 9.4 Z" fill="url(#star-fill)"/>
+  <path d="M12 11.6 L9.8 9.4 L8.4 13.6 Z" fill="#ffffff" opacity="0.18"/>
+  <path d="M12 11.6 L15.6 13.6 L14.2 9.4 Z" fill="#000000" opacity="0.12"/>
+  <path d="M12 11.6 L6.2 20.6 L8.4 13.6 Z" fill="#000000" opacity="0.16"/>
+  <path d="M12 11.6 L17.8 20.6 L15.6 13.6 Z" fill="#ffffff" opacity="0.1"/>
   <path d="M12 2.4 L14.2 9.4 L12 9.4 Z" fill="#ffffff" opacity="0.35"/>
   <path d="M18.4 3.6 L19.6 3.6 M19 3 L19 4.2" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round" opacity="0.6"/>
 </svg>

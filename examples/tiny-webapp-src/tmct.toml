@@ -1,0 +1,6 @@
+# This example ships a committed .tmct/graph.json. read_only keeps a plain
+# `tmct chat --repo examples/tiny-webapp-src` (no --ephemeral) from writing a
+# Session node back into it: the session reads the graph but persists nothing.
+# `tmct index` still regenerates the graph — read_only only gates chat sessions.
+[graph]
+read_only = true

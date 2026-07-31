@@ -122,7 +122,7 @@ export const SEED_TAXONOMY = Object.freeze([
 ]);
 
 export const WORLD_OPENING =
-  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.";
+  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat.";
 
 /** Every fact row the shipped world source carries: cell typing, grid
  *  adjacency (mgx:has-exit-<direction>), the web block (mgx:in-web) and the
@@ -205,6 +205,42 @@ export function* structuralFactRows() {
 /** The world's one meta row (its opening line). */
 export function worldMetaRow() {
   return { world: WORLD_NAME, kind: "meta", opening: WORLD_OPENING };
+}
+
+/** The class an agent id names — "spider-2" -> "spider", "fly-10" -> "fly",
+ *  "egg-1" -> "egg" — the one regex every caller that needs an individual's
+ *  kind from its id string shares. Self-contained (no outer refs),
+ *  `.toString()`-splice safe. */
+export function agentKindOf(id) {
+  return String(id).replace(/-\d+$/, "");
+}
+
+/** Every live id of `kind` among `agents`, sorted. `agents` is either a
+ *  plain `{ id: ... }` roster (runSpiderFlyTick's/foldSpiderFlyState's own
+ *  agents map, already excluding anything dead) or a `Map` keyed by id
+ *  (foldSpiderFlyState's own `state.placements`, which still carries a dead
+ *  individual's last-known cell) — pass the matching `state.removed` Set as
+ *  `removed` in the Map case to exclude those; omit it for a plain roster
+ *  that has no such concept. Pure. */
+export function liveIdsOfKind(agents, kind, removed = null) {
+  const re = new RegExp(`^${kind}-\\d+$`);
+  const ids = agents instanceof Map ? [...agents.keys()] : Object.keys(agents || {});
+  return ids.filter((id) => re.test(id) && !(removed && removed.has(id))).sort();
+}
+
+/** True for a web individual's own id ("web-3") — a spider-built web is
+ *  placed via mgx:currently-in exactly like a live agent, but it is never
+ *  one. */
+export function isWebIndividualId(id) {
+  return /^web-\d+$/.test(id);
+}
+
+/** Whether `id` belongs on a rendered agent roster built from `state`
+ *  (foldSpiderFlyState's own shape): live (not in `state.removed`) and not a
+ *  web individual. The one world rule a browser-side snapshot needs to skip
+ *  the same two things every renderer of `state.placements` must skip. */
+export function isLiveRenderableAgent(id, state) {
+  return !state.removed.has(id) && !isWebIndividualId(id);
 }
 
 /** A minimal, inert rule-row family, so scripts/build-worlds-pack.mjs's

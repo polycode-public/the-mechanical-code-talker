@@ -8,6 +8,8 @@
 {"subject":"audience sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"autumn sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"baby sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"badger sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"basket sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bathroom sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"beach sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bear sprite","predicate":"rdf:type","object":"sprite class"}
@@ -26,12 +28,15 @@
 {"subject":"breakfast sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bridge sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"brother sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"building sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"butler sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"butterfly sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cabinet sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"car sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"carrot sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"castle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cat sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"celestial body sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cellar sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"chair sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"champion sprite","predicate":"rdf:type","object":"sprite class"}
@@ -61,6 +66,7 @@
 {"subject":"earth sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"egg sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"elephant sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"emotion sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"employee sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"engineer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"factory sprite","predicate":"rdf:type","object":"sprite class"}
@@ -69,25 +75,32 @@
 {"subject":"farmer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"father sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fear sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"feel sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"feeling sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fish sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"flower sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fly sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"food sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"forest sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"fox sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"friend sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"frog sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"fruit sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"furniture sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"garden sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"gardener sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"gathering sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"girl sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"glove sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"gold sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"grandfather sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"grandmother sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"grass sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"groundhog sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"guest sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hate sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"herb sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"holiday sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"home sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hope sprite","predicate":"rdf:type","object":"sprite class"}
@@ -110,6 +123,7 @@
 {"subject":"lawyer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"leader sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"letter sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"lettuce sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"library sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"lion sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"love sprite","predicate":"rdf:type","object":"sprite class"}
@@ -118,18 +132,22 @@
 {"subject":"market sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meal sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meat sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"meerkat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meeting sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"metal sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"mole sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"money sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mother sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mountain sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mouse sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"municipality sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"museum sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"neighbor sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"nurse sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"ocean sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"office sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"officer sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"organism sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"owl sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"pan sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"parent sprite","predicate":"rdf:type","object":"sprite class"}
@@ -141,6 +159,7 @@
 {"subject":"poodle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"portable sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"portrait sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"precipitation sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"president sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"priest sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"queen sprite","predicate":"rdf:type","object":"sprite class"}
@@ -151,9 +170,13 @@
 {"subject":"river sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"road sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"room sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"root sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"salt sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"school sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"season sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"seed sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"servant sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"settlement sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"sheep sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"shirt sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"shoe sprite","predicate":"rdf:type","object":"sprite class"}
@@ -171,6 +194,7 @@
 {"subject":"stone sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"stranger sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"street sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"structure sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"student sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"study sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"sugar sprite","predicate":"rdf:type","object":"sprite class"}
@@ -182,6 +206,7 @@
 {"subject":"teacher sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"team sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"tiger sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"tomato sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"town sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"train sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"tree sprite","predicate":"rdf:type","object":"sprite class"}
@@ -190,6 +215,7 @@
 {"subject":"vehicle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"village sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"visitor sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"vole sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"volunteer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"water sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"waterway sprite","predicate":"rdf:type","object":"sprite class"}
@@ -200,6 +226,7 @@
 {"subject":"wolf sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"woman sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"worker sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"worm sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"writer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"adventurer sprite","predicate":"mgx:render-at","object":"icon tier"}
 {"subject":"animal sprite","predicate":"mgx:render-at","object":"icon tier"}
@@ -241,6 +268,8 @@
 {"subject":"audience sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"autumn sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"baby sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"badger sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"basket sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bathroom sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"beach sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bear sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -259,12 +288,15 @@
 {"subject":"breakfast sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bridge sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"brother sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"building sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"butler sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"butterfly sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cabinet sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"car sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"carrot sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"castle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cat sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"celestial body sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cellar sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"chair sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"champion sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -294,6 +326,7 @@
 {"subject":"earth sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"egg sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"elephant sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"emotion sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"employee sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"engineer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"factory sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -302,25 +335,32 @@
 {"subject":"farmer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"father sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fear sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"feel sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"feeling sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fish sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"flower sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fly sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"food sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"forest sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"fox sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"friend sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"frog sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"fruit sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"furniture sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"garden sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"gardener sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"gathering sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"girl sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"glove sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"gold sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"grandfather sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"grandmother sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"grass sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"groundhog sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"guest sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hate sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"herb sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"holiday sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"home sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hope sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -343,6 +383,7 @@
 {"subject":"lawyer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"leader sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"letter sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"lettuce sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"library sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"lion sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"love sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -351,18 +392,22 @@
 {"subject":"market sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meal sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meat sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"meerkat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meeting sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"metal sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"mole sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"money sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mother sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mountain sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mouse sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"municipality sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"museum sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"neighbor sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"nurse sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"ocean sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"office sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"officer sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"organism sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"owl sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"pan sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"parent sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -374,6 +419,7 @@
 {"subject":"poodle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"portable sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"portrait sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"precipitation sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"president sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"priest sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"queen sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -384,9 +430,13 @@
 {"subject":"river sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"road sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"room sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"root sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"salt sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"school sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"season sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"seed sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"servant sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"settlement sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"sheep sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"shirt sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"shoe sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -404,6 +454,7 @@
 {"subject":"stone sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"stranger sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"street sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"structure sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"student sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"study sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"sugar sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -415,6 +466,7 @@
 {"subject":"teacher sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"team sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"tiger sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"tomato sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"town sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"train sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"tree sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -423,6 +475,7 @@
 {"subject":"vehicle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"village sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"visitor sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"vole sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"volunteer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"water sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"waterway sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -433,6 +486,7 @@
 {"subject":"wolf sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"woman sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"worker sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"worm sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"writer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"dog sprite","predicate":"mgx:take-parameter","object":"colour"}
 {"subject":"dog sprite","predicate":"mgx:accept-colour","object":"black"}
@@ -444,6 +498,11 @@
 {"subject":"adult sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"adult sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"adult sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"adult sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"adult sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"adult sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"adult sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"adult sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"artist sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"artist sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"artist sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -451,6 +510,11 @@
 {"subject":"artist sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"artist sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"artist sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"artist sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"artist sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"artist sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"artist sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"artist sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"audience sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"audience sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"audience sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -458,6 +522,11 @@
 {"subject":"audience sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"audience sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"audience sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"audience sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"audience sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"audience sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"audience sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"audience sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"baby sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -465,6 +534,11 @@
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"baby sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"baby sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"baby sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"baby sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"baby sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bear sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -472,6 +546,11 @@
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bed sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"bed sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"bed sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -485,6 +564,11 @@
 {"subject":"bird sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"bird sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"bird sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"bird sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"bird sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"bird sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"bird sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"bird sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"boat sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"boat sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"boat sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -496,6 +580,11 @@
 {"subject":"boss sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"boss sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"boss sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"boss sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"boss sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"boss sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"boss sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"boss sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"boy sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -503,6 +592,11 @@
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bridge sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"bridge sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"bridge sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -513,6 +607,11 @@
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"cabinet sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"cabinet sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"cabinet sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -526,6 +625,11 @@
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"chair sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"chair sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"chair sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -537,6 +641,11 @@
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"child sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -544,6 +653,11 @@
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"citizen sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -551,6 +665,11 @@
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"clothing sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"clothing sprite","predicate":"mgx:accept-material","object":"woven material"}
 {"subject":"coat sprite","predicate":"mgx:take-parameter","object":"material"}
@@ -570,6 +689,11 @@
 {"subject":"cow sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"cow sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"cow sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"cow sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"cow sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"cow sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"cow sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"cow sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"crowd sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -577,6 +701,11 @@
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"customer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -584,6 +713,11 @@
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"daughter sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -591,6 +725,11 @@
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"daughter sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"daughter sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"daughter sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"daughter sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"daughter sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"desk sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"desk sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"desk sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -601,6 +740,11 @@
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"doctor sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"doctor sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"doctor sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"doctor sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"doctor sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"dog sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -608,6 +752,11 @@
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"dress sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"dress sprite","predicate":"mgx:accept-material","object":"woven material"}
 {"subject":"driver sprite","predicate":"mgx:take-parameter","object":"emotion"}
@@ -617,6 +766,11 @@
 {"subject":"driver sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"driver sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"driver sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"driver sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"driver sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"driver sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"driver sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"driver sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"elephant sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"elephant sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"elephant sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -624,6 +778,11 @@
 {"subject":"elephant sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"elephant sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"elephant sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"elephant sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"elephant sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"elephant sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"elephant sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"elephant sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"employee sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"employee sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"employee sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -631,6 +790,11 @@
 {"subject":"employee sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"employee sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"employee sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"employee sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"employee sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"employee sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"employee sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"employee sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"engineer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"engineer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"engineer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -638,6 +802,11 @@
 {"subject":"engineer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"engineer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"engineer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"engineer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"engineer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"engineer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"engineer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"engineer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"family sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"family sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"family sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -645,6 +814,11 @@
 {"subject":"family sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"family sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"family sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"family sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"family sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"family sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"family sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"family sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"farmer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"farmer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"farmer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -652,6 +826,11 @@
 {"subject":"farmer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"farmer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"farmer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"farmer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"farmer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"farmer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"farmer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"farmer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"father sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"father sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"father sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -659,6 +838,11 @@
 {"subject":"father sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"father sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"father sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"father sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"father sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"father sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"father sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"father sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"fly sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"fly sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"fly sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -666,6 +850,11 @@
 {"subject":"fly sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"fly sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"fly sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"fly sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"fly sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"fly sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"fly sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"fly sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"friend sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"friend sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"friend sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -673,6 +862,11 @@
 {"subject":"friend sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"friend sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"friend sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"friend sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"friend sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"friend sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"friend sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"friend sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"frog sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"frog sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"frog sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -680,6 +874,11 @@
 {"subject":"frog sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"frog sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"frog sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"frog sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"frog sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"frog sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"frog sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"frog sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"furniture sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"furniture sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"furniture sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -691,6 +890,11 @@
 {"subject":"girl sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"girl sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"girl sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"girl sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"girl sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"girl sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"girl sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"girl sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"grandfather sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"grandfather sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"grandfather sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -698,6 +902,11 @@
 {"subject":"grandfather sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"grandfather sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"grandfather sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"grandfather sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"grandfather sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"grandfather sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"grandfather sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"grandfather sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"grandmother sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"grandmother sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"grandmother sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -705,6 +914,11 @@
 {"subject":"grandmother sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"grandmother sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"grandmother sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"grandmother sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"grandmother sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"grandmother sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"grandmother sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"grandmother sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"guest sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"guest sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"guest sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -712,6 +926,11 @@
 {"subject":"guest sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"guest sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"guest sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"guest sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"guest sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"guest sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"guest sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"guest sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"horse sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"horse sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"horse sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -719,6 +938,11 @@
 {"subject":"horse sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"horse sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"horse sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"horse sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"horse sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"horse sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"horse sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"horse sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"human sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"human sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"human sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -726,6 +950,11 @@
 {"subject":"human sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"human sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"human sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"human sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"human sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"human sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"human sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"human sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"husband sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"husband sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"husband sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -733,6 +962,11 @@
 {"subject":"husband sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"husband sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"husband sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"husband sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"husband sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"husband sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"husband sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"husband sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"judge sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"judge sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"judge sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -740,6 +974,11 @@
 {"subject":"judge sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"judge sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"judge sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"judge sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"judge sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"judge sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"judge sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"judge sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"key sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"key sprite","predicate":"mgx:accept-material","object":"gold"}
 {"subject":"key sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -750,6 +989,11 @@
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"lamp sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"lamp sprite","predicate":"mgx:accept-material","object":"gold"}
 {"subject":"lamp sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -762,6 +1006,11 @@
 {"subject":"lawyer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"lawyer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"lawyer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"lawyer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"lawyer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"lawyer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"lawyer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"lawyer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"leader sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"leader sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"leader sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -769,6 +1018,11 @@
 {"subject":"leader sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"leader sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"leader sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"leader sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"leader sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"leader sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"leader sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"leader sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"letter sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"letter sprite","predicate":"mgx:accept-material","object":"paper"}
 {"subject":"letter sprite","predicate":"mgx:accept-material","object":"cardboard"}
@@ -779,6 +1033,11 @@
 {"subject":"lion sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"lion sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"lion sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"lion sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"lion sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"lion sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"lion sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"lion sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"man sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"man sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"man sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -786,6 +1045,11 @@
 {"subject":"man sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"man sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"man sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"man sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"man sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"man sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"man sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"man sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"manager sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"manager sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"manager sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -793,6 +1057,11 @@
 {"subject":"manager sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"manager sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"manager sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"manager sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"manager sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"manager sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"manager sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"manager sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"mother sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"mother sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"mother sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -800,6 +1069,11 @@
 {"subject":"mother sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"mother sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"mother sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"mother sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"mother sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"mother sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"mother sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"mother sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"mouse sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"mouse sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"mouse sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -807,6 +1081,11 @@
 {"subject":"mouse sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"mouse sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"mouse sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"mouse sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"mouse sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"mouse sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"mouse sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"mouse sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"neighbor sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"neighbor sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"neighbor sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -814,6 +1093,11 @@
 {"subject":"neighbor sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"neighbor sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"neighbor sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"neighbor sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"neighbor sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"neighbor sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"neighbor sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"neighbor sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"nurse sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"nurse sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"nurse sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -821,6 +1105,11 @@
 {"subject":"nurse sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"nurse sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"nurse sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"nurse sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"nurse sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"nurse sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"nurse sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"nurse sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"officer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"officer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"officer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -828,6 +1117,11 @@
 {"subject":"officer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"officer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"officer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"officer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"officer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"officer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"officer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"officer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"owl sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"owl sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"owl sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -835,6 +1129,11 @@
 {"subject":"owl sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"owl sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"owl sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"owl sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"owl sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"owl sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"owl sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"owl sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"parent sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"parent sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"parent sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -842,6 +1141,11 @@
 {"subject":"parent sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"parent sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"parent sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"parent sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"parent sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"parent sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"parent sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"parent sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"person sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"person sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"person sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -856,6 +1160,11 @@
 {"subject":"pig sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"pig sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"pig sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"pig sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"pig sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"pig sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"pig sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"pig sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"poodle sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"poodle sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"poodle sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -863,6 +1172,11 @@
 {"subject":"poodle sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"poodle sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"poodle sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"poodle sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"poodle sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"poodle sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"poodle sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"poodle sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"portable sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"portable sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"portable sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -879,6 +1193,11 @@
 {"subject":"president sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"president sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"president sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"president sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"president sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"president sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"president sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"president sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"priest sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"priest sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"priest sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -886,6 +1205,11 @@
 {"subject":"priest sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"priest sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"priest sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"priest sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"priest sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"priest sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"priest sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"priest sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"queen sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"queen sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"queen sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -893,6 +1217,11 @@
 {"subject":"queen sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"queen sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"queen sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"queen sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"queen sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"queen sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"queen sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"queen sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"rabbit sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"rabbit sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"rabbit sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -900,6 +1229,11 @@
 {"subject":"rabbit sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"rabbit sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"rabbit sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"rabbit sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"rabbit sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"rabbit sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"rabbit sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"rabbit sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"resident sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"resident sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"resident sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -907,6 +1241,11 @@
 {"subject":"resident sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"resident sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"resident sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"resident sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"resident sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"resident sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"resident sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"resident sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"ring sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"ring sprite","predicate":"mgx:accept-material","object":"gold"}
 {"subject":"ring sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -917,6 +1256,11 @@
 {"subject":"servant sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"servant sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"servant sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"servant sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"servant sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"servant sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"servant sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"servant sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"sheep sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"sheep sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"sheep sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -924,6 +1268,11 @@
 {"subject":"sheep sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"sheep sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"sheep sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"sheep sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"sheep sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"sheep sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"sheep sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"sheep sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"sister sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"sister sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"sister sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -931,6 +1280,11 @@
 {"subject":"sister sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"sister sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"sister sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"sister sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"sister sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"sister sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"sister sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"sister sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"soldier sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"soldier sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"soldier sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -938,6 +1292,11 @@
 {"subject":"soldier sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"soldier sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"soldier sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"soldier sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"soldier sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"soldier sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"soldier sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"soldier sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"son sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"son sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"son sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -945,6 +1304,11 @@
 {"subject":"son sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"son sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"son sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"son sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"son sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"son sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"son sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"son sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"spider sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"spider sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"spider sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -952,6 +1316,11 @@
 {"subject":"spider sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"spider sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"spider sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"spider sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"spider sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"spider sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"spider sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"spider sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"stranger sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"stranger sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"stranger sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -959,6 +1328,11 @@
 {"subject":"stranger sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"stranger sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"stranger sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"stranger sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"stranger sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"stranger sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"stranger sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"stranger sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"student sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"student sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"student sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -966,6 +1340,11 @@
 {"subject":"student sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"student sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"student sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"student sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"student sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"student sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"student sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"student sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"table sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"table sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"table sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -976,6 +1355,11 @@
 {"subject":"teacher sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"teacher sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"teacher sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"teacher sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"teacher sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"teacher sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"teacher sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"teacher sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"team sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"team sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"team sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -983,6 +1367,11 @@
 {"subject":"team sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"team sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"team sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"team sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"team sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"team sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"team sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"team sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"tiger sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"tiger sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"tiger sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -990,6 +1379,11 @@
 {"subject":"tiger sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"tiger sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"tiger sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"tiger sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"tiger sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"tiger sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"tiger sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"tiger sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"train sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"train sprite","predicate":"mgx:accept-material","object":"metal"}
 {"subject":"train sprite","predicate":"mgx:accept-material","object":"wood"}
@@ -1004,6 +1398,11 @@
 {"subject":"visitor sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"visitor sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"visitor sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"visitor sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"visitor sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"visitor sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"visitor sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"visitor sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"volunteer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"volunteer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"volunteer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1011,6 +1410,11 @@
 {"subject":"volunteer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"volunteer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"volunteer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"volunteer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"volunteer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"volunteer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"volunteer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"volunteer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"wife sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"wife sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"wife sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1018,6 +1422,11 @@
 {"subject":"wife sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"wife sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"wife sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"wife sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"wife sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"wife sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"wife sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"wife sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"wolf sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"wolf sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"wolf sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1025,6 +1434,11 @@
 {"subject":"wolf sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"wolf sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"wolf sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"wolf sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"wolf sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"wolf sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"wolf sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"wolf sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"woman sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"woman sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"woman sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1032,6 +1446,11 @@
 {"subject":"woman sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"woman sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"woman sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"woman sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"woman sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"woman sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"woman sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"woman sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"worker sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"worker sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"worker sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1039,6 +1458,11 @@
 {"subject":"worker sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"worker sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"worker sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"worker sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"worker sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"worker sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"worker sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"worker sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"writer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"writer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"writer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -1046,6 +1470,11 @@
 {"subject":"writer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"writer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"writer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"writer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"writer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"writer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"writer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"writer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"colour","predicate":"rdf:type","object":"sprite parameter"}
 {"subject":"emotion","predicate":"rdf:type","object":"sprite parameter"}
 {"subject":"material","predicate":"rdf:type","object":"sprite parameter"}

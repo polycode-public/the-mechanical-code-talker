@@ -1,0 +1,63 @@
+# bear-moving — bear-with-emotion.toml's front view caught mid-stride, the
+# turntable's centre position (the absent mgx:faces fact) paired with the
+# mgx:pose = moving fact alone, so a single [match] table is enough — the
+# same shape a lone [[match]] entry already collapses to.
+#
+# A front view shows all four paws at once rather than a near/far pair, so
+# the profile files' own forward-swing cue doesn't apply directly. Instead
+# the two outer paws (the front legs) lift and draw slightly in, the two
+# inner paws (the back legs) plant and spread slightly out — the diagonal
+# gait read from the front, front-left with back-right lifting together and
+# front-right with back-left planting together, at the same lift/dip
+# magnitude bear-facing-left-moving.toml uses. The body dips down slightly
+# under the stride, matching that same file's own +0.4 body drop.
+classes = ["bear"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bear-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="15.8" rx="7.2" ry="5.6" fill="url(#bear-moving-fill)"/>
+  <g fill="url(#bear-moving-fill)">
+    <ellipse cx="5.5" cy="18.9" rx="1.2" ry="1.3"/>
+    <ellipse cx="9.1" cy="21" rx="1.2" ry="1.4"/>
+    <ellipse cx="14.9" cy="19.5" rx="1.2" ry="1.3"/>
+    <ellipse cx="18.5" cy="20.6" rx="1.2" ry="1.4"/>
+  </g>
+  <circle cx="12" cy="9" r="5" fill="url(#bear-moving-fill)"/>
+  <circle cx="7" cy="5.4" r="2.1" fill="url(#bear-moving-fill)"/>
+  <circle cx="17" cy="5.4" r="2.1" fill="url(#bear-moving-fill)"/>
+  <ellipse cx="12" cy="11.4" rx="2.4" ry="1.9" fill="#c9a273"/>
+  <ellipse cx="12" cy="10.5" rx="0.9" ry="0.65" fill="#1c1c1c"/>
+  <ellipse cx="8.6" cy="11.4" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="7.6" cy="4.8" rx="0.8" ry="0.6" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+# The same cx/cy/r bear.toml's own head circle declares — the head doesn't
+# move mid-stride.
+[face]
+cx = 12
+cy = 9
+scale = 5
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -8,7 +8,7 @@
 // posture: a plain miss, nothing stored.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -162,11 +162,142 @@ test("an ordinary question is untouched by the lane: no research field rides the
   }
 });
 
+const queueFile = (dir) => join(dir, ".tmct", "research-queue.json");
+
+test("a queue persists under .tmct and resumes in a later session with no in-memory state", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(owlProvider());
+  try {
+    // Session one starts the run, then drops every scrap of in-memory state.
+    const start = await turn("research owl, limit 2", { memoryDir: dir });
+    assert.deepEqual(start.researchState.pending, ["Bird", "Night"]);
+    const raw = JSON.parse(await readFile(queueFile(dir), "utf8"));
+    assert.deepEqual(raw.pending, ["Bird", "Night"], "the queue is written through to .tmct");
+
+    // Session two carries no researchState — the queue resumes off disk.
+    const step1 = await turn("research next", { memoryDir: dir });
+    assert.match(step1.answer, /^bird — A bird is an animal\./);
+    assert.match(step1.answer, /1 linked topic still queued/);
+    assert.deepEqual(JSON.parse(await readFile(queueFile(dir), "utf8")).pending, ["Night"], "the step is persisted");
+
+    // Session three, still stateless, reports status from the persisted queue.
+    const status = await turn("research status", { memoryDir: dir });
+    assert.match(status.answer, /1 linked topic still queued/);
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function twoLevelProvider() {
+  const articles = {
+    owl: ROW("Owl", "An owl is a bird."),
+    bird: ROW("Bird", "A bird is an animal."),
+    feather: ROW("Feather", "A feather is a covering."),
+    wing: ROW("Wing", "A wing is a limb."),
+  };
+  const links = { Owl: ["Bird"], Bird: ["Feather", "Wing"] };
+  const p = {
+    calls: [],
+    async lookup(key) { p.calls.push(["lookup", key]); return articles[key] ?? null; },
+    async pageByTitle(title) { p.calls.push(["pageByTitle", title]); return articles[String(title).toLowerCase()] ?? null; },
+    async linkedTitles(title) { p.calls.push(["linkedTitles", title]); return links[title] ?? null; },
+  };
+  return p;
+}
+
+test("a depth-2 request persists both node knobs, and a later stateless session resumes them so its own step still fans out at depth 2", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(twoLevelProvider());
+  try {
+    // Session one: a depth-2 run. Owl queues Bird at depth 1.
+    const start = await turn("research owl, limit 5 depth 2", { memoryDir: dir });
+    assert.equal(start.research.maxDepth, 2, "the run carries the requested depth");
+    assert.deepEqual(start.researchState.pending, ["Bird"]);
+    const raw = JSON.parse(await readFile(queueFile(dir), "utf8"));
+    assert.equal(raw.maxDepth, 2, "the persisted queue carries the depth knob");
+    assert.ok(Number.isFinite(raw.maxTopics), "the persisted queue carries the node budget");
+
+    // Session two: no in-memory state. The resumed run must keep depth 2, so
+    // stepping Bird fans out its own links (Feather, Wing) at depth 2.
+    const step1 = await turn("research next", { memoryDir: dir });
+    assert.match(step1.answer, /^bird — A bird is an animal\./);
+    assert.deepEqual(step1.research.pending, ["Feather", "Wing"], "the resumed depth-2 run fans out from the stepped topic");
+
+    // The depth-2 topic grounds under research:owl@2.
+    const step2 = await turn("research next", { memoryDir: dir });
+    assert.match(step2.answer, /^feather —/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((f) => /^research:owl@2/.test(f.provenance)), "a resumed depth-2 topic stamps @2");
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an older persisted queue with no depth knobs resumes as today's depth-1 behaviour, never a crash", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(twoLevelProvider());
+  try {
+    // A queue file shaped like the pre-knob release: core fields only.
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    const legacy = { topic: "owl", key: "owl", title: "Owl", limit: 5, pending: ["Bird"], done: [{ title: "Owl", facts: 1, depth: 0 }], skipped: [] };
+    await writeFile(queueFile(dir), JSON.stringify(legacy), "utf8");
+    const step = await turn("research next", { memoryDir: dir });
+    assert.match(step.answer, /^bird — A bird is an animal\./);
+    // Depth defaults to 1, so Bird does NOT fan out — the run completes.
+    assert.deepEqual(step.research.pending, [], "a knob-less resume behaves as a depth-1 run");
+    assert.match(step.answer, /research on "owl" is complete/);
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("research stop in a later session clears the persisted queue file", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(owlProvider());
+  try {
+    await turn("research owl, limit 2", { memoryDir: dir });
+    const stop = await turn("research stop", { memoryDir: dir });
+    assert.match(stop.answer, /stopped research on "owl"/);
+    assert.equal(stop.researchState, null);
+    const gone = await readFile(queueFile(dir), "utf8").then(() => "PRESENT", () => "GONE");
+    assert.equal(gone, "GONE", "stop deletes the persisted queue file");
+    const after = await turn("research status", { memoryDir: dir });
+    assert.match(after.answer, /no research is running/);
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a corrupt queue file reads as no research running, never a crash", async () => {
+  const dir = await freshRepo();
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(queueFile(dir), "{ this is not json", "utf8");
+  try {
+    const status = await turn("research status", { memoryDir: dir });
+    assert.match(status.answer, /no research is running/);
+    const next = await turn("research next", { memoryDir: dir });
+    assert.match(next.answer, /no research is running/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a session with no memory store neither reads nor writes a persisted queue", async () => {
+  const status = await turn("research status", { memoryDir: null });
+  assert.match(status.answer, /no research is running/);
+  const next = await turn("research next", { memoryDir: null });
+  assert.match(next.answer, /needs a memory store/);
+});
+
 test("/help lists the research lane", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("/help", { memoryDir: dir });
-    assert.match(r.answer, /research <topic> \[limit N\]/);
+    assert.match(r.answer, /research <topic> \[limit N\] \[depth D\]/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

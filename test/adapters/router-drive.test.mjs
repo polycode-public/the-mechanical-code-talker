@@ -4,7 +4,7 @@
 // test/adapters/router-resolver.test.mjs (which drives the pure router
 // machinery directly), this file proves the wiring a library caller invokes —
 // all the way to a correct composed answer or an honest refuse. The `tmct
-// plan` CLI binary is covered from e2e/plan-cli.test.mjs, and the chat /plan
+// plan` CLI binary is covered from test-e2e/plan-cli.test.mjs, and the chat /plan
 // command by the planning corpus lane.
 
 import { test, after } from "node:test";
@@ -20,7 +20,7 @@ import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
-// The known-good composed answers agentbench/cases.jsonl already pins for this
+// The known-good composed answers test-benchmarks/agentbench/cases.jsonl already pins for this
 // exact fixture + request (ab-c1-untested-in-impact / ab-c2-what-to-test) — the
 // SAME ground truth the router's own benchmark grades against, not a
 // hand-derived-here truth this file invents on its own.

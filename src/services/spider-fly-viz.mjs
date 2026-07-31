@@ -22,7 +22,8 @@
 // `.toString()` — exactly ledger-viz.mjs's own `facetCounts`/
 // `resolveAnsweredTerm` pattern — because they are genuinely UI-only, with no
 // reason to live inside the engine bundle: `createTicker` (viz-ticker.mjs,
-// the shared play/pause/step/reset primitive), `classOfAgentId`,
+// the shared play/pause/step/reset primitive), `agentKindOf` (the shared
+// kind-from-id helper, defined once in spider-fly-world.mjs),
 // `threadCellsForSpiderPlan` (the silk-thread reconstruction), `nextCorpses`
 // (the dying-agent bookkeeping behind the dusty-corner corpse pile) and
 // `facingDegreesFor` (plan-driven sprite orientation) — all kept as real,
@@ -32,11 +33,14 @@
 // bundle's own real ES exports instead, since (unlike ledger-viz, which
 // reuses a FIXED shared bundle it can't extend for one page's own needs) this
 // page ships its own dedicated bundle and can just export what it needs.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, meterBarHtml } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
-import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
+import { loadWinkVendor } from "./viz-boot.mjs";
+import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId, agentKindOf } from "../domain/spider-fly-world.mjs";
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
-import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { believedFactSentence } from "./spider-fly-turn.mjs";
+import { DEFAULT_GAME_CONFIG, massScaleFor } from "../domain/game-config.mjs";
+import { resolveSpriteRequest } from "../domain/sprite-request.mjs";
 
 // A larger cell than this page's first cut (44px) — the board sits in its
 // own full-width block, so a bigger cell keeps it reading as the page's
@@ -62,13 +66,6 @@ function webCellIds() {
   return out;
 }
 
-/** An agent id's class for sprite/HUD purposes — "spider-2" -> "spider",
- *  "fly-10" -> "fly", "egg-1" -> "egg". Self-contained (no outer refs),
- *  `.toString()`-splice safe. */
-export function classOfAgentId(id) {
-  return String(id).replace(/-\d+$/, "");
-}
-
 /**
  * Reconstruct the spider's remaining silk-thread path — the sequence of
  * cell ids from its CURRENT cell (after this tick's one executed step) to
@@ -86,7 +83,7 @@ export function classOfAgentId(id) {
  * `geometry` is `{ parseCellId, cellId, directionDelta }` — the exact three
  * grid-geometry primitives spider-fly-world.mjs exports, injected rather
  * than imported so this function stays `.toString()`-splice safe (the
- * inlined page calls it with `window.tmctSpiderFly`'s own re-exports of the
+ * inlined page calls it with `window.tmct`'s own re-exports of the
  * same three). Returns the ordered cell-id array (length > 1) or null.
  */
 export function threadCellsForSpiderPlan(agents, geometry) {
@@ -128,54 +125,6 @@ export function facingDegreesFor(plan, previousDegrees) {
   return previousDegrees ?? 0;
 }
 
-/** The instance-level `mgx:feels` emotion for one spider-fly agent this
- *  tick — a PURE derivation from state spider-fly.mjs's own `runSpiderFlyTick`
- *  already returns on the agent (`goal`/`mass`), never a new persisted fact,
- *  the same derive-don't-duplicate posture `hasActiveWebAt` already holds for
- *  web state (PLAN_GAMES_UPLIFT_V3.md §B.2.4). Operator-confirmed mapping: a
- *  spider that just ate is happy; a spider carrying an uncaught fly or
- *  mid-chase (chasing, or co-located and about to catch) is angry (predatory
- *  focus); a spider avoiding another spider is scared; a spider holding
- *  position or building a web is calm. A fly evading a believed-visible
- *  spider is scared, and so is the sharper form of the same fear — just
- *  caught, or already being carried; a fly with no threat visible (wandering,
- *  or trapped with none in sight) is calm.
- *
- *  `agent.goal` is spider-fly.mjs's own fixed-template text (`goalLineFor`'s
- *  literal phrasing) — the only reliable per-tick discriminator this
- *  function's caller has, and every real goal string that engine can ever
- *  produce is matched below by its own distinguishing prefix. A goal this
- *  function doesn't recognize (a freshly hatched/spawned agent's "no goal
- *  yet", or the transient "X is gone — re-evaluating" scrub once a named
- *  agent dies) falls through to "calm" — the 6-word vocabulary's own
- *  deliberate no-strong-emotion baseline (sprite-expressions.mjs's B.2.1
- *  design), not a guess.
- *
- *  `maxMass` is accepted for parity with this page's own per-class mass-bar
- *  denominators (`SPIDERFLY.maxSpiderMass`/`maxFlyMass`) but unused today —
- *  no state in the operator's own confirmed table keys off a mass ratio,
- *  only off the goal text above. Self-contained (no outer refs),
- *  `.toString()`-splice safe. */
-export function emotionFor(agent, kind, maxMass) {
-  const goal = agent?.goal || "";
-  if (kind === "spider") {
-    if (goal.startsWith("just ate")) return "happy";
-    if (goal.startsWith("carrying") || goal.startsWith("chasing") || goal.startsWith("co-located with")) return "angry";
-    if (goal.startsWith("avoiding")) return "scared";
-    return "calm";
-  }
-  if (kind === "fly") {
-    if (
-      goal.startsWith("evading")
-      || goal.startsWith("being carried by")
-      || goal.startsWith("just caught by")
-      || goal.startsWith("trapped in an active web")
-    ) return "scared";
-    return "calm";
-  }
-  return "calm";
-}
-
 /**
  * The updated corpse set for one redraw (§A.2.5 — visual-only, entirely
  * client-side; the actual starve/eat removal already happened in the
@@ -200,7 +149,7 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
     if (agents[id] || out[id]) continue;
     const cell = prevAgents[id]?.cell;
     if (!cell) continue;
-    out[id] = { cls: classOfAgentId(id), cell, diedAtTurn: turn };
+    out[id] = { cls: agentKindOf(id), cell, diedAtTurn: turn };
   }
   return out;
 }
@@ -225,7 +174,9 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
  *  the engine into the page instead of the sibling `<script src>`, for the
  *  CLI's standalone export — one downloadable file that runs from file://
  *  with no sibling assets. Default empty keeps the site build's sibling-file
- *  arrangement byte-identical. */
+ *  arrangement byte-identical, favicon links included; the standalone export
+ *  drops them too, since a relative ./favicon.svg would be a dangling
+ *  external reference the "no sibling assets" export can't carry. */
 export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [], engineBundleJs = "" } = {}) {
   const gridData = embedJson({
     gridSize: GRID_SIZE,
@@ -254,48 +205,57 @@ export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+${engineBundleJs ? "" : `<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">`}
 <style>
 ${THEME_TOKENS_CSS}
   :root { --fly: #A6791F; }
   @media (prefers-color-scheme: dark) { :root { --fly: #D9A94B; } }
   :root[data-theme="dark"] { --fly: #D9A94B; }
   :root[data-theme="light"] { --fly: #A6791F; }
-  /* The dashboard chrome (Part C.4.2): a beveled control-panel palette
-     WRAPPING the dusty-window board scene above, never touching it — every
-     rule below this block styles .side/.controls-row/.tuning/.status only,
-     all of which are hidden in ?preview=1 mode alongside .side itself, so
-     none of this bleeds into the embedded home-page hero. --chrome-face is
-     the panel's own warm plastic face; --chrome-edge-hi/-lo are its raised-
-     bevel light/shadow edges; --chrome-brass is the console's metal accent
-     (borders, active/hover states); --chrome-well/-well-ink are the dark
-     "LCD" readout a real panel's numeric window would use, deliberately
-     near-black in both themes (a lit readout reads dark-with-a-glow whether
-     the room around it is light or dark). --chrome-shadow-raised/-inset
-     compose the two bevel directions once so every panel/button/well below
-     just references one of them, never re-deriving the edge colors. */
+  /* The console chrome, in this page's own gothic-whimsical register (a
+     Charles Addams cartoon: india-ink line work over aged paper, spooky-cute
+     rather than scary) WRAPPING the window-corner board scene above, never
+     touching it — every rule below this block styles
+     .side/.controls-row/.tuning/.status only, all of which are hidden in
+     ?preview=1 mode alongside .side itself, so none of this bleeds into the
+     embedded home-page hero. --chrome-face is the panel's aged-ivory (night
+     slate in dark) face, textured by --chrome-hatch, a two-direction ink
+     cross-hatch; --chrome-edge-hi/-lo are its raised-bevel light/shadow
+     edges; --chrome-accent is the ink-plum accent (borders, active/hover
+     states); --chrome-well/-well-ink are the near-black readout well with
+     bone-pale numerals, deliberately dark in both themes (a lit readout
+     reads dark-with-a-glow whether the room around it is light or dark).
+     --chrome-shadow-raised/-inset compose the two bevel directions once so
+     every panel/button/well below just references one of them. */
   :root {
-    --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
-    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
-    --chrome-well: #201A10; --chrome-well-ink: #E8C876;
+    --chrome-face: #E7E1D3; --chrome-face-hi: #F2EDE0; --chrome-edge-hi: #FAF6EA; --chrome-edge-lo: #6E6A5E;
+    --chrome-accent: #5C4B66; --chrome-accent-soft: rgba(92, 75, 102, .14);
+    --chrome-well: #1A171C; --chrome-well-ink: #E4DDCB;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(28, 23, 32, .05) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(28, 23, 32, .04) 0 1px, transparent 1px 9px);
     --chrome-shadow-raised: inset 0 1px 0 var(--chrome-edge-hi), inset 0 -1px 0 var(--chrome-edge-lo), 0 1px 2px rgba(0, 0, 0, .18);
     --chrome-shadow-inset: inset 0 1px 3px var(--chrome-edge-lo), inset 0 -1px 0 var(--chrome-edge-hi);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
-      --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
-      --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
+    :root { --chrome-face: #262230; --chrome-face-hi: #302B3D; --chrome-edge-hi: #453E57; --chrome-edge-lo: #121016;
+      --chrome-accent: #A995BD; --chrome-accent-soft: rgba(169, 149, 189, .16);
+      --chrome-well: #0C0A10; --chrome-well-ink: #E0D8C6;
+      --chrome-hatch: repeating-linear-gradient(55deg, rgba(240, 235, 220, .04) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(240, 235, 220, .03) 0 1px, transparent 1px 9px); }
   }
-  :root[data-theme="dark"] { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
-    --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
-    --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
-  :root[data-theme="light"] { --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
-    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
-    --chrome-well: #201A10; --chrome-well-ink: #E8C876; }
+  :root[data-theme="dark"] { --chrome-face: #262230; --chrome-face-hi: #302B3D; --chrome-edge-hi: #453E57; --chrome-edge-lo: #121016;
+    --chrome-accent: #A995BD; --chrome-accent-soft: rgba(169, 149, 189, .16);
+    --chrome-well: #0C0A10; --chrome-well-ink: #E0D8C6;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(240, 235, 220, .04) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(240, 235, 220, .03) 0 1px, transparent 1px 9px); }
+  :root[data-theme="light"] { --chrome-face: #E7E1D3; --chrome-face-hi: #F2EDE0; --chrome-edge-hi: #FAF6EA; --chrome-edge-lo: #6E6A5E;
+    --chrome-accent: #5C4B66; --chrome-accent-soft: rgba(92, 75, 102, .14);
+    --chrome-well: #1A171C; --chrome-well-ink: #E4DDCB;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(28, 23, 32, .05) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(28, 23, 32, .04) 0 1px, transparent 1px 9px); }
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1120px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-brass); }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-accent); }
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -305,7 +265,7 @@ ${THEME_TOKENS_CSS}
      needing to sum to a full width. */
   .stage { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 3fr); gap: 1.2rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
-  /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
+  /* A moonlit window corner: a cool pale glow near the top-left (WEB_HOME
      already sits near that corner — spider-fly-world.mjs's own header
      comment), and a faint diagonal weave standing in for dust/silk caught
      in the light. Decoration only — the 10x10 game grid itself is drawn by
@@ -314,20 +274,26 @@ ${THEME_TOKENS_CSS}
     margin: 0 auto;
     position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
     background:
-      radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),
-      repeating-linear-gradient(115deg, rgba(120, 110, 90, .06) 0 1px, transparent 1px 30px),
+      radial-gradient(140% 140% at 6% 6%, rgba(224, 224, 240, .55), transparent 52%),
+      repeating-linear-gradient(115deg, rgba(100, 95, 110, .06) 0 1px, transparent 1px 30px),
       var(--card);
     border: 1px solid var(--line);
     box-shadow: inset 0 0 0 6px var(--bg), inset 0 0 0 7px var(--line);
   }
-  @media (prefers-color-scheme: dark) { .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); } }
-  :root[data-theme="dark"] .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); }
+  @media (prefers-color-scheme: dark) { .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(126, 120, 158, .30), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); } }
+  :root[data-theme="dark"] .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(126, 120, 158, .30), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); }
   .board-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* The cobweb in the window corner — pure decoration over the moonlit
+     glow (never a game element; the ACTIVE web block is still drawn by
+     drawBoard() on the canvas). It sits under the sprite layer so agents
+     always pass in front of it. */
+  .cobweb { position: absolute; top: 7px; left: 7px; width: 36%; height: 36%; color: var(--ink); opacity: .26; pointer-events: none; }
+  .cobweb svg { width: 100%; height: 100%; display: block; }
   .sprite-layer { position: absolute; inset: 0; }
   .sprite { position: absolute; width: 7.6%; height: 7.6%; transform: translate(-50%, -50%); transition: left .25s ease, top .25s ease; }
   @media (prefers-reduced-motion: reduce) { .sprite, .sprite-face { transition: none !important; } }
   .sprite-face { width: 100%; height: 100%; transition: transform .25s ease; }
-  .sprite-face svg { width: 100%; height: 100%; display: block; }
+  .sprite-face svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
   .sprite[data-cls="spider"] { color: var(--taught); }
   .sprite[data-cls="fly"] { color: var(--fly); }
   .sprite[data-cls="egg"] { color: var(--muted); }
@@ -345,7 +311,7 @@ ${THEME_TOKENS_CSS}
      nameplate header below bleeds to this same panel's own edges via a
      negative margin equal to this padding, so it reads as one welded unit,
      not a label floating inside a box. */
-  .hud, .chat, .tuning { background: var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
+  .hud, .chat, .tuning { background: var(--chrome-hatch), var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
   /* Both the controls strip above the board and the tuning strip below it
      match the board's own width (not the wider stage-left column they sit
      in), so all three line up as one visual stack. */
@@ -375,12 +341,12 @@ ${THEME_TOKENS_CSS}
   .hud-row { display: flex; align-items: flex-start; gap: .6rem; padding: .4rem 0; border-top: 1px solid var(--chrome-edge-lo); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); }
   .hud-row:first-of-type { border-top: none; box-shadow: none; }
   .hud-row.clickable { cursor: pointer; }
-  .hud-row.clickable:hover, .hud-row.clickable:focus-visible { background: var(--chrome-brass-soft); }
+  .hud-row.clickable:hover, .hud-row.clickable:focus-visible { background: var(--chrome-accent-soft); }
   .hud-main { display: flex; flex-direction: column; gap: .1rem; flex: 1 1 auto; min-width: 0; }
   .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; font-weight: 600; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
-  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
   /* the click-expand facts panel (§28): beside the clicked spider/fly's own
      row, never a separate popover or a second panel elsewhere on the page —
      the same believedCellOf/beliefSnapshotFor read path spider-fly.mjs
@@ -392,9 +358,9 @@ ${THEME_TOKENS_CSS}
      texture (repeating-linear-gradient) instead of a smooth gradient bar —
      discrete resource units, the same reading-at-a-glance language a 90s
      strategy game's own gold/mana meters use. */
-  .mass-track { height: 7px; margin-top: .35rem; background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 1px; overflow: hidden; }
-  .mass-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--taught) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
-  .mass-fill.fly { background: repeating-linear-gradient(90deg, var(--fly) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
+  .meter-track { height: 7px; margin-top: .35rem; background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 1px; overflow: hidden; }
+  .meter-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--taught) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
+  .meter-fill.fly { background: repeating-linear-gradient(90deg, var(--fly) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
   .hud-empty { color: var(--muted); font-size: .85rem; }
   .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 220px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog:empty { display: none; margin-bottom: 0; }
@@ -412,7 +378,7 @@ ${THEME_TOKENS_CSS}
   .chatask input:disabled { opacity: .5; }
   .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
   .pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--chrome-edge-lo); border-radius: 99px; background: var(--chrome-face); color: var(--ink); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); white-space: nowrap; }
-  .pill:hover:not(:disabled) { border-color: var(--chrome-brass); }
+  .pill:hover:not(:disabled) { border-color: var(--chrome-accent); }
   .pill:disabled { opacity: .45; cursor: default; }
   .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
   /* The dynamic deception-pill rail (§A.2.4): a true/false tag shown ONLY
@@ -432,7 +398,7 @@ ${THEME_TOKENS_CSS}
   .tuning-col.spider h3 { color: var(--taught); } .tuning-col.fly h3 { color: var(--fly); }
   .tuning-col label { display: block; font-size: .68rem; color: var(--muted); margin-bottom: .6rem; }
   /* Every live number on this page (this readout, the turn plaque below)
-     shares the same brass-on-well "LED" treatment — one readout language,
+     shares the same bone-on-ink readout treatment — one readout language,
      not a one-off flourish. */
   .tuning-col .tuning-val { font-family: ${MONO_STACK}; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: 0 .35rem; float: right; }
   .tuning-col input[type="range"] {
@@ -441,7 +407,7 @@ ${THEME_TOKENS_CSS}
     -webkit-appearance: none; appearance: none;
   }
   .tuning-col.fly input[type="range"] { accent-color: var(--fly); }
-  /* A lever-look thumb (a molded brass-edged cap) — appearance: none above
+  /* A lever-look thumb (a molded, ink-edged cap) — appearance: none above
      drops the OS's own native slider look in browsers that honor it;
      accent-color just above is the fallback for any that don't. */
   .tuning-col input[type="range"]::-webkit-slider-thumb {
@@ -464,14 +430,14 @@ ${THEME_TOKENS_CSS}
      control panel", and it costs nothing under reduced-motion since neither
      state involves a transition, just an instant bevel swap. */
   .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; padding: .4rem .85rem; border-radius: 2px; border: 1px solid var(--chrome-edge-lo); background: var(--chrome-face); box-shadow: var(--chrome-shadow-raised); color: var(--ink); }
-  .controls-row button:hover:not(:disabled) { border-color: var(--chrome-brass); }
+  .controls-row button:hover:not(:disabled) { border-color: var(--chrome-accent); }
   .controls-row button:active:not(:disabled) { box-shadow: var(--chrome-shadow-inset); }
   .controls-row button:disabled { opacity: .4; cursor: default; box-shadow: none; }
-  /* The signature element: a brass-framed digital turn counter, the same
+  /* The turn counter plaque: an accent-framed readout, the same
      inset-well readout language as every stat above it — the one thing this
      page is remembered by. */
-  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-brass); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
-  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-accent); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
+  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
   body.preview .side, body.preview .controls-panel, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage, body.preview .stage-left { display: block; }
@@ -502,11 +468,23 @@ ${THEME_TOKENS_CSS}
     <div class="board-frame" id="boardFrame">
       <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
       <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
+      <div class="cobweb" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-linecap="round">
+        <g stroke-width="0.7">
+          <path d="M0 0 L73.8 5.2"/><path d="M0 0 L68.6 27.7"/><path d="M0 0 L52.3 52.3"/><path d="M0 0 L27.7 68.6"/><path d="M0 0 L5.2 73.8"/>
+        </g>
+        <g stroke-width="0.55">
+          <path d="M20 1.4 Q16.8 3.9 18.5 7.5 Q14.3 9.5 14.1 14.1 Q9.5 14.3 7.5 18.5 Q3.9 16.8 1.4 20"/>
+          <path d="M33.9 2.4 Q28.4 6.6 31.5 12.7 Q24.4 16.1 24 24 Q16.1 24.4 12.7 31.5 Q6.6 28.4 2.4 33.9"/>
+          <path d="M49.9 3.5 Q41.9 9.7 46.4 18.7 Q35.9 23.7 35.4 35.4 Q23.7 35.9 18.7 46.4 Q9.7 41.9 3.5 49.9"/>
+          <path d="M67.8 4.8 Q57 13.2 63 25.5 Q48.8 32.3 48.1 48.1 Q32.3 48.8 25.5 63 Q13.2 57 4.8 67.8"/>
+        </g>
+        <path d="M48.1 48.1 Q49.5 54 48.6 59.5" stroke-width="0.5"/>
+      </svg></div>
       <div class="sprite-layer" id="spriteLayer"></div>
       <div class="thread-tip" id="threadTip"></div>
     </div>
     <div class="tuning" id="tuning">
-      <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
+      <h2>live tuning &middot; mass loss, spawn rate, vision, per class</h2>
       <div class="tuning-grid">
         <div class="tuning-col spider">
           <h3>spider</h3>
@@ -562,12 +540,25 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 (function () {
   "use strict";
   const createTicker = ${createTicker.toString()};
-  const classOfAgentId = ${classOfAgentId.toString()};
+  const loadWinkVendor = ${loadWinkVendor.toString()};
+  const agentKindOf = ${agentKindOf.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
-  const emotionFor = ${emotionFor.toString()};
+  const resolveSpriteRequest = ${resolveSpriteRequest.toString()};
   const nextCorpses = ${nextCorpses.toString()};
-  const esc = ${escapeHtml.toString()};
+  const massScaleFor = ${massScaleFor.toString()};
+  const believedFactSentence = ${believedFactSentence.toString()};
+  const escapeHtml = ${escapeHtml.toString()};
+  const meterBarHtml = ${meterBarHtml.toString()};
+  const esc = escapeHtml;
+  // The lemma/POS tier every sibling dock loads: this game's OWN commands
+  // (tick, address, stop, see) are closed regexes that never need it, but a
+  // line that doesn't match one of those still falls through to the
+  // ordinary chat/ask/teach lanes (spiderFlyTurn returns null), and those
+  // lanes read exactly as much better with wink loaded as they do on every
+  // other page. Fired eagerly here so it is likely settled well before a
+  // visitor's first ordinary (non-game) question.
+  loadWinkVendor({ register: (factory) => tmct.page.registerWinkModel(factory) })();
   const el = (id) => document.getElementById(id);
   const boardFrame = el("boardFrame");
   const boardCanvas = el("board");
@@ -631,7 +622,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const goalById = {};
   const spriteEls = {};
   const facingByAgent = {};
-  const emotionByAgent = {};
+  const moodByAgent = {};
   let corpses = {};
   const corpseEls = {};
   let selectedAddresseeId = null;
@@ -646,30 +637,37 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function removeStaleSprites(agents) {
     for (const id of Object.keys(spriteEls)) {
       if (!agents[id]) {
-        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id]; delete emotionByAgent[id];
+        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id]; delete moodByAgent[id];
       }
     }
   }
 
-  // maxMassFor/propertyFactsForAgent (emotionFor's own caller-side glue): only
-  // spider/fly carry the mgx:feels parameter (data/sprites-large/*-with-
-  // emotion.toml exists for those two classes only) — every other class (egg,
-  // and any class this page has no template for at all) keeps propertyFacts
-  // empty, resolving through its plain template exactly as before this page
-  // wired emotion through. maxMassFor mirrors massBarHtml's own per-class
-  // denominator below so the HUD's mass bar and the sprite's own expression
-  // read the same "how full" scale.
-  function maxMassFor(cls) {
-    return cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
+  // The engine writes each agent's mood as a real mgx:feels fact every turn
+  // and hands the same word back on the agent, so this page reads it rather
+  // than deriving a mood of its own. Only spider/fly carry the mgx:feels
+  // parameter (data/sprites-large/*-with-emotion.toml exists for those two
+  // classes only) — every other class (egg, and any class this page has no
+  // template for at all) asks for no expression at all, resolving through its
+  // plain template. A snapshot-sourced agent carries no mood (a chat-driven
+  // tick returns text, not the structured tick shape), so the last mood the
+  // engine reported stands, exactly as goalById already holds the last goal.
+  // The starting board has no reported mood at all, and calm is the mood the
+  // engine itself writes for a just-minted agent, so that is the baseline.
+  function expressionForAgent(id, agent, cls) {
+    if (cls !== "spider" && cls !== "fly") return null;
+    return (agent && agent.mood) || moodByAgent[id] || "calm";
   }
-  function propertyFactsForAgent(agent, cls) {
-    if (cls !== "spider" && cls !== "fly") return [];
-    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMassFor(cls)) }];
-  }
-  function resolveSpriteFace(cls, propertyFacts) {
-    return window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], propertyFacts, SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-      : "";
+  // One sprite request, in the same { class, expression } shape tmct_sprite
+  // takes, answered by the same pure resolver the tool wraps (sprite-request.mjs,
+  // spliced in above) — the page holds the state and nothing else.
+  function resolveSpriteFace(spriteRequest) {
+    if (!window.tmct) return "";
+    return resolveSpriteRequest(spriteRequest, {
+      factRows: (session && session.taxonomyRows) || [],
+      templates: SPIDERFLY.spriteTemplates,
+      spriteRegistry: tmct.page.SPRITE_REGISTRY,
+      resolveSpriteAsset: tmct.page.resolveSpriteAsset,
+    }).svg || "";
   }
 
   function togglePov(id) {
@@ -688,18 +686,18 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     node.className = "sprite";
     node.dataset.cls = cls;
     // Property-aware resolution (sprite-templates.mjs's resolveSpriteAsset):
-    // a spider/fly's live mgx:feels emotion (emotionFor, above) resolves it
-    // through the matching data/sprites-large/*-with-emotion.toml template;
-    // every other class (egg) keeps propertyFacts empty and resolves through
-    // its plain class template (or the flat SPRITE_REGISTRY), unchanged.
-    const propertyFacts = propertyFactsForAgent(agent, cls);
-    emotionByAgent[id] = propertyFacts[0] ? propertyFacts[0].object : null;
+    // a spider/fly's live mgx:feels mood resolves it through the matching
+    // data/sprites-large/*-with-emotion.toml template; every other class
+    // (egg) asks for no expression and resolves through its plain class
+    // template (or the flat SPRITE_REGISTRY), unchanged.
+    const mood = expressionForAgent(id, agent, cls);
+    moodByAgent[id] = mood;
     // The sprite SVG lives in its own inner wrapper so plan-driven facing
     // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
     // own translate(-50%,-50%) positioning transform.
     const face = document.createElement("div");
     face.className = "sprite-face";
-    face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+    face.innerHTML = resolveSpriteFace({ class: cls, expression: mood });
     node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
@@ -718,9 +716,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function applyAgents(agents) {
     removeStaleSprites(agents);
     for (const [id, a] of Object.entries(agents)) {
-      const cls = classOfAgentId(id);
+      const cls = agentKindOf(id);
       const node = ensureSpriteEl(id, cls, a);
-      const parsed = tmctSpiderFly.parseCellId(a.cell);
+      const parsed = tmct.page.parseCellId(a.cell);
       if (!parsed) continue;
       const pct = cellCenterPct(parsed.x, parsed.y);
       node.style.left = pct.leftPct + "%";
@@ -734,16 +732,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       const face = node.querySelector(".sprite-face");
       if (face) {
         face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
-        // Emotion changes tick-to-tick (a fly's fear spikes the instant a
+        // Mood changes tick-to-tick (a fly's fear spikes the instant a
         // spider comes into view, a spider's joy fires the instant it eats),
         // so this must re-resolve every redraw, not just at sprite creation —
-        // but only actually replace the DOM when the emotion word itself
+        // but only actually replace the DOM when the mood word itself
         // changed since last render, never on every tick regardless.
-        const propertyFacts = propertyFactsForAgent(a, cls);
-        const emotion = propertyFacts[0] ? propertyFacts[0].object : null;
-        if (emotion !== emotionByAgent[id]) {
-          emotionByAgent[id] = emotion;
-          face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+        const mood = expressionForAgent(id, a, cls);
+        if (mood !== moodByAgent[id]) {
+          moodByAgent[id] = mood;
+          face.innerHTML = resolveSpriteFace({ class: cls, expression: mood });
         }
       }
       if (a.goal) goalById[id] = a.goal;
@@ -776,24 +773,17 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         // never emotion-parameterized at all (a rotting carcass has none),
         // just its class's own plain template under the grayscale/fade the
         // .sprite.corpse CSS rule already applies.
-        face.innerHTML = resolveSpriteFace(corpse.cls, []);
+        face.innerHTML = resolveSpriteFace({ class: corpse.cls });
         node.appendChild(face);
         spriteLayer.appendChild(node);
         corpseEls[id] = node;
       }
-      const deathCell = tmctSpiderFly.parseCellId(corpse.cell);
+      const deathCell = tmct.page.parseCellId(corpse.cell);
       if (!deathCell) continue;
       const pct = cellCenterPct(deathCell.x, SPIDERFLY.gridSize);
       node.style.left = pct.leftPct + "%";
       node.style.top = pct.topPct + "%";
     }
-  }
-
-  function massBarHtml(cls, mass) {
-    const maxMass = cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
-    if (typeof mass !== "number" || !maxMass) return "";
-    const pct = Math.max(0, Math.min(100, (mass / maxMass) * 100));
-    return '<div class="mass-track"><div class="mass-fill ' + esc(cls) + '" style="width:' + pct + '%"></div></div>';
   }
 
   // The last-created plan as a plain arrow chain ("west → west"), or
@@ -821,15 +811,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   // The full text rendering behind the click-expand panel: one sentence per
   // other candidate the observer currently has a belief about, or "has not
-  // been observed" for a candidate it doesn't — the same belief map
-  // beliefLineHtml already compresses into a single line, spelled out in
-  // full beside the clicked agent instead of abbreviated above it.
+  // been observed" for a candidate it doesn't — believedFactSentence is the
+  // SAME function spider-fly-turn.mjs's own chat lane renders "X sees: ..."
+  // from, so the chat phrasing and this panel can never drift apart.
+  // beliefLineHtml already compresses the same belief map into a single line
+  // above; this spells it out in full beside the clicked agent.
   function observedFactsHtml(observerId, belief) {
     const entries = Object.entries(belief || {});
     const lines = entries.length
-      ? entries.map(([id, cell]) => '<div class="hud-detail-line">'
-          + (cell ? esc(id) + " is at " + esc(cell) + "." : esc(id) + " has not been observed.")
-          + "</div>").join("")
+      ? entries.map(([id, cell]) => '<div class="hud-detail-line">' + esc(believedFactSentence(id, cell)) + "</div>").join("")
       : '<div class="hud-detail-line">nothing else is on the board yet.</div>';
     return '<div class="hud-detail"><div class="hud-detail-title">' + esc(observerId) + " observes</div>" + lines + "</div>";
   }
@@ -838,13 +828,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const ids = Object.keys(lastAgents).sort();
     if (!ids.length) { hudEl.innerHTML = '<div class="hud-empty">no agents on the board.</div>'; return; }
     hudEl.innerHTML = ids.map((id) => {
-      const cls = classOfAgentId(id);
+      const cls = agentKindOf(id);
       const a = lastAgents[id];
       const clickable = cls === "spider" || cls === "fly";
       const expanded = clickable && expandedAgents.has(id);
       const main = '<div class="hud-main"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
         + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span>"
-        + massBarHtml(cls, a.mass)
+        + meterBarHtml(cls, a.mass, massScaleFor(cls, { maxSpiderMass: SPIDERFLY.maxSpiderMass, maxFlyMass: SPIDERFLY.maxFlyMass }))
         + planLineHtml(a.plan)
         + beliefLineHtml(a.belief)
         + "</div>";
@@ -873,9 +863,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   });
 
   const threadGeometry = {
-    parseCellId: (id) => tmctSpiderFly.parseCellId(id),
-    cellId: (x, y) => tmctSpiderFly.cellId(x, y),
-    directionDelta: tmctSpiderFly.DIRECTION_DELTA,
+    parseCellId: (id) => tmct.page.parseCellId(id),
+    cellId: (x, y) => tmct.page.cellId(x, y),
+    directionDelta: tmct.page.DIRECTION_DELTA,
   };
 
   function drawBoard(agents, activeWebs) {
@@ -883,7 +873,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     boardCtx.clearRect(0, 0, w, h);
     boardCtx.fillStyle = cssVar("--taught-soft") || "rgba(46,125,79,.12)";
     for (const wc of SPIDERFLY.webCells) {
-      const p = tmctSpiderFly.parseCellId(wc);
+      const p = tmct.page.parseCellId(wc);
       boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
     }
     // A spider-built dynamic web is a distinct color from the always-on
@@ -894,7 +884,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     boardCtx.lineWidth = 1;
     boardCtx.setLineDash([3, 2]);
     for (const web of activeWebs || []) {
-      const p = tmctSpiderFly.parseCellId(web.cell);
+      const p = tmct.page.parseCellId(web.cell);
       if (!p) continue;
       boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
       boardCtx.strokeRect((p.x - 1) * cellSize + 0.5, (p.y - 1) * cellSize + 0.5, cellSize - 1, cellSize - 1);
@@ -914,7 +904,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       boardCtx.beginPath();
       let prev = null;
       thread.forEach((c, i) => {
-        const p = tmctSpiderFly.parseCellId(c);
+        const p = tmct.page.parseCellId(c);
         const px = (p.x - 0.5) * cellSize, py = (p.y - 0.5) * cellSize;
         if (i === 0) boardCtx.moveTo(px, py); else boardCtx.lineTo(px, py);
         if (prev) threadHits.push({ x: (prev.x + px) / 2, y: (prev.y + py) / 2, step: i });
@@ -929,19 +919,19 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     if (!povAgentId) return;
     const agent = lastAgents[povAgentId];
     if (!agent) { povAgentId = null; return; }
-    const p = tmctSpiderFly.parseCellId(agent.cell);
+    const p = tmct.page.parseCellId(agent.cell);
     // The live, slider-adjustable per-class radius (falling back to the
     // engine's own shipped default before the session has finished
     // booting) — a POV toggle always reflects whatever vision range this
     // class currently actually has, not a fixed constant.
-    const radius = classOfAgentId(povAgentId) === "spider"
-      ? (liveConfig.spiderVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS)
-      : (liveConfig.flyVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS);
-    const visible = new Set(tmctSpiderFly.visibleCells(p.x, p.y, radius));
+    const radius = agentKindOf(povAgentId) === "spider"
+      ? (liveConfig.spiderVisionRadius ?? tmct.page.DEFAULT_VISION_RADIUS)
+      : (liveConfig.flyVisionRadius ?? tmct.page.DEFAULT_VISION_RADIUS);
+    const visible = new Set(tmct.page.visibleCells(p.x, p.y, radius));
     povCtx.fillStyle = "rgba(0,0,0,.55)";
     for (let gy = 1; gy <= SPIDERFLY.gridSize; gy += 1) {
       for (let gx = 1; gx <= SPIDERFLY.gridSize; gx += 1) {
-        if (visible.has(tmctSpiderFly.cellId(gx, gy))) continue;
+        if (visible.has(tmct.page.cellId(gx, gy))) continue;
         povCtx.fillRect((gx - 1) * cellSize, (gy - 1) * cellSize, cellSize, cellSize);
       }
     }
@@ -993,7 +983,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     chatqEl.value = "";
     addChatLine("u", esc(q));
     withLock(async () => {
-      const result = await session.turn(q);
+      const result = await tmct.turn(q);
       addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       const snap = await session.snapshot();
       redraw(snap.agents, snap.turn, snap.activeWebs);
@@ -1037,14 +1027,14 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   refreshPills();
 
   // ---- deception pills (§A.2.4): a SEPARATE dynamic rail, alongside (never
-  // replacing) the static one above. tmctSpiderFly.pillsForSpiderFly is the
+  // replacing) the static one above. tmct.page.pillsForSpiderFly is the
   // exact same pure function spider-fly-turn.mjs exports — this page never
   // reimplements the true/false claim logic, only renders its output and
   // fills #chatq on click, same click-to-fill discipline as every other
   // pill on this page (never auto-submits).
   function renderDynamicPills() {
     if (!session || !Object.keys(lastAgents).length) { dynamicPillsEl.innerHTML = ""; return; }
-    const result = tmctSpiderFly.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});
+    const result = tmct.page.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});
     selectedAddresseeId = result.addresseeId;
     const addrHtml = result.addressPills.map((p) =>
       '<button type="button" class="pill" data-role="dyn-addr" data-id="' + esc(p.id) + '"'
@@ -1109,7 +1099,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   let tuningInitialized = false;
   async function boot() {
-    session = await tmctSpiderFly.createSpiderFlySession();
+    session = await tmct.open();
     // A reset mints a brand-new session (fresh board, fresh config) — the
     // FIRST boot seeds the sliders from the engine's own shipped defaults;
     // every boot after that re-applies whatever the visitor already had the

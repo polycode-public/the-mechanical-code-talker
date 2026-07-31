@@ -1,21 +1,22 @@
 # dog-with-colour — the parameterized-property worked example: "a dog that
-# is black". Same silhouette as dog.toml, but every filled shape takes its
-# color from the instance's OWN observed
-# mgx:hasProperty value rather than the page's currentColor accent, with a
-# thin currentColor stroke kept on each shape so a light value (white)
-# still reads against a light card background. A property value with no
-# entry in [parameters.colour.values] is not a match for this template at
-# all (see sprite-templates.mjs's own header for the naming/specificity
-# convention) — it falls through to the plain dog.toml sprite, never a
-# guessed color.
+# is black". Same silhouette as dog.toml (muzzle bump, curled alert tail,
+# floppy ear), but every filled shape takes its color from the instance's
+# OWN observed mgx:hasProperty value rather than the page's currentColor
+# accent, with a thin currentColor stroke kept on each shape so a light
+# value (white) still reads against a light card background. A property
+# value with no entry in [parameters.colour.values] is not a match for
+# this template at all (see sprite-templates.mjs's own header for the
+# naming/specificity convention) — it falls through to the plain dog.toml
+# sprite, never a guessed color.
 classes = ["dog"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
+  <path d="M19 13.4 C22.4 11.6 23.4 14.8 21.4 16.2 C20.6 15 19.8 14.2 19 13.4 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
   <circle cx="7" cy="9" r="3.6" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
-  <path d="M4.5 6.5 L2 3 L6 5 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
-  <path d="M19 13 C22 12 22.5 15 20 16 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
-  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+  <ellipse cx="3.3" cy="9.8" rx="1.7" ry="1.3" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
+  <path d="M4.6 6.4 C2.8 5 1.8 3.4 2.2 2.4 C4.2 2.6 6 4.4 6.4 6.6 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/>
+  <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
     <line x1="9" y1="19" x2="9" y2="22"/>
     <line x1="17" y1="19" x2="17" y2="22"/>
   </g>

@@ -13,7 +13,7 @@ import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../../
 import { mergeStrategyResults, alternateLines, sameParse } from "../../src/domain/interpret/merge.mjs";
 import {
   applyPreambleFrames, applySubordinationFrames, applySelfCorrectionFrames, applyConditionalFrames,
-  COUNTERFACTUAL_RE, normalizeQuery,
+  COUNTERFACTUAL_RE, normalizeQuery, datedTeachSuffix,
 } from "../../src/domain/interpret/normalize.mjs";
 import { stripNoise } from "../../src/domain/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../../src/domain/ask.mjs";
@@ -709,6 +709,25 @@ test("embedded-question de-inversion stands alone too: 'what a dog is' -> 'what 
   assert.equal(applyPreambleFrames("do you know what dog means"), "what does dog mean");
 });
 
+test("a leading connective is stripped from a bare relative-clause follow-up, so the utterance reads as its own bare form", () => {
+  // The remainder names a thing instead of asking outright, so none of the
+  // interrogative/auxiliary gates fire — without the relative-clause gate the
+  // connective survives and the parser reads "and" as the subject.
+  assert.equal(applyPreambleFrames("and the tests that cover it"), "the tests that cover it");
+  assert.equal(applyPreambleFrames("so the module that imports http.mjs"), "the module that imports http.mjs");
+  assert.equal(applyPreambleFrames("but the classes which extend Base"), "the classes which extend Base");
+  assert.equal(applyPreambleFrames("and the author who touched it"), "the author who touched it");
+});
+
+test("the relative-clause strip leaves a mid-clause boolean branch and a bare noun remainder alone", () => {
+  // "and are tested" is a set operator over the previous clause, not framing.
+  assert.equal(applyPreambleFrames("and are tested"), "are tested");
+  // no relative pronoun -> the connective is not framing, so it stays put
+  assert.equal(applyPreambleFrames("and the payment class"), "and the payment class");
+  // a determiner-less remainder is out of the closed shape
+  assert.equal(applyPreambleFrames("and tests that cover it"), "and tests that cover it");
+});
+
 test("the know/want wrappers never unwrap a non-interrogative remainder, and long relative clauses are never re-inverted", () => {
   // small-talk stays small-talk
   assert.equal(applyPreambleFrames("do you know anything about movies"), "do you know anything about movies");
@@ -719,4 +738,43 @@ test("the know/want wrappers never unwrap a non-interrogative remainder, and lon
   );
   // the direct question passes through unchanged (no rewrite loop)
   assert.equal(applyPreambleFrames("what is a dog"), "what is a dog");
+});
+
+test("datedTeachSuffix recognizes the three closed date forms and strips the suffix", () => {
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of 2019"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-01-01T00:00:00.000Z", dateText: "2019" },
+  );
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of 2019-03-01"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-03-01T00:00:00.000Z", dateText: "2019-03-01" },
+  );
+  assert.deepEqual(
+    datedTeachSuffix("the evening star's owner is edmund as of march 2019"),
+    { stripped: "the evening star's owner is edmund", observedAt: "2019-03-01T00:00:00.000Z", dateText: "march 2019" },
+  );
+  // month + year only carries the year+month down to the 1st — the START of
+  // the named period, never the middle or end.
+  assert.equal(datedTeachSuffix("x is y as of december 2020").observedAt, "2020-12-01T00:00:00.000Z");
+  // trailing punctuation is tolerated
+  assert.equal(datedTeachSuffix("x is y as of 2019.").stripped, "x is y");
+  assert.equal(datedTeachSuffix("x is y as of 2019!").stripped, "x is y");
+});
+
+test("datedTeachSuffix rejects every non-'as of' trigger and locative-ambiguous bare years", () => {
+  assert.equal(datedTeachSuffix("x is y as at 2019"), null);
+  assert.equal(datedTeachSuffix("x is y back in 2019"), null);
+  assert.equal(datedTeachSuffix("the dog is in 2019"), null);
+  // no content left once the suffix is stripped — nothing to teach
+  assert.equal(datedTeachSuffix("as of 2019"), null);
+  // no suffix at all
+  assert.equal(datedTeachSuffix("x is y"), null);
+});
+
+test("datedTeachSuffix returns every parsed instant Date.parse-able, and every returned instant is midnight UTC", () => {
+  for (const text of ["x is y as of 2019", "x is y as of 2019-07-15", "x is y as of july 2019"]) {
+    const hit = datedTeachSuffix(text);
+    assert.ok(Number.isFinite(Date.parse(hit.observedAt)), `${text} -> ${hit.observedAt} should be Date.parse-able`);
+    assert.match(hit.observedAt, /T00:00:00\.000Z$/);
+  }
 });

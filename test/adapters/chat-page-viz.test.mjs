@@ -6,7 +6,7 @@
 // per-message provenance chip) is built on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown } from "../../src/services/chat-page-viz.mjs";
+import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown, parseResearchAnswer } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "../../src/services/session-log-format.mjs";
 
@@ -68,7 +68,10 @@ test("provenanceChipFor: an answer with no citation and no assert via carries no
 test("renderChatHtml: mounts the chat engine bundle by a same-origin relative path only", () => {
   const html = renderChatHtml();
   assert.match(html, /<script src="\.\/chat-browser\.bundle\.js"><\/script>/);
-  assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads baked into the markup");
+  assert.ok(
+    !/<(?:script|link|img|iframe)[^>]*(?:src|href)=["']https?:/.test(html),
+    "no external resource loads baked into the markup — outbound reference links are fine, fetched assets are not",
+  );
 });
 
 test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack from same-origin paths, never a second engine", () => {
@@ -76,9 +79,9 @@ test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack fro
   assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
   assert.match(html, /fetchWithProgress\("\.\/vendor\/wink\.js"/);
   assert.match(html, /fetch\("\.\/reference-pack\/index\.json"\)/);
-  assert.match(html, /window\.tmctChat\.createChatSession/);
-  assert.match(html, /window\.tmctChat\.registerWinkModel/);
-  assert.match(html, /window\.tmctChat\.registerReferencePackProvider/);
+  assert.match(html, /window\.tmct\.open/);
+  assert.match(html, /window\.tmct\.page\.registerWinkModel/);
+  assert.match(html, /window\.tmct\.page\.registerReferencePackProvider/);
 });
 
 test("renderChatHtml: registers the site service worker, tolerating its absence", () => {
@@ -158,7 +161,12 @@ test("renderChatHtml: the three trust tiers reuse viz-theme.mjs's own color toke
   assert.match(html, /--taught-soft/);
   assert.match(html, /--corpus-soft/);
   assert.match(html, /--entail-soft/);
-  assert.ok(!/#[0-9A-Fa-f]{6}/.test(html.replace(THEME_TOKENS_HEX_ALLOWANCE(html), "")), "no page-local hex color literal outside the imported token block");
+  // A numeric HTML entity (e.g. &#128075; for the wave button's hand emoji)
+  // can have an all-hex-digit body by coincidence — strip entities before
+  // checking, the same way the token block itself is stripped, so a real
+  // duplicated color and an emoji reference are never confused.
+  const stripped = html.replace(THEME_TOKENS_HEX_ALLOWANCE(html), "").replace(/&#\d+;/g, "");
+  assert.ok(!/#[0-9A-Fa-f]{6}/.test(stripped), "no page-local hex color literal outside the imported token block");
 });
 
 // THEME_TOKENS_CSS itself legitimately contains hex literals (viz-theme.mjs's
@@ -180,7 +188,12 @@ test("renderChatHtml: self-contained, both theme schemes present, reduced-motion
 
 test("renderChatHtml: fits a narrow viewport — the legend hides rather than overflowing", () => {
   const html = renderChatHtml();
-  assert.match(html, /max-width: 560px[\s\S]{0,80}\.legend \{ display: none; \}/);
+  // The network chrome (state pill, wave, invite, help) added a row of
+  // controls the legend now competes with, so the legend goes first at a
+  // wider breakpoint than it used to — the legend is decorative, the
+  // controls are not, so it's dropped rather than folding them onto a
+  // second row. 560px is narrower still and now only re-flows the bubbles.
+  assert.match(html, /max-width: 1360px[\s\S]{0,220}\.legend \{ display: none; \}/);
 });
 
 test("renderChatHtml: escapes a custom title", () => {
@@ -223,7 +236,7 @@ test("renderChatHtml: the radio group is wired to the session and the stored pre
   assert.match(html, /"tmct\.chat\.wikiMode"/, "the mode persists under its own localStorage key");
   assert.match(html, /"tmct\.chat\.liveWikipedia"/, "the legacy key is still read, for migration");
   assert.match(html, /if \(localStorage\.getItem\(LEGACY_LIVE_PREF_KEY\) === "on"\) return "miss";/, "a legacy \"on\" preference migrates to the miss mode");
-  assert.match(html, /window\.tmctChatSession\.setLiveReference\(liveReferenceForMode\(mode\)\)/, "a flip reaches the running session");
+  assert.match(html, /window\.tmct\.session\.setLiveReference\(liveReferenceForMode\(mode\)\)/, "a flip reaches the running session");
   assert.match(html, /const initialMode = readWikiMode\(\);/, "boot restores the stored mode before the session starts");
   assert.match(html, /onLiveLookup: function \(\) \{ statusEl\.textContent = "searching wikipedia\\u2026"; \}/, "an in-flight lookup announces itself on the statusline");
   assert.match(html, /"live wikipedia: " \+ liveStatusWord\(liveReference\)/, "the statusline names the live state");
@@ -237,7 +250,7 @@ test("renderChatHtml: setLiveReference(false|true|\"always\") is exactly what th
 test("renderChatHtml: the synthesis slider is wired to setSynthesisBudget and its own storage key", () => {
   const html = renderChatHtml();
   assert.match(html, /"tmct\.chat\.synthBudget"/);
-  assert.match(html, /window\.tmctChatSession\.setSynthesisBudget\(n\)/);
+  assert.match(html, /window\.tmct\.session\.setSynthesisBudget\(n\)/);
 });
 
 test("renderChatHtml: a /wiki supplement turn clears every radio rather than leaving a stale one checked", () => {
@@ -317,9 +330,9 @@ test("renderChatHtml: a print stylesheet un-pins the message column and drops th
 
 // ---- persistence wiring: the page keeps taught state on the device ---------
 
-test("renderChatHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+test("renderChatHtml: the device store opens under a version, fact-count and seed-content stamp, and boot tries a restore before falling back to the fresh seed", () => {
   const html = renderChatHtml();
-  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \+ ":" \+ SEED_STAMP \}\)/);
   assert.match(html, /persist\.load\(\)/);
   assert.match(html, /Restored " \+ restoredCount \+ " taught fact/, "the boot line names how many taught facts came back");
   assert.match(html, /state kept best-effort on this device/);
@@ -329,7 +342,7 @@ test("renderChatHtml: any store-writing turn schedules a debounced save of a pay
   const html = renderChatHtml();
   // Persist on any store write (teach OR a learn-on-miss load), not just a
   // teach turn; only pure commands, which write nothing, stay out.
-  assert.match(html, /result\.record\.via !== "command"\) scheduleSave\(\)/);
+  assert.match(html, /result\.record\.via !== "command"\) \{[\s\S]{0,20}scheduleSave\(\)/);
   assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
   assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
   assert.match(html, /\}, 500\)/, "the debounce window is present");
@@ -348,4 +361,87 @@ test("renderChatHtml: the brand line renders as typed — lowercase, single elem
   assert.ok(!html.includes("<h1>"));
   const eyebrowRule = html.match(/\.eyebrow \{[^}]*\}/)?.[0] ?? "";
   assert.ok(!eyebrowRule.includes("text-transform"), "eyebrow must not transform the brand's case");
+});
+
+// ---- parseResearchAnswer: the researched panel's own reading of a settled
+// research turn's answer text, off research.mjs's own renderResearchAnswer
+// citation shape — never a second fetch.
+
+test("parseResearchAnswer: pulls the passage, article title and source url out of a research turn's own cited answer", () => {
+  const answer = 'owl — an owl is a bird of prey. (source: research article "Owl", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Owl?oldid=123)\nstored 2 facts from "Owl". queued 3 linked topics.';
+  const parsed = parseResearchAnswer(answer);
+  assert.deepEqual(parsed, {
+    term: "owl",
+    passage: "an owl is a bird of prey.",
+    title: "Owl",
+    url: "https://simple.wikipedia.org/wiki/Owl?oldid=123",
+  });
+});
+
+test("parseResearchAnswer: a miss, a status line, or any text that isn't this citation shape reads as null, never a guessed passage", () => {
+  assert.equal(parseResearchAnswer('I couldn\'t ground "zorblatt" from Simple English Wikipedia just now — no matching article. Nothing was stored.'), null);
+  assert.equal(parseResearchAnswer('research on "owls" is complete — 3 topics grounded, 5 facts stored.'), null);
+  assert.equal(parseResearchAnswer(""), null);
+  assert.equal(parseResearchAnswer(undefined), null);
+});
+
+// ---- renderChatHtml: the researched-this-session panel ---------------------
+
+test("renderChatHtml: a second docked section, seeded empty, sits alongside the memory stats — its own render survives a stats re-render rather than being wiped by it", () => {
+  const html = renderChatHtml();
+  assert.match(html, /id="statsPanelStats"/, "the stats panel moved into its own nested div");
+  assert.match(html, /id="researchedPanel"/, "the researched panel is a SIBLING div, not nested inside the stats div");
+  assert.match(html, /const statsPanelEl = el\("statsPanelStats"\);/);
+  assert.match(html, /const researchedPanelEl = el\("researchedPanel"\);/);
+});
+
+test("renderChatHtml: the researched panel reads real fact rows through window.tmct.page.researchedFactRows, never re-deriving them from the answer text", () => {
+  const html = renderChatHtml();
+  assert.match(html, /window\.tmct\.page\.researchedFactRows\(window\.tmct\.session\.memoryDir\)/);
+  assert.match(html, /const parseResearchAnswer = /, "the pure citation parser is spliced in, not reimplemented");
+});
+
+test("renderChatHtml: every settled, non-miss research turn is offered to the researched panel", () => {
+  const html = renderChatHtml();
+  assert.match(html, /await noteResearchLearned\(result\);/);
+  assert.match(html, /if \(result\.research === undefined \|\| !result\.record \|\| result\.record\.miss\) return;/);
+});
+
+test("renderChatHtml: the researched panel renders its own heading and an honest empty state before anything has been researched", () => {
+  const html = renderChatHtml();
+  assert.match(html, /textContent: "researched this session"/);
+  assert.match(html, /nothing yet — ask it to "research/);
+});
+
+test("renderChatHtml: the seed is fetched by a content-stamped URL, so a rebuilt seed can never be served from the service worker's cache of the old one", () => {
+  const stamped = renderChatHtml({ seedStamp: "deadbeef0001" });
+  assert.match(stamped, /const SEED_STAMP = "deadbeef0001";/);
+  assert.match(stamped, /const SEED_QUERY = SEED_STAMP \? "\?b=" \+ SEED_STAMP : "";/);
+  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  // A build with no seed to hash asks by the plain URL rather than a "?b=" with
+  // nothing after it.
+  assert.match(renderChatHtml(), /const SEED_STAMP = "";/);
+});
+
+test("renderChatHtml: reset-to-seed drops the service worker's asset cache as well as the taught-facts store", () => {
+  const html = renderChatHtml();
+  assert.match(html, /const clearSiteAssetCaches = async function clearSiteAssetCaches/);
+  assert.match(
+    html,
+    /el\("reinitStore"\)\.addEventListener\("click", async \(\) => \{[\s\S]*?await persist\.clear\(\);[\s\S]*?await clearSiteAssetCaches\(\);[\s\S]*?window\.location\.reload\(\)/,
+    "the reset handler clears IndexedDB, then Cache Storage, then reloads",
+  );
+  assert.match(html, /caches\.delete\(key\)/, "the helper deletes the precache entries it finds");
+  assert.match(html, /registration\.unregister\(\)/, "and unregisters the worker so the reload reads the network");
+});
+
+test("renderChatHtml: the live fact count rides in the topbar, not only the status line", () => {
+  const html = renderChatHtml();
+  assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
+  assert.match(html, /<span class="fact-pill-value" id="factPillValue">/);
+  assert.match(
+    html,
+    /lastStatsTotal = Number\(stats\.total \|\| 0\);\s*factPillValueEl\.textContent = lastStatsTotal\.toLocaleString\(\);/,
+    "it reads the same memoryStats total the docked panel does, so the two cannot disagree",
+  );
 });

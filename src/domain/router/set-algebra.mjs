@@ -1,7 +1,7 @@
 // src/domain/router/set-algebra.mjs — the COMPOSITION OPERATORS: pure set-algebra a
 // multi-step plan needs to fold its threaded step result-sets into ONE composed
 // answer. Shared by the product router (goal-reasoner's relative-filter fold)
-// and the bench result-execution layer (agentbench/results.mjs re-exports
+// and the bench result-execution layer (test-benchmarks/agentbench/results.mjs re-exports
 // these) — the bench imports the product, never the other way round. The
 // resolver DRIVER picks the operator from the router's OWN HTN method
 // (relative-filter -> intersect; conditional -> fallback/guard) and applies it;

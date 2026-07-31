@@ -1,7 +1,12 @@
-# fly — the spider-and-fly board's other agent at the sprite tier: a
-# gradient body and head, translucent wings kept flat (a gradient on a
-# near-transparent shape reads muddy rather than glassy), one highlight on
-# the thorax.
+# fly — the spider-and-fly board's other agent at the sprite tier, drawn
+# head-up (the head capsule at the top of the viewBox) since the board
+# rotates this sprite by the plan direction. It renders at ~41px there,
+# coloured entirely through currentColor (the board sets a fixed brass),
+# so the body stays the dominant surface — a fly's own compound eyes are
+# its one unmistakable feature, so they're fixed reddish-brown rather than
+# left as a currentColor blank; a thin wing vein is the only other fixed
+# accent. Wings stay flat translucent (a gradient on a near-transparent
+# shape reads muddy rather than glassy).
 classes = ["fly"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,13 +17,16 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-fill)"/>
-  <circle cx="12" cy="7" r="2.7" fill="url(#fly-fill)"/>
-  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
   <g fill="currentColor" opacity="0.5">
     <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/>
     <path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/>
   </g>
+  <path d="M6 6.4 C5.4 5 5.6 3.6 6.4 3" stroke="#5a4636" stroke-width="0.3" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-fill)"/>
+  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <circle cx="12" cy="7" r="2.7" fill="url(#fly-fill)"/>
+  <path d="M9.4 7 C9.4 5 10.5 4.3 12 4.3 C13.5 4.3 14.6 5 14.6 7 C14.6 8.6 13.5 9.5 12 9.5 C10.5 9.5 9.4 8.6 9.4 7 Z" fill="#7a3020" opacity="0.9"/>
+  <circle cx="10.6" cy="6.3" r="0.28" fill="#ffffff" opacity="0.55"/>
   <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
     <path d="M9.6 17 L7.4 19.4"/>
     <path d="M14.4 17 L16.6 19.4"/>

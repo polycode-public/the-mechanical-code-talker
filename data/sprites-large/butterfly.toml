@@ -1,6 +1,10 @@
 # butterfly — gradient-shaded like dog/animal, no material table: four
-# wing lobes around a slim body and two antennae, two highlight patches
-# tracing the upper wing pair.
+# wing lobes around a slim body and two antennae. A fixed eyespot on each
+# lower wing and fixed vein lines across all four are the wing PATTERN —
+# the specific markings that separate a butterfly from a plain moth-shaped
+# blob — while the wing membrane itself stays currentColor, a theme's own
+# colour to set. The antennae get fixed club tips, the small knob a real
+# butterfly's antenna carries and a moth's does not.
 classes = ["butterfly"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15,8 +19,20 @@ svg = """
   <path d="M12 6.4 C13 3.4 19 3 19.6 7.6 C20.2 12 15 12.8 12 9.6 Z" fill="url(#butterfly-fill)"/>
   <path d="M12 9.6 C9.4 12.4 5.2 12.6 5 16.4 C4.8 19.6 9.4 19.4 12 15.4 Z" fill="url(#butterfly-fill)"/>
   <path d="M12 9.6 C14.6 12.4 18.8 12.6 19 16.4 C19.2 19.6 14.6 19.4 12 15.4 Z" fill="url(#butterfly-fill)"/>
+  <g stroke="#1c1c1c" stroke-width="0.28" opacity="0.4" stroke-linecap="round" fill="none">
+    <path d="M12 7.4 C10 6.4 7 6.2 5.4 7.6"/>
+    <path d="M12 7.4 C14 6.4 17 6.2 18.6 7.6"/>
+    <path d="M12 11 C10 12 7.4 12.6 6.4 15"/>
+    <path d="M12 11 C14 12 16.6 12.6 17.6 15"/>
+  </g>
+  <circle cx="7.4" cy="16.2" r="1.1" fill="#1c1c1c"/>
+  <circle cx="7.4" cy="16.2" r="0.55" fill="#e8a23a"/>
+  <circle cx="16.6" cy="16.2" r="1.1" fill="#1c1c1c"/>
+  <circle cx="16.6" cy="16.2" r="0.55" fill="#e8a23a"/>
   <rect x="11.2" y="6" width="1.6" height="13.4" rx="0.8" fill="currentColor"/>
   <path d="M11.4 6.6 L9.4 3.4 M12.6 6.6 L14.6 3.4" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
+  <circle cx="9.4" cy="3.4" r="0.55" fill="#1c1c1c"/>
+  <circle cx="14.6" cy="3.4" r="0.55" fill="#1c1c1c"/>
   <ellipse cx="7" cy="7" rx="1.6" ry="1.2" fill="#ffffff" opacity="0.3"/>
   <ellipse cx="7.4" cy="15" rx="1.4" ry="1" fill="#ffffff" opacity="0.26"/>
 </svg>

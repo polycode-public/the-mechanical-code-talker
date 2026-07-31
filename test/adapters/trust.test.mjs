@@ -10,6 +10,7 @@ import {
   computeTrust, recencyNudge, SOURCE_PRIOR, RECENCY_FLOOR,
   SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL,
   sessionReliabilityFrom, provenanceTagToSource,
+  computeAssertionGroupTrust, aggregateCeilingFor,
 } from "../../src/domain/memory/trust.mjs";
 import { appendFact, loadMemory, provSourceClassFor, SOURCE_CLASS } from "../../src/adapters/memory/core.mjs";
 
@@ -317,7 +318,11 @@ test("a child-tagged fact scores the 0.7 corpus prior and materialises the share
     // createdAt, so the assertion is the tier band, not a frozen number
     const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
     assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
-    assert.deepEqual(JSON.parse(fact.attributes.find((a) => a.prop === "mgx:trustInputs")?.value).sourceTypes, ["corpus"]);
+    // a record's own inputs describe exactly one source — the hop list of the
+    // whole triple is the SET of records, never a field inside any one of them
+    const inputs = JSON.parse(fact.attributes.find((a) => a.prop === "mgx:trustInputs")?.value);
+    assert.equal(inputs.sourceType, "corpus");
+    assert.equal(inputs.sourceId, "src:corpus:conceptnet");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -354,6 +359,37 @@ test("a world-tagged fact scores the corpus prior and materialises one Source pe
   }
 });
 
+test("a character's testimony tag parses to one Source per character, at the same tier as the world it stands in", () => {
+  assert.deepEqual(provenanceTagToSource("mud:badger:turn3"),
+    { kind: "corpus", name: "mud:badger" });
+  // the :turnN tail records when the character said it, not who — one Source
+  // per character, however many turns it keeps talking for
+  assert.deepEqual(provenanceTagToSource("mud:badger"),
+    { kind: "corpus", name: "mud:badger" });
+  // two characters are two Sources, and neither is the world's
+  assert.notDeepEqual(provenanceTagToSource("mud:badger"), provenanceTagToSource("mud:mole"));
+  assert.notDeepEqual(provenanceTagToSource("mud:ashcombe-hall"), provenanceTagToSource("world:ashcombe-hall"));
+});
+
+test("a testimony-tagged fact scores the corpus prior and materialises the character's own Source", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mud-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "vole-1", predicate: "mgx:knows-about", object: "burrow-1",
+      provenance: "mud:mole-1:turn4", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:corpus:mud:mole-1");
+    assert.ok(source, "the character who spoke gets a Source of its own");
+    assert.equal(source.attributes.find((a) => a.prop === "mgx:sourceType")?.value, "corpus");
+    const fact = m.individuals.find((i) => i.class === "Fact");
+    const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
+    assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {
   const sources = { e: src("e", "entailed") };
   // no premises → the bare entailed prior (0.3)
@@ -364,4 +400,129 @@ test("entailed hook: min(premise trusts) × rule-confidence when premises are su
     { now: NOW, premiseTrusts: [0.9, 0.6, 0.8], ruleConfidence: 0.5 },
   );
   assert.equal(withPremises.score, 0.3); // min(0.9,0.6,0.8)=0.6 × 0.5 = 0.30
+});
+
+// ---- teach:peer:<name>#node:<id>@<ts> — the wire's origin identity ----------
+
+test("a peer tag's node segment keys the Source; the display name beside it is presentation only", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z"),
+    { kind: "teachNode", nodeId: "7f3a9c2e5b1d4a60", displayName: "amber-fox", createdAt: "2026-01-01T00:00:00.000Z" },
+  );
+});
+
+test("one display name across two nodes parses to two different origins", () => {
+  const one = provenanceTagToSource("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  const other = provenanceTagToSource("teach:peer:amber-fox#node:6589e595d1fa9a90@2026-01-01T00:00:00.000Z");
+  assert.notEqual(one.nodeId, other.nodeId);
+  assert.equal(one.displayName, other.displayName);
+});
+
+test("a peer tag with no node segment stays a plain teach session, so an older peer's tags still parse", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:peer:amber-fox@2026-01-01T00:00:00.000Z"),
+    { kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", sessionId: "amber-fox" },
+  );
+});
+
+test("a local teach session is untouched by the peer-tag path", () => {
+  assert.deepEqual(
+    provenanceTagToSource("teach:chat:sess-123@2026-01-01T00:00:00.000Z"),
+    { kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", sessionId: "sess-123" },
+  );
+});
+
+// The shipped parser reproduced exactly as it stood before the node segment
+// existed: everything between the first ":" and the "@" is one opaque session
+// slot. A peer running an older build is a real reader on a mixed mesh, so a
+// new-format tag has to survive this unchanged rather than merely not crash.
+function parseAsOlderReader(tag) {
+  const rest = tag.slice("teach:".length);
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const colon = beforeAt.indexOf(":");
+  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+  return { kind: "teach", createdAt, ...(sessionId ? { sessionId } : {}) };
+}
+
+test("an older reader parses a new-format peer tag onto a session id that is still node-unique", () => {
+  const older = parseAsOlderReader("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  assert.equal(older.kind, "teach");
+  assert.equal(older.createdAt, "2026-01-01T00:00:00.000Z", "the timestamp still lands where it always did");
+  assert.equal(older.sessionId, "amber-fox#node:7f3a9c2e5b1d4a60", "the node segment reads as part of one opaque slot");
+});
+
+test("an older reader keeps two same-named nodes apart, because the id it cannot interpret is still inside the slot it keys on", () => {
+  const one = parseAsOlderReader("teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z");
+  const other = parseAsOlderReader("teach:peer:amber-fox#node:6589e595d1fa9a90@2026-01-01T00:00:00.000Z");
+  assert.notEqual(one.sessionId, other.sessionId);
+});
+
+test("an older reader and a new one agree on the timestamp, so a tag orders the same on both", () => {
+  const tag = "teach:peer:amber-fox#node:7f3a9c2e5b1d4a60@2026-01-01T00:00:00.000Z";
+  assert.equal(parseAsOlderReader(tag).createdAt, provenanceTagToSource(tag).createdAt);
+});
+
+// Assertion-group heads, all asserted at the same fixed instant so recency is
+// one shared constant and the ceiling arithmetic below is exact.
+const ASSERTED_AT = "2026-07-05T00:00:00.000Z";
+const heads = (sourceType, count, ownTrust) => Array.from({ length: count }, (_, i) => ({
+  sourceId: `src:${sourceType}:${i}`, sourceType, ownTrust, assertedAt: ASSERTED_AT,
+}));
+const groupScore = (records) => computeAssertionGroupTrust(records, { now: Date.parse(ASSERTED_AT) }).score;
+
+test("aggregateCeilingFor: (prior + 1) / 2 per type, with operator uncapped", () => {
+  assert.equal(aggregateCeilingFor("teach"), 0.975);
+  assert.equal(aggregateCeilingFor("corpus"), 0.85);
+  assert.equal(aggregateCeilingFor("web"), 0.7);
+  assert.equal(aggregateCeilingFor("operator"), 1, "the store's own holder is the one authority left uncapped");
+  assert.equal(aggregateCeilingFor("no-such-type"), 1, "no prior to derive a ceiling from means no ceiling");
+});
+
+test("same-type corroboration approaches its ceiling and never crosses it, however many sources pile on", () => {
+  let previous = 0;
+  for (const count of [1, 2, 5, 20, 200, 1000]) {
+    const score = groupScore(heads("teach", count, SOURCE_PRIOR.teach));
+    assert.ok(score <= aggregateCeilingFor("teach"), `${count} teach sources stay at or under the ceiling, got ${score}`);
+    assert.ok(score >= previous, "more corroboration never lowers the score");
+    previous = score;
+  }
+  assert.equal(previous, aggregateCeilingFor("teach"), "a thousand peers max out AT the ceiling, not above it");
+});
+
+test("a Sybil pile of same-type asserters stays below what a single operator says on its own", () => {
+  const thousandPeers = groupScore(heads("teach", 1000, SOURCE_PRIOR.teach));
+  const oneOperator = groupScore(heads("operator", 1, SOURCE_PRIOR.operator));
+  assert.ok(thousandPeers < oneOperator, `${thousandPeers} must stay under operator certainty ${oneOperator}`);
+});
+
+test("each type is capped on its own, so corpus and web asymptote at their own ceilings", () => {
+  assert.equal(groupScore(heads("corpus", 500, SOURCE_PRIOR.corpus)), aggregateCeilingFor("corpus"));
+  assert.equal(groupScore(heads("web", 500, SOURCE_PRIOR.web)), aggregateCeilingFor("web"));
+});
+
+test("cross-type corroboration still climbs past any single type's ceiling", () => {
+  const cappedCorpus = groupScore(heads("corpus", 500, SOURCE_PRIOR.corpus));
+  const cappedWeb = groupScore(heads("web", 500, SOURCE_PRIOR.web));
+  const both = groupScore([...heads("corpus", 500, SOURCE_PRIOR.corpus), ...heads("web", 500, SOURCE_PRIOR.web)]);
+  assert.ok(both > cappedCorpus, "a whole second, independent type adds real weight");
+  assert.ok(both > cappedWeb);
+  assert.equal(both, 1 - (1 - cappedCorpus) * (1 - cappedWeb), "the capped per-type aggregates combine by noisy-OR");
+});
+
+test("the ceiling bounds corroboration, so it never drags a lone record below what it scored on its own", () => {
+  // An entailed conclusion's premise-derived trust sits above the entailed
+  // ceiling of 0.65; one record is testimony, not agreement, so it keeps it.
+  const lone = groupScore([{ sourceId: "src:entailed:cax-dw", sourceType: "entailed", ownTrust: 0.9, assertedAt: ASSERTED_AT }]);
+  assert.ok(aggregateCeilingFor("entailed") < 0.9, "the fixture really is above its type ceiling");
+  assert.equal(lone, 0.9);
+});
+
+test("the corpus + peer-teach worked pair folds to the same number the flat noisy-OR gave", () => {
+  const score = groupScore([
+    { sourceId: "src:corpus:human", sourceType: "corpus", ownTrust: 0.7, assertedAt: ASSERTED_AT },
+    { sourceId: "src:teach-node:7f3a9c2e", sourceType: "teach", ownTrust: 0.97375, assertedAt: ASSERTED_AT },
+  ]);
+  assert.equal(score, 0.992125, "both sit under their own ceilings, so nothing is clamped");
 });

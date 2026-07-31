@@ -1,0 +1,65 @@
+# grandmother-facing-right-moving — grandmother-facing-left-moving.toml's stride
+# mirrored across the canvas midline, the same translate-then-flip technique
+# the standing pair uses. {{FACE}} sits outside the flip group.
+
+classes = ["grandmother"]
+
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="grandmother-facing-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+  <path d="M15 5.4 C16.4 7 16.6 9.6 15.4 12.6" fill="none" stroke="color-mix(in srgb, currentColor 20%, white)" stroke-width="1.6" stroke-linecap="round" opacity="0.92"/>
+  <path d="M7.8 5.4 C6.4 7 6.2 9.6 7.4 12.6" fill="none" stroke="color-mix(in srgb, currentColor 20%, white)" stroke-width="1.6" stroke-linecap="round" opacity="0.92"/>
+  <g fill="url(#grandmother-facing-right-moving-fill)">
+    <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+    <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+    <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#grandmother-facing-right-moving-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#grandmother-facing-right-moving-fill)"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  <path d="M6.4 13.6 C5.8 16.3 6.1 19 7.6 21.2 C8.3 20.9 9 20.5 9.5 20 C8.3 18.1 8 15.9 8.5 13.9 C7.8 13.7 7.1 13.6 6.4 13.6 Z" fill="url(#grandmother-facing-right-moving-fill)" opacity="0.88"/>
+  <path d="M17.6 13.6 C18.2 16.3 17.9 19 16.4 21.2 C15.7 20.9 15 20.5 14.5 20 C15.7 18.1 16 15.9 15.5 13.9 C16.2 13.7 16.9 13.6 17.6 13.6 Z" fill="url(#grandmother-facing-right-moving-fill)" opacity="0.88"/>
+  <path d="M8.5 13.9 C9.8 13 10.9 12.6 12 12.6 C13.1 12.6 14.2 13 15.5 13.9" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.5"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 13.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

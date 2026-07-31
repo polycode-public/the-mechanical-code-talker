@@ -1,6 +1,9 @@
-# officer — a structured peaked cap, flat brim and band, the single
-# authority cue, its straight brim and crown line kept distinct from the
-# soft round beret artist.toml uses.
+# officer — the shared person body under a structured peaked cap, flat
+# brim and band, plus a small gold badge on the band, the authority cues.
+# The cap stays currentColor since uniform colour varies by force; the
+# badge is fixed gold the same way any pin or medal is, since a badge's
+# own metal is never theme-owned. The straight brim and crown line stay
+# distinct from the soft round beret artist.toml uses.
 classes = ["officer"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,11 +14,22 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <path d="M7.6 6.2 C7.6 4 9.6 2.3 12 2.3 C14.4 2.3 16.4 4 16.4 6.2 L16.4 6.4 L7.6 6.4 Z" fill="url(#officer-fill)"/>
-  <ellipse cx="12.4" cy="6.6" rx="4.6" ry="0.8" fill="url(#officer-fill)"/>
-  <rect x="8.6" y="5.4" width="6.8" height="0.8" fill="currentColor" opacity="0.5"/>
-  <circle cx="12" cy="9.2" r="3.1" fill="url(#officer-fill)"/>
-  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#officer-fill)"/>
-  <ellipse cx="9" cy="4.2" rx="1.6" ry="0.5" fill="#ffffff" opacity="0.3"/>
+  <path d="M7.8 3.6 C7.8 2.1 9.6 0.8 12 0.8 C14.4 0.8 16.2 2.1 16.2 3.6 L16.2 3.8 L7.8 3.8 Z" fill="url(#officer-fill)"/>
+  <ellipse cx="12.2" cy="4" rx="4.6" ry="0.7" fill="url(#officer-fill)"/>
+  <rect x="8.6" y="2.9" width="6.8" height="0.7" fill="currentColor" opacity="0.5"/>
+  <rect x="11.65" y="2.9" width="0.7" height="0.7" fill="#d9a635" transform="rotate(45 12 3.25)"/>
+  <g fill="url(#officer-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#officer-fill)"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <ellipse cx="9" cy="3.5" rx="1.6" ry="0.4" fill="#ffffff" opacity="0.3"/>
 </svg>
 """

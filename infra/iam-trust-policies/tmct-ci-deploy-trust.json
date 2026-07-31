@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeFromTmctCIActionsRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::026621560310:role/tmct-ci-gitlab-actions-role"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}

@@ -54,6 +54,12 @@ The required quartet is `subject / object / predicate / prop`. `edges(id, kind)`
 | `inherits` | `tmct:extends` |
 | `cochange` | `tmct:dependsOn` |
 | `reexports` | `tmct:exports` |
+| `serves` | `tmct:serves` |
+| `denotes` | `tmct:denotes` |
+
+The last two are provider-declared. tmct's own indexer emits neither, so a graph it built
+carries no such edge and `edges(id, "serves")` answers honestly empty there. A provider that
+supplies them gets the same traversal every other kind gets.
 
 ## The error contract — an honest miss is a value, never a throw
 
@@ -114,8 +120,9 @@ Grouped as in the plan's six-group inventory. Full arg/result/miss detail is in
   id-taking service consumes a resolved id. Miss: `UNRESOLVED_TERM`.
 - **`describe(id) → { individual, out: Edge[], incoming: Edge[] }`** — full typed portrait.
 - **`members(classId) → { methods: Individual[], attributes: Individual[] }`** — via `contains`.
-- **`subclasses(classId) → { bases: Individual[], subclasses: Individual[] }`** — forward bases +
-  transitive reverse inheritance closure.
+- **`subclasses(classId) → { bases: Individual[], subclasses: Individual[], levels: Array<Individual[]> }`**
+  — forward bases + transitive reverse inheritance closure; `subclasses` is the flat closure,
+  `levels` groups the same individuals by inheritance depth, mirroring `impact`'s leveled shape.
 - **`exports(moduleId) → { exports: Individual[] }`** — the curated public API (`reexports`).
 - **`signature(id) → { id, label, class, params, returns, raises, decorators, doc, selfFields, flags }`**
   — the compact API surface without the body.

@@ -28,6 +28,7 @@ import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
+import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
 import { resolveResearchConfig } from "./research.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
@@ -127,6 +128,32 @@ export async function createSession({
   // already-resolved value; full precedence (this param > TMCT_MEMORY_BACKEND
   // env > tmct.toml > the sqlite default) resolved below.
   memoryBackend = null,
+  // The tool-name prefix a host's own follow-up hints should use in place of
+  // "tmct_" (e.g. seonix's own tool names) — threaded onto `config` below so
+  // dispatchTool's handlers (kit.mjs/tmct-search.mjs/tmct-members.mjs/
+  // tmct-context.mjs) render hints under the host's own names. Omitted (the
+  // default) preserves today's "tmct_" behavior exactly.
+  toolNamePrefix,
+  // Which individual the adventure lane's world-mutating verbs act as —
+  // adventure.mjs's own actingSubject parameter, threaded up to session level
+  // so one session can play a single mud character rather than always
+  // "player". Omitted (the default) preserves today's single-player behavior
+  // exactly; a session speaks for exactly one character for its whole
+  // lifetime (four mud.html characters means four sessions, not one session
+  // switching identity turn to turn).
+  actingSubject,
+  // Marks a world already LIVE for this session, bypassing openAdventure's
+  // "play <world>" opener — that opener requires a shipped "player"
+  // individual (its own protection against mis-firing on a non-adventure
+  // world like spider-fly's board), which a multi-character world such as
+  // mud-garden deliberately never ships. The caller is responsible for
+  // seeding that world's facts/rules into this repo's store BEFORE opening
+  // any session against it (see test/services/adventure*.test.mjs's
+  // loadShippedWorldInto for the pattern) — one shared world, several
+  // sessions (one per actingSubject) pointed at the same repoPath. Omitted
+  // (the default) preserves today's behavior: a world only goes live via its
+  // own "play <world>" opener line.
+  adventureWorld,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
   // write NOTHING back into it. The shipped examples run this way so a demo never
@@ -192,6 +219,10 @@ export async function createSession({
       ({ config, toml } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
     }
   }
+  // Every `config` branch above ends up here — set once so every downstream
+  // hint-rendering call site (dispatchTool's handlers, via config.toolNamePrefix)
+  // sees the same value regardless of which branch built `config`.
+  config.toolNamePrefix = toolNamePrefix || "tmct_";
 
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap), resolved once per
@@ -208,6 +239,13 @@ export async function createSession({
   // tmct.toml's corpus tier3 opts the session into the live supplement too —
   // the flag/env tiers above stay authoritative when set.
   if (toml?.corpus?.tier === "tier3") liveReferenceOn = true;
+
+  // tmct.toml's [graph] read_only turns any session against this repo into a
+  // read-only one, exactly as --ephemeral does: the graph is read for
+  // structure but nothing (upsert, logs, memory) is written back into the
+  // repo's .tmct/. Committed example fixtures carry it so a plain
+  // `tmct chat --repo examples/<x>` never mutates the hand-stamped graph.
+  if (toml?.graph?.readOnly) ephemeral = true;
 
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
@@ -342,13 +380,25 @@ export async function createSession({
   let turns = 0;
   let focus = null; // the current focus entity ({id,label}) — threaded turn to turn
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
-  let planState = null; // the in-progress plan (goals/moves/cursor) — cleared by completion or a fresh goal, never by an aside
+  // The in-progress plan (goals/moves/cursor) — cleared by completion or a
+  // fresh goal, never by an aside. `adventureWorld` seeds it as already
+  // playing that world (see the option's own doc comment above) instead of
+  // starting null and waiting for a "play <world>" opener line.
+  let planState = adventureWorld ? { adventure: { world: adventureWorld } } : null;
   let researchState = null; // the in-progress research queue — advanced by "research next", cleared by completion or "research stop"
+  // The typed discourse record ([discourse] max_referents caps it) — session-scoped
+  // like the focus, threaded turn to turn, never persisted.
+  let discourseRecord = emptyRecord(resolveDiscourseConfig(toml));
   let closed = false;
 
   return {
     repo, config, graph, lexicon, memoryDir, moduleCount, version, sessionId,
     logFile, sidecarFile, bannerLines, empty, biasByBundle,
+    // Same handle as `memoryDir`, named to match dispatchTool's `memoryBackend`
+    // context param — a caller that wants a tool call (tmct_export, …) to read
+    // from THIS session's already-open store passes `memoryBackend: session.memoryBackend`
+    // rather than letting the tool re-derive a backend from config/tmct.toml.
+    memoryBackend: memoryDir,
     // Mutable between-turn state — read-only to the caller, so a shell can render the
     // prompt/expand-hint without reaching into runTurn's threading.
     get focus() { return focus; },
@@ -368,7 +418,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -384,6 +434,7 @@ export async function createSession({
       last = nextLast;
       if ("planState" in result) planState = result.planState;
       if ("researchState" in result) researchState = result.researchState;
+      if ("discourse" in result) discourseRecord = result.discourse;
       // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
       // same way a focus update does — apply them to this handle's
       // session-scoped state.
@@ -448,11 +499,13 @@ export async function runChat({
   narrate = false,
   liveReference = false,
   memoryBackend = null,
+  toolNamePrefix,
+  actingSubject,
 } = {}) {
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend, toolNamePrefix, actingSubject });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");

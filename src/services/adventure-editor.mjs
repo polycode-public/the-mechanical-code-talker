@@ -14,10 +14,13 @@
 // mgx:acts-toward, mgx:is-objective) — an editor has to show and change
 // exactly the facts a player is never told.
 //
-// No imports: every export here is .toString()-splice-safe, the same
-// discipline adventure-viz.mjs's own render-glue functions hold (see that
-// module's header) — this module's functions get spliced directly into the
-// adventure page's inline script the same way.
+// No imports of its own logic: every export here is .toString()-splice-safe,
+// the same discipline adventure-viz.mjs's own render-glue functions hold (see
+// that module's header) — this module's functions get spliced directly into
+// the adventure page's inline script the same way. The one exception,
+// wordBeforeCursor, re-exports viz-theme.mjs's own shared copy (byte-identical
+// to what used to live here, and to mud-editor.mjs's own copy) rather than
+// keep a third copy of the same regex.
 //
 // Two predicate families get different sync strategies, on purpose:
 //   - PLACEMENT/OPENNESS (mgx:currently-in/located-in/fixed-in/stands-
@@ -281,6 +284,14 @@ export function parseWorldEditorText(text, contextRows = []) {
 
 const tripleKey = (t) => `${t.subject} ${t.predicate} ${t.object}`;
 
+// The three flag predicates the renderer only ever writes a line for when they
+// read "true" ("Basket is a container."). A row saying "false" has no sentence
+// in this vocabulary, so it must not be diffable either — counted as editable
+// while being unrenderable, it sits in the diff's current set, matches nothing
+// the text can say, and gets retracted on the next clean parse: a fact the
+// player never saw, silently deleted by an edit somewhere else in the document.
+const TRUE_ONLY_FLAG_PREDICATES = ["mgx:is-container", "mgx:is-npc", "mgx:is-objective"];
+
 /** Every raw fact row this editor's "other" family (type/exits/container/
  *  puzzle — never placement/openness) is allowed to touch — the closed set
  *  planWorldEditorSync diffs against and the only rows a removal can ever
@@ -290,8 +301,8 @@ export function editableOtherRows(rows) {
     if (SNAPSHOT_RE.test(r.subject)) return false;
     if (r.predicate === "rdf:type") return true;
     if (EXIT_PREDICATE_RE.test(r.predicate)) return true;
-    return ["mgx:is-container", "mgx:is-npc", "mgx:is-objective", "mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward"]
-      .includes(r.predicate);
+    if (TRUE_ONLY_FLAG_PREDICATES.includes(r.predicate)) return r.object === "true";
+    return ["mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward"].includes(r.predicate);
   });
 }
 
@@ -349,13 +360,4 @@ export function planWorldEditorSync(rows, state, triples) {
 
 // ---- cursor-driven suggestions ---------------------------------------------
 
-/** The word immediately before `cursorPos` in `text` — a run of letters/
- *  digits/hyphens, the same token shape this vocabulary's own terms use
- *  (kebab-case room names like "drawing-room"). Empty string when the
- *  cursor sits after whitespace/punctuation with no word directly behind
- *  it. Pure. */
-export function wordBeforeCursor(text, cursorPos) {
-  const head = String(text || "").slice(0, cursorPos);
-  const m = head.match(/[A-Za-z][A-Za-z0-9-]*$/);
-  return m ? m[0].toLowerCase() : "";
-}
+export { wordBeforeCursor } from "./viz-theme.mjs";

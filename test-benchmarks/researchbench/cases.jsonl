@@ -1,0 +1,9 @@
+{"id":"res-volcano-fetch-stop","rung":"RES-0","seed":"volcano","k":0,"budget":0,"goldFollow":[],"goldHubs":[]}
+{"id":"res-volcano-queue","rung":"RES-1","seed":"volcano","k":1,"fanoutLimit":10,"budget":5,"goldFollow":["Active volcano","East African Rift","Hawaii"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-order","rung":"RES-2","seed":"volcano","k":1,"fanoutLimit":10,"budget":5,"goldFollow":["Active volcano","East African Rift","Hawaii"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-hub-avoid","rung":"RES-3","seed":"volcano","k":1,"fanoutLimit":10,"budget":3,"goldFollow":["Active volcano","East African Rift","Hawaii"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-completeness","rung":"RES-4","seed":"volcano","k":2,"fanoutLimit":10,"budget":10,"goldFollow":["Active volcano","East African Rift","Hawaii","Magma"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-budget-discipline","rung":"RES-5","seed":"volcano","k":2,"fanoutLimit":10,"budget":4,"goldFollow":["Active volcano","East African Rift","Hawaii","Magma"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-adaptive-depth","rung":"RES-6","seed":"volcano","k":2,"fanoutLimit":10,"budget":5,"goldFollow":["Active volcano","East African Rift","Hawaii","Magma"],"goldHubs":["Earth","Geology","ISBN 0-19-960146-4"]}
+{"id":"res-volcano-need-directed","rung":"RES-7","seed":"volcano","need":{"question":"what erupts from a volcano","answeredBy":"Active volcano"}}
+{"id":"res-volcano-self-coverage","rung":"RES-8","seed":"volcano","expectComplete":true}

@@ -31,7 +31,7 @@
 import { resolveOne, backwardChainWorld, resolveMemoryTerm } from "./resolver.mjs";
 import { plan, isMultiStep, decompose, MAX_STEPS } from "./planner.mjs";
 import { goalReason } from "./goal-reasoner.mjs";
-import { capabilities } from "./registry.mjs";
+import { capabilities, preconditionsOf, PRECOND } from "./registry.mjs";
 import { registerTaughtActions } from "./taught.mjs";
 import { intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching, resultSetOf } from "./results.mjs";
 import { resolveObject } from "../ask.mjs";
@@ -243,8 +243,8 @@ export async function runTaughtPlan(request, tools, ctx) {
 /** The full drive: resolver/planner first; a refusal there falls through to
  *  the taught world-goal lane (runTaughtPlan, above), and only a request that
  *  is not a world goal escalates to the closed-world goal-reasoner. Mirrors
- *  agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
- *  agentbench/ dependency (agentbench/ is dev-only, never shipped). Returns a
+ *  test-benchmarks/agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
+ *  test-benchmarks/agentbench/ dependency (test-benchmarks/agentbench/ is dev-only, never shipped). Returns a
  *  loopResult:
  *  `{ calls, refused, terminated, proof, why, driver, composed?, observed?, candidateResults? }`.
  *
@@ -288,23 +288,49 @@ export async function runCapabilityPlan(request, tools, ctx) {
  *  same store, re-reading it per request via ctx.readTaughtStore. The new
  *  registrations' unregister disposers ride the ctx as `ctx.disposers`; the
  *  caller runs them when the ctx is done. The same `memoryDir` also opens
- *  `ctx.resolveMemoryTerm` — resolveOne's binding oracle for a memoryTerm slot
- *  (tmct_related's `term`), re-reading the store's fact rows per request
+ *  `ctx.resolveMemoryTerm` — resolveOne's binding oracle for a KINDS.MemoryTerm
+ *  slot (tmct_related's `term`), re-reading the store's fact rows per request
  *  through resolveMemoryTerm (resolver.mjs), the memory-graph sibling of
- *  `resolve` above. */
+ *  `resolve` above.
+ *
+ *  MEMORY-ONLY MODE: pass a `memoryDir` with no `graph` and no `source`, and
+ *  the ctx builds with no code graph at all — the shape of a page that lives on
+ *  the memory graph alone. `resolve` then misses every term (a code-graph slot
+ *  refuses honestly at binding), dispatch refuses any capability whose
+ *  preconditions need a loaded code graph, and the memory lanes — MemoryTerm
+ *  binding, the taught world-goal simulation — carry the whole ctx. `config`
+ *  (if any) is still handed to dispatchTool so a memory-store tool can derive
+ *  its backend. A call with no graph, no source and no memoryDir is a wiring
+ *  error and throws. */
 export async function buildCapabilityPlanCtx({
-  config, source, tel = null, graph = null, memoryDir = null,
+  config, source = null, tel = null, graph = null, memoryDir = null,
   dispatchTool, isToolError = () => false, selectTool = null,
   loadMemory = null, readFactRows = null, readRuleRows = null,
 } = {}) {
-  const g = graph || parseEntities(await source.fetchEntities(config));
-  const resolve = (term) => resolveObject(g, term);
+  const g = graph || (source ? parseEntities(await source.fetchEntities(config)) : null);
+  if (!g && !(memoryDir && loadMemory)) {
+    throw new Error("buildCapabilityPlanCtx: pass a graph, a source to load one, or a memoryDir (memory-only mode)");
+  }
+  const resolve = g ? (term) => resolveObject(g, term) : () => ({ match: null, ambiguous: false, candidates: [] });
+  const needsCodeGraph = (name) => preconditionsOf(name).some((p) => p.pred === PRECOND.graphLoaded);
   const dispatch = async (name, input) => {
+    if (!g && needsCodeGraph(name)) {
+      return { ok: false, error: `${name} queries the code graph, and this memory-only context has none loaded` };
+    }
     try {
-      const text = await dispatchTool(name, input, { config, source, tel });
+      // `source ?? undefined` so a memory-only caller's explicit null never
+      // suppresses dispatchTool's own default source for a tool that loads.
+      // `memoryBackend` hands a memory-reading tool the SAME open store this
+      // ctx binds its MemoryTerm slots against, so binding and dispatch can
+      // never answer from two different stores — and so a store that was never
+      // derived from a config (a browser page's in-memory one) is reachable at
+      // all.
+      const text = await dispatchTool(name, input, {
+        config, source: source ?? undefined, tel, memoryBackend: memoryDir ?? undefined,
+      });
       const primary = input && (input.symbol ?? input.module ?? input.class ?? input.query);
       const resolved = primary ? resolve(String(primary)).match : null;
-      const result = resultSetOf(g, name, input, resolved);
+      const result = g ? resultSetOf(g, name, input, resolved) : [];
       return { ok: true, text, resolved, result };
     } catch (e) {
       if (isToolError(e)) return { ok: false, error: e.message };

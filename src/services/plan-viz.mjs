@@ -18,7 +18,7 @@
 // inline script degrades honestly when that sibling script is absent or
 // fails to load — the live controls disable themselves rather than pretend
 // to work.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, countLabel } from "./viz-theme.mjs";
 import { planToPddl } from "./plan-pddl.mjs";
 
 const BOARD_W = 640;
@@ -285,14 +285,20 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
   const pageData = planToPageData({ plan, rendersAs, sizeOrder });
   const embedded = embedJson(pageData);
   const pddlText = planToPddl(plan);
-  const pageTitle = title || `tmct plan — ${actions.length} move${actions.length === 1 ? "" : "s"}`;
+  const pageTitle = title || `tmct plan — ${countLabel(actions.length, "move")}`;
 
   return `<!doctype html>
-<html lang="en">
+<!-- data-theme is pinned to dark on purpose: this page reads as a track/
+     timeline console, and that console stays dark under a light OS or site
+     theme too, the same way a DAW's own window does. -->
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(pageTitle)}</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!--
   The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
   first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
@@ -306,97 +312,152 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
 -->
 <style>
 ${THEME_TOKENS_CSS}
-html { background: var(--bg); }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; }
-main { max-width: 880px; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
-.head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .4rem; }
-h1 { font-size: 1.15rem; margin: 0 0 .8rem; }
-.chip { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .12rem .55rem; }
-.stage { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 1rem; }
+/* This console stays dark under either site theme (the html tag pins
+   data-theme="dark" above), so these extra surfaces are plain literals
+   rather than theme-reactive tokens — a track console has one lighting
+   rig, not two. --taught/--corpus/--entail/--alert still come from
+   THEME_TOKENS_CSS above and still carry the site's own provenance
+   language: taught (green) marks the actual current position, entail
+   (amber) marks tmct's own inferred step goal, corpus (blue) marks a
+   session parameter, alert (red) marks a failed solve. */
+:root {
+  --rail: #101317; --well: #0A0C0E; --strip: #1A1F25; --strip2: #20262D;
+  --taught-glow: rgba(95, 190, 139, .45); --entail-glow: rgba(217, 165, 84, .4);
+}
+html { background: var(--rail); }
+body { margin: 0; background: var(--rail); color: var(--ink); font-family: ${MONO_STACK}; font-size: 14px; }
+main { max-width: 1040px; margin: 0 auto; padding: 1.3rem 1rem 3rem; }
+button { font: inherit; }
+
+.rack { border: 1px solid var(--line); background: var(--card); }
+
+/* ---- head strip: the nameplate ---- */
+.headStrip { display: flex; justify-content: space-between; align-items: flex-end; gap: .6rem; flex-wrap: wrap; padding: .9rem 1.1rem .75rem; background: linear-gradient(180deg, var(--strip2), var(--strip)); border-bottom: 1px solid var(--line); border-radius: 9px 9px 0 0; }
+.eyebrow { font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 .35rem; }
+h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0; color: var(--ink); }
+.chip { font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .02em; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: .22rem .6rem; background: var(--well); text-align: right; }
+
+/* ---- session strip: a channel-strip row of solve parameters ---- */
+.sessionStrip { display: flex; align-items: stretch; flex-wrap: wrap; background: var(--strip); border-bottom: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .74rem; }
+.sessionCell { display: flex; flex-direction: column; justify-content: center; gap: .3rem; padding: .55rem .95rem; border-right: 1px solid var(--line); }
+.paramLabel { font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sessionStrip input[type="number"] { width: 3.6rem; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--well); color: var(--taught); border: 1px solid var(--line); border-radius: 4px; padding: .22rem .4rem; font-variant-numeric: tabular-nums; }
+.sessionAction { justify-content: center; }
+.sessionAction button { font-family: ${MONO_STACK}; font-size: .74rem; padding: .4rem .85rem; border-radius: 5px; border: 1px solid var(--line); background: var(--well); color: var(--ink); cursor: pointer; }
+.sessionAction button:hover:not(:disabled) { border-color: var(--corpus); color: var(--corpus); }
+.sessionAction button:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
+.sessionAction button:disabled { opacity: .4; cursor: default; }
+.sessionStatus { display: flex; align-items: center; margin-left: auto; padding: 0 .95rem; color: var(--muted); }
+.sessionStatus.isError { color: var(--alert); }
+
+/* ---- transport bar ---- */
+.transport { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .7rem 1.1rem; background: var(--rail); border-bottom: 1px solid var(--line); }
+.transportButtons { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.transportButtons button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .48rem .8rem; border: none; border-right: 1px solid var(--line); background: var(--strip); color: var(--ink); cursor: pointer; }
+.transportButtons button:last-child { border-right: none; }
+.transportButtons button:hover:not(:disabled) { background: var(--strip2); }
+.transportButtons button:focus-visible { outline: 2px solid var(--taught); outline-offset: -2px; }
+.transportButtons button[disabled] { opacity: .35; cursor: default; }
+.transportButtons #play.isPlaying { background: var(--taught-soft); color: var(--taught); }
+.lcd { margin-left: auto; background: var(--well); border: 1px solid var(--line); border-radius: 6px; padding: .45rem .75rem; min-width: 10rem; }
+#stepLabel { display: block; font-family: ${MONO_STACK}; font-size: 1rem; letter-spacing: .03em; color: var(--taught); text-shadow: 0 0 8px var(--taught-glow); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lcdMeter { margin-top: .3rem; height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.lcdMeterFill { height: 100%; width: 0%; background: var(--taught); box-shadow: 0 0 6px var(--taught-glow); transition: width .18s ease; }
+
+/* ---- the deck: board on the left, arrangement view on the right ---- */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0; }
 /* grid items refuse to shrink below their content's min-width by default, so
    the 640px board would stretch the track and the whole page with it on a
    phone — let the items shrink and the boardwrap scroll instead. */
 .stage > * { min-width: 0; }
-@media (max-width: 660px) { .stage { grid-template-columns: 1fr; } }
+.deck { padding: 1rem 1.1rem 1.1rem; border-right: 1px solid var(--line); }
+@media (max-width: 660px) { .stage { grid-template-columns: 1fr; } .deck { border-right: none; border-bottom: 1px solid var(--line); } }
 .boardwrap { overflow-x: auto; }
-.board { position: relative; width: ${BOARD_W}px; height: ${BOARD_H}px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.board { position: relative; width: ${BOARD_W}px; height: ${BOARD_H}px; background: var(--well); border: 1px solid var(--line); border-radius: 6px; }
 .base { position: absolute; left: 4%; right: 4%; bottom: 22px; height: 6px; background: var(--line); border-radius: 3px; }
 .post { position: absolute; bottom: 28px; width: 6px; height: 150px; background: var(--line); border-radius: 3px 3px 0 0; }
-.anchorlabel { position: absolute; bottom: 2px; transform: translateX(-50%); font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); }
-.block { position: absolute; height: ${BLOCK_H}px; border-radius: 6px; color: #fff; display: flex; align-items: center; justify-content: center; font-family: ${MONO_STACK}; font-size: .66rem; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
-.block.moving { z-index: 3; box-shadow: 0 4px 10px rgba(0,0,0,.3); }
+.anchorlabel { position: absolute; bottom: 2px; transform: translateX(-50%); font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.block { position: absolute; height: ${BLOCK_H}px; border-radius: 4px; color: #fff; display: flex; align-items: center; justify-content: center; font-family: ${MONO_STACK}; font-size: .64rem; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 2px 4px rgba(0,0,0,.4); }
+.block.moving { z-index: 3; box-shadow: 0 0 0 2px var(--taught), 0 6px 14px rgba(0,0,0,.5); }
 .circle { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--muted); transform: translate(-50%, -100%); }
 .circlelabel { position: absolute; transform: translateX(-50%); font-family: ${MONO_STACK}; font-size: .6rem; color: var(--muted); }
-.controls { display: flex; gap: .45rem; align-items: center; margin-top: .7rem; flex-wrap: wrap; }
-.controls button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
-.controls button:hover { border-color: var(--taught); }
-.controls button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-.controls button[disabled] { opacity: .4; cursor: default; }
-.controls .step { margin-left: auto; font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.goalline { margin-top: .7rem; font-family: ${MONO_STACK}; font-size: .76rem; color: var(--taught); background: var(--taught-soft); border-radius: 6px; padding: .45rem .65rem; }
-.facts { margin-top: .7rem; font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: .55rem; line-height: 1.7; }
+.goalline { margin-top: .8rem; font-family: ${MONO_STACK}; font-size: .76rem; color: var(--entail); background: var(--entail-soft); border: 1px solid var(--entail); border-radius: 6px; padding: .5rem .75rem; }
+.facts { margin-top: .7rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: .55rem; line-height: 1.7; }
 .facts b { color: var(--ink); }
-.movelist { list-style: none; margin: 0; padding: 0; font-family: ${MONO_STACK}; font-size: .74rem; align-self: start; }
-.movelist li { padding: .28rem .55rem; border-left: 3px solid transparent; color: var(--muted); cursor: pointer; border-radius: 0 5px 5px 0; font-variant-numeric: tabular-nums; }
-.movelist li:hover { color: var(--ink); }
-.movelist li.done { color: var(--ink); }
-.movelist li.current { border-left-color: var(--taught); color: var(--ink); background: var(--taught-soft); font-weight: 700; }
-.movelist .phasehead { font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; border-left: 3px solid var(--taught); margin-top: .5rem; }
+.movelist { list-style: none; margin: 0; padding: .5rem; font-family: ${MONO_STACK}; font-size: .72rem; align-self: start; }
+.movelist .phasehead { display: block; background: var(--strip); border: 1px solid var(--line); border-left: 3px solid var(--corpus); border-radius: 4px; padding: .35rem .55rem; margin: .55rem 0 .3rem; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
 .movelist .phasehead:first-child { margin-top: 0; }
-.movelist .phasehead:hover { color: var(--taught); background: var(--taught-soft); }
+.movelist .phasehead:hover { color: var(--ink); border-left-color: var(--taught); }
 .movelist .phasehead:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .block { transition: none !important; } }
-.liveControls { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-family: ${MONO_STACK}; font-size: .74rem; }
-.liveControls label { display: flex; align-items: center; gap: .35rem; color: var(--muted); }
-.liveControls input[type="number"] { width: 3.6rem; font-family: ${MONO_STACK}; font-size: .74rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: .2rem .4rem; }
-.liveControls button { font-family: ${MONO_STACK}; font-size: .74rem; padding: .3rem .7rem; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
-.liveControls button:hover:not(:disabled) { border-color: var(--taught); }
-.liveControls button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-.liveControls button:disabled { opacity: .4; cursor: default; }
-.liveControls .livestatus { color: var(--muted); margin-left: auto; }
-.lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1.2rem; }
+.movelist li:not(.phasehead) { padding: .38rem .55rem; margin: .12rem 0; border: 1px solid transparent; border-radius: 4px; color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; opacity: .55; }
+.movelist li:not(.phasehead):hover { color: var(--ink); border-color: var(--line); opacity: 1; }
+.movelist li.done { color: var(--ink); background: var(--strip); opacity: 1; }
+.movelist li.current { color: var(--ink); background: var(--taught-soft); border-color: var(--taught); box-shadow: inset 3px 0 0 var(--taught); font-weight: 700; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .block, .lcdMeterFill { transition: none !important; } }
+
+/* ---- lower rack: two channel strips, teach dock and PDDL artifact ---- */
+.lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
 @media (max-width: 780px) { .lower { grid-template-columns: 1fr; } }
-.chat, .pddlpanel { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; min-width: 0; }
-.chat h2, .pddlpanel h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+.chat, .pddlpanel { background: var(--card); padding: .65rem .8rem; min-width: 0; }
+.chat { border-right: 1px solid var(--line); }
+@media (max-width: 780px) { .chat { border-right: none; border-bottom: 1px solid var(--line); } }
+.chat h2, .pddlpanel h2 { font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
 .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 180px; overflow-y: auto; margin-bottom: .5rem; }
 .chatlog:empty { display: none; margin-bottom: 0; }
 .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
 .chatlog .u::before { content: "tmct> "; color: var(--taught); }
-.chatlog .a { font-size: .85rem; line-height: 1.4; white-space: pre-wrap; }
+.chatlog .b { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
+.chatlog .b::before { content: "board> "; color: var(--corpus); }
+.chatlog .a { font-family: ${SERIF_STACK}; font-size: .87rem; line-height: 1.45; white-space: pre-wrap; color: var(--ink); }
 .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
 .chatlog:empty + .chatask { border-top: none; padding-top: 0; }
 .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
-.chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
+.chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--well); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .34rem .55rem; min-width: 0; }
 .chatask input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
 .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
-.pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--ink); cursor: pointer; white-space: nowrap; }
-.pill:hover { border-color: var(--taught); }
+.boardask { margin-top: .75rem; border-top: 1px dashed var(--line); padding-top: .55rem; }
+.boardask h3 { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .45rem; }
+.boardask .chatask { border-top: none; padding-top: 0; }
+.boardask .prompt { color: var(--corpus); }
+.boardask input:focus-visible { outline-color: var(--corpus); }
+.boardask .pill:hover { border-color: var(--corpus); color: var(--corpus); }
+.pill { font-family: ${MONO_STACK}; font-size: .66rem; padding: .22rem .6rem; border: 1px solid var(--line); border-radius: 99px; background: var(--well); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.pill:hover { border-color: var(--taught); color: var(--taught); }
 .pill:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-.pddlpanel pre { margin: 0; font-family: ${MONO_STACK}; font-size: .68rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow-y: auto; color: var(--ink); }
+.pddlpanel pre { margin: 0; font-family: ${MONO_STACK}; font-size: .67rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow-y: auto; color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: 4px; padding: .6rem .7rem; }
 </style>
 </head>
 <body>
 <main>
-  <div class="head">
-    <h1 id="pageTitle">${escapeHtml(pageTitle)}</h1>
+<div class="rack">
+  <div class="headStrip">
+    <div>
+      <div class="eyebrow">tmct &middot; plan</div>
+      <h1 id="pageTitle">${escapeHtml(pageTitle)}</h1>
+    </div>
     <span class="chip">blocks archetype · ${pageData.layouts.length} snapshots · plan: findActionPath</span>
   </div>
-  <div class="liveControls" id="liveControls">
-    <label for="diskCount">disks <input id="diskCount" type="number" min="1" max="7" value="3"></label>
-    <label for="maxDepth">max search depth <input id="maxDepth" type="number" min="1" max="999" value="300"></label>
-    <button id="resolveBtn" type="button">solve a fresh puzzle</button>
-    <span class="livestatus" id="liveStatus"></span>
+  <div class="sessionStrip" id="liveControls">
+    <label class="sessionCell" for="diskCount"><span class="paramLabel">disks</span><input id="diskCount" type="number" min="1" max="7" value="3"></label>
+    <label class="sessionCell" for="maxDepth"><span class="paramLabel">max depth</span><input id="maxDepth" type="number" min="1" max="999" value="300"></label>
+    <div class="sessionCell sessionAction"><button id="resolveBtn" type="button">solve a fresh puzzle</button></div>
+    <span class="sessionStatus" id="liveStatus"></span>
+  </div>
+  <div class="transport">
+    <div class="transportButtons">
+      <button id="reset" aria-label="Reset to start">⏮ reset</button>
+      <button id="back" aria-label="Step back">◀ back</button>
+      <button id="play" aria-label="Play">▶ play</button>
+      <button id="next" aria-label="Step forward">step ▶</button>
+    </div>
+    <div class="lcd">
+      <span id="stepLabel"></span>
+      <div class="lcdMeter"><div class="lcdMeterFill" id="stepMeter"></div></div>
+    </div>
   </div>
   <div class="stage">
-    <div>
+    <div class="deck">
       <div class="boardwrap"><div class="board" id="board" aria-label="plan board"></div></div>
-      <div class="controls">
-        <button id="reset" aria-label="Reset to start">⏮ reset</button>
-        <button id="back" aria-label="Step back">◀ back</button>
-        <button id="play" aria-label="Play">▶ play</button>
-        <button id="next" aria-label="Step forward">step ▶</button>
-        <span class="step" id="stepLabel"></span>
-      </div>
       <div class="goalline" id="goalline" hidden></div>
       <div class="facts" id="facts"></div>
     </div>
@@ -414,12 +475,25 @@ h1 { font-size: 1.15rem; margin: 0 0 .8rem; }
         <button type="button" class="pill" data-fill="solve it.">solve it</button>
         <button type="button" class="pill" data-fill="what moves are legal now?">what moves are legal now?</button>
       </div>
+      <div class="boardask">
+        <h3>ask the board at this step</h3>
+        <form class="chatask" id="boardform">
+          <span class="prompt">board&gt;</span>
+          <input id="boardq" type="text" placeholder="list the locations of disks" aria-label="Ask a question about the board at the current step">
+        </form>
+        <div class="chatpills" id="boardpills" role="group" aria-label="quick phrases to fill the board question input">
+          <button type="button" class="pill" data-fill="list the locations of disks">list the locations of disks</button>
+          <button type="button" class="pill" data-fill="how many moves are there?">how many moves are there?</button>
+          <button type="button" class="pill" data-fill="list the pegs">list the pegs</button>
+        </div>
+      </div>
     </div>
     <div class="pddlpanel">
       <h2>PDDL + OWL/RDF plan artifact</h2>
       <pre id="pddlOut">${escapeHtml(pddlText)}</pre>
     </div>
   </div>
+</div>
 </main>
 <script>
 const PLAN = ${embedded};
@@ -428,6 +502,8 @@ const PLAN = ${embedded};
 <script>
 (function () {
   "use strict";
+  const escapeHtml = ${escapeHtml.toString()};
+  const countLabel = ${countLabel.toString()};
   // Best-effort: a copy of this page opened without the sibling worker file
   // (a tmct --render plan --output file, a file:// open) just swallows the
   // registration failure and works exactly as before.
@@ -435,6 +511,7 @@ const PLAN = ${embedded};
   const pageTitleEl = document.getElementById("pageTitle");
   const board = document.getElementById("board");
   const stepLabel = document.getElementById("stepLabel");
+  const stepMeterEl = document.getElementById("stepMeter");
   const goalline = document.getElementById("goalline");
   const factsEl = document.getElementById("facts");
   const movelist = document.getElementById("movelist");
@@ -508,6 +585,7 @@ const PLAN = ${embedded};
   function render() {
     const phase = phaseFor(step);
     stepLabel.textContent = "step " + step + " / " + N + (phase ? " · " + phase : "");
+    if (stepMeterEl) stepMeterEl.style.width = (N ? Math.min(step, N) / N * 100 : 0) + "%";
     if (plan.stepGoals) {
       goalline.hidden = false;
       goalline.textContent = step < N
@@ -517,7 +595,7 @@ const PLAN = ${embedded};
       goalline.hidden = true;
     }
     factsEl.innerHTML = "<b>board@step" + step + "</b> — " +
-      plan.facts[step].map((f) => f.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join(" · ") +
+      plan.facts[step].map((f) => escapeHtml(f)).join(" · ") +
       ' <span style="opacity:.7">(plan: findActionPath)</span>';
     [...movelist.querySelectorAll("li:not(.phasehead)")].forEach((li, i) => {
       li.classList.toggle("done", i < step);
@@ -526,6 +604,7 @@ const PLAN = ${embedded};
     btn.back.disabled = step === 0 || animating;
     btn.next.disabled = step === N || animating;
     btn.play.textContent = playing ? "⏸ pause" : (step === N ? "▶ replay" : "▶ play");
+    btn.play.classList.toggle("isPlaying", playing);
   }
   async function forward() {
     if (animating || step >= N) return;
@@ -606,7 +685,7 @@ const PLAN = ${embedded};
   mountPlan(PLAN);
 
   // ---- live re-solve: disk-count/max-depth controls + the chat-assert dock
-  // over the sibling plan-browser.bundle.js (window.tmctPlan). Degrades
+  // over the sibling plan-browser.bundle.js (window.tmct). Degrades
   // honestly when the bundle failed to load or wasn't built alongside this
   // page (e.g. a plain renderPlanHtml() call with no bundle nearby) — the
   // baked-in replay above already stands on its own either way.
@@ -618,11 +697,21 @@ const PLAN = ${embedded};
   const chatformEl = document.getElementById("chatform");
   const chatqEl = document.getElementById("chatq");
   const chatpillsEl = document.getElementById("chatpills");
+  const boardformEl = document.getElementById("boardform");
+  const boardqEl = document.getElementById("boardq");
+  const boardpillsEl = document.getElementById("boardpills");
 
-  const liveAvailable = typeof tmctPlan !== "undefined" && typeof tmctPlan.createPlanSession === "function";
+  const liveAvailable = typeof tmct !== "undefined" && typeof tmct.open === "function";
   if (!liveAvailable) {
     liveStatusEl.textContent = "live re-solve unavailable here — showing the baked-in replay only.";
+    liveStatusEl.classList.add("isError");
     resolveBtn.disabled = true;
+    // Neither dock has a submit handler without the live engine, and a form
+    // that submits with no handler navigates away — so the inputs are shut
+    // off rather than left to reload the page on Enter.
+    chatqEl.disabled = true;
+    boardqEl.disabled = true;
+    boardqEl.placeholder = "needs the live engine — the replay above still works.";
   } else {
     let session = null;
     // Every engine-touching call (a resolve click and a chat submit) shares
@@ -652,7 +741,7 @@ const PLAN = ${embedded};
             import("./vendor/wink.js"),
             winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          tmctPlan.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+          tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn("tmct plan: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
@@ -669,9 +758,15 @@ const PLAN = ${embedded};
     }
     function applyPlan(freshPlan) {
       if (!freshPlan) return;
-      const { rendersAs, sizeOrder } = tmctPlan.renderInputsFromPlan(freshPlan);
-      mountPlan(tmctPlan.planToPageData({ plan: freshPlan, rendersAs, sizeOrder }));
-      if (pddlEl) pddlEl.textContent = tmctPlan.planToPddl(freshPlan);
+      const { rendersAs, sizeOrder } = tmct.page.renderInputsFromPlan(freshPlan);
+      mountPlan(tmct.page.planToPageData({ plan: freshPlan, rendersAs, sizeOrder }));
+      // The board tmct.ask() traverses is projected from a plan and a step.
+      // mountPlan rewinds the transport to step 0, so the graph is moved to
+      // the same position rather than left pointing at the previous puzzle.
+      if (typeof tmct.session?.showBoard === "function") {
+        tmct.session.showBoard({ plan: freshPlan, step: 0 });
+      }
+      if (pddlEl) pddlEl.textContent = tmct.page.planToPddl(freshPlan);
       // The <title>/<h1> were baked from the INITIAL plan's own goal text —
       // a live re-solve toward a different goal (a fresh puzzle, or a
       // taught goal revision) must not leave them stating the old one.
@@ -682,10 +777,15 @@ const PLAN = ${embedded};
     async function ensureSession() {
       if (session) return session;
       await tryLoadWink();
-      session = await tmctPlan.createPlanSession({
+      session = await tmct.open({
         diskCount: Math.max(1, Math.min(7, parseInt(diskCountEl.value, 10) || 3)),
         maxDepth: Math.max(1, parseInt(maxDepthEl.value, 10) || 300),
       });
+      // The board on screen is the server-rendered embed until the first
+      // session opens, and the disk-count control may have moved since. A
+      // session solving a different puzzle would answer about a board nobody
+      // is looking at, so mount its own plan instead.
+      if (session.plan && session.plan.actions.length !== N) applyPlan(session.plan);
       return session;
     }
 
@@ -695,13 +795,15 @@ const PLAN = ${embedded};
       const d = Math.max(1, parseInt(maxDepthEl.value, 10) || 300);
       diskCountEl.value = n; maxDepthEl.value = d;
       liveStatusEl.textContent = "solving a " + n + "-disk puzzle…";
+      liveStatusEl.classList.remove("isError");
       await tryLoadWink();
-      session = await tmctPlan.createPlanSession({ diskCount: n, maxDepth: d });
+      session = await tmct.open({ diskCount: n, maxDepth: d });
       if (session.plan) {
         applyPlan(session.plan);
-        liveStatusEl.textContent = "live — " + n + " disk" + (n === 1 ? "" : "s") + ", max depth " + d + ".";
+        liveStatusEl.textContent = "live — " + countLabel(n, "disk", "disks") + ", max depth " + d + ".";
       } else {
         liveStatusEl.textContent = "no plan found within " + d + " moves — raise max search depth and try again.";
+        liveStatusEl.classList.add("isError");
       }
       resolveBtn.disabled = false;
     }));
@@ -715,17 +817,36 @@ const PLAN = ${embedded};
       withLock(async () => {
         const s = await ensureSession();
         const maxDepth = Math.max(1, parseInt(maxDepthEl.value, 10) || 300);
-        const result = await s.turn(q, { maxDepth });
+        const result = await tmct.turn(q, { maxDepth });
         addChatLine("a", result.answer);
         if (result.plan) applyPlan(result.plan);
       });
     });
 
-    for (const pill of chatpillsEl.querySelectorAll(".pill")) {
-      pill.addEventListener("click", () => {
-        chatqEl.value = pill.dataset.fill || "";
-        chatqEl.focus();
+    // A board question goes to tmct.ask(), not tmct.turn(): ask() traverses
+    // the puzzle projected as a graph at the step the transport is showing,
+    // so "list the locations of disks" reads the board in front of you. A
+    // question that graph can't ground gets the engine's own refusal.
+    boardformEl.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = boardqEl.value.trim();
+      if (!q) return;
+      boardqEl.value = "";
+      addChatLine("b", q + " (step " + step + ")");
+      withLock(async () => {
+        await ensureSession();
+        const result = await tmct.ask(q, { step });
+        addChatLine("a", result.answer);
       });
+    });
+
+    for (const [pills, input] of [[chatpillsEl, chatqEl], [boardpillsEl, boardqEl]]) {
+      for (const pill of pills.querySelectorAll(".pill")) {
+        pill.addEventListener("click", () => {
+          input.value = pill.dataset.fill || "";
+          input.focus();
+        });
+      }
     }
   }
 })();

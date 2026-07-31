@@ -43,14 +43,19 @@
 // spider-fly.mjs's own header comment confirms grid movement never reads
 // them back (hand-written pathfinding over has-exit-* facts, not the taught
 // action-rule DSL), so nothing here depends on them being loaded.
-import { runTurn } from "../../services/chat.mjs";
+import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
+import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import {
   createInMemoryStore, normFactTerm, appendFacts, loadMemory, readFactRows,
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { worldRelationGraphPayload } from "../../domain/ask.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
+  isLiveRenderableAgent, agentKindOf,
 } from "../../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
 import { pillsForSpiderFly, oneStepDirectionBetween } from "../../services/spider-fly-turn.mjs";
@@ -84,13 +89,27 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     else if (f.predicate === "mgx:mass") initialAgents[f.subject] = { ...initialAgents[f.subject], mass: Number(f.object) };
   }
 
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // The graph the chat dock's own ask() traverses. There is no code graph
+  // here, so it holds the LIVE BOARD instead: one individual per agent, classed
+  // by its id, carrying its current cell, mass and mood. That is what makes
+  // "list the locations of flies and spiders" a real ask() capability call
+  // rather than another hand-written filter over the same rows. Rebuilt before
+  // every chat turn, since every tick moves the pieces.
+  let graph = parseEntities({ individuals: [], objectProperties: [] });
+  const readBoard = async () => {
+    const rows = readFactRows(await loadMemory(memoryDir));
+    return { rows, state: foldSpiderFlyState(rows) };
+  };
+  async function refreshWorldGraph() {
+    const { rows, state } = await readBoard();
+    graph = parseEntities(worldRelationGraphPayload(rows, {
+      classOf: (id) => (isLiveRenderableAgent(id, state) ? agentKindOf(id) : null),
+    }));
+  }
+  await refreshWorldGraph();
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
-  let focus = null;
-  let last = null;
-  let planState = { spiderFly: { turn: 0 } };
   // The live, in-page-slider-adjustable knobs (mass-loss-rate/spawn-rate/
   // vision-radius per class, and every other spiderFly tunable) — starts at
   // the shipped defaults, mutated only through setConfig() below, and
@@ -100,6 +119,19 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   // change only changes what happens FROM HERE ON, same as tmct.toml would.
   let config = { ...DEFAULT_GAME_CONFIG.spiderFly };
 
+  // The chat dock's turn dispatch — createTurnSession owns the focus/last/
+  // planState fold and the throw-safe catch fallback every browser entry
+  // needs; tick() below reaches into the SAME planState (via setPlanState)
+  // so a raw tick and a chat-driven tick can never disagree about the turn
+  // count either lane sees next.
+  const turnSession = createTurnSession({
+    memoryDir, graph, lexicon, sessionId, vocabHint: "",
+    // `graph` is re-read here, not captured above: createTurnSession binds its
+    // own once at creation, and this board is rebuilt every turn.
+    buildExtraOptions: () => ({ graph, gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config } }),
+  });
+  turnSession.setPlanState({ spiderFly: { turn: 0 } });
+
   return {
     memoryDir,
     sessionId,
@@ -107,34 +139,32 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     initial: { turn: 0, agents: initialAgents, activeWebs: [] },
     taxonomyRows,
 
+    /** The board as a graph, as of the last refresh. Every tick moves the
+     *  pieces, so a caller putting a question to it calls `refreshGraph()`
+     *  first — which is exactly what `turn()` below already does. */
+    get graph() { return graph; },
+
+    /** Rebuild the board graph from the store's current rows. Exposed so a
+     *  question asked outside the chat dock (tmct.ask) reads this turn's
+     *  positions and not last turn's, the same way a typed one does. */
+    refreshGraph: refreshWorldGraph,
+
     /** Run one real engine turn directly. Returns spider-fly.mjs's own
      *  { turn, agents, ecology } shape unmodified. */
     async tick() {
       const result = await runSpiderFlyTick(memoryDir, { config });
-      planState = { spiderFly: { turn: result.turn } };
+      turnSession.setPlanState({ spiderFly: { turn: result.turn } });
       return result;
     },
 
     /** One dispatched chat turn — the SAME runTurn the CLI and the home
-     *  page's own chat run, over this session's own memoryDir. A throwing
-     *  runTurn must never kill the session — the page has no other chance
-     *  to show this turn's answer. */
+     *  page's own chat run, over this session's own memoryDir, via the
+     *  shared turn-dispatch wrapper (createTurnSession above) every browser
+     *  entry now uses. The board graph is rebuilt first, so a question about
+     *  where the pieces are reads this turn's positions and not last turn's. */
     async turn(line) {
-      let result;
-      try {
-        result = await runTurn(line, {
-          config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint: "", planState,
-          gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config },
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
-      }
-      focus = result.focus;
-      last = result.last;
-      if ("planState" in result) planState = result.planState;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
+      await refreshWorldGraph();
+      return turnSession.turn(line);
     },
 
     /** A read-only fold of the CURRENT board — no engine advance, no goal
@@ -143,11 +173,10 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
      *  chat-driven tick. Web individuals are never listed as agents (that's
      *  spider-1/fly-1/... only) — they surface only through activeWebs. */
     async snapshot() {
-      const rows = readFactRows(await loadMemory(memoryDir));
-      const state = foldSpiderFlyState(rows);
+      const { state } = await readBoard();
       const agents = {};
       for (const [id, place] of state.placements) {
-        if (state.removed.has(id) || /^web-\d+$/.test(id)) continue;
+        if (!isLiveRenderableAgent(id, state)) continue;
         agents[id] = { cell: place.cell, mass: state.mass.get(id)?.value ?? null };
       }
       return { turn: state.turnCount, agents, activeWebs: liveWebs(state.webs, state.turnCount) };
@@ -172,16 +201,23 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   };
 }
 
-// cellId/parseCellId/DIRECTION_DELTA/visibleCells/DEFAULT_VISION_RADIUS are
-// re-exported so the page's own rendering script (spider-fly-viz.mjs) never
-// has to duplicate grid geometry or the vision-radius default: reconstructing
-// a spider's remaining silk-thread path from its returned direction list, and
-// computing the POV overlay's visible-cell mask, both need them.
-// pillsForSpiderFly/oneStepDirectionBetween are re-exported so the same page
-// can build its own dynamic deception-pill container without duplicating
-// spider-fly-turn.mjs's own pill logic.
-globalThis.tmctSpiderFly = {
-  createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
-  cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
-  pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG,
-};
+// `tmct.page` is grid geometry and sprite resolution — the two things on this
+// page the engine has no plain-English form for. Reconstructing a spider's
+// remaining silk-thread path from its returned direction list and masking the
+// POV overlay's visible cells both need the raw cell math; the deception pills
+// need spider-fly-turn.mjs's own pill logic.
+publishTmctSurface({
+  open: createSpiderFlySession,
+  // The board moves every tick, so a question rebuilds the graph first —
+  // the same refresh a typed turn does before it dispatches.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
+  plan: enginePlan,
+  page: {
+    normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
+    cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
+    pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG, registerWinkModel,
+  },
+});

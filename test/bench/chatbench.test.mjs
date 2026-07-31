@@ -13,23 +13,23 @@ import {
   TAGS, EXPECT_KEYS, JUDGE_DIMENSIONS, FIXTURE_CONTEXT,
   parseCases, evaluateExpect, summarizeTier1, runTurnsCase, runSessionCase,
   compareProducts,
-} from "../../chatbench/run.mjs";
+} from "../../test-benchmarks/chatbench/run.mjs";
 import {
   JUDGE_MODEL, PROMPT_VERSION, DIMENSIONS,
   renderTranscript, buildPrompt, validateScores, parseJudgeOutput, maskScores,
   judgeSample, sampleMean, isHardFail, computeSummary, pool,
-} from "../../chatbench/judge.mjs";
+} from "../../test-benchmarks/chatbench/judge.mjs";
 import {
   renderReport, renderTranscripts, orderDiscriminating,
   cellRollup, uncoveredCells, undeclaredCells,
-} from "../../chatbench/report.mjs";
-import { OFF_MATRIX_FOLD_CELLS, HORIZON_CELLS } from "../../chatbench/graded.mjs";
+} from "../../test-benchmarks/chatbench/report.mjs";
+import { OFF_MATRIX_FOLD_CELLS, HORIZON_CELLS } from "../../test-benchmarks/chatbench/graded.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
-const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", import.meta.url));
-const PROMPT_FILE = fileURLToPath(new URL(`../../chatbench/${PROMPT_VERSION}.txt`, import.meta.url));
-const SCHEMA_FILE = fileURLToPath(new URL("../../chatbench/rubric.schema.json", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/graded-pool.jsonl", import.meta.url));
+const PROMPT_FILE = fileURLToPath(new URL(`../../test-benchmarks/chatbench/${PROMPT_VERSION}.txt`, import.meta.url));
+const SCHEMA_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/rubric.schema.json", import.meta.url));
 
 // ---- frozen v1 core lint. The core cases live in graded-pool.jsonl as
 // fully-graded cells rather than in a separate ungraded file, and are
@@ -152,6 +152,99 @@ test("evaluateExpect: each check kind passes and fails on the right evidence", (
 
 test("evaluateExpect: no expect → no checks (a scripted setup turn)", () => {
   assert.deepEqual(evaluateExpect(undefined, OUTCOME), []);
+});
+
+// ---- lever 4: ingestbench's deterministic equivalence checker wired into
+// tier-1, so a subclass-paraphrase case settles free instead of needing the
+// judge ----
+
+test("evaluateExpect: subclassParaphrase accepts ANY valid closed-template paraphrase, not just one pinned string", () => {
+  // The product picks one of four closed templates deterministically per
+  // (subject, object) — a case author who pins the literal string couples the
+  // case to that pick. subclassParaphrase instead accepts whichever template
+  // surfaced, as long as it is a genuine paraphrase of the same pair.
+  const everyForm = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (every cache is a component)" },
+  );
+  assert.equal(everyForm.length, 1);
+  assert.equal(everyForm[0].pass, true, JSON.stringify(everyForm));
+
+  const kindOfForm = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (cache is a kind of component)" },
+  );
+  assert.equal(kindOfForm[0].pass, true, "a different template for the SAME pair still verifies");
+
+  const wholeAnswerForm = evaluateExpect(
+    { subclassParaphrase: { subject: "dog", object: "animal" } },
+    { answer: "dog counts as an animal" },
+  );
+  assert.equal(wholeAnswerForm[0].pass, true, "checks the whole answer too, not only a parenthetical clause");
+});
+
+test("evaluateExpect: subclassParaphrase rejects a paraphrase of the wrong pair or no paraphrase at all", () => {
+  const wrongPair = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (every widget is a container)" },
+  );
+  assert.equal(wrongPair[0].pass, false);
+
+  const swapped = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: component rdfs:subClassOf cache (every component is a cache)" },
+  );
+  assert.equal(swapped[0].pass, false, "subject/object swap is a different claim, never accepted as equivalent");
+
+  const noParaphrase = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component" },
+  );
+  assert.equal(noParaphrase[0].pass, false, "the machine-notation triple alone is not a paraphrase claim");
+});
+
+// ---- ING-8: the harder, non-isa paraphrase shapes ING-7's own checker
+// doesn't cover, wired in the same free way (src/domain/paraphrase-ing8.mjs) ----
+
+test("evaluateExpect: ing8Paraphrase accepts any valid closed-template paraphrase of a non-isa relation", () => {
+  const possessesForm = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird possesses a feather)" },
+  );
+  assert.equal(possessesForm.length, 1);
+  assert.equal(possessesForm[0].pass, true, JSON.stringify(possessesForm));
+
+  const ownsForm = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird owns a feather)" },
+  );
+  assert.equal(ownsForm[0].pass, true, "a different closed template for the SAME pair still verifies");
+
+  const wholeAnswerForm = evaluateExpect(
+    { ing8Paraphrase: { family: "capableOf", subject: "bird", object: "fly" } },
+    { answer: "bird knows how to fly" },
+  );
+  assert.equal(wholeAnswerForm[0].pass, true, "checks the whole answer too, not only a parenthetical clause");
+});
+
+test("evaluateExpect: ing8Paraphrase rejects a swapped pair, the wrong relation family, or no paraphrase at all", () => {
+  const swapped = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (feather possesses a bird)" },
+  );
+  assert.equal(swapped[0].pass, false, "subject/object swap is a different claim, never accepted as equivalent");
+
+  const wrongFamily = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird creates a feather)" },
+  );
+  assert.equal(wrongFamily[0].pass, false, "a different relation family is a different claim");
+
+  const noParaphrase = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather" },
+  );
+  assert.equal(noParaphrase[0].pass, false, "the machine-notation triple alone is not a paraphrase claim");
 });
 
 test("summarizeTier1: baselineFail turns never fail the case; all-green baselineFail flags improvement", () => {
@@ -277,6 +370,40 @@ test("runSessionCase: clears the product read cache before EVERY session (H1a be
   });
   assert.equal(transcript.length, 2);
   assert.equal(cleared, 2, "one cache clear per session run");
+});
+
+test("runSessionCase: a real teach-confirmation answer settles a subclassParaphrase case at tier-1, no judge involved", async () => {
+  // The visitor teaches with "kind of" wording; the product's own paraphrase
+  // suffix picks a DIFFERENT closed template ("every cache is a component" —
+  // deterministic per (subject, object), src/domain/paraphrase.mjs) rather
+  // than echoing the visitor's phrasing back. A case pinning the literal
+  // string would either have to special-case that pick or go stale the moment
+  // the template table changes; subclassParaphrase settles it on meaning.
+  const caseDef = {
+    id: "stub-subclass-paraphrase", tags: ["conversational"], mode: "session", graph: "empty",
+    env: { TMCT_NO_SEED: "1" },
+    turns: [{
+      say: "a cache is a kind of component", session: 1,
+      expect: { miss: false, subclassParaphrase: { subject: "cache", object: "component" } },
+    }],
+  };
+  const { transcript, turnEvals } = await runSessionCase(caseDef, {
+    runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson: "{}",
+  });
+  assert.match(transcript[0].answer, /\(every cache is a component\)/, "the product's own deterministic template pick");
+  assert.doesNotMatch(transcript[0].answer, /cache is a kind of component/, "not an echo of the visitor's wording");
+  const tier1 = summarizeTier1(turnEvals);
+  assert.equal(tier1.pass, true, JSON.stringify(tier1.failing));
+
+  // The same real answer against the WRONG pair fails tier-1 deterministically
+  // too — the check is a real equivalence test, not a rubber stamp.
+  const wrongPairEvals = [{
+    checks: evaluateExpect({ subclassParaphrase: { subject: "widget", object: "container" } }, {
+      answer: transcript[0].answer,
+    }),
+    baselineFail: false, improvedIn: null,
+  }];
+  assert.equal(summarizeTier1(wrongPairEvals).pass, false);
 });
 
 // ---- compare (the regression gate) ----
@@ -576,7 +703,7 @@ test("pins: full judge model id (never an alias) + versioned prompt file + expec
     assert.ok(prompt.includes(phrase), `v2 prompt names the ${phrase} surface`);
   }
   // superseded prompt versions stay committed so recorded runs stay auditable.
-  const v1 = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
+  const v1 = fileURLToPath(new URL("../../test-benchmarks/chatbench/judge-prompt-v1.txt", import.meta.url));
   assert.ok((await readFile(v1, "utf8")).length > 500, "the superseded v1 prompt text stays");
   assert.deepEqual(DIMENSIONS, JUDGE_DIMENSIONS, "runner and judge agree on the rubric dimensions");
   assert.ok(EXPECT_KEYS.includes("baselineFail"));

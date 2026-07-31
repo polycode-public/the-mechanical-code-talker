@@ -8,25 +8,146 @@ Prefer deleting a sentence to negating it.
 
 Living handover. Any session resumes from here. **Plan of record: the `PLAN_*.md` design docs** —
 each states its own status in its opening lines; `archive/` holds the delivered ones. This file
-holds ONLY what to do next. Completed work is not narrated here; `git log`, the `BENCHMARK_*.md`
-reports and `CAPABILITIES_*.md` hold that record.
+holds ONLY what to do next. Completed work is not narrated here; `git log` and the
+`reports/BENCHMARK_*.md` reports hold that record.
 
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
+## In-flight right now (2026-07-30)
+
+**`PLAN_TOOL_SURFACE.md` is fully landed, this session — all 11 phases, including phase 11's
+mechanical splice conversion and the coordinator's own read-through of every page's chat/dock
+surface against the operator's "thin caller of real tmct capability" test (no violations found).
+Archivable.** Phases 1-10 landed as follows: Coordinator + background
+sub-agents pushed phases 1-5 and 7 to done: the pure-library sweep and `phraseForRelation` (all ten
+demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz-theme.mjs`/
+`viz-ticker.mjs`/`memory-stats.mjs`/`ask-vocab.mjs`/`game-config.mjs` instead of duplicating them),
+Gap B (`dispatchToolStructured`, tool answers now carry `{ content, data }`), the code-explorer
+proof (its sidebar asks `tmct_ask` for real instead of filtering rows by hand — and found the doc's
+own `tmct_related` premise was wrong along the way, corrected in place), Gap A (memory-graph binding
+is a first-class `KINDS.MemoryTerm` capability-planner kind — router half only; the eight
+browser-entry callers still pass an empty graph, tracked below), and mood-becomes-a-fact
+(`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
+deleted). See the doc's own Phasing section for exact detail per phase.
+
+Phase 6 landed too, by the `ask` route Theme 2 recommended. `ask-vocab.mjs` now carries a
+`WORLD_RELATIONS` table (`mgx:currently-in`, `mgx:feels`, `mgx:mass`, each with its listing nouns),
+`ask.mjs` compiles "list the locations of flies and spiders" — and its where/position/mood/mass
+paraphrases — into a `worldRelation` AST over one predicate with a multi-class subject filter, and
+`worldRelationGraphPayload` projects a world's fact rows into a graph `ask` can traverse, folding
+`@turnN`/`@stepN` rows onto their base subject so the answer is this turn's board. The spider-fly
+page builds that graph before every chat turn; `session.snapshot()` is untouched and still the
+render fast path.
+
+Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
+`rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
+`foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one — real
+remainder tracked below) and **the two test-coverage gaps** (a new
+`test-e2e/pages-service-worker-cache-bust.test.mjs` proves the redeploy repro end to end; the four
+existing chat/ingest/code/research e2e files now assert their fact-count pill's live DOM value, not
+just its generated markup).
+
+**Sprites.html's turntable + move-pose catalog landed, this session.** An operator-requested
+expansion of what was "extend facing pairs, next slice": a 5-point turntable (left/half-left/
+centre/half-right/right, up from left/centre/right) crossed with a new `mgx:pose = "moving"` axis,
+both crossed with the existing six `mgx:feels` moods. The resolver supports combining several
+`[[match]]` constraints in one template (`src/domain/sprite-templates.mjs`'s header carries the
+exact shape and anchor arithmetic), proven on bear/cat/dog/king first, then rolled out across every
+remaining animal and person class in the `*-with-emotion.toml` catalog — 987 sprite-tier TOML files
+total, ~9 per class (facing-left/right, facing-half-left/half-right, the four combined
+facing+moving frames, one centre-facing moving-only file), verified with zero gradient-id
+collisions and zero unresolved placeholder tokens across the whole set. Ten parallel content
+sub-agents landed this in eleven merges, most needing a hand-reconciled conflict in the shared
+`test/adapters/sprite-large-template-files.test.mjs` (several independently discovered and
+worked around the same "does this class have its own centre-moving file" question under different
+names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation). The sprite content
+wave is done, and so is the demo UI for it: `sprites.html` now animates three axes per card at a
+shared 800ms frame delay — the pre-existing mood cycle (top-left, unchanged), a new 5-angle turning
+sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swatch's slot, using the
+`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite`
+(phase 8) is landed too — the tool, its capability record, `FRAMES` entry, and `class` slot binding
+through the existing tier-2 memory-fact-term oracle rather than a new one; "large" resolved to the
+scale tier `data/sprites-large/` ships, re-confirmed against the real 987-file catalog.
+`spider-fly-viz.mjs`'s five-argument sprite call collapsed into `src/domain/sprite-request.mjs`.
+Phase 9 landed too: `sprite-catalog-viz.mjs`'s two hand-rolled parsers are gone —
+`answerSpriteQuestion` deleted in favour of two generic `chat.mjs` lanes (a noun-phrase-aware class
+match shared by the membership/count lanes, and a new object-fronted property lane that reads a
+folded predicate straight off the question, so `mgx:accept-emotion`/`mgx:take-parameter`/
+`mgx:offer-variant` all answer with no hand-kept property-word table), and `extractSceneItems`
+moved into `src/domain/scene-compose.mjs`, resolving each span through `resolveObject`'s exact
+tier only (the fuzzy tier's "wood"→food/"glass"→grass matches are fine for a cited sentence, wrong
+for a sprite drawn silently). The cold-session `ask` condition Phase 6 flagged is fixed too —
+`chat.mjs` now prefers a passed-in graph whenever it holds individuals, so a fresh browser session
+answers a world question on its first turn, not its second.
+
+Gap C (phase 10) landed too: one `globalThis.tmct` — `open`/`session`/`turn`/`ask`/`plan`/`page` —
+replaces all eleven per-page global bags across 51 files. `ask`/`plan` are supplied per page
+(`engine-surface.mjs` carries the two standard ones: `graphAsk` via
+`dispatchToolStructured("tmct_ask")`, `enginePlan` via `buildCapabilityPlanCtx`'s memory-only
+mode); a page wiring neither refuses honestly rather than failing on a method it never had.
+`open` is a fifth name beyond the plan's original four, needed because page-specific open options
+(a payload, a world, a roster) can only come from the page itself. Each page's residual bag shrunk
+to whatever still has no natural-language form — canvas geometry, sprite templates/resolution,
+digest and affordance readers, vendor/provider registration seams; `code-explorer-viz.mjs` keeps
+its factory in a bag too, because the page's own session slot is created lazily on the first turn
+rather than the one `tmct.open` would install eagerly. Two real bugs surfaced and were fixed
+mid-migration: a rename sweep had silently eaten the
+page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e probes were still
+checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
+shape (fixed).
+
+**MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
+against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
+Bartle/mudii.co.uk) is in `PLAN_MUD.md`. Operator's chosen sequencing: ship `mudiii.html` with
+credit to `world-of-claudecraft` and MUD1/MUD2 first, email Bartle once it's live. Still waiting on
+the operator's call on timing for that email — noted directly in `PLAN_MUD.md`.
+
+**`archive/PLAN_FACT.md`** (multi-record-per-assertion fact model) shipped in full, all 8
+landing-order steps — see `git log` for the commit sequence.
+
+Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
+`tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
+clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
+
 ## Open items
 
-- [ ] **five rounds of `SKILL_PLAYTEST_EDGE_HUNT.md`** (main-thread-only per its own discipline), each round shipping itself, **then one `SKILL_PLAIN_PROSE.md` pass**, commit, push, and a final roll — operator-instructed; in progress this session. (The 2026-07-23 resume gate cleared: pipeline 2699472881 went green, 2.11.1 is shipped and npm-published; the six merged fix-group worktrees are removed.)
-- [ ] a fresh live-session miss-wall re-map at the new baseline
-- [ ] a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed numbers
-- [ ] PLAN_AGENTS.md gap items 1-5 (serve plan verb, external-proposal seam, four frozen rows, replan-on-drift, dormant seeds) — tmct-only, independent, ~a week combined
-- [ ] `g-c2-garden-1`'s garden-path parse is the sole hard fail at 2.11.0 (unchanged since 2.7.12) — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 1. Tried a stacked-reduced-relative production (split "classes inherited from Widget defined in app/lib/c.mjs" into two intersected clauses on the closed PASSIVE_PARTICIPLE_TO_KIND set) and reverted it: it only reads correctly for participle+"from" pairs that are really an active multi-word verb in disguise (inherits from/derives from); a genuine passive like "defined in" needs the object/subject swap the existing "by"-agent machinery only fires with an explicit copula, and a naive always-reverse traversal gave a wrong, confidently-empty answer on other inputs (`classes inherited from Base defined in app/lib/b.mjs` should answer Widget, gave a false miss instead) — no settled fix without also teaching the grammar layer to disambiguate active-disguised-as-participle from genuine copula-dropped passive per relation.
-- [ ] two tier-1 `answerMatch` patterns have drifted from current product copy (`be-honest-empty`, `conv-hello-there`) — both score well under the judge, so this is case-hygiene, not a regression. `chatbench/generate-graded.mjs` can't regenerate just these two: it only ever produces the `g-<grade>-<slug>-N` `GRADED_MATRIX` cells (the ~1,075-case full pool), has no `--only`/per-case scoping flag, and would overwrite unrelated content — these two are hand-authored, non-matrix cases the generator never touches. A case-set-wide regen or a deliberate hand-revision (recorded as such, per the append-only discipline) is the only path, and both are out of this task's scope — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 5
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #5 (remainder): "wat about validate" (a fuzzy-matchable typo of a real module name) still lands on the orientation blurb — the SQL-statement/nonsense half of this finding is fixed (SQL_STATEMENT_RE, `test/chatflow-flow0-identity-smalltalk-closing.test.mjs`), but resolving a short typo'd line to a real graph entity needs the ask-miss pipeline's own entity-resolution gates (`src/services/chat.mjs`'s runTurn, ~line 11960 on), outside the identity/small-talk closed-set region a 2.11.0 session scoped this fix to
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #9: "prove that X is Y" — tried: `rewriteProveThat`/`ISA_ASK_RE` (src/services/chat.mjs) already rewrite and answer this correctly for grounded terms, confirmed live turn-for-turn identical to bare "is X a Y". The real blocker is a separate, more serious bug found while chasing this one: a session's FIRST successful "is X a Y"-shaped turn against a never-written-to `.tmct` memory store gets the generic grammar wall instead of the specific isa-decline/confirmation — teaching any one fact first (even unrelated) fixes every later turn in the same session. Lives in chat.mjs's memory-facts lane / the memory adapter's first-write path, outside the query-routing region; needs its own investigation.
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #15: "used anywhere" vs "used by Y" — tried: both parse to a reasonable shape (`ask` for "by Y", `reverse` for bare/"anywhere"); the `ask` shape already renders a crisp yes/no (confirmed for #12's fix). The unclear wording for a single-match `reverse` "uses" answer is produced by `render()`/`renderCore` in src/domain/ask.mjs, outside the query-routing region. A same-region fix would need "anywhere"/"at all" to resolve through the `ask` shape with a generic existential subject instead, which needs confirming ask.mjs's resolveObject actually supports that for `uses` (unconfirmed, not attempted).
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #16: "whats X do" — tried: traced to ask-vocab.mjs's `CONTRACTIONS` table (`"whats": "what is"`, applied in normalize.mjs) turning "whats X do" into "what is X do"; grammar.mjs/keywords.mjs correctly decline this exactly as they already decline the grammatical "what does X do" (neither treats bare "do" as a relation verb, by design — that phrasing is owned entirely by chat.mjs's module-grain overview lane, which requires literal "does"). The divergence is chat.mjs's overview lane and `BARE_WHATIS_RE` fallback never accepting the "is...do" contraction form, outside the query-routing region.
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #17: "what about X, what he/it do" reverse-vs-forward — tried and root-caused precisely: chat.mjs's `discourseRewrite`/`WHAT_ABOUT_RE` greedily captures the WHOLE trailing clause after "what about" (here, "the store, what it do" — a second, embedded question with its own opposite-direction verb) and blindly substitutes it into the PRIOR turn's query pattern, preserving the prior turn's direction ("who uses store.mjs" + this turn → "who uses the store, what it do", still reverse). Confirmed via a standalone `parseQuery()` call: the literal typed text parses to a clean miss; keywords.mjs only ever sees the already-corrupted reconstructed string and behaves reasonably on it. The fix belongs in `discourseRewrite` (chat.mjs), outside the query-routing region — not a direction bug in keyword-spot itself.
+- [ ] **`chat.mjs` singularizes verbs on read-back.** "ann lives in paris" stores `mgx:life-in`
+  and reads back as "ann **lifes** in paris" — the singularization pass strips the wrong suffix.
+  Found while landing the chat/ledger ask/turn projector; the projector itself is unaffected
+  (predicates travel as opaque edges), this is `chat.mjs`'s own grammar layer.
+- [ ] **`tmct.turn`'s honest-miss message is CLI-flavoured on web pages.** "how many unicorns are
+  there" on a memory-only page answers "no code graph is loaded yet… index this repo with `tmct
+  index`" — correct advice for the CLI, wrong and confusing on a browser page with no filesystem to
+  index. Pre-existing in `chat.mjs`, shared by every memory-only page (sprites, now ingest); each
+  page currently has to work around it locally rather than the engine giving a page-appropriate
+  miss.
+- [ ] **`ask.mjs`'s strategy precedence misfires on 3+ same-class individuals.** "where are the
+  disks" (3 disks) is intercepted by the fuzzy code-module resolver and returns a spurious
+  ambiguity ("did you mean disk-1, disk-2, disk-3?") before the world-relation fallback — which
+  only runs after an honest miss — ever gets a turn. 2 individuals of the same class work fine.
+  Reproduced identically against a spider-fly world payload, so it's the engine's own precedence,
+  not a projector bug — found while landing the plan Hanoi-board projector. Left unfixed: the
+  precedence ordering is engine-wide (every world page shares it), so higher risk than a
+  single-page fix.
+- [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
+  `contradiction` — bit three separate test fixtures across two sessions before this was caught
+  everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
+  should use `mgx:father` or `mgx:mass`.
+
+## In flight (coordinator-dispatched batch, 2026-07-31)
+
+Three worktree agents dispatched against the four open items above (the `mgx:hasProperty` item is
+a documentation note, not actionable — no track).
+
+- [ ] **Track F** — `chat.mjs` verb singularization + page-appropriate `tmct.turn` honest-miss
+  message (both items live in the same file). worktree: dispatched, not yet landed. Status: started.
+- [ ] **Track G** — `ask.mjs` strategy-precedence fix for 3+ same-class individuals. worktree:
+  dispatched, not yet landed. Status: started.
+
+Landed and merged to main:
+- Track H (wire-tape CSS consolidated into `share-overlay-viz.mjs`, `--so-*` tokens throughout) —
+  blast-radius 137/137 + `test:fast` 209/209 green.
 
 ## Discipline
 
@@ -91,5 +212,41 @@ Three hard-won lessons, carried forward:
    applies to a roll commit too, even though `roll.mjs`'s own artifact regeneration feels like it
    should be self-verifying.
 
+6. (2026-07-24) Lesson 5's brief line is necessary but not sufficient: with the up-front
+   "foreground only, never end your turn on a running command" instruction in EVERY dispatch,
+   four of eight background sub-agents in one session still ended turns on "I'll wait for the
+   notification" — twice for runs that were genuinely live (those resume correctly on the real
+   notification; leave them alone once `ps` confirms the process), twice for phantom waits
+   (nothing running; `SendMessage` the correction, pointing at the teed log if the run already
+   finished green). The triage that works: `ps aux | grep <worktree-id>` FIRST, then
+   `git log`/`status` on the worktree — a live process means wait, a dead one means correct or
+   take over. A second identical stall on the same agent means stop it and let the coordinator
+   commit its (real, verified) work directly — that recovery took minutes and lost nothing.
+
+7. (2026-07-24) The merge gate's blast-radius run is not a substitute for the full suite on a
+   push to `main`. A merge whose own lane and estate guard were green went out without
+   `npm test`; CI's `unit` job then failed on `test/adapters/memory-seed-perf.test.mjs`'s
+   scaling ratio (12.72x against its 12x bar) — a contention flake, not a regression (the
+   local full suite ran 4093/4093 straight after). Two corrections: run the full suite before
+   every push that reaches the remote, and when a timing test flakes, harden it rather than
+   re-running it. That test had already been hardened once (min-of-5 after flakes at 6.30x and
+   10.49x); the remaining weakness is that a RATIO amplifies leftover noise asymmetrically —
+   the long batch's every trial can catch contention while the short batch catches a quiet
+   moment. Its bar is now 20x, which still leaves the whole quadratic band (64x up) outside.
+
+8. (2026-07-30) Two new ones from this session's large parallel-sprite-content wave. First: the
+   coordinator's own shell can silently carry a stale working directory across Bash calls even with
+   an explicit `cd` earlier in the same turn — a `git merge` once ran inside a sub-agent's worktree
+   instead of the main checkout because of this, caught immediately by `pwd`/`git branch
+   --show-current` returning the wrong path before anything was touched. Always `cd
+   <repo-root>; pwd` as the very first line of any merge-sequence Bash call, never trust the prior
+   call's `cd` to have stuck. Second: sibling content-authoring agents that each append a test
+   section to the SAME shared file (here, `test/adapters/sprite-large-template-files.test.mjs`)
+   reliably collide on top-level `const`/`function` names even when their actual test content
+   doesn't overlap — `git merge` cannot auto-resolve a same-name redeclaration, and the fix is a
+   manual reconciliation renaming one side's identifiers, not a blind pick of one branch. Worth
+   briefing distinct naming into any future dispatch batch that has multiple agents extending one
+   test file, rather than discovering it at every merge.
+
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
+history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*

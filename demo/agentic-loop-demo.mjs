@@ -4,8 +4,8 @@
 // anywhere in the loop.
 //
 // This is NOT a new engine: it reuses agentbench's own already-tested, already-
-// validated infrastructure verbatim (createRunCtx + goalDriver, agentbench/run.mjs
-// + agentbench/driver-goal.mjs) — the same machinery AGENTBENCH_0.8.2 measures at
+// validated infrastructure verbatim (createRunCtx + goalDriver, test-benchmarks/agentbench/run.mjs
+// + test-benchmarks/agentbench/driver-goal.mjs) — the same machinery AGENTBENCH_0.8.2 measures at
 // 100% plan / 98% result / 0% hallucination. The point of this script is only to
 // make that capability VISIBLE as a runnable transcript, not to build anything new.
 //
@@ -18,8 +18,8 @@
 //
 // Usage: node demo/agentic-loop-demo.mjs
 
-import { createRunCtx } from "../agentbench/run.mjs";
-import { goalDriver } from "../agentbench/driver-goal.mjs";
+import { createRunCtx } from "../test-benchmarks/agentbench/run.mjs";
+import { goalDriver } from "../test-benchmarks/agentbench/driver-goal.mjs";
 
 // Five requests chosen to show the full ladder this loop actually climbs —
 // INCLUDING the one honest refusal that used to be a confident-wrong answer

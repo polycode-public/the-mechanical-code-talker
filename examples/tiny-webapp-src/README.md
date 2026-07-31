@@ -28,7 +28,7 @@ node --test test/*.test.mjs
 
 `parseRow` (`lib/parse.mjs`) has exactly two call sites, one per importing
 module: `lib/store.mjs`'s `loadRows` and `app.mjs`'s `previewFirstRow`. That is
-deliberate — this fixture is PLAN_CODE.md Track 5's first milestone target: a
+deliberate — this fixture is PLAN_CODE_PLANNING.md Track 5's first milestone target: a
 planned two-step refactor (rename `parseRow`, then move it to a sibling module,
 updating both importers) verified by re-running this test suite after each
 step.

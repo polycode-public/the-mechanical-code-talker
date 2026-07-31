@@ -5,7 +5,7 @@
 // three tables ([games.spider-fly], [games.guess-number], [planning]).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_GAME_CONFIG, resolveGameConfig } from "../../src/domain/game-config.mjs";
+import { DEFAULT_GAME_CONFIG, resolveGameConfig, massScaleFor } from "../../src/domain/game-config.mjs";
 
 test("resolveGameConfig returns the full shipped defaults when given no toml input at all", () => {
   assert.deepEqual(resolveGameConfig(null), DEFAULT_GAME_CONFIG);
@@ -80,14 +80,66 @@ test("resolveGameConfig: a partial [games.guess-number] override leaves the unse
   assert.equal(resolved.guessNumber.maxBound, DEFAULT_GAME_CONFIG.guessNumber.maxBound);
 });
 
+test("resolveGameConfig: mud game defaults resolve correctly for at least two species", () => {
+  const resolved = resolveGameConfig(null);
+  assert.equal(resolved.mud.moleInitialMass, DEFAULT_GAME_CONFIG.mud.moleInitialMass);
+  assert.equal(resolved.mud.moleSpeed, 1);
+  assert.equal(resolved.mud.badgerInitialMass, DEFAULT_GAME_CONFIG.mud.badgerInitialMass);
+  assert.equal(resolved.mud.badgerSpeed, 2, "larger animals have higher speed");
+  assert.equal(resolved.mud.groundhogDigReach, 2, "larger animals have higher dig reach");
+});
+
+test("resolveGameConfig: a partial [games.mud] override merges over the defaults without dropping unset siblings", () => {
+  const toml = { games: { mud: { mole_speed: 3 } } };
+  const resolved = resolveGameConfig(toml);
+  assert.equal(resolved.mud.moleSpeed, 3, "the set key overrides the default");
+  assert.equal(resolved.mud.moleInitialMass, DEFAULT_GAME_CONFIG.mud.moleInitialMass, "every unset sibling keeps its default");
+  assert.equal(resolved.mud.badgerSpeed, DEFAULT_GAME_CONFIG.mud.badgerSpeed, "unrelated species are untouched");
+  assert.deepEqual(resolved.spiderFly, DEFAULT_GAME_CONFIG.spiderFly, "an unrelated table is completely untouched");
+});
+
+test("resolveGameConfig: [games.mud] snake_case keys map onto camelCase counterparts", () => {
+  const toml = {
+    games: {
+      mud: {
+        mole_initial_mass: 10,
+        mole_speed: 2,
+        badger_initial_mass: 25,
+        badger_dig_reach: 3,
+        groundhog_mass_decrement_per_turn: 0.5,
+      },
+    },
+  };
+  const resolved = resolveGameConfig(toml);
+  assert.equal(resolved.mud.moleInitialMass, 10);
+  assert.equal(resolved.mud.moleSpeed, 2);
+  assert.equal(resolved.mud.badgerInitialMass, 25);
+  assert.equal(resolved.mud.badgerDigReach, 3);
+  assert.equal(resolved.mud.groundhogMassDecrementPerTurn, 0.5);
+});
+
 test("resolveGameConfig returns a fully populated object of the same shape every time, never sparse", () => {
   const resolved = resolveGameConfig({ games: { "spider-fly": { spider_vision_radius: 2 } } });
-  assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "planning", "spiderFly"]);
+  assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "mud", "planning", "spiderFly"]);
   assert.deepEqual(Object.keys(resolved.spiderFly).sort(), Object.keys(DEFAULT_GAME_CONFIG.spiderFly).sort());
+  assert.deepEqual(Object.keys(resolved.mud).sort(), Object.keys(DEFAULT_GAME_CONFIG.mud).sort());
   assert.deepEqual(Object.keys(resolved.guessNumber).sort(), Object.keys(DEFAULT_GAME_CONFIG.guessNumber).sort());
   assert.deepEqual(Object.keys(resolved.planning).sort(), Object.keys(DEFAULT_GAME_CONFIG.planning).sort());
 });
 
 test("DEFAULT_GAME_CONFIG.spiderFly.spiderMassDecrementPerTurn is 0.5 (slowed from the shipped 1) — the operator's own starve-too-fast fix", () => {
   assert.equal(DEFAULT_GAME_CONFIG.spiderFly.spiderMassDecrementPerTurn, 0.5);
+});
+
+test("massScaleFor reads the spider/fly mass denominator off the given config, one shared source for a HUD bar and a sprite's expression", () => {
+  const config = { maxSpiderMass: 25, maxFlyMass: 10 };
+  assert.equal(massScaleFor("spider", config), 25);
+  assert.equal(massScaleFor("fly", config), 10);
+});
+
+test("massScaleFor: a class with no denominator (an egg, or anything the config doesn't name) is null, never a guessed number", () => {
+  const config = { maxSpiderMass: 25, maxFlyMass: 10 };
+  assert.equal(massScaleFor("egg", config), null);
+  assert.equal(massScaleFor("spider", {}), null);
+  assert.equal(massScaleFor("spider", undefined), null);
 });

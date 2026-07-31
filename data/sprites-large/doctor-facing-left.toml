@@ -1,0 +1,75 @@
+# doctor-facing-left — doctor-with-emotion.toml's white-coated figure turned
+# to a left profile: the head shifts toward the left shoulder, a nose wedge
+# breaks the head's left silhouette, and a single forward eye replaces the
+# front-facing pair. The coat, stethoscope, and body keep doctor-with-
+# emotion.toml's own geometry — a coat reads the same from the side.
+# Selected only when the instance's own mgx:faces fact says "left". It also
+# carries the shared face-fragment mechanism, so a doctor taught BOTH
+# mgx:faces = left and one of the 6 mgx:feels words renders this profile
+# wearing that mood; taught only the facing, {{FACE}} resolves to nothing
+# and the profile keeps the single forward eye it draws itself.
+classes = ["doctor"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="doctor-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="doctor-facing-left-coat" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#d9d6cc"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#doctor-facing-left-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <circle cx="11.4" cy="6.6" r="3.3" fill="url(#doctor-facing-left-fill)"/>
+  <path d="M8.3 6 Q7.05 7 8.3 8.05 Z" fill="url(#doctor-facing-left-fill)"/>
+  <ellipse cx="9.7" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M7.2 14.6 C6.4 16.5 6 18.5 6 21 L18 21 C18 18.5 17.6 16.5 16.8 14.6 C15.6 15.7 13.9 16.3 12 16.3 C10.1 16.3 8.4 15.7 7.2 14.6 Z" fill="url(#doctor-facing-left-coat)"/>
+  <path d="M9.6 13.3 L12 16.3 L10.6 21 L8.8 21 L9.1 15.2 Z" fill="#d9d6cc"/>
+  <path d="M14.4 13.3 L12 16.3 L13.4 21 L15.2 21 L14.9 15.2 Z" fill="#f2f0e8"/>
+  <path d="M12 16.3 L12 21" stroke="#c7c3b8" stroke-width="0.35" opacity="0.6"/>
+  <circle cx="12" cy="17.6" r="0.35" fill="#b7b3a8"/>
+  <circle cx="12" cy="19.4" r="0.35" fill="#b7b3a8"/>
+  <path d="M9.4 13 C9.4 15.2 9.8 16.6 10.8 17.2 C11.8 17.8 13 17.4 13.3 16.2" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.75" stroke-linecap="round"/>
+  <circle cx="13.6" cy="16.4" r="0.9" fill="currentColor" opacity="0.85"/>
+  <circle cx="9.4" cy="13" r="0.6" fill="currentColor" opacity="0.85"/>
+  <path d="M9 4.2 C9.7 3.6 10.5 3.4 11.4 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from doctor's own head geometry (cx=12 cy=6.6 r=3.3, the same
+# circle doctor-with-emotion.toml's own <circle> declares): the head shifts
+# left by 0.6 to cx=11.4, the nose wedge and forward eye follow the same
+# ratios king's own profile geometry uses, and scale is ~0.65 of the head
+# radius, pulling the fragment's two eyes closer together than a front view.
+[face]
+cx = 10.5
+cy = 6.4
+scale = 2.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

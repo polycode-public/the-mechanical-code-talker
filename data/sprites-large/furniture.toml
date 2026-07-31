@@ -1,7 +1,9 @@
 # furniture — the generic fallback for any furniture piece with no sprite
 # of its own: the console-table silhouette, gradient-shaded from its own
 # taught mgx:madeOf value across the three non-food treatments a generic
-# furniture piece is plausibly built from.
+# furniture piece is plausibly built from. An apron below the top and a
+# stretcher between the legs give it real joinery instead of a tabletop
+# floating over two bare legs.
 classes = ["furniture"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,8 +16,11 @@ svg = """
   </defs>
   <rect x="3.5" y="6.5" width="17" height="3.2" rx="0.8" fill="url(#furniture-fill)"/>
   <path d="M4 7.2 L19.6 7.2" stroke="#ffffff" stroke-width="0.7" opacity="0.4"/>
-  <path d="M5.6 9.7 L4.6 20 L6.7 20 L7.2 9.7 Z" fill="url(#furniture-fill)"/>
-  <path d="M18.4 9.7 L16.8 20 L18.9 20 L19.4 9.7 Z" fill="url(#furniture-fill)"/>
+  <rect x="5.4" y="9.7" width="13.2" height="1.4" fill="url(#furniture-fill)"/>
+  <rect x="5.4" y="9.7" width="13.2" height="1.4" fill="#000000" opacity="0.12"/>
+  <path d="M5.6 11.1 L4.6 20 L6.7 20 L7.2 11.1 Z" fill="url(#furniture-fill)"/>
+  <path d="M18.4 11.1 L16.8 20 L18.9 20 L19.4 11.1 Z" fill="url(#furniture-fill)"/>
+  <line x1="6.4" y1="15.6" x2="17.6" y2="15.6" stroke="{{FILL_DARK}}" stroke-width="0.8" opacity="0.5"/>
 </svg>
 """
 

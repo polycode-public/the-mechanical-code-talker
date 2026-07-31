@@ -172,6 +172,22 @@ test("ingestText: ephemeral (no memoryDir) grounds facts and mutates nothing on 
   assert.ok(result.extracted.every((f) => /^extracted:/.test(f.provenance)));
 });
 
+test("ingestText: a leading ordinal adverb threads a capability across two sentences", async () => {
+  const result = await ingestText("First a cell grows. Then it splits.");
+  assert.equal(result.recognized, 2, "both the lead sentence and the threaded pronoun sentence ground");
+  const has = (s, p, o) => result.extracted.some((f) => f.subject === s && f.predicate === p && f.object === o);
+  assert.ok(has("cell", "mgx:capableOf", "grow"), '"First a cell grows." grounds cell capableOf grow');
+  assert.ok(has("cell", "mgx:capableOf", "split"), '"Then it splits." carries the cell subject and grounds split');
+  assert.ok(!result.extracted.some((f) => f.subject === "it"), "the pronoun is never stored as a subject");
+});
+
+test("ingestText: a leading temporal adverb before a habitual clause grounds it", async () => {
+  const result = await ingestText("First a seed sprouts. Then it flowers.");
+  const has = (s, p, o) => result.extracted.some((f) => f.subject === s && f.predicate === p && f.object === o);
+  assert.ok(has("seed", "mgx:capableOf", "sprout"), "the ordinal lead-in is stripped before the habitual match");
+  assert.ok(has("seed", "mgx:capableOf", "flower"), "the threaded pronoun sentence grounds the second capability");
+});
+
 // ---- clause candidates ---------------------------------------------------
 
 test("clauseCandidates: whole sentence first, then verb-bearing clauses of a marker split", () => {
@@ -250,4 +266,184 @@ test("ingestText: --canonical renders each ingested fact as a triple linked back
   } finally {
     await rm(repoDir, { recursive: true, force: true });
   }
+});
+
+test("optimisticTriples: the isa scan never crosses a clause or a prepositional complement", () => {
+  // A copula inside a subordinate frame is not "X is-a Y" — the nouns either
+  // side belong to different clauses.
+  assert.deepEqual(
+    optimisticTriples("One big reason life can exist here is that Earth has a lot of water on its surface."),
+    [],
+  );
+  // A locative "is in" is placement, not class membership.
+  assert.deepEqual(
+    optimisticTriples("Most of Earth's water is in the oceans, which cover most of the planet's surface."),
+    [],
+  );
+  // A passive participle after the copula is not class membership either.
+  assert.deepEqual(
+    optimisticTriples("Most of this land is grouped into large continents, like North America and Africa."),
+    [],
+  );
+  // The clean copula frames those guards must not touch.
+  assert.deepEqual(
+    optimisticTriples("Earth is the third planet from the Sun and the only place known where life exists."),
+    [{ subject: "earth", predicate: "rdfs:subClassOf", object: "planet" }],
+  );
+  // The relative clause "that has lava" predicates about the SENTENCE subject:
+  // the isa AND the relation verb it grounds both come out of one sentence.
+  assert.deepEqual(
+    optimisticTriples("A volcano is a mountain that has lava coming out from a magma chamber under the ground."),
+    [
+      { subject: "volcano", predicate: "rdfs:subClassOf", object: "mountain" },
+      { subject: "volcano", predicate: "tmct:has", object: "lava" },
+    ],
+  );
+});
+
+test("optimisticTriples: a compound noun is captured whole, never reduced to its modifier", () => {
+  // "string instrument" is the class; "string" alone is its modifier and a
+  // wrong fact ("a violin is a kind of string"). The "which has four strings"
+  // relative clause binds to the sentence subject, so a true relation fact comes
+  // out alongside the isa.
+  assert.deepEqual(
+    optimisticTriples("The violin is a string instrument which has four strings and is played with a bow."),
+    [
+      { subject: "violin", predicate: "rdfs:subClassOf", object: "string instrument" },
+      { subject: "violin", predicate: "tmct:has", object: "string" },
+    ],
+  );
+  // The subject side captures its run the same way.
+  assert.deepEqual(
+    optimisticTriples("A guinea pig is a small rodent."),
+    [{ subject: "guinea pig", predicate: "rdfs:subClassOf", object: "rodent" }],
+  );
+  // Single-word entities keep the plain lemma fold.
+  assert.deepEqual(
+    optimisticTriples("A dog is an animal."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "animal" }],
+  );
+});
+
+test("optimisticTriples: an attributive hyphenated adjective is skipped; the real head noun after a modifier list is the class", () => {
+  // wink tokenizes "medium-sized" as medium/NOUN + "-"/PUNCT + sized/VERB and
+  // never re-fuses it, so a naive noun-run stops at "medium" and mints the wrong
+  // class. The object scan must walk past the whole coordinate modifier list
+  // ("medium-sized, burrowing, nocturnal") to the real head noun "mammal".
+  assert.deepEqual(
+    optimisticTriples("The aardvark is a medium-sized, burrowing, nocturnal mammal."),
+    [{ subject: "aardvark", predicate: "rdfs:subClassOf", object: "mammal" }],
+  );
+  // A hyphenated compound whose second half is not a VERB/ADJ (mother-in-law:
+  // NOUN + "-" + ADP) never triggers the attributive walk. This sentence's
+  // pre-existing "law ⊑ teacher" read (a separate subject-side truncation, not
+  // fixed here) is confirmed unchanged, so the new check did not make it worse.
+  assert.deepEqual(
+    optimisticTriples("My mother-in-law is a teacher."),
+    [{ subject: "law", predicate: "rdfs:subClassOf", object: "teacher" }],
+  );
+});
+
+test("optimisticTriples: a partitive container is composition, never a class; a classifier reads through", () => {
+  // "a large body of ice" states what a glacier is made of, not what kind of
+  // thing it is — no isa at all.
+  assert.deepEqual(optimisticTriples("A glacier is a large body of ice and snow."), []);
+  assert.deepEqual(optimisticTriples("A lake is a large body of water."), []);
+  // A classifier head reads through to the real class.
+  assert.deepEqual(
+    optimisticTriples("A dog is a type of mammal."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal" }],
+  );
+  // A plain content head before "of" keeps the outer class.
+  assert.deepEqual(
+    optimisticTriples("Chess is a game of skill."),
+    [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }],
+  );
+});
+
+test("optimisticTriples: a naming periphrasis stays copular; the copula's own modal chain is crossable", () => {
+  assert.deepEqual(
+    optimisticTriples("An identifier can be termed as a name given to something unique, an object, or a set of objects."),
+    [{ subject: "identifier", predicate: "rdfs:subClassOf", object: "name" }],
+  );
+  // "is grouped into" has no "as" — still a passive complement, still no isa.
+  assert.deepEqual(
+    optimisticTriples("Most of this land is grouped into large continents, like North America."),
+    [],
+  );
+});
+
+test("optimisticTriples: a verb-tier of-chain subject climbs to its head, never the inner noun", () => {
+  // The nearest noun left of "creates" is the of-chain's inner noun ("snow");
+  // the grammatical subject is its head ("weight"), reached by a two-hop climb
+  // through "of all of the".
+  assert.deepEqual(
+    optimisticTriples("The weight of all of the snow creates pressure."),
+    [{ subject: "weight", predicate: "tmct:creates", object: "pressure" }],
+  );
+  // The same climb over a single "of".
+  assert.deepEqual(
+    optimisticTriples("The pressure of the ice creates heat."),
+    [{ subject: "pressure", predicate: "tmct:creates", object: "heat" }],
+  );
+  // A classifier head reads THROUGH — "a kind of X" outer never becomes the
+  // subject, so the inner noun is kept.
+  assert.deepEqual(
+    optimisticTriples("A kind of snow creates pressure."),
+    [{ subject: "snow", predicate: "tmct:creates", object: "pressure" }],
+  );
+});
+
+test("optimisticTriples: a copula-subject of-chain with no readable head abstains, never the inner-noun confusion", () => {
+  // "The top of the mountain is a crater" is not "mountain ⊑ crater": the
+  // subject is "top", which the tagger reads as a modifier, so no readable head
+  // fronts the of-chain and the frame abstains rather than store the inner noun.
+  assert.deepEqual(optimisticTriples("The top of the mountain is a crater."), []);
+});
+
+test("optimisticTriples: a non-relative multi-verb sentence contributes a fact per clause", () => {
+  // Two coordinated clauses, each with its own nearest-entity-leftward subject:
+  // one sentence, two facts, neither in a relative frame.
+  assert.deepEqual(
+    optimisticTriples("A furnace produces heat and a pump creates pressure."),
+    [
+      { subject: "furnace", predicate: "tmct:produces", object: "heat" },
+      { subject: "pump", predicate: "tmct:creates", object: "pressure" },
+    ],
+  );
+});
+
+test("optimisticTriples: a relation-verb run-on stays bounded, never shatters into noise", () => {
+  const triples = optimisticTriples(
+    "A machine uses power and has parts and contains gears and produces motion and creates force and needs oil.",
+  );
+  assert.ok(triples.length <= 4, `bounded to at most four triples, got ${triples.length}`);
+  assert.deepEqual(triples[0], { subject: "machine", predicate: "tmct:uses", object: "power" });
+});
+
+test("optimisticTriples: the widened tiers leave every abstention and clean-isa guard exactly as before", () => {
+  // The abstention guards — each must still ground nothing.
+  for (const s of [
+    "One big reason life can exist here is that Earth has a lot of water on its surface.",
+    "Most of Earth's water is in the oceans, which cover most of the planet's surface.",
+    "Most of this land is grouped into large continents, like North America and Africa.",
+    "A glacier is a large body of ice and snow.",
+    "A lake is a large body of water.",
+    "The quick brown fox jumps over something vague.",
+  ]) {
+    assert.deepEqual(optimisticTriples(s), [], `still abstains: ${s}`);
+  }
+  // The clean single-isa frames — each still exactly one class fact and nothing
+  // more (no spurious relation triple crept in behind the copula).
+  assert.deepEqual(optimisticTriples("In the wild, an otter is a small mammal."),
+    [{ subject: "otter", predicate: "rdfs:subClassOf", object: "mammal" }]);
+  assert.deepEqual(optimisticTriples("A guinea pig is a small rodent."),
+    [{ subject: "guinea pig", predicate: "rdfs:subClassOf", object: "rodent" }]);
+  assert.deepEqual(optimisticTriples("A dog is a type of mammal."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal" }]);
+  assert.deepEqual(optimisticTriples("Chess is a game of skill."),
+    [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }]);
+  assert.deepEqual(
+    optimisticTriples("An identifier can be termed as a name given to something unique, an object, or a set of objects."),
+    [{ subject: "identifier", predicate: "rdfs:subClassOf", object: "name" }]);
 });
