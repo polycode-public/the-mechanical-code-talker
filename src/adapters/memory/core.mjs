@@ -34,7 +34,23 @@ import {
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
+import {
+  planHeadRollup, planChainRollup, mergeRollups,
+  isHeadRollupId, isChainRollupId, isRollupId, headRollupTypeOf,
+  isAbsorbedSource, absorbedSourceIds,
+  ROLLUP_PRIOR_PROP, ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_COUNT_PROP,
+  CHAIN_ROLLUP_THRESHOLD,
+} from "../../domain/memory/compaction.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
+
+// The rollup vocabulary and its tuning constants live with the compaction
+// layer; re-exported here so store consumers keep one import site.
+export {
+  GROUP_ROLLUP_THRESHOLD, ROLLUP_KEEP_PER_TYPE, CHAIN_ROLLUP_THRESHOLD, CHAIN_KEEP_DEPTH,
+  ROLLUP_SOURCE_IDS_PROP, ROLLUP_RECORD_IDS_PROP, ROLLUP_COUNT_PROP,
+  ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_PRIOR_PROP,
+  headRollupIdFor, chainRollupIdFor, isHeadRollupId, isChainRollupId, isRollupId,
+} from "../../domain/memory/compaction.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -362,12 +378,18 @@ function factProjectionValues(ind, json) {
   // A collection in the blob; the column carries the common-case single
   // successor, so a reader can filter for live heads without opening the JSON.
   const supersededBy = attr(SUPERSEDED_BY_PROP).split(" ").filter(Boolean)[0] || null;
+  // A pool-1 summary has no tag to re-derive a type from and no Source of its
+  // own: it stands for many absorbed sources of ONE type, which its id carries,
+  // and its trust contribution is the noisy-OR base over what it absorbed.
+  // Both belong in the columns, so a per-type SQL read sees a compacted group
+  // exactly as it sees an uncompacted one.
+  const rollupType = headRollupTypeOf(ind.id);
   return [
     ind.id,
     factGroupId(ind.id),
     attr("rdf:subject"), attr("rdf:predicate"), attr("rdf:object"),
-    attr(SOURCE_ID_PROP) || source.id, source.type,
-    Number(attr(TRUST_SCORE_PROP)) || 0,
+    attr(SOURCE_ID_PROP) || source.id, rollupType || source.type,
+    Number(attr(rollupType ? ROLLUP_PRIOR_PROP : TRUST_SCORE_PROP)) || 0,
     attr(CREATED_AT_PROP),
     attr(OBSERVED_AT_PROP) || null,
     supersededBy,
@@ -1420,12 +1442,31 @@ function recomputeSourceReliability(payload) {
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable).
  *  Returns the stored reference — callers should index THAT, not `ind`. */
+/**
+ * Two rollup summaries at one id JOIN instead of overwriting: union the ids
+ * they absorbed, then re-derive count, bounds and prior from that union. This
+ * is what lets two peers that compacted the same group at different moments
+ * converge — union, min and max are all joins, so the result is the same in
+ * either order and applying it twice changes nothing. Re-writing a summary that
+ * already holds everything the incoming one does is therefore a no-op, which is
+ * why compaction's own write can go through this path unchanged.
+ *
+ * Everything that is not a summary keeps plain last-write-wins.
+ */
+function joinIfRollup(payload, prior, incoming) {
+  if (!isRollupId(incoming?.id)) return incoming;
+  const sourceType = headRollupTypeOf(incoming.id);
+  if (!sourceType) return mergeRollups(prior, incoming);
+  const sources = sourcesByIdMap(payload);
+  return mergeRollups(prior, incoming, { priorFor: (sid) => assertionPrior(sourceType, sources[sid]) });
+}
+
 function upsertIndividual(payload, ind) {
   const idx = memoryIndexOf(payload);
   if (idx) {
     const prior = idx.individualsById.get(ind.id);
     if (prior) {
-      Object.assign(prior, ind);
+      Object.assign(prior, joinIfRollup(payload, prior, ind));
       return prior;
     }
     payload.individuals.push(ind);
@@ -1439,7 +1480,10 @@ function upsertIndividual(payload, ind) {
     return ind;
   }
   const i = payload.individuals.findIndex((x) => x?.id === ind.id);
-  if (i >= 0) { payload.individuals[i] = ind; return ind; }
+  if (i >= 0) {
+    payload.individuals[i] = joinIfRollup(payload, payload.individuals[i], ind);
+    return payload.individuals[i];
+  }
   payload.individuals.push(ind);
   return ind;
 }
@@ -1633,7 +1677,30 @@ function assertionGroupsFor(payload, groupId, provenance) {
   if (groups.length === 1 && groups[0].sourceId === NO_SOURCE_ID) {
     if (factRecordIdsFor(payload, groupId).length) return [];
   }
-  return groups;
+  // A source this group has already compacted away stays compacted. Every
+  // delivery path for a fact lands here, so this is where a late or re-synced
+  // copy of an absorbed assertion is recognized and dropped rather than
+  // inserted — without it the next sync resurrects everything compaction just
+  // folded, which is what makes deleting from a replicated set hard at all.
+  const rollups = headRollupsFor(payload, groupId);
+  if (!rollups.length) return groups;
+  return groups.filter((group) => !isAbsorbedSource(rollups, group.sourceId));
+}
+
+/** A group's pool-1 summaries, one per compacted source type. Reads the index
+ *  directly rather than through factRecordIdsFor, because this runs on EVERY
+ *  fact write and nearly always finds nothing — the common case must not pay
+ *  for an array copy. */
+function headRollupsFor(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  const ids = idx ? idx.factRecordsByGroup.get(groupId) : factRecordIdsFor(payload, groupId);
+  const rollups = [];
+  for (const id of ids || []) {
+    if (!isHeadRollupId(id)) continue;
+    const record = storedIndividual(payload, id);
+    if (record) rollups.push(record);
+  }
+  return rollups;
 }
 
 /**
@@ -1799,6 +1866,131 @@ function storedIndividual(payload, id) {
   return idx ? idx.individualsById.get(id) : payload.individuals.find((x) => x?.id === id);
 }
 
+/** Remove absorbed records and scrub any edge that named them, mirroring
+ *  removeFacts' own discipline. An orphaned Source is left in place: a source
+ *  whose assertion was compacted is still a real source with a track record. */
+function dropAbsorbedRecords(payload, ids) {
+  const drop = new Set(ids);
+  if (!drop.size) return;
+  payload.individuals = (payload.individuals || []).filter((ind) => !drop.has(ind?.id));
+  for (const group of payload.objectProperties || []) {
+    const before = group.examples || [];
+    const after = before.filter((e) => !drop.has(e?.subject) && !drop.has(e?.object));
+    if (after.length === before.length) continue;
+    group.examples = after;
+    group.count = after.length;
+  }
+  const idx = memoryIndexOf(payload);
+  if (!idx) return;
+  for (const id of drop) {
+    idx.individualsById.delete(id);
+    idx.statedByBySubject.delete(id);
+    const groupId = factGroupId(id);
+    const held = (idx.factRecordsByGroup.get(groupId) || []).filter((x) => x !== id);
+    if (held.length) idx.factRecordsByGroup.set(groupId, held);
+    else idx.factRecordsByGroup.delete(groupId);
+  }
+}
+
+/**
+ * Bound one triple's record growth, on the write that grew it. Two pools, two
+ * triggers, two summaries, never mixed:
+ *
+ *   - pool 1 absorbs the OLDEST live heads of one source TYPE once that type
+ *     holds GROUP_ROLLUP_THRESHOLD of them, keeping the newest
+ *     ROLLUP_KEEP_PER_TYPE intact. Its summary carries a prior, because every
+ *     head it absorbed was a live vote in the group fold and dropping that
+ *     contribution would silently under-trust the compacted answer.
+ *   - pool 2 absorbs the OLDEST demoted leaves of ONE source's own chain once
+ *     that chain holds CHAIN_ROLLUP_THRESHOLD of them, keeping the newest
+ *     CHAIN_KEEP_DEPTH. Its summary carries no prior: a demoted leaf counts for
+ *     nothing while it stands, and compacting it must not change that.
+ *
+ * A head absorbed by pool 1 takes its own chain with it. The chain is reachable
+ * only through the head, so once the head is summarized its history answers no
+ * question this model asks, and leaving it behind would orphan it.
+ */
+function compactFactGroup(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  const ids = (idx ? idx.factRecordsByGroup.get(groupId) : factRecordIdsFor(payload, groupId)) || [];
+  // Nearly every fact has no summary in either pool, and the record count says
+  // so before anything else is read: pool 2 has the lower trigger, so a group
+  // under it can fire neither pool.
+  if (ids.length < CHAIN_ROLLUP_THRESHOLD) return;
+
+  const headsByType = new Map();
+  const leavesBySource = new Map();
+  const headRollupByType = new Map();
+  const chainRollupBySource = new Map();
+  for (const id of ids.slice()) {
+    const record = storedIndividual(payload, id);
+    if (!record) continue;
+    const attrOf = (prop) => (record.attributes || []).find((a) => a?.prop === prop)?.value || "";
+    if (isHeadRollupId(id)) { headRollupByType.set(headRollupTypeOf(id), record); continue; }
+    if (isChainRollupId(id)) { chainRollupBySource.set(attrOf(SOURCE_ID_PROP), record); continue; }
+    const provenance = attrOf("mgx:factProvenance");
+    const source = primarySourceOf(provenance);
+    const tags = provenance.split(" | ").filter(Boolean);
+    const entry = {
+      id,
+      sourceId: attrOf(SOURCE_ID_PROP) || source.id,
+      assertedAt: assertionTimestampFor(tags, attrOf(CREATED_AT_PROP)),
+      record,
+    };
+    if (attrOf(SUPERSEDED_BY_PROP)) {
+      const chain = leavesBySource.get(entry.sourceId);
+      if (chain) chain.push(entry);
+      else leavesBySource.set(entry.sourceId, [entry]);
+      continue;
+    }
+    // src:none stands for "no source at all" — it has no type, so it belongs to
+    // no per-type pool and is never compacted.
+    if (!source.type) continue;
+    const heads = headsByType.get(source.type);
+    if (heads) heads.push(entry);
+    else headsByType.set(source.type, [entry]);
+  }
+
+  const sources = sourcesByIdMap(payload);
+  const absorbed = [];
+
+  for (const [sourceType, heads] of headsByType) {
+    const plan = planHeadRollup({
+      groupId, sourceType, heads,
+      existing: headRollupByType.get(sourceType) || null,
+      priorFor: (sid) => assertionPrior(sourceType, sources[sid]),
+    });
+    if (!plan) continue;
+    upsertIndividual(payload, plan.rollup);
+    absorbed.push(...plan.absorbed);
+    for (const sourceId of plan.absorbedSourceIds) {
+      for (const leaf of leavesBySource.get(sourceId) || []) absorbed.push(leaf.id);
+      leavesBySource.delete(sourceId);
+      const chainRollup = chainRollupBySource.get(sourceId);
+      if (chainRollup) absorbed.push(chainRollup.id);
+      chainRollupBySource.delete(sourceId);
+    }
+  }
+
+  for (const [sourceId, leaves] of leavesBySource) {
+    const plan = planChainRollup({
+      groupId, sourceId, leaves,
+      existing: chainRollupBySource.get(sourceId) || null,
+    });
+    if (!plan) continue;
+    upsertIndividual(payload, plan.rollup);
+    absorbed.push(...plan.absorbed);
+    // Keep the chain walkable backward: the oldest leaf still standing points
+    // at the summary rather than at a record that no longer exists. A walk that
+    // reaches it and needs a point inside the absorbed span gets the summary's
+    // own bounds, never a fabricated instant.
+    const rewired = storedIndividual(payload, plan.rewire);
+    if (rewired) setAttr(rewired, SUPERSEDES_PROP, "supersedes", plan.rollup.id);
+  }
+
+  dropAbsorbedRecords(payload, absorbed);
+}
+
 /** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual —
  *  one record per asserting SOURCE, all of them sharing the content-addressed
  *  group id this returns. Same (s,p,o) from the same source resolves onto that
@@ -1834,6 +2026,8 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
           id === plan.candidate.id ? { premiseTrusts, ruleConfidence } : undefined);
       }
     }
+    // After the Sources exist, so a summary can price what it absorbs.
+    compactFactGroup(payload, groupId);
     recountClasses(payload);
   });
   return { id: groupId };
@@ -1932,6 +2126,10 @@ export async function appendFacts(dir, facts) {
     // Reconcile each touched record's Source + trust once (add-only,
     // idempotent), then recount classes a SINGLE time at the end.
     for (const id of touched) syncFactSources(payload, storedIndividual(payload, id), undefined, trustOptsById.get(id));
+    // After the Sources exist, so a summary can price what it absorbs, and once
+    // per touched GROUP rather than once per prepared row — a batch that
+    // asserts the same triple many times compacts it once.
+    for (const groupId of new Set(ids)) compactFactGroup(payload, groupId);
     recountClasses(payload);
   });
   return { ids, appended: ids.length, skipped };
@@ -2357,6 +2555,7 @@ export function readFactRows(memory, opts = {}) {
   for (const ind of individuals) {
     if (ind?.class !== FACT_CLASS) continue;
     if ((ind.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP)) continue; // a demoted leaf, not a head
+    if (isChainRollupId(ind.id)) continue; // a summary of one source's demoted history, which was never a vote
     const groupId = factGroupId(ind.id);
     const group = groups.get(groupId);
     if (group) group.push(ind);
@@ -2380,6 +2579,35 @@ export function readFactRows(memory, opts = {}) {
     const seenEnvironment = new Set();
     let quantifier = "";
     for (const head of heads) {
+      // A pool-1 summary joins the fold as ONE pseudo-record standing for every
+      // head it absorbed: its noisy-OR base is their combined contribution, and
+      // its recency comes from the newest assertion time it absorbed, so the
+      // decay still happens at the reading moment rather than being baked in.
+      // The sources it absorbed stay in the union a reader renders — they did
+      // vouch for this triple, and the summary is where that record now lives.
+      if (isHeadRollupId(head.id)) {
+        const rollupType = headRollupTypeOf(head.id);
+        const absorbed = absorbedSourceIds(head);
+        for (const sid of absorbed) {
+          if (sourceIds.includes(sid)) continue;
+          sourceIds.push(sid);
+          if (rollupType) sourceTypes.push(rollupType);
+        }
+        assertions.push({
+          id: head.id, sourceId: "", sourceType: rollupType,
+          provenance: "",
+          createdAt: attrOf(head, ROLLUP_EARLIEST_PROP),
+          ownTrust: Number(attrOf(head, ROLLUP_PRIOR_PROP)) || 0,
+          assertedAt: attrOf(head, ROLLUP_LATEST_PROP),
+          rollup: {
+            count: Number(attrOf(head, ROLLUP_COUNT_PROP)) || absorbed.length,
+            sourceIds: absorbed,
+            earliest: attrOf(head, ROLLUP_EARLIEST_PROP),
+            latest: attrOf(head, ROLLUP_LATEST_PROP),
+          },
+        });
+        continue;
+      }
       const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
       for (const tag of headTags) tags.add(tag);
       const [statedBy] = byRecord.get(head.id) || [];
