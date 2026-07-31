@@ -14,6 +14,8 @@ stages:
   - e2e
   - deploy
   - verify
+  - site-ready
+  - e2e-deployed
 
 # ---- security scanning (free tier) -----------------------------------------
 # SAST (semgrep) + Pipeline Secret Detection via GitLab's stock templates.
@@ -562,8 +564,17 @@ smoke:post-deploy:
 # re-runs its own slice, not the whole matrix, and the concurrency cap bounds
 # how many of THOSE Chromium instances run at once regardless of the runner's
 # core count.
-.e2e-deployed-base:
-  stage: verify
+# Polls the deployed site (parseVersionStamp against the same page
+# smoke:post-deploy checks) until it serves THIS build's version, capped at
+# ~5 minutes by default (WAIT_FOR_SITE_ATTEMPTS/WAIT_FOR_SITE_DELAY_MS). The
+# e2e-deployed jobs below need this instead of racing deploy:website directly
+# — pipeline history (2721958621, 2722312066) showed real, inconsistent
+# failures (different files, different assertions, every retry) that
+# vanished when the same files were run standalone against the live site
+# moments later: a still-settling CDN, not a code defect. A cheap poll here
+# replaces blindly eating a `retry: 2` on the whole (expensive) e2e matrix.
+site:ready:
+  stage: site-ready
   needs:
     - deploy:website
   environment:
@@ -573,10 +584,25 @@ smoke:post-deploy:
       when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
       changes: *consumer-paths
-  # Kept from the three-file version, and it earns more here: this job starts
-  # seconds after a CDK deploy, so the first attempt can race CloudFront still
-  # settling. A genuinely flaky file should be hardened rather than left to the
-  # retry — the split below already shrinks what a retry has to redo.
+  script:
+    - npm ci
+    - npm run wait:site
+
+.e2e-deployed-base:
+  stage: e2e-deployed
+  needs:
+    - site:ready
+  environment:
+    name: production
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  # site:ready already confirmed the CDN serves this build before this stage
+  # starts, so a retry here is for genuine transient flakes (a dropped CDP
+  # promise under real Chromium-instance contention — see the comment above
+  # smoke:post-deploy), not CDN-settling races.
   retry: 2
   variables:
     TMCT_E2E_BASE_URL: "https://tmct.polycode.co.uk"

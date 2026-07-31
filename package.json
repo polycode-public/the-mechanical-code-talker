@@ -107,6 +107,7 @@
     "check:publish": "node scripts/check-publish.mjs",
     "check:all": "npm run check:links && npm run check:pii && npm run check:licences && npm run check:publint && npm run check:tool-docs && npm run check:budgets",
     "smoke:deploy": "node scripts/post-deploy-smoke.mjs",
+    "wait:site": "node scripts/wait-for-site.mjs",
     "chat": "node --disable-warning=ExperimentalWarning bin/tmct.mjs",
     "chat:repo": "node --disable-warning=ExperimentalWarning bin/tmct.mjs chat --repo",
     "chat:plain": "node --disable-warning=ExperimentalWarning bin/tmct.mjs chat --plain",
