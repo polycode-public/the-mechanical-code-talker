@@ -372,6 +372,7 @@
   "src/domain/interpret/strategies/grammar.mjs",
   "src/domain/interpret/strategies/keywords.mjs",
   "src/domain/interpret/strategies/noise-strip.mjs",
+  "src/domain/memory-facts.mjs",
   "src/domain/memory/bias.mjs",
   "src/domain/memory/capability.mjs",
   "src/domain/memory/compaction.mjs",
