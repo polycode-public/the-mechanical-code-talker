@@ -29,11 +29,30 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
+// Diagnostic only, deliberately noisy: this file's export/ingest tests have
+// failed intermittently in CI against the deployed site (never locally, never
+// run standalone against the live site directly) with an empty-seeming seed —
+// "dog is a kind of animal" missing from an otherwise-normal answer. Every
+// theory tried so far (Chromium-instance contention, chat-seed.json not yet
+// propagated) reproduced nothing when tested directly and was falsified by a
+// clean re-run. Logging exactly what the browser saw is the next step before
+// trying a fourth guess.
 async function openChatPage() {
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
+  page.on("console", (msg) => {
+    if (msg.type() === "warning" || msg.type() === "error") console.log(`[browser console ${msg.type()}] ${msg.text()}`);
+  });
+  page.on("pageerror", (err) => console.log(`[browser pageerror] ${err}`));
+  page.on("requestfailed", (req) => console.log(`[requestfailed] ${req.url()} — ${req.failure()?.errorText}`));
+  page.on("response", (res) => {
+    if (res.url().includes("chat-seed.json") || !res.ok()) {
+      console.log(`[response] ${res.status()} ${res.url()} content-length=${res.headers()["content-length"] ?? "?"}`);
+    }
+  });
   await page.route("**/*", (route) => {
     if (route.request().url().startsWith(server.origin)) return route.continue();
+    console.log(`[route abort — off origin] ${route.request().url()}`);
     return route.abort();
   });
   await page.goto(`${server.origin}/chat.html`, { waitUntil: "networkidle" });

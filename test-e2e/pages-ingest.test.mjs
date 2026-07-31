@@ -101,11 +101,18 @@ test("the ingest page serves every asset it asks for and logs no error of its ow
 });
 
 test("seeded boot (the default) shows band rows and a nonzero total in the docked stats panel", async () => {
-  const { context, page } = await openIngestPage();
+  const { context, page, consoleErrors, failedRequests } = await openIngestPage();
   try {
     assert.equal(await page.locator("#seedToggle").isChecked(), true, "the seed toggle ships checked");
     const total = Number((await statsTotal(page)).replace(/[^\d]/g, ""));
-    assert.ok(total > 100, `expected a real starter-memory total, got ${total}`);
+    // Diagnostic only: this test has failed intermittently in CI against the
+    // deployed site with a zero total, never locally and never standalone
+    // against the live site directly. openIngestPage() already captures these
+    // — surfacing them here so the next CI failure explains itself instead of
+    // just reporting the symptom.
+    assert.ok(total > 100, `expected a real starter-memory total, got ${total}`
+      + (consoleErrors.length ? `; console errors: ${JSON.stringify(consoleErrors)}` : "; no console errors")
+      + (failedRequests.length ? `; failed requests: ${JSON.stringify(failedRequests)}` : "; no failed requests"));
     const labels = await bandRowLabels(page);
     assert.ok(labels.length > 2, "more than just the total-facts row renders");
 
