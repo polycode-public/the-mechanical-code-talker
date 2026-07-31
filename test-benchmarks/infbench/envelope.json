@@ -135,8 +135,8 @@
             "completion": 1,
             "fabricationRate": 0,
             "gatePass": true,
-            "ceilingGraded": 5,
-            "ceilingGradedPassed": 5
+            "ceilingGraded": 0,
+            "ceilingGradedPassed": 0
           },
           "INF-7": {
             "n": 14,
@@ -166,9 +166,6 @@
         "INF-8": [
           "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation",
           "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation"
-        ],
-        "INF-6": [
-          "PLAN_FACT.md dated-teach frame ('as of <date>' -> mgx:observedAt) + latest-observation-wins sibling resolution"
         ]
       }
     }
