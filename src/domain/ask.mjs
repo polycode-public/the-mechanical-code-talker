@@ -4547,7 +4547,7 @@ export function worldRelationGraphPayload(rows, { classOf = () => null } = {}) {
     const { base, stamp } = splitWorldSnapshot(row.subject);
     const cls = declaredClass.get(base) || classOf(base);
     if (!cls) continue;
-    const key = `${row.predicate} ${base}`;
+    const key = `${row.predicate}\u0000${base}`;
     const prior = newest.get(key);
     if (prior && prior.stamp > stamp) continue;
     individuals.set(base, { id: base, label: base, class: cls });

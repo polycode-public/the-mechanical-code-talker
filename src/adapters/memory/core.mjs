@@ -443,7 +443,7 @@ function backfillFactsProjection(db) {
 
 const individualAttr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value || "";
 const individualKey = (ind, key) => (ind?.attributes || []).find((a) => a?.key === key)?.value || "";
-const subjectPredicateKey = (subject, predicate) => `${subject} ${predicate}`;
+const subjectPredicateKey = (subject, predicate) => `${subject}\u0000${predicate}`;
 
 // ---- Derived-local tables: `fact_heads` and `fact_object_supersessions` -----
 // Both are breadcrumbs over a computation that is already correct without them,
@@ -573,7 +573,7 @@ function recordObjectSupersessions(db, ctx, touchedPairs) {
   );
   const recordedAt = nowIso();
   for (const pairKey of touchedPairs) {
-    const [subject, predicate] = pairKey.split(" ");
+    const [subject, predicate] = pairKey.split("\u0000");
     if (resolutionStrategyFor(predicate) !== RESOLUTION_LATEST_OBSERVATION_WINS) continue;
     const groupIds = ctx.groupsByPair.get(pairKey) || [];
     if (groupIds.length < 2) continue; // one object is a state, not a succession
