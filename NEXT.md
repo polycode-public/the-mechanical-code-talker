@@ -121,10 +121,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   example:mini`, so "who are you" reads CLI-flavoured on a browser page. The miss/decline paths
   now split on `uiContext`; these are template data shared with the CLI, so they need a browser
   variant plus whatever the template estate guard expects, rather than a one-line branch.
-- [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
-  `contradiction` — bit three separate test fixtures across two sessions before this was caught
-  everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
-  should use `mgx:father` or `mgx:mass`.
 
 ## Discipline
 
