@@ -142,6 +142,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
   should use `mgx:father` or `mgx:mass`.
 
+## In flight (coordinator-dispatched batch, 2026-07-31)
+
+Three worktree agents dispatched against the four open items above (the `mgx:hasProperty` item is
+a documentation note, not actionable — no track).
+
+- [ ] **Track F** — `chat.mjs` verb singularization + page-appropriate `tmct.turn` honest-miss
+  message (both items live in the same file). worktree: dispatched, not yet landed. Status: started.
+- [ ] **Track G** — `ask.mjs` strategy-precedence fix for 3+ same-class individuals. worktree:
+  dispatched, not yet landed. Status: started.
+- [ ] **Track H** — wire-tape CSS moved into `share-overlay-viz.mjs`, `--so-*` tokens throughout,
+  chat's duplicate removed. worktree: dispatched, not yet landed. Status: started.
+
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
