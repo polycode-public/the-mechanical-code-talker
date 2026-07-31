@@ -617,8 +617,13 @@ site:ready:
     - npm ci
     - npx playwright install --with-deps chromium
 
-# The site shell, also run pre-deploy as e2e-web-index. Nine single-context
+# The site shell, also run pre-deploy as e2e-web-index. Eight single-context
 # pages — the lightest slice, so it keeps node's default concurrency.
+# pages-service-worker.test.mjs moved to pages-timing (below): it precaches
+# the ~93MB chat-seed.json as part of its normal flow, which broke the
+# "everything here is light" assumption this job's concurrency relies on —
+# reproduced clean standalone and against the live site directly, but failed
+# repeatedly here running concurrently with 8 other live Chromium instances.
 e2e:deployed:shell:
   extends: .e2e-deployed-base
   script:
@@ -626,7 +631,7 @@ e2e:deployed:shell:
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
       test-e2e/pages-demo-history.test.mjs test-e2e/pages-demo-templates.test.mjs
-      test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
+      test-e2e/pages-examples.test.mjs
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
 
@@ -686,6 +691,7 @@ e2e:deployed:pages-timing:
       test-e2e/pages-chat-live-toggle.test.mjs
       test-e2e/pages-ingest.test.mjs
       test-e2e/pages-chat-export.test.mjs
+      test-e2e/pages-service-worker.test.mjs
 
 # Sharing between browsers: every file here drives two or three real browser
 # contexts at once, so the heaviest per-file Chromium load in the matrix and
