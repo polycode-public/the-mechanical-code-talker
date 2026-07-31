@@ -25,8 +25,13 @@ export function provenanceTag({ source = "chat", sessionId = "", ts = "" } = {})
  *  `appendFact` (memory/core.mjs's, in the live wiring). Returns the parse
  *  result extended with `ids` (one fact id per triple, same order) and the
  *  provenance tag — or null (grammar miss, nothing written), or the residue
- *  parse (unknown words: triples empty, ids empty, nothing written). */
-export async function assertSentence(dir, sentence, { lexicon, provenance, appendFact } = {}) {
+ *  parse (unknown words: triples empty, ids empty, nothing written).
+ *
+ *  `observedAt`, when given, passes straight through to every appended fact
+ *  — the dated teach frame's own hook (chat.mjs's assertTurn strips the
+ *  "as of <date>" suffix before the sentence ever reaches parseAce, and
+ *  supplies the parsed instant here). */
+export async function assertSentence(dir, sentence, { lexicon, provenance, appendFact, observedAt } = {}) {
   if (typeof appendFact !== "function") {
     throw new TypeError("assertSentence needs an appendFact option (memory/core.mjs's writer) — the grammar never imports the store");
   }
@@ -37,6 +42,7 @@ export async function assertSentence(dir, sentence, { lexicon, provenance, appen
   for (const t of parse.triples) {
     const { id } = await appendFact(dir, {
       subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag,
+      ...(observedAt ? { observedAt } : {}),
     });
     ids.push(id);
   }

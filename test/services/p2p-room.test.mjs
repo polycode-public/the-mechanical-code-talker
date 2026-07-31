@@ -181,6 +181,55 @@ test("a locally taught fact is diffed, relabeled onto this node's name, and merg
   assert.equal(findRow(aliceRows, "rover", "mgx:isA").provenance, "teach:chat:sess-a@2026-05-01T10:00:00.000Z");
 });
 
+test("a dated taught fact's mgx:observedAt is record content — it rides the wire fact and the peer stores the same instant", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  await appendFacts(alice.memoryDir, [{
+    ...teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z"),
+    observedAt: "2019-03-01T00:00:00.000Z",
+  }]);
+  await alice.room.afterLocalChange();
+  await settle();
+
+  const merged = findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA");
+  assert.ok(merged, "the taught fact reached the peer");
+  assert.equal(merged.assertions[0].observedAt, "2019-03-01T00:00:00.000Z");
+});
+
+test("presence-wins: on an id collision at an equal assertion timestamp, a record carrying mgx:observedAt supersedes the same record without one", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bobTransports = [];
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", capture: bobTransports });
+  await connect(alice.room, bob.room);
+
+  // The SAME tag arriving twice — the mixed-version-mesh scenario: an old
+  // relay drops the field first, then a re-sync (or the origin resending)
+  // carries it. Equal assertedAt both times (embedded in the identical tag),
+  // so this is exactly the tie supersedesPriorAssertion breaks on presence.
+  const tag = "teach:peer:amber-fox#node:0123456789abcdef@2026-05-01T10:00:00.000Z";
+  network.injectTo(bobTransports[0], {
+    type: "op", from: "peer-a",
+    facts: [{ subject: "otter", predicate: "mgx:isA", object: "mammal", provenance: tag }],
+  });
+  await settle();
+  const undated = findRow(await rowsOf(bob.memoryDir), "otter", "mgx:isA");
+  assert.equal(undated.assertions.length, 1);
+  assert.equal(undated.assertions[0].observedAt, undefined);
+
+  network.injectTo(bobTransports[0], {
+    type: "op", from: "peer-a",
+    facts: [{ subject: "otter", predicate: "mgx:isA", object: "mammal", provenance: tag, observedAt: "2019-01-01T00:00:00.000Z" }],
+  });
+  await settle();
+  const dated = findRow(await rowsOf(bob.memoryDir), "otter", "mgx:isA");
+  assert.equal(dated.assertions.length, 1, "still one live head for this source — a supersession, never a second vote");
+  assert.equal(dated.assertions[0].observedAt, "2019-01-01T00:00:00.000Z");
+});
+
 test("a fact received from a peer is never broadcast back out", async () => {
   const network = createFakeNetwork();
   const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
