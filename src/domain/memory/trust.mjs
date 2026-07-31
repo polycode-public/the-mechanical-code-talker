@@ -375,6 +375,29 @@ export function computeAssertionGroupTrust(records, opts = {}) {
   return { score: heads.length ? round(Math.min(1, 1 - complement)) : 0, inputs };
 }
 
+/** A half-life that decays nothing: `age / Infinity` is 0, so every record's
+ *  multiplier comes out at exactly 1 and computeAssertionGroupTrust returns the
+ *  same noisy-OR with the time axis removed. */
+export const NO_DECAY_HALF_LIFE = Infinity;
+
+/**
+ * The recency-free BASE of an assertion group's aggregate — the only part of it
+ * that a store can materialise and keep.
+ *
+ * Recency is a function of the READING moment, so an aggregate with the decay
+ * folded in is already wrong by the time anyone reads it back: it would have to
+ * be rewritten on every tick of the clock to stay true. What survives storage is
+ * the part that only changes when the group's own records change. A reader takes
+ * this base's audit trail and runs the same aggregate again at its own `now`,
+ * which is where the decay belongs and the only place it can be right.
+ *
+ * `records` is the same per-record shape computeAssertionGroupTrust folds —
+ * `{ ownTrust, assertedAt, sourceId?, sourceType? }`. Returns { score, inputs }.
+ */
+export function computeAssertionGroupTrustBase(records) {
+  return computeAssertionGroupTrust(records, { halfLifeMs: NO_DECAY_HALF_LIFE });
+}
+
 // Laplace/"add-k" pseudo-count: without it a single data point would saturate
 // mgx:sourceReliability to the bare max/min immediately.
 const RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
