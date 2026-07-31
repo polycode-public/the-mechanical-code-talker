@@ -1,6 +1,6 @@
 // scripts/wait-for-site.mjs — poll the deployed site until it serves this
-// build's version AND its chat-seed.json, so the deployed-e2e jobs never
-// race CloudFront still settling after a CDK deploy. Site-only:
+// build's version AND commit AND its chat-seed.json, so the deployed-e2e jobs
+// never race CloudFront still settling after a CDK deploy. Site-only:
 // smoke:post-deploy already checks the npm/pages pairing separately, in its
 // own stage, for a different question (is the published package live) than
 // this one (is the site the e2e-deployed jobs are about to hit actually the
@@ -16,17 +16,26 @@
 // reads chat.html's own SEED_STAMP and HEAD-checks that exact
 // chat-seed.json?b=<stamp> URL for a real, adequately-sized response —
 // the same URL and cache key a real browser boot uses.
+//
+// The version is not commit-precise either. Several commits share a version
+// between bumps, so a slow deploy still settling while the next push races
+// past it can serve the WRONG commit under a version that checks out. The
+// build stamps CI_COMMIT_SHA into the page too, and this demands it back.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { parseVersionStamp } from "../src/domain/version-stamp.mjs";
+import { parseCommitStamp, parseVersionStamp, shortCommit } from "../src/domain/version-stamp.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { version, homepage } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 
 const SITE_URL = homepage;
 const CHAT_URL = new URL("chat.html", SITE_URL).href;
+// GitLab sets CI_COMMIT_SHA in every job, so the deploy stamps the page with
+// it and this poll demands it back. Empty outside CI, where there is no commit
+// to be precise about and the version check is the whole of the answer.
+const EXPECTED_COMMIT = shortCommit(process.env.CI_COMMIT_SHA ?? "");
 const ATTEMPTS = Number(process.env.WAIT_FOR_SITE_ATTEMPTS ?? 10);
 const DELAY_MS = Number(process.env.WAIT_FOR_SITE_DELAY_MS ?? 30_000);
 const FETCH_TIMEOUT_MS = 20_000;
@@ -45,10 +54,14 @@ async function fetchText(url) {
   return res.text();
 }
 
-async function siteVersion() {
-  const stamped = parseVersionStamp(await fetchText(SITE_URL));
-  if (!stamped) throw new Error("the home page shows no version");
-  return stamped;
+/** The version and commit the live home page carries. The version alone is not
+ *  commit-precise — commits share a version between bumps — so a still-live
+ *  previous build can pass the version check while serving the wrong code. */
+async function homePageBuild() {
+  const html = await fetchText(SITE_URL);
+  const stampedVersion = parseVersionStamp(html);
+  if (!stampedVersion) throw new Error("the home page shows no version");
+  return { version: stampedVersion, commit: parseCommitStamp(html) };
 }
 
 /** chat.html's own SEED_STAMP — the content-hash query chat-page-viz.mjs
@@ -81,20 +94,24 @@ async function seedReady(stamp) {
 }
 
 async function checkOnce() {
-  const seenVersion = await siteVersion();
+  const { version: seenVersion, commit: seenCommit } = await homePageBuild();
   if (seenVersion !== version) throw new Error(`home page serves ${seenVersion}, not ${version}`);
+  if (EXPECTED_COMMIT && seenCommit !== EXPECTED_COMMIT) {
+    throw new Error(`home page serves commit ${seenCommit ?? "(none stamped)"}, not ${EXPECTED_COMMIT}`);
+  }
   const stamp = await chatSeedStamp();
   const bytes = await seedReady(stamp);
-  return { version: seenVersion, stamp, bytes };
+  return { version: seenVersion, commit: seenCommit, stamp, bytes };
 }
 
 async function main() {
-  console.log(`waiting for ${SITE_URL} to serve ${version} with a ready chat-seed.json (up to ${ATTEMPTS} attempts, ${DELAY_MS}ms apart, ~${Math.round((ATTEMPTS * DELAY_MS) / 60_000)}min cap)`);
+  const wanted = EXPECTED_COMMIT ? `${version} at commit ${EXPECTED_COMMIT}` : version;
+  console.log(`waiting for ${SITE_URL} to serve ${wanted} with a ready chat-seed.json (up to ${ATTEMPTS} attempts, ${DELAY_MS}ms apart, ~${Math.round((ATTEMPTS * DELAY_MS) / 60_000)}min cap)`);
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      const { version: seenVersion, stamp, bytes } = await checkOnce();
-      console.log(`attempt ${attempt}/${ATTEMPTS}: home=${seenVersion} chat-seed.json(b=${stamp})=${bytes} bytes`);
-      console.log(`${SITE_URL} is serving ${version} with a ${bytes}-byte chat-seed.json — the deployed-e2e jobs can start`);
+      const { version: seenVersion, commit: seenCommit, stamp, bytes } = await checkOnce();
+      console.log(`attempt ${attempt}/${ATTEMPTS}: home=${seenVersion}@${seenCommit ?? "(none stamped)"} chat-seed.json(b=${stamp})=${bytes} bytes`);
+      console.log(`${SITE_URL} is serving ${wanted} with a ${bytes}-byte chat-seed.json — the deployed-e2e jobs can start`);
       return 0;
     } catch (err) {
       console.log(`attempt ${attempt}/${ATTEMPTS}: ${err.message}`);
