@@ -121,32 +121,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   example:mini`, so "who are you" reads CLI-flavoured on a browser page. The miss/decline paths
   now split on `uiContext`; these are template data shared with the CLI, so they need a browser
   variant plus whatever the template estate guard expects, rather than a one-line branch.
-- [ ] **`ask.mjs`'s strategy precedence misfires on 3+ same-class individuals.** "where are the
-  disks" (3 disks) is intercepted by the fuzzy code-module resolver and returns a spurious
-  ambiguity ("did you mean disk-1, disk-2, disk-3?") before the world-relation fallback — which
-  only runs after an honest miss — ever gets a turn. 2 individuals of the same class work fine.
-  Reproduced identically against a spider-fly world payload, so it's the engine's own precedence,
-  not a projector bug — found while landing the plan Hanoi-board projector. Left unfixed: the
-  precedence ordering is engine-wide (every world page shares it), so higher risk than a
-  single-page fix.
 - [ ] `mgx:hasProperty` is `merge` under PLAN_FACT's resolver table (many-true-at-once), not
   `contradiction` — bit three separate test fixtures across two sessions before this was caught
   everywhere. Any future fixture needing a genuinely single-valued/contradiction-default predicate
   should use `mgx:father` or `mgx:mass`.
-
-## In flight (coordinator-dispatched batch, 2026-07-31)
-
-Three worktree agents dispatched against the four open items above (the `mgx:hasProperty` item is
-a documentation note, not actionable — no track).
-
-- [ ] **Track F** — `chat.mjs` verb singularization + page-appropriate `tmct.turn` honest-miss
-  message (both items live in the same file). worktree: dispatched, not yet landed. Status: started.
-- [ ] **Track G** — `ask.mjs` strategy-precedence fix for 3+ same-class individuals. worktree:
-  dispatched, not yet landed. Status: started.
-
-Landed and merged to main:
-- Track H (wire-tape CSS consolidated into `share-overlay-viz.mjs`, `--so-*` tokens throughout) —
-  blast-radius 137/137 + `test:fast` 209/209 green.
 
 ## Discipline
 
