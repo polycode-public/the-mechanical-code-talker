@@ -1055,40 +1055,8 @@ const MUD_STYLE = `
   .mud-window.remote .pane-controls button { display: none; }
   .mud-window.remote .room-view { box-shadow: inset 0 0 0 2px rgba(60,60,180,.35); }
 
-  /* the wire tape — ported from chat.html's own instrument, riding inside the
-     sharing overlay's diagnostics fold. Every message in and out, in arrival
-     order, newest first so the latest is readable without scrolling. Themed
-     through the same --so-* custom properties the rest of the overlay reads
-     (MUD_SHARE_SKIN re-points those at the burrow's soil/parchment palette),
-     rather than chat's bare --ink/--muted tokens — those stay pinned to the
-     site's light/dark theme regardless of the overlay's own skin, which would
-     read as near-invisible text on the burrow's always-dark card. */
-  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: .4rem 0 .3rem; }
-  .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--so-muted); }
-  .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
-  .meter-n { color: var(--so-ink); font-variant-numeric: tabular-nums; }
-  .tape { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; border-top: 1px solid var(--so-line); }
-  .tape-row { display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .18rem 0 .18rem .2rem; border-bottom: 1px dotted var(--so-line); font-size: .6rem; font-variant-numeric: tabular-nums; }
-  .tape-row:first-child { animation: tape-arrive .6s ease-out; }
-  .tape-bar { align-self: stretch; border-radius: 1px; background: var(--so-muted); }
-  .tape-clock { color: var(--so-muted); }
-  .tape-type { color: var(--so-ink); overflow-wrap: anywhere; }
-  .tape-detail { color: var(--so-muted); text-align: right; white-space: nowrap; }
-  .tape-row[data-dir="out"] .tape-type::before { content: "\\2192 "; color: var(--so-muted); }
-  .tape-row[data-dir="in"] .tape-type::before { content: "\\2190 "; color: var(--so-muted); }
-  .tape-row[data-dir="note"] .tape-type::before { content: "\\00b7 "; color: var(--so-muted); }
-  .tape-row[data-family="facts"] .tape-bar { background: var(--so-good); }
-  .tape-row[data-family="state"] .tape-bar { background: var(--so-accent); }
-  .tape-row[data-family="greeting"] .tape-bar { background: var(--so-warn); }
-  .tape-row[data-family="signal"] .tape-bar { background: var(--so-warn); }
-  .tape-row[data-family="fault"] .tape-bar { background: var(--so-alert); }
-  .tape-row[data-family="fault"] .tape-type { color: var(--so-alert); }
-  .tape-empty { font-family: ${SANS_STACK}; color: var(--so-muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
-  @keyframes tape-arrive { from { background: var(--so-accent-soft); } to { background: transparent; } }
-
   @media (prefers-reduced-motion: reduce) {
     .wave-hand { animation: none; }
-    .tape-row:first-child { animation: none; }
   }
 `;
 
