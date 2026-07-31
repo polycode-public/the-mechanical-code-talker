@@ -43,6 +43,10 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
 // fresh paragraph never resolves against a stale antecedent.
 const PRONOUN_LEAD_RE = /^(?:they|it|these|those|this)\b\s*/i;
 
+// The turn kinds that move the fact store, so the projected graph a later
+// question traverses has to be rebuilt before it answers.
+const STORE_WRITING_TURNS = new Set(["assert", "retract"]);
+
 /**
  * The single recognizer seam. Splits `text` into paragraphs (blank-line
  * separated, so the pronoun carry never bridges a topic break) and each
@@ -215,10 +219,10 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
   const graphForTurn = () => (graph.individuals.length ? graph : null);
 
   const turnSession = createTurnSession({
-    memoryDir, graph, lexicon, sessionId, vocabHint,
+    memoryDir, lexicon, sessionId, vocabHint,
     buildExtraOptions: () => ({ graph: graphForTurn(), uiContext: "browser" }),
     captureExtraState: (result) => {
-      if (result?.record?.via === "assert" && !result.record.miss) storeMovedSinceGraph = true;
+      if (STORE_WRITING_TURNS.has(result?.record?.via) && !result.record.miss) storeMovedSinceGraph = true;
     },
   });
 

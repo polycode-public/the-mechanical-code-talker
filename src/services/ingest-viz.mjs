@@ -446,7 +446,8 @@ ${THEME_TOKENS_CSS}
       try { turned = await window.tmct.turn(q); } catch { turned = null; }
       if (turned && turned.answer && !(turned.record && turned.record.miss)) {
         addAskAnswer(turned.answer);
-        // A line the dock TAUGHT moved the store, so the panels reading it follow.
+        // A taught line writes to the same store an ingest does, so it earns
+        // the same debounced save and the same panel refresh.
         if (turned.record && turned.record.via === "assert") {
           scheduleSave();
           await renderStatsPanel();
