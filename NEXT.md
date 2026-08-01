@@ -47,7 +47,7 @@ script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, a
 | W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
 | PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | merged, worktree removed | **landed** — 17 unit tests; adopters splice `matchPills`/`pillCandidates`/`createPillComplete` under those exact names, and call `.refresh()` from the page's own pill render pass |
 | WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | merged, worktree removed | **landed** — 116 in its radius, adventure corpus 91 with the coordinator's `chat.mjs` argument applied |
-| REF-CRDT — `docs/references/papers/crdt.md` | top | `.claude/worktrees/agent-a1c4a3e9b06fcf440` | started |
+| REF-CRDT — `docs/references/papers/crdt.md` | top | merged, worktree removed | **landed** — estate 68, links OK |
 
 W0-AUDIT's findings, which the wave-2 lane brief is written against:
 
@@ -90,6 +90,19 @@ files for the whole build and no track may edit them: `chat.mjs`, `build-demo-si
   - `world-teach.mjs` and `adventure.mjs` import each other. Safe today — every binding crossing
     the cycle is a hoisted function declaration, and no estate rule forbids a same-layer cycle —
     but worth knowing before either file grows.
+- **Retraction does not replicate.** `removeFacts` is a real local delete, reached by chat's
+  `/retract` and by mud EDIT mode for the non-fold-versioned predicates. Those predicates are
+  exactly the ones the sync filter replicates, and nothing broadcasts a removal — so over a mesh a
+  retraction is undone by the next sync from any peer that still holds the fact. Found by the CRDT
+  reference pass and reasoned about there: an OR-Set would need causal delivery the transport does
+  not provide, and its tombstones would put holes in the provenance record, which is a product
+  feature. The cheaper route is the shape `compaction.mjs` already uses — a replicated summary
+  record carrying the ids it absorbs, so absorption merges by union and stays a join.
+- **The read-time resolver must stay a pure function of the fact set.** `foldWorldState` broke this
+  once and was fixed from outside itself, by `p2p-room.mjs` sorting Fact individuals by
+  content-addressed id after every merge. Check any future resolver the same way: feed one peer's
+  facts in two different orders and demand the same answer. One that reads a wall clock, a local
+  counter, or array position passes a single-browser test and diverges on the mesh.
 - **Pill-driven predictive text** on the same three pages: typing a prefix completes to a live pill's
   whole grounded command. Sub-clause: adventure.html's pill buttons carry no `data-command`
   attribute, where mud.html's already do. Keyboard completion works fully without it — only the

@@ -29,6 +29,8 @@
 // right.
 //
 // Pure: this module plans and merges summary RECORDS. core.mjs owns the payload.
+// The CRDT vocabulary above (G-Set, join, replicated delete) is pinned in
+// docs/references/papers/crdt.md.
 
 const FACT_CLASS = "Fact";
 
