@@ -2,9 +2,8 @@
 
 **Every item here is DONE or OPEN — there is no in-between, and nothing is deferred.** Work we decide
 not to do is deleted from scope, never negated in place or held as deferred. A chunk that is
-delivered but still has a real remainder stays OPEN, with the remainder recorded in
-`CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md`.
-Prefer deleting a sentence to negating it.
+delivered but still has a real remainder stays OPEN, with the remainder recorded directly in its
+own Open items entry (see the next paragraph for how). Prefer deleting a sentence to negating it.
 
 **A bug found while fixing item A is A's remainder, not a new item.** Write it as a sub-clause of
 A's own entry — what's fixed, what's still open — and leave A's checkbox open until the sub-clause
@@ -24,104 +23,21 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## In-flight right now (2026-07-30)
-
-**`PLAN_TOOL_SURFACE.md` is fully landed, this session — all 11 phases, including phase 11's
-mechanical splice conversion and the coordinator's own read-through of every page's chat/dock
-surface against the operator's "thin caller of real tmct capability" test (no violations found).
-Archivable.** Phases 1-10 landed as follows: Coordinator + background
-sub-agents pushed phases 1-5 and 7 to done: the pure-library sweep and `phraseForRelation` (all ten
-demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz-theme.mjs`/
-`viz-ticker.mjs`/`memory-stats.mjs`/`ask-vocab.mjs`/`game-config.mjs` instead of duplicating them),
-Gap B (`dispatchToolStructured`, tool answers now carry `{ content, data }`), the code-explorer
-proof (its sidebar asks `tmct_ask` for real instead of filtering rows by hand — and found the doc's
-own `tmct_related` premise was wrong along the way, corrected in place), Gap A (memory-graph binding
-is a first-class `KINDS.MemoryTerm` capability-planner kind, and all ten browser-entry pages now
-build a real graph before `ask`/`plan`/`turn` where one applies), and mood-becomes-a-fact
-(`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
-deleted). See the doc's own Phasing section for exact detail per phase.
-
-Phase 6 landed too, by the `ask` route Theme 2 recommended. `ask-vocab.mjs` now carries a
-`WORLD_RELATIONS` table (`mgx:currently-in`, `mgx:feels`, `mgx:mass`, each with its listing nouns),
-`ask.mjs` compiles "list the locations of flies and spiders" — and its where/position/mood/mass
-paraphrases — into a `worldRelation` AST over one predicate with a multi-class subject filter, and
-`worldRelationGraphPayload` projects a world's fact rows into a graph `ask` can traverse, folding
-`@turnN`/`@stepN` rows onto their base subject so the answer is this turn's board. The spider-fly
-page builds that graph before every chat turn; `session.snapshot()` is untouched and still the
-render fast path.
-
-Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
-`rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
-`foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one) and
-**the two test-coverage gaps** (a new
-`test-e2e/pages-service-worker-cache-bust.test.mjs` proves the redeploy repro end to end; the four
-existing chat/ingest/code/research e2e files now assert their fact-count pill's live DOM value, not
-just its generated markup).
-
-**Sprites.html's turntable + move-pose catalog landed, this session.** An operator-requested
-expansion of what was "extend facing pairs, next slice": a 5-point turntable (left/half-left/
-centre/half-right/right, up from left/centre/right) crossed with a new `mgx:pose = "moving"` axis,
-both crossed with the existing six `mgx:feels` moods. The resolver supports combining several
-`[[match]]` constraints in one template (`src/domain/sprite-templates.mjs`'s header carries the
-exact shape and anchor arithmetic), proven on bear/cat/dog/king first, then rolled out across every
-remaining animal and person class in the `*-with-emotion.toml` catalog — 987 sprite-tier TOML files
-total, ~9 per class (facing-left/right, facing-half-left/half-right, the four combined
-facing+moving frames, one centre-facing moving-only file), verified with zero gradient-id
-collisions and zero unresolved placeholder tokens across the whole set. Ten parallel content
-sub-agents landed this in eleven merges, most needing a hand-reconciled conflict in the shared
-`test/adapters/sprite-large-template-files.test.mjs` (several independently discovered and
-worked around the same "does this class have its own centre-moving file" question under different
-names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation). The sprite content
-wave is done, and so is the demo UI for it: `sprites.html` now animates three axes per card at a
-shared 800ms frame delay — the pre-existing mood cycle (top-left, unchanged), a new 5-angle turning
-sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swatch's slot, using the
-`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite`
-(phase 8) is landed too — the tool, its capability record, `FRAMES` entry, and `class` slot binding
-through the existing tier-2 memory-fact-term oracle rather than a new one; "large" resolved to the
-scale tier `data/sprites-large/` ships, re-confirmed against the real 987-file catalog.
-`spider-fly-viz.mjs`'s five-argument sprite call collapsed into `src/domain/sprite-request.mjs`.
-Phase 9 landed too: `sprite-catalog-viz.mjs`'s two hand-rolled parsers are gone —
-`answerSpriteQuestion` deleted in favour of two generic `chat.mjs` lanes (a noun-phrase-aware class
-match shared by the membership/count lanes, and a new object-fronted property lane that reads a
-folded predicate straight off the question, so `mgx:accept-emotion`/`mgx:take-parameter`/
-`mgx:offer-variant` all answer with no hand-kept property-word table), and `extractSceneItems`
-moved into `src/domain/scene-compose.mjs`, resolving each span through `resolveObject`'s exact
-tier only (the fuzzy tier's "wood"→food/"glass"→grass matches are fine for a cited sentence, wrong
-for a sprite drawn silently). The cold-session `ask` condition Phase 6 flagged is fixed too —
-`chat.mjs` now prefers a passed-in graph whenever it holds individuals, so a fresh browser session
-answers a world question on its first turn, not its second.
-
-Gap C (phase 10) landed too: one `globalThis.tmct` — `open`/`session`/`turn`/`ask`/`plan`/`page` —
-replaces all eleven per-page global bags across 51 files. `ask`/`plan` are supplied per page
-(`engine-surface.mjs` carries the two standard ones: `graphAsk` via
-`dispatchToolStructured("tmct_ask")`, `enginePlan` via `buildCapabilityPlanCtx`'s memory-only
-mode); a page wiring neither refuses honestly rather than failing on a method it never had.
-`open` is a fifth name beyond the plan's original four, needed because page-specific open options
-(a payload, a world, a roster) can only come from the page itself. Each page's residual bag shrunk
-to whatever still has no natural-language form — canvas geometry, sprite templates/resolution,
-digest and affordance readers, vendor/provider registration seams; `code-explorer-viz.mjs` keeps
-its factory in a bag too, because the page's own session slot is created lazily on the first turn
-rather than the one `tmct.open` would install eagerly. Two real bugs surfaced and were fixed
-mid-migration: a rename sweep had silently eaten the
-page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e probes were still
-checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
-shape (fixed).
-
 *(Footnote, not an open item: MUD3D was renamed MUDIII, design only, credit to
 `world-of-claudecraft` and MUD1/MUD2 chosen if `mudiii.html` ever ships. An optional email to
 Richard Bartle at that point is the operator's call to make if and when they choose to.)*
-
-**`archive/PLAN_FACT.md`** (multi-record-per-assertion fact model) shipped in full, all 8
-landing-order steps — see `git log` for the commit sequence.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
+## In-flight right now
+
+Nothing in flight.
+
 ## Open items
 
-`SKILL_DO_NEXT.md`'s 2026-08-01 batch (`locative-predicate-dedup`, `code-explorer-seed-retry`,
-`ci-ask-bundle-build`, `gap-a-graph-wiring`) is fully landed on `main` — see `git log`. None open.
+None open.
 
 ## Discipline
 
@@ -129,7 +45,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 blast radius, the versioning and push rules, and the repo-local identity. Read it there. This
 section holds only what `CLAUDE.md` doesn't.
 
-Three hard-won lessons, carried forward:
+Hard-won lessons, carried forward:
 
 1. Background sub-agents sharing one working tree (no worktree isolation) can and did run
    destructive/shared git operations (`git stash`) meant only for the coordinator — recovered
@@ -179,11 +95,10 @@ Three hard-won lessons, carried forward:
    and block synchronously in the foreground. Brief this into every dispatch up front next time
    ("run test commands in the foreground and let them block; do not end your turn on a command
    still running") rather than catching it after the fact three times running.
-   Separately: `npm run roll` bumps the version and regenerates artifacts, but this session pushed
-   the resulting commit without re-running `npm test` locally first, trusting CI to catch a
-   problem — CI did (the screenshot-manifest gap above), but that's a real gap in this session's
-   own discipline, not a success story. `npm test` green at every commit (`CLAUDE.md`'s own rule)
-   applies to a roll commit too, even though `roll.mjs`'s own artifact regeneration feels like it
+   Separately: this session pushed a `npm run roll` commit without re-running `npm test` locally
+   first, trusting CI to catch a problem — CI did (a stale screenshot manifest), but that's a real
+   gap in this session's own discipline, not a success story. `npm test` green at every commit
+   (`CLAUDE.md`'s own rule) applies to a roll commit too, even though a version bump feels like it
    should be self-verifying.
 
 6. (2026-07-24) Lesson 5's brief line is necessary but not sufficient: with the up-front
