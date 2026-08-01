@@ -26,10 +26,8 @@ demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz
 Gap B (`dispatchToolStructured`, tool answers now carry `{ content, data }`), the code-explorer
 proof (its sidebar asks `tmct_ask` for real instead of filtering rows by hand — and found the doc's
 own `tmct_related` premise was wrong along the way, corrected in place), Gap A (memory-graph binding
-is a first-class `KINDS.MemoryTerm` capability-planner kind — six of the ten browser-entry pages now
-build a real graph before `ask`/`plan`/`turn`; `adventure-browser-entry.mjs` and
-`mud-browser-entry.mjs` are the two still passing a permanently-empty one, see Open items), and
-mood-becomes-a-fact
+is a first-class `KINDS.MemoryTerm` capability-planner kind, and all ten browser-entry pages now
+build a real graph before `ask`/`plan`/`turn` where one applies), and mood-becomes-a-fact
 (`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
 deleted). See the doc's own Phasing section for exact detail per phase.
 
@@ -112,22 +110,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-**Batch in flight (`SKILL_DO_NEXT.md`, 2026-08-01):** all four items below dispatched as
-worktree-isolated tracks — `locative-predicate-dedup` (started), `code-explorer-seed-retry`
-(started), `ci-ask-bundle-build` (started), `gap-a-graph-wiring` (started).
+**Batch in flight (`SKILL_DO_NEXT.md`, 2026-08-01):** `locative-predicate-dedup`,
+`code-explorer-seed-retry`, and `gap-a-graph-wiring` landed on `main` this batch (see `git log`).
+`ci-ask-bundle-build` is still running.
 
-- [ ] **The locative-predicate closed set is spelled twice.** `chat.mjs`'s `LOCATIVE_FACT_PREDICATE_RE`
-  and `ask-vocab.mjs`'s new `LOCATIVE_PREPOSITIONS` (added landing individual-level world-relation
-  locatives) are the same preposition family, defined independently in two files — a real drift
-  risk if one gains a preposition the other doesn't. `chat.mjs` importing the set from
-  `ask-vocab.mjs` would collapse it to one; deferred because it's a `chat.mjs` edit outside the
-  track that found it.
-- [ ] **`code-explorer-viz.mjs`'s seed fetch lacks the retry the other three pages got.**
-  `chat-page-viz.mjs`/`ingest-viz.mjs`/`research-viz.mjs` all retry a corrupted `chat-seed.json`
-  fetch once (a transient bad CDN edge-cache entry, not a code defect — see the commit that added
-  it) before falling back to unseeded. `code-explorer-viz.mjs` has the same vulnerable pattern but
-  a more tangled control flow (a desktop-app branch shares the try/catch), left alone rather than
-  edited under time pressure.
 - [ ] **CI still builds bundles once and commits the output, so they can drift from their source.**
   `src/surfaces/web/memory-ask-browser.bundle.js` is committed, packed by `npm publish`, and inlined
   into the deployed ledger page. `test/estate/generated-artifacts.test.mjs` exists solely to catch
