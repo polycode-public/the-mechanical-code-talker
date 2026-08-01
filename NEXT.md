@@ -33,11 +33,41 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Nothing in flight.
+**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 0 of 5, dispatched 2026-08-02. Plus two features the
+operator added to the same run: world teach mode and pill-driven predictive text.
+
+Wave-0 prerequisites landed on `main` first (c45a6fc7): `three` as a devDependency, the two npm
+script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, and the
+`ensure-worlds-pack.mjs` freshness fix.
+
+| track | tier | worktree / branch | status |
+|---|---|---|---|
+| W0-SPIKE — belief extraction, tick fixture header, config sections | top | — | started |
+| W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | — | started |
+| W0-AUDIT — lane/vocabulary collision check (read-only) | Sonnet | — | started |
+| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | — | started |
+
+Worktree paths and branches are filled in as each track reports; the coordinator holds these shared
+files for the whole build and no track may edit them: `chat.mjs`, `build-demo-site.mjs`,
+`public/index.html`, `package.json`, `test/estate/pack-manifest.json`, `test/fast/lanes.test.mjs`,
+`scripts/gen-screenshots.mjs`, `.gitlab-ci.yml`, `NEXT.md`.
 
 ## Open items
 
-None open.
+- **MUDIII ships as `mudiii.html`** alongside `mud.html`, per `PLAN_MUD_MUDIII.md`. Closes when
+  `smoke:deploy` passes against the live page. Known remainders folded in as sub-clauses:
+  - `visibleCells` clips to a module-level `GRID_SIZE = 10`, so 44 of a 12x12 board's 144 cells are
+    invisible to every agent. Fixed as part of the belief extraction.
+  - `believedCellOf`'s docstring claims a removed target is never believed present; a told fact
+    reaches the fallback and returns a cell anyway.
+  - `gen-spider-fly-world.mjs` claims an estate freshness guard regenerates and compares its world
+    source. No such guard exists. Build it for the town square, and for spider-fly while there.
+- **Teach mode** on adventure.html, mud.html and mudiii.html: a checkbox that reads a declarative
+  sentence as a fact against the live world. General semantics — any sentence the editor grammar
+  can express, including moving world-authored things. Sub-clause: `adventure-browser-entry.mjs`'s
+  `applyEdit` does not snapshot-stamp its writes, where mud's does; pre-existing, lands separately.
+- **Pill-driven predictive text** on the same three pages: typing a prefix completes to a live pill's
+  whole grounded command.
 
 ## Discipline
 
