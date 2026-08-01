@@ -135,9 +135,12 @@ In order:
 
 - the file you edited, and whatever imports it;
 - its keyed corpus rows — `node scripts/corpus-matrix.mjs` prints the key × lane map;
-- the estate guard for any generated artifact you touched (the ask bundle, the real-word collision
-  table, the page version stamp) — these fail on drift, so a change that regenerates one is exactly
-  where a targeted run pays;
+- the estate guard for any generated artifact you touched (the real-word collision table, the page
+  version stamp) — these fail on drift, so a change that regenerates one is exactly where a
+  targeted run pays. The browser ask bundle isn't one of these anymore: it's gitignored and built
+  fresh by whichever CI job needs it, not committed, so there's nothing for a drift guard to check
+  — rebuilding it locally (`npm run build:ask-bundle`) still matters before running anything that
+  reads it, just not as an estate-guard failure;
 - whatever the change's own reason names.
 
 `node --test test/tools/ask.test.mjs` costs 0.4s for 125 assertions.

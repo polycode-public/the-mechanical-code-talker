@@ -11,8 +11,8 @@
 // index.html already uses for chat-browser.bundle.js (both are the FULL
 // turn engine, both generated fresh per build, neither meant to be
 // committed), not memory-ask-browser.bundle.js's inlined-text arrangement
-// (that bundle is small, committed, and inlined specifically so ledger.html
-// stays portable on its own — neither reason applies here).
+// (that bundle is small and inlined specifically so ledger.html stays
+// portable on its own — that reason doesn't apply here).
 //
 // renderSpiderFlyHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result

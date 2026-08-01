@@ -9,8 +9,10 @@
 //
 // The output is gitignored and Pages-only: scripts/build-demo-site.mjs builds
 // it fresh on every deploy (and `npm run build:chat-bundle` locally), so the
-// served bundle can never drift from src/. That is the opposite arrangement
-// from the COMMITTED memory-ask bundle, which npm publish packs.
+// served bundle can never drift from src/. The memory-ask bundle is built
+// fresh the same way now (publish:npm, pack:contents, and the shared e2e job
+// bases each build their own copy), but it still ships gitignored INSIDE the
+// npm package itself, which this bundle never does.
 //
 // Stub selection differs from build-ask-bundle.mjs in two deliberate ways:
 //   - ask-nlp/wink-model stay LIVE — the page registers a CDN-loaded wink

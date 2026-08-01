@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "4.1.1",
+  "tmctVersion": "4.1.2",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -16,7 +16,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "079bf697ffae775782152572e93695980ceb6064eb4657bce26a6a3e3a4d3bcb"
+      "sha256": "8205cffc90155880cf6838a70f17626743062f9dce28bbbbe11fcfa04718dd94"
     },
     {
       "page": "spider-fly",
@@ -81,7 +81,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "9a5d9f5a8a31f7a8aa4e22a6ebf6e1d5ea5fbb2a3524e4590bf63bfd6ac7e433"
+      "sha256": "7f1ee13bbb18fadb560226043c7cd0ff49615602b48968481849984e94dd03f0"
     },
     {
       "page": "ingest",
@@ -94,7 +94,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "21201ab727d0da0d84e6522b706e57ec1c3fe2685addfa55db490e58c5bf0d76"
+      "sha256": "e106fa4bc651d6826437b30d330a9706dd41c67f2f15a8a8e33a721cf8beff05"
     },
     {
       "page": "sprites",
@@ -107,7 +107,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "3548e273849a7ccf9657f846cdac58f71fae2467974c0e0742ee93af317fb592"
+      "sha256": "6ef268692ece5f082f76f807896581c9747eb1bb8d1ad8706481aa6f0c8549c9"
     },
     {
       "page": "research",
@@ -120,7 +120,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "78ab8d354d7487b77ef068035c4d0f81f8a5e229c99aa139304f2d71988ee698"
+      "sha256": "7d6b7f62f26ed720558690e4213cd84680c35b1dff970d240a533f08c29e1ca3"
     },
     {
       "page": "mud",
@@ -133,7 +133,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "03acda18b8c668e04a45ac6d97701660dfb1f88a24f297d1ce08e1984ab9d6ca"
+      "sha256": "32895501dd76112368bd2cb45ea58b9c0121f90765c061722bd0cd3f4b2addd3"
     }
   ]
 }
