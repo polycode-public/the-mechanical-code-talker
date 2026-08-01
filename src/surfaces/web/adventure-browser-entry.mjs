@@ -41,6 +41,7 @@ import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { foldWorldState, worldDigestRows, roomAffordances, worldActionRows } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
@@ -103,7 +104,21 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   const openingHere = foldWorldState(worldActionRows(openingRows)).placements.get("player")?.object ?? null;
   if (openingHere) visitedRoomIds.add(openingHere);
 
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // A known-empty code graph: code-structure questions get the same honest
+  // no-code-graph answer an un-pointed CLI session gives, never a crash — the
+  // turn engine keeps reading THIS one for its own in-turn code lane.
+  const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
+
+  // What `tmct.ask()` traverses is a different graph: this world's own memory
+  // store, projected through memoryFactGraphPayload. Rebuilt on demand rather
+  // than once at open, because every taught fact and every played turn grows
+  // the store.
+  let memoryGraph = parseEntities({ individuals: [], objectProperties: [] });
+  async function refreshGraph() {
+    memoryGraph = parseEntities(memoryFactGraphPayload(readFactRows(await loadMemory(memoryDir))));
+    return memoryGraph;
+  }
+
   const lexicon = loadLexicon();
 
   // createTurnSession owns focus/last and the catch fallback; planHolder
@@ -117,7 +132,7 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   // when the command didn't move anyone) — the manual-play half of the
   // merged exposure set.
   const turnSession = createTurnSession({
-    memoryDir, graph, lexicon, sessionId,
+    memoryDir, graph: codeGraph, lexicon, sessionId,
     vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
     buildExtraOptions: () => ({ planState: planHolder.state }),
     captureExtraState: async (result) => {
@@ -129,7 +144,9 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
 
   return {
     memoryDir,
-    graph,
+    codeGraph,
+    get graph() { return memoryGraph; },
+    refreshGraph,
 
     /** One auto-play tick: infer the goal, execute exactly one move through
      *  adventureTurn (adventure-autoplay.mjs's own contract), thread the
@@ -204,7 +221,12 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
 // roomGraphSvg needs escapeHtml, directedGridLayout its own exit-delta table).
 publishTmctSurface({
   open: createAdventureSession,
-  ask: graphAsk,
+  // The memory projection is rebuilt first, so a direct tmct.ask() sees every
+  // fact taught or played into this world since the last one.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
   plan: enginePlan,
   page: {
     resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
