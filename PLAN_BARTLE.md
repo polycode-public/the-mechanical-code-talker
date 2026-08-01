@@ -1,8 +1,8 @@
 # PLAN_BARTLE.md — MUD lineage and naming research for MUDIII
 
-Split out of `PLAN_MUD.md`'s MUDIII section. This document is the lineage/history background and
-the naming research behind the name "MUDIII", kept separate from the game design itself so
-`PLAN_MUD.md` stays about what gets built.
+Split out of the MUDIII design, which now lives in `PLAN_MUD_MUDIII.md`. This document is the
+lineage/history background and the naming research behind the name "MUDIII", kept separate from
+the game design itself so `PLAN_MUD_MUDIII.md` stays about what gets built.
 
 ## Lineage notes (verified 2026-07-30)
 
@@ -117,7 +117,7 @@ asset (a lineage claim with the founder's nod); his objection, arriving before a
 costs a rename of one unshipped page. Either answer is worth more than any further desk
 research. If the name must proceed unblessed, the fallback keeps the homage explicit and the
 succession implicit: brand the page inside tmct's own namespace and let the MUD lineage live
-in the credit line rather than the product name. The design in `PLAN_MUD.md` does not change
+in the credit line rather than the product name. The design in `PLAN_MUD_MUDIII.md` does not change
 under any of these outcomes; only the masthead does.
 
 Sources checked 2026-07-30: en.wikipedia.org/wiki/MUD1, /MUD2, /Multi-user_dungeon,
