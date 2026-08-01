@@ -310,20 +310,42 @@ const CLIENT_JS = String.raw`
   var seedFactsFromPayload = ${seedFactsFromPayload.toString()};
   var seedLoadingNote = ${seedLoadingNote.toString()};
 
-  async function loadSeed() {
-    try {
-      var text = null;
-      if (window.tmctDesktop && typeof window.tmctDesktop.readSeed === "function") {
-        seedNote("loading general knowledge…");
-        text = await window.tmctDesktop.readSeed();
-      } else {
-        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
+  // One retry with a cache-busting query param, fetch side only: a CDN edge
+  // can serve a corrupted or truncated precompressed response (a transient
+  // bad cache entry, not a code defect — real bytes decompress fine, and the
+  // same URL fetched moments later is clean), and JSON.parse throwing is the
+  // only signal of that. The bust param forces a fresh fetch past that one
+  // entry. The desktop shell's readSeed() reads off local disk, not a CDN, so
+  // it keeps its single attempt.
+  async function fetchSeedPayload() {
+    var lastErr = null;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        var bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
+        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, function (loaded, total) {
           seedNote(seedLoadingNote(loaded, total));
         });
-        text = await seedBlob.text();
+        var text = await seedBlob.text();
+        return JSON.parse(text); // throwing here is the corrupted/truncated-response retry signal
+      } catch (e) {
+        lastErr = e;
       }
-      if (text) {
-        seedState.payload = JSON.parse(text);
+    }
+    throw lastErr;
+  }
+
+  async function loadSeed() {
+    try {
+      var payload = null;
+      if (window.tmctDesktop && typeof window.tmctDesktop.readSeed === "function") {
+        seedNote("loading general knowledge…");
+        var text = await window.tmctDesktop.readSeed();
+        if (text) payload = JSON.parse(text);
+      } else {
+        payload = await fetchSeedPayload();
+      }
+      if (payload) {
+        seedState.payload = payload;
         seedState.facts = seedFactsFromPayload(seedState.payload);
         seedState.status = "ready";
         seedNote("general knowledge: " + seedState.facts + " facts");
