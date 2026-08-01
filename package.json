@@ -1,6 +1,6 @@
 {
   "name": "@polycode-projects/the-mechanical-code-talker",
-  "version": "4.1.4",
+  "version": "4.1.5",
   "private": false,
   "type": "module",
   "description": "The Mechanical Code Talker (tmct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; indexes a repo on request (tmct index) or reads any producer's graph.",
@@ -87,10 +87,10 @@
   },
   "scripts": {
     "help": "node --disable-warning=ExperimentalWarning bin/tmct.mjs --help",
-    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=8 \"test/**/*.test.mjs\"",
+    "test": "node scripts/ensure-worlds-pack.mjs && node scripts/ensure-sprite-facts.mjs && node --disable-warning=ExperimentalWarning --test --test-concurrency=8 \"test/**/*.test.mjs\"",
     "test:smoke": "node --disable-warning=ExperimentalWarning --test test/smoke/*.test.mjs",
-    "test:fast": "node --disable-warning=ExperimentalWarning --test --test-concurrency=8 test/smoke/*.test.mjs test/fast/*.test.mjs test/tools/ask.test.mjs test/tools/server.test.mjs test/estate/import-layers.test.mjs",
-    "test:unit": "node --disable-warning=ExperimentalWarning --test --test-concurrency=8 $(node scripts/list-unit-test-files.mjs)",
+    "test:fast": "node scripts/ensure-worlds-pack.mjs && node --disable-warning=ExperimentalWarning --test --test-concurrency=8 test/smoke/*.test.mjs test/fast/*.test.mjs test/tools/ask.test.mjs test/tools/server.test.mjs test/estate/import-layers.test.mjs",
+    "test:unit": "node scripts/ensure-worlds-pack.mjs && node scripts/ensure-sprite-facts.mjs && node --disable-warning=ExperimentalWarning --test --test-concurrency=8 $(node scripts/list-unit-test-files.mjs)",
     "test:slow": "node --disable-warning=ExperimentalWarning --test test/bench/synthbench-code.test.mjs test/readme/readme.test.mjs test/corpus/bench-smoke.test.mjs test/corpus/inference.test.mjs",
     "test:e2e": "node --disable-warning=ExperimentalWarning --test \"test-e2e/*.test.mjs\"",
     "test:e2e:heavy": "node --disable-warning=ExperimentalWarning --test \"test-e2e/heavy/*.test.mjs\"",

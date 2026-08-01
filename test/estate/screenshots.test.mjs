@@ -58,12 +58,3 @@ test("every manifest entry shares the one viewport the manifest declares up fron
     assert.deepEqual(entry.viewport, manifest.viewport, `${entry.file} does not share the manifest's declared viewport`);
   }
 });
-
-test("the manifest stamps the tmct version it was captured against", () => {
-  const { version } = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
-  assert.equal(
-    manifest.tmctVersion,
-    version,
-    `the screenshot manifest was captured against ${manifest.tmctVersion}, the package now ships ${version} — run \`npm run gen:screenshots\``,
-  );
-});

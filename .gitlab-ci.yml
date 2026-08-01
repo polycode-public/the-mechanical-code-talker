@@ -191,7 +191,6 @@ unit:
   script:
     - npm ci
     - npm run build:ask-bundle
-    - npm run gen:worlds-pack
     - npm run test:unit
 
 # The four files with at least one test over 20s: synthbench's SYN rungs, the
