@@ -26,8 +26,10 @@ demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz
 Gap B (`dispatchToolStructured`, tool answers now carry `{ content, data }`), the code-explorer
 proof (its sidebar asks `tmct_ask` for real instead of filtering rows by hand — and found the doc's
 own `tmct_related` premise was wrong along the way, corrected in place), Gap A (memory-graph binding
-is a first-class `KINDS.MemoryTerm` capability-planner kind — router half only; the eight
-browser-entry callers still pass an empty graph, tracked below), and mood-becomes-a-fact
+is a first-class `KINDS.MemoryTerm` capability-planner kind — six of the ten browser-entry pages now
+build a real graph before `ask`/`plan`/`turn`; `adventure-browser-entry.mjs` and
+`mud-browser-entry.mjs` are the two still passing a permanently-empty one, see Open items), and
+mood-becomes-a-fact
 (`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
 deleted). See the doc's own Phasing section for exact detail per phase.
 
@@ -110,6 +112,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+**Batch in flight (`SKILL_DO_NEXT.md`, 2026-08-01):** all four items below dispatched as
+worktree-isolated tracks — `locative-predicate-dedup` (started), `code-explorer-seed-retry`
+(started), `ci-ask-bundle-build` (started), `gap-a-graph-wiring` (started).
+
 - [ ] **The locative-predicate closed set is spelled twice.** `chat.mjs`'s `LOCATIVE_FACT_PREDICATE_RE`
   and `ask-vocab.mjs`'s new `LOCATIVE_PREPOSITIONS` (added landing individual-level world-relation
   locatives) are the same preposition family, defined independently in two files — a real drift
@@ -136,6 +142,24 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   Once a bundle stops being committed, delete its estate guard with it — don't keep policing an
   invariant that no longer exists. `public/`'s site build (~85 MB) can stay out of this for now;
   keeping it out of GitLab artifact transit was a deliberate choice, not an oversight.
+- [ ] **`adventure-browser-entry.mjs` and `mud-browser-entry.mjs` still pass a permanently-empty
+  graph into `graphAsk`/`enginePlan`.** Six of the ten browser-entry pages already build a real one
+  before `ask`/`plan`/`turn` — `chat-browser-entry.mjs`/`ledger-browser-entry.mjs` via the generic
+  `memoryFactGraphPayload` (`src/domain/memory-facts.mjs`), `ingest-browser-entry.mjs` via its own
+  `ingestFactGraphPayload`, `sprites-browser-entry.mjs` via `spriteFactGraphPayload`,
+  `plan-browser-entry.mjs` via `hanoiBoardGraphPayload`, `spider-fly-browser-entry.mjs` (the
+  original case) via `worldRelationGraphPayload`. `adventure-browser-entry.mjs:106` and
+  `mud-browser-entry.mjs:92` both still set `graph = parseEntities({ individuals: [],
+  objectProperties: [] })` once and never reassign it, so any `ask`/`plan` call against either page
+  answers with an honest miss instead of reading the page's own facts. `memoryFactGraphPayload` is a
+  plausible drop-in for both (adventure and mud are both plain fact stores), each likely needing its
+  own `classOf` callback the way `worldRelationGraphPayload` takes one (adventure has rooms/items/
+  people; mud has per-character fog-of-war windows sharing one store) — a small wrapper reusing
+  existing infrastructure, not two bespoke projections from scratch. (Not in scope:
+  `research-browser-entry.mjs` calls `factAnswer`/`factReadBack` directly, bypassing `graphAsk`;
+  `code-explorer-browser-entry.mjs` holds a real code graph, not a memory one; `memory-ask-
+  browser-entry.mjs`/`graph-ask-browser-entry.mjs` have no `graphAsk`/`enginePlan` wiring at all;
+  `p2p-browser-entry.mjs` is a re-export library with no session.)
 
 ## Discipline
 
