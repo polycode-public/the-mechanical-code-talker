@@ -11,7 +11,7 @@ import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/
 import { foldWorldState, worldActionRows } from "../../src/services/adventure.mjs";
 import {
   renderMudEditorText, parseMudEditorLine, parseMudEditorText, planMudEditorSync,
-  editableMudOtherRows, wordBeforeCursor,
+  planTaughtMudTriple, editableMudOtherRows, wordBeforeCursor,
 } from "../../src/services/mud-editor.mjs";
 
 async function shippedMudGarden() {
@@ -138,6 +138,68 @@ test("a turn snapshot is never rendered as a fact of its own", () => {
   const text = renderMudEditorText(rows, foldWorldState(rows));
   assert.ok(text.includes("Mole-1 stands in the sett-1."), "the fold's own answer is the one shown");
   assert.equal(text.includes("@turn"), false, "and no snapshot subject reaches the page");
+});
+
+test("the mesh a thing draws with and how far it is turned both round-trip through the sentence table", () => {
+  const rows = [
+    { id: "m", subject: "cart", predicate: "mgx:model", object: "barrow" },
+    { id: "r", subject: "cart", predicate: "mgx:rotation", object: "90" },
+    { id: "n", subject: "cart", predicate: "mgx:display-name", object: "handcart" },
+  ];
+  const text = renderMudEditorText(rows, foldWorldState(rows));
+  const lines = text.split("\n");
+  assert.ok(lines.includes("Cart is modelled as barrow."));
+  assert.ok(lines.includes("Cart is turned 90 degrees."));
+  assert.ok(lines.includes("Cart is shown as handcart."), "the reading name keeps its own sentence, apart from the mesh");
+
+  const { triples, unrecognized } = parseMudEditorText(text);
+  assert.deepEqual(unrecognized, []);
+  assert.deepEqual(
+    triples.map((t) => [t.subject, t.predicate, t.object]).sort(),
+    [["cart", "mgx:display-name", "handcart"], ["cart", "mgx:model", "barrow"], ["cart", "mgx:rotation", "90"]],
+    "every rendered sentence parses back to the triple it came from",
+  );
+  const { toAppend, toRemoveIds } = planMudEditorSync(rows, foldWorldState(rows), triples);
+  assert.deepEqual([toAppend, toRemoveIds], [[], []], "re-syncing an untouched document writes and retracts nothing");
+});
+
+test("a negative rotation still reads as a number, not as a fresh class", () => {
+  assert.deepEqual(
+    parseMudEditorLine("Gate is turned -45 degrees."),
+    { subject: "gate", predicate: "mgx:rotation", object: "-45", kind: "other" },
+  );
+  assert.deepEqual(
+    parseMudEditorLine("Gate is turned 1 degree."),
+    { subject: "gate", predicate: "mgx:rotation", object: "1", kind: "other" },
+  );
+});
+
+test("planTaughtMudTriple: one sentence appends what it changes and never plans a retraction", () => {
+  const rows = [
+    { id: "a", subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { id: "b", subject: "mole-1", predicate: "mgx:hasMass", object: "8" },
+    { id: "c", subject: "basket", predicate: "mgx:is-container", object: "true" },
+  ];
+  const state = foldWorldState(rows);
+  const moved = { subject: "mole-1", predicate: "mgx:currently-in", object: "sett-1", kind: "placement" };
+  const plan = planTaughtMudTriple(rows, state, moved);
+  assert.deepEqual(plan.toAppend, [moved]);
+  assert.equal("toRemoveIds" in plan, false);
+
+  assert.deepEqual(
+    planTaughtMudTriple(rows, state, { subject: "mole-1", predicate: "mgx:hasMass", object: "8", kind: "mass" }).toAppend,
+    [],
+    "a mass already folded to the same number is not written again",
+  );
+  assert.equal(
+    planTaughtMudTriple(rows, state, { subject: "mole-1", predicate: "mgx:hasMass", object: "5", kind: "mass" }).toAppend.length,
+    1,
+  );
+  assert.deepEqual(
+    planTaughtMudTriple(rows, state, { subject: "basket", predicate: "mgx:is-container", object: "true", kind: "other" }).toAppend,
+    [],
+    "a raw fact the world already carries is not written twice",
+  );
 });
 
 test("the word before the cursor is the term a suggestion is asked for", () => {

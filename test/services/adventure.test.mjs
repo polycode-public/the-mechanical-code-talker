@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport, parseSnapshotSubject, snapshotSubject, characterTestimonyTag } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport, parseSnapshotSubject, snapshotSubject, characterTestimonyTag, adventureTurn } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, openMemoryBackend, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -468,6 +468,66 @@ test("the worked example writes every intermediate graph state, and the housekee
     assert.ok(!rows.some((r) => r.subject.startsWith("portrait@") && r.predicate === "mgx:located-in"),
       "the declined take-the-portrait wrote nothing");
     assert.ok(!rows.some((r) => /@turn(1[0-9]|[1-9][0-9])/.test(r.subject)), "nine state-changing commands, nine turns, nothing more");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// The teach switch runs before the imperative parse, and that ordering is the
+// whole point. parseImperative fuzzy-repairs a leading noun into a verb when
+// one is an edit away, so "Book is in the study" reads as a "look" with
+// residue and declines. With teach on the sentence is read as a fact about
+// the world first; with teach off the shipped behaviour stands unchanged.
+const teachHolder = () => ({ state: { adventure: { world: "ashcombe-hall" } } });
+
+test("with teach on, a declarative about a noun that shadows a verb moves the world instead of misfiring", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-adventure-teach-on-"));
+  try {
+    await loadShippedWorldInto(dir);
+    const answer = await adventureTurn("Book is in the study", {
+      planHolder: teachHolder(), memoryDir: dir, actingSubject: "player",
+      gameConfig: { adventure: { teach: true } },
+    });
+    assert.equal(answer.miss, false);
+    assert.match(answer.text, /^noted — the book is in the study now\./);
+    assert.equal(/reading that as "look"/.test(answer.text), false, "the fuzzy verb repair never gets the line");
+    const state = foldWorldState(worldActionRows(readFactRows(await loadMemory(dir))));
+    assert.equal(state.placements.get("book").object, "study");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("with teach off, the same sentence still declines exactly as it always has", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-adventure-teach-off-"));
+  try {
+    await loadShippedWorldInto(dir);
+    const answer = await adventureTurn("Book is in the study", {
+      planHolder: teachHolder(), memoryDir: dir, actingSubject: "player",
+    });
+    assert.equal(
+      answer.text,
+      '(reading that as "look") I don\'t know the word "is" — it isn\'t in my vocabulary.',
+      "pinned byte-for-byte, so leaving the switch off is genuinely a no-op",
+    );
+    assert.equal(answer.miss, true);
+    const state = foldWorldState(worldActionRows(readFactRows(await loadMemory(dir))));
+    assert.equal(state.placements.get("book").object, "library", "and the world is untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("with teach on, an ordinary command still executes as a command", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-adventure-teach-cmd-"));
+  try {
+    await loadShippedWorldInto(dir);
+    const planHolder = teachHolder();
+    const gameConfig = { adventure: { teach: true } };
+    const taken = await adventureTurn("take the lamp", { planHolder, memoryDir: dir, actingSubject: "player", gameConfig });
+    assert.match(taken.text, /^you take the lamp\./);
+    const moved = await adventureTurn("go north", { planHolder, memoryDir: dir, actingSubject: "player", gameConfig });
+    assert.match(moved.text, /^you go north\. Now in the library\./);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

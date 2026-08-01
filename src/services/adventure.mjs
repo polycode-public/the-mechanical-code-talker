@@ -18,6 +18,9 @@ import { compileDomain, precondHolds, roleBinding } from "../domain/domain.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, normFactTerm, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
 import { COMPLETIONS_STORE, generateCompletion } from "./completions.mjs";
+import { parseEditorLine, planTaughtTriple } from "./adventure-editor.mjs";
+import { parseMudEditorLine, planTaughtMudTriple } from "./mud-editor.mjs";
+import { worldTeachTurn } from "./world-teach.mjs";
 
 // ---- recognizers: the closed opening/stop set --------------------------------
 
@@ -562,6 +565,20 @@ export function roomAffordances(rows, state, here, actingSubject = "player") {
 }
 
 const affordanceSuffix = (actions) => (actions.length ? ` You can: ${actions.join(", ")}.` : "");
+
+/** The auto-relook line every state-changing turn ends on: the room read back
+ *  from a FRESH load of the store, in the same shape a manual "look"
+ *  produces, so nobody has to retype "look" to see what just changed. Every
+ *  writer that changes the world shares this one renderer — a second copy
+ *  would drift the moment the digest or the affordance list moved. */
+export async function worldRelook(room, { memoryDir, graph = null, actingSubject = "player" }) {
+  const memory = await loadMemory(memoryDir);
+  const rows = readFactRows(memory);
+  const state = foldWorldState(worldActionRows(rows));
+  const digest = await worldDigest(room, { memoryDir, memory, rows, state, graph, actingSubject });
+  const actions = roomAffordances(rows, state, room, actingSubject);
+  return `you are in the ${room}. ${digest ?? "Nothing more about it is written down yet."}${affordanceSuffix(actions)}`;
+}
 
 /** The effect predicate a family writes (its action-effect row's slot, with
  *  the mgx: prefix rule readers re-attach). Null when the family carries no
@@ -1218,7 +1235,7 @@ function freshRoomId(rows, here, direction) {
  *  whole nested dig path ("carrot-sett-1-north-east-east"), which is an id, not
  *  a name anyone can read. `alsoTaken` holds the ids minted earlier in this
  *  same dig, which are not in `rows` yet. Pure. */
-function freshObjectId(rows, kind, alsoTaken) {
+export function freshObjectId(rows, kind, alsoTaken = new Set()) {
   const taken = (id) => alsoTaken.has(id) || (rows || []).some((r) => r.subject === id || r.object === id);
   for (let n = 1; n <= (rows || []).length + 2; n += 1) {
     if (!taken(`${kind}-${n}`)) return `${kind}-${n}`;
@@ -1237,7 +1254,7 @@ function declaredKindsOr(rows, roomClass, predicate, fallback) {
  *  nothing when the class declares no mass. eat reads the instance's mass, so a
  *  dug carrot with none would be worth the flat default however the world
  *  values a carrot. Pure. */
-function classMassFacts(rows, instance, kind) {
+export function classMassFacts(rows, instance, kind) {
   const mass = factObjects(rows, kind, MASS_PREDICATE)[0];
   return mass ? [{ subject: instance, predicate: MASS_PREDICATE, object: mass }] : [];
 }
@@ -1911,15 +1928,7 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
     const npcPass = runNpcPass({ rows, state, k, families, playerRoomAfter });
     await writeWorldTurn(memoryDir, world, k, [...facts, ...npcPass.writes], cache);
     const text2 = npcPass.lines.length ? `${text} ${npcPass.lines.join(" ")}` : text;
-    // Auto-relook: every state-changing command ends in the same shape a
-    // manual "look" produces, read from the FRESH post-write state, so the
-    // player is never left to retype "look" to see what just changed.
-    const freshMemory = await loadMemory(memoryDir);
-    const freshRows = readFactRows(freshMemory);
-    const freshState = foldWorldState(worldActionRows(freshRows));
-    const relookDigest = await worldDigest(playerRoomAfter, { memoryDir, memory: freshMemory, rows: freshRows, state: freshState, graph, actingSubject });
-    const actions = roomAffordances(freshRows, freshState, playerRoomAfter, actingSubject);
-    const relook = `you are in the ${playerRoomAfter}. ${relookDigest ?? "Nothing more about it is written down yet."}${affordanceSuffix(actions)}`;
+    const relook = await worldRelook(playerRoomAfter, { memoryDir, graph, actingSubject });
     return answer(
       `${text2} ${relook}`,
       noteFor(`${detail}; turn ${k} snapshots written through appendFacts${npcPass.writes.length ? `; NPC pass fired ${npcPass.writes.length} scheduled move(s)` : ""}; auto-relook appended for the ${playerRoomAfter}`),
@@ -2362,7 +2371,7 @@ async function addressedLine(line, { memoryDir }) {
  * recognizer, injected so the two lanes can never disagree about what a plan
  * frame is.
  */
-export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false, discourseHolder = null, actingSubject = "player" }) {
+export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false, discourseHolder = null, actingSubject = "player", gameConfig = null }) {
   const slot = planHolder?.state ?? null;
   const adventure = slot?.adventure ?? null;
   const opening = matchAdventureOpening(line);
@@ -2418,11 +2427,11 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
       note: "ADVENTURE — a plan frame arrived mid-adventure; the slot holds one thing at a time",
     };
   }
-  const direct = await liveWorldAnswer(line, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject });
+  const direct = await liveWorldAnswer(line, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject, gameConfig });
   if (direct) return direct;
   const addressed = await addressedLine(line, { memoryDir });
   if (addressed) {
-    const readdressed = await liveWorldAnswer(addressed, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject });
+    const readdressed = await liveWorldAnswer(addressed, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject, gameConfig });
     if (readdressed) return readdressed;
   }
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
@@ -2433,8 +2442,29 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
  *  lets an ordinary mid-game question keep its own lane. Split out from the
  *  lane itself so a line carrying a vocative can be re-offered here once,
  *  stripped, without the two paths ever drifting apart. */
-async function liveWorldAnswer(line, { world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject }) {
+async function liveWorldAnswer(line, { world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject, gameConfig }) {
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph, actingSubject });
+  // The teach switch runs BEFORE the imperative parse, and that ordering is
+  // the point. parseImperative fuzzy-repairs a leading noun into a verb when
+  // one is an edit away ("book" -> "look"), so a declarative sentence about
+  // such a noun would be executed as a command and decline on its own
+  // residue. With teach on, the sentence is read as a fact first; with teach
+  // off, nothing here runs and the lane behaves exactly as it always has.
+  if (gameConfig?.adventure?.teach && memoryDir) {
+    const teachRows = readFactRows(await loadMemory(memoryDir));
+    const taught = await worldTeachTurn(line, {
+      // A burrow says placement with different words than a manor does, so
+      // the sentence table follows the world, never the lane. The world's own
+      // origin fact is the test: only a burrow measures digs from one.
+      ...(originRoomOf(teachRows)
+        ? { parseLine: parseMudEditorLine, planTriple: planTaughtMudTriple }
+        : { parseLine: parseEditorLine, planTriple: planTaughtTriple }),
+      rows: teachRows,
+      state: foldWorldState(worldActionRows(teachRows)),
+      memoryDir, world, actingSubject, cache, graph,
+    });
+    if (taught) return taught;
+  }
   const parsed = parseImperative(line, await worldAwareLexicon(memoryDir, lexicon));
   if (parsed) {
     const bound = await bindPronouns(parsed, { discourseHolder, memoryDir, actingSubject });
