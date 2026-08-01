@@ -186,6 +186,28 @@ export function seedLoadingNote(loadedBytes, totalBytes) {
   return "loading general knowledge… " + mbText(loadedBytes) + (totalBytes ? " of " + mbText(totalBytes) : "") + " MB";
 }
 
+/** One retry with a cache-busting query param, fetch side only: a CDN edge
+ *  can serve a corrupted or truncated precompressed response (a transient
+ *  bad cache entry, not a code defect — real bytes decompress fine, and the
+ *  same URL fetched moments later is clean), and JSON.parse throwing is the
+ *  only signal of that. `fetcher` is `fetchWithProgress` (or a stand-in for
+ *  a test); `baseUrl` already carries the build's own content-hash query
+ *  string, if any, so the bust param joins with `&` or `?` accordingly. */
+export async function fetchSeedPayloadWithRetry(fetcher, baseUrl, seedQuery, onProgress) {
+  var lastErr = null;
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    try {
+      var bust = attempt === 1 ? "" : (seedQuery ? "&" : "?") + "retry=1";
+      var seedBlob = await fetcher(baseUrl + seedQuery + bust, onProgress);
+      var text = await seedBlob.text();
+      return JSON.parse(text); // throwing here is the corrupted/truncated-response retry signal
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
 const CLIENT_JS = String.raw`
 (function () {
   var DATA = window.__CODE_EXPLORER__;
@@ -309,29 +331,14 @@ const CLIENT_JS = String.raw`
   var fetchWithProgress = ${fetchWithProgress.toString()};
   var seedFactsFromPayload = ${seedFactsFromPayload.toString()};
   var seedLoadingNote = ${seedLoadingNote.toString()};
+  var fetchSeedPayloadWithRetry = ${fetchSeedPayloadWithRetry.toString()};
 
-  // One retry with a cache-busting query param, fetch side only: a CDN edge
-  // can serve a corrupted or truncated precompressed response (a transient
-  // bad cache entry, not a code defect — real bytes decompress fine, and the
-  // same URL fetched moments later is clean), and JSON.parse throwing is the
-  // only signal of that. The bust param forces a fresh fetch past that one
-  // entry. The desktop shell's readSeed() reads off local disk, not a CDN, so
-  // it keeps its single attempt.
-  async function fetchSeedPayload() {
-    var lastErr = null;
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      try {
-        var bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
-        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, function (loaded, total) {
-          seedNote(seedLoadingNote(loaded, total));
-        });
-        var text = await seedBlob.text();
-        return JSON.parse(text); // throwing here is the corrupted/truncated-response retry signal
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr;
+  // The desktop shell's readSeed() reads off local disk, not a CDN, so it
+  // keeps its single attempt in loadSeed() below; only this fetch path retries.
+  function fetchSeedPayload() {
+    return fetchSeedPayloadWithRetry(fetchWithProgress, "./chat-seed.json", SEED_QUERY, function (loaded, total) {
+      seedNote(seedLoadingNote(loaded, total));
+    });
   }
 
   async function loadSeed() {

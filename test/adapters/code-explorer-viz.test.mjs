@@ -23,6 +23,7 @@ import {
   mbText,
   seedFactsFromPayload,
   seedLoadingNote,
+  fetchSeedPayloadWithRetry,
 } from "../../src/services/code-explorer-viz.mjs";
 
 const payload = {
@@ -152,6 +153,46 @@ test("seedFactsFromPayload counts only the Fact-classed individuals", () => {
 test("seedLoadingNote reports progress in megabytes, with a total once the response names one", () => {
   assert.equal(seedLoadingNote(1048576, 0), "loading general knowledge… 1.0 MB");
   assert.equal(seedLoadingNote(1048576, 2097152), "loading general knowledge… 1.0 of 2.0 MB");
+});
+
+function textBlob(text) { return { text: async () => text }; }
+
+test("fetchSeedPayloadWithRetry returns the parsed payload on a clean first fetch, no retry", async () => {
+  const calls = [];
+  const fetcher = async (url) => { calls.push(url); return textBlob('{"individuals":[]}'); };
+  const payload = await fetchSeedPayloadWithRetry(fetcher, "./chat-seed.json", "", () => {});
+  assert.deepEqual(payload, { individuals: [] });
+  assert.deepEqual(calls, ["./chat-seed.json"]);
+});
+
+test("fetchSeedPayloadWithRetry retries once with a cache-busting param when the first response is corrupted", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(url);
+    return calls.length === 1 ? textBlob("not json") : textBlob('{"individuals":[{"class":"Fact"}]}');
+  };
+  const payload = await fetchSeedPayloadWithRetry(fetcher, "./chat-seed.json", "", () => {});
+  assert.deepEqual(payload, { individuals: [{ class: "Fact" }] });
+  assert.deepEqual(calls, ["./chat-seed.json", "./chat-seed.json?retry=1"]);
+});
+
+test("fetchSeedPayloadWithRetry's retry param joins with & when a seed query string is already present", async () => {
+  const calls = [];
+  const fetcher = async (url) => { calls.push(url); return textBlob("still not json"); };
+  await assert.rejects(() => fetchSeedPayloadWithRetry(fetcher, "./chat-seed.json", "?b=abc123", () => {}));
+  assert.deepEqual(calls, ["./chat-seed.json?b=abc123", "./chat-seed.json?b=abc123&retry=1"]);
+});
+
+test("fetchSeedPayloadWithRetry throws the last error when both attempts fail", async () => {
+  const fetcher = async () => { throw new Error("network down"); };
+  await assert.rejects(() => fetchSeedPayloadWithRetry(fetcher, "./chat-seed.json", "", () => {}), /network down/);
+});
+
+test("fetchSeedPayloadWithRetry reports progress through the caller's callback", async () => {
+  const progress = [];
+  const fetcher = async (url, onProgress) => { onProgress(50, 100); return textBlob("{}"); };
+  await fetchSeedPayloadWithRetry(fetcher, "./chat-seed.json", "", (loaded, total) => progress.push([loaded, total]));
+  assert.deepEqual(progress, [[50, 100]]);
 });
 
 function renderDefault(opts = {}) {

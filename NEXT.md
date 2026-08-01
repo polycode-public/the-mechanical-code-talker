@@ -111,14 +111,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 `SKILL_DO_NEXT.md`'s 2026-08-01 batch (`locative-predicate-dedup`, `code-explorer-seed-retry`,
-`ci-ask-bundle-build`, `gap-a-graph-wiring`) is fully landed on `main` — see `git log`.
-
-- [ ] **`code-explorer-viz.mjs`'s new seed-fetch retry has no direct test coverage.** The retry
-  logic (`fetchSeedPayload`, landed this batch) lives as inline browser-script text inside a
-  `String.raw` block, not a module-level function — consistent with how its sibling helpers
-  (`fetchWithProgress`, `mbText`) are tested only as standalone pure functions before being spliced
-  in, but that means the retry-on-corrupted-fetch behavior itself is currently untested at any
-  level. Deferred under the track's own time-box rather than added under pressure.
+`ci-ask-bundle-build`, `gap-a-graph-wiring`) is fully landed on `main` — see `git log`. None open.
 - [ ] **`adventure-browser-entry.mjs` and `mud-browser-entry.mjs` still pass a permanently-empty
   graph into `graphAsk`/`enginePlan`.** Six of the ten browser-entry pages already build a real one
   before `ask`/`plan`/`turn` — `chat-browser-entry.mjs`/`ledger-browser-entry.mjs` via the generic
