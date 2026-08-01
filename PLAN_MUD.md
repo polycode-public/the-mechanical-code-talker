@@ -1158,25 +1158,43 @@ the tick's cell (the lerp is presentation, never state). Spawns, despawns and an
 appearance use a short scale/fade flourish at the destination cell, no path animation — the
 mud-viz event-flourish idiom (dig-pulse, fox-pounce) in 3D. Reduced motion disables both.
 
-**Camera and visibility.** v1 is one orbitable camera around the square's center, omniscient —
-the counterpart of mud.html's whole-burrow survey. "NPCs wandering in and out of view" is the
-agents' own vision model, never the camera's: what each animal can see stays vision-radius
-belief, surfaced through the belief panel and "what does the goblin see?". A per-agent POV mode
-(dim every cell outside the selected agent's `visibleCells` — spider-fly's fog canvas translated
-to material dimming) is phase 2 of this page, not v1.
+**Camera and visibility.** The default view is a player POV camera: the dashboard's agent-select
+dropdown (below) lets the player assume any one cast member's viewpoint — wolf or goblin — and
+the camera sits at that agent's own position and facing, world-of-claudecraft-style, rather than
+surveying the square from outside. A dashboard button switches to an overhead orbitable camera
+around the square's centre, the counterpart of mud.html's whole-burrow survey, for a full-board
+view at any time. "NPCs wandering in and out of view" stays the agents' own vision model
+regardless of which camera mode is active: what each animal can see is vision-radius belief,
+surfaced through the belief panel and "what does the goblin see?", never gated by what the camera
+itself currently renders.
+
+**The map panel.** A small, always-visible 2D top-down panel alongside the 3D view — the same
+role adventure.html's `roommap` panel plays, simplified: one square, no visited-room tracking to
+draw, just the grid with a tiny dot per live agent at its current cell. It reads the same tick
+payload the 3D scene does, so it's a second, cheap rendering of the same truth rather than a
+second state to keep in sync. With a single square, it covers exactly the same ground the
+overhead camera already shows — the two read as duplicates of each other for now. They stay
+structurally different views, though: the overhead camera is inherently local, orbiting one
+square's own centre, while the map panel draws whatever the world pack actually contains. That
+distinction earns its keep the moment a world has more than one square to show at once, and
+costs nothing to carry now.
 
 ### The dashboard: a 1-player mud deck
 
-The deck carries over minus P2P: play/pause, reset, a delay slider, a scavenger-count slider
-(1..10) and a predator-count slider (1..3) in place of mud's players/npcs pair, and a scenario
-dropdown once a
-second map exists. Turn flow reuses `serializeTick` plus one ticker per animal. Below or beside
-the 3D view: the chat log and input with the pill rail, and per-agent HUD cards (mass bar, goal
-line, expandable belief panel) following spider-fly's HUD. mud's EDIT mode (the
-facts-as-sentences textarea in `mud-editor.mjs`) applies to this world unchanged, because the
-world is the same kind of fact rows; it is phase 2, not v1. The P2P layer can arrive later the
-same lazy way mud.html gained it, since the session store is the same shape; v1 deliberately
-ships without it.
+The deck adopts mud.html's own control set unchanged, same ranges and defaults: Play (starts
+every animal's ticker at once, wolves and goblins alike), the shared turn counter, Reset (starts
+a fresh world and redraws the whole cast), a Players slider (1/2/4, redrawn on release) sizing
+the wolf roster, an Npcs slider (1..10, default 2) sizing the goblin roster, a Delay slider
+(80-2000ms, default 650ms) and a Max-turns slider (20-2000, default 400). The agent-select
+dropdown (which cast member the POV camera follows) sits alongside them. Turn flow reuses
+`serializeTick` plus one ticker per animal. Below or beside the 3D view: the chat
+log and input with the pill rail, and per-agent HUD cards (mass bar, goal line, expandable belief
+panel) following spider-fly's HUD. mud's EDIT mode (the facts-as-sentences textarea in
+`mud-editor.mjs`) applies to this world unchanged, because the world is the same kind of fact
+rows. Three scenarios ship in the scenario dropdown, mirroring mud.html's own three-burrow set —
+town-square variants of the wolf/goblin cast, each varying grid size, building layout, and
+predator/scavenger counts. The P2P layer can arrive later the same lazy way mud.html gained it,
+since the session store is the same shape; v1 deliberately ships without it.
 
 ### "Pills and pointers", concretely
 
@@ -1197,10 +1215,10 @@ single convention, and no pointer-from-chat-into-the-viz anywhere. The real inve
 
 MUDIII carries forward: the affordance pills (addresses `@wolf`/`@goblin`, tick, the food verb),
 the deception rail generalized to the role pair, and the goal/belief HUD. The compass ring dies
-here — an orbitable 3D camera replaces it, and directions live on in the teach-frame pills ("the
-wolf is north"). `.state-pill` stays out with the P2P layer. Provenance chips stay a chat.html
-surface; this page's chat is a game lane whose answers are board reads, and it follows
-spider-fly (no provchips) rather than chat.html.
+here — the free 3D camera (POV or overhead) replaces it, and directions live on in the
+teach-frame pills ("the wolf is north"). `.state-pill` stays out with the P2P layer. Provenance
+chips stay a chat.html surface; this page's chat is a game lane whose answers are board reads,
+and it follows spider-fly (no provchips) rather than chat.html.
 
 ### The chat lane
 
@@ -1299,10 +1317,10 @@ confirming a vanilla-three page is the right shape for ours.
    spider-fly shipped in).
 3. Vendored three + the minimal scene: ground, grid, box placeholders for agents and props,
    tick wiring, the deck. The page is playable and ugly.
-4. Assets and polish: the claudecraft-derived models above, the movement tween, flourishes,
-   HUD cards, the pill rail.
-5. Phase-2 items, in whatever order earns it: per-agent POV mode, EDIT mode, a second map for
-   the scenario dropdown, the next role pair.
+4. Assets and polish: the claudecraft-derived models above, the movement tween, flourishes, HUD
+   cards, the pill rail, the POV/overhead camera toggle and map panel, EDIT mode, and the three
+   scenarios.
+5. The next role pair, whenever a new cast earns it.
 6. The online phase — the published shared world, designed in the MUDMMORPG section below, built
    only after the page itself has earned it.
 
