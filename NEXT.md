@@ -6,6 +6,16 @@ delivered but still has a real remainder stays OPEN, with the remainder recorded
 `CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md`.
 Prefer deleting a sentence to negating it.
 
+**A bug found while fixing item A is A's remainder, not a new item.** Write it as a sub-clause of
+A's own entry — what's fixed, what's still open — and leave A's checkbox open until the sub-clause
+closes too, even if the sub-clause itself is deferred. Only promote it to a genuinely separate item
+when it's actually unrelated to A's own scope (a different file or subsystem entirely), and say so
+explicitly when you do. Closing A outright and opening a freshly-labeled item for the same discovery
+is stalling dressed as progress: the open-item count looks flat or improved, but the record now hides
+that A was never actually finished. (Landed 2026-08-01 after doing exactly this: a track's own
+seed-fetch-retry fix got marked done and its test-coverage gap got logged as a brand new item,
+until corrected.)
+
 Living handover. Any session resumes from here. **Plan of record: the `PLAN_*.md` design docs** —
 each states its own status in its opening lines; `archive/` holds the delivered ones. This file
 holds ONLY what to do next. Completed work is not narrated here; `git log` and the

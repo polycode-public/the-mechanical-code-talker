@@ -72,11 +72,19 @@ one's work the moment it's ready rather than waiting for the whole batch.
      blocks every subsequent push in the batch.
 8. **Update `NEXT.md` in the same breath as each landing**, not batched at the end. Move the
    track's in-flight line to a landed note (commit SHA, test counts), and remove the item it
-   resolved from Open items — or narrow it, if the track only closed part of a multi-part item.
-   **Any bug a track's report surfaces gets its own tracked entry** — fold a small, safe one into
-   the current fix per `CLAUDE.md`'s "don't narrow scope on your own judgment" rule; a large or
-   engine-wide one (affects more than the page being worked) gets logged as its own Open item
-   instead of attempted mid-track, and say why explicitly.
+   resolved from Open items — but only once nothing that item's own track surfaced is still
+   outstanding (see next point). Narrow the item's text instead of removing it, if the track only
+   closed part of a multi-part item.
+   **A bug the track's report surfaces is that item's remainder, not a new item** — fold a small,
+   safe one into the current fix per `CLAUDE.md`'s "don't narrow scope on your own judgment" rule
+   and close both together; a large or engine-wide one still gets written as a sub-clause of the
+   SAME item (what landed, what's still open) and keeps that item's checkbox open, even if fixing
+   the sub-clause is deferred to the next batch. Only write it as a genuinely separate new item
+   when it's actually unrelated to the item's own scope (a different file or subsystem the track
+   never touched), and say so explicitly when you do. Closing the item outright and opening a
+   freshly-labeled one for the same discovery is stalling dressed as progress — the open-item count
+   looks flat or improved, but the record now hides that the original item was never actually
+   finished.
 9. **Track the build honestly, without editorializing.** State what CI actually shows — which
    stage passed, which didn't, why if known — and leave it there unless asked for more. A known,
    already-documented infra blocker doesn't need re-explaining every time it's mentioned.
@@ -99,7 +107,8 @@ one's work the moment it's ready rather than waiting for the whole batch.
 - Don't batch every track's merge for the end of the session — merge, test, and push each one as
   it lands, so a slow track doesn't hold back four fast ones.
 - Don't silently drop a bug a sub-agent surfaces because it's outside the current track's scope —
-  track it in `NEXT.md`, even if fixing it is deferred.
+  track it in `NEXT.md` as a sub-clause of the item that surfaced it, even if fixing it is
+  deferred, and leave that item open rather than closing it and filing the bug as a new one.
 - Don't leave a merged worktree or its branch behind — remove both in the same breath as the merge.
 - Don't re-litigate or re-explain a known, already-tracked blocker (e.g. an external infra issue)
   every time the build comes up — state the current fact once and move on.
