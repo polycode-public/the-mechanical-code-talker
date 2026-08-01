@@ -82,18 +82,31 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - **Publish continuously, batch what lands while CI builds.** Merge each sub-agent's verified
   commit onto local `main` as soon as it's ready — don't hold everything for one end-of-session
   merge sweep. Run the full suite once (still only at the actual push moment — see "Test the
-  blast radius"), then push. `PLAN_PUBLISH_AND_BE_DAMNED.md` is the current CI model — secret
-  detection gates `deploy:website`/`publish:npm`, everything else runs as fast parallel
-  information — check the last pipeline's own duration rather than a remembered number, since it
-  changes as the suite grows. While a pipeline runs, keep merging further sub-agent commits onto
-  local `main`. Once it goes green: if commits have stacked up since that push, `npm run roll`
-  (bump the patch version, regenerate the version-stamped artifacts), run the full suite again,
-  commit, and push that batch — this both ships the accumulated work and gives `publish:npm`'s
-  version check something real to publish (`.gitlab-ci.yml`'s `deploy` stage only publishes on an
-  actual version increase). If a pipeline goes red, don't push through it — diagnose and fix
-  (harden a flaky timing test rather than re-running it) before the next push. **The one thing
-  this doesn't relax: the full suite stays mandatory before every push that reaches `main` — this
-  changes *when* you push, never *whether* you test first.**
+  blast radius"), then push. `.gitlab-ci.yml` is the CI model, read directly rather than through a
+  design doc — secret detection gates `deploy:website`/`publish:npm`, everything else runs as fast
+  parallel information — check the last pipeline's own duration rather than a remembered number,
+  since it changes as the suite grows. While a pipeline runs, keep merging further sub-agent
+  commits onto local `main`. Once it goes green: if commits have stacked up since that push, `npm
+  run roll` (bump the patch version — it no longer regenerates anything else; nothing left in the
+  tree embeds the version in its own committed content), run the full suite again, commit, and
+  push that batch — this both ships the accumulated work and gives `publish:npm`'s version check
+  something real to publish (`.gitlab-ci.yml`'s `deploy` stage only publishes on an actual version
+  increase). If a pipeline goes red, don't push through it — diagnose and fix (harden a flaky
+  timing test rather than re-running it) before the next push. **The one thing this doesn't
+  relax: the full suite stays mandatory before every push that reaches `main` — this changes
+  *when* you push, never *whether* you test first.**
+- **The e2e/heavy Playwright jobs' image tracks `package-lock.json`'s pinned `playwright` version
+  automatically — nothing to update by hand when that dependency bumps.** `detect:playwright-version`
+  reads the resolved version and hands it to `.e2e-web-base`/`.e2e-deployed-base`/`e2e:heavy` as a
+  dotenv-loaded `PLAYWRIGHT_VERSION` variable, and each job's `image:` is
+  `mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble` — Microsoft's own image, browsers and
+  system deps pre-baked, so there's no `npx playwright install --with-deps` step left to pay for on
+  every job (that was a real, measured ~8.6s of redundant `apt-get` dependency-checking per job,
+  every job, even with the browser binary itself already cache-warm). The one thing that CAN still
+  need a human: if Microsoft ever drops the `-noble` (Ubuntu 24.04) tag variant for a future
+  playwright release, the tag suffix in the three `image:` lines needs updating to whatever codename
+  replaces it — check `mcr.microsoft.com/v2/playwright/tags/list` if a pipeline fails on "manifest
+  unknown" right after a playwright bump.
 
 ## Test the blast radius, not the whole suite
 

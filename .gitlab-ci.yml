@@ -153,6 +153,22 @@ secret_detection:
   - package-lock.json
   - .gitlab-ci.yml
 
+# Reads package-lock.json's own pinned playwright version and hands it to
+# every job that needs the matching mcr.microsoft.com/playwright:v<version>-noble
+# image, via a dotenv artifact — so a playwright version bump in package.json
+# flows into the CI image automatically, nothing here to remember to edit by
+# hand. Dependency-free, pure JSON read, so no npm ci.
+detect:playwright-version:
+  stage: gate
+  needs: []
+  rules:
+    - changes: *consumer-paths
+  script:
+    - node scripts/detect-playwright-version.mjs playwright-version.env
+  artifacts:
+    reports:
+      dotenv: playwright-version.env
+
 # The suite split four ways so a push isn't gated on one long serial run.
 # `scripts/list-unit-test-files.mjs` is the one place the >=20s exclusion list
 # lives; test:slow's own package.json script names those same five files
@@ -269,22 +285,16 @@ license:deps:
 .e2e-web-base:
   stage: e2e
   interruptible: true
-  needs: []
+  image: "mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
+  needs:
+    - job: detect:playwright-version
+      artifacts: true
   rules:
     - changes: *consumer-paths
-  variables:
-    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
-  cache:
-    key:
-      files:
-        - package-lock.json
-    paths:
-      - .playwright-browsers
   before_script:
     - npm ci
     - npm run build:ask-bundle
     - npm run gen:worlds-pack
-    - npx playwright install --with-deps chromium
 
 .e2e-lite-base:
   stage: e2e
@@ -361,15 +371,10 @@ e2e-cli:
 e2e:heavy:
   stage: e2e
   interruptible: true
-  needs: []
-  variables:
-    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
-  cache:
-    key:
-      files:
-        - package-lock.json
-    paths:
-      - .playwright-browsers
+  image: "mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
+  needs:
+    - job: detect:playwright-version
+      artifacts: true
   rules:
     - changes:
         - scripts/build-*.mjs
@@ -382,7 +387,6 @@ e2e:heavy:
   script:
     - npm ci
     - npm run build:ask-bundle
-    - npx playwright install --with-deps chromium
     - npm run test:e2e:heavy
 
 # Publish the package to PUBLIC npmjs.org. Automatic on main, but the release
@@ -616,8 +620,11 @@ site:ready:
 
 .e2e-deployed-base:
   stage: e2e-deployed
+  image: "mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
   needs:
     - site:ready
+    - job: detect:playwright-version
+      artifacts: true
   environment:
     name: production
   rules:
@@ -630,18 +637,10 @@ site:ready:
   retry: 2
   variables:
     TMCT_E2E_BASE_URL: "https://tmct.polycode.co.uk"
-    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
-  cache:
-    key:
-      files:
-        - package-lock.json
-    paths:
-      - .playwright-browsers
   before_script:
     - npm ci
     - npm run build:ask-bundle
     - npm run gen:worlds-pack
-    - npx playwright install --with-deps chromium
 
 # The site shell, also run pre-deploy as e2e-web-index. Eight single-context
 # pages — the lightest slice, so it keeps node's default concurrency.
