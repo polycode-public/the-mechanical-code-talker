@@ -181,7 +181,7 @@ unit:fast:
     - npm ci
     - npm run test:fast
 
-# Everything except the five files test:slow owns.
+# Everything except the four files test:slow owns.
 unit:
   stage: test
   interruptible: true
@@ -190,18 +190,16 @@ unit:
     - changes: *consumer-paths
   script:
     - npm ci
+    - npm run build:ask-bundle
+    - npm run gen:worlds-pack
     - npm run test:unit
 
-# The five files with at least one test over 20s: synthbench's SYN rungs, the
-# generated-artifacts estate guards, the README shell-example harness, the
-# bench-smoke corpus lane, and the inference corpus lane.
+# The four files with at least one test over 20s: synthbench's SYN rungs, the
+# README shell-example harness, the bench-smoke corpus lane, and the inference
+# corpus lane.
 #
 # This tier gates nothing now, but it is deliberately NOT made conditional on a
-# fresh x.y.0 the way e2e:heavy is. It owns the generated-artifacts estate
-# guard, which is the one check standing between a committed generated file that
-# has drifted from its generator and a published npm tarball carrying it — and
-# the publish is exactly what this restructure made easier to reach. Drift has
-# bit this repo repeatedly; the guard runs on every push.
+# fresh x.y.0 the way e2e:heavy is — these are real coverage, not drift guards.
 unit:slow:
   stage: test
   interruptible: true
@@ -229,6 +227,8 @@ pack:contents:
   script:
     - npm ci
     - npm run build:ask-bundle
+    - npm run gen:sprite-facts
+    - npm run gen:worlds-pack
     - npm run check:publint
     - npm pack --dry-run --json | npm run --silent check:pack
 
@@ -381,6 +381,7 @@ e2e:heavy:
         - test-e2e/heavy/**/*
   script:
     - npm ci
+    - npm run build:ask-bundle
     - npx playwright install --with-deps chromium
     - npm run test:e2e:heavy
 
@@ -437,6 +438,8 @@ publish:npm:
     - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
     - npm ci
     - npm run build:ask-bundle
+    - npm run gen:sprite-facts
+    - npm run gen:worlds-pack
     # The fast tier, not the full suite. The full suite ran here serially for
     # roughly six minutes, on top of the four unit jobs that had already run it
     # in parallel — the same tests, twice, once on the critical path. Those

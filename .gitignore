@@ -117,6 +117,19 @@ public/*.br
 # `npm run build:ask-bundle` fresh instead of reading a committed copy.
 src/surfaces/web/memory-ask-browser.bundle.js
 
+# corpus/sprites/src/sprite-facts.jsonl (scripts/gen-sprite-facts.mjs, purely
+# derived from data/sprites*/*.toml — nothing at runtime reads this file, only
+# `npm pack` ships it) and the worlds-pack build (scripts/build-worlds-pack.mjs,
+# derived from the still-committed corpus/worlds/src/*.jsonl) are the same
+# kind of build artifact: every job that needs them runs `npm run
+# gen:sprite-facts` / `npm run gen:worlds-pack` fresh instead of reading a
+# committed copy. corpus/worlds/src/*.jsonl itself stays committed — six of
+# its seven files are hand-authored, with no generator to recreate them.
+corpus/sprites/src/sprite-facts.jsonl
+corpus/worlds/index.json.gz
+corpus/worlds/manifest.json
+corpus/worlds/shards/
+
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
 # so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.
 .playwright-browsers/
