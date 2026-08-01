@@ -283,6 +283,7 @@ license:deps:
   before_script:
     - npm ci
     - npm run build:ask-bundle
+    - npm run gen:worlds-pack
     - npx playwright install --with-deps chromium
 
 .e2e-lite-base:
@@ -638,6 +639,7 @@ site:ready:
   before_script:
     - npm ci
     - npm run build:ask-bundle
+    - npm run gen:worlds-pack
     - npx playwright install --with-deps chromium
 
 # The site shell, also run pre-deploy as e2e-web-index. Eight single-context
