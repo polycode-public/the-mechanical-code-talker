@@ -46,7 +46,8 @@ script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, a
 | W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | merged, worktree removed | **landed** — 14 CC0 rows, 1.14 MB, verified against disk by size and sha256 |
 | W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
 | PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | merged, worktree removed | **landed** — 17 unit tests; adopters splice `matchPills`/`pillCandidates`/`createPillComplete` under those exact names, and call `.refresh()` from the page's own pill render pass |
-| WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | `.claude/worktrees/agent-a22a65e499c3440bf` | started |
+| WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | merged, worktree removed | **landed** — 116 in its radius, adventure corpus 91 with the coordinator's `chat.mjs` argument applied |
+| REF-CRDT — `docs/references/papers/crdt.md` | top | `.claude/worktrees/agent-a1c4a3e9b06fcf440` | started |
 
 W0-AUDIT's findings, which the wave-2 lane brief is written against:
 
@@ -78,10 +79,17 @@ files for the whole build and no track may edit them: `chat.mjs`, `build-demo-si
     misses the tape. Its turn-8 "trap" note is honest about not springing on turn 8: any prey close
     enough to believe a morsel one cell from a predator also believes the predator, and evade beats
     forage. The turn-10 eat happens because the predator chased something else off the spot.
-- **Teach mode** on adventure.html, mud.html and mudiii.html: a checkbox that reads a declarative
-  sentence as a fact against the live world. General semantics — any sentence the editor grammar
-  can express, including moving world-authored things. Sub-clause: `adventure-browser-entry.mjs`'s
-  `applyEdit` does not snapshot-stamp its writes, where mud's does; pre-existing, lands separately.
+- **Teach mode** on adventure.html, mud.html and mudiii.html. The engine half has landed: a
+  declarative sentence is read as a fact against the live world, general semantics, world-scoped
+  provenance, mint or move depending on whether the world already answers to the subject. The
+  `applyEdit` snapshot-stamp sub-clause closed with it. What is left is the UI half — the checkbox
+  on each page, its hint text (`Candle is in the study.`), and the flag's route from DOM to the turn
+  call. Remainders carried forward:
+  - `QUESTION_LEAD_RE` is duplicated in `world-teach.mjs` because it is private to `chat.mjs`.
+    Moving it to `src/domain/interpret/normalize.mjs`, beside `correctMisspellings`, kills the copy.
+  - `world-teach.mjs` and `adventure.mjs` import each other. Safe today — every binding crossing
+    the cycle is a hoisted function declaration, and no estate rule forbids a same-layer cycle —
+    but worth knowing before either file grows.
 - **Pill-driven predictive text** on the same three pages: typing a prefix completes to a live pill's
   whole grounded command. Sub-clause: adventure.html's pill buttons carry no `data-command`
   attribute, where mud.html's already do. Keyboard completion works fully without it — only the

@@ -15376,7 +15376,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // otherwise read as a declarative or an orientation ask.
   {
     const advTurn = await adventureTurn(workingLine, {
-      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder, actingSubject,
+      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder, actingSubject, gameConfig,
     });
     if (advTurn) {
       note(trace, `lane: ${advTurn.note}`);

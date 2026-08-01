@@ -473,6 +473,7 @@
   "src/services/viz-room-graph.mjs",
   "src/services/viz-theme.mjs",
   "src/services/viz-ticker.mjs",
+  "src/services/world-teach.mjs",
   "src/surfaces/http/server-http.mjs",
   "src/surfaces/tui/app.mjs",
   "src/surfaces/web/adventure-browser-entry.mjs",
