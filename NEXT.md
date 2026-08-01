@@ -122,24 +122,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 `SKILL_DO_NEXT.md`'s 2026-08-01 batch (`locative-predicate-dedup`, `code-explorer-seed-retry`,
 `ci-ask-bundle-build`, `gap-a-graph-wiring`) is fully landed on `main` — see `git log`. None open.
-- [ ] **`adventure-browser-entry.mjs` and `mud-browser-entry.mjs` still pass a permanently-empty
-  graph into `graphAsk`/`enginePlan`.** Six of the ten browser-entry pages already build a real one
-  before `ask`/`plan`/`turn` — `chat-browser-entry.mjs`/`ledger-browser-entry.mjs` via the generic
-  `memoryFactGraphPayload` (`src/domain/memory-facts.mjs`), `ingest-browser-entry.mjs` via its own
-  `ingestFactGraphPayload`, `sprites-browser-entry.mjs` via `spriteFactGraphPayload`,
-  `plan-browser-entry.mjs` via `hanoiBoardGraphPayload`, `spider-fly-browser-entry.mjs` (the
-  original case) via `worldRelationGraphPayload`. `adventure-browser-entry.mjs:106` and
-  `mud-browser-entry.mjs:92` both still set `graph = parseEntities({ individuals: [],
-  objectProperties: [] })` once and never reassign it, so any `ask`/`plan` call against either page
-  answers with an honest miss instead of reading the page's own facts. `memoryFactGraphPayload` is a
-  plausible drop-in for both (adventure and mud are both plain fact stores), each likely needing its
-  own `classOf` callback the way `worldRelationGraphPayload` takes one (adventure has rooms/items/
-  people; mud has per-character fog-of-war windows sharing one store) — a small wrapper reusing
-  existing infrastructure, not two bespoke projections from scratch. (Not in scope:
-  `research-browser-entry.mjs` calls `factAnswer`/`factReadBack` directly, bypassing `graphAsk`;
-  `code-explorer-browser-entry.mjs` holds a real code graph, not a memory one; `memory-ask-
-  browser-entry.mjs`/`graph-ask-browser-entry.mjs` have no `graphAsk`/`enginePlan` wiring at all;
-  `p2p-browser-entry.mjs` is a re-export library with no session.)
 
 ## Discipline
 
@@ -239,6 +221,14 @@ Three hard-won lessons, carried forward:
    manual reconciliation renaming one side's identifiers, not a blind pick of one branch. Worth
    briefing distinct naming into any future dispatch batch that has multiple agents extending one
    test file, rather than discovering it at every merge.
+
+9. (2026-08-01) Closing Open items with narrow, sequential text-replace edits left a fully-resolved
+   checkbox item sitting in the file for several commits: each edit's own old-text match ended right
+   before the next item's text, so a trailing item further down the list was never touched by any of
+   them, even after the section's own summary line said "None open." right above it. The fix is
+   procedural: after removing an item, re-read the WHOLE Open items section (not just the diff of
+   what you just edited) before treating it as accurate — a section-level check catches what a
+   line-level edit can silently skip.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
