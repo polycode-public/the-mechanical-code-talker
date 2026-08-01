@@ -72,6 +72,22 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   `git add`ed) that vanishes the moment the worktree is removed — the coordinator gets exactly
   one look. (Recovered once: a `-ses` singularization fix's own test file sat untracked in an
   abandoned worktree for hours before this check would have caught it.)
+- **A sub-agent sharing a working tree can run destructive git ops meant only for the
+  coordinator.** Brief every dispatch: it may only `git add <its own files>` + `git commit` —
+  never `stash`/`reset`/`checkout --`/`clean`. If the harness blocks background-agent commits
+  entirely (no live user to approve one), the coordinator commits on its behalf, reviewing
+  `git status` line by line first — a swept-up `git add -A` once caught another track's
+  untracked file that didn't belong in the commit.
+- **A sub-agent's own "waiting for the notification" or "completed" claim is not proof.** Before
+  resuming it or accepting it as done: `ps aux | grep <worktree-id>` for a live process, then
+  `git log`/`git status` on its worktree. Live process → leave it alone, it resumes correctly on
+  the real notification. Dead process + real committed work → treat it as done. Dead process +
+  nothing → send an explicit correction (foreground only, never end a turn on a still-running
+  command) or take over and commit its verified work yourself. A second identical stall on the
+  same agent means stop it and finish the work directly rather than resuming again.
+- **Never resume a round whose worktree has already been auto-removed.** Check `git worktree
+  list` for its path first; if it's gone, `TaskStop` that round and dispatch a fresh one instead
+  of `SendMessage`-ing a dead round back to life.
 - **Remove the worktree (and its branch) as soon as its commit is merged onto `main`** —
   `git worktree remove <path>` then `git branch -d worktree-agent-<id>` (safe delete; it refuses
   if the branch isn't actually an ancestor of `main`, which is exactly the check you want).
@@ -179,6 +195,17 @@ agent should run, and tell it to cite the coordinator's count rather than re-ear
 Two traps this rule does not excuse: a radius you cannot see is a real reason to run the suite (say
 so), and a shared generated artifact is wider than it looks — touching the verb vocabulary
 regenerates the collision table, which redraws the ask bundle. Follow the generator, not the diff.
+
+The same widening applies to any repo-wide migration, not just a generated artifact: "stop
+committing X, build it fresh instead" has as many invocation paths as there are places that
+assumed X was already there, and grepping X's own filename finds only some of them. Grep every
+form the thing goes by — filename, the npm/build script name that wraps it, the prose words a
+comment would use to describe it — and enumerate every independent path that could need the same
+fix (a test tier's npm script, a CI job that calls raw commands bypassing that script, and the
+actual deploy/publish path are usually three separate places). Fix the shared layer every caller
+already goes through before patching individual callers as they turn up failing — a build-if-
+missing guard baked into the npm script itself beats finding the same gap five different ways,
+one broken pipeline at a time.
 
 ## Always tee to a file before filtering — every pipe, not just the slow ones
 

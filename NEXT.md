@@ -41,132 +41,29 @@ None open.
 
 ## Discipline
 
-`CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
-blast radius, the versioning and push rules, and the repo-local identity. Read it there. This
-section holds only what `CLAUDE.md` doesn't.
+`CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split (including
+sub-agent git discipline, verifying a "waiting"/"completed" claim, and never resuming an
+auto-removed worktree), the test blast radius (including the migration concept-sweep), the
+versioning and push rules, and the repo-local identity. Read it there. This section holds only
+what's specific enough to `tmct` that it doesn't belong in that general model.
 
-Hard-won lessons, carried forward:
-
-1. Background sub-agents sharing one working tree (no worktree isolation) can and did run
-   destructive/shared git operations (`git stash`) meant only for the coordinator — recovered
-   without loss, but now explicitly called out in every dispatch brief: sub-agents may only
-   `git add <their own files>` + `git commit`, never `git stash`/`reset`/`checkout --`/`clean`.
-   Also: the harness's permission system blocks `git commit` for *background* sub-agents entirely
-   in some configurations (no live user to approve a permission-gated action) — the coordinator does
-   the committing itself in the foreground when this happens, verifying `git status` immediately
-   before every stage to avoid sweeping in another track's pre-staged files. (Re-proven 2026-07-15:
-   a `git add -A` swept another session's untracked design doc into a commit — caught and amended
-   out. List paths explicitly, or review `git status` line by line first.)
-
-2. A background sub-agent's own final "completed" notification is not reliable proof it actually
-   finished — an agent reporting a vague "I'll wait for the Monitor notification" as its terminal
-   output is a sign of unfinished work, not a status update, even when its worktree in fact holds
-   complete, real, committed work. Always verify via `git log`/`git status` on the agent's own
-   worktree directly before deciding whether to resume it or treat it as done — trust the commits,
-   not the prose. An agent stuck repeating the same "still waiting" message across multiple
-   notifications is a sign to `TaskStop` it explicitly rather than keep resuming, once its worktree
-   confirms the real work is already complete.
-
-3. Never resume (`SendMessage`) a round whose worktree has already been auto-removed — relaunch
-   fresh instead. This was observed twice: once an agent fell back to operating directly in the
-   coordinator's own shared working tree; on a later occasion this went as far as checking out a
-   brand-new branch on the shared worktree itself (caught immediately via `git branch
-   --show-current` returning something other than `main`, no work lost). The rule: before resuming
-   any stalled round, check `git worktree list` for its path
-   — if it's gone, `TaskStop` that round and dispatch a fresh one instead, never `SendMessage` it
-   back to life.
-
-4. Concurrent chat.mjs agents work when each brief pins its region (learn-on-miss block /
-   logLines + slash commands / factReadBackReaders) and forbids refactors — but the merge gate
-   must still rebuild the ask bundle (it inlines chat readers, so it drifts on every reader
-   change), re-run the pack-manifest check (three separate agents forgot new `src/` files in one
-   day), and watch for same-name declarations across branches (two batches both coined
-   `spiderFlyContextAnswer`; esbuild's duplicate-symbol error at bundle time was the catch).
-   Seed-content-dependent e2e pins are the other recurring merge hazard: raising the seed caps
-   silently grounded the learn-on-miss demo's lookup term, and the sense-split chain rendering
-   broke a source-adjacency pin — the fix each time is a probe against the real store, then the
-   pin follows the behavior.
-
-5. (2026-07-23) Lesson 2's pattern recurred three separate times in one session, across three
-   different background sub-agents, each ending its turn on a variant of "I'll wait for the
-   background monitor" while its own `npm test`/judge fan-out was still genuinely running as an
-   untracked OS process. The fix each time was the same: verify via `ps aux` in the agent's
-   worktree, then `SendMessage` an explicit correction telling it to stop backgrounding entirely
-   and block synchronously in the foreground. Brief this into every dispatch up front next time
-   ("run test commands in the foreground and let them block; do not end your turn on a command
-   still running") rather than catching it after the fact three times running.
-   Separately: this session pushed a `npm run roll` commit without re-running `npm test` locally
-   first, trusting CI to catch a problem — CI did (a stale screenshot manifest), but that's a real
-   gap in this session's own discipline, not a success story. `npm test` green at every commit
-   (`CLAUDE.md`'s own rule) applies to a roll commit too, even though a version bump feels like it
-   should be self-verifying.
-
-6. (2026-07-24) Lesson 5's brief line is necessary but not sufficient: with the up-front
-   "foreground only, never end your turn on a running command" instruction in EVERY dispatch,
-   four of eight background sub-agents in one session still ended turns on "I'll wait for the
-   notification" — twice for runs that were genuinely live (those resume correctly on the real
-   notification; leave them alone once `ps` confirms the process), twice for phantom waits
-   (nothing running; `SendMessage` the correction, pointing at the teed log if the run already
-   finished green). The triage that works: `ps aux | grep <worktree-id>` FIRST, then
-   `git log`/`status` on the worktree — a live process means wait, a dead one means correct or
-   take over. A second identical stall on the same agent means stop it and let the coordinator
-   commit its (real, verified) work directly — that recovery took minutes and lost nothing.
-
-7. (2026-07-24) The merge gate's blast-radius run is not a substitute for the full suite on a
-   push to `main`. A merge whose own lane and estate guard were green went out without
-   `npm test`; CI's `unit` job then failed on `test/adapters/memory-seed-perf.test.mjs`'s
-   scaling ratio (12.72x against its 12x bar) — a contention flake, not a regression (the
-   local full suite ran 4093/4093 straight after). Two corrections: run the full suite before
-   every push that reaches the remote, and when a timing test flakes, harden it rather than
-   re-running it. That test had already been hardened once (min-of-5 after flakes at 6.30x and
-   10.49x); the remaining weakness is that a RATIO amplifies leftover noise asymmetrically —
-   the long batch's every trial can catch contention while the short batch catches a quiet
-   moment. Its bar is now 20x, which still leaves the whole quadratic band (64x up) outside.
-
-8. (2026-07-30) Two new ones from this session's large parallel-sprite-content wave. First: the
-   coordinator's own shell can silently carry a stale working directory across Bash calls even with
-   an explicit `cd` earlier in the same turn — a `git merge` once ran inside a sub-agent's worktree
-   instead of the main checkout because of this, caught immediately by `pwd`/`git branch
-   --show-current` returning the wrong path before anything was touched. Always `cd
-   <repo-root>; pwd` as the very first line of any merge-sequence Bash call, never trust the prior
-   call's `cd` to have stuck. Second: sibling content-authoring agents that each append a test
-   section to the SAME shared file (here, `test/adapters/sprite-large-template-files.test.mjs`)
-   reliably collide on top-level `const`/`function` names even when their actual test content
-   doesn't overlap — `git merge` cannot auto-resolve a same-name redeclaration, and the fix is a
-   manual reconciliation renaming one side's identifiers, not a blind pick of one branch. Worth
-   briefing distinct naming into any future dispatch batch that has multiple agents extending one
-   test file, rather than discovering it at every merge.
-
-9. (2026-08-01) Closing Open items with narrow, sequential text-replace edits left a fully-resolved
-   checkbox item sitting in the file for several commits: each edit's own old-text match ended right
-   before the next item's text, so a trailing item further down the list was never touched by any of
-   them, even after the section's own summary line said "None open." right above it. The fix is
-   procedural: after removing an item, re-read the WHOLE Open items section (not just the diff of
-   what you just edited) before treating it as accurate — a section-level check catches what a
-   line-level edit can silently skip.
-
-10. (2026-08-01) Un-committing a build artifact ("stop tracking X, build it fresh instead") is one
-    change with many independent invocation paths, and finding them by grepping the artifact's own
-    filename is not enough. First miss: `scripts/roll.mjs` referenced the ask bundle only by its npm
-    script name (`build:ask-bundle`) and in prose ("packaged ask bundle"), never the literal
-    filename — a filename-only grep across the repo walked right past it, and it kept regenerating
-    a bundle nothing needed regenerated, on every version bump, for a stale reason. Second, bigger
-    round: un-committing the worlds-pack build output surfaced FIVE separate consumers, one pipeline
-    run at a time — `unit`/`unit:fast` (test files read it directly), `.e2e-web-base`/
-    `.e2e-deployed-base` (they invoke `node --test` directly, bypassing the npm-script guard that
-    fixed the first two), and `deploy:website` itself (the actual live deploy, a fourth independent
-    script). Fixing `deploy:website` then changed real behavior — the mud worlds finally loaded —
-    which added enough concurrent browser-context contention in a shared job to push two unrelated
-    timing-sensitive tests over their own timeouts, a fifth failure that was a genuine consequence of
-    the fix, not a coincidence. The pattern each time: fix the one consumer already known, push,
-    let the pipeline find the next one, repeat — four separate roll/commit/push cycles where one
-    pass could have worked. What would have caught more up front: grep for the concept in every form
-    it takes (filename, npm script name, and the prose words used to describe it — "ask bundle",
-    "worlds pack") before treating a migration as scoped, not just the literal path; and fix
-    the *shared layer* every caller already goes through (bake a build-if-missing guard into the npm
-    script itself, as `scripts/ensure-worlds-pack.mjs` ended up doing) before patching individual CI
-    job scripts one at a time as failures surface them — patching sites as discovered is what turned
-    one bug into four commits.
+- **Merging concurrent `chat.mjs` branches**: rebuild the ask bundle (it inlines chat readers, so
+  it drifts on every reader change), rerun the pack-manifest check, and check for same-name
+  top-level declarations across branches — esbuild's duplicate-symbol error at bundle time is the
+  tell (two batches once both coined `spiderFlyContextAnswer`). Re-probe seed-content-dependent
+  e2e pins against the real store after any seed-generation change — a raised seed cap can
+  silently ground a demo's lookup term or break a source-adjacency pin.
+- **`cd <repo-root>; pwd` as the literal first line of any merge-sequence Bash call.** The shell
+  can carry a stale working directory across calls even with an explicit `cd` earlier in the same
+  turn; a merge has run inside a sub-agent's worktree instead of the main checkout because of this.
+- **Brief distinct naming when multiple agents extend the same shared test file.** Sibling
+  content-authoring agents reliably collide on top-level `const`/`function` names even when their
+  actual test content doesn't overlap — `git merge` can't auto-resolve that, only a manual rename
+  can, so name the collision risk up front rather than reconciling it at every merge.
+- **After closing an Open item, re-read the whole Open items section, not just your own diff.** A
+  narrow text-replace edit's own match can end before a trailing item's text, leaving it
+  unresolved and untouched for several commits even after the section's own summary line says
+  "None open."
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
