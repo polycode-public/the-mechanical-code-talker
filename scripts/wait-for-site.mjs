@@ -6,35 +6,36 @@
 // this one (is the site the e2e-deployed jobs are about to hit actually the
 // build that just shipped).
 //
-// The page version stamp alone isn't enough: index.html is small and
-// uploads/propagates fast, but chat-seed.json is ~93MB and can still be
-// mid-upload (or mid-CloudFront-invalidation) after index.html already
-// shows the new version. Pipeline 2722451772 reproduced exactly this —
-// every deployed-e2e job's very first seed-dependent test failed with zero
-// facts, even at --test-concurrency=1 (no contention possible), moments
-// after the version-stamp check alone had already passed. So this also
-// reads chat.html's own SEED_STAMP and HEAD-checks that exact
-// chat-seed.json?b=<stamp> URL for a real, adequately-sized response —
-// the same URL and cache key a real browser boot uses.
+// version.txt alone isn't enough: it's tiny and uploads/propagates fast, but
+// chat-seed.json is ~93MB and can still be mid-upload (or mid-CloudFront-
+// invalidation) after version.txt already shows the new version. Pipeline
+// 2722451772 reproduced exactly this — every deployed-e2e job's very first
+// seed-dependent test failed with zero facts, even at --test-concurrency=1
+// (no contention possible), moments after the version check alone had
+// already passed. So this also reads chat.html's own SEED_STAMP and
+// HEAD-checks that exact chat-seed.json?b=<stamp> URL for a real,
+// adequately-sized response — the same URL and cache key a real browser
+// boot uses.
 //
 // The version is not commit-precise either. Several commits share a version
 // between bumps, so a slow deploy still settling while the next push races
-// past it can serve the WRONG commit under a version that checks out. The
-// build stamps CI_COMMIT_SHA into the page too, and this demands it back.
+// past it can serve the WRONG commit under a version that checks out.
+// version.txt's own commit line demands it back.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { parseCommitStamp, parseVersionStamp, shortCommit } from "../src/domain/version-stamp.mjs";
+import { parseVersionFile, shortCommit } from "../src/domain/version-stamp.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { version, homepage } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 
 const SITE_URL = homepage;
+const VERSION_URL = new URL("version.txt", SITE_URL).href;
 const CHAT_URL = new URL("chat.html", SITE_URL).href;
-// GitLab sets CI_COMMIT_SHA in every job, so the deploy stamps the page with
-// it and this poll demands it back. Empty outside CI, where there is no commit
-// to be precise about and the version check is the whole of the answer.
+// GitLab sets CI_COMMIT_SHA in every job, so the deploy writes it into
+// version.txt and this poll demands it back. Empty outside CI, where there is
+// no commit to be precise about and the version check is the whole of the answer.
 const EXPECTED_COMMIT = shortCommit(process.env.CI_COMMIT_SHA ?? "");
 const ATTEMPTS = Number(process.env.WAIT_FOR_SITE_ATTEMPTS ?? 10);
 const DELAY_MS = Number(process.env.WAIT_FOR_SITE_DELAY_MS ?? 30_000);
@@ -54,14 +55,14 @@ async function fetchText(url) {
   return res.text();
 }
 
-/** The version and commit the live home page carries. The version alone is not
- *  commit-precise — commits share a version between bumps — so a still-live
- *  previous build can pass the version check while serving the wrong code. */
-async function homePageBuild() {
-  const html = await fetchText(SITE_URL);
-  const stampedVersion = parseVersionStamp(html);
-  if (!stampedVersion) throw new Error("the home page shows no version");
-  return { version: stampedVersion, commit: parseCommitStamp(html) };
+/** The version and commit the live site's version.txt carries. The version
+ *  alone is not commit-precise — commits share a version between bumps — so
+ *  a still-live previous build can pass the version check while serving the
+ *  wrong code. */
+async function versionFileBuild() {
+  const { version: seenVersion, commit } = parseVersionFile(await fetchText(VERSION_URL));
+  if (!seenVersion) throw new Error("version.txt shows no version");
+  return { version: seenVersion, commit };
 }
 
 /** chat.html's own SEED_STAMP — the content-hash query chat-page-viz.mjs
@@ -94,10 +95,10 @@ async function seedReady(stamp) {
 }
 
 async function checkOnce() {
-  const { version: seenVersion, commit: seenCommit } = await homePageBuild();
-  if (seenVersion !== version) throw new Error(`home page serves ${seenVersion}, not ${version}`);
+  const { version: seenVersion, commit: seenCommit } = await versionFileBuild();
+  if (seenVersion !== version) throw new Error(`version.txt shows ${seenVersion}, not ${version}`);
   if (EXPECTED_COMMIT && seenCommit !== EXPECTED_COMMIT) {
-    throw new Error(`home page serves commit ${seenCommit ?? "(none stamped)"}, not ${EXPECTED_COMMIT}`);
+    throw new Error(`version.txt shows commit ${seenCommit ?? "(none stamped)"}, not ${EXPECTED_COMMIT}`);
   }
   const stamp = await chatSeedStamp();
   const bytes = await seedReady(stamp);

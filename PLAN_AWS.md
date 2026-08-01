@@ -24,8 +24,8 @@ for the `homepage` field.
   `tmct-precache-v<version>` (`build-demo-site.mjs:474-479`).
 - **The post-deploy smoke** (`scripts/post-deploy-smoke.mjs`, run by `smoke:post-deploy` at
   `.gitlab-ci.yml:525-537`): polls the URL taken from `package.json`'s `homepage` field, checks
-  the npm `latest` version, the page's `#pkg-version` stamp, and — hard requirement on any new
-  host — that `vendor/wink.js` comes back with a `content-encoding` response header
+  the npm `latest` version against the deployed site's `version.txt`, and — hard requirement on
+  any new host — that `vendor/wink.js` comes back with a `content-encoding` response header
   (`post-deploy-smoke.mjs:54-64`). Changing `homepage` repoints the whole smoke; there is no
   separate URL config.
 - **The live URLs**: `https://polycode-projects.gitlab.io/the-mechanical-code-talker/`

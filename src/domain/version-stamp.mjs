@@ -1,78 +1,52 @@
-// version-stamp.mjs — the home page's #pkg-version and #pkg-commit elements,
-// written and read from one place. Pure: strings in, strings out, no imports,
-// so the deploy smoke check can reach it without npm ci.
+// version-stamp.mjs — the deployed site's version.txt, written and read from
+// one place. Pure: strings in, strings out, no imports, so the deploy smoke
+// check can reach it without npm ci.
 //
-// This existed three times and the copies had already drifted: the writer
-// matched [^<]*, the smoke check demanded \d+\.\d+\.\d+, and the estate test
-// accepted [^<\s]*. A writer that accepts what its reader rejects is a green
-// build and a failed deploy, so the pattern lives here and all three call it.
+// This used to be a stamp baked into index.html's #pkg-version/#pkg-commit
+// elements. That required the committed page to be rewritten (and re-verified
+// for drift) on every version bump. version.txt is a plain generated file
+// instead, gitignored like every other build output under public/, so there
+// is nothing committed for it to drift against.
 //
 // The version alone cannot say WHICH build the edge is serving. Several
 // commits share one version between bumps, so a slow deploy still settling
 // while the next push races past it serves the wrong commit under a version
-// that checks out. The commit stamp is the precise answer, so the readiness
-// poll can tell "still the old build" from "ready".
-
-/** The element that carries the version, and the value inside it. */
-const STAMP = /(id="pkg-version"[^>]*>)\s*v?([^<]*?)\s*(<)/;
+// that checks out. The commit line is the precise answer, so the readiness
+// poll can tell "still the old build" from "ready". The timestamp is for a
+// human reading a stale-deploy report, not something a script gates on.
 
 /** A semver core, which is what the deploy smoke check is entitled to expect. */
 const SEMVER = /^\d+\.\d+\.\d+$/;
-
-/** The element that carries the commit, and the value inside it. */
-const COMMIT_STAMP = /(id="pkg-commit"[^>]*>)\s*([^<]*?)\s*(<)/;
 
 /** Twelve hex characters of a git object name — long enough that a collision
  *  between two builds of this repo is not a thing that happens, short enough
  *  to read. */
 const SHORT_COMMIT = /^[0-9a-f]{12}$/;
 
-/** True iff `html` carries an element the stamp can be written into. */
-export function hasVersionStamp(html) {
-  return STAMP.test(html);
-}
-
-/** The version `html` displays, or null when the element is absent or holds
- *  something that is not a semver core (an unstamped placeholder, say). */
-export function parseVersionStamp(html) {
-  const found = STAMP.exec(html);
-  if (!found) return null;
-  const value = found[2].trim();
-  return SEMVER.test(value) ? value : null;
-}
-
-/** `html` with the stamp set to `version`. Throws when there is nothing to
- *  stamp — a page that lost its element would otherwise publish blank. */
-export function stampVersion(html, version) {
-  if (!SEMVER.test(version)) throw new Error(`not a stampable version: "${version}"`);
-  if (!hasVersionStamp(html)) throw new Error("no #pkg-version element to stamp");
-  return html.replace(STAMP, `$1${version}$3`);
-}
-
 /** The twelve-character form of a full or already-short git object name. */
 export function shortCommit(sha) {
   return String(sha ?? "").trim().toLowerCase().slice(0, 12);
 }
 
-/** True iff `html` carries an element the commit stamp can be written into. */
-export function hasCommitStamp(html) {
-  return COMMIT_STAMP.test(html);
+/** version.txt's own three-line body: version, commit (empty outside CI —
+ *  a build cannot name the commit that adds it, so there is nothing to write
+ *  locally), and the ISO instant this was written. Throws on a version or
+ *  commit that isn't stampable, the same guard the old HTML stamp made. */
+export function versionFileText({ version, commit = "", timestamp }) {
+  if (!SEMVER.test(version)) throw new Error(`not a stampable version: "${version}"`);
+  const short = commit ? shortCommit(commit) : "";
+  if (commit && !SHORT_COMMIT.test(short)) throw new Error(`not a stampable commit: "${commit}"`);
+  return `${version}\n${short}\n${timestamp}\n`;
 }
 
-/** The commit `html` was built from, or null when the element is absent or
- *  holds something that is not a short object name — which is what the
- *  committed page carries, since a page cannot name the commit that adds it. */
-export function parseCommitStamp(html) {
-  const found = COMMIT_STAMP.exec(html);
-  if (!found) return null;
-  const value = found[2].trim().toLowerCase();
-  return SHORT_COMMIT.test(value) ? value : null;
-}
-
-/** `html` with the commit stamp set to `sha`'s short form. */
-export function stampCommit(html, sha) {
-  const short = shortCommit(sha);
-  if (!SHORT_COMMIT.test(short)) throw new Error(`not a stampable commit: "${sha}"`);
-  if (!hasCommitStamp(html)) throw new Error("no #pkg-commit element to stamp");
-  return html.replace(COMMIT_STAMP, `$1${short}$3`);
+/** version.txt's three fields, read back. `version`/`commit` are null when
+ *  their line is absent or doesn't hold what it should — an empty commit
+ *  line reads as "no commit stamped" rather than a false match. `timestamp`
+ *  is whatever string is there, untouched: it's for display, not grading. */
+export function parseVersionFile(text) {
+  const [versionLine = "", commitLine = "", timestampLine = ""] = String(text ?? "").split("\n");
+  const version = SEMVER.test(versionLine.trim()) ? versionLine.trim() : null;
+  const commit = SHORT_COMMIT.test(commitLine.trim().toLowerCase()) ? commitLine.trim().toLowerCase() : null;
+  const timestamp = timestampLine.trim() || null;
+  return { version, commit, timestamp };
 }

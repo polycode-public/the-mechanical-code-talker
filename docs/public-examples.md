@@ -68,7 +68,7 @@ harness the README fences use.
 | `index.html:311` | `runChat` library block | `runChat` | `test/tools/chat-library-block.test.mjs` (runs the block, asserts the answer) | tool |
 | ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `test-e2e/pages-home.test.mjs`, `test-e2e/pages-index.test.mjs` | dom |
 | plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `test-e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
-| version stamp | `<span id="pkg-version">` | `scripts/build-demo-site.mjs` | `test-e2e/pages-home.test.mjs`, `test/estate/page-version-stamp.test.mjs` | estate |
+| version stamp | `version.txt` | `scripts/build-demo-site.mjs` | `test-e2e/pages-home.test.mjs`, `test/adapters/version-stamp.test.mjs` | dom |
 
 The `runChat` block is pinned at the tool layer:
 `test/tools/chat-library-block.test.mjs` runs the same call in-process and

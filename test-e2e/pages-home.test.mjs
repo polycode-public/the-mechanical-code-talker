@@ -332,17 +332,14 @@ test("the sprite-library feature's teaser shows real sprite icons and real ances
   }
 });
 
-test("the version the page documents is the version the package ships", async () => {
-  const { context, page } = await openHomePage();
-  try {
-    const shown = (await page.locator("#pkg-version").textContent())?.trim();
-    const { version } = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
-    // post-deploy-smoke.mjs reads this element off the deployed page and checks
-    // it against the published package, so a stale stamp reports a bad deploy.
-    assert.equal(shown, version, "the page's version stamp tracks package.json");
-  } finally {
-    await context.close();
-  }
+test("version.txt documents the version the package ships", async () => {
+  const text = await (await fetch(`${server.origin}/version.txt`)).text();
+  const [shown] = text.split("\n");
+  const { version } = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+  // post-deploy-smoke.mjs and wait-for-site.mjs both read this file off the
+  // deployed site and check it against the published package, so a stale
+  // stamp reports a bad deploy.
+  assert.equal(shown, version, "version.txt's version line tracks package.json");
 });
 
 test("the page fits a phone viewport without sideways scrolling", async () => {

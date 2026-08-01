@@ -40,7 +40,7 @@ confirms the deploy is current.
 ## 2. Confirm the deployed version
 
     BASE=https://tmct.polycode.co.uk
-    curl -s "$BASE/" | grep -o 'id="pkg-version">[^<]*'
+    curl -s "$BASE/version.txt" | head -1
 
 Record this exact version string — it is what the new report revision stamps itself against. If
 it doesn't match `package.json`'s current version, the deployed site is behind a pending

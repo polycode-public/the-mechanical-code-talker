@@ -13,13 +13,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { parseVersionStamp } from "../src/domain/version-stamp.mjs";
+import { parseVersionFile } from "../src/domain/version-stamp.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { name, version, homepage } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 
 const REGISTRY_URL = `https://registry.npmjs.org/${name.replace("/", "%2f")}/latest`;
 const PAGES_URL = homepage;
+const VERSION_URL = new URL("version.txt", PAGES_URL.endsWith("/") ? PAGES_URL : `${PAGES_URL}/`).href;
 const ATTEMPTS = Number(process.env.SMOKE_ATTEMPTS ?? 10);
 const DELAY_MS = Number(process.env.SMOKE_DELAY_MS ?? 30_000);
 const FETCH_TIMEOUT_MS = 20_000;
@@ -40,10 +41,10 @@ async function publishedVersion() {
   return JSON.parse(await fetchText(REGISTRY_URL)).version;
 }
 
-/** The version the Pages home page shows, read from the element that carries it. */
+/** The version the deployed site's version.txt shows. */
 async function pagesVersion() {
-  const version = parseVersionStamp(await fetchText(PAGES_URL));
-  if (!version) throw new Error("the page shows no version");
+  const { version } = parseVersionFile(await fetchText(VERSION_URL));
+  if (!version) throw new Error("version.txt shows no version");
   return version;
 }
 

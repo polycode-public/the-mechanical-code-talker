@@ -8,16 +8,21 @@
 //   npm run roll -- --version 3.0.0    # set an exact version
 //
 // It bumps package.json (and the lockfile) with NO git tag and NO commit — the
-// caller commits — then regenerates the four artifacts that carry the version
-// and must not ship stale: the agentbench envelope, the infbench envelope, the
-// home-page footer, and the screenshot manifest's tmctVersion field.
+// caller commits — then regenerates the two committed artifacts that carry
+// the version and must not ship stale: the agentbench envelope and the
+// infbench envelope.
 //
-// The browser ask bundle (src/surfaces/web/memory-ask-browser.bundle.js) is
-// deliberately NOT rebuilt here: it's code-derived, not version-stamped, so a
-// version-only roll never changes its bytes, and it's no longer committed to
-// git — publish:npm, pack:contents, and the two shared e2e job bases each
-// build their own fresh copy in CI, independent of anything this script does
-// locally.
+// Nothing else in the tree is committed with the version baked in anymore, so
+// nothing else needs a local rebuild here:
+//   - the home page's version.txt is gitignored and written fresh by whichever
+//     CI job builds the site (deploy:website), not committed;
+//   - the screenshot manifest's tmctVersion field is likewise not something a
+//     local roll needs to chase — run `npm run gen:screenshots` directly when
+//     you actually want new screenshots, version bump or not;
+//   - the browser ask bundle (src/surfaces/web/memory-ask-browser.bundle.js)
+//     is code-derived, not version-stamped, and no longer committed either —
+//     publish:npm, pack:contents, and the two shared e2e job bases each build
+//     their own fresh copy in CI.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -47,10 +52,8 @@ run("npm", ["version", explicit ?? release, "--no-git-tag-version", "--allow-sam
 const version = versionNow();
 console.log(`\nrolled to ${version} — regenerating version-stamped artifacts\n`);
 
-// 2) regenerate the release artifacts
-run("node", ["test-benchmarks/agentbench/generate-envelope.mjs"]); // test-benchmarks/agentbench/envelope.json (version-stamped)
-run("node", ["test-benchmarks/infbench/generate-envelope.mjs"]); // test-benchmarks/infbench/envelope.json (version-stamped)
-run("npm", ["run", "demo:build"]); // public/index.html footer stamp (version-stamped)
-run("npm", ["run", "gen:screenshots"]); // public/screenshots/manifest.json's tmctVersion stamp
+// 2) regenerate the committed, version-stamped release artifacts
+run("node", ["test-benchmarks/agentbench/generate-envelope.mjs"]); // test-benchmarks/agentbench/envelope.json
+run("node", ["test-benchmarks/infbench/generate-envelope.mjs"]); // test-benchmarks/infbench/envelope.json
 
 console.log(`\nroll complete: ${version}. Review with \`git status\`, then commit.`);
