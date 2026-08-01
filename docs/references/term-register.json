@@ -380,6 +380,62 @@
       "cite": "de Kleer, Artificial Intelligence 28(2), 1986, pp. 127-162, s4.2 p. 143 (ATMS justification: antecedents + consequent + informant); PROV-O, W3C Rec 2013-04-30 (wasDerivedFrom)",
       "note": "space-joined premise Fact ids. Emitted by core.mjs:1068 and was declared in NO ontology file - it is absent from MEMORY_VOCABULARY, so the documented-vocabulary test could not see it. The deprecated factProvenance shim WAS declared; this live prop was not. Now declared and pinned.",
       "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "CRDT",
+      "area": "storage",
+      "verdict": "aligned",
+      "cite": "Shapiro, Preguica, Baquero, Zawirski, \"Conflict-free Replicated Data Types\", INRIA RR-7687 (rev. 2011-08-25) and SSS 2011, LNCS 6976, pp. 386-400, DOI 10.1007/978-3-642-24550-3_29; catalogue in INRIA RR-7506, \"A comprehensive study of Convergent and Commutative Replicated Data Types\", Jan 2011, HAL inria-00555588",
+      "note": "tmct is STATE-BASED (CvRDT), so no causal delivery is required - which is why a sync-response and a live op merge through one path. Four 2011 artefacts share these authors; cite RR-7687/SSS for the definitions, RR-7506 for the catalogue. See docs/references/papers/crdt.md.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "G-Set",
+      "area": "storage",
+      "verdict": "extend",
+      "cite": "Shapiro et al., INRIA RR-7506, s3.3.1, Specification 11",
+      "note": "the element is a (triple, source) RECORD, not a triple: core.mjs files every assertion under <groupId>@<sourceId> and unions provenance tags inside it. So it is a G-Set of records each carrying a G-Set of tags, plus a per-source revision chain that demotes rather than deletes. PLAN_MUD_WEBRTC.md's \"a G-Set's merge rule, byte for byte\" is right about union and loose about granularity.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "OR-Set",
+      "area": "storage",
+      "verdict": "open",
+      "cite": "Shapiro et al., INRIA RR-7506, s3.3.5, Specification 15 (introduced there; no prior citation given)",
+      "note": "not built, and not needed for what ships: no product path removes a replicated element, and the unique add-tag an OR-Set would need already exists as the provenance tag - which is a citation people read, so a tombstone would put holes in the audit trail. Named as the retraction option in PLAN_MUD_WEBRTC.md; crdt.md prices it against the compaction-rollup shape instead.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "strong eventual consistency",
+      "area": "storage",
+      "verdict": "aligned",
+      "cite": "Shapiro et al., INRIA RR-7687, Definition 2.3 (eventual consistency plus strong convergence: replicas that delivered the same updates have equivalent state)",
+      "note": "the NAMED definition is in RR-7687, not in RR-7506 - that report's abstract says \"SEC\" but its s2.3 formalises the property as \"Eventual Convergence\". A citation of RR-7506 for the SEC definition points at a document that does not carry it.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "last-writer-wins",
+      "area": "storage",
+      "verdict": "extend",
+      "cite": "Shapiro et al., INRIA RR-7506, s3.2.1, Specifications 8-9 (LWW-Register), attributing it to Johnson & Thomas, RFC 677, \"The Maintenance of Duplicate Databases\", 1975-01-27",
+      "note": "tmct's latest-wins is a READ-time query (adventure.mjs's foldWorldState ranks by (epoch, turn); rulingTestimonyClaim by epoch/firsthand/turn/gone), never a merge-time register - the loser stays in the store so its citation stays readable. NB RR-7506's own bibliography misdates RFC 677 as January 1976; the RFC is dated 27 January 1975.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "tombstone",
+      "area": "storage",
+      "verdict": "extend",
+      "cite": "Shapiro et al., INRIA RR-7506, s3.3.2 (2P-Set) and s3.3.5 (OR-Set)",
+      "note": "the only tombstone tmct has is compaction's: assertionGroupsFor refuses a source a pool-1 rollup already absorbed, so an absorbed assertion is not resurrected by the next sync. Retraction (removeFacts) writes no tombstone and does not replicate, so a retracted fact returns from any peer that still holds it.",
+      "verified": "2026-08-02 — primary source read"
+    },
+    {
+      "term": "CALM",
+      "area": "storage",
+      "verdict": "map",
+      "cite": "Hellerstein, \"The Declarative Imperative: Experiences and Conjectures in Distributed Logic\", ACM SIGMOD Record 39(1), 2010, pp. 5-19, DOI 10.1145/1860702.1860704 (conjecture); Ameloot, Neven, Van den Bussche, \"Relational Transducers for Declarative Networking\", PODS 2011 pp. 283-292 and JACM 60(2) Art. 15, 2013, DOI 10.1145/2450142.2450151 (proof); Hellerstein & Alvaro, \"Keeping CALM\", CACM 63(9), 2020, pp. 72-81, DOI 10.1145/3369736",
+      "note": "the base layer is monotone and coordination-free, so CALM applies to it. The read is NOT: ranking rows and taking the newest means \"there is no later row\", which is negation. Moving it to the read buys CONFLUENCE (same set, same view), not monotonicity - and only because p2p-room.mjs sorts Fact individuals by content-addressed id so the fold is a function of the set. Hellerstein's paper is 2010, commonly misdated 2011.",
+      "verified": "2026-08-02 — primary source read"
     }
   ]
 }

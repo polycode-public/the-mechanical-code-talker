@@ -48,7 +48,9 @@ docs/references/
     ace-owl-fragment.md           <- hand: tmct's ACE-inspired sub-fragment (~8 patterns)
     conceptnet-relations.md       <- hand: ConceptNet's fixed relation types
   papers/
-    README.md                     <- ACE/APE + ELIZA/PARRY lineage candidates
+    README.md                     <- the papers index; ACE/APE + ELIZA/PARRY lineage still wanted
+    crdt.md                       <- CRDTs: the four 2011 Shapiro et al. documents, and why tmct needs no OR-Set
+    graded-language-measures.md   <- the chatbench difficulty spectrum (TROG/CELF/CEFR)
   planning/
     README.md                     <- classical planning & KR: planning is not LLM-only
     PARTIAL_ORDER_PLANNING.md     <- least-commitment planning: causal links, threats
@@ -82,9 +84,17 @@ against. **Consumer:** `src/adapters/corpus/conceptnet.mjs` (Phase 2).
 
 ## 4. Papers — [`papers/`](papers/README.md)
 
-Empty pending Phase 2: ACE/APE papers and the ELIZA/PARRY lineage
-(Weizenbaum 1966; Colby et al. 1971). Only redistributable licences get
-committed; the rest are link+excerpt stubs.
+Two entries. [`papers/crdt.md`](papers/crdt.md) pins the CRDT literature and settles what tmct's
+P2P layer actually replicates: a grow-only set of `(triple, source)` records merged by union, with
+"latest wins" as a read-time query rather than a CRDT primitive, and no OR-Set.
+**Consumer:** `src/adapters/memory/core.mjs`, `src/domain/memory/compaction.mjs`,
+`src/services/p2p-room.mjs`, `src/domain/p2p/`, `src/services/adventure.mjs`.
+[`papers/graded-language-measures.md`](papers/graded-language-measures.md) holds the chatbench
+difficulty spectrum and is still unverified.
+
+Still wanted: the ACE/APE papers and the ELIZA/PARRY lineage (Weizenbaum 1966;
+Colby et al. 1971). Only redistributable licences get committed; the rest are
+link+excerpt stubs.
 
 ## 5. Classical planning & KR — [`planning/`](planning/)
 
