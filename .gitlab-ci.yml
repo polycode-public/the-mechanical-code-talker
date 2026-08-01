@@ -504,6 +504,7 @@ deploy:website:
   script:
     - npm ci
     - npm run build:ask-bundle
+    - npm run gen:worlds-pack
     - npm run demo:build
     - command -v aws >/dev/null || pip install --quiet awscli
     - source scripts/assume-aws.sh prod
