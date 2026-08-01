@@ -42,7 +42,7 @@ script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, a
 
 | track | tier | worktree / branch | status |
 |---|---|---|---|
-| W0-SPIKE — belief extraction, tick fixture header, config sections | top | `.claude/worktrees/agent-a84b9cf55622784fb` | started |
+| W0-SPIKE — belief extraction, tick fixture header, config sections | top | merged, worktree removed | **landed** — 120 tests in its radius; both belief fixes spot-checked directly on merged `main` |
 | W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | merged, worktree removed | **landed** — 14 CC0 rows, 1.14 MB, verified against disk by size and sha256 |
 | W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
 | PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | merged, worktree removed | **landed** — 17 unit tests; adopters splice `matchPills`/`pillCandidates`/`createPillComplete` under those exact names, and call `.refresh()` from the page's own pill render pass |
@@ -71,12 +71,13 @@ files for the whole build and no track may edit them: `chat.mjs`, `build-demo-si
 
 - **MUDIII ships as `mudiii.html`** alongside `mud.html`, per `PLAN_MUD_MUDIII.md`. Closes when
   `smoke:deploy` passes against the live page. Known remainders folded in as sub-clauses:
-  - `visibleCells` clips to a module-level `GRID_SIZE = 10`, so 44 of a 12x12 board's 144 cells are
-    invisible to every agent. Fixed as part of the belief extraction.
-  - `believedCellOf`'s docstring claims a removed target is never believed present; a told fact
-    reaches the fallback and returns a cell anyway.
   - `gen-spider-fly-world.mjs` claims an estate freshness guard regenerates and compares its world
     source. No such guard exists. Build it for the town square, and for spider-fly while there.
+  - The tick fixture's `expectedTape` fixes event types and decision rungs, not cells — every wander
+    is a seeded pick, so cells are an output and the starting board is the knob if a generated run
+    misses the tape. Its turn-8 "trap" note is honest about not springing on turn 8: any prey close
+    enough to believe a morsel one cell from a predator also believes the predator, and evade beats
+    forage. The turn-10 eat happens because the predator chased something else off the spot.
 - **Teach mode** on adventure.html, mud.html and mudiii.html: a checkbox that reads a declarative
   sentence as a fact against the live world. General semantics — any sentence the editor grammar
   can express, including moving world-authored things. Sub-clause: `adventure-browser-entry.mjs`'s
@@ -108,6 +109,12 @@ what's specific enough to `tmct` that it doesn't belong in that general model.
   content-authoring agents reliably collide on top-level `const`/`function` names even when their
   actual test content doesn't overlap — `git merge` can't auto-resolve that, only a manual rename
   can, so name the collision risk up front rather than reconciling it at every merge.
+- **A fresh worktree has no `corpus/worlds/`, no `corpus/sprites/` and no ask bundle, and
+  `node --test <file>` does not build them** — only the `npm run test:*` scripts do. So a targeted
+  run in a new worktree fails tests that pass everywhere else, and the failure reads as a lane
+  regression rather than a missing artifact (`spider-fly-turn.test.mjs` fails 7 of 17 at pristine
+  HEAD for this reason alone). Every dispatch brief should say: run `node scripts/ensure-worlds-pack.mjs`,
+  `node scripts/ensure-sprite-facts.mjs` and `npm run build:ask-bundle` before any `node --test`.
 - **After closing an Open item, re-read the whole Open items section, not just your own diff.** A
   narrow text-replace edit's own match can end before a trailing item's text, leaving it
   unresolved and untouched for several commits even after the section's own summary line says
