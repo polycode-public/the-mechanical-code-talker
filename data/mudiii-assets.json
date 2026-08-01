@@ -1,0 +1,201 @@
+{
+  "_readme": [
+    "Closed allowlist. A later copy agent may copy ONLY the exact sourcePath -> destPath pairs listed in `assets` below, and must not read, list, or copy anything else out of ../world-of-claudecraft. If a model isn't a row here, it doesn't get copied, no matter how well it fits.",
+    "The eastbrook_* trap: those files sit alphabetically right next to the correct ones and look better, but CREDITS.md licenses the whole eastbrook_* kit 'With the project only' (ships with that project, not extractable into a standalone demo like mudiii.html). Take the unprefixed sibling every time: market_stand_1.glb not eastbrook_market_stall.glb, inn.glb not eastbrook_inn.glb, blacksmith.glb not eastbrook_smithy.glb, well.glb not eastbrook_civic_well_beacon.glb.",
+    "Every GLB listed here uses EXT_meshopt_compression and KHR_mesh_quantization (verified by parsing each file's JSON chunk directly, not by trusting docs). Three additionally use EXT_texture_webp: creatures/goblin.glb, foliage/oak_1.glb, foliage/bush.glb. three.js's GLTFLoader decodes KHR_mesh_quantization and EXT_texture_webp natively, so nobody needs to hunt for a decoder for either of those. EXT_meshopt_compression is the one exception and needs exactly one line: loader.setMeshoptDecoder(MeshoptDecoder). See commands.vendorMeshoptDecoderLine below, and commands.fallbackTranscodeToPlainGlb if vendoring the decoder turns out to be undesirable.",
+    "Food markers (cheese, apples, apple crate) are primitive geometry in v1, not models. The KayKit food props (food_cheese, food_apple_*, food_crate_large_apples) are almost certainly CC0 at source, but no CREDITS.md row names a KayKit resource pack, so they're unrecorded rather than free to take and are excluded here. Fetching the genuine KayKit Resource Bits pack from source (https://kaykit.itch.io) and adding a CREDITS.md row for it is a clean later upgrade, not a wall.",
+    "The predator is creatures/fox.glb, not creatures/wolf_basic.glb. wolf_basic.glb looks like the obvious predator model and is close in name to the CREDITS 'Animated creatures' row, but wolf_basic.glb itself is an unrecorded custom Tripo-generated project asset, not the CC0 Quaternius wolf. fox.glb is covered by the CC0 Quaternius creatures row by name, shares the same quadruped rig (Idle/Walk/Gallop/Attack/hit-react/Death via manifest.ts's animal() clip map), and additionally ships an 'Eating' clip verified in the GLB itself -- useful for an eaten-flourish. goblin.glb is the prey/scavenger, matching world-of-claudecraft's own mob_kobold casting (Idle/Walk/Run/Attack/HitRecieve/Death) -- note HitRecieve is misspelled in the asset itself and is reproduced verbatim below, not corrected.",
+    "targetHeight is the model's own measured bounding-box height in metres (computed from each GLB's POSITION accessor bounds through its node transform chain, dequantizing normalized SHORT/BYTE components first), not an arbitrary guess -- these packs already ship in a consistent real-world scale, so no further per-item normalization judgment call was needed for the static props. The two character rigs (fox, goblin) use world-of-claudecraft's own manifest.ts height values instead, since their POSITION accessors are in skinned bind-pose space and a plain node-transform bbox walk (as used for the static props) does not account for joint transforms."
+  ],
+  "commands": {
+    "verifyBytes": "stat -f '%z' <file>   # BSD/macOS; use `stat -c '%s' <file>` on GNU/Linux",
+    "verifySha256": "shasum -a 256 <file>",
+    "vendorMeshoptDecoderLine": "loader.setMeshoptDecoder(MeshoptDecoder)  // three.js GLTFLoader; the only line meshopt compression needs -- quantization and webp need nothing",
+    "fallbackTranscodeToPlainGlb": "npx gltf-transform copy <in>.glb <out>.glb   # decodes EXT_meshopt_compression on read; since no compress step is re-applied, the written GLB carries plain (uncompressed) buffers -- use only if vendoring the decoder is undesirable"
+  },
+  "assets": [
+    {
+      "key": "fox",
+      "sourcePath": "public/models/creatures/fox.glb",
+      "destPath": "public/models/creatures/fox.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://poly.pizza/u/Quaternius · https://quaternius.com",
+      "bytes": 332748,
+      "sha256": "2694028b47e84bad3b9d985aa7743dae02a3bcfddd6becd73b46c747a1e067b3",
+      "targetHeight": 1.0,
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "run": "Gallop",
+        "attack": "Attack",
+        "hit": ["Idle_HitReact_Left", "Idle_HitReact_Right"],
+        "death": "Death",
+        "eat": "Eating"
+      }
+    },
+    {
+      "key": "goblin",
+      "sourcePath": "public/models/creatures/goblin.glb",
+      "destPath": "public/models/creatures/goblin.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://poly.pizza/u/Quaternius · https://quaternius.com",
+      "bytes": 47924,
+      "sha256": "2f02ce927a8871554f3931655d75f1abb8237d36be8a19a35b09920d0812bc3c",
+      "targetHeight": 2.1,
+      "clips": {
+        "idle": "Idle",
+        "walk": "Walk",
+        "run": "Run",
+        "attack": "Attack",
+        "hit": ["HitRecieve"],
+        "death": "Death"
+      }
+    },
+    {
+      "key": "well",
+      "sourcePath": "public/models/props/well.glb",
+      "destPath": "public/models/props/well.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 27788,
+      "sha256": "9308ba09ea3bed048984eeb14307b0557c5ea11404556d33afa9ed904b6ee123",
+      "targetHeight": 1.25,
+      "clips": null
+    },
+    {
+      "key": "house-1",
+      "sourcePath": "public/models/props/house_1.glb",
+      "destPath": "public/models/props/house_1.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 84484,
+      "sha256": "87c8306f95e335ce01150ef3fb90b52cabc15e047077f98d1f25df8d76a95b9e",
+      "targetHeight": 3.39,
+      "clips": null
+    },
+    {
+      "key": "house-2",
+      "sourcePath": "public/models/props/house_2.glb",
+      "destPath": "public/models/props/house_2.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 103180,
+      "sha256": "ede3299a2b09bdf66fc56cb56187ae1cdd673ee23eb44b75a40aa38cd8855e93",
+      "targetHeight": 3.25,
+      "clips": null
+    },
+    {
+      "key": "house-3",
+      "sourcePath": "public/models/props/house_3.glb",
+      "destPath": "public/models/props/house_3.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 43696,
+      "sha256": "3b426a1d8894d3423c0a32c61527dfcbf79e9c0727fa9b83889cf6fa93d9b969",
+      "targetHeight": 1.07,
+      "clips": null
+    },
+    {
+      "key": "inn",
+      "sourcePath": "public/models/props/inn.glb",
+      "destPath": "public/models/props/inn.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 92748,
+      "sha256": "a1386fe4db504f5110df670b91f4e5f6fdc3baf545cc023fb21ebcc457867a04",
+      "targetHeight": 3.49,
+      "clips": null
+    },
+    {
+      "key": "blacksmith",
+      "sourcePath": "public/models/props/blacksmith.glb",
+      "destPath": "public/models/props/blacksmith.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 97444,
+      "sha256": "893c49e06a5c7e5967caad0a666666fb898f3d6823e81dec66b8cf96b3aca3ac",
+      "targetHeight": 3.0,
+      "clips": null
+    },
+    {
+      "key": "market-stall-1",
+      "sourcePath": "public/models/props/market_stand_1.glb",
+      "destPath": "public/models/props/market_stand_1.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 25184,
+      "sha256": "d59645bb16549882280e091e41804cca09dac4a693772960bde0418e5d0229b5",
+      "targetHeight": 1.05,
+      "clips": null
+    },
+    {
+      "key": "market-stall-2",
+      "sourcePath": "public/models/props/market_stand_2.glb",
+      "destPath": "public/models/props/market_stand_2.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 18868,
+      "sha256": "b81f32ab47d17e5b76386814554fe5c1419189049c727d5b84a46a2278ce3597",
+      "targetHeight": 1.04,
+      "clips": null
+    },
+    {
+      "key": "cart",
+      "sourcePath": "public/models/props/cart.glb",
+      "destPath": "public/models/props/cart.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 30972,
+      "sha256": "8bb07d235482439d0e4f1d9152d932b6487cdb09b3331c668f882461401f43d9",
+      "targetHeight": 0.8,
+      "clips": null
+    },
+    {
+      "key": "fence",
+      "sourcePath": "public/models/props/fence.glb",
+      "destPath": "public/models/props/fence.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.com/packs/medievalvillage.html",
+      "bytes": 4836,
+      "sha256": "ff22bf2593398774f20e7e6f82f3a9184e326cc4c45cd780a0981590a54172c0",
+      "targetHeight": 0.33,
+      "clips": null
+    },
+    {
+      "key": "oak-tree",
+      "sourcePath": "public/models/foliage/oak_1.glb",
+      "destPath": "public/models/foliage/oak_1.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.itch.io/stylized-nature-megakit",
+      "bytes": 184216,
+      "sha256": "e8c8b7e02173490bfe5e802fad47c1b7824b787bb6c9274163bde7fda065c102",
+      "targetHeight": 7.26,
+      "clips": null
+    },
+    {
+      "key": "bush",
+      "sourcePath": "public/models/foliage/bush.glb",
+      "destPath": "public/models/foliage/bush.glb",
+      "licence": "CC0-1.0",
+      "author": "Quaternius",
+      "source": "https://quaternius.itch.io/stylized-nature-megakit",
+      "bytes": 49064,
+      "sha256": "614172ada35fc6048487a6af6d77059a5c031e0a93eff9d58036649ea0d16c12",
+      "targetHeight": 1.57,
+      "clips": null
+    }
+  ]
+}
