@@ -42,10 +42,25 @@ script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, a
 
 | track | tier | worktree / branch | status |
 |---|---|---|---|
-| W0-SPIKE — belief extraction, tick fixture header, config sections | top | — | started |
-| W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | — | started |
-| W0-AUDIT — lane/vocabulary collision check (read-only) | Sonnet | — | started |
-| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | — | started |
+| W0-SPIKE — belief extraction, tick fixture header, config sections | top | `.claude/worktrees/agent-a84b9cf55622784fb` | started |
+| W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | merged, worktree removed | **landed** — 14 CC0 rows, 1.14 MB, verified against disk by size and sha256 |
+| W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
+| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | `.claude/worktrees/agent-a00a3089173c9c3b8` | started |
+| WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | `.claude/worktrees/agent-a22a65e499c3440bf` | started |
+
+W0-AUDIT's findings, which the wave-2 lane brief is written against:
+
+- The new lane's `chat.mjs` block goes after the spider-fly block and before `unclaimedAdventureOpening`.
+  The phrasing at risk is `play mudiii` — the named-opener regex requires `play`/`let's play`, so
+  `visit the town square` and `enter the town square` are free and never reach that decline.
+- **There is no mud lane in `chat.mjs`.** `runMudTurn` is called only from the browser entry's
+  autoplay tick; a typed line on a mud page is claimed by `adventureTurn` like any other world.
+- `src/domain/real-word-collisions.json` is about fuzzy typo-repair for code-graph verbs, not game
+  vocabulary. Adding `fox`/`goblin`/`town`/`square` trips nothing there.
+- `test:fast`'s budget is 10s and it currently runs in ~2.1s, so a new lane's corpus has room.
+- Narrow collision to design around: `drop a morsel at cell-3-4` is free by default, but with an
+  adventure world live in the same session `drop` falls to the generic object arm and `adventureTurn`
+  claims it with an honest miss.
 
 Worktree paths and branches are filled in as each track reports; the coordinator holds these shared
 files for the whole build and no track may edit them: `chat.mjs`, `build-demo-site.mjs`,
