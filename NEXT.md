@@ -230,5 +230,28 @@ Three hard-won lessons, carried forward:
    what you just edited) before treating it as accurate — a section-level check catches what a
    line-level edit can silently skip.
 
+10. (2026-08-01) Un-committing a build artifact ("stop tracking X, build it fresh instead") is one
+    change with many independent invocation paths, and finding them by grepping the artifact's own
+    filename is not enough. First miss: `scripts/roll.mjs` referenced the ask bundle only by its npm
+    script name (`build:ask-bundle`) and in prose ("packaged ask bundle"), never the literal
+    filename — a filename-only grep across the repo walked right past it, and it kept regenerating
+    a bundle nothing needed regenerated, on every version bump, for a stale reason. Second, bigger
+    round: un-committing the worlds-pack build output surfaced FIVE separate consumers, one pipeline
+    run at a time — `unit`/`unit:fast` (test files read it directly), `.e2e-web-base`/
+    `.e2e-deployed-base` (they invoke `node --test` directly, bypassing the npm-script guard that
+    fixed the first two), and `deploy:website` itself (the actual live deploy, a fourth independent
+    script). Fixing `deploy:website` then changed real behavior — the mud worlds finally loaded —
+    which added enough concurrent browser-context contention in a shared job to push two unrelated
+    timing-sensitive tests over their own timeouts, a fifth failure that was a genuine consequence of
+    the fix, not a coincidence. The pattern each time: fix the one consumer already known, push,
+    let the pipeline find the next one, repeat — four separate roll/commit/push cycles where one
+    pass could have worked. What would have caught more up front: grep for the concept in every form
+    it takes (filename, npm script name, and the prose words used to describe it — "ask bundle",
+    "worlds pack") before treating a migration as scoped, not just the literal path; and fix
+    the *shared layer* every caller already goes through (bake a build-if-missing guard into the npm
+    script itself, as `scripts/ensure-worlds-pack.mjs` ended up doing) before patching individual CI
+    job scripts one at a time as failures surface them — patching sites as discovered is what turned
+    one bug into four commits.
+
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
