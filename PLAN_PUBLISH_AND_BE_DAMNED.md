@@ -236,8 +236,9 @@ lighter on patch bumps, revisit this section rather than starting over.
 
 ## Not in this plan
 
-The nightly scheduled jobs (`dep:audit`, `renovate`, scheduled `e2e:heavy`) keep their current
-shapes; they run outside the push pipeline this plan redesigns. The doc-guard sensors
+There are no scheduled jobs left to carve out: the pipeline schedule, `dep:audit`, and `renovate`
+are gone, and `e2e:heavy` now runs only from its own `changes:` rule, inside the push pipeline
+this plan redesigns like everything else here. The doc-guard sensors
 (`pii:lint`, `links:check`) are already parallel, cheap, and non-gating, and only pick up
 explicit `needs: []` for uniformity. Branch/MR pipeline behaviour is untouched: ship jobs are
 already `main`-only by rule, and on other refs the pipeline is sensors all the way down, which

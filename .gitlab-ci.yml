@@ -52,9 +52,8 @@ stages:
 # ---- security scanning (free tier) -----------------------------------------
 # SAST (semgrep) + Pipeline Secret Detection via GitLab's stock templates.
 # Harmless if the group doesn't license the report UI — the jobs still run.
-# tmct is a pure-JS package, so IaC (KICS) and Container Scanning are N/A and
-# are deliberately NOT included; the nightly `dep:audit` job below covers the
-# Ultimate-only Dependency Scanning as far as the free tier allows.
+# tmct is a pure-JS package, so IaC (KICS), Container Scanning, and the
+# Ultimate-only Dependency Scanning are all N/A and deliberately not included.
 include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
@@ -123,52 +122,6 @@ secret_detection:
   allow_failure: false
   rules:
     - if: '$CI_COMMIT_BRANCH'
-
-# ---- nightly dependency scanning (free-tier substitute for Ultimate DS) ----
-# Runs ONLY from a scheduled pipeline. The operator creates the schedule once
-# in the GitLab UI: Settings → CI/CD → Pipeline schedules → e.g. "0 3 * * *"
-# on main (CI files cannot create schedules). BLOCKING  — it has NO
-# allow_failure: `npm audit --audit-level=high` fails the job on any high or
-# critical advisory. `npm outdated` is visibility-only. OSV-Scanner is pinned
-# to a specific release (never `releases/latest`) and cross-checks the npm
-# lockfile only — tmct is pure JS, so there is no pom.xml to scan.
-dep:audit:
-  stage: test
-  interruptible: true
-  needs: []
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-  script:
-    - npm run audit
-    - npm outdated || true          # visibility only — never fails the job
-    - curl -sSL -o /usr/local/bin/osv-scanner
-        https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64
-    - chmod +x /usr/local/bin/osv-scanner
-    # v2 syntax with v1 fallback, scoped to the single first-party manifest.
-    - osv-scanner scan source -L package-lock.json
-        || osv-scanner --lockfile=package-lock.json
-
-# ---- dependency cooldown (Renovate) ----------------------------------------
-# Self-hosted Renovate run. renovate.json holds the policy: minimumReleaseAge
-# 14 days, so a hijacked or wormed release has two weeks to be reported and
-# yanked before an update MR can pull it in. Runs ONLY from a scheduled
-# pipeline (reuse the nightly schedule, or a dedicated one) and ONLY when
-# RENOVATE_TOKEN is configured (a project access token with api + write_repository
-# scope) — a missing token fails closed, the same shape as publish:npm's
-# NPM_TOKEN gate.
-renovate:
-  stage: test
-  interruptible: true
-  needs: []
-  image: renovate/renovate:43.264.2
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TOKEN'
-  variables:
-    RENOVATE_PLATFORM: gitlab
-    RENOVATE_ENDPOINT: $CI_API_V4_URL
-    RENOVATE_ONBOARDING: "false"
-  script:
-    - renovate $CI_PROJECT_PATH
 
 # ---- consumer-impacting path set -------------------------------------------
 # The heavy pipeline — the suite, package hygiene, the licence audit, the e2e
@@ -396,10 +349,8 @@ e2e-cli:
 
 # The heavy half of the e2e tier (test-e2e/heavy/*.test.mjs): a full demo:build, an
 # uncapped ConceptNet seed, and a full-store export/import round trip —
-# together several minutes of real signal, but not on every push. Runs when a
-# push actually touches what these tests exercise, and on the nightly
-# schedule (the same one dep:audit/renovate use) so drift still gets caught
-# even on a quiet week.
+# together several minutes of real signal, but not on every push. Runs only
+# when a push actually touches what these tests exercise.
 #
 # No x.y.0-vs-patch distinction: this job has `needs: []` and gates nothing,
 # so skipping it on a patch roll would save runner-minutes, not wall-clock —
@@ -418,7 +369,6 @@ e2e:heavy:
     paths:
       - .playwright-browsers
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - changes:
         - scripts/build-*.mjs
         - src/adapters/corpus/**/*
@@ -466,9 +416,6 @@ publish:npm:
     - job: unit:smoke
       optional: true
   rules:
-    # schedule-guarded: the nightly dep:audit schedule must not re-publish.
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     # The npm surface: the consumer-impacting set OR README.md, which ships to
     # npm. A version bump always touches package.json, so real publishes still
     # fire; a README-only push starts the job and the version gate no-ops it.
@@ -540,9 +487,6 @@ deploy:website:
   environment:
     name: production
   rules:
-    # schedule-guarded: the nightly dep:audit schedule must not redeploy the site.
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     # Fails closed until PROD_AWS_DEPLOY_ROLE_ARN is set (see the AWS deploy
     # CI/CD variables block near the top of this file) — same posture as
     # publish:npm's NPM_TOKEN gate.
@@ -572,9 +516,9 @@ deploy:website:
 # Follows package.json's `homepage` automatically -- no script change needed
 # for the cutover, only which job this waits on.
 #
-# It runs only on main, only with NPM_TOKEN, and never from a schedule — the
-# same gate publish:npm uses, because there is nothing to smoke without a
-# publish. That also keeps it off merge requests, so it can never gate a merge.
+# It runs only on main and only with NPM_TOKEN — the same gate publish:npm
+# uses, because there is nothing to smoke without a publish. That also keeps
+# it off merge requests, so it can never gate a merge.
 # `needs` makes it wait for the two jobs whose output it reads. Dependency-free
 # and token-free, so no npm ci.
 smoke:post-deploy:
@@ -590,8 +534,6 @@ smoke:post-deploy:
   environment:
     name: production
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     # Only when a consumer-impacting commit could have produced a new publish or
     # deploy to smoke, AND both jobs this one needs are actually in the pipeline
     # (deploy:website's own rule additionally requires PROD_AWS_DEPLOY_ROLE_ARN —
@@ -659,8 +601,6 @@ site:ready:
   environment:
     name: production
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
       changes: *consumer-paths
   script:
@@ -674,8 +614,6 @@ site:ready:
   environment:
     name: production
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
       changes: *consumer-paths
   # site:ready already confirmed the CDN serves this build before this stage
@@ -822,8 +760,6 @@ e2e:published-package:
   needs:
     - publish:npm
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
       changes: *consumer-paths
   script:
