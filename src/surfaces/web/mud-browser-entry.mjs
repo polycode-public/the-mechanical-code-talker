@@ -32,6 +32,7 @@ import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
@@ -62,7 +63,10 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  *  are minted, fewer leaves the ones nobody is playing out of the world
  *  altogether.
  *
- *  Returns `{ memoryDir, graph, windows, snapshot }`. `windows` is a plain object
+ *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, windows, snapshot }`.
+ *  `codeGraph` is the known-empty index the turn engine and a scripted
+ *  autoplayTick read; `graph` is this world's own memory store projected for
+ *  `ask()` (refreshGraph rebuilds it on demand). `windows` is a plain object
  *  keyed by character id, each value `{ character, turn, autoplayTick,
  *  visitedRoomIds, turnsTaken, isOutOfPlay, outOfPlayReason }`. `snapshot()` is
  *  the one OMNISCIENT read this module exposes — the central world map's own
@@ -89,7 +93,11 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
   // way rather than through the "play <world>" opener (which needs a
   // shipped "player" individual mud-garden deliberately has none of).
   const planHolder = { state: { adventure: { world: worldPayload.name } } };
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // A known-empty code graph: code-structure questions get the same honest
+  // no-code-graph answer an un-pointed CLI session gives, never a crash — the
+  // turn engine (and a scripted autoplayTick) keep reading THIS one for their
+  // own in-turn code lane.
+  const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
   // The world's own minted ids ("groundhog-1", "carrot-2") are declared as
   // vocabulary inside the adventure lane itself, for the length of one world
   // command — see adventure.mjs's own worldLexicon. This page hands over the
@@ -99,6 +107,17 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
   async function readWorld() {
     const rows = readFactRows(await loadMemory(memoryDir));
     return { rows, state: foldWorldState(worldActionRows(rows)) };
+  }
+
+  // What `tmct.ask()` traverses is a different graph: this shared world's own
+  // memory store, projected through memoryFactGraphPayload. Rebuilt on demand
+  // rather than once at open, because every character's turn grows the store.
+  // Built off readWorld()'s own rows rather than a second readFactRows call.
+  let memoryGraph = parseEntities({ individuals: [], objectProperties: [] });
+  async function refreshGraph() {
+    const { rows } = await readWorld();
+    memoryGraph = parseEntities(memoryFactGraphPayload(rows));
+    return memoryGraph;
   }
 
   async function roomOf(character) {
@@ -126,7 +145,7 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
     if (startRoom) visitedRoomIds.add(startRoom);
 
     const turnSession = createTurnSession({
-      memoryDir, graph, lexicon, sessionId: character,
+      memoryDir, graph: codeGraph, lexicon, sessionId: character,
       vocabHint: 'Try a world command ("dig north", "eat the carrot-1"), or ask "what food do you know about".',
       buildExtraOptions: () => ({
         actingSubject: character, planState: planHolder.state,
@@ -158,7 +177,7 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
        *  note }` unmodified, so the caller can render the speech-bubble/
        *  dig-flourish triggers straight off `actions`. */
       async autoplayTick(k) {
-        const result = await runMudTurn(character, { world: worldPayload.name, memoryDir, env: {}, graph, k });
+        const result = await runMudTurn(character, { world: worldPayload.name, memoryDir, env: {}, graph: codeGraph, k });
         // A turn that ended in starvation still happened, and still counts —
         // only a DECLINED turn (no room to act in) leaves the tally alone.
         if (result.room) turnsTaken += 1;
@@ -272,7 +291,13 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
     return claims.length;
   }
 
-  return { memoryDir, graph, windows, snapshot, applyEdit, wave, claimCharacters };
+  return {
+    memoryDir,
+    codeGraph,
+    get graph() { return memoryGraph; },
+    refreshGraph,
+    windows, snapshot, applyEdit, wave, claimCharacters,
+  };
 }
 
 /** `count` entries drawn at random from `roster`, in random order, without
@@ -378,7 +403,13 @@ publishTmctSurface({
     }
     return characterWindow.turn(line);
   },
-  ask: graphAsk,
+  // The memory projection is rebuilt first, so a direct tmct.ask() sees every
+  // fact any character's turn has written into this shared world since the
+  // last one.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
   plan: enginePlan,
   page: {
     pickMudRoster, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
