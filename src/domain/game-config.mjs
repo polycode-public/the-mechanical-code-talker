@@ -56,10 +56,42 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     meerkatSpeed: 1,
     meerkatDigReach: 1,
   }),
+  // The town square's knobs are keyed by role, not by species: its cast is a
+  // predator/prey pair by construction, so a later pair is a new roles object
+  // and no edit here. (mud above went the other way because its cast is
+  // authored per world.) The drains sit on mud's scale against the deck's own
+  // 400-turn default: a prey that never eats starves after about 133 turns, a
+  // predator after 250.
+  //
+  // maxPreyPopulation and maxFoodItems are the two knobs that keep that
+  // arithmetic from running away. Prey arrive every 5 turns and live ~133, so
+  // an uncapped 400-turn run ends with roughly 80 of them on a 144-cell board
+  // — a solid carpet of goblins, and every tick paying for their planning.
+  // Food spawns faster still. Both caps are checked before a spawn, so
+  // reaching one simply skips that turn's arrival.
+  mudiii: Object.freeze({
+    predatorInitialMass: 20,
+    predatorMassDecrementPerTurn: 0.08,
+    predatorVisionRadius: 4,
+    preyInitialMass: 8,
+    preyMassDecrementPerTurn: 0.06,
+    preyVisionRadius: 3,
+    preySpawnIntervalTurns: 5,
+    foodSpawnIntervalTurns: 3,
+    spawnedFoodMass: 1,
+    placedFoodMass: 2,
+    maxPreyPopulation: 6,
+    maxFoodItems: 8,
+  }),
   guessNumber: Object.freeze({
     defaultLo: 1,
     defaultHi: 100,
     maxBound: 1_000_000_000,
+  }),
+  // Whether the adventure surface accepts teaching. One knob behind a page
+  // checkbox, the CLI flag and the corpus rows, so all three agree.
+  adventure: Object.freeze({
+    teach: false,
   }),
   planning: Object.freeze({
     maxDepth: 300,
@@ -105,6 +137,25 @@ const MUD_KEY_MAP = Object.freeze({
   meerkat_mass_decrement_per_turn: "meerkatMassDecrementPerTurn",
   meerkat_speed: "meerkatSpeed",
   meerkat_dig_reach: "meerkatDigReach",
+});
+
+const MUDIII_KEY_MAP = Object.freeze({
+  predator_initial_mass: "predatorInitialMass",
+  predator_mass_decrement_per_turn: "predatorMassDecrementPerTurn",
+  predator_vision_radius: "predatorVisionRadius",
+  prey_initial_mass: "preyInitialMass",
+  prey_mass_decrement_per_turn: "preyMassDecrementPerTurn",
+  prey_vision_radius: "preyVisionRadius",
+  prey_spawn_interval_turns: "preySpawnIntervalTurns",
+  food_spawn_interval_turns: "foodSpawnIntervalTurns",
+  spawned_food_mass: "spawnedFoodMass",
+  placed_food_mass: "placedFoodMass",
+  max_prey_population: "maxPreyPopulation",
+  max_food_items: "maxFoodItems",
+});
+
+const ADVENTURE_KEY_MAP = Object.freeze({
+  teach: "teach",
 });
 
 const GUESS_NUMBER_KEY_MAP = Object.freeze({
@@ -154,6 +205,18 @@ export function massScaleFor(cls, config) {
   return null;
 }
 
+/** The mass denominator a town-square HUD bar scales against, from a resolved
+ *  `mudiii` section. `role` is "predator" or "prey"; anything else — a crumb,
+ *  a prop, a role a later cast adds — has no denominator and gets null, never
+ *  a guessed number. Separate from massScaleFor above on purpose: that one
+ *  takes a species literal off the spider-and-fly page, and folding a second
+ *  vocabulary into it would turn a two-line read into a registry. Pure. */
+export function mudiiiMassScaleFor(role, config) {
+  if (role === "predator") return config?.predatorInitialMass ?? null;
+  if (role === "prey") return config?.preyInitialMass ?? null;
+  return null;
+}
+
 /**
  * Fold a normalized tmct.toml's `games`/`planning` tables (the raw sparse
  * pass-through src/adapters/toml-config.mjs's normalizeConfig produces —
@@ -168,7 +231,9 @@ export function resolveGameConfig(toml) {
   return {
     spiderFly: mergeSection(DEFAULT_GAME_CONFIG.spiderFly, games["spider-fly"], SPIDER_FLY_KEY_MAP),
     mud: mergeSection(DEFAULT_GAME_CONFIG.mud, games.mud, MUD_KEY_MAP),
+    mudiii: mergeSection(DEFAULT_GAME_CONFIG.mudiii, games.mudiii, MUDIII_KEY_MAP),
     guessNumber: mergeSection(DEFAULT_GAME_CONFIG.guessNumber, games["guess-number"], GUESS_NUMBER_KEY_MAP),
+    adventure: mergeSection(DEFAULT_GAME_CONFIG.adventure, games.adventure, ADVENTURE_KEY_MAP),
     planning: mergeSection(DEFAULT_GAME_CONFIG.planning, toml?.planning, PLANNING_KEY_MAP),
   };
 }
