@@ -66,9 +66,10 @@ test("demo:build produces the Pages demo artefacts", async () => {
   assert.match(sw, /vendor\/wink\.js/, "the service worker precaches the wink vendor asset");
 });
 
-// The build goes to a temp directory of our own. Other e2e files read the
-// committed bundle, and node runs e2e files concurrently, so rebuilding over
-// the shared path would have this test racing their reads.
+// The build goes to a temp directory of our own, not the real
+// src/surfaces/web/ path: whichever job runs this file may have already
+// built a fresh copy there in its own before_script for other e2e files to
+// read, and this test's own rebuild must not overwrite or race that.
 test("build:ask-bundle rebuilds a parseable browser bundle", () => {
   const outDir = mkdtempSync(path.join(tmpdir(), "tmct-ask-bundle-"));
   runNpmScript("build:ask-bundle", { TMCT_ASK_BUNDLE_OUT: outDir });
