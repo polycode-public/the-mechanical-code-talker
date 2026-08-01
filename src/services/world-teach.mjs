@@ -162,7 +162,7 @@ export async function worldTeachTurn(line, {
   if (!toAppend.length && !minting) {
     const room = state?.placements?.get(actingSubject)?.object ?? null;
     return {
-      text: `the world already said that — ${reason}.${room ? ` ${await worldRelook(room, { memoryDir, graph, actingSubject })}` : ""}`,
+      text: `the world already said that.${room ? ` ${await worldRelook(room, { memoryDir, graph, actingSubject })}` : ""}`,
       lane: "game-answer",
       miss: false,
       note: `ADVENTURE — world-teach: "${trimmed}" asserts a fact the world already holds (${reason}); nothing written`,
