@@ -124,6 +124,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   it) before falling back to unseeded. `code-explorer-viz.mjs` has the same vulnerable pattern but
   a more tangled control flow (a desktop-app branch shares the try/catch), left alone rather than
   edited under time pressure.
+- [ ] **CI still builds bundles once and commits the output, so they can drift from their source.**
+  `src/surfaces/web/memory-ask-browser.bundle.js` is committed, packed by `npm publish`, and inlined
+  into the deployed ledger page. `test/estate/generated-artifacts.test.mjs` exists solely to catch
+  this file (and its siblings) going stale against the code that generates it — a whole test
+  category whose only job is policing a self-inflicted invariant. `.gitlab-ci.yml`'s `unit:slow`
+  comment says as much directly: it "owns the generated-artifacts estate guard, which is the one
+  check standing between a committed bundle that has drifted from the code and a published npm
+  tarball carrying it." The fix: a `build:*` job per artifact family builds fresh from source once
+  per pipeline and hands the result to every consumer via `artifacts:` + `needs:` (or, for the
+  npm-packed bundles specifically, `publish:npm` runs the builder itself before `npm publish`,
+  since `npm pack` includes files present in the package directory whether or not git tracks them).
+  Once a bundle stops being committed, delete its estate guard with it — don't keep policing an
+  invariant that no longer exists. `public/`'s site build (~85 MB) can stay out of this for now;
+  keeping it out of GitLab artifact transit was a deliberate choice, not an oversight.
 
 ## Discipline
 
