@@ -45,7 +45,7 @@ script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, a
 | W0-SPIKE — belief extraction, tick fixture header, config sections | top | `.claude/worktrees/agent-a84b9cf55622784fb` | started |
 | W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | merged, worktree removed | **landed** — 14 CC0 rows, 1.14 MB, verified against disk by size and sha256 |
 | W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
-| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | `.claude/worktrees/agent-a00a3089173c9c3b8` | started |
+| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | merged, worktree removed | **landed** — 17 unit tests; adopters splice `matchPills`/`pillCandidates`/`createPillComplete` under those exact names, and call `.refresh()` from the page's own pill render pass |
 | WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | `.claude/worktrees/agent-a22a65e499c3440bf` | started |
 
 W0-AUDIT's findings, which the wave-2 lane brief is written against:
