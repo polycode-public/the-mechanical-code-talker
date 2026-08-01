@@ -176,6 +176,15 @@ In order:
 `node --test "test/estate/*.test.mjs"` costs seconds. Running all of it to check a one-line edit is
 a habit, not a check.
 
+### Reference sweeps and docs-only commits don't take the full suite
+
+A reference-sweep commit — comment-only or string-only edits to code files, such as repointing
+doc citations after a file move or rename — doesn't take the full suite, even on `main`. Its
+gate is: `node --check` on every touched `.mjs`, a JSON parse on every touched `.json`, the
+estate tier (`node --test "test/estate/*.test.mjs"`), `test:fast`, and the test files that
+import any touched data file. Anything that changes executable code or asserted data takes the
+full rule as written. Same family: an all-`.md` diff needs only the links/estate guards.
+
 ### README examples are checked locally, not per-push
 
 The README's two heavy copy-paste examples cost ~6 CI-minutes and exercise machinery the init
