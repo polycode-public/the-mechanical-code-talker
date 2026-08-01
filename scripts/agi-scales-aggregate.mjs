@@ -147,8 +147,6 @@ export function buildAgiRow({ agentbench = null, infbench = null, chatbench = nu
     benchmark: "AGI_SCALES",
     version,
     generatedFrom: {
-      agentbench: agentbench?.generatedFrom?.agentbenchVersion ?? null,
-      infbench: infbench?.generatedFrom?.infbenchVersion ?? null,
       chatbench: chatbench?.generatedFrom?.chatbenchVersion ?? null,
     },
     measuredCount: scales.filter((s) => s.measured).length,

@@ -39,7 +39,6 @@ test("buildAgiRow never fabricates a scalar: no envelope means every scale reads
   assert.equal(row.measuredCount, 0);
   assert.ok(row.scales.every((s) => s.measured === false));
   assert.ok(row.scales.every((s) => s.reading === "entry rung held, assessment only"));
-  assert.equal(row.generatedFrom.agentbench, null);
 });
 
 test("buildAgiRow abstention stays UNMEASURED when the envelope does not gate-pass (non-zero fabrication or sub-floor coverage)", () => {

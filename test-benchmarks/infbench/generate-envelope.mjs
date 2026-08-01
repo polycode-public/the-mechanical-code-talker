@@ -6,9 +6,13 @@
 // from a results directory.
 //
 // Deterministic like agentbench's generator: no Date.now anywhere in the
-// output. The stamp is BENCH_VERSION (package.json's version, read once at
-// load — see run.mjs), so two runs over the same tree produce a byte-identical
-// file, and a version bump auto-flows into the next generated envelope.
+// output, and no tmct version embedded in it either — a reader who needs
+// that reads package.json directly, so this file never goes stale just
+// because the version bumped with nothing about infbench's own behavior
+// actually changing. `stamp` defaults to BENCH_VERSION (package.json's
+// version, read once at load — see run.mjs) but is just a run label, not a
+// drift-checked claim; two runs over the same tree still produce a
+// byte-identical file for a given stamp.
 //
 // TWO ARMS, both reported: INFBENCH drives every case through a `kernel` arm
 // (src/domain/syllogise.mjs's pure provers, blind to chat.mjs) and a `chat` arm
@@ -107,7 +111,6 @@ export function buildEnvelope({ result, stamp, cases }) {
   return {
     schemaVersion: SCHEMA_VERSION,
     generatedFrom: {
-      infbenchVersion: BENCH_VERSION,
       stamp,
       caseCount: cases.length,
     },
@@ -158,9 +161,8 @@ export async function main(argv = process.argv.slice(2)) {
   await mkdir(dirname(args.out), { recursive: true });
   await writeFile(args.out, JSON.stringify(envelope, null, 2) + "\n");
 
-  console.log(`infbench envelope written: ${args.out}`);
-  console.log(`  infbenchVersion=${envelope.generatedFrom.infbenchVersion} ` +
-    `kernel.bandReached=${envelope.capability.kernel.ladder.bandReached} ` +
+  console.log(`infbench envelope written: ${args.out} (tmct ${BENCH_VERSION})`);
+  console.log(`  kernel.bandReached=${envelope.capability.kernel.ladder.bandReached} ` +
     `chat.bandReached=${envelope.capability.chat.ladder.bandReached}`);
   return 0;
 }
