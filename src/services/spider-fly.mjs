@@ -4,16 +4,21 @@
 // rows through the shared memory store. No chat, no rendering — a later
 // piece of work wraps runSpiderFlyTick's return shape for a chat turn.
 //
-// Grid geometry (cellId, parseCellId, visibleCells, isInWebBlock,
+// Grid geometry (cellId, parseCellId, chebyshevDistance, isInWebBlock,
 // perimeterCells, DIRECTION_DELTA) is never redefined here — it all comes
 // from spider-fly-world.mjs, the one source of truth both the shipped world
-// pack and this engine read from.
+// pack and this engine read from. Vision-gated belief is the same deal: it
+// lives in the board-size-agnostic domain/agent-belief.mjs and is re-exported
+// below, so this file's public surface is unchanged by where it sits.
 
 import {
   WORLD_NAME, WEB_HOME, WEB_DURATION_TURNS, SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN,
-  cellId, parseCellId, chebyshevDistance, visibleCells, isInWebBlock, perimeterCells,
+  cellId, parseCellId, chebyshevDistance, isInWebBlock, perimeterCells,
   DIRECTION_DELTA, oneStepDirectionBetween,
 } from "../domain/spider-fly-world.mjs";
+import {
+  DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor,
+} from "../domain/agent-belief.mjs";
 import { findActionPath, findReachableSet } from "../domain/planning.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
@@ -24,7 +29,6 @@ import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 // ---- tunable constants (starting values, not fixed — the vision radius and
 // mass economy all want checking against a real playable board) -------------
 
-export const DEFAULT_VISION_RADIUS = 4;
 export const FLY_INITIAL_MASS = 10;
 export const FLY_MASS_DECREMENT_PER_TURN = 1;
 export const EGG_HATCH_DELAY_TURNS = 3;
@@ -33,6 +37,7 @@ export const EGG_LAY_MASS_THRESHOLD = 25;
 export const EGG_HATCH_COUNT = 2;
 export const MIN_HATCHLING_MASS = 3;
 export { SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN, WEB_DURATION_TURNS };
+export { DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor };
 
 // ---- seeded "randomness" (never Math.random) ---------------------------------
 // Every "random" decision (fly wander, fly/spawn placement) is a mulberry32
@@ -316,45 +321,11 @@ export function greedySpiderAvoid(spiderCell, believedOtherSpiderCell, applyActi
 }
 
 // ---- visibility and belief (§4): static grid topology is common knowledge
-// to both agents; only dynamic entity positions are gated by vision. A told
-// fact (a later chat-integration piece of work, not built here) is the one
-// extension point this function leaves open via its optional toldFacts
-// parameter — shaped { subject, toAgent, cell, turn }, defaulting to empty
-// so today's belief is exactly "what's currently visible." -------------------
-
-/** Whether `observerSubject` currently believes `targetSubject` to be at a
- *  particular cell: ground truth when the target's real cell is within the
- *  observer's own visibleCells radius, else the newest told fact addressed
- *  to this observer about this target, else null (unknown). A removed
- *  target (eaten/starved/hatched) is never believed present. */
-export function believedCellOf(targetSubject, observerSubject, observerCell, state, opts = {}) {
-  const { visionRadius = DEFAULT_VISION_RADIUS, toldFacts = [] } = opts;
-  const place = state.placements.get(targetSubject);
-  if (place && !state.removed.has(targetSubject)) {
-    const seen = visibleCells(observerCell.x, observerCell.y, visionRadius);
-    if (seen.includes(place.cell)) return parseCellId(place.cell);
-  }
-  const told = toldFacts
-    .filter((f) => f.toAgent === observerSubject && f.subject === targetSubject)
-    .sort((a, b) => (b.turn ?? 0) - (a.turn ?? 0))[0];
-  return told ? parseCellId(told.cell) : null;
-}
-
-/** The nearest candidate (by believed Chebyshev distance) an observer has
- *  any belief about at all — null when the observer believes nothing about
- *  any candidate. `candidates` must already be in a deterministic order
- *  (ties favor the earlier candidate). */
-export function nearestBelievedTarget(observerSubject, observerCell, candidates, state, opts = {}) {
-  let best = null;
-  let bestDist = Infinity;
-  for (const subject of candidates) {
-    const cell = believedCellOf(subject, observerSubject, observerCell, state, opts);
-    if (!cell) continue;
-    const dist = chebyshevDistance(observerCell.x, observerCell.y, cell.x, cell.y);
-    if (dist < bestDist) { bestDist = dist; best = { subject, cell }; }
-  }
-  return best;
-}
+// to both agents; only dynamic entity positions are gated by vision, in
+// domain/agent-belief.mjs (imported and re-exported above). A told fact —
+// shaped { subject, toAgent, cell, turn } — is the chat-integration channel
+// into it, defaulting to empty so belief with no chat is exactly "what's
+// currently visible." --------------------------------------------------------
 
 // ---- the ecology pass (§10): catch, eat, lay, hatch, spawn, starve, all as
 // ordinary turn-gated checks in one fixed-order pass. Order matters and is
@@ -654,27 +625,6 @@ function goalLineFor(subject, believed, arrived, kind) {
 function stepPlan(fromCell, toCell) {
   const direction = oneStepDirectionBetween(fromCell, toCell);
   return direction ? [direction] : [];
-}
-
-/** A full "world knowledge graph" snapshot for one observer this tick: every
- *  OTHER named candidate's believed cell (believedCellOf — ground truth
- *  inside vision, else the newest told fact addressed to this observer,
- *  else null for "unknown") — feeds a per-agent belief panel. Deliberately
- *  never ground truth: showing the observer's own honest gap
- *  between belief and reality (visibly widened by a deceiving pill or a fed
- *  false fact) is the whole point of that panel. Returns a plain
- *  `{ [candidateId]: cellId | null }` map. Exported as the read path for
- *  what one agent can currently observe — every caller (this file's own
- *  tick loop, a viz panel, a future chat lane) reads the same computation,
- *  never a re-derived copy of it. */
-export function beliefSnapshotFor(observerSubject, observerCell, candidateIds, state, opts) {
-  const belief = {};
-  for (const candidateId of candidateIds) {
-    if (candidateId === observerSubject) continue;
-    const cell = believedCellOf(candidateId, observerSubject, observerCell, state, opts);
-    belief[candidateId] = cell ? cellId(cell.x, cell.y) : null;
-  }
-  return belief;
 }
 
 /** Live (unexpired, by `turn`) dynamic webs from a `Map(webId -> {cell,

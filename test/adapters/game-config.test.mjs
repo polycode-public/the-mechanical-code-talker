@@ -1,11 +1,12 @@
 // game-config.test.mjs — direct unit coverage for src/domain/game-config.mjs's
-// resolveGameConfig: the no-toml default fill, a partial [games.spider-fly]
-// override merging over the defaults without dropping unset siblings, and
-// the snake_case -> camelCase mapping for every recognized key across all
-// three tables ([games.spider-fly], [games.guess-number], [planning]).
+// resolveGameConfig: the no-toml default fill, a partial override merging over
+// the defaults without dropping unset siblings, and the snake_case -> camelCase
+// mapping for every recognized key in every table. That last one is the test
+// that earns its keep: a typo'd key map entry silently drops the override and
+// nothing else notices.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_GAME_CONFIG, resolveGameConfig, massScaleFor } from "../../src/domain/game-config.mjs";
+import { DEFAULT_GAME_CONFIG, resolveGameConfig, massScaleFor, mudiiiMassScaleFor } from "../../src/domain/game-config.mjs";
 
 test("resolveGameConfig returns the full shipped defaults when given no toml input at all", () => {
   assert.deepEqual(resolveGameConfig(null), DEFAULT_GAME_CONFIG);
@@ -120,11 +121,104 @@ test("resolveGameConfig: [games.mud] snake_case keys map onto camelCase counterp
 
 test("resolveGameConfig returns a fully populated object of the same shape every time, never sparse", () => {
   const resolved = resolveGameConfig({ games: { "spider-fly": { spider_vision_radius: 2 } } });
-  assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "mud", "planning", "spiderFly"]);
+  assert.deepEqual(Object.keys(resolved).sort(), ["adventure", "guessNumber", "mud", "mudiii", "planning", "spiderFly"]);
   assert.deepEqual(Object.keys(resolved.spiderFly).sort(), Object.keys(DEFAULT_GAME_CONFIG.spiderFly).sort());
   assert.deepEqual(Object.keys(resolved.mud).sort(), Object.keys(DEFAULT_GAME_CONFIG.mud).sort());
+  assert.deepEqual(Object.keys(resolved.mudiii).sort(), Object.keys(DEFAULT_GAME_CONFIG.mudiii).sort());
   assert.deepEqual(Object.keys(resolved.guessNumber).sort(), Object.keys(DEFAULT_GAME_CONFIG.guessNumber).sort());
+  assert.deepEqual(Object.keys(resolved.adventure).sort(), Object.keys(DEFAULT_GAME_CONFIG.adventure).sort());
   assert.deepEqual(Object.keys(resolved.planning).sort(), Object.keys(DEFAULT_GAME_CONFIG.planning).sort());
+});
+
+test("resolveGameConfig: the mudiii table arrives fully populated with no toml at all", () => {
+  const resolved = resolveGameConfig(null);
+  assert.deepEqual(resolved.mudiii, {
+    predatorInitialMass: 20,
+    predatorMassDecrementPerTurn: 0.08,
+    predatorVisionRadius: 4,
+    preyInitialMass: 8,
+    preyMassDecrementPerTurn: 0.06,
+    preyVisionRadius: 3,
+    preySpawnIntervalTurns: 5,
+    foodSpawnIntervalTurns: 3,
+    spawnedFoodMass: 1,
+    placedFoodMass: 2,
+    maxPreyPopulation: 6,
+    maxFoodItems: 8,
+  });
+  assert.ok(
+    resolved.mudiii.predatorVisionRadius > resolved.mudiii.preyVisionRadius,
+    "the predator out-sees its prey, which is what lets it stalk something that cannot see it back",
+  );
+});
+
+test("resolveGameConfig: every [games.mudiii] snake_case key maps onto its camelCase counterpart", () => {
+  const toml = {
+    games: {
+      mudiii: {
+        predator_initial_mass: 30,
+        predator_mass_decrement_per_turn: 0.1,
+        predator_vision_radius: 6,
+        prey_initial_mass: 12,
+        prey_mass_decrement_per_turn: 0.09,
+        prey_vision_radius: 5,
+        prey_spawn_interval_turns: 7,
+        food_spawn_interval_turns: 4,
+        spawned_food_mass: 3,
+        placed_food_mass: 5,
+        max_prey_population: 9,
+        max_food_items: 11,
+      },
+    },
+  };
+  assert.deepEqual(resolveGameConfig(toml).mudiii, {
+    predatorInitialMass: 30,
+    predatorMassDecrementPerTurn: 0.1,
+    predatorVisionRadius: 6,
+    preyInitialMass: 12,
+    preyMassDecrementPerTurn: 0.09,
+    preyVisionRadius: 5,
+    preySpawnIntervalTurns: 7,
+    foodSpawnIntervalTurns: 4,
+    spawnedFoodMass: 3,
+    placedFoodMass: 5,
+    maxPreyPopulation: 9,
+    maxFoodItems: 11,
+  });
+});
+
+test("resolveGameConfig: a partial [games.mudiii] override merges over the defaults without dropping unset siblings", () => {
+  const resolved = resolveGameConfig({ games: { mudiii: { prey_vision_radius: 1 } } });
+  assert.equal(resolved.mudiii.preyVisionRadius, 1, "the set key overrides the default");
+  assert.equal(resolved.mudiii.preyInitialMass, DEFAULT_GAME_CONFIG.mudiii.preyInitialMass, "every unset sibling keeps its default");
+  assert.equal(resolved.mudiii.predatorVisionRadius, DEFAULT_GAME_CONFIG.mudiii.predatorVisionRadius, "the other role is untouched");
+  assert.equal(resolved.mudiii.maxPreyPopulation, DEFAULT_GAME_CONFIG.mudiii.maxPreyPopulation);
+  assert.deepEqual(resolved.mud, DEFAULT_GAME_CONFIG.mud, "an unrelated table is completely untouched");
+});
+
+test("the mudiii drains size both roles' lifespans to the same order as the deck's 400-turn default run", () => {
+  const { mudiii } = DEFAULT_GAME_CONFIG;
+  const preyLifespan = mudiii.preyInitialMass / mudiii.preyMassDecrementPerTurn;
+  const predatorLifespan = mudiii.predatorInitialMass / mudiii.predatorMassDecrementPerTurn;
+  assert.ok(preyLifespan > 100 && preyLifespan < 200, `a prey that never eats starves after ${preyLifespan} turns`);
+  assert.ok(predatorLifespan > 200 && predatorLifespan < 300, `a predator that never eats starves after ${predatorLifespan} turns`);
+});
+
+test("resolveGameConfig: [games.adventure] teach defaults off and takes an override", () => {
+  assert.equal(resolveGameConfig(null).adventure.teach, false);
+  assert.equal(resolveGameConfig({ games: { adventure: { teach: true } } }).adventure.teach, true);
+});
+
+test("mudiiiMassScaleFor reads each role's starting mass off a resolved mudiii section, one source for both HUD bars", () => {
+  const { mudiii } = DEFAULT_GAME_CONFIG;
+  assert.equal(mudiiiMassScaleFor("predator", mudiii), 20);
+  assert.equal(mudiiiMassScaleFor("prey", mudiii), 8);
+});
+
+test("mudiiiMassScaleFor: a role with no denominator (a crumb, a prop, a cast the config doesn't name) is null, never a guessed number", () => {
+  assert.equal(mudiiiMassScaleFor("food", DEFAULT_GAME_CONFIG.mudiii), null);
+  assert.equal(mudiiiMassScaleFor("predator", {}), null);
+  assert.equal(mudiiiMassScaleFor("predator", undefined), null);
 });
 
 test("DEFAULT_GAME_CONFIG.spiderFly.spiderMassDecrementPerTurn is 0.5 (slowed from the shipped 1) — the operator's own starve-too-fast fix", () => {
