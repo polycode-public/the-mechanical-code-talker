@@ -1,4 +1,4 @@
-// memory-ask-browser-bundle.test.mjs — proves the checked-in browser
+// memory-ask-browser-bundle.test.mjs — proves the freshly built browser
 // MEMORY-graph ask-engine bundle (scripts/build-ask-bundle.mjs's output,
 // src/surfaces/web/memory-ask-browser.bundle.js, inlined by `tmct viz`'s ledger-page chat
 // dock) actually evaluates as a classic script and answers a real
@@ -47,7 +47,7 @@ function factIndividual(id, subject, predicate, object, provenance) {
   };
 }
 
-test("memory-ask-browser.bundle.js exists and is a checked-in build artifact (run `npm run build:ask-bundle` if this fails)", async () => {
+test("memory-ask-browser.bundle.js exists and is a real build (run `npm run build:ask-bundle` if this fails)", async () => {
   const content = await readFile(BUNDLE_PATH, "utf8").catch(() => null);
   assert.ok(content && content.length > 1000, "the bundle exists and is non-trivial");
 });

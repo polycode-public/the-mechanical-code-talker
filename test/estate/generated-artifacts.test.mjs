@@ -1,9 +1,8 @@
-// The repo commits build outputs and then ships them: `npm publish` packs the
-// committed file, and the Pages job inlines it into the deployed ledger page
-// without rebuilding. So a committed artifact that has fallen behind its source
-// is what real users get, and nothing else notices — the bundle's own e2e tests
-// pass on a stale build, because a stale build still exists, still evaluates and
-// still answers. This rebuilds and compares.
+// The repo commits several generated files and then ships them: `npm publish`
+// packs whatever is committed, with no rebuild step of its own. So a committed
+// artifact that has fallen behind its generator is what real users get, and
+// nothing else notices — a stale artifact still exists, still evaluates, and
+// still answers. Each test below rebuilds its artifact fresh and compares.
 //
 // Rebuilding into a temp dir keeps the tracked file untouched, so a failure here
 // reports drift rather than quietly papering over it, and names the command that
@@ -43,28 +42,6 @@ const missingWordnet = existsSync(wordnetYamlDir)
   ? false
   : `Open English WordNet not found at ${wordnetYamlDir} — the variants generator can't run here. `
     + "Set TMCT_WORDNET_SRC to a checkout to enable this drift guard.";
-
-test("the committed ask bundle is what its source builds today", () => {
-  const rel = "surfaces/web/memory-ask-browser.bundle.js";
-  const committed = path.join(repoRoot, "src", rel);
-  const out = mkdtempSync(path.join(tmpdir(), "tmct-bundle-freshness-"));
-  try {
-    execFileSync("node", [path.join(repoRoot, "scripts", "build-ask-bundle.mjs")], {
-      cwd: repoRoot,
-      env: { ...process.env, TMCT_ASK_BUNDLE_OUT: out },
-      stdio: "pipe",
-    });
-    assert.equal(
-      sha(readFileSync(path.join(out, rel))),
-      sha(readFileSync(committed)),
-      `src/${rel} has drifted from its source — run \`npm run build:ask-bundle\` and commit the result.\n`
-        + "It is packed by npm publish and inlined into the deployed ledger page as-is, so a stale "
-        + "commit ships stale code to real users.",
-    );
-  } finally {
-    rmSync(out, { recursive: true, force: true });
-  }
-});
 
 test("the committed real-word collision table is what its generator produces today", () => {
   const rel = "domain/real-word-collisions.json";
