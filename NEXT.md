@@ -82,7 +82,10 @@ files for the whole build and no track may edit them: `chat.mjs`, `build-demo-si
   can express, including moving world-authored things. Sub-clause: `adventure-browser-entry.mjs`'s
   `applyEdit` does not snapshot-stamp its writes, where mud's does; pre-existing, lands separately.
 - **Pill-driven predictive text** on the same three pages: typing a prefix completes to a live pill's
-  whole grounded command.
+  whole grounded command. Sub-clause: adventure.html's pill buttons carry no `data-command`
+  attribute, where mud.html's already do. Keyboard completion works fully without it — only the
+  rail highlight and `aria-activedescendant` wiring stay inert. Operator's call to add it in a
+  later wave, so the adoption brief leaves it alone.
 
 ## Discipline
 
