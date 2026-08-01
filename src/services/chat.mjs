@@ -38,6 +38,7 @@ import { splitSentences, carriesASentenceBoundary } from "./sentences.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
+  locativePreposition,
 } from "../domain/ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
@@ -7249,15 +7250,16 @@ const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.
 const WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
 /** "where does ann live[ now]" — the auxiliary-fronted sibling of
  *  WHERE_IS_FACT_RE, over the same taught locative facts. The trailing verb
- *  carries no meaning here (LOCATIVE_FACT_PREDICATE_RE below matches on the
- *  predicate's own folded preposition, not the query's surface verb), so it
- *  is dropped rather than captured — group 1 is the subject alone, same
- *  shape WHERE_IS_FACT_RE's reader already expects. */
+ *  carries no meaning here (locativePreposition, imported from ask-vocab.mjs,
+ *  matches on the predicate's own folded preposition, not the query's
+ *  surface verb), so it is dropped rather than captured — group 1 is the
+ *  subject alone, same shape WHERE_IS_FACT_RE's reader already expects. */
 const WHERE_DOES_FACT_RE = /^where\s+(?:does|do|did)\s+(.+?)\s+[a-z][a-z'-]*(?:\s+now)?\s*[?.!]*$/i;
-/** The closed locative tail of a folded prepositional-verb predicate
- *  (mgx:rest-on, mgx:stand-on, mgx:sit-in, …) — what makes a taught fact a
- *  LOCATION answer rather than any arbitrary relation. */
-const LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+// The closed locative tail of a folded prepositional-verb predicate
+// (mgx:rest-on, mgx:stand-on, mgx:sit-in, …) — what makes a taught fact a
+// LOCATION answer rather than any arbitrary relation — lives once, in
+// ask-vocab.mjs's LOCATIVE_PREPOSITIONS/locativePreposition; this file reads
+// it through locativePreposition rather than keeping its own copy.
 /** "what is on peg-a" / "what's on peg-a" — the reverse-by-OBJECT mirror of
  *  WHERE_IS_FACT_RE, over the same taught locative facts. The bare copula
  *  carries no verb to mint a predicate from, so the PREPOSITION is the anchor:
@@ -7749,7 +7751,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   if (whereQ) {
     const variants = factTermVariants(normFactTerm, whereQ[1]);
     const hits = (await factRows(memoryDir, cache))
-      .filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+      .filter((f) => locativePreposition(f.predicate) !== null && variants.has(f.subject));
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -7773,7 +7775,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const prep = whatIsPrepQ[1].toLowerCase();
     const variants = factTermVariants(normFactTerm, whatIsPrepQ[2].replace(/^(?:an?|the)\s+/i, "").trim());
     const hits = (await factRows(memoryDir, cache)).filter(
-      (f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && f.predicate.endsWith(`-${prep}`) && variants.has(f.object),
+      (f) => locativePreposition(f.predicate) === prep && variants.has(f.object),
     );
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
@@ -11629,15 +11631,15 @@ function actionLabel(name, subject, target) {
  *  sentence never says, and a preposition doesn't imply one — "on" reads as
  *  rest-on, stand-on, sit-on or lie-on with equal warrant, so any prep→verb
  *  table here would be invention. The taught facts answer instead: every
- *  locative fact (LOCATIVE_FACT_PREDICATE_RE's closed predicate tail) about a
- *  member of the goal's class whose preposition is the one typed contributes
- *  its verb. Returns the candidates, sorted. Exactly one is an answer; none or
- *  several is the caller's decline. */
+ *  locative fact (ask-vocab.mjs's locativePreposition, over its closed
+ *  predicate tail) about a member of the goal's class whose preposition is
+ *  the one typed contributes its verb. Returns the candidates, sorted.
+ *  Exactly one is an answer; none or several is the caller's decline. */
 function goalVerbsFromTaughtFacts(factRows, domain, { universal, term, prep }) {
   const subjects = new Set(universal ? domain?.classMembers?.[term] || [] : [term]);
   const verbs = new Set();
   for (const row of factRows || []) {
-    if (!LOCATIVE_FACT_PREDICATE_RE.test(row.predicate)) continue;
+    if (locativePreposition(row.predicate) === null) continue;
     if (!subjects.has(row.subject)) continue;
     const [factVerb, factPrep] = row.predicate.slice("mgx:".length).split("-");
     if (factPrep === prep) verbs.add(factVerb);
