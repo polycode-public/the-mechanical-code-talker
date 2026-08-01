@@ -2,7 +2,7 @@
 
 INGESTBENCH grades how faithfully `ingestText` (`src/services/extract-facts.mjs`)
 turns a document into stored facts, on the `ING-0…ING-9` ladder. It is the
-harness `SKILL_BENCHMARK_INGEST.md` specifies. Dev-only, never shipped.
+harness `.claude/skills/benchmark-ingest/SKILL.md` specifies. Dev-only, never shipped.
 
 Run the ladder:
 

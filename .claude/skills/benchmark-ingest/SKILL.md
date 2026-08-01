@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_INGEST.md — the INGESTBENCH measure-then-build cycle (rung-gated fact-extraction fidelity)
+---
+name: benchmark-ingest
+description: Runs the INGESTBENCH cycle that grades how faithfully tmct's text-to-facts extraction turns a document into stored facts on the ING-0 through ING-9 fidelity ladder; invoke when the operator asks to run an INGESTBENCH cycle or advance the fact-extraction fidelity ladder. The harness is specified but not yet built.
+---
+
+# benchmark-ingest — the INGESTBENCH measure-then-build cycle (rung-gated fact-extraction fidelity)
 
 The repeatable loop that drives tmct's **text-to-facts** measurement forward one extraction
 capability at a time: run the ladder, read the rung table, decide ship-or-build, and if building,
@@ -55,7 +60,7 @@ the judge scores them as misses, exactly as CHATBENCH's `HORIZON_CELLS` and INFB
 Don't compare an `ING-3` result against a CEFR B1, a `TOOL-3`, or an `INF-3`. Same ladder shape,
 unrelated axes. A rung is never compared across ladders.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_INGEST.md` and run an INGESTBENCH
+> **Invoke it by telling a session:** *"Run the `benchmark-ingest` skill and run an INGESTBENCH
 > cycle"* (optionally: a source-text family to measure, a rung to target, a version stamp).
 
 ---
@@ -68,8 +73,8 @@ Every cycle MUST satisfy:
   tmct version it measures: `BENCHMARK_INGEST_<version>.md`, raw under
   `test-benchmarks/ingestbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   re-judge, a second draw) appends `_00N`: `BENCHMARK_INGEST_2.11.9_001.md`, `_002`, … — the same
-  convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_AGENT.md` §1, and
-  `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
+  convention `.claude/skills/benchmark-cefr-english/SKILL.md` §1, `.claude/skills/benchmark-agent/SKILL.md` §1, and
+  `.claude/skills/benchmark-inference/SKILL.md` §1 already use.
 - **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
   **benchmarking session** (the extraction run plus any judge fan-out) and the start and end of the
   **analysis** (reading the scores and writing the report). State the date and both intervals — a
@@ -137,7 +142,7 @@ Every cycle MUST satisfy:
   expected statements** (`COMPLETION_FLOOR = 0.5`). A correct `expect.abstain` case counts toward
   the pass. The FIRST rung that fails this gate gates every rung above it — report those higher
   rungs as **skipped-with-a-receipt** (e.g. `rung ING-6 skipped: gated by ING-5 recall 0% < 50%`),
-  the same discipline `SKILL_BENCHMARK_AGENT.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §2 hold:
+  the same discipline `.claude/skills/benchmark-agent/SKILL.md` §1 and `.claude/skills/benchmark-inference/SKILL.md` §2 hold:
   don't pay to judge a ceiling while the floor leaks. `--ladder` runs the rungs ascending and
   applies this automatically.
 - **Bench-import direction stays one way.** The product (`src/`) never imports from `test-benchmarks/ingestbench/`;
@@ -157,7 +162,7 @@ specific gated rung to push past.
 **Step 2 — RUN the ladder.** `node test-benchmarks/ingestbench/run.mjs --ladder --stamp <version>`. The
 deterministic tiers (`ING-0`–`ING-7`) are fast and free — no judge concurrency to manage. When the
 cycle reaches the judged tiers (`ING-8`, `ING-9`), fan the judge out at maximum safe concurrency the
-way `SKILL_BENCHMARK_CEFR_ENGLISH.md` §Step 4 does, and run that fan-out as a **background task** so
+way `.claude/skills/benchmark-cefr-english/SKILL.md` §Step 4 does, and run that fan-out as a **background task** so
 the main chat stays free for the operator.
 
 > **Coordinator model — background sub-agents for the build.** Per `CLAUDE.md`'s standing working

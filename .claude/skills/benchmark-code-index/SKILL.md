@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_CODE_INDEX.md — the IDXBENCH restate-the-source cycle (rung-gated, deterministic, no judge)
+---
+name: benchmark-code-index
+description: Runs the IDXBENCH cycle that grades how faithfully tmct's code-index producer restates source as a graph on the IDX-0 through IDX-10 fidelity ladder; invoke when the operator asks to run an IDXBENCH cycle or advance the code-index fidelity ladder. The harness is specified but not yet built.
+---
+
+# benchmark-code-index — the IDXBENCH restate-the-source cycle (rung-gated, deterministic, no judge)
 
 The repeatable loop that drives the tmct **code-index producer** forward one fidelity rung at a
 time: index a fixture repo, compare the produced graph against a gold entity/edge set and a set of
@@ -42,7 +47,7 @@ resolution. It is not a fixed ceiling: IDX-8's semantic resolver, more languages
 richer round-trip deltas at IDX-10 extend it as the producer grows. New rungs append; a shipped
 rung's cases are frozen.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CODE_INDEX.md` and run an IDXBENCH
+> **Invoke it by telling a session:** *"Run the `benchmark-code-index` skill and run an IDXBENCH
 > cycle"* (optionally: a language to measure, a rung to target, a version stamp).
 
 ---
@@ -55,8 +60,8 @@ Every cycle MUST satisfy:
   tmct version it measures: `BENCHMARK_CODE_INDEX_<version>.md`, raw under
   `test-benchmarks/idxbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
   language, a re-verify) appends `_00N`: `BENCHMARK_CODE_INDEX_0.9.0_001.md`, `_002`, … — the same
-  convention `SKILL_BENCHMARK_AGENT.md` §1, `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, and
-  `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
+  convention `.claude/skills/benchmark-agent/SKILL.md` §1, `.claude/skills/benchmark-cefr-english/SKILL.md` §1, and
+  `.claude/skills/benchmark-inference/SKILL.md` §1 already use.
 - **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
   **indexing session** (the producer runs) and the start and end of the **analysis** (reading the
   gold comparison and writing the report). State the date and both intervals.

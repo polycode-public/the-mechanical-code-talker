@@ -1,5 +1,5 @@
 // test/helpers/session.mjs — shared "drive a scripted turn/session sequence"
-// helpers for the SKILL_CHAT_PLAYTEST regression-transcript suites
+// helpers for the playtest regression-transcript suites
 // (chatflow-*.test.mjs and friends), which independently hand-rolled a
 // near-identical drive()/driveSession() loop. This module extracts the
 // genuinely-distinct shapes so each caller imports instead of re-declaring

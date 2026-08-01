@@ -1,10 +1,10 @@
 // researchbench/grade.mjs — the deterministic grading core for RESEARCHBENCH
-// (SKILL_BENCHMARK_RESEARCH.md). No LLM, no judge, no network: every metric is
+// (.claude/skills/benchmark-research/SKILL.md). No LLM, no judge, no network: every metric is
 // a pure function over the frozen fixture graph and the recorded walk.
 //
 // RESEARCHBENCH grades the TRAVERSAL — which links get followed, in what
 // order, when the run stops — never the per-article facts (that is
-// SKILL_BENCHMARK_INGEST.md's job). RES-0..RES-8 is its own ladder, drawn from
+// .claude/skills/benchmark-ingest/SKILL.md's job). RES-0..RES-8 is its own ladder, drawn from
 // focused crawling, distinct from CEFR/TOOL-*/INF-*.
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
@@ -19,7 +19,7 @@ export const HUB_FLOOR = 0.8;
 export const ORDER_FLOOR = 0.8;
 
 // Which floors a rung's gate actually applies — recall always applies
-// (SKILL_BENCHMARK_RESEARCH.md §1); hub-avoidance and ordering apply only
+// (.claude/skills/benchmark-research/SKILL.md §1); hub-avoidance and ordering apply only
 // where the rung's own "what it tests" column names them. RES-7/RES-8 are
 // ceiling markers (see run.mjs) and never reach the gate at all.
 const RUNG_CHECKS = Object.freeze({

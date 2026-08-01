@@ -1,6 +1,6 @@
 // chatbench/judge.mjs — tier-2: the LLM-as-judge fan-out over a product.jsonl.
 //
-// The ONLY paid component of the chatbench (SKILL_TUNING_CYCLE.md §1): the
+// The ONLY paid component of the chatbench (.claude/skills/benchmark-cefr-english/SKILL.md §1): the
 // product run is deterministic and free; this module scores each case's
 // transcript with a PINNED judge model + PINNED prompt version, N samples per
 // case (default 3 — the judge is the noisy part, so it is the thing repeated).

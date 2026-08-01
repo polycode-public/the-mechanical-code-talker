@@ -41,6 +41,10 @@ test/fixtures/entities-repo/.tmct/sessions/
 # Claude Code's transient agent worktrees (git-internal checkouts, never committed)
 .claude/worktrees/
 
+# machine-local convenience symlinks to the skill docs, which really live at
+# .claude/skills/<name>/SKILL.md — recreate with `ln -s`, never commit
+/SKILL_*.md
+
 # local lcov output from coverage runs
 .coverage/
 

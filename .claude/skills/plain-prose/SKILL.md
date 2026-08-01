@@ -1,4 +1,9 @@
-# SKILL_PLAIN_PROSE.md — write plain, human prose; keep the proof out of the shop window
+---
+name: plain-prose
+description: Holds this repo's writing rules for plain, human prose and the LLM-voice tells to cut. Load it before writing any human-facing text — docs, code comments, benchmark write-ups, site copy, or chat replies.
+---
+
+# plain-prose — write plain, human prose; keep the proof out of the shop window
 
 The stock LLM writing voice reads as generic and machine-made, and on a project whose whole pitch is
 "no LLM, deterministic, grounded or an honest miss," that voice undercuts trust in the claims. This
@@ -18,7 +23,7 @@ of them.
 > **Use it whenever you draft or edit human-facing text** in this repo: `README.md`,
 > `public/index.html` (the homepage at tmct.polycode.co.uk, also the landing surface), the `PLAN_*.md` design
 > docs, the `BENCHMARK_CEFR_ENGLISH_<version>.md` / `BENCHMARK_INFERENCE_<version>.md` / `BENCHMARK_AGENT_<version>.md` /
-> `BENCHMARK_CONVERSATION_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,
+> `BENCHMARK_CONVERSATION_<version>.md` write-ups, the other skill docs, any other `*.md`, code comments,
 > and chat.
 
 ---

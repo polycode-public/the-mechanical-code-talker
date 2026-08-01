@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_INFERENCE.md — the INFBENCH measure-then-build cycle (regenerate, run, gate, write up)
+---
+name: benchmark-inference
+description: Runs the INFBENCH measure-then-build cycle that grades tmct's classical-logic inference engine on the INF-1 through INF-10 fragment-expressivity ladder and decides whether to ship or build the next engine capability; invoke when the operator asks to run an INFBENCH cycle or advance the logic-fragment ladder.
+---
+
+# benchmark-inference — the INFBENCH measure-then-build cycle (regenerate, run, gate, write up)
 
 The repeatable loop that drives the 8-band logic-fragment expressivity ladder (INF-1…INF-8) forward
 one engine capability at a time: regenerate cases, run the bench, read the rung table, decide
@@ -24,11 +29,11 @@ profiles RL/EL, the ALC→SHOIQ→SROIQ progression, `PLAN_SYLLOGIST_EL_DL.md`):
 | INF-6 | Consistency | disjointness-clash detection across stored memory (`c2Inconsistent`) |
 | INF-7 | Constructed restriction (OWL 2 EL) | classify through undeclared class expressions (nested existentials, existential chains); needs EL saturation (`elConstructedRestriction`, `elExistentialChain`) |
 | INF-8 | Reasoning by cases (OWL 2 DL) | disjunction elimination, complement classes; needs a branching tableau plus the disjointness-proof-soundness discriminator (`dlDisjunction`, `dlComplement`, `dlDisjointProofSoundness`) |
-| INF-9 | Abduction (best explanation) | select the best explanation for an observation over a CLOSED hypothesis set — diagnosis-shaped, deduction run backwards (`SKILL_BENCHMARK_AGI_SCALES.md` maps abduction as an absent classic-AI inference mode) |
+| INF-9 | Abduction (best explanation) | select the best explanation for an observation over a CLOSED hypothesis set — diagnosis-shaped, deduction run backwards (`.claude/skills/benchmark-agi-scales/SKILL.md` maps abduction as an absent classic-AI inference mode) |
 | INF-10 | Causal & counterfactual | "what if it had gone the other way", evaluated over the planner's own state snapshots: a modified start re-solved and compared, never a guessed outcome (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2) |
 
 INFBENCH grades classical-logic inference capability (fabrication vs completion on this fragment
-ladder), while `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s CEFR bands grade linguistic complexity in
+ladder), while `.claude/skills/benchmark-cefr-english/SKILL.md`'s CEFR bands grade linguistic complexity in
 conversation and AGENTBENCH's `TOOL-0…TOOL-8` grades tool-use. Don't compare an `INF-3` result
 against a CEFR B1 or a `TOOL-3` — unrelated measurements.
 
@@ -45,7 +50,7 @@ cross-benchmark link where a defect the persona sweep found becomes a pinned INF
 
 INF-1..INF-6 ship and gate nowhere; INF-7/INF-8 are named horizons with `PLAN_SYLLOGIST_EL_DL.md`
 as the build path. INF-9 and INF-10 extend the ladder one step past deduction, into the next two
-classic-AI inference modes `SKILL_BENCHMARK_AGI_SCALES.md` maps as absent at the same level: abduction
+classic-AI inference modes `.claude/skills/benchmark-agi-scales/SKILL.md` maps as absent at the same level: abduction
 (inferring the best explanation) and causal/counterfactual reasoning. They are defined here so the
 scale has headroom past what today's engine reaches — a ruler with room above the reading, not a
 claim the engine does either yet. The AGI won't live on this ladder; these two rungs are where its
@@ -59,17 +64,17 @@ snapshots. The fabrication rule (§2) holds for both verbatim — fabrication is
 not pinned by the case's own literal at generation time, so an unranked guess at a cause, or a
 made-up counterfactual outcome, is a fabrication and the floor is a miss.
 
-This shape is closer to **`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s** measure→apply-one-lever→re-measure loop than
-to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
-follows `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s structure most closely for that reason: INFBENCH is a
+This shape is closer to **`.claude/skills/benchmark-cefr-english/SKILL.md`'s** measure→apply-one-lever→re-measure loop than
+to a delegated chat-round sprint (`.claude/skills/benchmark-conversation/SKILL.md`'s capped sprint mode), and this doc
+follows `.claude/skills/benchmark-cefr-english/SKILL.md`'s structure most closely for that reason: INFBENCH is a
 deterministic benchmark replay (`node test-benchmarks/infbench/run.mjs`), not a natural conversation, so there is no
 "curious user" to delegate to a sub-agent round-by-round the way a playtest sprint delegates chat
 turns — the loop's unit is "one engine-build stage measured against a fixed ladder," the same unit
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
+`.claude/skills/benchmark-cefr-english/SKILL.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
 invokable callout; a numbered discipline section; a closing TL;DR) this doc keeps it; where it
 doesn't (delegated rounds, live chat transcripts, a round cap) it doesn't force the metaphor.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_INFERENCE.md` and run an INFBENCH
+> **Invoke it by telling a session:** *"Run the `benchmark-inference` skill and run an INFBENCH
 > cycle"* (optionally: a seed for `generate-cases.mjs`, or a specific band/capability to target).
 
 ---
@@ -120,7 +125,7 @@ is a **ceiling marker**, not a failure — name it as exactly that.
 **Step 6 — WRITE the cycle up.** Every cycle, not only when a version just shipped: a
 console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw output first
 (`test-benchmarks/infbench/results/raw/run-<version>[_00N]/`, per Step 2's stamping rule), then write
-`BENCHMARK_INFERENCE_<version>.md` (same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
+`BENCHMARK_INFERENCE_<version>.md` (same artifact-naming convention `.claude/skills/benchmark-cefr-english/SKILL.md`
 §1 uses: named after the `package.json` version measured, same-version re-runs append `_00N`):
 - a headline naming the honest delta versus the last cycle;
 - the run's timing — the start and end of the benchmarking session (regenerate + run) and the
@@ -143,13 +148,13 @@ Bands run **INF-1 → INF-2 → INF-3 → INF-4 → INF-5 → INF-6 → INF-7 �
 band: PASS requires **completion ≥ 50% at 0% fabrication**; fabrication = any answered
 verdict/entailment not pinned by the case's own literal at generation time. **The first band that
 fails this gate gates every band above it** — this is chatbench's Meta-2 rule
-(`SKILL_BENCHMARK_CONVERSATION.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
+(`.claude/skills/benchmark-conversation/SKILL.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
 judge a ceiling while the floor leaks") applied mechanically. A band at a clean **0%** on a
 capability that genuinely isn't implemented yet is a **ceiling marker** — legitimate, expected, and
 should be reported as such, never silently patched around or forced to a fake pass. Dual-draw
-agreement (the parallel-forms reliability check `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 requires for chatbench's
+agreement (the parallel-forms reliability check `.claude/skills/benchmark-cefr-english/SKILL.md` §1 requires for chatbench's
 judged tier) is **not** needed here — INFBENCH is deterministic-replay, one run per arm suffices,
-exactly as `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s own deterministic-replay clause already allows.
+exactly as `.claude/skills/benchmark-cefr-english/SKILL.md`'s own deterministic-replay clause already allows.
 
 ---
 
@@ -205,7 +210,7 @@ still-current.**
   before that convenience script landed; verify it's still there (`grep infbench package.json`)
   each time this skill is invoked rather than assuming a prior cycle's state persists.
 - **Regression is still sacred.** `npm test` green after every engine change, same contract
-  `SKILL_BENCHMARK_AGENT.md` §4 and `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 hold every other loop in this repo to.
+  `.claude/skills/benchmark-agent/SKILL.md` §4 and `.claude/skills/benchmark-cefr-english/SKILL.md` §1 hold every other loop in this repo to.
 - **Snapshot before overwrite.** The raw dir is keyed on `--stamp`, so a same-version re-run stamps
   `_00N` (`run-<version>_001`) rather than clobbering the prior run's `product.jsonl` — a skipped
   snapshot is a process slip, the same rule chatbench holds.

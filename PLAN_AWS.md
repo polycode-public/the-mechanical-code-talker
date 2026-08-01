@@ -226,11 +226,11 @@ a manually-run `npm run smoke:deploy` (with `homepage` edited locally) are green
 | `package.json:28` `homepage` | → `https://tmct.polycode.co.uk/` — this is the single edit that repoints `smoke:post-deploy` **and** the homepage link npmjs displays; npmjs picks it up when `publish:npm` ships the next version, so the cutover commit includes a version roll (`npm run roll`) |
 | `README.md:145`, `README.md:200` | live-demo links → `https://tmct.polycode.co.uk/` (+ `/code.html`) |
 | `src/adapters/corpus/wikipedia-live.mjs:37` | `WIKIMEDIA_USER_AGENT` contact URL → the new domain (check the tests that assert this string) |
-| `SKILL_PAGE_WEIGHTS.md:42` | `BASE=` → the new domain; also reword its GitLab-Pages-serves-`.br` assertion (line 55) to the CloudFront equivalent |
+| `.claude/skills/page-weights/SKILL.md` | its `BASE=` default → the new domain; also reword its GitLab-Pages-serves-`.br` assertion to the CloudFront equivalent |
 | `STATUS.md` pipeline table (`pages` row, `:43`) | `pages` row → `deploy:website`; add `e2e:deployed` |
-| `SKILL_PLAIN_PROSE.md:19,99,103`, `CLAUDE.md:164` | "GitLab Pages homepage" wording → the new domain |
+| `.claude/skills/plain-prose/SKILL.md` (three mentions), `CLAUDE.md:164` | "GitLab Pages homepage" wording → the new domain |
 | `.gitlab-ci.yml` | retire the `pages` job; repoint `smoke:post-deploy`'s `needs` |
-| `reports/PAGE_WEIGHTS.md` | leave revision 1 as-is (historical measurement against the old host); the next `SKILL_PAGE_WEIGHTS` run measures the new `BASE` and becomes revision 2 — run it soon after cutover to confirm weight parity, especially the `chat-seed.json` brotli path |
+| `reports/PAGE_WEIGHTS.md` | leave revision 1 as-is (historical measurement against the old host); the next `page-weights` skill run measures the new `BASE` and becomes revision 2 — run it soon after cutover to confirm weight parity, especially the `chat-seed.json` brotli path |
 | `.claude/settings.local.json:60` | machine-local allowlist entry — update opportunistically, not part of the commit |
 
 `public/index.html`'s outbound links (GitLab repo, npmjs, seonix, marginalia) are content and
@@ -258,4 +258,4 @@ until the next publish either way, which is cosmetic; keep the AWS stack up whil
       retirement (cutover)
 - [x] `test-e2e/helpers/` — `TMCT_E2E_BASE_URL` switch
 - [x] Reference updates + version roll + publish (cutover commit)
-- [ ] Post-cutover `SKILL_PAGE_WEIGHTS` run → `reports/PAGE_WEIGHTS.md` revision 2
+- [ ] Post-cutover `page-weights` skill run → `reports/PAGE_WEIGHTS.md` revision 2

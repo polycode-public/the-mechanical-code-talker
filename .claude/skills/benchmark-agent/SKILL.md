@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_AGENT.md — the AGENTBENCH measure-then-build cycle (rung-gated, deterministic, no judge)
+---
+name: benchmark-agent
+description: Runs the AGENTBENCH measure-then-build cycle that grades tmct's router/planner tool-use capability on the TOOL-0 through TOOL-10 ladder and decides whether to ship or build the next capability; invoke when the operator asks to run an AGENTBENCH cycle or to advance the tool-use ladder.
+---
+
+# benchmark-agent — the AGENTBENCH measure-then-build cycle (rung-gated, deterministic, no judge)
 
 The repeatable loop that drives the tmct **tool-loop** measurement forward one router/planner
 capability at a time: run the ladder, read the rung table, decide ship-or-build, and if building,
@@ -43,7 +48,7 @@ with headroom, not a claim the router does either yet. The AGI won't sit in this
 rungs are where its agent-side capabilities would first register. They carry no cases in
 `test-benchmarks/agentbench/cases.jsonl` today: a horizon rung's cases get authored when a design for it exists
 (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B for TOOL-9; `archive/PLAN_AGENTS.md` §5 R3 for TOOL-10), the same defer-until-buildable discipline
-INF-7/INF-8 hold in `SKILL_BENCHMARK_INFERENCE.md`. `SKILL_BENCHMARK_AGI_SCALES.md` maps the same
+INF-7/INF-8 hold in `.claude/skills/benchmark-inference/SKILL.md`. `.claude/skills/benchmark-agi-scales/SKILL.md` maps the same
 capabilities at the classic-AI level.
 
 The measurement contract (§1) applies to them unchanged, the zero-hallucination line included: a
@@ -58,7 +63,7 @@ fails outright. Expect-shapes, sketched in the case format so a future author ha
   named, or an `expect.relevanceBound` listing the facts the plan declared it needs and could not
   ground — the frame problem handled honestly, not a guessed-complete world.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_AGENT.md` and run an AGENTBENCH
+> **Invoke it by telling a session:** *"Run the `benchmark-agent` skill and run an AGENTBENCH
 > cycle"* (optionally: a driver to measure, a rung to target, a version stamp).
 
 ---
@@ -71,7 +76,7 @@ Every cycle MUST satisfy:
   tmct version it measures: `BENCHMARK_AGENT_<version>.md`, raw under
   `test-benchmarks/agentbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
   driver, a re-verify) appends `_00N`: `BENCHMARK_AGENT_0.8.2_001.md`, `_002`, … — the same convention
-  `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
+  `.claude/skills/benchmark-cefr-english/SKILL.md` §1 and `.claude/skills/benchmark-inference/SKILL.md` §1 already use.
 - **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
   **benchmarking session** (the run itself) and the start and end of the **analysis** (reading the
   results and writing the report). State the date and both intervals — a reader comparing two
@@ -103,8 +108,8 @@ Every cycle MUST satisfy:
   rung PASSES iff **0% hallucination at ≥50% plan-completion** (`COMPLETION_FLOOR = 0.5`,
   `test-benchmarks/agentbench/grade.mjs`). The FIRST rung that fails this gate gates every rung above it — report
   those higher rungs as **skipped-with-a-receipt** (e.g. `rung TOOL-8 skipped: gated by TOOL-7
-  completion 0% < 50%`), the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 borrows for INFBENCH and
-  `SKILL_BENCHMARK_CONVERSATION.md`'s ladder honors for flow tiers: don't pay to judge a ceiling while
+  completion 0% < 50%`), the same Meta-2 discipline `.claude/skills/benchmark-inference/SKILL.md` §2 borrows for INFBENCH and
+  `.claude/skills/benchmark-conversation/SKILL.md`'s ladder honors for flow tiers: don't pay to judge a ceiling while
   the floor leaks. `--ladder` runs the rungs ascending and applies this automatically.
 - **Refusal is a legitimate pass.** For an `expect.refuse` case, a clean refusal (no call, when no
   declared tool fits or the entity does not resolve) is a PASS at the honest-miss level — refusing
@@ -135,7 +140,7 @@ coordinator model described below when it's one of several concurrent workstream
 > **Coordinator model — background sub-agents for the build, not (usually) the run.** Per
 > `CLAUDE.md`'s standing working model, the main session is the coordinator, not the worker. The
 > AGENTBENCH run itself is cheap enough to run inline most cycles. What benefits from delegation is
-> the SAME kind of work `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s Step 2 calls out: a cycle that touches multiple
+> the SAME kind of work `.claude/skills/benchmark-cefr-english/SKILL.md`'s Step 2 calls out: a cycle that touches multiple
 > mostly-independent workstreams — a new HTN method in `src/domain/router/planner.mjs`, a new declared goal
 > rule in `src/domain/router/goal-reasoner.mjs`, new fixture-linted cases in `test-benchmarks/agentbench/cases.jsonl`, the
 > write-up itself — can fan those out to background sub-agents with clear file-ownership boundaries,
@@ -178,7 +183,7 @@ as a one-line open item pointing at this write-up — `NEXT.md` is the next-sess
 
 **Step 7 — CONTINUE.** If the operator wants the ladder pushed further, go to Step 1 of the next
 cycle with the next gated rung as the target. There is no autonomous no-pause loop here the way
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` runs one — AGENTBENCH cycles are naturally coarser-grained (one router
+`.claude/skills/benchmark-cefr-english/SKILL.md` runs one — AGENTBENCH cycles are naturally coarser-grained (one router
 capability is real implementation work, not a lever toggle), so each cycle ends with a normal
 operator check-in rather than an automatic re-arm.
 
@@ -191,7 +196,7 @@ operator check-in rather than an automatic re-arm.
   change) — size the cycle to that, not to a fixed time box.
 - A pure re-measurement (no build) is a fast, cheap cycle — worth running whenever `src/domain/router/` or
   `test-benchmarks/agentbench/cases.jsonl` changes, to catch a regression before it compounds.
-- Run alongside `SKILL_BENCHMARK_CEFR_ENGLISH.md` and `SKILL_BENCHMARK_INFERENCE.md` cycles when a release
+- Run alongside `.claude/skills/benchmark-cefr-english/SKILL.md` and `.claude/skills/benchmark-inference/SKILL.md` cycles when a release
   touches both the chat surface and the router — they measure different axes of the same release
   and belong in the same write-up cadence, not necessarily the same run.
 

@@ -1,14 +1,14 @@
 # researchbench — the tmct RESEARCH-TRAVERSAL measurement harness
 
 The sibling of `idxbench`/`agentbench`/`infbench`, on the focused-crawling axis.
-Full design in `SKILL_BENCHMARK_RESEARCH.md` — this file is the mechanics.
+Full design in `.claude/skills/benchmark-research/SKILL.md` — this file is the mechanics.
 
 **What it grades: the TRAVERSAL, not the per-article facts.** RESEARCHBENCH
 replays `research <seed>` + `research next` through the REAL lane
 (`src/services/research.mjs`'s `researchTurn`/`researchSnapshot`) and grades
 which links get followed, in what order, and when the run stops. It never
 grades whether the triples a fetched article yields are correct — that is
-`SKILL_BENCHMARK_INGEST.md`'s job; this harness's own `ingest` callback is a
+`.claude/skills/benchmark-ingest/SKILL.md`'s job; this harness's own `ingest` callback is a
 deliberate no-op (`async () => 0`), so no memory store is ever written by a
 graded run.
 

@@ -1084,8 +1084,8 @@ test("ask(): a commit-content frame over an UNKNOWN sha is the standard honest c
 });
 
 test("parseQuery: the COMMIT frames require a sha tail — \"what is in walk.mjs\" is NOT bent into a commit query (the members phrasing-frame routes it to contains instead)", () => {
-  // Over a non-sha object the commit-content frame does not fire; the SKILL_CHAT_PLAYTEST
-  // members phrasing-frame (normalize.mjs) instead routes "what is in X" → "what does X
+  // Over a non-sha object the commit-content frame does not fire; the members
+  // phrasing-frame (normalize.mjs) instead routes "what is in X" → "what does X
   // contain", so a natural "what's in <module/class>" flows to a members query rather
   // than the grammar wall. The load-bearing assertion is that it is NOT a commit touches
   // query — the sha-tail requirement of the commit frame still holds.

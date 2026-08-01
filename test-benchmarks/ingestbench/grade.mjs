@@ -2,7 +2,7 @@
 // (sibling of infbench/grade.mjs and agentbench/grade.mjs). INGESTBENCH grades
 // fact-extraction FIDELITY on the ING-0..ING-9 ladder: does a document's meaning
 // arrive in the store as correct canonical statements, with real facts kept and
-// no wrong facts invented. See SKILL_BENCHMARK_INGEST.md.
+// no wrong facts invented. See .claude/skills/benchmark-ingest/SKILL.md.
 //
 // Grading is deterministic value-compare at and below ING-7 (ingestText's stored
 // triples folded to canonical form, set-compared to the case's pinned expected

@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_RESEARCH.md — the RESEARCHBENCH measure-then-build cycle (traversal-graded, deterministic, no judge)
+---
+name: benchmark-research
+description: Runs the RESEARCHBENCH cycle that grades tmct's research-lane link traversal (ordering, hub avoidance, recall@budget) against a frozen stub wiki graph on the RES-0 through RES-8 ladder; invoke when the operator asks to run a RESEARCHBENCH cycle or advance the crawl-quality ladder. The harness is specified but not yet built.
+---
+
+# benchmark-research — the RESEARCHBENCH measure-then-build cycle (traversal-graded, deterministic, no judge)
 
 The repeatable loop that drives the tmct **research traversal** forward one crawl capability at a
 time: run the ladder against a frozen stub wiki graph, read the rung table, decide ship-or-build,
@@ -14,7 +19,7 @@ builds it from this spec, then measures against it.**
 walks that queue one step per turn. RESEARCHBENCH grades that walk: **which links get followed, in
 what order, and when the run stops.** It does NOT grade whether the triples extracted from each
 fetched article are correct or complete — that per-article fact fidelity is
-`SKILL_BENCHMARK_INGEST.md`'s job (the ingest pipeline, `src/services/extract-facts.mjs`), and the
+`.claude/skills/benchmark-ingest/SKILL.md`'s job (the ingest pipeline, `src/services/extract-facts.mjs`), and the
 two benches share nothing but a topic name. A case here can score a perfect traversal over articles
 whose fact extraction INGEST separately marks as poor, and the reverse. Keep the boundary sharp:
 if the complaint is "it stored a confused fact from the Earth summary," that is an INGEST case
@@ -51,7 +56,7 @@ is designed, its cases land on the honest miss wall and the rung sits as a ceili
 as INFBENCH's INF-7/INF-8 sit until `PLAN_SYLLOGIST_EL_DL.md` lands. Don't compare a RES rung against
 a CEFR grade, a `TOOL-*` rung, or an `INF-*` band: same ladder shape, unrelated axes.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_RESEARCH.md` and run a RESEARCHBENCH
+> **Invoke it by telling a session:** *"Run the `benchmark-research` skill and run a RESEARCHBENCH
 > cycle"* (optionally: a rung to target, a version stamp).
 
 ---
@@ -64,7 +69,7 @@ Every cycle MUST satisfy:
   version it measures: `BENCHMARK_RESEARCH_<version>.md`, raw under
   `test-benchmarks/researchbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   re-verify) appends `_00N`: `BENCHMARK_RESEARCH_2.12.0_001.md`, `_002`, … — the same convention
-  `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_AGENT.md` §1 and `SKILL_BENCHMARK_INFERENCE.md`
+  `.claude/skills/benchmark-cefr-english/SKILL.md` §1, `.claude/skills/benchmark-agent/SKILL.md` §1 and `.claude/skills/benchmark-inference/SKILL.md`
   §1 already use.
 - **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
   **benchmarking session** (the run itself) and the start and end of the **analysis** (reading the
@@ -110,7 +115,7 @@ Every cycle MUST satisfy:
   (constants in `test-benchmarks/researchbench/grade.mjs`; which floors apply to which rung is fixed by the rung's
   `what it tests` column). The FIRST rung that fails its gate gates every rung above it — report those
   higher rungs as **skipped-with-a-receipt** (e.g. `RES-5 skipped: gated by RES-4 recall 0.33 < 0.5`),
-  the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 and `SKILL_BENCHMARK_AGENT.md` §1 hold:
+  the same Meta-2 discipline `.claude/skills/benchmark-inference/SKILL.md` §2 and `.claude/skills/benchmark-agent/SKILL.md` §1 hold:
   don't score a ceiling while the floor leaks. `--ladder` runs the rungs ascending and applies this
   automatically. A rung sitting at a clean floor-miss because its capability is not built yet is a
   **ceiling marker**, not a regression — name it as exactly that (RES-7 and RES-8 sit here until
@@ -264,7 +269,7 @@ them yet:
 - **RES-7 — need-directed research.** A case carries a `need`: a question and the fact that answers it
   (`answeredBy`, a title in the fixture whose summary grounds the answer). A passing run researches
   until that fact is grounded, then stops — the queue serves the information need rather than a fixed
-  fan-out. This brushes autonomous goal formation (`SKILL_BENCHMARK_AGI_SCALES.md`'s goal-origination scale:
+  fan-out. This brushes autonomous goal formation (`.claude/skills/benchmark-agi-scales/SKILL.md`'s goal-origination scale:
   a run that pursues a goal rather than draining a queue). Candidate literatures: information foraging
   and information scent (Pirolli & Card 1999), the anomalous-state-of-knowledge model of an
   information need (Belkin 1980), question-driven retrieval. Until a tier is designed, these cases sit
@@ -294,7 +299,7 @@ receipt.
   `src/services/research.mjs` or `src/adapters/corpus/wikipedia-live.mjs`'s fan-out surface changes, to
   catch a traversal regression before it compounds.
 - Run alongside the sibling benches when a release touches the research lane, and always alongside a
-  `SKILL_BENCHMARK_INGEST.md` cycle when it exists: the two measure the two halves of a research run
+  `.claude/skills/benchmark-ingest/SKILL.md` cycle when it exists: the two measure the two halves of a research run
   (which articles get fetched here; what facts each yields there) and belong in the same write-up
   cadence.
 
@@ -335,7 +340,7 @@ honest gate: recall@budget ≥ 0.5 with hub-avoidance ≥ 0.8 and ordering ≥ 0
 them, no invented traversal, walking RES-0→RES-8 strictly in order, the first failing rung gating
 every rung above it skipped-with-a-receipt. This bench grades the TRAVERSAL — which links get
 followed, in what order, when to stop — not the per-article facts, which are
-`SKILL_BENCHMARK_INGEST.md`'s job. Hubs (Earth, Geology, year/ISBN-class links) are flagged
+`.claude/skills/benchmark-ingest/SKILL.md`'s job. Hubs (Earth, Geology, year/ISBN-class links) are flagged
 deterministically by a degree proxy over the frozen graph plus a committed generic-term list, never a
 live count. RES-0/RES-1 describe today's lane; RES-2…RES-6 are the crawl-quality arc built one rung at
 a time; RES-7 (need-directed research) and RES-8 (self-assessed coverage) are named research horizons

@@ -29,7 +29,7 @@ The two designs are the same move applied twice:
 | binding | a closed set of pronoun forms binds by kind, then recency | a trace fits a goal by operator containment |
 | the tie | two candidates of the admitted kind: refuse and list | two goals not excluded: refuse and list |
 | the honest miss | nothing in the record admits that form | the reject class (the +1) |
-| its bench rung | `SKILL_BENCHMARK_CONVERSATION.md` FLOW-7 | `SKILL_BENCHMARK_AGENT.md` TOOL-9 |
+| its bench rung | `.claude/skills/benchmark-conversation/SKILL.md` FLOW-7 | `.claude/skills/benchmark-agent/SKILL.md` TOOL-9 |
 
 The honest miss is tmct's central promise, and today it lives at the grounding wall: a query that
 matches nothing gets a refusal. Both halves carry the same promise into a second place. A pronoun
@@ -505,7 +505,7 @@ cost.
 
 ## A7. Measurement
 
-**The rung.** FLOW-7 in `SKILL_BENCHMARK_CONVERSATION.md`: *a query whose meaning composes across
+**The rung.** FLOW-7 in `.claude/skills/benchmark-conversation/SKILL.md`: *a query whose meaning composes across
 several prior answers through a typed record that tracks entities and relations turn to turn, past
 the prev-set anaphora the lanes already carry.* It sits above the ratcheting FLOW-0→FLOW-6 ladder
 and carries no frozen regressions yet, by the defer-until-buildable rule the four benches share.
@@ -522,7 +522,7 @@ the `answerMatchesNone` guards kept so the old wrong reading cannot come back.
 3. FLOW-7 gains authored cases in the CONVERSATION cycle: at least one per A4 shape, replayed as
    fresh conversations with zero dead-ends, and each fixed dead-end frozen as a tagged regression.
 4. The ambiguity refusal has its own passing row: a genuine tie refuses and lists, and never picks.
-5. `SKILL_BENCHMARK_AGI_SCALES.md`'s temporal-causal depth scale moves. Its described next rung is
+5. `.claude/skills/benchmark-agi-scales/SKILL.md`'s temporal-causal depth scale moves. Its described next rung is
    *one cross-turn temporal composition (frozen row 19) and one re-solved counterfactual*; this half
    delivers the first of the two.
 
@@ -749,7 +749,7 @@ says so in its `why` line, which is a true statement about the trace either way.
 
 ## B7. Measurement
 
-**The rung.** TOOL-9 in `SKILL_BENCHMARK_AGENT.md`: *infer the goal from an observed action
+**The rung.** TOOL-9 in `.claude/skills/benchmark-agent/SKILL.md`: *infer the goal from an observed action
 sequence, then confirm it against a bounded scheme — N declared goals plus an explicit reject class
 — rather than force-fit a partial trace to the nearest goal.* Its expect shape is already sketched
 there: `expect.inferredGoal` names the recognized goal or the reject class,
@@ -767,7 +767,7 @@ fits none.
    measurement contract that already governs every rung.
 4. A forced nearest fit fails. A case whose trace fits nothing and gets a named goal back is a
    failure even when the named goal is the plausible one.
-5. `SKILL_BENCHMARK_AGI_SCALES.md`'s goal-origination distance moves from notch 2 to notch 3, whose
+5. `.claude/skills/benchmark-agi-scales/SKILL.md`'s goal-origination distance moves from notch 2 to notch 3, whose
    described criterion is *a goal inferred from an observed trace (TOOL-9)*.
 
 ---
@@ -801,15 +801,15 @@ stub rather than a citation.
 - Kautz, H. & Allen, J.F. (1986), *Generalized Plan Recognition*, AAAI-86 — the deductive,
   set-containment formulation, which is the closest published shape to Part B's design.
 - Ramírez, M. & Geffner, H. (2010), *Probabilistic Plan Recognition Using Off-the-Shelf Classical
-  Planners*, AAAI-10 — already named as TOOL-9's grounding in `SKILL_BENCHMARK_AGENT.md`, and the
+  Planners*, AAAI-10 — already named as TOOL-9's grounding in `.claude/skills/benchmark-agent/SKILL.md`, and the
   source of the plan-recognition-as-planning framing Part B takes deterministically.
 
 # Cross-references
 
-- `SKILL_BENCHMARK_CONVERSATION.md` — FLOW-7, Part A's rung, and the FLOW ladder's ratchet rule.
-- `SKILL_BENCHMARK_AGENT.md` — TOOL-9, Part B's rung, its expect shapes, and the measurement
+- `.claude/skills/benchmark-conversation/SKILL.md` — FLOW-7, Part A's rung, and the FLOW ladder's ratchet rule.
+- `.claude/skills/benchmark-agent/SKILL.md` — TOOL-9, Part B's rung, its expect shapes, and the measurement
   contract both halves inherit.
-- `SKILL_BENCHMARK_AGI_SCALES.md` — temporal-causal depth (Part A) and goal-origination distance
+- `.claude/skills/benchmark-agi-scales/SKILL.md` — temporal-causal depth (Part A) and goal-origination distance
   (Part B); both scales' next rungs are what these two halves deliver.
 - `test/corpus/games/compositional.jsonl` — the flipped acceptance row
   (`games/cross-turn-temporal-composition-composes`) and its three earlier-flipped siblings.

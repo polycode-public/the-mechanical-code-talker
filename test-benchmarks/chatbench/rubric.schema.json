@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "tmct chatbench judge rubric (SKILL_TUNING_CYCLE.md §1)",
+  "title": "tmct chatbench judge rubric (.claude/skills/benchmark-cefr-english/SKILL.md §1)",
   "type": "object",
   "additionalProperties": false,
   "required": ["groundedness", "correctness", "honesty", "rephrase", "rationale"],

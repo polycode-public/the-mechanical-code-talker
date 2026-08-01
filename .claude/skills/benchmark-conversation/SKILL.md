@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_CONVERSATION.md — the fluid-conversation playtest cycle (dead-ends, learning-then-inference, completions retrieval, two run modes)
+---
+name: benchmark-conversation
+description: Plays a curious user against tmct's chat surface to find dead-ends and broken conversational flow, then documents and routes what it finds without fixing it inline; invoke when the operator asks for a playtest sprint, a persona sweep, or a dialogue-flow/FLOW-ladder pass.
+---
+
+# benchmark-conversation — the fluid-conversation playtest cycle (dead-ends, learning-then-inference, completions retrieval, two run modes)
 
 *(Renamed from `SKILL_BENCHMARK_PLAYTEST.md` and refocused, 2026-07-10 — the mechanism below is
 unchanged, but its scope is now explicit about three things a scalar benchmark structurally can't
@@ -19,9 +24,9 @@ them, regression-tests, then **replays the same conversations** to confirm they 
 a tier of conversations flows to a useful outcome with zero dead-ends, **ratchets up the
 complexity** and repeats.
 
-This is the complement to `SKILL_BENCHMARK_CEFR_ENGLISH.md`, not a replacement:
+This is the complement to `.claude/skills/benchmark-cefr-english/SKILL.md`, not a replacement:
 
-| | `SKILL_BENCHMARK_CEFR_ENGLISH` | `SKILL_BENCHMARK_CONVERSATION` (this) |
+| | `benchmark-cefr-english` | `benchmark-conversation` (this) |
 |---|---|---|
 | question | is the aggregate quality UP? | does the conversation FLOW, or hit a wall? |
 | signal | LLM-judge rubric mean over a case set | dead-ends + unnatural breaks in a real dialogue |
@@ -62,7 +67,7 @@ This skill has **three modes**, sharing the same discipline (§1):
 - **Full ladder mode** (§2) — open-ended, run by the main agent inline, ratcheting a FLOW-0…FLOW-6
   complexity ladder one tier at a time. Pick this to deliberately push into new complexity territory.
 
-> **Invoke it:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run the dialogue-flow loop"* runs
+> **Invoke it:** *"Run the `benchmark-conversation` skill and run the dialogue-flow loop"* runs
 > persona-sweep mode by default. Ask explicitly for *"as a capped sprint"* (optionally a round cap)
 > or a complexity tier for full ladder mode to get the other two.
 
@@ -126,8 +131,8 @@ the highest-impact dead-end, since it's the one every future stranger session wi
 ## 1. The shared discipline: chat, find dead-ends, document, hand off
 
 **(Re-scoped 2026-07-11, operator instruction: this skill MEASURES and DOCUMENTS only. The other
-three benchmark skills (`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/
-`SKILL_BENCHMARK_INFERENCE.md`) do build within their cycles — a lever, an engine capability, a
+three benchmark skills (`.claude/skills/benchmark-agent/SKILL.md`/`.claude/skills/benchmark-cefr-english/SKILL.md`/
+`.claude/skills/benchmark-inference/SKILL.md`) do build within their cycles — a lever, an engine capability, a
 router capability — but each keeps the measurement pass itself untouched and re-measures after;
 this skill goes further and has no build leg at all. It
 used to fix, freeze, and ship inline too, which made its own runtime unpredictable (an open-ended
@@ -274,7 +279,7 @@ what lets it produce a position and a gate.
   corpus lane (cross-turn temporal composition) is its standing acceptance test.
 - **FLOW-8 — Nested other-minds dialogue.** talking about what ANOTHER agent believes — a believer
   of beliefs, not only a first-order belief about the world. The spider-fly false-belief world is the
-  world-side floor; this rung grades holding that nesting in conversation (`SKILL_BENCHMARK_AGI_SCALES.md`'s
+  world-side floor; this rung grades holding that nesting in conversation (`.claude/skills/benchmark-agi-scales/SKILL.md`'s
   other-minds depth scale).
 
 FLOW-7 and FLOW-8 sit above the ratcheting FLOW-0→FLOW-6 ladder, not inside it: the ratchet gate
@@ -372,7 +377,7 @@ does not redefine it, only wraps it in a capped, delegated, per-round-shippable 
 ladder mode (§2) for the open-ended tier-ladder pass; use this mode when the operator wants a
 bounded sprint with a clear stop and a recommendation at the end, run mostly hands-off.
 
-> **Invoke it specifically:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run a playtest sprint"*
+> **Invoke it specifically:** *"Run the `benchmark-conversation` skill and run a playtest sprint"*
 > (optionally: a round cap other than 3, a starting graph/repo, a focus area).
 
 ### 3.1 The loop (one round)
@@ -528,7 +533,7 @@ would itself become the thing exploration drifts toward):
 
 Every playtest run — a persona sweep (§3.4, the default), a full-ladder tier completion (§2), or a
 capped sprint (§3) — writes ONE versioned report doc, matching the naming convention
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` already use:
+`.claude/skills/benchmark-cefr-english/SKILL.md` §1 and `.claude/skills/benchmark-inference/SKILL.md` already use:
 `BENCHMARK_CONVERSATION_<version>.md`, named after the `package.json` version the run measured. A
 re-run of the same version (no version bump between runs) appends `_00N`:
 `BENCHMARK_CONVERSATION_0.9.0_001.md`, `_002`, … Same shape as `BENCHMARK_AGENT_<version>.md`'s own
@@ -604,7 +609,7 @@ Report structure:
 
 This skill is the WIDE assessment: where does a capability actually stop working, across genuinely
 different kinds of user, so the operator can decide whether an architectural uplift is worth it.
-Unlike `SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`,
+Unlike `.claude/skills/benchmark-agent/SKILL.md`/`.claude/skills/benchmark-cefr-english/SKILL.md`/`.claude/skills/benchmark-inference/SKILL.md`,
 which build within their own cycles, this skill has no build leg: it
 MEASURES AND DOCUMENTS ONLY — it never edits `src/` or `test/` itself. Play a curious user against a
 loaded example graph: follow the product's own guided questions, drill down with natural phrasing,

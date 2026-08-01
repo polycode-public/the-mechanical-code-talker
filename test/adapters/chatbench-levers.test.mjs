@@ -1,5 +1,5 @@
 // chatbench-levers.test.mjs — the PRODUCT regression suite for the chat tuning
-// cycle's applied levers (SKILL_TUNING_CYCLE.md step 2: "every product lever gets
+// cycle's applied levers (.claude/skills/benchmark-cefr-english/SKILL.md step 2: "every product lever gets
 // a regression test"). Each cycle's section pins, with the EXACT chatbench case
 // phrasings over the same writer-faithful fixture pipeline the bench runner uses
 // (raw fixture -> ingestSchemaDocs -> parseEntities), the behavior a lever bought

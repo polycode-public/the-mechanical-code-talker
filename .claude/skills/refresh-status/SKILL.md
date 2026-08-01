@@ -1,4 +1,9 @@
-# SKILL_REFRESH_STATUS.md — regenerate STATUS.md from the committed reports and the latest CI run
+---
+name: refresh-status
+description: Resynthesize STATUS.md from the already-committed benchmark reports, PLAN docs, README claims, and the latest CI pipeline on main, without running any benchmark or editing any source doc. Invoke when a new report or pipeline has landed, a PLAN doc changed status, or the operator asks to refresh STATUS.md.
+---
+
+# refresh-status — regenerate STATUS.md from the committed reports and the latest CI run
 
 This skill resynthesizes `STATUS.md` (repo root), the one-page capability summary, from whatever
 `reports/BENCHMARK_*.md` and `reports/PAGE_WEIGHTS.md` reports are already committed, the root
@@ -11,7 +16,7 @@ this skill's output should prompt, not silently substitute for.
 STATUS.md lives at the repo root, not inside `reports/` — it's the front door that points into
 that directory, not one of the reports itself.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_REFRESH_STATUS.md`"*, or "refresh STATUS.md".
+> **Invoke it by telling a session:** *"Follow the `refresh-status` skill"*, or "refresh STATUS.md".
 
 ## When to run this
 
@@ -53,7 +58,7 @@ that directory, not one of the reports itself.
 6. **Carry forward the gates-ranked-by-leverage list** from the summary if one exists (or compose
    one from each axis's stated gate/ceiling if not), and the site-weight pointer to
    `reports/PAGE_WEIGHTS.md` (a one-line pointer, not a duplicated table — that table has its own
-   skill and its own version stamp; see `SKILL_PAGE_WEIGHTS.md`).
+   skill and its own version stamp; see the `page-weights` skill).
 
 ## Part 2 — the last CI pipeline
 
@@ -175,7 +180,7 @@ sub-agent or fork, then the coordinator does Part 5 itself once all three report
 
 - Don't touch any `reports/BENCHMARK_*.md` file itself — this skill only reads them.
 - Don't backfill a number for an axis with no report. Say "not yet measured" and name the owning
-  `SKILL_BENCHMARK_*.md` that would produce it, rather than leaving the axis out silently or
+  `benchmark-*` skill that would produce it, rather than leaving the axis out silently or
   guessing at a plausible-sounding figure.
 - Don't silently advance the "measured tree" version to match `package.json`'s current version
   without a real new report backing every number that changes — that would make STATUS.md's own

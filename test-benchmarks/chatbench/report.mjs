@@ -6,7 +6,7 @@
 // the hard-fail list, the top discriminating transcripts — plus TEMPLATE
 // sections the cycle write-up fills in by hand: the predictions-vs-actuals
 // table, the per-lever analysis, and the RANKED LEVER BOARD decision log
-// (SKILL_TUNING_CYCLE.md step 6).
+// (.claude/skills/benchmark-cefr-english/SKILL.md step 6).
 //
 // "Discriminating" transcripts lead the appendix: baseline improvements and
 // tier-1 failures first (behavior moved), then hard fails, then lowest judged

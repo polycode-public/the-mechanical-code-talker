@@ -1,4 +1,4 @@
-// researchbench/run.mjs — the RESEARCHBENCH runner (SKILL_BENCHMARK_RESEARCH.md).
+// researchbench/run.mjs — the RESEARCHBENCH runner (.claude/skills/benchmark-research/SKILL.md).
 //
 // Replays each case's `research <seed>` + `research next` walk through the
 // REAL lane (src/services/research.mjs's researchTurn/researchSnapshot),
@@ -8,7 +8,7 @@
 // LLM, no judge, no network anywhere in this loop.
 //
 // Grades the TRAVERSAL only (ordering, hub-avoidance, recall@budget) —
-// per-article fact fidelity is SKILL_BENCHMARK_INGEST.md's job, so `ingest`
+// per-article fact fidelity is .claude/skills/benchmark-ingest/SKILL.md's job, so `ingest`
 // here is a deliberate no-op stub, never a real memory write.
 //
 // Usage:
@@ -80,7 +80,7 @@ async function driveCase(caseDef, graph) {
 }
 
 // RES-7 (need-directed research) and RES-8 (self-assessed coverage) are named
-// research horizons (SKILL_BENCHMARK_RESEARCH.md §3): no lane capability
+// research horizons (.claude/skills/benchmark-research/SKILL.md §3): no lane capability
 // answers them yet, so these never reach the lane at all — a ceiling marker,
 // not a floor-miss, exactly as the skill doc's own rung table frames them.
 function isCeilingRung(rung) {
@@ -163,7 +163,7 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(renderRollup(result.rolled));
 
   const ceilingRows = result.rows.filter((r) => r.ceiling);
-  for (const r of ceilingRows) console.log(`  ${r.rung} ${r.id}: ceiling marker — no lane capability yet (research horizon, see SKILL_BENCHMARK_RESEARCH.md §3)`);
+  for (const r of ceilingRows) console.log(`  ${r.rung} ${r.id}: ceiling marker — no lane capability yet (research horizon, see .claude/skills/benchmark-research/SKILL.md §3)`);
 
   if (args.ladder) {
     console.log(`\nladder: ${result.ladder.order.join(" -> ")}${result.ladder.gatedAt ? `  — gated at ${result.ladder.gatedAt}` : "  — every measured rung passes the gate"}`);

@@ -286,7 +286,8 @@ that's measurement, not design), and present-tense descriptions of current behav
 
 ## Writing style
 
-Follow `SKILL_PLAIN_PROSE.md` for every human-facing surface this project touches: docs,
+Follow the `plain-prose` skill (`.claude/skills/plain-prose/SKILL.md`) for every human-facing
+surface this project touches: docs,
 code comments, benchmark write-ups, and the assistant's own chat replies. Plain English Campaign
 base rules first (short sentences, active voice, everyday words, "you"/"we"), then cut the
 LLM-voice tells (em-dashes as glue, "not X, it's Y", announced-honesty preambles, colon reveals,
@@ -307,6 +308,7 @@ bibliography carries both.
 
 - `npm test` — node --test suite; must stay green.
 - CLI smoke: `printf 'hi\n/exit\n' | node bin/tmct.mjs` must greet and exit 0.
-- See `NEXT.md` (open items) and the `PLAN_*.md` design docs,
-  `SKILL_BENCHMARK_CEFR_ENGLISH.md` (autonomous chat tuning loop),
-  `SKILL_AGENT_STRATEGY_ADVISOR.md` (background advisor recipe).
+- See `NEXT.md` (open items) and the `PLAN_*.md` design docs.
+- Project skills (benchmark ladders, playtests, status refresh, prose rules) live under
+  `.claude/skills/` — each is invocable by name (e.g. `/benchmark-cefr-english` is the
+  autonomous chat tuning loop) and self-describes when to use it.

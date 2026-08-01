@@ -1,11 +1,16 @@
-# SKILL_PAGE_WEIGHTS.md — re-measure and refresh reports/PAGE_WEIGHTS.md
+---
+name: page-weights
+description: Re-measure what every deployed demo-site page costs to load and rewrite reports/PAGE_WEIGHTS.md with the result. Invoke when the deployed site's version has moved meaningfully since the report's last revision, a page was added or removed, or the operator asks to refresh page weights.
+---
+
+# page-weights — re-measure and refresh reports/PAGE_WEIGHTS.md
 
 This skill re-measures what every page of the deployed demo site costs to load, and rewrites
 `reports/PAGE_WEIGHTS.md` with the result. It is written so that a page being added or removed
 from the site since this skill was last touched never requires editing this file — the page list
 is discovered fresh each run, never hardcoded here.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_PAGE_WEIGHTS.md`"*, or "refresh page
+> **Invoke it by telling a session:** *"Follow the `page-weights` skill"*, or "refresh page
 > weights".
 
 ## When to run this
@@ -96,7 +101,7 @@ Rewrite `reports/PAGE_WEIGHTS.md`:
 - Commit reports/PAGE_WEIGHTS.md alone or alongside whatever prompted the re-measurement, citing
   the old and new revision numbers in the commit message.
 - If `reports/STATUS.md` exists and its own site-weight pointer references a stale revision
-  number or date, refresh it too via `SKILL_REFRESH_STATUS.md` — that skill only reads this
+  number or date, refresh it too via the `refresh-status` skill — that skill only reads this
   report, so run this one first.
 
 ## What NOT to do

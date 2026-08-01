@@ -1,8 +1,13 @@
-# SKILL_BENCHMARK_CEFR_ENGLISH.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
+---
+name: benchmark-cefr-english
+description: Runs the autonomous CEFR chat-tuning cycle that applies one lever, measures it against the judged CEFR case pool, and continues to the next cycle without pausing; invoke when the operator asks to run the chat tuning cycle or a CHATBENCH/CEFR benchmark pass.
+---
+
+# benchmark-cefr-english — the autonomous chat tuning cycle (continuous iterations, no hard pause)
 
 The orchestration skill that runs the tmct **chat tuning cycle**: read the last result, pick +
 apply the next lever, smoke, run the chatbench, analyse, write it up, and **continue to the next
-cycle**. It is the conductor; the worker skill it drives is **`SKILL_AGENT_STRATEGY_ADVISOR.md`** (the
+cycle**. It is the conductor; the worker skill it drives is **`archive/SKILL_AGENT_STRATEGY_ADVISOR.md`** (the
 second pair of eyes). The measurement rules live in **§1 of this document**. This skill both
 defines and enforces them (there is no separate benchmarking skill in this repo).
 
@@ -13,7 +18,7 @@ menu as a **decision log** in the write-up, picking the top lever, and starting 
 **The operator can interrupt at any time**; the decision logs are the audit trail of what the loop
 chose and why.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CEFR_ENGLISH.md` and run the chat tuning
+> **Invoke it by telling a session:** *"Run the `benchmark-cefr-english` skill and run the chat tuning
 > cycle"* (optionally naming a lever to start from, or a cycle budget). The session then executes
 > the loop below repeatedly until interrupted or the budget is spent.
 
@@ -156,7 +161,7 @@ tmct's own terms:
 Both are staged in the horizon docs and, until their capability lands, sit at the honest-miss floor
 exactly as the P-axis cells do — a judged miss, not a fabricated answer. Naming them keeps the
 scale's top calibrated against the horizon rather than implying C2 is the end.
-`SKILL_BENCHMARK_AGI_SCALES.md` maps the same two absences (its open-discourse-record and other-minds
+`.claude/skills/benchmark-agi-scales/SKILL.md` maps the same two absences (its open-discourse-record and other-minds
 items) at the classic-capability level.
 
 ## 2. The loop (one cycle; repeats without pausing)
@@ -199,7 +204,7 @@ executes as a background task: **the chat stays for chat**, the coordinator laun
 keeps coordinating (merges, advisor ticks, operator questions), and picks the results up on the
 completion notification. Never block the conversation on a benchmark.
 
-**Step 5 — STRATEGY ADVISOR runs ALONGSIDE the whole time.** Per `SKILL_AGENT_STRATEGY_ADVISOR.md`,
+**Step 5 — STRATEGY ADVISOR runs ALONGSIDE the whole time.** Per `archive/SKILL_AGENT_STRATEGY_ADVISOR.md`,
 spawn the background advisor and let it ride the check-in cadence with the chat-eval watch-list
 (its §6): judge integrity, overfit-to-judge, regressions, interpretation telemetry, process
 slips. Because the loop no longer pauses for the operator, **the advisor is also the drift alarm
@@ -239,7 +244,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 ## 3. Cadence
 
 - Cycles run back-to-back; within a run, a ~5-minute check-in is the heartbeat and doubles as the
-  advisor's tick (`SKILL_AGENT_STRATEGY_ADVISOR.md` §3 Step D).
+  advisor's tick (`archive/SKILL_AGENT_STRATEGY_ADVISOR.md` §3 Step D).
 - The advisor is the only thing that runs *continuously*; everything else is sequential
   (read → apply → smoke → run → write → continue).
 

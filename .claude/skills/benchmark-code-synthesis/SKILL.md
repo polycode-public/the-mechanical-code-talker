@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_CODE_SYNTHESIS.md — the SYNTHBENCH-CODE measure-then-build cycle (regenerate, run, gate, write up)
+---
+name: benchmark-code-synthesis
+description: Runs the SYNTHBENCH-CODE cycle that grades tmct's deterministic code synthesis and transformation on the SYN-0 through SYN-8 ladder and decides whether to ship or build the next track capability; invoke when the operator asks to run a SYNTHBENCH-CODE cycle or advance the code-synthesis ladder. The harness is specified but not yet built.
+---
+
+# benchmark-code-synthesis — the SYNTHBENCH-CODE measure-then-build cycle (regenerate, run, gate, write up)
 
 The repeatable loop that drives tmct's **deterministic code synthesis and transformation** forward
 one rung at a time: run the ladder, read the rung table, decide ship-or-build, and if building, pick
@@ -25,7 +30,7 @@ named for that meaning. Do not compare a SYN rung against CHATBENCH's CEFR grade
 | SYN-5 | Multi-step with replanning | a plan of three or more operators where a mid-plan tier-1 drift forces a replan from observed state, not an edit against a stale snapshot |
 | SYN-6 | Capability from spec | synthesize a NEW capability into the fixture app from a behavioral spec — planning + PBE composed, the spec's own acceptance tests as the oracle |
 | SYN-7 | Self-source change | a planned transformation on tmct's OWN non-core source, verified by tmct's own suite (the fixture is now the repo) |
-| SYN-8 | Bootstrapping | regenerate a working tmct SUBSYSTEM from its own specs and tests — the self-improvement capability `SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind |
+| SYN-8 | Bootstrapping | regenerate a working tmct SUBSYSTEM from its own specs and tests — the self-improvement capability `.claude/skills/benchmark-agi-scales/SKILL.md` names as different-in-kind |
 
 **SYN-0…SYN-4 are the near ladder** — each maps to a track already designed (SYN-0 and SYN-3/4 to
 tmct's `PLAN_CODE_PLANNING.md` Track 5, SYN-1 to seonix's `PLAN_CODE_SYNTHESIS.md` Track 3, SYN-2
@@ -36,7 +41,7 @@ unbuilt. **SYN-7…SYN-8 are horizons**, not walls: `SYN-7` needs the self-sourc
 §8 stages as a later step past the fixture milestone; `SYN-8` edges toward open-ended
 self-improvement, and the AGI-shaped version of that (improvement that rewrites the improver or the
 operator catalogue itself, not a regeneration from a fixed catalogue) begins at the miss wall
-`SKILL_BENCHMARK_AGI_SCALES.md` marks. Candidate literatures for the horizons are the plan docs' own:
+`.claude/skills/benchmark-agi-scales/SKILL.md` marks. Candidate literatures for the horizons are the plan docs' own:
 Opdyke's behavior-preservation preconditions (1992), CEGIS, equality saturation (egg/egglog/Ruler),
 APR/TBar template repair, and for self-hosting the plan-calculus lineage (Programmer's Apprentice,
 Rich & Waters). Until a rung is built it sits at the honest-miss floor as a **ceiling marker**,
@@ -47,7 +52,7 @@ measured and named, never patched to a fake pass.
 > **SYN-0 is the first build target** — the smallest end-to-end slice (one observable edit through
 > the plan-act-verify loop on a JS fixture), staged in `PLAN_CODE_PLANNING.md` §3.7's sub-list.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CODE_SYNTHESIS.md` and run a
+> **Invoke it by telling a session:** *"Run the `benchmark-code-synthesis` skill and run a
 > SYNTHBENCH-CODE cycle"* (optionally: a rung to target, a track to build, a version stamp). Until
 > the harness lands, invoking it means executing the ship-or-build loop against the plan — the first
 > "build" is the SYN-0 slice itself.
@@ -62,8 +67,8 @@ Every cycle MUST satisfy:
   version it measures: `BENCHMARK_CODE_SYNTHESIS_<version>.md`, raw under
   `test-benchmarks/synthbench/code/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   second fixture, a re-verify) appends `_00N`: `BENCHMARK_CODE_SYNTHESIS_0.9.0_001.md`, `_002`, … —
-  the convention `SKILL_BENCHMARK_AGENT.md` §1, `SKILL_BENCHMARK_INFERENCE.md` §1, and
-  `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 all use.
+  the convention `.claude/skills/benchmark-agent/SKILL.md` §1, `.claude/skills/benchmark-inference/SKILL.md` §1, and
+  `.claude/skills/benchmark-cefr-english/SKILL.md` §1 all use.
 - **Record the timing.** Four wall-clock stamps: the start and end of the benchmarking session (the
   ladder run, including any sandbox test execution) and the start and end of the analysis (reading
   results and writing the report), with the date. A reader comparing two versions needs the
@@ -135,7 +140,7 @@ A dev-only sibling directory, never listed in `package.json`'s `files` or `expor
 - `test-benchmarks/synthbench/code/run.mjs` — the ladder driver: `--ladder` walks SYN-0→SYN-8 ascending and applies
   the gate; `--rung SYN-N` runs one; `--stamp <version>` keys the raw output dir. Provision
   `npm run synthbench:code -- --stamp <version>` when the harness lands (and verify it exists rather
-  than assume it — the same lesson `SKILL_BENCHMARK_INFERENCE.md` §4 records for `npm run infbench`).
+  than assume it — the same lesson `.claude/skills/benchmark-inference/SKILL.md` §4 records for `npm run infbench`).
 - `test-benchmarks/synthbench/code/grade.mjs` — pure deterministic grading: the four metrics (§1), the gate, the
   overfit checks, byte-determinism. No network, no model call.
 - `test-benchmarks/synthbench/code/verify/` — the verification tiers (§4): the re-parse pass, the re-index +
@@ -388,7 +393,7 @@ examples for PBE, mutation-testing for repair, byte-determinism for transformati
 from SYN-0 (one observable edit, verified by running it) through SYN-4 (the §3.7 two-step refactor,
 suite green, drift caught, poisoned variant refused) to the SYN-7/SYN-8 horizons (self-source change,
 then bootstrapping a subsystem from its own specs and tests — the self-improvement capability
-`SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind, sitting at the miss wall until built, framed as a
+`.claude/skills/benchmark-agi-scales/SKILL.md` names as different-in-kind, sitting at the miss wall until built, framed as a
 research horizon with the plan docs' own candidate literatures, never as a wall). If every rung lands
 where expected, ship the re-measurement; to push further, build the next track capability (tmct's
 `PLAN_CODE_PLANNING.md` for Track 5, seonix's `PLAN_CODE_SYNTHESIS.md` for Tracks 2-4) that unlocks

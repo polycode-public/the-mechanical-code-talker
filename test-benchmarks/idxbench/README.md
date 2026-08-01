@@ -1,7 +1,7 @@
 # idxbench — the tmct CODE-INDEX measurement harness
 
 The sibling of `agentbench`/`infbench`, on the code-index axis. Full design in
-`SKILL_BENCHMARK_CODE_INDEX.md` — this file is the mechanics.
+`.claude/skills/benchmark-code-index/SKILL.md` — this file is the mechanics.
 
 **What it grades: does the produced graph RESTATE the source?** IDXBENCH indexes
 committed fixture repos through the real producer

@@ -1408,7 +1408,7 @@ writes graded rows you can diff between runs:
 
 - `npm run chatbench:run` measures chat quality against CEFR-graded English
   cases with deterministic tier-1 checks (the full tuning loop is in
-  `SKILL_BENCHMARK_CEFR_ENGLISH.md`);
+  `.claude/skills/benchmark-cefr-english/SKILL.md`);
 - `npm run infbench` generates inference cases, then runs each through both
   drive points, the reasoning kernel and the chat surface;
 - `npm run agentbench:run` measures the tool-loop behaviour, and every

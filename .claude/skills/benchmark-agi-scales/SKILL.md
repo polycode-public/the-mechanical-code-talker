@@ -1,4 +1,9 @@
-# SKILL_BENCHMARK_AGI_SCALES.md — the AGI-scales measure-then-assess cycle (eight scalar capabilities, held from cycle one)
+---
+name: benchmark-agi-scales
+description: Grades tmct against eight general-intelligence scales, each running from a passed entry rung to a described rung above, and writes up the assessment; invoke when the operator asks to run an AGI-scales cycle or assess general-intelligence capability growth.
+---
+
+# benchmark-agi-scales — the AGI-scales measure-then-assess cycle (eight scalar capabilities, held from cycle one)
 
 The repeatable loop that grades tmct against the capabilities a general system would need, on eight
 scalar scales instead of one pass/fail line. Each scale runs from an **entry rung tmct passes
@@ -11,8 +16,8 @@ demos against these scales, plus any scalar readings a scale already has a probe
 these tops out at a wall. Each is a ruler with headroom above the current reading: an entry rung
 that is on record, and a described rung above it that names what growth looks like without designing
 the mechanism for it. Where an existing bench already measures the relevant axis, this doc points
-there rather than re-deriving the number. `SKILL_BENCHMARK_CONVERSATION.md`,
-`SKILL_BENCHMARK_INFERENCE.md`, and `SKILL_BENCHMARK_AGENT.md` each own one.
+there rather than re-deriving the number. `.claude/skills/benchmark-conversation/SKILL.md`,
+`.claude/skills/benchmark-inference/SKILL.md`, and `.claude/skills/benchmark-agent/SKILL.md` each own one.
 
 **This is its own scale set, not a re-labelling of the others.** CHATBENCH's CEFR grades linguistic
 complexity, INFBENCH's `INF-1…INF-10` grades logic-fragment expressivity, AGENTBENCH's
@@ -26,9 +31,9 @@ reading is never compared against a CEFR grade or an `INF-*` band.
 |---|---|---|---|
 | **Abstention calibration** | how much it answers at what fabrication rate: the risk-coverage trade, with every bench's zero-fabrication gate as the fixed-risk point | fabrication 0% at ≥50% coverage on the graded pools (on record across INFBENCH, AGENTBENCH, CHATBENCH) | a measured risk-coverage curve, coverage growing version-on-version at fixed zero risk |
 | **Transfer breadth** | how many domains it acquires with no engine change | three plan-lane domains acquired with zero engine changes (hanoi, river crossing, crates, on record) | a domain outside the shipped vocabularies acquired teach-only in one session |
-| **Other-minds depth** | how deep the belief nesting goes (`SKILL_BENCHMARK_CONVERSATION.md` FLOW-8, plus the spider-fly worlds) | depth 1: spider-fly beliefs including taught false beliefs, on record in its corpus lane | depth 2 in conversation, a believer of beliefs (FLOW-8) |
-| **Temporal-causal depth** | ordering, last-touch, cross-turn composition, counterfactual re-solve (`SKILL_BENCHMARK_INFERENCE.md` INF-10, plus compositional row 19 — flipped 2026-07-24, now `cross-turn-temporal-composition-composes`) | ordered snapshots plus last-touch temporal reads, on record | one cross-turn temporal composition (row 19, now composing) and one re-solved counterfactual (INF-10) |
-| **Goal-origination distance** | how far a goal travels from declared to self-originated, on four notches (`SKILL_BENCHMARK_AGENT.md` TOOL-6 deduced-and-reached, TOOL-9 inferred-and-horizon) | notch 2 of 4: declared goals plus deduced maintenance goals, the goal-reasoner on record | notch 3, a goal inferred from an observed trace (TOOL-9) |
+| **Other-minds depth** | how deep the belief nesting goes (`.claude/skills/benchmark-conversation/SKILL.md` FLOW-8, plus the spider-fly worlds) | depth 1: spider-fly beliefs including taught false beliefs, on record in its corpus lane | depth 2 in conversation, a believer of beliefs (FLOW-8) |
+| **Temporal-causal depth** | ordering, last-touch, cross-turn composition, counterfactual re-solve (`.claude/skills/benchmark-inference/SKILL.md` INF-10, plus compositional row 19 — flipped 2026-07-24, now `cross-turn-temporal-composition-composes`) | ordered snapshots plus last-touch temporal reads, on record | one cross-turn temporal composition (row 19, now composing) and one re-solved counterfactual (INF-10) |
+| **Goal-origination distance** | how far a goal travels from declared to self-originated, on four notches (`.claude/skills/benchmark-agent/SKILL.md` TOOL-6 deduced-and-reached, TOOL-9 inferred-and-horizon) | notch 2 of 4: declared goals plus deduced maintenance goals, the goal-reasoner on record | notch 3, a goal inferred from an observed trace (TOOL-9) |
 | **Knowledge-scale tolerance** | how many facts it answers over while holding zero fabrication | the shipped seed bands (~93k triples) answer with 0% fabrication, on record | the same at 10× facts with tie-rates held |
 | **Stability × plasticity** | growth per session against interference with what it already knew | append-only teach with prior answers byte-stable within a session, regression-pinned across the corpus lanes | a measured growth-per-session rate with a zero-interference guarantee across sessions |
 | **Loop closure** | how far round perceive → decide → act → verify → learn it closes on its own | autoplay completes perceive → decide → act → verify to a stall or a win honestly, on record | a full perceive → … → LEARN cycle closed autonomously, the learned fact provably used by a later cycle |
@@ -39,7 +44,7 @@ stops there, deliberately without a mechanism design for it. When a scale's next
 and measured, its build path is the plan doc that owns that axis, and the reading moves in the
 write-up, never here.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_AGI_SCALES.md` and run an AGI-scales
+> **Invoke it by telling a session:** *"Run the `benchmark-agi-scales` skill and run an AGI-scales
 > cycle"* (optionally: a scale to focus, a version stamp).
 
 ---
@@ -51,8 +56,8 @@ Every cycle MUST satisfy:
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
   tmct version it grades: `BENCHMARK_AGI_<version>.md`. A RE-RUN of the same version (a re-read after
   a fix, a second reviewer) appends `_00N`: `BENCHMARK_AGI_2.11.10_001.md`, `_002`, … — the same
-  convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_INFERENCE.md` §1, and
-  `SKILL_BENCHMARK_AGENT.md` §1 all use.
+  convention `.claude/skills/benchmark-cefr-english/SKILL.md` §1, `.claude/skills/benchmark-inference/SKILL.md` §1, and
+  `.claude/skills/benchmark-agent/SKILL.md` §1 all use.
 - **Record the timing.** The write-up carries the wall-clock start and end of the **assessment**
   (reading the tree and demos against the eight scales) and, when a scale is measured, the start and
   end of that **measurement run**, with the date. A reader comparing two versions needs the

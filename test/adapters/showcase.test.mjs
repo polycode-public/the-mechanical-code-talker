@@ -1,6 +1,6 @@
 // The RETAINED SHOWCASE — the five most complex sequences tmct has achieved,
 // frozen as deterministic regression tests (CHATBENCH cycles 1-2; the "demo
-// reel" of SKILL_TUNING_CYCLE.md step 6). These run in unit-test timescale
+// reel" of .claude/skills/benchmark-cefr-english/SKILL.md step 6). These run in unit-test timescale
 // (no judge, no network): if any of them regresses, a cycle's PASS is void
 // regardless of what the mean does.
 //

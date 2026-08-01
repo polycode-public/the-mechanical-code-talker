@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "tmct ingestbench judge rubric (SKILL_BENCHMARK_INGEST.md §1)",
+  "title": "tmct ingestbench judge rubric (.claude/skills/benchmark-ingest/SKILL.md §1)",
   "type": "object",
   "additionalProperties": false,
   "required": ["forward", "backward", "rationale"],

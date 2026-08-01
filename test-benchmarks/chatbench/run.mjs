@@ -30,7 +30,7 @@
 // flagged `improvedBaselineTurns` (a lever fixed a documented weakness). Once a
 // lever DOES fix it, the turn gains expect.improvedIn:"<cycle>" (cycle 2 onward):
 // baselineFail:true stays as the historical record (the case set is append-only —
-// SKILL_TUNING_CYCLE.md §1), but the expectation is ENFORCED from that cycle on,
+// .claude/skills/benchmark-cefr-english/SKILL.md §1), but the expectation is ENFORCED from that cycle on,
 // so a later regression on a fixed weakness is a real tier-1 failure, never a
 // quietly-lapsed improvement.
 //
@@ -44,7 +44,7 @@
 // (chatbench/graded-pool.jsonl) is sampled per run. The frozen v1 core was
 // folded into it as fully-graded cells at case-set v3 (eaf33f0), so there is
 // no separate ungraded always-run tier unless a caller supplies one via
-// --cases. The go-to default (--sample 1, SKILL_BENCHMARK_CEFR_ENGLISH.md §1)
+// --cases. The go-to default (--sample 1, .claude/skills/benchmark-cefr-english/SKILL.md §1)
 // takes the WHOLE pool as a single draw — nothing is left to cross-validate
 // against, so dual-draw never fires. A caller who narrows --sample below 1
 // gets a stratified per grade×construction draw, DUAL by default (two
@@ -746,7 +746,7 @@ export async function main(argv = process.argv.slice(2)) {
 
   // Sampling: --only pins exact ids (no sampling); the default --sample 1
   // takes the whole pool as a single draw (the go-to profile,
-  // SKILL_BENCHMARK_CEFR_ENGLISH.md §1). Narrowing --sample below 1 switches
+  // .claude/skills/benchmark-cefr-english/SKILL.md §1). Narrowing --sample below 1 switches
   // to a stratified seeded draw per cell — DUAL by default (parallel-forms
   // reliability, see GRADED.md): two disjoint-where-possible draws whose
   // per-cell agreement is the instrument's self-test. Seeds derive from the

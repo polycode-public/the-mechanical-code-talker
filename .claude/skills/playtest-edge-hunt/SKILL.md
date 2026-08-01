@@ -1,4 +1,9 @@
-# SKILL_PLAYTEST_EDGE_HUNT.md — the main-thread playtest loop: find an edge, fix it, ship it
+---
+name: playtest-edge-hunt
+description: Run the main-thread loop that walks a fixed six-area conversation with tmct, finds an edge, minimizes it, fixes it, and ships it every iteration. Invoke when the operator says "run a playtest", names an iteration budget, or asks for routine hardening of the six standing user-journey areas.
+---
+
+# playtest-edge-hunt — the main-thread playtest loop: find an edge, fix it, ship it
 
 This skill turns `EXAMPLE_PLAYTEST_LOG.md` (written for a human playtester) into a loop Claude
 Code runs itself, against the LOCAL working copy — always `node bin/tmct.mjs` from this repo,
@@ -8,15 +13,15 @@ edges (a request tmct can't parse, or one that parses but returns the wrong or n
 goes, documents whatever it finds in a numbered log under `./playtests/`, fixes it, retests, then
 commits, rolls the version, and pushes. Then the next iteration starts.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_PLAYTEST_EDGE_HUNT.md`"*, optionally naming
+> **Invoke it by telling a session:** *"Follow the `playtest-edge-hunt` skill"*, optionally naming
 > an iteration budget ("run 5 playtests").
 
-## How this differs from `SKILL_BENCHMARK_CONVERSATION.md`
+## How this differs from the `benchmark-conversation` skill
 
 Both skills hold real conversations with tmct and look for dead-ends. They are not
 interchangeable, and running one is not a substitute for the other:
 
-| | this skill (EDGE_HUNT) | `SKILL_BENCHMARK_CONVERSATION.md` |
+| | this skill (EDGE_HUNT) | `benchmark-conversation` |
 |---|---|---|
 | loop | main thread, serial, one iteration at a time | coordinator + parallel background sub-agents (persona sweep, its default mode) |
 | does it fix? | **yes** — find, minimize, fix, regression-test, ship, every iteration | **no** — measures and routes only; never edits `src/`/`test/` |
@@ -26,7 +31,7 @@ interchangeable, and running one is not a substitute for the other:
 | when to use | routine hands-on hardening of the six areas every user session actually touches | periodically, to find where a whole capability stops working across kinds of user CONVERSATION's persona sweep can reach but a fixed six-area script cannot |
 
 Use this skill for the tight, ship-every-iteration loop over the specific territory §4 names.
-Reach for `SKILL_BENCHMARK_CONVERSATION.md` when the question is wider — "where does this
+Reach for the `benchmark-conversation` skill when the question is wider — "where does this
 capability stop working, and for whom" — or when a finding needs the wide net of a persona sweep
 before it's even clear what "the right area" would have been to script here.
 
@@ -123,7 +128,7 @@ printf 'hi, i'"'"'m alex, i work mostly on the backend\nwhat can you help me wit
 
 - **Never run `chat --repo` directly against a committed `examples/*/.tmct/graph.json`** — a live
   session writes session/provenance state back into that fixture, dirtying a checked-in file.
-  Copy the example to a `mktemp -d` scratch dir first, same as `SKILL_BENCHMARK_CONVERSATION.md`
+  Copy the example to a `mktemp -d` scratch dir first, same as the `benchmark-conversation` skill
   requires. Use `mktemp -d`, capture the path in a variable, clean up ONLY that exact path when
   done — never a wildcard glob (other playtest cycles and agents share `/tmp` concurrently).
 - Areas 1, 2, 4 (its personal/general half), and 6 don't strictly need an indexed codebase and
@@ -160,7 +165,7 @@ SPECIFIC content (which fact, which topic, which task) run to run, per §1 step 
    help me with", "how do I use this", "what kinds of questions can I ask". A new user asks this
    early, for real; the answer must actually orient someone with zero context, and per this
    project's own "verify every offered example, in-state" discipline
-   (`SKILL_BENCHMARK_CONVERSATION.md` §5), any suggested example this turn offers must actually
+   (the `benchmark-conversation` skill §5), any suggested example this turn offers must actually
    be tried later in the same session before counting the turn as a real answer.
 3. **Finding out about an indexed codebase.** Point tmct at the session's real example repo (§3)
    and explore it the way a developer actually would: concept → instance → its relations → their
@@ -170,10 +175,10 @@ SPECIFIC content (which fact, which topic, which task) run to run, per §1 step 
    ingested codebase.** Teach a fact — general/commonsense, personal, or one that names something
    from the indexed codebase (e.g. "the Store module is the one I maintain") — then ask a
    FOLLOW-UP that requires COMBINING it with something else already known, not just recalling it
-   verbatim (teach-then-INFER, not teach-then-recall, same discipline
-   `SKILL_BENCHMARK_CONVERSATION.md` §1 names). The highest-value probes here mix a taught fact
+   verbatim (teach-then-INFER, not teach-then-recall, same discipline the `benchmark-conversation`
+   skill §1 names). The highest-value probes here mix a taught fact
    with a codebase-grounded one in a single inference — a genuinely different, harder path than
-   either alone, and one neither `SKILL_BENCHMARK_CONVERSATION.md`'s generic teach-then-infer
+   either alone, and one neither the `benchmark-conversation` skill's generic teach-then-infer
    probes nor a pure-codebase drill-down would reach. Also probe what a SECOND assertion does to
    a first here — re-teach the same fact, teach a conflicting one, add a dated "as of <year>"
    claim — per the sibling-resolution axis (§4.1), which lives in this area.
@@ -192,14 +197,14 @@ SPECIFIC content (which fact, which topic, which task) run to run, per §1 step 
    sourced content, not one flat sentence or a bare wall — and cites where it came from.
 
 Close the session genuinely (a real thanks/goodbye turn, not just the last structural question) —
-per `SKILL_BENCHMARK_CONVERSATION.md` §1, a session that flows perfectly in the middle but hits a
+per the `benchmark-conversation` skill's §1, a session that flows perfectly in the middle but hits a
 wall on "cheers, that's everything" still fails the fluid-conversation bar.
 
 ### 4.1 Surface variation within an area (orthogonal — apply for depth, not instead of §4)
 
 Once an area's baseline probe (§4) is in, the productive move for going deeper on IT specifically
 is to hold MEANING constant and vary FORM until the answer changes — the same
-"surface-variation axis" idea `SKILL_BENCHMARK_CONVERSATION.md` §2.2 uses for its own ladder.
+"surface-variation axis" idea the `benchmark-conversation` skill's §2.2 uses for its own ladder.
 Axes worth walking inside whichever area turned up something interesting, or as a spot-check
 elsewhere, roughly in order of yield:
 

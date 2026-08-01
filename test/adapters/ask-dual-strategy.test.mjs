@@ -291,7 +291,7 @@ test("regression: plain formal/neutral anchored phrasings are unaffected by the 
   assert.equal(parseQuery("which classes inherit from Base").kind, "inherits");
 });
 
-// ---- found live (playtest sprint round 1, SKILL_PLAYTEST_SPRINT.md): "what
+// ---- found live in a playtest sprint: "what
 // tests cover X" and "which tests test X" — the relation-noun "tests" and the
 // relation's OWN verb synonym ("cover"/"test") are adjacent, and only the noun
 // got consumed, leaving the real verb glued into the object ("cover X" instead

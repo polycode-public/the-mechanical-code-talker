@@ -1,7 +1,7 @@
 // scripts/agi-scales-aggregate.mjs — mechanically emit the AGI-scales row from
 // the other benches' committed envelopes/results (PLAN lever 7).
 //
-// SKILL_BENCHMARK_AGI_SCALES.md grades tmct on eight scalar scales, each held
+// .claude/skills/benchmark-agi-scales/SKILL.md grades tmct on eight scalar scales, each held
 // from an ENTRY RUNG tmct passes today up to a described rung above. Several
 // entry rungs are facts a sibling bench already records — above all abstention
 // calibration (every bench's zero-fabrication gate) and goal-origination
@@ -14,7 +14,7 @@
 //
 // It NEVER fabricates a rung. A scale reads a SCALAR only when a bench artifact
 // actually produced the number; every other scale reads "entry rung held,
-// assessment only" — the honest label SKILL_BENCHMARK_AGI_SCALES.md §1 requires.
+// assessment only" — the honest label .claude/skills/benchmark-agi-scales/SKILL.md §1 requires.
 // The eight-scale code assessment stays a per-major-version frontier task, by
 // design; this only mechanises the entry-rung readings that are already on record.
 //
@@ -35,7 +35,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
 
 /** Map an AGENTBENCH reached ladder rung to the goal-origination notch
- *  SKILL_BENCHMARK_AGI_SCALES.md names (TOOL-6 deduced-and-reached = notch 2;
+ *  .claude/skills/benchmark-agi-scales/SKILL.md names (TOOL-6 deduced-and-reached = notch 2;
  *  TOOL-9 inferred-and-horizon = notch 3). A rung between reads at the lower
  *  notch it has cleared. Null rung → no measured notch. */
 export function goalNotchFromRung(rung) {
@@ -59,7 +59,7 @@ const INFBENCH_COMPLETION_FLOOR = 0.5;
 // confident, wrong, directional verdict).
 const CHATBENCH_HARD_FAIL_FLOOR = 0;
 
-// The eight scales, with the entry-rung text and source SKILL_BENCHMARK_AGI_SCALES.md
+// The eight scales, with the entry-rung text and source .claude/skills/benchmark-agi-scales/SKILL.md
 // records. `derive` (optional) pulls a MEASURED reading from the supplied bench
 // artifacts; absent or returning null, the scale reads assessment-only.
 const SCALES = [
@@ -98,15 +98,15 @@ const SCALES = [
   {
     key: "goal-origination-distance",
     entryRung: "notch 2 of 4: declared goals plus deduced maintenance goals",
-    source: "SKILL_BENCHMARK_AGENT.md TOOL-6 (reached), TOOL-9 (horizon)",
+    source: ".claude/skills/benchmark-agent/SKILL.md TOOL-6 (reached), TOOL-9 (horizon)",
     derive: ({ agentbench }) => {
       const notch = goalNotchFromRung(agentbench?.ladder?.rungReached);
       return notch ? `${notch.label}; AGENTBENCH rungReached=${agentbench.ladder.rungReached}` : null;
     },
   },
   { key: "transfer-breadth", entryRung: "three plan-lane domains (hanoi, river crossing, crates) acquired with zero engine changes", source: "on record in the plan lanes" },
-  { key: "other-minds-depth", entryRung: "depth 1: spider-fly beliefs including taught false beliefs", source: "SKILL_BENCHMARK_CONVERSATION.md FLOW-8" },
-  { key: "temporal-causal-depth", entryRung: "ordered snapshots plus last-touch temporal reads", source: "SKILL_BENCHMARK_INFERENCE.md INF-10, frozen compositional row 19" },
+  { key: "other-minds-depth", entryRung: "depth 1: spider-fly beliefs including taught false beliefs", source: ".claude/skills/benchmark-conversation/SKILL.md FLOW-8" },
+  { key: "temporal-causal-depth", entryRung: "ordered snapshots plus last-touch temporal reads", source: ".claude/skills/benchmark-inference/SKILL.md INF-10, frozen compositional row 19" },
   {
     key: "knowledge-scale-tolerance",
     entryRung: "the shipped seed bands (~93k triples) answer with 0% fabrication",
@@ -155,7 +155,7 @@ export function buildAgiRow({ agentbench = null, infbench = null, chatbench = nu
 }
 
 /** Render the row as the per-scale bullet block a BENCHMARK_AGI_<version>.md
- *  cycle pastes (matches SKILL_BENCHMARK_AGI_SCALES.md's "Per-scale reading"). */
+ *  cycle pastes (matches .claude/skills/benchmark-agi-scales/SKILL.md's "Per-scale reading"). */
 export function renderAgiRow(row) {
   const lines = [
     `# AGI-scales row — ${row.version ?? "(unversioned)"} (${row.measuredCount}/${row.scales.length} scales read a scalar)`,

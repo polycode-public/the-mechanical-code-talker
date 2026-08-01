@@ -1,10 +1,15 @@
-# SKILL_DO_NEXT.md — work `NEXT.md`'s open items with the coordinator model
+---
+name: do-next
+description: Dispatch NEXT.md's open items as worktree-isolated coordinator sub-agents and land each one as it lands. Invoke when the operator says "do next", "work the backlog", "clear NEXT.md", or when a landed batch leaves items still open.
+---
+
+# do-next — work `NEXT.md`'s open items with the coordinator model
 
 This skill turns `NEXT.md`'s **Open items** section into a dispatched batch of worktree-isolated
 sub-agents, keeps `NEXT.md` itself as the live tracking surface while they run, and lands each
 one's work the moment it's ready rather than waiting for the whole batch.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_DO_NEXT.md`"*, or "work the open items in
+> **Invoke it by telling a session:** *"Follow the `do-next` skill"*, or "work the open items in
 > NEXT.md", or "do NEXT".
 
 ## When to run this

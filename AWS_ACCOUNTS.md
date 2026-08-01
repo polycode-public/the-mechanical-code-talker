@@ -115,9 +115,9 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
   `environment: production` to see the production-scoped gate variable its rule now checks).
   **PLAN_AWS.md's live execution is complete.** Remaining: flip `e2e:deployed`'s
   `allow_failure: true` off once it has a longer green history (per the plan's own stated
-  burn-in criterion), and the post-cutover `SKILL_PAGE_WEIGHTS` run for `reports/PAGE_WEIGHTS.md`
+  burn-in criterion), and the post-cutover `page-weights` skill run for `reports/PAGE_WEIGHTS.md`
   revision 2.
-- ⏳ Post-cutover `SKILL_PAGE_WEIGHTS` run → `reports/PAGE_WEIGHTS.md` revision 2 (once DNS
+- ⏳ Post-cutover `page-weights` skill run → `reports/PAGE_WEIGHTS.md` revision 2 (once DNS
   fully clears, so the measurement hits the real deployed edge, not a stale-cache miss).
 
 ## Reproduce / finish provisioning
