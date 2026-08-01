@@ -110,6 +110,12 @@ public/tmct-sw.js
 public/*.gz
 public/*.br
 
+# src/surfaces/web/memory-ask-browser.bundle.js is esbuild output (see
+# scripts/build-ask-bundle.mjs), the same kind of build artifact as the
+# public/*-browser.bundle.js files above — every job that needs it runs
+# `npm run build:ask-bundle` fresh instead of reading a committed copy.
+src/surfaces/web/memory-ask-browser.bundle.js
+
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
 # so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.
 .playwright-browsers/
