@@ -358,6 +358,42 @@ export function planWorldEditorSync(rows, state, triples) {
   return { toAppend, toRemoveIds };
 }
 
+/** The additive half of planWorldEditorSync, for ONE already-parsed triple:
+ *  the rows a single taught sentence implies, and never a retraction. A whole
+ *  document says what the world contains, so a fact missing from it has gone;
+ *  one sentence only ever says what it says, so nothing it leaves out is
+ *  evidence of anything. Re-asserting a fact the world already holds appends
+ *  nothing — `reason` says which of the two happened, in the caller's own
+ *  words. Pure. */
+export function planTaughtTriple(rows, state, triple) {
+  if (!triple?.subject || !triple?.object) return { toAppend: [], reason: "nothing parsed" };
+  if (triple.kind === PLACEMENT_KIND) {
+    const current = state?.placements?.get(triple.subject);
+    if (current && current.predicate === triple.predicate && current.object === triple.object) {
+      return { toAppend: [], reason: `${triple.subject} is already ${triple.predicate} ${triple.object}` };
+    }
+    return {
+      toAppend: [triple],
+      reason: current
+        ? `${triple.subject} moves from ${current.object} to ${triple.object}`
+        : `${triple.subject} is placed ${triple.predicate} ${triple.object}`,
+    };
+  }
+  if (triple.kind === OPENNESS_KIND) {
+    const current = state?.openness?.get(triple.subject);
+    const wantOpen = triple.object === "true";
+    if (current && current.open === wantOpen) {
+      return { toAppend: [], reason: `${triple.subject} is already ${wantOpen ? "open" : "closed"}` };
+    }
+    return { toAppend: [triple], reason: `${triple.subject} becomes ${wantOpen ? "open" : "closed"}` };
+  }
+  const key = tripleKey(triple);
+  if (editableOtherRows(rows).some((r) => tripleKey(r) === key)) {
+    return { toAppend: [], reason: `the world already says ${key}` };
+  }
+  return { toAppend: [triple], reason: `the world gains ${key}` };
+}
+
 // ---- cursor-driven suggestions ---------------------------------------------
 
 export { wordBeforeCursor } from "./viz-theme.mjs";

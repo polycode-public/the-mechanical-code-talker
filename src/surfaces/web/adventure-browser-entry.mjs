@@ -43,7 +43,7 @@ import {
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
-import { foldWorldState, worldDigestRows, roomAffordances, worldActionRows } from "../../services/adventure.mjs";
+import { foldWorldState, worldDigestRows, roomAffordances, worldActionRows, snapshotSubject } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
 import { parseWorldEditorText, planWorldEditorSync } from "../../services/adventure-editor.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
@@ -194,15 +194,30 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
      *  fact as "not in this text" and try to retract it). Retractions
      *  (removeFacts) only ever run when the WHOLE document parsed cleanly —
      *  see adventure-editor.mjs's own header for why a typo must never be
-     *  read as "this fact is gone". Returns `{ unrecognized, added, removed }`. */
+     *  read as "this fact is gone". Returns `{ unrecognized, added, removed }`.
+     *
+     *  A placement or openness edit is written as a TURN SNAPSHOT, the way
+     *  every played turn writes one. foldWorldState ranks an unstamped row as
+     *  turn 0, so an edit to something already played — the lamp taken on
+     *  turn 4, then moved back to the desk in the editor — would be outranked
+     *  by the very move it was meant to correct, and the edit would land in
+     *  the store and change nothing anyone can see. Type/exit/puzzle rows are
+     *  read raw and keep their bare subject: a stamped one names a subject no
+     *  verb resolves. */
     async applyEdit(text) {
       const allRows = readFactRows(await loadMemory(memoryDir));
       const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
       const state = foldWorldState(worldRows);
       const { triples, unrecognized } = parseWorldEditorText(text, worldRows);
       const { toAppend, toRemoveIds } = planWorldEditorSync(worldRows, state, triples);
+      const editTurn = state.turnCount + 1;
       if (toAppend.length) {
-        await appendFacts(memoryDir, toAppend.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag })));
+        await appendFacts(memoryDir, toAppend.map((f) => ({
+          subject: f.kind === "other" ? f.subject : snapshotSubject(f.subject, editTurn, state.epoch),
+          predicate: f.predicate,
+          object: f.object,
+          provenance: f.kind === "other" ? tag : `${tag}:turn${editTurn}`,
+        })));
       }
       const removedCount = unrecognized.length === 0 && toRemoveIds.length ? (await removeFacts(memoryDir, toRemoveIds)).removed.length : 0;
       const here = foldWorldState(readFactRows(await loadMemory(memoryDir))).placements.get("player")?.object ?? null;

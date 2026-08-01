@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   renderWorldEditorText, parseEditorLine, parseWorldEditorText,
-  planWorldEditorSync, editableOtherRows, wordBeforeCursor,
+  planWorldEditorSync, planTaughtTriple, editableOtherRows, wordBeforeCursor,
 } from "../../src/services/adventure-editor.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
@@ -251,6 +251,65 @@ test("editableOtherRows: excludes placement/openness and background facts, inclu
   ];
   const ids = editableOtherRows(rows).map((r) => r.id);
   assert.deepEqual(ids, ["c", "d"]);
+});
+
+// ---- one sentence at a time ---------------------------------------------------
+
+test("parseEditorLine: a bare noun that is an edit away from a verb still reads as a placement sentence", () => {
+  const types = new Map(ROWS.filter((r) => r.predicate === "rdf:type").map((r) => [r.subject, r.object]));
+  assert.deepEqual(
+    parseEditorLine("Book is in the study", types),
+    { subject: "book", predicate: "mgx:located-in", object: "study", kind: "placement" },
+    "the sentence table reads the noun as a subject, where an imperative parser repairs it to a verb",
+  );
+  assert.deepEqual(
+    parseEditorLine("Candle is in the study.", types),
+    { subject: "candle", predicate: "mgx:located-in", object: "study", kind: "placement" },
+    "with or without the full stop",
+  );
+});
+
+test("parseEditorLine: the generic type fallback reads an expletive lead as a subject, which is why a caller has to gate it", () => {
+  assert.deepEqual(
+    parseEditorLine("There is a book in the study", new Map()),
+    { subject: "there", predicate: "rdf:type", object: "book in the study", kind: "other" },
+  );
+});
+
+test("planTaughtTriple: a placement that differs from the fold is appended, and never a removal alongside it", () => {
+  const state = foldWorldState(ROWS);
+  const moved = { subject: "lamp", predicate: "mgx:located-in", object: "library", kind: "placement" };
+  const { toAppend, reason } = planTaughtTriple(ROWS, state, moved);
+  assert.deepEqual(toAppend, [moved]);
+  assert.match(reason, /lamp moves from study to library/);
+  assert.equal("toRemoveIds" in planTaughtTriple(ROWS, state, moved), false, "one sentence is never evidence a fact has gone");
+});
+
+test("planTaughtTriple: re-asserting where a thing already is appends nothing and says why", () => {
+  const state = foldWorldState(ROWS);
+  const { toAppend, reason } = planTaughtTriple(ROWS, state, {
+    subject: "lamp", predicate: "mgx:located-in", object: "study", kind: "placement",
+  });
+  assert.deepEqual(toAppend, []);
+  assert.match(reason, /already/);
+});
+
+test("planTaughtTriple: openness and the other family each read their own current value", () => {
+  const state = foldWorldState(ROWS);
+  assert.deepEqual(
+    planTaughtTriple(ROWS, state, { subject: "cabinet", predicate: "mgx:is-open", object: "true", kind: "openness" }).toAppend.length,
+    1,
+    "a container with no openness fact yet gains one",
+  );
+  assert.deepEqual(
+    planTaughtTriple(ROWS, state, { subject: "cabinet", predicate: "mgx:is-container", object: "true", kind: "other" }).toAppend,
+    [],
+    "a raw fact the world already carries is not written twice",
+  );
+  assert.deepEqual(
+    planTaughtTriple(ROWS, state, { subject: "chair", predicate: "rdf:type", object: "furniture", kind: "other" }).toAppend.length,
+    1,
+  );
 });
 
 // ---- wordBeforeCursor ---------------------------------------------------------

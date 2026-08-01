@@ -56,6 +56,7 @@ const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
 // elsewhere in the document can never silently retract it.
 const EDITABLE_OTHER_PREDICATES = [
   "rdf:type", "rdfs:subClassOf", "mgx:display-name",
+  "mgx:model", "mgx:rotation",
   "mgx:is-container", "mgx:is-predator", "mgx:is-origin",
   "mgx:dig-spawns", "mgx:den-spawns", "mgx:den-resident",
   "mgx:dig-reach", "mgx:dig-spawn-max", "mgx:den-chance-in", "mgx:den-resident-chance-in",
@@ -125,6 +126,8 @@ export function renderMudEditorText(rows, state) {
     if (p === "rdf:type") { push(s, p, o, `${cap(s)} ${typePhraseFor(o)} ${o}.`); continue; }
     if (p === "rdfs:subClassOf") { push(s, p, o, `${cap(s)} is a kind of ${o}.`); continue; }
     if (p === "mgx:display-name") { push(s, p, o, `${cap(s)} is shown as ${o}.`); continue; }
+    if (p === "mgx:model") { push(s, p, o, `${cap(s)} is modelled as ${o}.`); continue; }
+    if (p === "mgx:rotation") { push(s, p, o, `${cap(s)} is turned ${o} degrees.`); continue; }
     if (p === "mgx:is-container" && o === "true") { push(s, p, o, `${cap(s)} is a container.`); continue; }
     if (p === "mgx:is-predator" && o === "true") { push(s, p, o, `${cap(s)} hunts the other animals.`); continue; }
     if (p === "mgx:is-origin" && o === "true") { push(s, p, o, `${cap(s)} is where the burrow starts.`); continue; }
@@ -179,6 +182,14 @@ const LINE_PATTERNS = [
     build: (m) => ({ subject: LOW(m[1]), predicate: "mgx:hasMass", object: m[2] }) },
   { re: /^(.+?)\s+is\s+shown\s+as\s+(.+?)\.?$/i,
     build: (m) => ({ subject: LOW(m[1]), predicate: "mgx:display-name", object: LOW(m[2]) }) },
+  // The two facts a 3D view needs and no other sentence in this table can
+  // say: which mesh draws a thing, and how far round it is turned. Kept
+  // apart from "is shown as" (a plain reading name, which every surface uses)
+  // because a renderer asking for the mesh must never be handed the name.
+  { re: /^(.+?)\s+is\s+modelled\s+as\s+(.+?)\.?$/i,
+    build: (m) => ({ subject: LOW(m[1]), predicate: "mgx:model", object: LOW(m[2]) }) },
+  { re: /^(.+?)\s+is\s+turned\s+(-?[\d.]+)\s+degrees?\.?$/i,
+    build: (m) => ({ subject: LOW(m[1]), predicate: "mgx:rotation", object: m[2] }) },
   { re: /^(.+?)\s+loses\s+([\d.]+)\s+mass\s+a\s+turn\.?$/i,
     build: (m) => ({ subject: LOW(m[1]), predicate: "mgx:mass-drain-per-turn", object: m[2] }) },
   // The dig knobs. "at most N things" is tried before the plain "turns up X" so
@@ -305,4 +316,46 @@ export function planMudEditorSync(rows, state, triples) {
     if (!newOtherKeys.has(key)) toRemoveIds.push(id);
   }
   return { toAppend, toRemoveIds };
+}
+
+/** The additive half of planMudEditorSync, for ONE already-parsed triple: the
+ *  rows a single taught sentence implies, and never a retraction. A whole
+ *  document says what the world contains, so a fact missing from it has gone;
+ *  one sentence only ever says what it says, so nothing it leaves out is
+ *  evidence of anything. Re-asserting a fact the world already holds appends
+ *  nothing, and `reason` says which of the two happened. Pure. */
+export function planTaughtMudTriple(rows, state, triple) {
+  if (!triple?.subject || !triple?.object) return { toAppend: [], reason: "nothing parsed" };
+  if (triple.kind === PLACEMENT_KIND) {
+    const current = state?.placements?.get(triple.subject);
+    if (current && current.predicate === triple.predicate && current.object === triple.object) {
+      return { toAppend: [], reason: `${triple.subject} is already ${triple.predicate} ${triple.object}` };
+    }
+    return {
+      toAppend: [triple],
+      reason: current
+        ? `${triple.subject} moves from ${current.object} to ${triple.object}`
+        : `${triple.subject} is placed ${triple.predicate} ${triple.object}`,
+    };
+  }
+  if (triple.kind === OPENNESS_KIND) {
+    const current = state?.openness?.get(triple.subject);
+    const wantOpen = triple.object === "true";
+    if (current && current.open === wantOpen) {
+      return { toAppend: [], reason: `${triple.subject} is already ${wantOpen ? "open" : "closed"}` };
+    }
+    return { toAppend: [triple], reason: `${triple.subject} becomes ${wantOpen ? "open" : "closed"}` };
+  }
+  if (triple.kind === MASS_KIND) {
+    const current = state?.masses?.get(triple.subject);
+    if (current && Number(current.value) === Number(triple.object)) {
+      return { toAppend: [], reason: `${triple.subject} already weighs ${triple.object}` };
+    }
+    return { toAppend: [triple], reason: `${triple.subject} weighs ${triple.object}` };
+  }
+  const key = tripleKey(triple);
+  if (editableMudOtherRows(rows).some((r) => tripleKey(r) === key)) {
+    return { toAppend: [], reason: `the world already says ${key}` };
+  }
+  return { toAppend: [triple], reason: `the world gains ${key}` };
 }
