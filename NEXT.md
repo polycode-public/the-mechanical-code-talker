@@ -42,8 +42,8 @@ render fast path.
 
 Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
 `rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
-`foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one — real
-remainder tracked below) and **the two test-coverage gaps** (a new
+`foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one) and
+**the two test-coverage gaps** (a new
 `test-e2e/pages-service-worker-cache-bust.test.mjs` proves the redeploy repro end to end; the four
 existing chat/ingest/code/research e2e files now assert their fact-count pill's live DOM value, not
 just its generated markup).
@@ -97,11 +97,9 @@ page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e p
 checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
 shape (fixed).
 
-**MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
-against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
-Bartle/mudii.co.uk) is in `PLAN_MUD.md`. Operator's chosen sequencing: ship `mudiii.html` with
-credit to `world-of-claudecraft` and MUD1/MUD2 first, email Bartle once it's live. Still waiting on
-the operator's call on timing for that email — noted directly in `PLAN_MUD.md`.
+*(Footnote, not an open item: MUD3D was renamed MUDIII, design only, credit to
+`world-of-claudecraft` and MUD1/MUD2 chosen if `mudiii.html` ever ships. An optional email to
+Richard Bartle at that point is the operator's call to make if and when they choose to.)*
 
 **`archive/PLAN_FACT.md`** (multi-record-per-assertion fact model) shipped in full, all 8
 landing-order steps — see `git log` for the commit sequence.
