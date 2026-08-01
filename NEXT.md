@@ -110,24 +110,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-**Batch in flight (`SKILL_DO_NEXT.md`, 2026-08-01):** `locative-predicate-dedup`,
-`code-explorer-seed-retry`, and `gap-a-graph-wiring` landed on `main` this batch (see `git log`).
-`ci-ask-bundle-build` is still running.
+`SKILL_DO_NEXT.md`'s 2026-08-01 batch (`locative-predicate-dedup`, `code-explorer-seed-retry`,
+`ci-ask-bundle-build`, `gap-a-graph-wiring`) is fully landed on `main` — see `git log`.
 
-- [ ] **CI still builds bundles once and commits the output, so they can drift from their source.**
-  `src/surfaces/web/memory-ask-browser.bundle.js` is committed, packed by `npm publish`, and inlined
-  into the deployed ledger page. `test/estate/generated-artifacts.test.mjs` exists solely to catch
-  this file (and its siblings) going stale against the code that generates it — a whole test
-  category whose only job is policing a self-inflicted invariant. `.gitlab-ci.yml`'s `unit:slow`
-  comment says as much directly: it "owns the generated-artifacts estate guard, which is the one
-  check standing between a committed bundle that has drifted from the code and a published npm
-  tarball carrying it." The fix: a `build:*` job per artifact family builds fresh from source once
-  per pipeline and hands the result to every consumer via `artifacts:` + `needs:` (or, for the
-  npm-packed bundles specifically, `publish:npm` runs the builder itself before `npm publish`,
-  since `npm pack` includes files present in the package directory whether or not git tracks them).
-  Once a bundle stops being committed, delete its estate guard with it — don't keep policing an
-  invariant that no longer exists. `public/`'s site build (~85 MB) can stay out of this for now;
-  keeping it out of GitLab artifact transit was a deliberate choice, not an oversight.
+- [ ] **`code-explorer-viz.mjs`'s new seed-fetch retry has no direct test coverage.** The retry
+  logic (`fetchSeedPayload`, landed this batch) lives as inline browser-script text inside a
+  `String.raw` block, not a module-level function — consistent with how its sibling helpers
+  (`fetchWithProgress`, `mbText`) are tested only as standalone pure functions before being spliced
+  in, but that means the retry-on-corrupted-fetch behavior itself is currently untested at any
+  level. Deferred under the track's own time-box rather than added under pressure.
 - [ ] **`adventure-browser-entry.mjs` and `mud-browser-entry.mjs` still pass a permanently-empty
   graph into `graphAsk`/`enginePlan`.** Six of the ten browser-entry pages already build a real one
   before `ask`/`plan`/`turn` — `chat-browser-entry.mjs`/`ledger-browser-entry.mjs` via the generic
