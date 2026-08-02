@@ -647,7 +647,7 @@
 {"world":"town-square","kind":"fact","subject":"well-1","predicate":"mgx:rotation","object":"0"}
 {"world":"town-square","kind":"fact","subject":"stall-1","predicate":"rdf:type","object":"prop"}
 {"world":"town-square","kind":"fact","subject":"stall-1","predicate":"mgx:currently-in","object":"cell-3-9"}
-{"world":"town-square","kind":"fact","subject":"stall-1","predicate":"mgx:model","object":"market-stall"}
+{"world":"town-square","kind":"fact","subject":"stall-1","predicate":"mgx:model","object":"market-stall-1"}
 {"world":"town-square","kind":"fact","subject":"stall-1","predicate":"mgx:rotation","object":"90"}
 {"world":"town-square","kind":"fact","subject":"inn-1","predicate":"rdf:type","object":"prop"}
 {"world":"town-square","kind":"fact","subject":"inn-1","predicate":"mgx:currently-in","object":"cell-11-10"}

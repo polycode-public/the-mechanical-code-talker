@@ -49,28 +49,20 @@
 //   sites needed, mirroring how window.mudiiiHandleSceneClick was already
 //   added for the reverse direction.
 //
-// Reused from mudiii-viz.mjs rather than re-derived (its own frozen exports,
-// read directly off that file): `roleOfAgentId`, `cellToWorld`,
-// `cellFromGroundPoint`, `cameraRigFor`, `clipForAction`. Guarded with the
-// same dynamic-import-with-stub-fallback shape mudiii-viz.mjs uses for THIS
-// file, for the same reason: a worktree that has not received the sibling
-// file yet still loads and its own tests still run. Once both land on one
-// tree the import resolves for real; the two files are then circularly
-// dependent by design, which is safe here because every export reused below
-// is a hoisted `export function` declaration (a live binding available at
-// link time, before either module's own top-level body runs).
-let roleOfAgentId = (id) => String(id).replace(/-\d+$/, "");
-let cellToWorld = () => null;
-let cellFromGroundPoint = () => null;
-let cameraRigFor = () => null;
-let clipForAction = () => null;
-try {
-  ({ roleOfAgentId, cellToWorld, cellFromGroundPoint, cameraRigFor, clipForAction } = await import("./mudiii-viz.mjs"));
-} catch {
-  // src/services/mudiii-viz.mjs not landed in this worktree yet — the stubs
-  // above stand in for this module's own Node-side tests.
-}
-
+// Reused from mudiii-viz.mjs rather than re-derived, off its own frozen
+// exports: `roleOfAgentId`, `cellToWorld`, `cellFromGroundPoint`,
+// `cameraRigFor`, `clipForAction`. The two files import each other by design,
+// which a static cycle handles: every binding crossing it is a hoisted
+// `export function` declaration, a live binding available at link time, and
+// nothing calls one while either module's top-level body is still running.
+//
+// It must stay a static import. A top-level `await import()` on both sides
+// turns the same cycle into a deadlock — each module waits for the other to
+// finish evaluating, neither ever does, and the symptom is a silent hang with
+// no error rather than a resolution failure.
+import {
+  roleOfAgentId, cellToWorld, cellFromGroundPoint, cameraRigFor, clipForAction,
+} from "./mudiii-viz.mjs";
 import { prefersReducedMotion } from "./viz-ticker.mjs";
 
 /** The movement/camera tween's duration under normal motion — three.js has

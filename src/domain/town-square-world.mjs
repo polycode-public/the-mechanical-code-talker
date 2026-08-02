@@ -153,7 +153,7 @@ const TOWN_SQUARE = layout({
     { id: "house-2", model: "house-2", cell: "cell-8-2", rotation: "180" },
     { id: "house-3", model: "house-3", cell: "cell-8-3", rotation: "180" },
     { id: "well-1", model: "well", cell: "cell-6-7", rotation: "0" },
-    { id: "stall-1", model: "market-stall", cell: "cell-3-9", rotation: "90" },
+    { id: "stall-1", model: "market-stall-1", cell: "cell-3-9", rotation: "90" },
     { id: "inn-1", model: "inn", cell: "cell-11-10", rotation: "270" },
   ],
 });

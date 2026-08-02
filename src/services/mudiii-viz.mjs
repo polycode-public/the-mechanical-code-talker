@@ -58,19 +58,15 @@ import {
 } from "./pill-complete.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
-// The concurrent scene track's own module. Guarded with a dynamic import so
-// this file — and every test that imports it — keeps working in a worktree
-// that has not received src/services/mudiii-scene.mjs yet. The specifier and
-// the call site (`mudiiiSceneScript(opts)`, below in renderMudiiiHtml) are
-// already the real shape, so landing that file needs no edit here.
-let mudiiiSceneScript = () => "";
-try {
-  ({ mudiiiSceneScript } = await import("./mudiii-scene.mjs"));
-} catch {
-  // src/services/mudiii-scene.mjs not landed in this worktree yet — the ""
-  // stub above stands in; the town square renders with no 3D scene script
-  // until the concurrent track's file arrives.
-}
+// The scene module and this one import each other: this file embeds the
+// scene's generated IIFE, and the scene splices this file's pure geometry
+// helpers into it. A static cycle is fine here because every binding crossing
+// it is a hoisted function declaration that nothing calls at module-evaluation
+// time — the same shape world-teach.mjs and adventure.mjs already rely on. It
+// must NOT be a top-level `await import()`: two modules awaiting each other at
+// evaluation time never settle, and the failure is a silent hang rather than
+// an error.
+import { mudiiiSceneScript } from "./mudiii-scene.mjs";
 
 const DEFAULT_TITLE = "tmct — mudiii";
 const DISPLAY_STACK = SERIF_STACK;

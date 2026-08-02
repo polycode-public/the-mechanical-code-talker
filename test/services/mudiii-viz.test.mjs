@@ -306,15 +306,32 @@ test("propPlacementsFrom: every prop in the fixture resolves its cell, model and
 });
 
 test("propPlacementsFrom: a model the manifest carries no key for resolves with asset: null, not a guess", () => {
-  // stall-1's own mgx:model is "market-stall" (see the fixture's propFacts);
-  // the manifest only carries "market-stall-1"/"market-stall-2" — a real,
-  // deliberate gap the fixture leaves in, exercised here rather than
-  // "fixed" by widening the match.
-  const placements = propPlacementsFrom(FIXTURE.propFacts, ASSETS);
-  const stall = placements.find((p) => p.id === "stall-1");
-  assert.ok(stall);
-  assert.equal(stall.model, "market-stall");
-  assert.equal(stall.asset, null);
+  // A world may name a model the asset manifest has no key for. That resolves
+  // to a null asset and stays null — the renderer shows nothing rather than
+  // substituting a lookalike, because a silently swapped mesh is worse than a
+  // visible gap. The unknown key is minted here rather than borrowed from the
+  // fixture, so the fixture stays free to name only real keys.
+  const rows = [
+    { subject: "shrine-1", predicate: "rdf:type", object: "prop" },
+    { subject: "shrine-1", predicate: "mgx:currently-in", object: "cell-5-5" },
+    { subject: "shrine-1", predicate: "mgx:model", object: "wayside-shrine" },
+  ];
+  const placements = propPlacementsFrom(rows, ASSETS);
+  const shrine = placements.find((p) => p.id === "shrine-1");
+  assert.ok(shrine);
+  assert.equal(shrine.model, "wayside-shrine");
+  assert.equal(shrine.asset, null);
+});
+
+test("propPlacementsFrom: every model the shipped fixture names is a real manifest key", () => {
+  // The complement of the test above, and the one that would have caught the
+  // fixture naming "market-stall" while the manifest carried only
+  // "market-stall-1" and "market-stall-2".
+  const keys = new Set(ASSETS.map((a) => a.key));
+  for (const p of propPlacementsFrom(FIXTURE.propFacts, ASSETS)) {
+    assert.ok(keys.has(p.model), `fixture prop ${p.id} names model "${p.model}", which is not a manifest key`);
+    assert.ok(p.asset, `fixture prop ${p.id} should resolve to a manifest row`);
+  }
 });
 
 test("propPlacementsFrom: sorted by id, and drops any subject missing a cell or a model", () => {
