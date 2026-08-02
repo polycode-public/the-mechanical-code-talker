@@ -15,6 +15,7 @@
 // HTTP surface.
 
 import { createServer } from "node:http";
+import { stat } from "node:fs/promises";
 import { runTurn, selectTool, capabilityPlanDeps } from "../../services/chat.mjs";
 import { TOOLS, dispatchTool } from "../../tools/server.mjs";
 import { runCapabilityPlan, buildCapabilityPlanCtx, declaredCapabilityNames } from "../../domain/router/drive.mjs";
@@ -143,6 +144,15 @@ function withRestNote(text, rest) {
  *   - a mapped, declared graph tool → tool_use
  *   - otherwise → end_turn text via runTurn
  */
+/** How many Fact individuals a store snapshot holds. Facts only: an ordinary
+ *  turn records an Utterance and a Session too, and counting those made a game
+ *  move or a cited lookup read as a teach that went nowhere. */
+function countStoredFacts(snapshot) {
+  const individuals = snapshot?.payload?.individuals;
+  if (!Array.isArray(individuals)) return 0;
+  return individuals.reduce((n, i) => n + ((i?.class || "") === "Fact" ? 1 : 0), 0);
+}
+
 /** The memory store's vocabulary reader over a throwaway copy of `memoryDir` —
  *  the seam a cold tool call gets so `tmct_ask` here answers what chat answers
  *  over the same repo. Null when the server was started without a store. */
@@ -244,14 +254,16 @@ export async function respondToMessages(body, { config, graph, memoryDir = null,
   // turn would write lands in the copy rather than on disk.
   const { readOnlyMemorySnapshot } = await import("../../adapters/memory/core.mjs");
   const snapshot = await readOnlyMemorySnapshot(memoryDir);
-  const storedBefore = snapshot?.payload?.individuals?.length ?? 0;
+  const factsBefore = countStoredFacts(snapshot);
   const { answer } = await runTurn(userText, { config, graph, source, memoryDir: snapshot });
   // A teach turn lands in the copy and confirms itself. Say plainly that the
   // fact went nowhere, rather than leaving "noted — remembered" as the last
   // word on a write this endpoint never makes.
-  const wrote = (snapshot?.payload?.individuals?.length ?? 0) > storedBefore;
+  const wrote = countStoredFacts(snapshot) > factsBefore;
+  // A game's opening move writes board facts the same way a teach writes one,
+  // so the advice names the turn rather than assuming a fact was taught.
   const text = wrote
-    ? `${answer}\n(nothing was stored — this endpoint reads the memory store and never writes to it. Teach the fact in a chat session to keep it.)`
+    ? `${answer}\n(nothing was stored — this endpoint reads the memory store and never writes to it. Run the same turn in a chat session to keep what it writes.)`
     : answer;
   return assistantMessage(model, [{ type: "text", text }], "end_turn");
 }
@@ -333,9 +345,48 @@ function sendError(res, status, type, message) {
   sendJson(res, status, { type: "error", error: { type, message } });
 }
 
+/** A stamp of every graph file's size and mtime. Two equal stamps mean the
+ *  parsed graph in hand is still the graph on disk. */
+async function graphFileStamp(config) {
+  const files = config.graphFiles?.length ? config.graphFiles : [config.graphFile];
+  const parts = [];
+  for (const f of files) {
+    try {
+      const s = await stat(f);
+      parts.push(`${f}:${s.size}:${s.mtimeMs}`);
+    } catch { parts.push(`${f}:absent`); }
+  }
+  return parts.join("|");
+}
+
 /**
- * Start the HTTP server. Loads the graph once (tolerant: a missing artifact is
- * the empty bootstrap graph, never an error). Returns { server, url, host, port,
+ * A graph reader that re-parses when the artifact underneath it changes. The
+ * cold tool route loads the graph per call (dispatchTool → loadGraph), so a
+ * text answer served from a graph parsed at startup and a tool answer served
+ * from the file disagreed about the same repo the moment anything reindexed it
+ * mid-run. Stat-guarded, so an unchanged file costs one stat rather than a
+ * re-parse.
+ */
+function reloadingGraph(config, source) {
+  let stamp = null;
+  let graph = null;
+  return async () => {
+    const now = await graphFileStamp(config);
+    if (graph && now === stamp) return graph;
+    // source.fetchEntities keys its own per-process cache on the file PATH
+    // alone, so a same-path rewrite would still serve the payload parsed at
+    // startup. Drop it before re-reading; a stamp only changes when the bytes
+    // on disk did.
+    if (graph) source.clearCache?.();
+    graph = parseEntities(await source.fetchEntities(config));
+    stamp = now;
+    return graph;
+  };
+}
+
+/**
+ * Start the HTTP server. The graph is read tolerantly: a missing artifact is
+ * the empty bootstrap graph, never an error. Returns { server, url, host, port,
  * config, close } — `close()` shuts the socket cleanly (no hanging handles).
  *
  *   config — { graphFile } (build via configFor(repoPath) in bin/tmct.mjs)
@@ -344,9 +395,10 @@ function sendError(res, status, type, message) {
  */
 export async function startServer({ config, host = "127.0.0.1", port = 0, source = defaultSource, memoryDir = null } = {}) {
   if (!config || !config.graphFile) throw new Error("startServer requires config.graphFile");
-  // Load the graph once, up front. A missing artifact loads as the empty
-  // bootstrap graph — runTurn tolerates it (an honest empty/orienting answer).
-  const graph = parseEntities(await source.fetchEntities(config));
+  const currentGraph = reloadingGraph(config, source);
+  // Parse once up front so a listening server has already paid for the common
+  // case, and so a broken artifact surfaces before the first request.
+  await currentGraph();
 
   const server = createServer(async (req, res) => {
     try {
@@ -377,7 +429,7 @@ export async function startServer({ config, host = "127.0.0.1", port = 0, source
           sendError(res, 400, "invalid_request_error", `unknown tools name(s): ${unknown.join(", ")}; registered capabilities: ${declared.join(", ")}`);
           return;
         }
-        const out = await respondToPlan(body, { config, graph, memoryDir, source });
+        const out = await respondToPlan(body, { config, graph: await currentGraph(), memoryDir, source });
         sendJson(res, 200, out);
         return;
       }
@@ -400,7 +452,7 @@ export async function startServer({ config, host = "127.0.0.1", port = 0, source
         sendError(res, 400, "invalid_request_error", "`messages` array is required");
         return;
       }
-      const out = await respondToMessages(body, { config, graph, memoryDir, source });
+      const out = await respondToMessages(body, { config, graph: await currentGraph(), memoryDir, source });
       sendJson(res, 200, out);
     } catch (e) {
       sendError(res, 500, "api_error", e && e.message ? e.message : String(e));

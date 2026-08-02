@@ -347,6 +347,69 @@ test("respondToMessages: a teach sent to the endpoint says plainly that nothing 
   }
 });
 
+test("respondToMessages: a grounded answer that stores no fact carries no store note", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { appendFact, openConfiguredMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-http-nonote-"));
+  const { dir: memoryDir, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    await appendFact(memoryDir, {
+      subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA",
+    });
+    // An ordinary turn records an Utterance and a Session alongside the answer.
+    // Those are not facts, so the read-only note must stay off.
+    const out = await respondToMessages(
+      { model: "tmct", messages: [{ role: "user", content: "what is a gizmo" }] },
+      { config: CONFIG, graph, memoryDir },
+    );
+    assert.match(out.content[0].text, /software/, "the answer still grounds");
+    assert.doesNotMatch(out.content[0].text, /nothing was stored/);
+  } finally {
+    await close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("serve: a graph rewritten under a running server is re-read, not answered from the startup parse", async () => {
+  const { mkdtemp, rm, writeFile, copyFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = await mkdtemp(join(tmpdir(), "tmct-http-reload-"));
+  const graphFile = join(dir, "graph.json");
+  await writeFile(graphFile, JSON.stringify({ individuals: [], relationships: [] }), "utf8");
+
+  const srv = await startServer({ config: { graphFile }, port: 0 });
+  try {
+    const ask = async () => {
+      const res = await fetch(`${srv.url}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "tmct", messages: [{ role: "user", content: "/stats" }] }),
+      });
+      return (await res.json()).content[0].text;
+    };
+
+    assert.match(await ask(), /0 module\(s\)/, "the empty artifact reads as empty");
+
+    // What `tmct index` does to a repo while a server is up.
+    await copyFile(FIXTURE, graphFile);
+
+    const after = await ask();
+    assert.doesNotMatch(after, /graph overview — 0 entities/, "the startup parse is not still the answer");
+    // The cold tool route reads the file per call; the text route must agree.
+    const viaTool = await dispatchTool("tmct_architecture", {}, { config: { graphFile }, source });
+    const modules = /(\d+) module\(s\)/.exec(viaTool)?.[1];
+    assert.ok(Number(modules) > 0, "the fixture has modules to find");
+    assert.match(after, new RegExp(`${modules} module\\(s\\)`), "both routes report the same module count");
+  } finally {
+    await srv.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- the plan verb (POST /v1/plan) ----
 
 test("plan: a single-shot request grounds to one registry call with $0 usage", async () => {
