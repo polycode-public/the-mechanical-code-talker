@@ -1,7 +1,8 @@
 # CRDTs — what tmct replicates, and where the convergence actually comes from
 
 **Consumer in repo:** `src/adapters/memory/core.mjs` (`appendFacts`, `readFactRows`, `removeFacts`),
-`src/domain/memory/compaction.mjs`, `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
+`src/domain/memory/compaction.mjs`, `src/domain/memory/retraction.mjs`,
+`src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
 `rulingTestimonyClaim`), `PLAN_MUD_WEBRTC.md`.
 **Retrieval date:** 2026-08-02 — VERIFIED. Every citation below was checked against a primary
@@ -210,14 +211,16 @@ An OR-Set solves one problem: a remove that is concurrent with an add of the sam
 the add should win and a later re-add must survive. It does that by giving every add a unique tag
 and having a remove carry the tags it observed.
 
-tmct does not have that problem, and the price is wrong for it.
+The price is wrong for tmct, and the one removal it does have is narrow enough not to need it.
 
-**The problem does not arise.** No product path removes a replicated element. "Stopping being
-true" is expressed four other ways, all of them appends: a newer `@turnN` snapshot for world state,
-a fresh testimony tag with a `:gone` suffix for what a character knows, a newer tag for a name, and
-a recency window for a wave. A wave is the clean case. Waving again re-asserts the same
-content-addressed triple, `appendFacts` unions a fresh tag onto it, and `isRecentWave` decides
-whether it is current. The animation needs no remove because "waving" was never stored.
+**Almost nothing removes.** "Stopping being true" is expressed four ways, all of them appends: a
+newer `@turnN` snapshot for world state, a fresh testimony tag with a `:gone` suffix for what a
+character knows, a newer tag for a name, and a recency window for a wave. A wave is the clean case.
+Waving again re-asserts the same content-addressed triple, `appendFacts` unions a fresh tag onto
+it, and `isRecentWave` decides whether it is current. The animation needs no remove because
+"waving" was never stored. Retraction is the exception, and it takes the summary shape rather than
+the OR-Set one for the reasons below. What that costs is the re-add: a suppressed assertion comes
+back only under a later instant, never under its own identity.
 
 **tmct already has the unique tag, and it is a product feature.** `teach:peer:<name>#node:<id>@<ts>`
 is exactly the shape an OR-Set's add-tag takes: a node identity plus an instant, unique per add.
@@ -237,25 +240,18 @@ Theorem 2.2 makes causal delivery a precondition. tmct's mesh gives no such guar
 mean building causal delivery first, then a causal-stability rule before any tombstone could ever
 be dropped.
 
-**One tombstone does exist, for compaction.** `assertionGroupsFor` filters out any source a
-pool-1 rollup has already absorbed, "without it the next sync resurrects everything compaction just
-folded, which is what makes deleting from a replicated set hard at all". That is a real tombstone,
-and it is the shape an OR-Set would generalise. It is confined to compaction because compaction is
-the one place a delete is not a change of belief.
+**Two tombstones exist, and both take the summary shape rather than the OR-Set one.**
+`assertionGroupsFor` filters out any source a pool-1 rollup has already absorbed, "without it the
+next sync resurrects everything compaction just folded, which is what makes deleting from a
+replicated set hard at all". `retraction.mjs` does the same job for a real change of belief: one
+record per (triple, source) carrying the record ids it suppressed, merging by union of those ids
+and max of the instant it carries. Neither hides a tag. The compaction summary keeps the sources it
+absorbed in the citation; the retraction record keeps the tags of what it suppressed, so the store's
+account of what it was told stays complete.
 
 ## What does not converge
 
-Three things. Named as present behaviour, not as design limits.
-
-**A retraction is local.** `removeFacts` is a real delete, reached by chat's `/retract` (through
-`syllogise.mjs`'s `retractSubClassOf` cascade) and by mud.html's EDIT mode for the non-fold-versioned
-family (`rdf:type`, `mgx:has-exit-*`, the container and puzzle predicates). Nothing broadcasts a
-removal. `mergeIncomingFacts` only calls `appendFacts`, and `flushLocalChange` diffs the rows that
-are present, so a disappearance is invisible to the diff. Every removed predicate in the mud case
-passes `isMudStatePredicate`, which is exactly what the sync filter replicates. So a peer that
-still holds the fact re-sends it on the next sync and it comes back — the classic uncoordinated
-delete against a grow-only set, verified by probe below. Chat's `/retract` behaves the same way for
-a taught fact, since teach-kind rows are what `chatSyncableFacts` syncs.
+Two things. Named as present behaviour, not as design limits.
 
 **One source's own revision history is order-sensitive in the provenance projection.** If a source
 asserts a triple at `t1` and again at `t2 > t1`, delivery order changes what the read row's
@@ -276,7 +272,8 @@ Run against the real modules, in memory, on 2026-08-02.
 | same tag appended twice | one row, one tag. Idempotent |
 | two distinct sources, both orders | identical row, identical tag order (`alpha \| beta` either way). Commutative |
 | one source at two instants, both orders | row provenance differs: `{t2}` versus `{t1, t2}` |
-| delete then peer re-delivery | the fact returns, same id, same tag |
+| delete then peer re-delivery, before the retraction record existed | the fact returns, same id, same tag |
+| retract then peer re-delivery | refused on ingest; the fact stays gone, in either arrival order |
 | equal `(epoch, turn)`, array order flipped | fold answer flips; after the id sort, both orders agree |
 | `epoch 2 turn 1` against `epoch 0 turn 9` | the later epoch wins in both array orders |
 
@@ -312,15 +309,17 @@ and it holds only because `sortFactIndividualsById` makes the fold a function of
 that sort the view is neither monotone nor confluent, and the whole argument fails.
 
 So: monotone base, non-monotone but confluent view, coordination-free throughout. `removeFacts` is
-the operation that sits outside all of it, which is why it is the one that does not replicate.
+the operation that sits outside all of it, and what puts it back inside is the retraction record:
+the delete becomes an APPEND of a tombstone, the base relation keeps growing, and the suppression
+happens at the read. Same trade as the placement fold, one level down.
 
 ## The verdict for tmct
 
 **The G-Set is the right choice, and "state-based G-Set" is an incomplete description of what
 ships.** What ships is a grow-only set of `(triple, source)` records, each carrying a grow-only set
-of provenance tags, with a per-source revision chain that demotes rather than deletes, plus a
-replicated compaction summary that merges by union of absorbed ids. Union at every level. No
-causal delivery required anywhere.
+of provenance tags, with a per-source revision chain that demotes rather than deletes, plus two
+replicated summaries that merge by union of the ids they carry: a compaction rollup and a
+retraction record. Union at every level. No causal delivery required anywhere.
 
 **The conflict resolution is a read-time query, and it must stay a pure function of the set.** That
 is the invariant to protect. `foldWorldState` broke it and was fixed outside itself, by
@@ -329,18 +328,24 @@ resolver has to be checked the same way: feed one peer's facts in two different 
 the same answer. A resolver that reads a wall clock, a local counter, or array position without
 that sort will look correct in a single-browser test and diverge on the mesh.
 
-**OR-Set is not needed because tmct never removes a replicated element in normal use, and the
-tombstone it would require would put holes in the provenance record.** The provenance record is a
-product feature. That is the reason, and it is a stronger one than "no scenario needs retraction
-yet".
+**The OR-Set's price is the wrong one for tmct: its tombstone would put holes in the provenance
+record.** The provenance record is a product feature, and that is the reason the removal tmct does
+have takes the summary shape instead — a retraction record carries the tags of what it suppressed
+rather than hiding them.
 
-**Retraction over the mesh is the open gap.** `removeFacts` is local, so a `/retract` or a mud
-EDIT-mode removal is undone by the next sync from any peer that still holds the fact. Two routes
-exist in the literature when that becomes worth building. The first is an OR-Set proper, with
-causal delivery and a causal-stability rule to bound the tombstones. The second is the shape
-`compaction.mjs` already uses: a replicated summary record that carries the ids it absorbs, so
-absorption itself merges by union and stays a join. The second reuses machinery that is already in
-the tree and already keeps the provenance readable, which makes it the one to price first.
+**Retraction over the mesh took the summary route, not the OR-Set one.** `removeFacts` now leaves
+a record behind, one per (triple, source), carrying the record ids it suppressed and the moment it
+did, so absorption merges by union and stays a join. Two enforcement points read it: the fold
+strips a record it covers, and `assertionGroupsFor` refuses to re-materialise one on ingest. Both
+compare the assertion's own embedded instant against the retraction's, so a source that says the
+thing again later still lands. The suppressed ids are re-keyed through the provenance tag on the
+way out and on the way in, because the broadcast relabel means two stores file one assertion under
+two Source keys.
+
+Two open problems sit next to it. A retraction record has no causal-stability rule, so nothing
+tells it when it could be dropped — the same gap the compaction rollup has. And an OR-Set proper,
+with causal delivery, remains the route that would let a suppressed assertion be re-added under its
+own identity rather than under a later instant.
 
 ## Deepen-next
 
