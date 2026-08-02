@@ -411,7 +411,7 @@ ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-sel
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
-        <label class="deck-teach" title="With this on, a sentence like &quot;Candle is in the study.&quot; writes a fact into the world instead of running as a command.">
+        <label class="deck-teach" title="With this on, a sentence like &quot;Pebble lies in the garden.&quot; writes a fact into the world instead of running as a command.">
           <input type="checkbox" id="teachToggle">
           teach
         </label>
