@@ -1237,7 +1237,9 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             // hold it), and resolveAnsweredTerm has no way to tell that
             // apart from the term genuinely being discussed.
             const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmct.page.normFactTerm);
-            if (hit) refocusWithLabel(hit, q);
+            // No label: the breadcrumb falls back to the term itself
+            // (c.label || c.term) rather than showing the whole question.
+            if (hit) refocusWithLabel(hit);
           }
         } catch {
           pending.className = "a miss";
@@ -1440,7 +1442,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
           // full-stop-terminated, rendered only when the engine deduced one.
           if (data && data.goal) addLine("a goal", "Goal (inferred): " + esc(data.goal.charAt(0).toUpperCase() + data.goal.slice(1)) + ".");
           const hit = resolveAnsweredTerm(answer, q, LEDGER.terms, tmct.page.normFactTerm);
-          if (hit) refocusWithLabel(hit, q);
+          if (hit) refocusWithLabel(hit);
         } else {
           const tips = LEDGER.terms.filter((t) => t.term.length >= 3).slice(0, 2)
             .map((t) => '"what is ' + esc(t.term) + '"').join(" \\u00b7 ");
