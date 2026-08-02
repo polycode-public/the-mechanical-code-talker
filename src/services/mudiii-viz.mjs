@@ -82,7 +82,7 @@ const NPC_COUNT_MIN = 1;
 const NPC_COUNT_MAX = 10;
 const NPC_COUNT_LABELLED = [1, 5, 10];
 const DEFAULT_NPC_COUNT = 2;
-const DEFAULT_DELAY_MS = 650;
+const DEFAULT_DELAY_MS = 220;
 const DEFAULT_MAX_TURNS = 400;
 // test/fixtures/mudiii-ticks.json's own board size — the fallback for a
 // scenario that names no gridSize of its own.

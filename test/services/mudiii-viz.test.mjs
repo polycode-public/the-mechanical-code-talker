@@ -70,7 +70,7 @@ test("renderMudiiiHtml: the goblins slider is npcCountSlider, 1..10, default 2",
 
 test("renderMudiiiHtml: delay and max-turns sliders match mud.html's own ranges and defaults", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /id="delaySlider" min="80" max="2000" step="20" value="650"/);
+  assert.match(html, /id="delaySlider" min="80" max="2000" step="20" value="220"/);
   assert.match(html, /id="maxTurnsSlider" min="20" max="2000" step="20" value="400"/);
 });
 
