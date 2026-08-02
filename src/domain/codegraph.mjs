@@ -57,6 +57,10 @@ export function moduleCountOf(graph) {
   return graph.individuals.filter((i) => (i.class || "") === "Module").length;
 }
 
+/** What a store with zero modules actually holds, said once so every lane that
+ *  has to decline for that reason declines in the same words. */
+export const NO_CODE_INDEX_NOTE = "This store holds no code index, so it records no modules or commits to look through.";
+
 // ---- relation-kind classifier (for impact + tests-coverage) -------------------
 
 const KINDS = ["imports", "calls", "defines", "tests", "touches", "contains", "inherits", "callsSymbol", "touchesSymbol"];
@@ -1360,7 +1364,13 @@ export function renderTestsFor(graph, ind) {
 }
 
 /** Source modules with no covering test module — a coverage gap view. Test
- *  modules (subjects of test edges, or test-named paths) are excluded. */
+ *  modules (subjects of test edges, or test-named paths) are excluded.
+ *
+ *  "Nothing is uncovered" and "I hold nothing to look at" are opposite
+ *  statements, so the empty survey has to say which one it means: with no
+ *  source module recorded there is no coverage claim to make at all, and the
+ *  full-coverage sentence would be an assertion about a repo this store has
+ *  never seen. */
 export function renderUntested(graph) {
   const covered = new Set();
   const testModules = new Set();
@@ -1368,14 +1378,18 @@ export function renderUntested(graph) {
     covered.add(e.object);
     testModules.add(e.subject);
   }
-  const untested = graph.individuals
-    .filter(
-      (i) =>
-        (i.class || "") === "Module" &&
-        !testModules.has(i.id) &&
-        !isTestPath(String(i.label).toLowerCase()) &&
-        !covered.has(i.id),
-    )
+  const sourceModules = graph.individuals.filter(
+    (i) => (i.class || "") === "Module"
+      && !testModules.has(i.id)
+      && !isTestPath(String(i.label).toLowerCase()),
+  );
+  if (!sourceModules.length) {
+    return moduleCountOf(graph) === 0
+      ? `no modules to check for test coverage in this index. ${NO_CODE_INDEX_NOTE}`
+      : "no source modules to check for test coverage in this index — only test modules are recorded.";
+  }
+  const untested = sourceModules
+    .filter((i) => !covered.has(i.id))
     .map((i) => i.label)
     .sort();
   if (!untested.length) return "every source module has at least one covering test module.";
