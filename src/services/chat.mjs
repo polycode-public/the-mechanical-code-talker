@@ -1425,8 +1425,8 @@ const SESSION_REFERENT_TERMS = new Set([
   "going", "happening", "possible", "available", "supported", "included",
 ]);
 
-/** The term a short "what is X" / "who is X" asks about, or null when the line
- *  isn't that shape or names the session itself.
+/** The term a short "what is X" / "who is X" / "define X" asks about, or null
+ *  when the line isn't that shape or names the session itself.
  *
  *  isConversational's catch-all counts words, so "what is grelb" (three) took
  *  the orientation card while "what is a grelb" (four, one article apart)
@@ -1436,7 +1436,7 @@ const SESSION_REFERENT_TERMS = new Set([
  *  wall; only the closed set above is really about the product. */
 function shortTermQuestionTerm(query) {
   const m = String(query).trim().replace(/[?.!]+\s*$/, "")
-    .match(/^(?:what|who)\s+(?:is|are|was|were)\s+([a-z][\w'-]*)$/i);
+    .match(/^(?:(?:what|who)\s+(?:is|are|was|were)|define|definition\s+of)\s+([a-z][\w'-]*)$/i);
   if (!m) return null;
   const term = m[1].toLowerCase();
   return SESSION_REFERENT_TERMS.has(term) ? null : term;
@@ -7978,6 +7978,15 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // tail, verbatim.
     if (m) metaTerm = stripTrailingScopeFiller(m[1]);
   }
+  // "define X" parses cleanly as the code lane's reverse-defines query, so it
+  // OWNS the turn and the guard above never arms — a person typing "define dog"
+  // at a vocabulary chatbot got told no module matches. Read as a vocabulary
+  // ask only once the code lane has actually missed, so "define parseQuery"
+  // over an indexed repo keeps the module answer it parsed to.
+  if (!metaTerm && miss) {
+    const d = q.match(DEFINE_IMPERATIVE_RE);
+    if (d) metaTerm = stripTrailingScopeFiller(stripTrailingDiscourseTag(d[1].trim()));
+  }
   // An ambiguous parse tie ({ambiguousParse}) reaches this lane with
   // envelope.parsed nulled and miss=false, so NEITHER branch above arms —
   // but when one tied reading is META and memory holds facts for its term
@@ -10898,6 +10907,12 @@ const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
  *  subject or a relation object); with no such facts it returns null and the
  *  turn falls through to the author/relation who-readers unchanged. */
 const WHO_IS_BARE_RE = /^who\s+(?:is|are|was|were)\s+(?:an?\s+|the\s+)?([\w'-]+)[?.!\s]*$/i;
+/** "define X" / "please define a dog" / "definition of X" — the imperative twin
+ *  of "what does X mean". Read as a vocabulary ask only where the code lane has
+ *  already missed, so "define parseQuery" over an indexed repo keeps the module
+ *  answer it parses to. */
+const DEFINE_IMPERATIVE_RE =
+  /^(?:please\s+|can\s+you\s+|could\s+you\s+)*(?:define|definition\s+of|give\s+me\s+the\s+definition\s+of)\s+(?:the\s+(?:term|word)\s+)?(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 
 /** The meta term a "what is a X" / "what is X" / "what does X mean" / "define X"
  *  question asks about — from the parse when present, else recognized directly
@@ -10916,7 +10931,7 @@ function metaTermOf(query, envelope) {
   const q = String(query).trim();
   const m = q.match(BARE_WHATIS_RE)
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
-    || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
+    || q.match(DEFINE_IMPERATIVE_RE);
   return m ? stripTrailingScopeFiller(stripTrailingDiscourseTag(m[1].trim())) : null;
 }
 
@@ -13509,6 +13524,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (fact.generalVerbQuery) {
         deduced = TAUGHT_FACT_LOOKUP_GOAL;
         note(trace, `goal: ${deduced} (revised — a general-verb direct-question fact lookup answered this turn)`);
+      }
+      // Same revision for "define X" answered out of the vocabulary store: the
+      // parsed AST is the code lane's reverse-defines shape, so a goal line read
+      // off it names a module search this turn never made.
+      const definedTerm = !fact.miss && DEFINE_IMPERATIVE_RE.test(String(query).trim())
+        ? metaTermOf(query, null)
+        : null;
+      if (definedTerm) {
+        deduced = deduceGoalFromParsed({ shape: "meta", object: definedTerm });
+        note(trace, `goal: ${deduced} (revised — "define X" answered from the vocabulary store, not the code index)`);
       }
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
