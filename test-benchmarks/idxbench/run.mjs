@@ -55,7 +55,17 @@ const resolveRepoPath = (repo) => (repo.startsWith("/") ? repo : join(ROOT, repo
 // NODE_TEST_CONTEXT-stripping trick test/index/example-fixtures.test.mjs
 // already uses for its own spawned `node --test` child.
 const conformanceCache = new Map();
-const CHILD_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT"));
+// FORCE_COLOR is dropped rather than overridden to "0": Node's own colour decision
+// treats any FORCE_COLOR key as a forced-on signal regardless of its value and then
+// ignores NO_COLOR outright, so the key has to be absent, not falsy. NO_COLOR is then
+// added because a caller's real terminal session can otherwise hand this spawned
+// `node --test` child colour and break the anchored ^ℹ pass/fail regexes below that
+// parse its captured stdout — silently, since the status-code fallback masks it.
+const CHILD_ENV = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT" && k !== "FORCE_COLOR")),
+  NO_COLOR: "1",
+};
 
 async function checkConformance(entities, repoRoot) {
   const tmp = await mkdtemp(join(tmpdir(), "idxbench-conformance-"));
