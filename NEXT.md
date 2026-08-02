@@ -43,8 +43,6 @@ is capped at a single `demo:build` and told to report rather than retry if it fa
   e2e page-order files. Top tier. Status: started.
 - **T29 deck layout** — the map moves inside the control panel at both orientations.
   `mudiii-viz.mjs`. Sonnet. Status: started, uncommitted work in its worktree.
-- **T30 hand-driving, engine half** — `manualMoves` on `runTownSquareTick` and
-  `session.driveAgent`. `predator-prey.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
 
 - **T31 teach mode** — mudiii's own teach lane (sentence table, `planTaughtTownSquareTriple`, the
   gate inside `mudiiiTurn`), then browser legs for adventure's and mud's existing checkbox.
@@ -516,15 +514,20 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** e2e that clicks an unarmed ground cell and asserts the followed agent's facing
   changed while `cellOf` did not, proving a turn rather than a move.
 
-- **The ring of directional controls is not built.** The engine seam is in flight as its own
-  track: a `manualMoves` option on `runTownSquareTick`, validated against the same legality table
-  the planner uses, wrapped as `session.driveAgent(agentId, direction)`. What is still open is the
-  page half — up steps along the facing, down steps back, left and right turn ninety degrees, the
-  diagonals forty-five. It waits for `mudiii-viz.mjs` to come free.
-  **Tier:** Sonnet once the seam exists.
-  **Do:** draw the ring around the view and call `driveAgent`. Land it with the click-to-turn item
-  below, which writes facing through the same predicate, so a clicked turn and a ring turn behave
-  the same way.
+- **The ring of directional controls is not built.** The engine seam has landed.
+  `session.driveAgent(agentId, direction)` returns a whole tick payload plus
+  `driven: { agent, direction, accepted, from, cell, facing }`, so a press draws exactly the way a
+  tick does. The exported `driveRequest(direction, { cell, facing })` resolves a press: `up`/`down`
+  step along or against the facing and leave it alone, `left`/`right` turn ninety on the spot, the
+  diagonals turn forty-five or a hundred and thirty-five, a cardinal steps and faces, an
+  intercardinal turns. A refused press still spends the turn and that agent takes its own move.
+  `mgx:driven-facing` holds while the agent stands still and is outranked by the planner's next step.
+  **What is left is the page half**, which waits on `mudiii-viz.mjs`.
+  **Tier:** Sonnet.
+  **Do:** draw the ring around the view and call `driveAgent`. Land it with the click-to-turn item,
+  which should write facing through the same predicate.
+  **`clipForAction` has no `driven` key**, so a hand-walked agent falls to `idle` and slides without
+  a walk cycle — `kindFor[action] || "idle"`. Add `driven: "walk"` in the same change.
   **Risk:** a press spends a turn and the whole board moves with it. The control has to read that
   way rather than as a free nudge.
 
