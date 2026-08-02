@@ -1,5 +1,5 @@
-// mudiii-viz.mjs — mudiii.html: the one-player town-square demo PLAN_MUD_MUDIII.md
-// describes, over a real three.js scene rather than mud.html's canvas-drawn
+// mudiii-viz.mjs — mudiii.html: the one-player town-square demo, over a real
+// three.js scene rather than mud.html's canvas-drawn
 // room boxes. mud.html's whole control deck carries over unchanged (same
 // ids, same ranges, same defaults — see MUDIII_STYLE and renderMudiiiHtml's
 // own header below for the two sliders' new labels); what mudiii adds is a
@@ -23,27 +23,23 @@
 // the map panel, the HUD, the deck or the chat down with it.
 //
 // Deliberately absent, all P2P (mud.html's #statePill, share/join buttons,
-// the share overlay, the wave button, the compass ring): this is the
-// 1-player page. A later document adds sharing back from the same bundle.
+// the share overlay, the wave button): this is the 1-player page. A later
+// document adds sharing back from the same bundle.
 //
-// Two corrections applied against PLAN_MUD_MUDIII.md's own text (see
-// AGENTS.md/the dispatch brief this track was built from): the page
-// publishes through the ONE `globalThis.tmct` surface (tmct-surface.mjs),
-// never a page-scoped `tmctMudiii` bag; and `createTicker`/`createSerialQueue`
-// are spliced into the page script from viz-ticker.mjs, not carried by the
-// browser entry.
+// The page publishes through the ONE `globalThis.tmct` surface
+// (tmct-surface.mjs), never a page-scoped bag of its own, and
+// `createTicker`/`createSerialQueue` are spliced into the page script from
+// viz-ticker.mjs rather than carried by the browser entry.
 //
-// A THIRD correction, found while wiring the deck's own play control: the
-// brief's "one createTicker per agent" does not fit the engine contract it
-// was written against. `runPredatorPreyTick(memoryDir, opts)` returns
+// One ticker drives the whole world, not one per agent:
+// `runPredatorPreyTick(memoryDir, opts)` returns
 // `{ turn, agents, items, ecology }` for the WHOLE WORLD in one call — it has
 // no per-character entry point the way mud-turn.mjs's `runMudTurn(character,
 // ...)` does, so there is nothing for a second or third ticker to drive that
 // the first one has not already advanced. This page runs ONE shared ticker
 // for the whole simulation, serialized through the same createSerialQueue
-// mud.html uses for its own multi-pane writes; every HUD card still reads
-// its own agent's slice of the one tick result, which is what "per agent"
-// was actually asking for.
+// mud.html uses for its own multi-pane writes; every HUD card reads its own
+// agent's slice of the one tick result.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
   rowsForWorld, appendLogLine, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS,
@@ -54,6 +50,7 @@ import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
 } from "./pill-complete.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { DEFAULT_FACING, DEFAULT_GRID_SIZE } from "../domain/town-square-world.mjs";
 import { believedFactSentence } from "./mudiii-turn.mjs";
 
 // The scene module and this one import each other: this file embeds the
@@ -79,11 +76,10 @@ const NPC_COUNT_LABELLED = [1, 5, 10];
 const DEFAULT_NPC_COUNT = 2;
 const DEFAULT_DELAY_MS = 220;
 const DEFAULT_MAX_TURNS = 400;
-// test/fixtures/mudiii-ticks.json's own board size — the fallback for a
-// scenario that names no gridSize of its own.
-const DEFAULT_GRID_SIZE = 12;
-const DEFAULT_FACING = "south";
 const CAMERA_MODES = ["follow", "pov", "overhead"];
+// Every export below except renderMudiiiHtml is spliced by `.toString()` into
+// a generated script that shares no scope with this module, so none of them
+// may read a binding declared up here. mudiii-viz.test.mjs holds the line.
 // The ring reads ABSOLUTE, not relative to whichever way an agent happens to
 // face: every other direction word on this page is a compass point (a told
 // fact says "the goblin is east", the map is north-up), and driveRequest takes
@@ -221,6 +217,48 @@ export function occupiedCells(agents, items) {
   return cells;
 }
 
+/** Who and what stands where right now, as `{ subject, cell }[]` sorted by
+ *  subject — the edit panel's own read of a fact list that carries the whole
+ *  tape rather than a board.
+ *
+ *  The engine stamps each turn's placement row `<id>@turn<N>`, or
+ *  `<id>@epoch<E>@turn<N>` once a reset has moved the epoch on, so a raw
+ *  `mgx:currently-in` sweep returns one row per agent per turn played. This
+ *  folds them to the latest row per base subject by `(epoch, turn)`, the same
+ *  order the engine's own fold ranks by. A bare subject is the world's
+ *  authored placement — every prop is one — and ranks below any stamped row
+ *  for the same base rather than competing with it.
+ *
+ *  Anything carrying `mgx:eaten-by` or `mgx:starved` is dropped: it stood
+ *  somewhere once, and the panel is asked where things stand now. Pure,
+ *  self-contained. */
+export function currentPlacementsFrom(rows) {
+  const STAMP = /^(.*?)(?:@epoch(\d+))?@turn(\d+)$/;
+  const latest = new Map();
+  const gone = new Set();
+  for (const row of rows || []) {
+    if (!row || !row.subject) continue;
+    const match = STAMP.exec(String(row.subject));
+    const base = match ? match[1] : String(row.subject);
+    if (row.predicate === "mgx:eaten-by" || row.predicate === "mgx:starved") {
+      gone.add(base);
+      continue;
+    }
+    if (row.predicate !== "mgx:currently-in") continue;
+    const epoch = match ? Number(match[2] || 0) : -1;
+    const turn = match ? Number(match[3]) : -1;
+    const prior = latest.get(base);
+    if (prior && (prior.epoch > epoch || (prior.epoch === epoch && prior.turn > turn))) continue;
+    latest.set(base, { epoch, turn, cell: row.object });
+  }
+  const placements = [];
+  for (const [subject, entry] of latest) {
+    if (!gone.has(subject)) placements.push({ subject, cell: entry.cell });
+  }
+  placements.sort((a, b) => a.subject.localeCompare(b.subject));
+  return placements;
+}
+
 /** Why a click-to-move or a food placement on `cell` would be refused, or
  *  null when it is clear — `"cell-4-3 is blocked"`, worded once so both the
  *  3D raycast click and a typed "go there" chat verb read the same refusal.
@@ -254,8 +292,13 @@ export function blockedCellReason(cell, props, agents) {
  *  name, spliced alongside it. */
 export function cameraRigFor(mode, agent, gridSize) {
   const cellSize = 1;
+  // Both fallbacks are written out rather than read from this module's own
+  // constants: the browser runs a `.toString()` copy of this function in a
+  // script that declares neither, and the drive ring's diagonals set exactly
+  // the intercardinal facing that reaches the second one.
+  const FALLBACK_GRID_SIZE = 12;
   if (mode === "overhead") {
-    const height = Math.max(4, Number(gridSize) || DEFAULT_GRID_SIZE) * 1.4;
+    const height = Math.max(4, Number(gridSize) || FALLBACK_GRID_SIZE) * 1.4;
     return { mode: "overhead", position: { x: 0, y: height, z: 0 }, lookAt: { x: 0, y: 0, z: 0 } };
   }
   if (!agent || !agent.cell) return null;
@@ -264,7 +307,7 @@ export function cameraRigFor(mode, agent, gridSize) {
   const FACING_VECTOR = {
     north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, east: { x: 1, z: 0 }, west: { x: -1, z: 0 },
   };
-  const dir = FACING_VECTOR[agent.facing] || FACING_VECTOR[DEFAULT_FACING];
+  const dir = FACING_VECTOR[agent.facing] || FACING_VECTOR.south;
   if (mode === "pov") {
     return {
       mode: "pov",
@@ -318,6 +361,28 @@ export function nextCameraSelection(prev, agents, ecology) {
     mode: "overhead", selectedId: null,
     status: `${current.selectedId} left the board — switching to overhead`,
   };
+}
+
+/** What one press on a camera-mode button should do, as
+ *  `{ mode, selectedId, status }`.
+ *
+ *  `overhead` needs nobody and keeps whatever was selected, so switching back
+ *  to `follow` resumes the same agent. The other two need one, and after a
+ *  fallback there is none: the agent that was followed has been eaten and the
+ *  selection was cleared. The dropdown, meanwhile, still lists the survivors
+ *  and shows its first one, so a press that did nothing left the deck naming
+ *  an agent the camera was not on. `offered` is that dropdown value, and a
+ *  press adopts it when it is still live.
+ *
+ *  With nobody left to adopt the press stays overhead and says why, rather
+ *  than lighting a button over a camera that did not move. `liveIds` is this
+ *  turn's roster. Pure, self-contained. */
+export function cameraSelectionForMode(mode, selectedId, offered, liveIds) {
+  const live = liveIds || [];
+  if (mode === "overhead") return { mode: "overhead", selectedId: selectedId || null, status: null };
+  if (selectedId && live.indexOf(selectedId) !== -1) return { mode, selectedId, status: null };
+  if (offered && live.indexOf(offered) !== -1) return { mode, selectedId: offered, status: null };
+  return { mode: "overhead", selectedId: null, status: "nobody left to follow — staying overhead." };
 }
 
 /** Every agent and item's own dot for the 2D top-down map panel, as
@@ -1001,9 +1066,11 @@ function pageScript() {
   const cellFromGroundPoint = ${cellFromGroundPoint.toString()};
   const propPlacementsFrom = ${propPlacementsFrom.toString()};
   const occupiedCells = ${occupiedCells.toString()};
+  const currentPlacementsFrom = ${currentPlacementsFrom.toString()};
   const blockedCellReason = ${blockedCellReason.toString()};
   const cameraRigFor = ${cameraRigFor.toString()};
   const nextCameraSelection = ${nextCameraSelection.toString()};
+  const cameraSelectionForMode = ${cameraSelectionForMode.toString()};
   const mapDotsFor = ${mapDotsFor.toString()};
   const mapBlocksFor = ${mapBlocksFor.toString()};
   const hudCardFieldsFor = ${hudCardFieldsFor.toString()};
@@ -1502,8 +1569,13 @@ function pageScript() {
     const btn = e.target.closest("button[data-mode]");
     if (!btn) return;
     cameraModeBeforeFallback = null;
-    camera = { mode: btn.getAttribute("data-mode"), selectedId: camera.selectedId, status: null };
+    camera = cameraSelectionForMode(
+      btn.getAttribute("data-mode"), camera.selectedId, el("agentSelect").value, Object.keys(agentsById),
+    );
     renderCameraButtons();
+    renderAgentSelect();
+    renderDriveRing();
+    setSceneStatus(camera.status || "");
     sendCameraToScene(camera);
   });
 
@@ -1584,15 +1656,10 @@ function pageScript() {
   let allStoreRows = [];
 
   function renderEditPlacements() {
-    const placements = {};
-    for (const row of editRows) {
-      if (row.predicate !== "mgx:currently-in") continue;
-      placements[row.subject] = row.object;
-    }
-    const subjects = Object.keys(placements).sort();
-    el("editPlacements").innerHTML = subjects.length
-      ? subjects.map(function (s) {
-        return '<div class="edit-placement-row"><span class="mono">' + esc(s) + '</span><span>' + esc(placements[s]) + "</span></div>";
+    const placements = currentPlacementsFrom(editRows);
+    el("editPlacements").innerHTML = placements.length
+      ? placements.map(function (p) {
+        return '<div class="edit-placement-row"><span class="mono">' + esc(p.subject) + '</span><span>' + esc(p.cell) + "</span></div>";
       }).join("")
       : '<span class="edit-empty">nothing placed yet</span>';
   }

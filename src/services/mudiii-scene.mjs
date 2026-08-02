@@ -11,11 +11,8 @@
 // this file renders is a read of one of those two — never a second, locally
 // invented notion of where an agent stands.
 //
-// PLAN_MUD_MUDIII.md's own render-layer section is corrected in two places
-// this file follows rather than the doc's original text: GLTFLoader ships in
-// the vendor bundle (handles KHR_mesh_quantization and EXT_texture_webp
-// natively; only EXT_meshopt_compression needs a decoder line), and there is
-// no globalThis.tmctMudiii — pages publish one globalThis.tmct.
+// GLTFLoader ships in the vendor bundle, and handles KHR_mesh_quantization and
+// EXT_texture_webp natively; only EXT_meshopt_compression needs a decoder line.
 //
 // The page-shell <-> scene handshake, since the two scripts share no scope:
 //   - the page shell already defines `window.mudiiiHandleSceneClick(cellId)`
@@ -100,8 +97,11 @@ export function tweenStep(tween, now) {
   return { ...point, t, done: false };
 }
 
-/** A fresh tween from `from` to `to`, starting at `now`. Pure. */
-export function startTween(from, to, now, durationMs = TWEEN_DURATION_MS) {
+/** A fresh tween from `from` to `to`, starting at `now`. Pure — the default
+ *  duration is written out rather than read from `TWEEN_DURATION_MS`, because
+ *  the browser runs a `.toString()` copy of this function in a script that
+ *  declares no such binding. mudiii-viz.test.mjs holds the two together. */
+export function startTween(from, to, now, durationMs = 250) {
   return { from, to, startedAt: now, durationMs };
 }
 
@@ -111,7 +111,7 @@ export function startTween(from, to, now, durationMs = TWEEN_DURATION_MS) {
  *  tweening); `to` is the new destination point. Pure — `tweenStep` is
  *  called on the OLD tween at `now` to read the current position before
  *  building the new one. */
-export function reseedTween(existingTween, to, now, durationMs = TWEEN_DURATION_MS) {
+export function reseedTween(existingTween, to, now, durationMs = 250) {
   const current = existingTween ? tweenStep(existingTween, now) : null;
   const from = current ? Object.fromEntries(Object.keys(to).map((k) => [k, current[k]])) : to;
   return startTween(from, to, now, durationMs);
@@ -168,6 +168,29 @@ export function lookTargetWithOffset(position, lookAt, offset) {
   };
 }
 
+/** The town square's own sky, as gradient stops running from straight up
+ *  (`at` 0) to straight down (`at` 1), each `{ at, color }`.
+ *
+ *  The colours are the page's own `--square-sky`, `--square-horizon`,
+ *  `--square-stone` and `--square-stone-dark`, in the order the page body's
+ *  own background already reads them, so the canvas continues the page it
+ *  sits in rather than cutting a dark hole in it. The board is twelve units
+ *  across with nothing beyond it, so a camera aimed anywhere off it — the
+ *  opening follow shot, an overhead orbit, a long look-drag in POV — is
+ *  looking at this and nothing else.
+ *
+ *  The band sits at 0.5 because that is the horizon in an equirectangular
+ *  projection, where the caller maps these onto a sphere. Pure,
+ *  self-contained. */
+export function skyGradientStops() {
+  return [
+    { at: 0, color: "#BFE3F0" },
+    { at: 0.46, color: "#E9D9B6" },
+    { at: 0.52, color: "#8C8172" },
+    { at: 1, color: "#59503F" },
+  ];
+}
+
 /** A facing word to a Y rotation in radians. Assumes a model's own local
  *  forward is +Z (true for fox and goblin, the two rigs in the current
  *  manifest, checked by walking each GLB's own bind-pose bone chain) so a
@@ -182,7 +205,7 @@ export function yawForFacing(facing) {
 /** Whether `agentId` (predator or prey) currently believes an agent of the
  *  opposing role — the one belief-derived bit that separates a predator's
  *  "chase" rung from "wander", and a prey's "evade" rung from "forage"/
- *  "wander" (PLAN_MUD_MUDIII.md's own priority chains). Read entirely off
+ *  "wander". Read entirely off
  *  the tick payload's own `role`/`belief` fields — no rung name travels on
  *  the wire, so this reconstructs which rung applied rather than trusting a
  *  label. Pure. */
@@ -358,6 +381,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var reseedTween = ${reseedTween.toString()};
   var chebyshevDistanceBetweenCells = ${chebyshevDistanceBetweenCells.toString()};
   var lookTargetWithOffset = ${lookTargetWithOffset.toString()};
+  var skyGradientStops = ${skyGradientStops.toString()};
   var yawForFacing = ${yawForFacing.toString()};
   var threatEngagedFor = ${threatEngagedFor.toString()};
   var movementRungFor = ${movementRungFor.toString()};
@@ -469,9 +493,30 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     return true;
   }
 
+  // Equirectangular, not a flat screen-space backdrop: three maps this onto a
+  // sphere around the camera, so the horizon stays put as the visitor turns
+  // instead of sliding with the view. Eight pixels wide is enough for a
+  // gradient with no horizontal variation, and wraps with no seam.
+  function buildSkyTexture() {
+    var swatch = document.createElement("canvas");
+    swatch.width = 8;
+    swatch.height = 256;
+    var ctx = swatch.getContext("2d");
+    var gradient = ctx.createLinearGradient(0, 0, 0, swatch.height);
+    var stops = skyGradientStops();
+    for (var i = 0; i < stops.length; i += 1) gradient.addColorStop(stops[i].at, stops[i].color);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, swatch.width, swatch.height);
+    var texture = new THREE.CanvasTexture(swatch);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
   function setUpScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x10161b);
+    scene.background = buildSkyTexture();
     camera3 = new THREE.PerspectiveCamera(55, (canvas.clientWidth || 640) / Math.max(1, canvas.clientHeight || 360), 0.1, 500);
     camera3.position.set(0, 8, 8);
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });

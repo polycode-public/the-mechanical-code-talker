@@ -11,9 +11,12 @@
 // manifest), so these tests need no engine build at all.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { DEFAULT_GRID_SIZE } from "../../src/domain/town-square-world.mjs";
+import { TWEEN_DURATION_MS, startTween, reseedTween } from "../../src/services/mudiii-scene.mjs";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
-  propPlacementsFrom, occupiedCells, blockedCellReason, cameraRigFor, nextCameraSelection,
+  propPlacementsFrom, occupiedCells, currentPlacementsFrom, blockedCellReason, cameraRigFor, nextCameraSelection, cameraSelectionForMode,
   mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
@@ -951,4 +954,183 @@ test("renderMudiiiHtml: the belief summary is capped, and the full list comes fr
   assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
   assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
   assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
+});
+
+const LIVE = ["fox-2", "goblin-3", "goblin-4"];
+
+test("cameraSelectionForMode: overhead needs nobody and keeps the selection to come back to", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("overhead", "goblin-3", "goblin-3", LIVE),
+    { mode: "overhead", selectedId: "goblin-3", status: null },
+  );
+});
+
+test("cameraSelectionForMode: a live selection is kept as it stands", () => {
+  for (const mode of ["follow", "pov"]) {
+    assert.deepEqual(
+      cameraSelectionForMode(mode, "goblin-3", "fox-2", LIVE),
+      { mode, selectedId: "goblin-3", status: null },
+    );
+  }
+});
+
+test("cameraSelectionForMode: with nothing selected the press adopts the agent the deck is showing", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("follow", null, "goblin-4", LIVE),
+    { mode: "follow", selectedId: "goblin-4", status: null },
+  );
+});
+
+test("cameraSelectionForMode: an agent that has left the board is replaced, not followed", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("pov", "goblin-1", "fox-2", LIVE),
+    { mode: "pov", selectedId: "fox-2", status: null },
+  );
+});
+
+test("cameraSelectionForMode: with nobody to follow the press says so instead of lighting a dead button", () => {
+  const answer = cameraSelectionForMode("follow", "goblin-1", "goblin-1", []);
+  assert.equal(answer.mode, "overhead");
+  assert.equal(answer.selectedId, null);
+  assert.match(answer.status, /nobody left to follow/);
+});
+
+test("renderMudiiiHtml: a camera-mode press redraws the follow controls with it", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const cameraSelectionForMode = /, "the rule is spliced into the page script");
+  assert.match(
+    html,
+    /camera = cameraSelectionForMode\(\s*btn\.getAttribute\("data-mode"\), camera\.selectedId, el\("agentSelect"\)\.value, Object\.keys\(agentsById\),\s*\);/,
+    "and the press runs through it, against the deck's own value",
+  );
+  assert.match(html, /renderCameraButtons\(\);\s*renderAgentSelect\(\);\s*renderDriveRing\(\);/, "the dropdown and the ring follow the camera");
+});
+
+const PLACE = (subject, object) => ({ subject, predicate: "mgx:currently-in", object });
+
+test("currentPlacementsFrom: one row per subject, the latest turn, not the whole tape", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([
+      PLACE("fox-1@turn0", "cell-7-7"),
+      PLACE("fox-1@turn1", "cell-7-6"),
+      PLACE("fox-1@turn2", "cell-8-6"),
+      PLACE("goblin-1@turn2", "cell-2-2"),
+    ]),
+    [{ subject: "fox-1", cell: "cell-8-6" }, { subject: "goblin-1", cell: "cell-2-2" }],
+  );
+});
+
+test("currentPlacementsFrom: rows out of order still fold to the latest turn", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("fox-1@turn9", "cell-1-1"), PLACE("fox-1@turn3", "cell-5-5")]),
+    [{ subject: "fox-1", cell: "cell-1-1" }],
+  );
+});
+
+test("currentPlacementsFrom: a later epoch outranks a higher turn in an earlier one", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([
+      PLACE("fox-1@turn40", "cell-1-1"),
+      PLACE("fox-1@epoch1@turn2", "cell-9-9"),
+    ]),
+    [{ subject: "fox-1", cell: "cell-9-9" }],
+  );
+});
+
+test("currentPlacementsFrom: a prop's bare row stands, and any stamped row for it wins", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("well-1", "cell-6-7"), PLACE("stall-1", "cell-4-3")]),
+    [{ subject: "stall-1", cell: "cell-4-3" }, { subject: "well-1", cell: "cell-6-7" }],
+  );
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("stall-1", "cell-4-3"), PLACE("stall-1@turn0", "cell-5-3")]),
+    [{ subject: "stall-1", cell: "cell-5-3" }],
+  );
+});
+
+test("currentPlacementsFrom: what has been eaten or has starved no longer stands anywhere", () => {
+  const rows = [
+    PLACE("goblin-1@turn4", "cell-2-2"),
+    PLACE("crumb-1@turn1", "cell-3-3"),
+    PLACE("fox-2@turn4", "cell-8-8"),
+    { subject: "goblin-1@turn5", predicate: "mgx:eaten-by", object: "fox-1" },
+    { subject: "fox-2@turn6", predicate: "mgx:starved", object: "true" },
+  ];
+  assert.deepEqual(currentPlacementsFrom(rows), [{ subject: "crumb-1", cell: "cell-3-3" }]);
+});
+
+test("currentPlacementsFrom: no rows, no placements", () => {
+  assert.deepEqual(currentPlacementsFrom([]), []);
+  assert.deepEqual(currentPlacementsFrom(null), []);
+});
+
+test("renderMudiiiHtml: the edit panel folds the tape rather than printing it", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const currentPlacementsFrom = /, "the fold is spliced into the page script");
+  assert.match(html, /const placements = currentPlacementsFrom\(editRows\);/);
+});
+
+// Every export of these two modules except the page/script builder is spliced
+// by `.toString()` into a generated inline script that shares no scope with
+// its own module. A spliced function that reads a module-level binding runs
+// fine in Node, where the binding is in scope, and throws a ReferenceError the
+// moment the browser copy reaches the line — so the check has to read the
+// source text rather than the Node-side behaviour.
+const SPLICE_HOSTS = [
+  { path: "../../src/services/mudiii-viz.mjs", builder: "renderMudiiiHtml" },
+  { path: "../../src/services/mudiii-scene.mjs", builder: "mudiiiSceneScript" },
+];
+
+function topLevelConstNames(source) {
+  return [...source.matchAll(/^(?:export )?const ([A-Za-z_$][\w$]*)\s*=/gm)].map((m) => m[1]);
+}
+
+for (const host of SPLICE_HOSTS) {
+  const label = host.path.split("/").pop();
+  test(`${label}: no spliced export closes over a module-level constant`, async () => {
+    const url = new URL(host.path, import.meta.url);
+    const source = await readFile(url, "utf8");
+    const declared = topLevelConstNames(source);
+    assert.ok(declared.length, "the host module declares constants worth guarding against");
+    const module = await import(url.href);
+    const leaks = [];
+    for (const [name, value] of Object.entries(module)) {
+      if (typeof value !== "function" || name === host.builder) continue;
+      for (const constant of declared) {
+        if (new RegExp(`\\b${constant}\\b`).test(value.toString())) leaks.push(`${name} reads ${constant}`);
+      }
+    }
+    assert.deepEqual(leaks, [], "a spliced function must carry its own fallbacks");
+  });
+}
+
+test("the tween helpers' own default duration agrees with the named one", () => {
+  assert.equal(startTween({ x: 0 }, { x: 1 }, 0).durationMs, TWEEN_DURATION_MS);
+  assert.equal(reseedTween(null, { x: 1 }, 0).durationMs, TWEEN_DURATION_MS);
+});
+
+test("cameraRigFor: its own grid fallback agrees with the world's default board size", () => {
+  assert.deepEqual(
+    cameraRigFor("overhead", null, undefined),
+    cameraRigFor("overhead", null, DEFAULT_GRID_SIZE),
+  );
+});
+
+test("cameraRigFor: an intercardinal facing rigs south rather than failing", () => {
+  const south = cameraRigFor("follow", { cell: "cell-3-3", facing: "south" }, 12);
+  for (const facing of ["northeast", "southeast", "southwest", "northwest", undefined, null]) {
+    assert.deepEqual(
+      cameraRigFor("follow", { cell: "cell-3-3", facing }, 12), south,
+      `a ${facing} facing falls back to the default rather than throwing`,
+    );
+  }
+});
+
+test("cameraRigFor: the spliced copy survives an intercardinal facing in a bare scope", () => {
+  const spliced = new Function(
+    `${cellToWorld.toString()}\n${cameraRigFor.toString()}\nreturn cameraRigFor;`,
+  )();
+  assert.doesNotThrow(() => spliced("follow", { cell: "cell-3-3", facing: "northeast" }, 12));
+  assert.doesNotThrow(() => spliced("pov", { cell: "cell-3-3" }, 12));
+  assert.doesNotThrow(() => spliced("overhead", null, undefined));
 });

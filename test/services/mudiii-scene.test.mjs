@@ -19,7 +19,7 @@ import {
   TWEEN_DURATION_MS, lerp, tweenStep, startTween, reseedTween,
   chebyshevDistanceBetweenCells, lookTargetWithOffset, yawForFacing, threatEngagedFor, movementRungFor,
   currentActionFor, flourishForEcologyEvent, createConcurrencyQueue, createCachedLoader,
-  createThreeVendorLoader,
+  createThreeVendorLoader, skyGradientStops,
 } from "../../src/services/mudiii-scene.mjs";
 
 // A verbatim local copy of mudiii-viz.mjs's own clipForAction, for the one
@@ -469,4 +469,46 @@ test("mudiiiSceneScript falls back to a default grid size and cell size for miss
   const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus" });
   assert.match(script, /GRID_SIZE = 12/, "gridSize defaults rather than baking in a nonsense value");
   assert.match(script, /CELL_SIZE = 1/);
+});
+
+test("skyGradientStops: stops run zenith to nadir, in order, spanning the whole sphere", () => {
+  const stops = skyGradientStops();
+  assert.ok(stops.length >= 3, "a sky, a horizon and the ground haze under it");
+  assert.equal(stops[0].at, 0, "the first stop is straight up");
+  assert.equal(stops[stops.length - 1].at, 1, "the last is straight down, so no band is left unpainted");
+  for (let i = 1; i < stops.length; i += 1) {
+    assert.ok(stops[i].at > stops[i - 1].at, "every stop sits below the one before it");
+  }
+  for (const stop of stops) assert.match(stop.color, /^#[0-9A-Fa-f]{6}$/);
+});
+
+test("skyGradientStops: the horizon band sits where a sphere puts the horizon", () => {
+  const stops = skyGradientStops();
+  const above = stops.filter((s) => s.at < 0.5);
+  const below = stops.filter((s) => s.at > 0.5);
+  assert.ok(above.length && below.length, "the band is crossed rather than sitting at one end");
+  assert.ok(0.5 - above[above.length - 1].at < 0.1, "and the crossing is tight enough to read as a horizon");
+});
+
+test("skyGradientStops: the colours are the page's own sky, horizon and stone tokens", async () => {
+  const { renderMudiiiHtml } = await import("../../src/services/mudiii-viz.mjs");
+  const html = renderMudiiiHtml({ worldPayload: { name: "town-square", facts: [], rules: [] }, agents: [] });
+  for (const stop of skyGradientStops()) {
+    assert.ok(
+      html.includes(stop.color),
+      `${stop.color} is one of the page's own custom properties, so the canvas continues the page`,
+    );
+  }
+});
+
+test("mudiiiSceneScript paints a sphere of sky rather than a flat colour behind the board", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /scene\.background = buildSkyTexture\(\);/);
+  assert.match(script, /var skyGradientStops = /, "the stops are spliced, not re-typed in the browser copy");
+  assert.match(
+    script, /texture\.mapping = THREE\.EquirectangularReflectionMapping;/,
+    "a sphere, so the horizon holds still while the visitor turns",
+  );
+  assert.ok(!/new THREE\.Color\(0x10161b\)/.test(script), "the flat slate backdrop is gone");
 });
