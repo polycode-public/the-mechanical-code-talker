@@ -36,8 +36,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Three tracks running. Sixteen have merged. `2b64f3e2` was pushed with the suite green at 5886/5886;
 the fox fix has merged since and is not pushed yet.
 
-- **T17 spider-fly migration** — `spider-fly*.mjs`, `predator-prey.mjs`, spider-fly's viz layer and
-  corpus rows. Top tier. Status: started.
 - **T19 hay-bale food render** — `mudiii-scene.mjs` and its two test files. Sonnet.
   Status: started.
 
@@ -616,43 +614,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   reusing the `nextCameraSelection` fallback status pattern.
   **Mitigation:** a screenshot check is enough; there is no new fact path to unit-test.
 
-- **spider-fly still has its own engine.** MUDIII was built role-parameterized from day one so
-  spider-fly could move onto it; spider-fly was left untouched to keep the regression surface small
-  while MUDIII was being built.
-  **Tier:** top, and a sequence of changes rather than one change.
-  **Do:** the gap is wider than "keep webs, delete the duplicate". `spider-fly.mjs` has three
-  mechanics `predator-prey.mjs` has no counterpart for. Carrying: a spider that catches a fly carries
-  it (`mgx:carrying`) toward the nearest active web via `planSpiderPathToWeb` and only eats while
-  standing in one, a priority-0 rung that overrides avoid and chase, against the shared engine's
-  single immediate co-location eat. Active webs: `hasActiveWebAt`, the static `isInWebBlock` check,
-  dynamic web-building on the hold rung, and `liveWebs` for the renderer, with no `web-N` subject or
-  `mgx:web-built-at-turn` anywhere in `predator-prey.mjs`. Reproduction: egg-laying
-  (`mgx:laid-at-turn`, mass-gated and web-gated) and hatching (`mgx:hatched-into`, splitting mass
-  across `eggHatchCount` with a floor), a whole ecology stage against the shared engine's
-  population-cap perimeter arrivals. Spider-vs-spider avoidance (`greedySpiderAvoid`) does transfer
-  cleanly; it is already what the shared avoid rung does.
-  Two more mismatches move replay output rather than behaviour. `predator-prey.mjs`'s own header says
-  it deliberately does not reuse spider-fly's greedy `@turn(\d+)$` snapshot regex (wrong once a
-  recast produces `id@epoch2@turn3`) or `mgx:mass` (unlisted in the contradiction-policy table;
-  `mgx:hasMass` is the listed predicate). And the seed keys differ,
-  `${WORLD_NAME}:${turn}:${id}:${purpose}` against `${layoutName}:${epoch}:${turn}:${id}:${purpose}`,
-  which draws different `mulberry32` values even at epoch 0 for every wander and spawn.
-  So the sequence is: add carrying, web-gated eating and egg/hatch to `predator-prey.mjs` as opt-in
-  features so fox and goblin do not gain them by accident; reconcile the mass predicate and the
-  snapshot subject shape; reconcile the seed key; only then delete `spider-fly.mjs` and repoint
-  `spider-fly-turn.mjs` and spider-fly's viz layer.
-  **The operator's decision: do it, and do not freeze a fixture first.** Build it straight through
-  the sequence above. Spider-fly's own test file and its corpus rows are the contract; a seed-key
-  change moves their expected output, and that output gets updated to whatever the migrated engine
-  really produces.
-  **Risk:** `test/services/spider-fly.test.mjs` and the spider-fly corpus rows are the must-not-move
-  contract. The seed-key change alone moves spider-fly's output without touching a single assertion
-  the migration author wrote, because the affected assertions live in the corpus and that test file.
-  **Mitigation:** freeze a fixture first, the way `PLAN_MUD_MUDIII.md`'s delivery section prescribes.
-  Record N ticks of `spider-fly.mjs`'s real output (agents, ecology events, writes) over a fixed seed
-  before any migration code is written, then diff the migrated engine's output turn for turn. "The
-  tests still pass" is not the check.
-
 ### Teach mode
 
 - **mudiii.html has no teach mode, and there is no engine content to wire one to.** adventure.html
@@ -711,6 +672,14 @@ until it does. Then the grid-size item, because the deception rail and the map p
   because nothing has been pushed.
   **Tier:** none. It closes on the next green pipeline.
   **Do:** confirm both jobs pass on the push that clears the red suite. If they do, delete this item.
+
+- **`PLAN_SPIDER_FLY.md §N` citations sit in comments in two files.** `spider-fly-world.mjs` and
+  `spider-fly-viz.mjs` cite a plan doc from inside code comments, which this repo's own rules
+  forbid because the reference rots once the doc is archived or renamed. Pre-existing, not new
+  drift.
+  **Tier:** Haiku. A comment-only sweep.
+  **Do:** delete the citations, keeping whatever non-obvious why each comment actually carries.
+  **Risk:** none. A comment-only diff takes the reference-sweep gate, not the full suite.
 
 - **Stale header comments in `mudiii-browser-entry.mjs`, `mudiii-viz.mjs` and `mudiii-scene.mjs`.**
   They say sibling modules "do not exist in every worktree yet"; all are on `main`.
