@@ -2,6 +2,7 @@
 
 **Consumer in repo:** `src/adapters/memory/core.mjs` (`appendFacts`, `readFactRows`, `removeFacts`),
 `src/domain/memory/compaction.mjs`, `src/domain/memory/retraction.mjs`,
+`src/domain/memory/causal-stability.mjs`,
 `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
 `rulingTestimonyClaim`), `PLAN_MUD_WEBRTC.md`.
@@ -249,6 +250,153 @@ and max of the instant it carries. Neither hides a tag. The compaction summary k
 absorbed in the citation; the retraction record keeps the tags of what it suppressed, so the store's
 account of what it was told stays complete.
 
+## Retiring a tombstone: what causal stability needs, and what this mesh has
+
+Two records here work by staying put. A retraction record carries the record ids it suppressed, and
+a peer that re-delivers one of those ids gets refused. A compaction rollup does the same for the
+sources it absorbed. That is what makes a delete survive a sync over a grow-only set, and it is why
+both accumulate. Nothing yet says when one has done its job.
+
+The literature calls the missing rule **causal stability**. A record is safe to drop once every
+replica that could still send a conflicting copy has it. Baquero, Almeida and Shoker's *Pure
+Operation-Based Replicated Data Types* (CoRR arXiv:1710.04469, 2017) is the one to read first: its
+PO-Log discards per-operation metadata exactly when a stability check over a per-replica vector says
+the operation is known everywhere. The ancestor is Wuu and Bernstein, *Efficient solutions to the
+replicated log and dictionary problems*, PODC 1984, whose two-dimensional time table answers the
+same question for a log. Neither was re-checked against a primary source in this entry's
+verification pass, so treat both as leads rather than as pinned citations.
+
+Every version of the rule needs two inputs: who the replicas are, and what each of them has
+received. This mesh has the first and none of the second.
+
+### What the mesh knows about its own membership
+
+Three separate notions, and only one is durable and replicated.
+
+| notion | where it lives | durable | replicated | what it answers |
+|---|---|---|---|---|
+| the peer map | `peers` in `p2p-room.mjs`'s closure | no, per page session | no | who this node has a channel to right now |
+| the node id | `node-id.json` beside the store (a handle field in memory, a `meta` row in SQLite) | yes | never, by design | what this store calls itself |
+| the admission graph | `node:<joiner> mgx:invitedBy node:<inviter>` facts | yes | yes, like any fact | every node this world has ever admitted |
+
+**The peer map is session state.** `myPeerId` is a UUID minted per page load. The map fills from
+`hello`, and a closed channel is marked `connected: false` rather than deleted, so it survives a
+disconnect inside one session. A reload starts it empty. Nothing writes it to the store.
+
+**The admission graph is a real roster.** `recordInviteEdge` writes one edge per join, on the
+joiner's own store, keyed on node ids rather than peer ids. It is an ordinary fact, so it merges by
+union, and both sync filters carry it: chat's admits it through the `operator` kind on its `ace:p2p:`
+tag, mud's through `P2P_PREDICATES`. Union the node terms at both ends of every edge and you get a
+grow-only set of node ids that every peer holding the same facts computes identically.
+`admittedNodes` in `causal-stability.mjs` is that fold. Grow-only is the right shape here. A roster
+that could shrink would let a forgotten node's stale copy back in.
+
+Four gaps in the roster, all worth knowing before a rule leans on it:
+
+- A world nobody has joined yet has an empty roster. The first inviter appears only once somebody
+  joins it.
+- An invite blob from a build that predates the `node` field records no edge, so a node admitted
+  that way is invisible to the fold.
+- Nothing records a departure. There is no leave message and no eviction.
+- `resolveStoreNodeId` keeps whatever id the store already holds, so a copied store puts two live
+  claims on one roster entry.
+
+**Acknowledgement does not exist yet.** No message carries an ack. `op` and `sync-response` are
+fire-and-forget, `sync-request` carries no cursor, and there is no version vector anywhere.
+`seenProvenanceById` and `seenRetractionValueById` are the local send-diff baseline. They record what
+this node has broadcast, never what a peer received.
+
+It cannot be inferred from today's traffic either, and the reason is narrow enough to fix. A peer
+answering a sync request does re-emit every retraction it holds, which is real evidence that it holds
+them. But no message identifies the sender's node. `hello` carries `peerId` and `displayName`. `op`
+carries `from: <peerId>`, a per-session UUID. `sync-response` carries no sender at all. The
+retraction's own provenance tags name its author, not whoever relayed it. So "node X holds tombstone
+T" is not derivable from any byte currently on the wire.
+
+That is the hinge. The roster half is built and replicating. The acknowledgement half needs one field
+on the wire before any rule can fire.
+
+### The options, and what each costs
+
+| rule | what it needs | what it costs | verdict |
+|---|---|---|---|
+| drop a tombstone after a fixed age | a clock | breaks the pure-function-of-the-set invariant, and the offline peer defeats it | rejected |
+| drop once every currently connected peer has it | the peer map | reads a closed tab as a departure | rejected |
+| drop once every admitted node has it | the roster plus an acknowledgement | one wire field, one sidecar | the route |
+| fold tombstones together rather than dropping them | nothing new | fewer records, all the same ids | not a retirement rule |
+
+**The age rule is the tempting one, and it is the one to refuse.** It needs nothing built. It fails
+twice. First, the answer would depend on when you ask and whose clock you ask on, so two peers
+holding an identical fact set would fold it differently. `foldWorldState` already taught this repo
+that lesson once. Second, a peer offline across the window is the exact case it gets wrong.
+Everybody else forgets, the peer comes back with a copy that predates the retraction, and the fact
+returns. That failure is silent, it arrives late, and it reads as the memory inventing something.
+
+**The live-peer rule fails the same way in fewer steps.** A browser tab closes and the peer map marks
+that peer away. Nothing tells it apart from a peer that left for good.
+
+**Folding tombstones together is worth naming because it looks like retirement.** Several per-source
+retraction records over one triple could merge into one. That shrinks the record count and keeps
+every id, so it retires nothing. It also breaks the instant: enforcement compares each assertion's
+own time against the retraction's, and one merged instant is a max, so the merged record would
+suppress a later, deliberate re-assertion by a source that never retracted anything.
+
+### The shape that fits this mesh
+
+Split the two inputs by what each one is.
+
+**The roster wants to be a fact.** It is monotone, it has to converge, and it is small. The admission
+graph already is one.
+
+**The high-water mark wants to be node-local state beside the store.** It is a max per observer, it
+is nobody else's business, and writing it as facts would turn it into history. A fact store keeps
+every value a mark ever took, so an ack channel built from facts grows faster than the tombstones it
+retires. `node-id.json` is the precedent already in the tree: `loadNodeId` and `saveNodeId` carry
+per-store state that never replicates, across all three backends.
+
+What that leaves to build, in order:
+
+1. The sender's node id on the wire, on `hello` or on each message.
+2. A per-peer record of which tombstones that node has been seen to hold, in a sidecar beside the
+   node id.
+3. The min over the roster, which is `stableRecordIds` and is already written.
+
+### What ships now
+
+`causal-stability.mjs` holds the rule as a pure function of its inputs. `admittedNodes` folds the
+roster off the admission graph. `stableRecordIds` answers which records every rostered peer is known
+to hold. `core.mjs` exposes `retirableRetractions` as a report and `retireRetractions` as the sweep.
+
+The gate is the missing input. `acknowledgedBy` defaults to knowing nothing, so the answer defaults
+to the empty set, and nothing in the product supplies it. `retireRetractions` takes ids rather than
+choosing them, so a caller has to run the rule and hand over its answer. Every safety default points
+the same way: an empty roster retires nothing, a roster holding only this node retires nothing, and
+one member that has acknowledged nothing blocks every record.
+
+### Departure is the open sub-problem
+
+Under this rule a node that joins once and never comes back holds every tombstone standing. That is
+correct rather than convenient. The node really might return with a copy. It is also why the
+literature pairs stability with a group membership service, so the group the min runs over can
+change. The admission graph is half of that already, a social record of who let whom in. Its
+counterpart is a departure edge written the same way, plus a rule for what the remaining members can
+conclude about a node nobody has seen for a long time. Whoever picks this up should read the view
+synchrony and group membership literature beside the CRDT papers; that is where the vocabulary
+lives. Until such a rule is designed, the answer stays what it is now: retire nothing, keep the
+tombstones.
+
+### Rollups pose two questions, not one
+
+The compaction summaries have the same gap, and they split.
+
+A **chain rollup** (pool 2) carries no prior. It is bookkeeping: the ids it absorbed, so a
+re-delivered leaf stays absorbed. The rule above transfers to it unchanged.
+
+A **head rollup** (pool 1) carries the noisy-OR base over the sources it absorbed, so it is
+bookkeeping and a live vote in the group fold at once. Dropping it changes the answer a reader gets,
+not just what the store refuses on ingest. "Retire a head rollup" is therefore a different question
+from "retire a tombstone", and it needs its own account before either rule reaches it.
+
 ## What does not converge
 
 Two things. Named as present behaviour, not as design limits.
@@ -276,6 +424,8 @@ Run against the real modules, in memory, on 2026-08-02.
 | retract then peer re-delivery | refused on ingest; the fact stays gone, in either arrival order |
 | equal `(epoch, turn)`, array order flipped | fold answer flips; after the id sort, both orders agree |
 | `epoch 2 turn 1` against `epoch 0 turn 9` | the later epoch wins in both array orders |
+| two peers retract together, both invite directions | same roster, same tombstone, nothing retirable on either |
+| a rostered peer away since before the retraction | nothing retirable. Retire the tombstone anyway and its rejoin puts the fact back |
 
 ## The monotonicity connection
 
@@ -342,10 +492,11 @@ thing again later still lands. The suppressed ids are re-keyed through the prove
 way out and on the way in, because the broadcast relabel means two stores file one assertion under
 two Source keys.
 
-Two open problems sit next to it. A retraction record has no causal-stability rule, so nothing
-tells it when it could be dropped — the same gap the compaction rollup has. And an OR-Set proper,
-with causal delivery, remains the route that would let a suppressed assertion be re-added under its
-own identity rather than under a later instant.
+Two open problems sit next to it. The causal-stability rule is now written as a pure function, with
+the roster half derived from the admission graph and the acknowledgement half named as the one thing
+still missing; "Retiring a tombstone" above has the design and the reason nothing retires yet. And an
+OR-Set proper, with causal delivery, remains the route that would let a suppressed assertion be
+re-added under its own identity rather than under a later instant.
 
 ## Deepen-next
 
@@ -357,10 +508,15 @@ own identity rather than under a later instant.
   DOI `10.1016/j.jpdc.2017.08.003` (preprint arXiv:1603.01529). Verified via dblp 2026-08-02. This
   is the answer to "the joiner downloads a full copy". `PLAN_MUD_WEBRTC.md`'s sharded manifest
   scheme is a hand-rolled version of the same idea. Read this before building it.
-- **Causal stability.** Every tombstone scheme needs a rule for when a tombstone can be dropped.
-  Carlos Baquero, Paulo Sérgio Almeida and Ali Shoker, *Pure Operation-Based Replicated Data
-  Types*, CoRR arXiv:1710.04469, 2017 (dblp-verified 2026-08-02; a peer-reviewed venue for it was
-  not checked). It is the piece the compaction rollup currently does without.
+- **Causal stability.** Carlos Baquero, Paulo Sérgio Almeida and Ali Shoker, *Pure Operation-Based
+  Replicated Data Types*, CoRR arXiv:1710.04469, 2017 (dblp-verified 2026-08-02; a peer-reviewed
+  venue for it was not checked). Read it against "Retiring a tombstone" above, which has the design
+  this mesh can reach and the wire field it still needs. Wuu and Bernstein's PODC 1984 log paper is
+  the ancestor and has not been checked here.
+- **Group membership and view synchrony.** The stability rule's min runs over a group, so a group
+  that only ever grows makes one departed node hold every tombstone standing. The admission graph is
+  half a membership service already. Find the other half in this literature before designing a
+  departure edge.
 - **The Bloom/CALM lineage.** Alvaro, Conway, Hellerstein and Marczak, *Consistency analysis in
   Bloom: a CALM and collected approach*, CIDR 2011, is cited in RR-7506 §6.3 as related to and more
   restrictive than the monotonic-semilattice condition. Worth reading for how it classifies a
