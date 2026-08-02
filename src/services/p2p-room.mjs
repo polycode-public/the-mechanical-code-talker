@@ -30,7 +30,11 @@ import {
   WAVED_PREDICATE,
 } from "../domain/p2p/facts.mjs";
 import { generateNodeId } from "../domain/p2p/peer-id.mjs";
-import { appendFacts, loadMemory, loadNodeId, saveNodeId, readFactRows, normFactTerm, FACT_CLASS } from "../adapters/memory/core.mjs";
+import { RETRACTION_PREDICATE } from "../domain/memory/retraction.mjs";
+import {
+  appendFacts, appendRetractions, loadMemory, loadNodeId, saveNodeId,
+  readFactRows, readRetractions, normFactTerm, FACT_CLASS,
+} from "../adapters/memory/core.mjs";
 
 export const ROOM_IDLE = "idle";
 export const ROOM_SHARING = "sharing";
@@ -219,6 +223,14 @@ export function createP2pRoom({
   // fact that arrived from a peer being re-broadcast as if we had authored it.
   const seenProvenanceById = new Map();
   let cachedRows = [];
+  // A retraction is not a fact row — readFactRows can never return one, because
+  // the whole point of the record is that the rows it names are gone. So it
+  // gets its own cache and its own diff, keyed on what it actually carries: the
+  // ids it suppressed. Those grow by union as peers merge, and a grown record
+  // is a change worth broadcasting even though its provenance never moved.
+  let cachedRetractions = [];
+  const seenRetractionValueById = new Map();
+  const retractionDiffValue = (fact) => `${fact.provenance} ${fact.object}`;
 
   // Store-touching work runs one job at a time, in arrival order. Every path
   // that reads or writes memoryDir/seenProvenanceById/cachedRows crosses at
@@ -263,7 +275,9 @@ export function createP2pRoom({
   }
 
   async function refreshRows() {
-    cachedRows = readFactRows(await loadMemory(memoryDir));
+    const memory = await loadMemory(memoryDir);
+    cachedRows = readFactRows(memory);
+    cachedRetractions = readRetractions(memory);
     return cachedRows;
   }
 
@@ -293,6 +307,7 @@ export function createP2pRoom({
   async function baselineSeen() {
     await refreshRows();
     for (const row of cachedRows) seenProvenanceById.set(row.id, row.provenance);
+    for (const fact of cachedRetractions) seenRetractionValueById.set(fact.id, retractionDiffValue(fact));
   }
 
   async function ensureStarted() {
@@ -328,6 +343,12 @@ export function createP2pRoom({
       seenProvenanceById.set(row.id, row.provenance);
       changed.push(row);
     }
+    for (const fact of cachedRetractions) {
+      const value = retractionDiffValue(fact);
+      if (seenRetractionValueById.get(fact.id) === value) continue;
+      seenRetractionValueById.set(fact.id, value);
+      changed.push(fact);
+    }
     if (!changed.length) return { broadcast: 0 };
     const targets = connectedPeers();
     if (!targets.length) return { broadcast: 0 };
@@ -343,7 +364,17 @@ export function createP2pRoom({
     // Flush first: a local fact still waiting to be diffed would otherwise be
     // recorded as merged below and never leave this browser.
     await flushLocalChange();
-    const { ids } = await appendFacts(memoryDir, accepted.map((f) => ({
+    // Retractions land BEFORE the assertions in the same batch, so a peer
+    // sending both the fact and the record that suppresses it lands them in the
+    // order that leaves the fact out. Either order converges — the read fold
+    // strips a record a retraction covers however late the retraction arrives —
+    // but doing it this way keeps a suppressed record from being written at all.
+    const retractions = accepted.filter((f) => f.predicate === RETRACTION_PREDICATE);
+    if (retractions.length) await appendRetractions(memoryDir, retractions);
+    const assertions = retractions.length
+      ? accepted.filter((f) => f.predicate !== RETRACTION_PREDICATE)
+      : accepted;
+    const { ids } = assertions.length ? await appendFacts(memoryDir, assertions.map((f) => ({
       subject: f.subject,
       predicate: f.predicate,
       object: f.object,
@@ -353,15 +384,21 @@ export function createP2pRoom({
       // this is the passthrough that lets a dated taught fact's wire fact
       // reach it at all.
       ...(typeof f.observedAt === "string" && f.observedAt ? { observedAt: f.observedAt } : {}),
-    })));
+    }))) : { ids: [] };
     await sortFactIndividualsById();
     await refreshRows();
     const mergedIds = new Set(ids);
     for (const row of cachedRows) {
       if (mergedIds.has(row.id)) seenProvenanceById.set(row.id, row.provenance);
     }
-    emit(factsListeners, { merged: ids.length, rows: cachedRows });
-    return { merged: ids.length };
+    // Same reason the fact baseline above exists: a retraction that arrived
+    // from a peer must not go back out as though this node had authored it.
+    // Every peer broadcasts its OWN record when it makes one, so the union each
+    // peer ends up with is reached from the originals rather than from relays.
+    for (const fact of cachedRetractions) seenRetractionValueById.set(fact.id, retractionDiffValue(fact));
+    const merged = ids.length + retractions.length;
+    emit(factsListeners, { merged, rows: cachedRows });
+    return { merged };
   }
 
   function registerPeer(peerId, peerDisplayName, transport) {
@@ -437,7 +474,8 @@ export function createP2pRoom({
         const facts = await withStore(async () => {
           await refreshRows();
           const timestamp = now();
-          return syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
+          return syncableFacts([...cachedRows, ...cachedRetractions])
+            .flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
         });
         send(transport, syncResponseMessage({ facts }));
         return;
@@ -644,7 +682,9 @@ export function createP2pRoom({
       // from reading to every peer as a brand-new node.
       nodeId = await resolveStoreNodeId(memoryDir, nodeId || myNodeId);
       seenProvenanceById.clear();
+      seenRetractionValueById.clear();
       cachedRows = [];
+      cachedRetractions = [];
       const timestamp = now();
       const identity = [];
       if (worldId && worldName) identity.push(worldNameFact(worldId, worldName, timestamp));
@@ -655,11 +695,13 @@ export function createP2pRoom({
       }
       await refreshRows();
       for (const row of cachedRows) seenProvenanceById.set(row.id, row.provenance);
+      for (const fact of cachedRetractions) seenRetractionValueById.set(fact.id, retractionDiffValue(fact));
       const targets = connectedPeers();
       let pushed = 0;
       if (targets.length) {
         const wireTimestamp = now();
-        const facts = syncableFacts(cachedRows).flatMap((row) => toWireFacts(row, wireIdentity(), wireTimestamp));
+        const facts = syncableFacts([...cachedRows, ...cachedRetractions])
+          .flatMap((row) => toWireFacts(row, wireIdentity(), wireTimestamp));
         pushed = facts.length;
         if (facts.length) broadcast(opMessage({ from: myPeerId, facts }));
         broadcast(syncRequestMessage());
