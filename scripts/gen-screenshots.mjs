@@ -37,6 +37,9 @@ const MUD_BUSY_TIMEOUT_MS = 30_000;
 // the scene's own ready() signal ever fires, so both of its timeouts get
 // real headroom rather than reusing READY_TIMEOUT_MS/MUD_BUSY_TIMEOUT_MS.
 const MUDIII_BUSY_TURN_THRESHOLD = 12;
+// One tween's worth after scrolling, so the shot lands on settled meshes
+// rather than mid-step: the scene eases a one-cell move over 250ms.
+const SCENE_SETTLE_MS = 1_200;
 const MUDIII_READY_TIMEOUT_MS = 60_000;
 const MUDIII_BUSY_TIMEOUT_MS = 60_000;
 
@@ -138,13 +141,10 @@ const READY_CHECKS = {
   mudiii: async (page) => {
     await page.waitForFunction(() => window.mudiiiScene?.ready() === true, null, { timeout: MUDIII_READY_TIMEOUT_MS });
 
-    // fox-1 is the predator's id under the default single-predator roster
-    // (test/fixtures/mudiii-ticks.json's own `roles`/`initial` blocks — the
-    // frozen interface the engine and viz tracks both build against), so
-    // waiting on its placement is waiting for the scene to have drawn its
-    // first agent rather than an empty, still-loading square.
+    // The cast is drawn from the resting board before any turn runs, so this
+    // is what "the square is populated" looks like at rest.
     await page.waitForFunction(
-      () => Boolean(window.mudiiiScene?.cellOf("fox-1")),
+      () => document.querySelectorAll("#hudRow .hud-card").length > 0,
       null,
       { timeout: MUDIII_READY_TIMEOUT_MS },
     );
@@ -162,7 +162,25 @@ const READY_CHECKS = {
       MUDIII_BUSY_TURN_THRESHOLD,
       { timeout: MUDIII_BUSY_TIMEOUT_MS },
     );
-    await page.evaluate(() => window.scrollTo(0, 0));
+
+    // Only now is a mesh guaranteed to carry a cell: the scene tracks agent
+    // positions from ticks, so it has none to report until one has run. This
+    // wait is what keeps the shot off an empty plaza — the turn counter above
+    // proves the simulation advanced, and this proves the 3D view drew it.
+    await page.waitForFunction(
+      () => Object.keys(window.mudiiiScene?.cells?.() ?? {}).length > 0
+        || Boolean(window.mudiiiScene?.cellOf("fox-1")),
+      null,
+      { timeout: MUDIII_BUSY_TIMEOUT_MS },
+    );
+
+    // The only page that does NOT scroll back to the top for its shot. Its
+    // deck alone fills the viewport, which would make the plate a picture of
+    // some sliders; centring the 3D stage puts the square in frame together
+    // with the HUD cards under it, where each animal states what it is doing
+    // and what it has actually seen. That pairing is the page's whole point.
+    await page.evaluate(() => document.querySelector("#sceneStage")?.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(SCENE_SETTLE_MS);
   },
 };
 
