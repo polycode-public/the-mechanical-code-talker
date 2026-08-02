@@ -42,6 +42,21 @@ Nothing in flight.
 `PLAN_MUD_MUDIII.md` is the design of record and is marked BUILT AND DEPLOYED. These are the
 gaps between it and the shipped page.
 
+- **Goblins do not render.** The board shows the fox, the props and the food markers; no goblin
+  mesh appears at all, whatever the cast size. They are not missing from the simulation — the
+  scene tracks them with correct cells (`cellOf("goblin-3")` returns `cell-11-4`), the HUD cards
+  are right, and no request fails. So the group is created and positioned and its mesh never
+  becomes visible.
+  Where to look: `addAgent` in `src/services/mudiii-scene.mjs` sets `entry.group.visible = true`
+  only inside the GLB `.then`, so anything that makes that promise not settle leaves an invisible
+  group behind with a valid cell. Two differences between the two rigs are worth checking first:
+  `goblin.glb` carries `EXT_texture_webp` where `fox.glb` has no textures at all, and its
+  `targetHeight` is 2.1 against the fox's 1.0, so a `normalizeToHeight` that measures a degenerate
+  `Box3` on a skinned mesh would scale it very differently.
+  **Do:** find why the goblin's load path does not reach `visible = true`, and add an e2e
+  assertion that every live agent has a visible mesh, not merely a tracked cell — the current
+  smoke asserts cells, which is exactly why this shipped.
+
 - **The deception rail is not on the page.** `pillsForMudiii` is fully implemented and
   unit-tested in `src/services/mudiii-turn.mjs` — address pills, true/false claim pairs, a
   point-reflected false cell, the food channel gated to prey addressees, grid-size aware.
@@ -140,9 +155,8 @@ gaps between it and the shipped page.
   entirely would still pass, and `smoke:deploy` is the plan's own done-check for its final step.
   **Do:** add a probe fetching the page and asserting a 200 with a content-encoding.
 
-- **Food items render as primitive spheres.** The KayKit cheese and apple models are excluded
-  because no row in the source repo's register names a KayKit resource pack, so their terms are
-  unrecorded rather than free.
+- **Food items render as primitive spheres.** The KayKit cheese and apple models have no row in
+  the source repo's register, so their terms are unrecorded.
   **Do:** download the three files from KayKit's own CC0 pack and record that as the source,
   which removes the ambiguity entirely.
 
@@ -153,48 +167,35 @@ gaps between it and the shipped page.
   *moved*, which is what the plan's done-check asks for.
   **Do:** delete the dead disjunct and compare two `cellOf` reads across ticks.
 
-- **The predator is a fox.** The code casts a fox throughout and always has. The plan doc has
-  been aligned. Nothing in `src/` needs changing — the only remaining `wolf` strings in the tree
-  are the river-crossing puzzle, the sprite catalogue, and the guard that blocks `wolf_basic`.
-  **Do:** nothing further. Recorded so nobody re-opens it.
+### mudiii.html — further work
 
-### mudiii.html — the plan's own alternatives, none of them out of scope
-
-These were named in `PLAN_MUD_MUDIII.md` as considered or later. They are open work, not
-closed decisions.
-
-- **Further role pairs.** The engine is role-parameterized and the asset pipeline is "drop a CC0
-  GLB in, map its clip names". No second pair has been cast.
+- **A second role pair has not been cast.** The engine is role-parameterized and the asset
+  pipeline is "drop a CC0 GLB in, map its clip names".
   **Do:** pick one pair, add its two manifest rows and a roles object, and confirm no engine
   edit is needed. That is the claim the parameterization was built to make.
 
-- **Food as common knowledge on spawn.** Food is vision-gated exactly like agents. The plan
-  notes a variant where a crumb is known to everyone the moment it appears, which changes the
-  foraging feel.
+- **Food is vision-gated, with no way to try it otherwise.** A crumb known to everyone the moment
+  it appears changes the foraging feel, and there is no switch to see it.
   **Do:** add it as a `DEFAULT_GAME_CONFIG.mudiii` flag, default off, so it can be tried without
   a code change.
 
-- **A blended one-ply score for the prey's evade/forage decision.** The shipped chain is strict
-  priority: evade beats forage beats wander. The plan considered one score weighing predator
-  distance against food distance, and parked it because it needs new scoring machinery and
-  tuning against a real board.
-  **Do:** the board is real now. Build it behind a config flag and compare survival time against
-  the priority chain over a fixed seed set.
+- **Prey decide by strict priority: evade beats forage beats wander.** A single score weighing
+  predator distance against food distance would let a goblin take a crumb that costs it nothing,
+  instead of abandoning food the moment anything is in view.
+  **Do:** build it behind a config flag and compare survival time against the priority chain over
+  a fixed seed set.
 
-- **Evade tie-breaking toward the nearest believed food.** When evading, several cells are often
-  equally safe and the prey picks by seeded order. Breaking that tie toward food would let a
-  fleeing goblin still make progress.
+- **A fleeing goblin makes no progress toward food.** Several cells are usually equally safe and
+  it picks between them by seeded order.
   **Do:** add the comparator in the evade scorer. Small and self-contained.
 
-- **The compass ring.** The plan dropped it on the grounds that a free camera replaces it. It
-  is wanted.
-  **Do:** bring it back — mud.html's own `DIR_GLYPH` ring is the working version to copy. It
-  needs a decision about what it points at on a grid with no rooms: the followed agent's facing
-  is the obvious reading.
+- **There is no compass ring.** mud.html's `DIR_GLYPH` ring is the working version to copy.
+  **Do:** build it, pointing at the followed agent's facing — the reading that makes sense on a
+  grid with no rooms.
 
-- **spider-fly migrating onto the shared engine.** MUDIII was built role-parameterized from day
-  one specifically so spider-fly could move onto it, and spider-fly was left untouched to keep
-  the regression surface small. It still has its own engine.
+- **spider-fly still has its own engine.** MUDIII was built role-parameterized from day one so
+  spider-fly could move onto it; spider-fly was left untouched to keep the regression surface
+  small while MUDIII was being built.
   **Do:** cast spider and fly as a roles object over `predator-prey.mjs`, keeping webs as the
   one genuine behavioural difference, and delete the duplicate.
 
