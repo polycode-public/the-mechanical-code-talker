@@ -76,7 +76,7 @@ test("renderChatHtml: mounts the chat engine bundle by a same-origin relative pa
 
 test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack from same-origin paths, never a second engine", () => {
   const html = renderChatHtml();
-  assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
+  assert.match(html, /loadSeedPayload\(fetchWithProgress, "\.\/chat-seed\.json"/);
   assert.match(html, /fetchWithProgress\("\.\/vendor\/wink\.js"/);
   assert.match(html, /fetch\("\.\/reference-pack\/index\.json"\)/);
   assert.match(html, /window\.tmct\.open/);
@@ -427,7 +427,7 @@ test("renderChatHtml: the seed is fetched by a content-stamped URL, so a rebuilt
   const stamped = renderChatHtml({ seedStamp: "deadbeef0001" });
   assert.match(stamped, /const SEED_STAMP = "deadbeef0001";/);
   assert.match(stamped, /const SEED_QUERY = SEED_STAMP \? "\?b=" \+ SEED_STAMP : "";/);
-  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  assert.match(stamped, /loadSeedPayload\(fetchWithProgress, "\.\/chat-seed\.json", SEED_QUERY/);
   // A build with no seed to hash asks by the plain URL rather than a "?b=" with
   // nothing after it.
   assert.match(renderChatHtml(), /const SEED_STAMP = "";/);
@@ -451,7 +451,38 @@ test("renderChatHtml: the live fact count rides in the topbar, not only the stat
   assert.match(html, /<span class="fact-pill-value" id="factPillValue">/);
   assert.match(
     html,
-    /lastStatsTotal = Number\(stats\.total \|\| 0\);\s*factPillValueEl\.textContent = lastStatsTotal\.toLocaleString\(\);/,
+    /lastStatsTotal = Number\(stats\.total \|\| 0\);\s*renderFactPill\(\);/,
     "it reads the same memoryStats total the docked panel does, so the two cannot disagree",
+  );
+});
+
+test("renderChatHtml: the topbar pill reports the starter memory's real load progress, and shows no percentage when no true total is known", () => {
+  const html = renderChatHtml({ seedBytes: 93_496_025 });
+  assert.match(html, /const SEED_BYTES = 93496025;/, "the builder's own decompressed byte count is the denominator");
+  assert.match(
+    html,
+    /return Math\.min\(100, Math\.floor\(\(seedLoadedBytes \/ seedTotalBytes\) \* 100\)\);/,
+    "the percentage is bytes received over bytes expected, never elapsed time",
+  );
+  assert.match(html, /if \(!\(seedTotalBytes > 0\)\) return null;/, "with no real total it reports no percentage at all");
+  assert.match(
+    html,
+    /factPillValueEl\.textContent = percent === null \? "loading" : percent \+ "%";/,
+    "and the pill shows the number only when there is one",
+  );
+  assert.match(renderChatHtml(), /const SEED_BYTES = 0;/, "a build that measured no seed offers no denominator to divide by");
+});
+
+test("renderChatHtml: the starter memory's load phases are published as tmct.seed, so a failed download is never mistaken for an empty store", () => {
+  const html = renderChatHtml();
+  assert.match(html, /window\.tmct\.seed = Object\.assign\(\{ state: phase, facts: seedFacts \}/);
+  assert.match(html, /setSeedPhase\("loading"\)/, "published before the fetch starts, not after");
+  assert.match(html, /setSeedPhase\("indexing"/, "the parse-and-open phase is its own, since it is most of the wait");
+  assert.match(html, /setSeedPhase\("ready"\)/, "ready means the session holds the seed, not merely that the bytes arrived");
+  assert.match(html, /setSeedPhase\("failed", \{ error: outcome\.status\.error/, "a failed load carries the reason it failed");
+  assert.match(
+    html,
+    /console\.error\("tmct chat: chat-seed\.json unavailable/,
+    "and says so at error level — a warning is invisible to every diagnostic that watches for errors",
   );
 });

@@ -12,6 +12,7 @@ import { rmSync } from "node:fs";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { requireSeedLoaded } from "./helpers/seed-state.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const ANSWER_TIMEOUT_MS = 20_000;
@@ -32,9 +33,14 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
+/** Boot the chat page and require its starter memory to be in. Boot alone
+ *  resolves either way — a seed that never arrived boots a page that answers
+ *  every seeded question with a miss, and the miss is honest but it is not what
+ *  this file is testing. */
 async function awaitChatBoot(page) {
   await page.waitForFunction(() => window.tmctChatReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
   await page.evaluate(() => window.tmctChatReady);
+  return requireSeedLoaded(page);
 }
 
 test("after one online visit, chat.html boots and answers fully offline from the service worker's precache", async () => {
@@ -51,7 +57,8 @@ test("after one online visit, chat.html boots and answers fully offline from the
 
     await context.setOffline(true);
     await page.reload({ waitUntil: "load" });
-    await awaitChatBoot(page);
+    const offlineSeed = await awaitChatBoot(page);
+    assert.ok(offlineSeed.facts > 100, `the precached seed came back whole offline, got ${offlineSeed.facts} facts`);
 
     assert.equal(await page.locator("#composerInput").isDisabled(), false, "the composer enables with the network cut");
 

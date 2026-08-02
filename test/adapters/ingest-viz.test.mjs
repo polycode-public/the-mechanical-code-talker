@@ -99,14 +99,18 @@ test("renderIngestHtml: fits a narrow viewport — the panes stack rather than o
 
 test("renderIngestHtml: seeds from the same chat-seed.json chat.html embeds, with progress reported", () => {
   const html = renderIngestHtml();
-  assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
+  assert.match(html, /loadSeedPayload\(fetchWithProgress, "\.\/chat-seed\.json"/);
   assert.match(html, /<input type="checkbox" id="seedToggle" checked>/, "the seed toggle ships checked — seeded by default");
 });
 
 test("renderIngestHtml: the seed toggle persists under its own storage key, off skipping the fetch outright", () => {
   const html = renderIngestHtml();
   assert.match(html, /"tmct\.ingest\.seed"/);
-  assert.match(html, /if \(!seedToggleEl\.checked\) \{ seedPayload = null; seedFacts = 0; return; \}/, "the off branch never even attempts the request");
+  assert.match(
+    html,
+    /if \(!seedToggleEl\.checked\) \{\s*seedPayload = null;\s*seedFacts = 0;\s*setSeedPhase\("skipped"\);\s*return;\s*\}/,
+    "the off branch never even attempts the request, and says it skipped rather than that it failed",
+  );
 });
 
 test("renderIngestHtml: the fuzzy low-trust tier checkbox ships off by default", () => {
@@ -278,7 +282,7 @@ test("groundTextToFacts: the row-length fast path never mis-skips a real fact on
 test("renderIngestHtml: the seed is fetched by a content-stamped URL, so a rebuilt seed can never be served from the service worker's cache of the old one", () => {
   const stamped = renderIngestHtml({ seedStamp: "deadbeef0002" });
   assert.match(stamped, /const SEED_STAMP = "deadbeef0002";/);
-  assert.match(stamped, /fetchWithProgress\("\.\/chat-seed\.json" \+ SEED_QUERY/);
+  assert.match(stamped, /loadSeedPayload\(fetchWithProgress, "\.\/chat-seed\.json", SEED_QUERY/);
   assert.match(renderIngestHtml(), /const SEED_STAMP = "";/);
 });
 
@@ -294,7 +298,18 @@ test("renderIngestHtml: reset-to-seed drops the service worker's asset cache as 
 test("renderIngestHtml: the memory's fact count rides in the topbar, not only the status line", () => {
   const html = renderIngestHtml();
   assert.match(html, /<span class="fact-pill" id="factPill" aria-live="polite"/);
-  assert.match(html, /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/);
+  assert.match(html, /lastStatsTotal = Number\(stats\.total \|\| 0\);\s*renderFactPill\(\);/);
+});
+
+test("renderIngestHtml: the same pill reports the starter memory's real load progress and its phases, matching chat.html", () => {
+  const html = renderIngestHtml({ seedBytes: 93_496_025 });
+  assert.match(html, /const SEED_BYTES = 93496025;/);
+  assert.match(html, /return Math\.min\(100, Math\.floor\(\(seedLoadedBytes \/ seedTotalBytes\) \* 100\)\);/);
+  assert.match(html, /if \(!\(seedTotalBytes > 0\)\) return null;/, "no true total means no percentage, rather than a guessed one");
+  assert.match(html, /setSeedPhase\("indexing"/);
+  assert.match(html, /setSeedPhase\("ready"\)/);
+  assert.match(html, /setSeedPhase\("failed", \{ error: outcome\.status\.error/);
+  assert.match(html, /console\.error\("tmct ingest: chat-seed\.json unavailable/);
 });
 
 // ---- the ask dock: a question put to what this session ingested -----------

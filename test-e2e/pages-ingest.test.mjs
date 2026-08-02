@@ -15,6 +15,7 @@ import { rmSync } from "node:fs";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { waitForSeedState } from "./helpers/seed-state.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const GROUND_TIMEOUT_MS = 20_000;
@@ -74,7 +75,11 @@ async function openIngestPage({ viewport, colorScheme, seedPref, acceptDownloads
   await page.goto(`${server.origin}/ingest.html`, { waitUntil: "load" });
   await page.waitForFunction(() => window.tmctIngestReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
   await page.evaluate(() => window.tmctIngestReady);
-  return { context, page, consoleErrors, failedRequests, requestedUrls };
+  // Boot resolving does not mean the starter memory is in — it resolves just
+  // the same when the seed fetch failed, which is what every test below would
+  // otherwise report as an unexplained zero.
+  const seed = await waitForSeedState(page);
+  return { context, page, consoleErrors, failedRequests, requestedUrls, seed };
 }
 
 const SAMPLE = "Zorbles are a kind of animal. How are you today? Zorbles are closely connected with wodgetry.[7]";
@@ -101,18 +106,15 @@ test("the ingest page serves every asset it asks for and logs no error of its ow
 });
 
 test("seeded boot (the default) shows band rows and a nonzero total in the docked stats panel", async () => {
-  const { context, page, consoleErrors, failedRequests } = await openIngestPage();
+  const { context, page, seed } = await openIngestPage();
   try {
     assert.equal(await page.locator("#seedToggle").isChecked(), true, "the seed toggle ships checked");
+    // The seed's own state first: a zero total means either a load that failed
+    // or a store that is empty on purpose, and only this can say which.
+    assert.equal(seed.state, "ready", `the starter memory never loaded — state "${seed.state}"${seed.error ? `, reason: ${seed.error}` : ""}`);
+    assert.ok(seed.facts > 100, `the loaded seed carries a real fact count, got ${seed.facts}`);
     const total = Number((await statsTotal(page)).replace(/[^\d]/g, ""));
-    // Diagnostic only: this test has failed intermittently in CI against the
-    // deployed site with a zero total, never locally and never standalone
-    // against the live site directly. openIngestPage() already captures these
-    // — surfacing them here so the next CI failure explains itself instead of
-    // just reporting the symptom.
-    assert.ok(total > 100, `expected a real starter-memory total, got ${total}`
-      + (consoleErrors.length ? `; console errors: ${JSON.stringify(consoleErrors)}` : "; no console errors")
-      + (failedRequests.length ? `; failed requests: ${JSON.stringify(failedRequests)}` : "; no failed requests"));
+    assert.ok(total > 100, `expected a real starter-memory total, got ${total}`);
     const labels = await bandRowLabels(page);
     assert.ok(labels.length > 2, "more than just the total-facts row renders");
 
@@ -124,10 +126,11 @@ test("seeded boot (the default) shows band rows and a nonzero total in the docke
 });
 
 test("the seed toggle off skips the chat-seed.json fetch entirely and boots an empty store", async () => {
-  const { context, page, requestedUrls } = await openIngestPage({ seedPref: "off" });
+  const { context, page, requestedUrls, seed } = await openIngestPage({ seedPref: "off" });
   try {
     assert.equal(await page.locator("#seedToggle").isChecked(), false, "the stored preference is honored before boot");
     assert.ok(!requestedUrls.some((u) => u.includes("chat-seed.json")), "the seed asset is never requested when the toggle starts off");
+    assert.equal(seed.state, "skipped", "an empty store on purpose reports itself as skipped, never as a failed load");
     assert.equal(await statsTotal(page), "0", "an unseeded session starts with zero facts");
   } finally {
     await context.close();

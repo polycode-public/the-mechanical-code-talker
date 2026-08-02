@@ -105,6 +105,50 @@ export async function fetchWithProgress(url, onProgress) {
 }
 
 /**
+ * Fetch and parse the starter-memory seed, and say what actually happened.
+ *
+ * Resolves to `{ payload, status }` and never rejects. `payload` is the parsed
+ * seed, or null. `status` is the small, payload-free record a page publishes
+ * as `tmct.seed` and a test reads back:
+ *
+ *   { state: "loaded", facts, attempts }
+ *   { state: "failed", facts: 0, attempts, error }
+ *
+ * The record exists because a seed that failed to download and a store that is
+ * empty on purpose both leave the fact count at zero, and until now nothing
+ * downstream could tell them apart — not the page, which went on answering as
+ * a normal empty chat, and not a test, which could only report the zero. A
+ * page that cannot ground an answer must be able to say WHY it cannot, and
+ * that starts with knowing.
+ *
+ * It resolves rather than throwing because a failed seed is not a failed boot:
+ * you can still teach the page facts of your own. Boot carries on, and the
+ * caller decides what to show.
+ *
+ * Two attempts, the second under a cache-busting query param: a CDN edge can
+ * serve a corrupt, truncated or wrongly-encoded response, and a throw out of
+ * the read or the parse is the only signal of that. `seedQuery` already
+ * carries the build's own content-hash query string, if any, so the bust param
+ * joins with `&` or `?` accordingly.
+ */
+export async function loadSeedPayload(fetcher, url, seedQuery, onProgress) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const bust = attempt === 1 ? "" : (seedQuery ? "&" : "?") + "retry=1";
+      const blob = await fetcher(url + seedQuery + bust, onProgress);
+      const payload = JSON.parse(await blob.text());
+      const facts = (payload.individuals || []).filter((i) => i.class === "Fact").length;
+      return { payload, status: { state: "loaded", facts, attempts: attempt } };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  const reason = lastError && lastError.message ? lastError.message : String(lastError);
+  return { payload: null, status: { state: "failed", facts: 0, attempts: 2, error: reason } };
+}
+
+/**
  * (Re)render the docked "this session's memory" panel into `panelEl` from a
  * memoryStats() result: a total-facts row, one row per seed band the session
  * actually holds, then the last 8 taught facts (most recent first), most

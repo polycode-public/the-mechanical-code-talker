@@ -9,6 +9,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { requireSeedLoaded } from "./helpers/seed-state.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const ANSWER_TIMEOUT_MS = 20_000;
@@ -29,14 +30,9 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
-// Diagnostic only, deliberately noisy: this file's export/ingest tests have
-// failed intermittently in CI against the deployed site (never locally, never
-// run standalone against the live site directly) with an empty-seeming seed —
-// "dog is a kind of animal" missing from an otherwise-normal answer. Every
-// theory tried so far (Chromium-instance contention, chat-seed.json not yet
-// propagated) reproduced nothing when tested directly and was falsified by a
-// clean re-run. Logging exactly what the browser saw is the next step before
-// trying a fourth guess.
+// The response logging stays: when the seed does fail, its status, length and
+// encoding are the whole diagnosis, and they are gone by the time an assertion
+// further down reports a missing phrase.
 async function openChatPage() {
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
@@ -58,7 +54,11 @@ async function openChatPage() {
   await page.goto(`${server.origin}/chat.html`, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.tmctChatReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
   await page.evaluate(() => window.tmctChatReady);
-  return { context, page };
+  // Every test here drives a conversation whose answers come from the seed. If
+  // the seed is not in, they all fail on a phrase that is missing for a reason
+  // none of them can name.
+  const seed = await requireSeedLoaded(page);
+  return { context, page, seed };
 }
 
 /** Submit a question through the live composer and wait for its answer to settle. */
