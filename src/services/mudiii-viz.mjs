@@ -539,32 +539,55 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
       <div class="deck-body">
-        <div class="deck-sliders">
-          <label class="deck-slider">foxes
-            <input type="range" id="playerCountSlider" min="0" max="${PLAYER_COUNTS.length - 1}" step="1"
-                   value="${Math.max(0, PLAYER_COUNTS.indexOf(DEFAULT_PLAYER_COUNT))}"
-                   list="playerCountTicks" aria-valuetext="${DEFAULT_PLAYER_COUNT} foxes">
-            <datalist id="playerCountTicks">${PLAYER_COUNTS.map((n, i) => `<option value="${i}" label="${n}"></option>`).join("")}</datalist>
-            <span class="mono" id="playerCountValue">${DEFAULT_PLAYER_COUNT}</span>
-          </label>
-          <label class="deck-slider">goblins
-            <input type="range" id="npcCountSlider" min="${NPC_COUNT_MIN}" max="${NPC_COUNT_MAX}" step="1"
-                   value="${DEFAULT_NPC_COUNT}"
-                   list="npcCountTicks" aria-valuetext="${DEFAULT_NPC_COUNT} goblins">
-            <datalist id="npcCountTicks">${Array.from({ length: NPC_COUNT_MAX - NPC_COUNT_MIN + 1 }, (_, i) => {
-              const n = NPC_COUNT_MIN + i;
-              return NPC_COUNT_LABELLED.includes(n) ? `<option value="${n}" label="${n}"></option>` : `<option value="${n}"></option>`;
-            }).join("")}</datalist>
-            <span class="mono" id="npcCountValue">${DEFAULT_NPC_COUNT}</span>
-          </label>
-          <label class="deck-slider">delay
-            <input type="range" id="delaySlider" min="80" max="2000" step="20" value="${DEFAULT_DELAY_MS}">
-            <span class="mono" id="delayValue">${DEFAULT_DELAY_MS}ms</span>
-          </label>
-          <label class="deck-slider">max turns
-            <input type="range" id="maxTurnsSlider" min="20" max="2000" step="20" value="${DEFAULT_MAX_TURNS}">
-            <span class="mono" id="maxTurnsValue">${DEFAULT_MAX_TURNS}</span>
-          </label>
+        <div class="deck-panels">
+          <div class="deck-stack deck-stack-1">
+            <label class="deck-slider">foxes
+              <input type="range" id="playerCountSlider" min="0" max="${PLAYER_COUNTS.length - 1}" step="1"
+                     value="${Math.max(0, PLAYER_COUNTS.indexOf(DEFAULT_PLAYER_COUNT))}"
+                     list="playerCountTicks" aria-valuetext="${DEFAULT_PLAYER_COUNT} foxes">
+              <datalist id="playerCountTicks">${PLAYER_COUNTS.map((n, i) => `<option value="${i}" label="${n}"></option>`).join("")}</datalist>
+              <span class="mono" id="playerCountValue">${DEFAULT_PLAYER_COUNT}</span>
+            </label>
+            <label class="deck-slider">goblins
+              <input type="range" id="npcCountSlider" min="${NPC_COUNT_MIN}" max="${NPC_COUNT_MAX}" step="1"
+                     value="${DEFAULT_NPC_COUNT}"
+                     list="npcCountTicks" aria-valuetext="${DEFAULT_NPC_COUNT} goblins">
+              <datalist id="npcCountTicks">${Array.from({ length: NPC_COUNT_MAX - NPC_COUNT_MIN + 1 }, (_, i) => {
+                const n = NPC_COUNT_MIN + i;
+                return NPC_COUNT_LABELLED.includes(n) ? `<option value="${n}" label="${n}"></option>` : `<option value="${n}"></option>`;
+              }).join("")}</datalist>
+              <span class="mono" id="npcCountValue">${DEFAULT_NPC_COUNT}</span>
+            </label>
+            <label class="deck-slider">follow
+              <select id="agentSelect" class="deck-select" aria-label="which agent to follow"
+                      aria-describedby="agentSelectHint">
+${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">${escapeHtml(a.id)}</option>`).join("\n")}
+              </select>
+            </label>
+            <span class="deck-hint" id="agentSelectHint" hidden>pause to swap</span>
+          </div>
+          <div class="deck-stack deck-stack-2">
+            <label class="deck-slider">delay
+              <input type="range" id="delaySlider" min="80" max="2000" step="20" value="${DEFAULT_DELAY_MS}">
+              <span class="mono" id="delayValue">${DEFAULT_DELAY_MS}ms</span>
+            </label>
+            <label class="deck-slider">max turns
+              <input type="range" id="maxTurnsSlider" min="20" max="2000" step="20" value="${DEFAULT_MAX_TURNS}">
+              <span class="mono" id="maxTurnsValue">${DEFAULT_MAX_TURNS}</span>
+            </label>
+            <div class="camera-mode" id="cameraMode" role="group" aria-label="camera mode">
+              <button type="button" data-mode="follow" aria-pressed="true">follow</button>
+              <button type="button" data-mode="pov" aria-pressed="false">pov</button>
+              <button type="button" data-mode="overhead" aria-pressed="false">overhead</button>
+            </div>
+          </div>
+          <div class="deck-stack deck-stack-3">
+            <button type="button" class="pill affordance" id="foodPill" data-command="place food" aria-pressed="false">place food</button>
+            <label class="deck-teach" title="With this on, a sentence like &quot;The fox is at cell-3-4.&quot; writes a fact into the square instead of running as a command.">
+              <input type="checkbox" id="teachToggle">
+              teach
+            </label>
+          </div>
         </div>
         <section class="map-panel" id="mapPanel" aria-label="the town square, from above">
           <div class="map-panel-head">
@@ -579,25 +602,6 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
             <span class="map-key"><i class="map-swatch map-swatch-prop"></i>building</span>
           </div>
         </section>
-      </div>
-      <div class="deck-camera">
-        <label class="deck-slider">follow
-          <select id="agentSelect" class="deck-select" aria-label="which agent to follow"
-                  aria-describedby="agentSelectHint">
-${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${escapeHtml(a.id)}</option>`).join("\n")}
-          </select>
-        </label>
-        <span class="deck-hint" id="agentSelectHint" hidden>pause to swap</span>
-        <div class="camera-mode" id="cameraMode" role="group" aria-label="camera mode">
-          <button type="button" data-mode="follow" aria-pressed="true">follow</button>
-          <button type="button" data-mode="pov" aria-pressed="false">pov</button>
-          <button type="button" data-mode="overhead" aria-pressed="false">overhead</button>
-        </div>
-        <button type="button" class="pill affordance" id="foodPill" data-command="place food" aria-pressed="false">place food</button>
-        <label class="deck-teach" title="With this on, a sentence like &quot;The fox is at cell-3-4.&quot; writes a fact into the square instead of running as a command.">
-          <input type="checkbox" id="teachToggle">
-          teach
-        </label>
       </div>
       <div class="deck-info-popup mudiii-note" id="deckInfoPopup" role="dialog" aria-label="about this demo" hidden>
         ${MUDIII_NOTE_LINES.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n        ")}
@@ -694,7 +698,7 @@ const MUDIII_STYLE = `
     box-shadow: 0 2px 0 rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.35);
     padding: .8rem .9rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0;
   }
-  .deck-controls, .deck-camera { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .deck-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
   .deck-info-btn {
     font-family: ${MONO_STACK}; font-size: .78rem; line-height: 1; width: 1.5rem; height: 1.5rem;
     border-radius: 50%; border: 1px solid var(--square-stone-dark); background: rgba(255,255,255,.5);
@@ -725,12 +729,19 @@ const MUDIII_STYLE = `
   .deck-play[aria-pressed="true"] { background: var(--square-accent) !important; border-color: var(--square-accent) !important; color: var(--square-ink); }
   .deck-turns { margin-left: auto; font-size: .74rem; color: var(--square-stone-dark); background: var(--square-stone-dark); background: rgba(43,35,24,.9); color: var(--square-accent); border-radius: 2px; padding: .1rem .5rem; }
   .deck-body { display: flex; gap: .7rem; align-items: flex-start; }
-  .deck-sliders { display: flex; flex-wrap: wrap; gap: 1rem; flex: 1 1 auto; min-width: 0; }
+  .deck-panels { display: flex; flex-wrap: wrap; gap: .6rem 1rem; flex: 1 1 auto; min-width: 0; }
+  /* On a narrow viewport a stack is just a grouping label, not a real box:
+     its controls flow straight into .deck-panels' own wrap, one per row
+     beside the map. Wider breakpoints turn it back into a real column. */
+  .deck-stack { display: contents; }
   .deck-slider { display: flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--square-stone-dark); min-width: 0; }
   .deck-slider input[type="range"] { accent-color: var(--square-accent); flex: 1 1 4rem; min-width: 2.5rem; width: auto; max-width: 8rem; }
   .deck-teach { display: flex; align-items: center; gap: .3rem; font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--square-stone-dark); cursor: pointer; }
   .deck-teach input[type="checkbox"] { accent-color: var(--square-accent); }
-  .camera-mode { display: inline-flex; gap: .25rem; }
+  /* A narrow stack column can be too tight for all three button labels on
+     one line, and a nowrap row would rather overflow into the next column
+     than shrink — wrap keeps it inside its own box. */
+  .camera-mode { display: inline-flex; flex-wrap: wrap; gap: .25rem; }
   .camera-mode button[aria-pressed="true"] { background: var(--square-accent); border-color: var(--square-accent); color: var(--square-ink); }
   .deck-info-popup {
     position: absolute; left: .9rem; right: .9rem; top: calc(100% + 8px); z-index: 8;
@@ -908,37 +919,45 @@ const MUDIII_STYLE = `
     #editorText { min-height: 16rem; }
   }
 
-  /* A landscape phone and a narrow desktop window are both under 900px but
-     want different slider/map arrangements, so the split has to key off
-     orientation as well as width. */
-  @media (max-width: 900px) and (orientation: landscape) {
-    .deck-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem 1rem; }
-    .deck-body { align-items: stretch; }
-    .map-panel { flex-basis: 33%; max-width: 33%; }
-    /* The square aspect-ratio that suits a tall portrait column would blow
-       the map back up to full column width in a short landscape viewport —
-       here it follows the two-row slider stack's own height instead. */
-    .map-panel-board { aspect-ratio: auto; min-height: 90px; }
-  }
-
   /* Half the deck is right on a phone and absurd on a 2000px window: a
      percentage has no ceiling, so a square board grew to roughly 950px tall
      and pushed the 3D view off the screen. Wide viewports get an absolute
      size instead, and keep the square — there is room for it here.
 
-     The map is also taller than the sliders beside it, which left a tall
-     empty stripe of parchment under them. On a wide screen the deck becomes
-     one grid so the map can stand beside the sliders AND the camera row at
-     once, and the space under the controls closes up. display:contents lifts
-     .deck-sliders and .map-panel out of .deck-body so both are grid items of
-     the deck itself. */
+     The map is also taller than a single row of controls, which used to
+     leave a tall empty stripe of parchment under them. On a landscape phone
+     and a desktop window alike, the deck becomes one grid with three control
+     columns beside the map, so the columns can stretch to the map's own
+     height and close that gap. display:contents lifts .deck-panels' three
+     .deck-stack children, and .map-panel, out of .deck-body so all four are
+     grid items of the deck itself. */
+  @media (min-width: 901px), (max-width: 900px) and (orientation: landscape) {
+    .deck-body, .deck-panels { display: contents; }
+    .deck-stack {
+      display: flex; flex-direction: column; justify-content: space-between; gap: .5rem;
+      grid-row: 2;
+    }
+    .deck-stack-1 { grid-column: 1; }
+    .deck-stack-2 { grid-column: 2; }
+    .deck-stack-3 { grid-column: 3; }
+    .map-panel { grid-column: 4; grid-row: 2; flex: 0 0 auto; max-width: none; }
+  }
+
   @media (min-width: 901px) {
-    .deck { display: grid; grid-template-columns: minmax(0, 1fr) 240px; grid-template-rows: auto 1fr auto; column-gap: .8rem; }
+    .deck { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 240px; grid-template-rows: auto auto; column-gap: .8rem; }
     .deck-controls { grid-column: 1 / -1; grid-row: 1; }
-    .deck-body { display: contents; }
-    .deck-sliders { grid-column: 1; grid-row: 2; align-self: start; }
-    .deck-camera { grid-column: 1; grid-row: 3; align-self: end; }
-    .map-panel { grid-column: 2; grid-row: 2 / 4; flex: 0 0 auto; max-width: none; align-self: start; }
+    .map-panel { align-self: start; }
+  }
+
+  /* A landscape phone is under 900px but wants the same four-column
+     treatment as desktop — just narrower columns and a map that stretches
+     to the stacks' height rather than holding a fixed square, the same
+     trade this breakpoint always made before the grid switch. */
+  @media (max-width: 900px) and (orientation: landscape) {
+    .deck { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(140px, 220px); grid-template-rows: auto auto; column-gap: .6rem; }
+    .deck-controls { grid-column: 1 / -1; grid-row: 1; }
+    .map-panel { align-self: stretch; }
+    .map-panel-board { aspect-ratio: auto; min-height: 90px; }
   }
 
 `;
