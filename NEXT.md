@@ -46,9 +46,6 @@ cadence.
   checkbox, the eyebrow adoption, the stale headers, and the recast callers. One owner, in order,
   because that file is the bottleneck and parallel edits to it cost more than sequencing saves. Top
   tier. Status: started.
-- **T39 page headings and a stale label** — the five demo pages with no `<h1>`, and
-  `MUDIII_SCENARIO_LABELS`. `build-demo-site.mjs` and the page renderers the mudiii track does not
-  hold. Sonnet. Status: started.
 
 Not dispatchable: the CI-verification items wait on a pipeline, and `smoke:deploy`'s probe needs a
 real deploy.
@@ -371,14 +368,6 @@ real deploy.
   `auto`, which is what the earlier fix used to stop a square box blowing out to 283px tall. Decide
   whether a square board or a visible 3D view matters more in landscape; they are in tension.
 
-- **`MUDIII_SCENARIO_LABELS` describes a cast the page no longer uses.**
-  `scripts/build-demo-site.mjs` still labels the opening square "town square (12x12, 1 fox, 3
-  goblins)". The roster now comes from the sliders, so that count is a layout default the page
-  ignores.
-  **Tier:** Haiku.
-  **Do:** drop the cast from the label, or derive it. The board size is still true.
-
-
 - **The eat flourish barely reads at a 220ms tick.** The flourish now plays on both sides, but the
   predator's clip fades in over 150ms and an attack animation runs several hundred ms, so the next
   tick fades it out before it finishes. A viewer sees the wind-up blending into whatever comes next
@@ -440,15 +429,6 @@ real deploy.
   **Risk:** none beyond copying the wrong hint, which is the bug below.
 
 ### Pipeline
-
-- **Five demo pages ship with no `<h1>` at all.** `chat.html`, `ingest.html`, `ledger.html`,
-  `research.html` and `adventure.html` carry no top-level heading anywhere. Found while giving every
-  page a navigable eyebrow, unrelated to it, and left alone deliberately.
-  **Tier:** Sonnet. Five pages of heading hierarchy, not one insertion.
-  **Do:** work out what each page's real title should be before adding tags. An `<h1>` in the wrong
-  place reads worse to a screen reader than none at all.
-  **Risk:** the eyebrow is not the title. Several pages already carry a real page-title `<h1>`
-  elsewhere, so check before adding a second.
 
 - **`e2e:deployed:pages` fails on the teach-frame test's own precondition.** Job 15665986632, against
   `ab32c1ce`: "an addressed teach-frame moves the board and the page redraws it, with nothing
