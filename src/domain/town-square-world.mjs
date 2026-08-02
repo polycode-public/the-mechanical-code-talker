@@ -82,6 +82,42 @@ export function oneStepDirectionBetween(fromCell, toCell) {
   return null;
 }
 
+/** The eight points a facing may take, clockwise from north. The four
+ *  cardinals are DIRECTION_DELTA's own keys, and they are the only ones a STEP
+ *  can use — the grid has no diagonal exits. The four intercardinals are
+ *  turn-only, which is what a forty-five degree turn on the spot writes. */
+export const COMPASS_POINTS = Object.freeze([
+  "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
+]);
+
+/** `facing` turned `degrees` clockwise (a negative angle turns the other way),
+ *  landing on one of COMPASS_POINTS. Null when `facing` isn't a compass point
+ *  or the angle isn't a whole multiple of 45, so a caller refuses rather than
+ *  rounding a nonsense turn into a real one. Pure. */
+export function turnedFacing(facing, degrees) {
+  const at = COMPASS_POINTS.indexOf(String(facing ?? ""));
+  if (at < 0) return null;
+  if (!Number.isInteger(degrees) || degrees % 45 !== 0) return null;
+  const steps = degrees / 45;
+  return COMPASS_POINTS[(((at + steps) % 8) + 8) % 8];
+}
+
+/** The compass point directly behind `facing`, or null. Pure. */
+export function reverseFacing(facing) {
+  return turnedFacing(facing, 180);
+}
+
+/** The cell one step `direction` from `cell`, or null when `direction` names
+ *  no cardinal step or `cell` doesn't parse. Bounds and props are NOT checked
+ *  here: whether that cell can actually be entered is the exit table's answer,
+ *  and there is only one of those. Pure. */
+export function stepCellFrom(cell, direction) {
+  const at = parseCellId(cell);
+  const delta = DIRECTION_DELTA[String(direction ?? "")];
+  if (!at || !delta) return null;
+  return cellId(at.x + delta.dx, at.y + delta.dy);
+}
+
 // ---- the prop vocabulary ------------------------------------------------------
 
 /** The closed set of noun stems a prop id may use ("house-1" -> "house"). A

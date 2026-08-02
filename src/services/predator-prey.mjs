@@ -58,6 +58,12 @@ const PLACEMENT_PREDICATE = "mgx:currently-in";
 const MASS_PREDICATE = "mgx:hasMass";
 const MOOD_PREDICATE = "mgx:feels";
 const FACING_PREDICATE = "mgx:facing";
+// The facing a visitor's own hand turned an agent to, written only on a driven
+// turn. It folds into the same facing map as the ordinary row below, which is
+// what makes a hand turn hold while the agent stands still and lose the moment
+// the planner takes a step of its own: the step's own facing row is stamped
+// with a later turn, and a later turn outranks.
+const DRIVEN_FACING_PREDICATE = "mgx:driven-facing";
 const EATEN_BY_PREDICATE = "mgx:eaten-by";
 const STARVED_PREDICATE = "mgx:starved";
 const PLACED_BY_PREDICATE = "mgx:placed-by";
@@ -86,7 +92,7 @@ const TURN_PLAYED_PREDICATE = "mgx:turn-played";
 const BOARD_SUBJECT = "square";
 
 const MUDIII_STATE_PREDICATE_SET = new Set([
-  PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE,
+  PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE, DRIVEN_FACING_PREDICATE,
   EATEN_BY_PREDICATE, STARVED_PREDICATE, PLACED_BY_PREDICATE,
   MODEL_PREDICATE, ROTATION_PREDICATE, TURN_PLAYED_PREDICATE,
   CARRYING_PREDICATE, PREY_EATEN_PREDICATE, WEB_BUILT_PREDICATE,
@@ -208,6 +214,7 @@ export function foldTownSquareState(factRows) {
         if (snap && rowEpoch === epoch) tickCount = Math.max(tickCount, turn);
         break;
       case FACING_PREDICATE:
+      case DRIVEN_FACING_PREDICATE:
         if (outranks(rowEpoch, turn, facing.get(base))) facing.set(base, { value: row.object, turn, epoch: rowEpoch });
         break;
       case EATEN_BY_PREDICATE:
@@ -448,6 +455,29 @@ function stepPlan(fromCell, toCell) {
   return direction ? [direction] : [];
 }
 
+/**
+ * The hand-driven move `entry` asks of an agent standing at `fromCell`, as
+ * `{ cell, facing }` with `cell` a parsed cell — or null when nothing was
+ * asked, or when what was asked is not a legal one-step move.
+ *
+ * `entry` is a target cell id, or `{ cell, facing }` with both parts optional:
+ * no cell holds the agent where it stands, which is what a turn on the spot
+ * is, and no facing leaves the facing to the step itself.
+ *
+ * The legality table is oneStepOptions — the very list the wander, evade and
+ * chase rungs pick from — so a wall or a prop is a missing exit here too,
+ * never a second notion of blocked, and a refusal reads as "no such move"
+ * rather than as a rule this seam invented. Pure.
+ */
+function acceptedManualMove(entry, fromCell, applyActions) {
+  if (!entry) return null;
+  const request = typeof entry === "string" ? { cell: entry } : entry;
+  const facing = typeof request.facing === "string" && request.facing ? request.facing : null;
+  const target = typeof request.cell === "string" && request.cell ? request.cell : cellId(fromCell.x, fromCell.y);
+  const cell = oneStepOptions(fromCell, applyActions).find((option) => cellId(option.x, option.y) === target);
+  return cell ? { cell, facing } : null;
+}
+
 const round2 = (n) => Math.round(n * 100) / 100;
 
 // ---- the goal line and the mood word -------------------------------------------
@@ -457,8 +487,9 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // is scared, anything wandering or foraging is calm, and anything that just ate
 // is happy.
 
-function goalLine(kind, { subject, cell, arrived, boardNoun = "square", catches = false } = {}) {
+function goalLine(kind, { subject, cell, arrived, boardNoun = "square", catches = false, facing = null, held = false } = {}) {
   switch (kind) {
+    case "driven": return held ? `driven by hand — holding at ${cell}, facing ${facing}.` : `driven by hand — stepping to ${cell}.`;
     case "avoid": return `avoiding ${subject}, last seen at ${cell}.`;
     case "chase":
       if (!arrived) return `chasing ${subject}, last seen at ${cell}.`;
@@ -980,11 +1011,20 @@ function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
  * to where the predator was when it looked), while eating resolves on the
  * post-move ones (it is caught where the predator actually ends up).
  *
+ * `manualMoves` is the one place a visitor's own hand reaches the world:
+ * `{ agentId: cellId }`, or `{ agentId: { cell, facing } }`, checked before
+ * that agent's belief chain runs. A legal request moves the agent under the
+ * `driven` rung; an illegal one is refused and that agent decides for itself
+ * this turn, so a rejected press never freezes it. A driven turn spends a
+ * turn like any other: the ecology pass runs, and every other agent decides
+ * and moves in this same call.
+ *
  * Returns `{ turn, epoch, agents, items, ecology, rungs, activeWebs, writes }`.
  * `agents` and `items` and `ecology` are the frozen render payload — see
  * townSquareTickPayload, which projects exactly those three plus the turn.
- * `rungs` is the decision each live agent reached this turn ("chase", "evade",
- * "forage", "avoid", "wander", and — on a cast that carries or spins webs —
+ * `rungs` is the decision each live agent reached this turn ("driven" for a
+ * hand-driven move, then "chase", "evade", "forage", "avoid", "wander", and —
+ * on a cast that carries or spins webs —
  * "carry", "deliver", "carried", "trapped", "hold-web", "build-web"); an agent
  * that decided and then died still has a rung and no longer has an `agents`
  * entry, which is the difference between a decision and a survivor.
@@ -993,6 +1033,7 @@ function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
  */
 export async function runTownSquareTick(memoryDir, {
   layout, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+  manualMoves = {},
 } = {}) {
   const lay = typeof layout === "string" ? TOWN_SQUARE_LAYOUTS[layout] : layout;
   if (!lay) throw new Error(`runTownSquareTick: no such layout "${layout}"`);
@@ -1031,6 +1072,11 @@ export async function runTownSquareTick(memoryDir, {
 
   const decide = (agentId, role) => {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
+    // The visitor's hand, checked before any of the belief chain below. A
+    // refused request leaves `driven` null, and the chain then runs exactly as
+    // it would have on a turn nobody touched.
+    const driven = acceptedManualMove(manualMoves?.[agentId], fromCell, applyActions);
+    const restingFacing = state.facing.get(agentId)?.value ?? DEFAULT_FACING;
     const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
     const beliefOpts = { visionRadius, toldFacts };
     // True unless a caller explicitly turns it off. A config object built by
@@ -1045,13 +1091,14 @@ export async function runTownSquareTick(memoryDir, {
     // lookup below stays on beliefOpts either way: this switch is about food.
     const foodBeliefOpts = foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
     const rivals = role === "predator" ? predators.filter((id) => id !== agentId) : predators;
-    const threat = nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
+    const threat = driven ? null : nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
 
     let rung;
     let nextCell;
     let plan;
     let goal;
     let mood;
+    let drivenFacing = null;
     // A carried prey and its captor both leave the ordinary chain. A carrying
     // predator never drops its catch to dodge a rival or chase a second one:
     // nothing here eats a predator, so "avoid" is contention, not survival.
@@ -1060,7 +1107,18 @@ export async function runTownSquareTick(memoryDir, {
     const captorId = (carriesPrey && role === "prey") ? (captorOfPrey.get(agentId) ?? null) : null;
     let beliefCell = fromCell;
 
-    if (isCarrying && webbedAt(fromCell)) {
+    if (driven) {
+      rung = "driven";
+      nextCell = driven.cell;
+      plan = stepPlan(fromCell, nextCell);
+      drivenFacing = driven.facing;
+      goal = goalLine("driven", {
+        cell: cellId(nextCell.x, nextCell.y),
+        facing: driven.facing ?? restingFacing,
+        held: plan.length === 0,
+      });
+      mood = "calm";
+    } else if (isCarrying && webbedAt(fromCell)) {
       // Already standing in a web: hold, so the pass's own eat gate reads this
       // same cell and resolves the delivery on this exact tick.
       rung = "deliver";
@@ -1166,7 +1224,10 @@ export async function runTownSquareTick(memoryDir, {
       const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
       Object.assign(belief, beliefSnapshotFor(agentId, beliefCell, foodCandidates, state, foodBeliefOpts));
     }
-    const facing = plan[0] ?? state.facing.get(agentId)?.value ?? DEFAULT_FACING;
+    // A hand-picked facing beats the step it came with, which is what lets the
+    // page walk an agent backwards without spinning it round.
+    const facing = drivenFacing ?? plan[0] ?? restingFacing;
+    if (rung === "driven") movementWrites.push({ subject: stamp(agentId), predicate: DRIVEN_FACING_PREDICATE, object: facing });
     postMovePlacements.set(agentId, nextCell);
     rungs[agentId] = rung;
     agents[agentId] = { role, cell: cellId(nextCell.x, nextCell.y), facing, goal, mood, plan, mass: 0, belief };
