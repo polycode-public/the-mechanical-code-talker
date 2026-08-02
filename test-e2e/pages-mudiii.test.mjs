@@ -1,10 +1,11 @@
-// mudiii.html's own town square, in a real browser: nothing plays until the
-// deck's play control is pressed, pressing it and waiting five ticks moves
-// at least one agent to a new cell and advances the shared turn counter, a
-// click on a blocked cell writes nothing and leaves the food pill armed, and
-// a typed "put food at cell-3-4" and the same click both land the same kind
-// of fact set. Mirrors pages-mud.test.mjs's own fixture setup and assertion
-// style.
+// mudiii.html's own town square, in a real browser: the board opens already
+// playing (and stays still for a visitor who asked for reduced motion), the
+// follow control is closed while it plays and open once it is paused, pausing
+// and pressing play again moves at least one agent to a new cell and advances
+// the shared turn counter, a click on a blocked cell writes nothing and leaves
+// the food pill armed, and a typed "put food at cell-3-4" and the same click
+// both land the same kind of fact set. Mirrors pages-mud.test.mjs's own
+// fixture setup and assertion style.
 //
 // Every model-dependent assertion is gated on `public/models/` actually
 // being on disk — a sibling wave-2 track copies it in from
@@ -56,11 +57,16 @@ after(async () => {
 });
 
 /** Open mudiii.html and wait for its own session to finish booting — the
- *  chat input starts disabled and flips once boot() resolves, the same
- *  signal every other tmct page's own chat input uses. Third-party hosts are
- *  blocked and same-origin console errors/failed requests are tracked. */
-async function openMudiiiPage() {
-  const context = await browser.newContext();
+ *  chat input starts disabled and flips once the session opens, and the deck's
+ *  play control turns itself on as the last thing boot() does, which is the
+ *  signal that the opening board has actually been drawn. Third-party hosts
+ *  are blocked and same-origin console errors/failed requests are tracked.
+ *
+ *  `reducedMotion: "reduce"` opens the page as a visitor who asked for less
+ *  movement. That visitor's board never starts on its own, so the play-control
+ *  wait is skipped. */
+async function openMudiiiPage({ reducedMotion = null } = {}) {
+  const context = await browser.newContext(reducedMotion ? { reducedMotion } : {});
   const page = await context.newPage();
   const consoleErrors = [];
   const failedRequests = [];
@@ -86,11 +92,47 @@ async function openMudiiiPage() {
     null,
     { timeout: READY_TIMEOUT_MS },
   );
+  if (!reducedMotion) {
+    await page.waitForFunction(
+      () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true",
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+  }
   return { context, page, consoleErrors, failedRequests };
 }
 
 const turnCountOf = async (page) =>
   Number(((await page.locator("#globalTurnCount").textContent()).match(/\d+/) ?? ["0"])[0]);
+
+/** Stop the board and wait until it is actually still. Pausing ends the loop,
+ *  but the tick already in flight still lands, so every assertion that compares
+ *  two reads of the world has to wait for the counter to settle rather than
+ *  trusting the play control's own flag alone. */
+async function pauseBoard(page) {
+  if (await page.locator("#autoToggle").getAttribute("aria-pressed") === "true") {
+    await page.locator("#autoToggle").click();
+  }
+  await page.waitForFunction(
+    () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "false",
+    null,
+    { timeout: TICK_TIMEOUT_MS },
+  );
+  await page.waitForFunction(() => {
+    const read = () => document.querySelector("#globalTurnCount")?.textContent ?? "";
+    const first = read();
+    return new Promise((resolve) => { setTimeout(() => resolve(read() === first), 700); });
+  }, null, { timeout: TICK_TIMEOUT_MS });
+}
+
+/** Wait for a reboot (a slider change, a scenario switch, Reset) to finish.
+ *  boot() turns the play control on as its very last act, so that flipping back
+ *  to "true" is the one signal that the new cast is drawn and running. */
+const waitForReboot = (page) => page.waitForFunction(
+  () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true",
+  null,
+  { timeout: READY_TIMEOUT_MS },
+);
 
 /** Every agent the HUD row currently draws, id -> its authoritative stored
  *  cell, read through `window.mudiiiScene.cellOf` — a JS handle rather than
@@ -107,33 +149,101 @@ const agentCellsOf = (page) => page.evaluate(() => {
   return out;
 });
 
-test("the page boots with nothing playing, and no console error along the way", async () => {
+test("the page opens playing, and no console error along the way", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
-    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "the deck's play control starts off");
-    assert.equal(await turnCountOf(page), 0, "no turn has run at all on load");
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "true", "the deck's play control starts on");
+    assert.match(await page.locator("#autoToggle").textContent(), /pause/i, "and it offers the pause it is now the opposite of");
+    assert.ok(await page.locator("#hudRow .hud-card").count() > 0, "the opening cast is drawn before the board starts moving it");
     assert.equal(await page.locator("#foodPill").getAttribute("aria-pressed"), "false", "the food pill starts unarmed");
-    assert.ok(await page.locator("#hudRow .hud-card").count() > 0, "the opening cast is drawn before any turn runs");
+
+    await page.waitForFunction(() => {
+      const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+      return m && Number(m[0]) >= 1;
+    }, null, { timeout: TICK_TIMEOUT_MS });
+    await pauseBoard(page);
+    assert.ok(await turnCountOf(page) >= 1, "turns run without the visitor pressing anything");
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
-    assert.deepEqual(consoleErrors, [], "no console error booting the town square with nothing playing");
+    assert.deepEqual(consoleErrors, [], "no console error opening the town square already playing");
   } finally {
     await context.close();
   }
 });
 
-test("pressing play and waiting five ticks moves at least one agent and advances the shared counter", async () => {
+test("a visitor who asked for reduced motion gets the opening board drawn and left still", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage({ reducedMotion: "reduce" });
+  try {
+    assert.ok(await page.locator("#hudRow .hud-card").count() > 0, "the opening cast is still drawn");
+    assert.ok(await page.locator("#mapPanelBoard .map-dot").count() > 0, "and the map panel still shows where it stands");
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "nothing started on its own");
+    assert.equal(await turnCountOf(page), 0, "no turn ran unasked");
+    assert.equal(await page.locator("#agentSelect").isDisabled(), false, "the follow control is open, because nothing is playing");
+
+    // The play control is right there — this is a default, not a lockout.
+    await page.locator("#autoToggle").click();
+    await page.waitForFunction(() => {
+      const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+      return m && Number(m[0]) >= 1;
+    }, null, { timeout: TICK_TIMEOUT_MS });
+    await pauseBoard(page);
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error holding the board still");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the follow control closes while the board plays, opens when it is paused, and keeps the pick", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
+    assert.equal(
+      await page.locator("#agentSelect").getAttribute("aria-describedby"),
+      "agentSelectHint",
+      "the hint is associated with the control it describes, not floating loose beside it",
+    );
+    assert.equal(await page.locator("#agentSelect").isDisabled(), true, "a playing board closes the follow control");
+    assert.ok(await page.locator("#agentSelectHint").isVisible(), "and the hint says what to do about it");
+    assert.match(await page.locator("#agentSelectHint").textContent(), /pause/i);
+
+    await pauseBoard(page);
+    assert.equal(await page.locator("#agentSelect").isDisabled(), false, "a still board opens it again");
+    assert.equal(await page.locator("#agentSelectHint").isVisible(), false, "and the hint has nothing left to say");
+
+    const ids = await page.$$eval("#agentSelect option", (options) => options.map((o) => o.value));
+    const goblin = ids.find((id) => id.startsWith("goblin-"));
+    assert.ok(goblin, "the cast has a goblin to swap to");
+    await page.selectOption("#agentSelect", goblin);
+    assert.equal(await page.locator("#agentSelect").inputValue(), goblin, "the pick sticks while the board is still");
+    assert.equal(
+      await page.locator('#cameraMode button[data-mode="follow"]').getAttribute("aria-pressed"),
+      "true",
+      "picking someone leaves the camera following, never sitting in overhead",
+    );
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error swapping who the camera follows");
+  } finally {
+    await context.close();
+  }
+});
+
+test("pausing and pressing play again moves at least one agent and advances the shared counter", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    const startedAt = await turnCountOf(page);
     const before = await agentCellsOf(page);
+
     await page.locator("#autoToggle").click();
     await page.waitForFunction((n) => {
       const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
       return m && Number(m[0]) >= n;
-    }, 5, { timeout: TICK_TIMEOUT_MS });
-    await page.locator("#autoToggle").click();
+    }, startedAt + 5, { timeout: TICK_TIMEOUT_MS });
+    await pauseBoard(page);
 
-    assert.ok(await turnCountOf(page) >= 5, "the shared turn counter advanced across five ticks");
+    assert.ok(await turnCountOf(page) >= startedAt + 5, "the shared turn counter advanced across five more ticks");
 
     const after = await agentCellsOf(page);
     const moved = Object.keys(before).filter((id) => before[id] !== after[id] && after[id] != null);
@@ -209,6 +319,8 @@ test("every agent that takes a one-cell step renders facing the way it actually 
       null,
       { timeout: READY_TIMEOUT_MS },
     );
+    await pauseBoard(page);
+    const startedAt = await turnCountOf(page);
     let prev = await agentCellsAndYawOf(page);
     const samples = [];
     await page.locator("#autoToggle").click();
@@ -221,7 +333,7 @@ test("every agent that takes a one-cell step renders facing the way it actually 
       await page.waitForFunction((n) => {
         const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
         return m && Number(m[0]) >= n;
-      }, tick, { timeout: TICK_TIMEOUT_MS });
+      }, startedAt + tick, { timeout: TICK_TIMEOUT_MS });
       const cur = await agentCellsAndYawOf(page);
       for (const id of Object.keys(cur)) {
         const before = prev[id];
@@ -233,7 +345,7 @@ test("every agent that takes a one-cell step renders facing the way it actually 
       }
       prev = cur;
     }
-    await page.locator("#autoToggle").click();
+    await pauseBoard(page);
 
     assert.ok(samples.length > 0, "at least one live agent took a one-cell step across the run");
     for (const sample of samples) {
@@ -314,12 +426,13 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
     // Drive both sliders to their own max before rebooting — the largest
-    // cast is where the shared-cache bug compounds the hardest, and a
-    // clamped roster still reports its own real count through aria-valuetext
-    // rather than the slider's own requested value. The page updates
-    // aria-valuetext from `input` and reboots from `change` — a real drag
-    // fires both, so this dispatches both on each slider rather than only
-    // the one event that happens to trigger a reboot.
+    // cast is where the shared-cache bug compounds the hardest, and it is
+    // also where a slider that could not reach its own stated range showed
+    // up, so the count asked for has to be the count actually cast. The page
+    // updates aria-valuetext from `input` and reboots from `change` — a real
+    // drag fires both, so this dispatches both on each slider rather than
+    // only the one event that happens to trigger a reboot.
+    await pauseBoard(page);
     await page.evaluate(() => {
       const fox = document.getElementById("playerCountSlider");
       const npc = document.getElementById("npcCountSlider");
@@ -330,38 +443,43 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
       fox.dispatchEvent(new Event("change", { bubbles: true }));
       npc.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    await waitForReboot(page);
+    await pauseBoard(page);
+    // Both counts are compared against the deck's own maxima, not the values
+    // held before the drag: the whole point is that 4 foxes and 10 goblins is
+    // a cast the page can actually build. Prey also arrive from the perimeter
+    // while the board plays, so the live cast is a floor, never an equality.
     await page.waitForFunction(() => {
       const fox = document.getElementById("playerCountSlider");
       const npc = document.getElementById("npcCountSlider");
       const foxCount = Number((fox.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
       const npcCount = Number((npc.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
       const cards = document.querySelectorAll("#hudRow .hud-card[data-agent]").length;
-      return foxCount + npcCount > 0 && cards === foxCount + npcCount;
+      return foxCount === 4 && npcCount === 10 && cards >= foxCount + npcCount;
     }, null, { timeout: READY_TIMEOUT_MS });
     await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
     assertEveryMeshWithinTolerance(await meshHeightsOf(page), "on load, largest cast");
 
+    const startedAt = await turnCountOf(page);
     await page.locator("#autoToggle").click();
     await page.waitForFunction((n) => {
       const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
       return m && Number(m[0]) >= n;
-    }, 4, { timeout: TICK_TIMEOUT_MS });
-    await page.locator("#autoToggle").click();
+    }, startedAt + 4, { timeout: TICK_TIMEOUT_MS });
+    await pauseBoard(page);
     await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
     assertEveryMeshWithinTolerance(await meshHeightsOf(page), "after four ticks");
 
     // The Reset path is where the warm loader cache bites hardest: every
     // agent re-requests the very same URL a second time, this time into an
-    // already-warm cache.
-    //
-    // Wait on the turn counter and a non-empty cast, never on the cast size
-    // held before the Reset. Prey arrive from the perimeter while the board
-    // plays, so the cast is usually larger by then than the seeded roster a
-    // Reset returns to.
+    // already-warm cache. boot() turns the play control back on as its last
+    // act, so that is the signal the new cast is drawn — the turn counter
+    // passes through zero too fast to catch on a board that opens playing.
     await page.locator("#resetBtn").click();
+    await waitForReboot(page);
+    await pauseBoard(page);
     await page.waitForFunction(
-      () => document.querySelectorAll("#hudRow .hud-card[data-agent]").length > 0
-        && (document.querySelector("#globalTurnCount")?.textContent ?? "").includes("turns: 0"),
+      () => document.querySelectorAll("#hudRow .hud-card[data-agent]").length > 0,
       null,
       { timeout: READY_TIMEOUT_MS },
     );
@@ -378,6 +496,7 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
 test("a click on a blocked cell writes nothing and leaves the food pill armed", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
+    await pauseBoard(page);
     await page.locator("#foodPill").click();
     assert.equal(await page.locator("#foodPill").getAttribute("aria-pressed"), "true", "the pill reports itself armed");
 
@@ -440,6 +559,10 @@ async function sendAndSettle(page, act, { prepare = null } = {}) {
 test("a typed 'put food at cell-3-4' and a click on the same cell both place a morsel there", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
+    // Paused first: this compares three reads of the world's own sentences, and
+    // an agent stepping between two of them adds lines to the diff that have
+    // nothing to do with the food being placed.
+    await pauseBoard(page);
     const before = await readWorldSentences(page);
     await sendAndSettle(page, () => page.locator("#chatInput").press("Enter"), {
       prepare: () => page.locator("#chatInput").fill("put food at cell-3-4"),
@@ -476,12 +599,14 @@ test("a typed 'put food at cell-3-4' and a click on the same cell both place a m
 });
 
 /** Switch the deck's scenario dropdown to the square whose label matches
- *  `pattern`, and wait for the new square's own opening cast to be drawn.
- *  Returns the picked scenario's embedded board size. The wait is on an
- *  agent id only that square casts, because boot() draws the HUD after it
- *  has the engine's own opening board — a count alone can match the square
- *  being left behind. */
-async function switchScenario(page, pattern, waitForAgentId) {
+ *  `pattern`, wait for the new square to finish booting, and stop it there.
+ *  Returns the picked scenario's embedded board size. The wait is on the play
+ *  control turning itself back on, which boot() does as its very last act —
+ *  every square now casts the same slider-driven ids, so no agent id tells the
+ *  new square apart from the one being left behind. The board is left paused,
+ *  because every caller then compares two reads of where things stand. */
+async function switchScenario(page, pattern) {
+  await pauseBoard(page);
   const gridSize = await page.evaluate((source) => {
     const index = MUDIII_PAGE_DATA.scenarios.findIndex((s) => new RegExp(source, "i").test(s.label || ""));
     if (index < 0) return null;
@@ -490,11 +615,8 @@ async function switchScenario(page, pattern, waitForAgentId) {
     select.dispatchEvent(new Event("change", { bubbles: true }));
     return MUDIII_PAGE_DATA.scenarios[index].gridSize;
   }, pattern.source);
-  await page.waitForFunction(
-    (id) => !!document.querySelector(`#hudRow .hud-card[data-agent="${id}"]`),
-    waitForAgentId,
-    { timeout: READY_TIMEOUT_MS },
-  );
+  await waitForReboot(page);
+  await pauseBoard(page);
   return gridSize;
 }
 
@@ -514,7 +636,7 @@ const mapDotCellsUnder = (page, size) => page.evaluate((gridSize) => {
 test("switching to the 14x14 chapel yard redraws the board at its own size and places food outside a 12-cell square", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
-    const gridSize = await switchScenario(page, /chapel/, "fox-2");
+    const gridSize = await switchScenario(page, /chapel/);
     assert.equal(gridSize, 14, "the chapel yard's own board size travels with its scenario");
 
     const dots = await mapDotCellsUnder(page, 14);
@@ -555,10 +677,14 @@ test("switching to the 14x14 chapel yard redraws the board at its own size and p
   }
 });
 
-test("an addressed teach-frame moves the board and the page redraws it, with nothing playing", async () => {
+test("an addressed teach-frame moves the board and the page redraws it, on a paused board", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
-    assert.equal(await turnCountOf(page), 0, "no turn has run on load");
+    // Paused first, so the one turn this frame spends is the only turn between
+    // the two reads below — the whole assertion is that a chat turn reaches the
+    // renderer, and a board still ticking underneath it proves nothing.
+    await pauseBoard(page);
+    const turnsBefore = await turnCountOf(page);
     const ids = await page.$$eval(
       "#hudRow .hud-card[data-agent]",
       (cards) => cards.map((card) => card.getAttribute("data-agent")),
@@ -574,9 +700,10 @@ test("an addressed teach-frame moves the board and the page redraws it, with not
       prepare: () => page.locator("#chatInput").fill(`@${fox} the ${goblin} is at cell-5-5`),
     });
 
-    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "the deck was never started");
-    assert.equal(await turnCountOf(page), 1, "the teach-frame's own turn is counted like a deck-driven one");
-    assert.match(await page.locator("#mapPanelTurn").textContent(), /turn 1\b/, "the map panel agrees with the deck's counter");
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "the deck stayed paused throughout");
+    const turnsAfter = await turnCountOf(page);
+    assert.equal(turnsAfter, turnsBefore + 1, "the teach-frame's own turn is counted like a deck-driven one");
+    assert.match(await page.locator("#mapPanelTurn").textContent(), new RegExp(`turn ${turnsAfter}\\b`), "the map panel agrees with the deck's counter");
 
     // The page's own dots against the store's own sentences. This is the read
     // that catches a chat turn whose result never reached the renderer.

@@ -3,7 +3,7 @@
 // own style — these tests pin the page's STRUCTURE (the deck's controls,
 // including the foxes/goblins-relabelled sliders and the two new controls
 // this page adds over mud.html's own deck; the deliberate absence of every
-// P2P surface; nothing auto-playing on load), plus the pure render-glue
+// P2P surface; the board opening already playing), plus the pure render-glue
 // functions the page splices into its own inline script.
 //
 // Driven from test/fixtures/mudiii-ticks.json (the frozen engine/viz
@@ -272,12 +272,100 @@ test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absen
   assert.doesNotMatch(html, /dir-ring/, "the compass ring dies with the free camera");
 });
 
-test("renderMudiiiHtml: nothing auto-plays on load — boot() never starts the ticker", () => {
+test("renderMudiiiHtml: the board opens playing, and a reduced-motion visitor gets it drawn but still", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(bootBlock, "boot() is in the page script");
-  assert.doesNotMatch(bootBlock[1], /\.play\(\)/, "boot draws the opening state and stops there");
-  assert.match(html, /wireDeck\(\);\s*wirePillComplete\(\);\s*boot\(\);\s*\}\)\(\);/, "boot runs once at the very end, unattended by a play call");
+  assert.match(bootBlock[1], /if \(!prefersReducedMotion\(\)\) \{\s*autoOn = true;\s*ensureTicker\(\)\.play\(\);/,
+    "boot starts the ticker itself, unless motion was asked to stop");
+  assert.match(bootBlock[1], /applyTickResult\(opening\);[\s\S]*prefersReducedMotion/,
+    "the opening board is drawn before anything starts ticking over it");
+  assert.match(html, /const prefersReducedMotion = function prefersReducedMotion\(/,
+    "the media-query read is spliced into the page rather than re-implemented");
+  assert.match(html, /wireDeck\(\);\s*wirePillComplete\(\);\s*boot\(\);\s*\}\)\(\);/, "boot still runs once at the very end");
+});
+
+test("renderMudiiiHtml: a reset draws its own cast and starts it, so the deck's play state never lies", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.match(bootBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
+    "a reboot stops whatever was running before it draws anything");
+  assert.match(
+    html,
+    /el\("resetBtn"\)\.addEventListener\("click", function \(\) \{ boot\(\); \}\)/,
+    "reset is the same boot path, so it lands on the same play state",
+  );
+});
+
+test("renderMudiiiHtml: the page script has no Math.random — two loads of a square cast identically", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.doesNotMatch(html, /Math\.random/, "a shuffled draw makes a board impossible to reload");
+});
+
+test("renderMudiiiHtml: the cast is minted by count off the scenario's own id prefix, never sliced from its opening list", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.match(bootBlock[1], /mintRoster\(rosterPrefixFor\(s, "predator"\), chosenFoxCount\(\)\)/);
+  assert.match(bootBlock[1], /mintRoster\(rosterPrefixFor\(s, "prey"\), chosenGoblinCount\(\)\)/);
+  const mint = /function mintRoster\(prefix, count\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(mint, "mintRoster is in the page script");
+  assert.match(mint[1], /prefix \+ "-" \+ i/, "the ids match the <prefix>-1..N the engine mints at seeded cells");
+  const prefix = /function rosterPrefixFor\(s, role\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(prefix, "rosterPrefixFor is in the page script");
+  assert.match(prefix[1], /roleOfAgentId\(first\.id\)/, "the prefix comes off the scenario, not a hardcoded fox");
+  assert.doesNotMatch(html, /function pickRoster\(/, "the slice-from-the-opening-cast draw is gone");
+});
+
+test("renderMudiiiHtml: the follow control closes while the board plays, driven by the ticker's own state", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const onRender = /onRender: function \(state\) \{([\s\S]*?)\n      \}/.exec(html);
+  assert.ok(onRender, "the ticker's onRender is in the page script");
+  assert.match(onRender[1], /playBtn\.setAttribute\("aria-pressed", state\.playing/,
+    "the play control reads the ticker's own state");
+  assert.match(onRender[1], /el\("agentSelect"\)\.disabled = state\.playing;/,
+    "the follow control reads that same state, so the two can never disagree");
+  assert.match(onRender[1], /el\("agentSelectHint"\)\.hidden = !state\.playing;/);
+  assert.doesNotMatch(
+    /el\("agentSelect"\)\.addEventListener\("change"[\s\S]*?\n  \}/.exec(html)[0],
+    /playing|autoOn/,
+    "the change handler keeps no second notion of whether the board is running",
+  );
+});
+
+test("renderMudiiiHtml: the follow hint is associated with the select it describes", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /id="agentSelect"[\s\S]{0,120}aria-describedby="agentSelectHint"/);
+  assert.match(html, /<span class="deck-hint" id="agentSelectHint" hidden>pause to swap<\/span>/);
+});
+
+test("renderMudiiiHtml: picking a new agent after a despawn fallback resumes the mode the fallback took", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const applyTick = /function applyTickResult\(result\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(applyTick, "applyTickResult is in the page script");
+  assert.match(applyTick[1], /if \(nextCamera\.status && camera\.mode !== "overhead"\) cameraModeBeforeFallback = camera\.mode;/);
+
+  const onChange = /el\("agentSelect"\)\.addEventListener\("change", function \(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(onChange, "the follow select's change handler is in the page script");
+  assert.match(onChange[1], /const mode = cameraModeBeforeFallback \|\| camera\.mode;/);
+  assert.match(onChange[1], /cameraModeBeforeFallback = null;/);
+  assert.match(onChange[1], /callScene\("setCamera", camera\);\s*$/, "the scene is told last, once the new state is settled");
+
+  const onCameraMode = /el\("cameraMode"\)\.addEventListener\("click", function \(e\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(onCameraMode, "the camera-mode click handler is in the page script");
+  assert.match(onCameraMode[1], /cameraModeBeforeFallback = null;/,
+    "a visitor who deliberately picks overhead stays there");
+});
+
+test("renderMudiiiHtml: the belief cards sit below the chat, so the command box is reachable without scrolling past them", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const chatAt = html.indexOf('class="mudiii-chat"');
+  const hudAt = html.indexOf('id="hudRow"');
+  const mainEndsAt = html.indexOf("</main>");
+  assert.ok(chatAt > 0 && hudAt > 0 && mainEndsAt > 0);
+  assert.ok(chatAt < hudAt, "the chat comes first in the document");
+  assert.ok(hudAt < mainEndsAt, "the HUD row is still inside main");
+  assert.match(html, /body\.editing [^{]*\.hud-row[^{]*\{ display: none; \}/,
+    "edit mode still hides the row wherever it sits");
 });
 
 test("renderMudiiiHtml: the asset manifest is embedded as page data, and no fact row carries a file path", () => {
