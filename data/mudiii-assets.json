@@ -21,7 +21,7 @@
       "destPath": "public/models/creatures/fox.glb",
       "licence": "CC0-1.0",
       "author": "Quaternius",
-      "source": "https://poly.pizza/u/Quaternius · https://quaternius.com",
+      "source": "https://poly.pizza/u/Quaternius \u00b7 https://quaternius.com",
       "bytes": 332748,
       "sha256": "2694028b47e84bad3b9d985aa7743dae02a3bcfddd6becd73b46c747a1e067b3",
       "targetHeight": 1.0,
@@ -30,7 +30,10 @@
         "walk": "Walk",
         "run": "Gallop",
         "attack": "Attack",
-        "hit": ["Idle_HitReact_Left", "Idle_HitReact_Right"],
+        "hit": [
+          "Idle_HitReact_Left",
+          "Idle_HitReact_Right"
+        ],
         "death": "Death",
         "eat": "Eating"
       }
@@ -41,7 +44,7 @@
       "destPath": "public/models/creatures/goblin.glb",
       "licence": "CC0-1.0",
       "author": "Quaternius",
-      "source": "https://poly.pizza/u/Quaternius · https://quaternius.com",
+      "source": "https://poly.pizza/u/Quaternius \u00b7 https://quaternius.com",
       "bytes": 47924,
       "sha256": "2f02ce927a8871554f3931655d75f1abb8237d36be8a19a35b09920d0812bc3c",
       "targetHeight": 2.1,
@@ -50,7 +53,9 @@
         "walk": "Walk",
         "run": "Run",
         "attack": "Attack",
-        "hit": ["HitRecieve"],
+        "hit": [
+          "HitRecieve"
+        ],
         "death": "Death"
       }
     },
@@ -207,7 +212,7 @@
       "source": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
       "bytes": 14004,
       "sha256": "8b340af18ea1325d5a9bd4a967d3ef37bb90838ca2d90927b123e23877f7ddad",
-      "targetHeight": 0.16,
+      "targetHeight": 0.6,
       "clips": null
     },
     {
@@ -219,7 +224,7 @@
       "source": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
       "bytes": 14004,
       "sha256": "8b340af18ea1325d5a9bd4a967d3ef37bb90838ca2d90927b123e23877f7ddad",
-      "targetHeight": 0.36,
+      "targetHeight": 0.6,
       "clips": null
     }
   ]

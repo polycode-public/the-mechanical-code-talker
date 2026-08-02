@@ -141,7 +141,7 @@ test("resolveGameConfig: the mudiii table arrives fully populated with no toml a
     preyVisionRadius: 3,
     preySpawnIntervalTurns: 5,
     foodSpawnIntervalTurns: 3,
-    spawnedFoodMass: 1,
+    spawnedFoodMass: 2,
     placedFoodMass: 2,
     maxPreyPopulation: 6,
     maxFoodItems: 8,

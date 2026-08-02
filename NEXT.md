@@ -408,17 +408,20 @@ until it does. Then the grid-size item, because the deception rail and the map p
   local can tell you.
   **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
 
-- **Food reads small on the board even after the swap.** The hay bale renders: `food-crumb` and
-  `food-morsel` resolve through the manifest, the page fetches `haybale.glb` exactly once, and the
-  e2e is green. But at `targetHeight` 0.16 a crumb is 16% of the fox's height and reads as a speck
-  at normal camera distance. The heights were chosen to preserve the primitive spheres' footprint,
-  which had itself just been doubled, so this is the old size in a new shape.
-  **Tier:** Haiku. Two numbers in `data/mudiii-assets.json`.
-  **Do:** raise `food-crumb` and `food-morsel`'s `targetHeight` until a crumb reads as an object
-  rather than a dot, and screenshot to confirm rather than reasoning about the number. Keep the
-  morsel clearly larger than the crumb.
-  **Risk:** a bale taller than a goblin turns food into scenery and hides the agents behind it.
-  **Mitigation:** capture the board at the follow camera and look at it, at both sizes together.
+- **The bigger single-food change is committed and not yet looked at.** The operator's decision:
+  one food, not two. Spawned and placed food are the same hay bale, worth the same, at the same
+  size. `spawnedFoodMass` is now 2, matching `placedFoodMass`, and both manifest rows carry
+  `targetHeight` 0.6 against the fox's 1.0. Green: manifest check OK, 130/130 across game-config,
+  predator-prey, the replay fixture and mudiii-turn. The frozen tape is insulated because it pins
+  its own `spawnedFoodMass`.
+  **What is missing is the look.** Nobody has seen 0.6 on the board. 0.6 was chosen by reasoning
+  about the fox's height, not by looking at a render.
+  **Tier:** Haiku.
+  **Do:** `npm run demo:build`, drive mudiii.html, place a morsel and let a crumb spawn, screenshot
+  it, and **open the PNG with the Read tool**. Judge whether a bale reads as food on the ground at
+  the follow camera, and whether it now hides agents behind it. Adjust `targetHeight` on both rows
+  together and look again if it is wrong. Report the path.
+  **Risk:** a bale taller than a goblin turns food into scenery.
 
 - **The screenshot ready-check has a dead branch.** `scripts/gen-screenshots.mjs:170`-`:175` waits on
   `window.mudiiiScene?.cells?.()` or `cellOf("fox-1")`. The scene surface (`mudiii-scene.mjs:754`)

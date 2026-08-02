@@ -78,7 +78,9 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     preyVisionRadius: 3,
     preySpawnIntervalTurns: 5,
     foodSpawnIntervalTurns: 3,
-    spawnedFoodMass: 1,
+    // Spawned and placed food are one thing: the same hay bale, worth the
+    // same. The two knobs stay separate so a world can still tell them apart.
+    spawnedFoodMass: 2,
     placedFoodMass: 2,
     maxPreyPopulation: 6,
     maxFoodItems: 8,
