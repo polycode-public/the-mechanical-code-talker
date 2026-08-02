@@ -17,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { homepage } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 const BASE = homepage.endsWith("/") ? homepage : `${homepage}/`;
 
-const WARM_PATHS = ["chat-seed.json", "mud.html", "sprites.html", "adventure.html", "spider-fly.html"];
+const WARM_PATHS = ["chat-seed.json", "mud.html", "sprites.html", "adventure.html", "spider-fly.html", "mudiii.html"];
 const FETCH_TIMEOUT_MS = 60_000;
 const ATTEMPTS = 3;
 

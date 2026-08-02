@@ -693,6 +693,7 @@ e2e:deployed:pages:
       test-e2e/plan-browser-entry.test.mjs test-e2e/pages-adventure.test.mjs
       test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
       test-e2e/pages-mud.test.mjs test-e2e/pages-mud-scenarios.test.mjs
+      test-e2e/pages-mudiii.test.mjs
       test-e2e/pages-screenshot-sweep.test.mjs
 
 # The three files whose own assertions race a real elapsed-time budget
