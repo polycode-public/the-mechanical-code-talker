@@ -33,38 +33,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Batch 2, running alongside the one batch-1 track still open. Each track owns files no sibling
-touches. Every remaining mudiii item that edits `mudiii-viz.mjs` waits for T1, because that file is
-the whole collision point and the goblin item has to land first anyway.
+Two tracks running. Fourteen have merged; `main` carries 19 unpushed commits and is **red** on three
+tests, which is what T15 exists to clear. Nothing gets pushed until it is green.
 
-- **T14 feed models** — `data/mudiii-assets.json`, `CREDITS.md`, the committed model files. Sonnet.
-  Status: started.
-- **T13 goblin e2e regressions** — the byte-cache loader rework in `mudiii-scene.mjs` and the two
-  failing tests in `test-e2e/pages-mudiii.test.mjs`. Sonnet. Status: started.
+- **T15 red `main`** — `predator-prey.mjs`, `game-config.mjs`, `mudiii-turn.test.mjs` and the
+  fixture tape. Sonnet. Status: started.
+- **T16 fox walks backwards** — `mudiii-scene.mjs`, `mudiii-viz.mjs`, `data/mudiii-assets.json`.
+  Sonnet. Status: started.
 
-Landed:
-
-- **T2 smoke:deploy mudiii probe** — merged as `f768dd8e`, pushed. Full suite 5845/5845.
-- **T4 `QUESTION_LEAD_RE` dedup** — merged. Blast radius 205/205 with T5/T6/T7.
-- **T5 import-cycle estate guard** — merged, `test/estate/no-deadlock-import-cycle.test.mjs`.
-- **T6 adventure pill `data-command`** — merged.
-- **T7 resolver purity invariant** — merged into `CLAUDE.md`'s working-model section.
-- **T3 index/home PAGE_ORDER** — merged. Both e2e files pinned the stale ten-page count.
-- **T1 goblin-render** — merged. Blast radius 80/80. The e2e assertion it wrote has not run yet;
-  the machine could not finish a `demo:build` under seven concurrent tracks.
-- **T10 pages-home wait hardening** — merged, then corrected: the track set a 10s timeout, which is
-  shorter than Playwright's own 30s default and so made the flake likelier. Both waits now share a
-  named 60s constant.
-- **T8 teach mode UI for adventure and mud** — merged. mudiii's third stays open below.
-- **T11 p2p retraction replication** — merged. Blast radius 356/356. It also found that
-  `relabelForBroadcast` files the same assertion under a different id locally and at the peer, so a
-  retraction naming only local ids bit on one store and missed the other.
-- **T12 trust-score flake** — merged, 8/8. It found the same wall-clock bug a second time in
-  `readFactRows`' folded `trust`, which had not flipped yet only because its two calls land closer
-  together in real time.
-- **T9 predator-prey trio** — merged. Blast radius 311/311 with T8. `recastTownSquare` also fixed
-  `startTownSquareGame`'s guard to compare the placement's epoch rather than its existence, and
-  stamped the roster's bootstrap facts so an epoch-aware guard has something to read.
+Landed, in merge order: the `smoke:deploy` mudiii probe; the `QUESTION_LEAD_RE` dedup; the
+import-cycle estate guard; adventure's pill `data-command`; the resolver purity invariant in
+`CLAUDE.md`; both e2e files' page-order pins; the goblin sizing fix and its byte-caching loader
+rework; the `pages-home` wait hardening; teach mode's UI for adventure and mud; p2p retraction
+replication; the 3sf trust-score comparison; the predator-prey trio; and the committed hay bale with
+its manifest rows.
 
 ## Open items
 
@@ -77,74 +59,24 @@ Order matters in a few places. Land the goblin-render item first, because every 
 until it does. Then the grid-size item, because the deception rail and the map panel both need its
 `gridSizeOf()` helper. Then the rail trio together, then the tick-result pair together.
 
-- **Goblins render at a different wrong scale each time, and the giant is one of them.** Three live
-  screenshots of the same scenario show a goblin many times house height with its foot above the
-  ground, a goblin at roughly fox knee-height standing correctly, and a goblin clipping through the
-  ground plane at a third scale. The simulation is fine: `cellOf("goblin-3")` returns `cell-11-4`,
-  the HUD cards are right, the map dots are right, no request fails.
-  The variation is a race with the spawn tween. `playSpawnFlourish` tweens `entry.group.scale` from
-  0 to 1, and `normalizeToHeight` measures its object's bounding box **through that group's world
-  matrix**, so it reads `rawHeight * groupScaleAtThatFrame` and applies
-  `targetHeight / (rawHeight * groupScaleAtThatFrame)`. Where the tween happened to be when the GLTF
-  parse resolved decides the scale, which differs per agent and per load. At or near scale 0,
-  `size.y` reads zero, `var height = size.y || 1` substitutes 1, and the applied scale becomes
-  `targetHeight` against the raw model — the giant. The seat comes off the same polluted box, which
-  is the floating and the clipping. Three causes, all measured on the live page.
-  `createCachedLoader` (`src/services/mudiii-scene.mjs:240`) caches the promise, so every agent of a
-  kind receives the same `gltf.scene`. `entry.group.add(gltf.scene)` (`:584`) reparents it and
-  empties the previous goblin's group, so only the last goblin ends up holding a mesh.
-  `normalizeToHeight` (`:583`) then runs a second time on an already-normalized, already-parented
-  object and measures through the group's world matrix. `playSpawnFlourish` (`:609`) can have that
-  parent at scale 0 in the same frame, so `var height = size.y || 1` (`:480`) substitutes 1 and the
-  applied scale becomes `targetHeight` against the raw model. That is the giant, and the seat
-  computed at `:484` in the same frame is the float. One Reset breaks the fox the same way.
-  Third, `mudiii-viz.mjs:1219` calls `callScene("boot", …)` without awaiting it, so
-  `applyTickResult(opening)` at `:1230` runs while `scene` is still null and `boot` then clears
-  `agentGroups`. Nothing agent-shaped renders until the first tick.
-  **Tier:** Sonnet. The diagnosis is settled and the edit is small and precise.
-  **Do:** normalize before parenting and before the flourish. Measure the raw parsed model in
-  isolation, apply the scale and seat to the object itself, then add it to `entry.group`, then start
-  `playSpawnFlourish`. A box taken on an unparented object cannot be polluted by a parent's in-flight
-  tween, which removes the race rather than narrowing it. Call
-  `loadGlbRaw(modelUrlFor(asset.destPath))` in `ensureAgent` (`:582`) so each agent owns an object it
-  is safe to mutate, which is what the block comment at `:565` already claims happens — with the
-  shared cached scene, agent N's normalization silently rescales agents 1 to N-1 as well. Leave
-  `loadPropTemplate` (`:487`) on the cached loader; props are cloned and unskinned. Add two guards to
-  `normalizeToHeight` (`:476`): refuse an object that already has a parent, refuse a second call on
-  the same object. Drop the `|| 1` fallback at `:480` — it invents a scale from an unmeasurable
-  height, and once normalization runs pre-parent on a raw model, a zero height means something is
-  wrong and should fail loudly. Await the boot at `mudiii-viz.mjs:1219`.
-  **Feasibility:** one extra GLTF parse per agent, 47 KB for `goblin.glb` and 333 KB for `fox.glb`,
-  at most 4 foxes and 10 goblins. `SkeletonUtils` is not in the vendor bundle
-  (`scripts/build-three-vendor.mjs:31`), so a clone-based fix needs a vendor change. Don't take it.
-  **Risk:** `test/services/mudiii-viz.test.mjs:138` pins the exact `callScene("boot", …)` string.
-  Adding `await` still matches; the grid-size item's edit to the same line does not.
-  `test/services/mudiii-scene.test.mjs:250` pins the splice list.
-  **The sizing fix has landed and its own e2e does not pass yet.** `normalizeToHeight` now refuses a
-  parented object and a repeat call, the `|| 1` fallback is gone, each agent parses its own model,
-  `meshHeightOf(id)` is on the scene surface, and `boot` is awaited. Unit tests are green, 80/80.
-  `node --test test-e2e/pages-mudiii.test.mjs` on `main` runs 6 and fails 2, both caused by the fix:
-  - **Per-agent `loadGlbRaw` fires one network request per agent for the same URL, and a reboot
-    cancels the in-flight duplicates.** The pre-existing test "a typed 'put food at cell-3-4' and a
-    click on the same cell both place a morsel there" now fails with
-    `models/creatures/fox.glb` in `failedRequests`. This file's `requestfailed` handler
-    (`test-e2e/pages-mudiii.test.mjs:78`-`:80`) pushes every same-origin failure with no
-    `net::ERR_ABORTED` exemption, unlike `pages-home.test.mjs`, so a cancelled duplicate reads as a
-    broken asset. The old cached loader fetched once, which is why this is new.
-    **Do:** cache the fetched bytes, not the parsed scene. One request per URL, then a
-    `GLTFLoader.parse` per agent off the shared ArrayBuffer, so every agent still owns its own object
-    graph and the guards still hold. Do not exempt `ERR_ABORTED` in the test to make this go away;
-    the duplicate requests are real and worth removing.
-  - **The new sizing test times out on its Reset wait** (`:263`), which wants the card count back at
-    its pre-Reset value and `#globalTurnCount` reading `turns: 0`. It also drives the sliders by
-    assigning `.value` and dispatching only `change`, so `showFoxCount`/`showGoblinCount` never run
-    from `input` and the `aria-valuetext` the earlier wait reads can disagree with the clamped
-    roster. That clamp is the sliders item below.
-    **Do:** drive the sliders through the events the page actually listens to, and settle what Reset
-    is expected to restore before asserting it.
-  **Mitigation:** the e2e must pass before this item closes. It has to catch variance rather than a
-  wrong average, at the largest cast the sliders can really deliver: a single-agent check passes on
-  whichever goblin happened to get a good frame.
+- **The goblin sizing fix is green locally and unproven on CI.** Goblins used to render at a
+  different wrong scale on every load, with one coming out many times house height, its foot above
+  the ground. The cause was a race with the spawn tween: a cached loader handed every agent of a kind
+  the same parsed `gltf.scene`, and `normalizeToHeight` measured it through a parent group's world
+  matrix while `playSpawnFlourish` was still tweening that group's scale, so the applied scale
+  depended on which frame the parse landed on. At or near scale zero the measured height read zero,
+  the `|| 1` fallback invented a height, and the scale became `targetHeight` against the raw model.
+  Fixed: each model URL's bytes are fetched once and parsed per agent off the shared buffer, so every
+  agent owns its own object graph without a duplicate request. `normalizeToHeight` throws on an
+  already-parented object and on a repeat call, the `|| 1` fallback is gone, `meshHeightOf(id)` is on
+  the scene surface, and `boot` is awaited so the opening tick no longer runs against a null scene.
+  `node --test test-e2e/pages-mudiii.test.mjs` passes 6/6 across three consecutive local runs, and
+  each of `fox.glb` and `goblin.glb` is requested exactly once across a load, a slider reboot and a
+  Reset.
+  **What is left:** none of that has reached CI. `e2e:deployed:pages` failed this test on pipeline
+  2725214193, which ran against a commit predating the fix.
+  **Tier:** none. It closes on the next green pipeline.
+  **Do:** confirm the job passes on the push that clears the red suite, then delete this item.
 
 - **The deception rail is not on the page.** `pillsForMudiii` is fully implemented and unit-tested
   in `src/services/mudiii-turn.mjs`: address pills, true/false claim pairs, a point-reflected false
@@ -830,6 +762,23 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### Pipeline
 
+- **`memory-seed-perf.test.mjs:65` fails on CI at 21.09x against a "well under 20x" bar.** The
+  `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
+  batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
+  retraction work, so nothing in this batch caused it. A shared CI runner and a bar the measurement
+  sits right on top of are enough to explain it.
+  **Tier:** Sonnet. The judgment is what the test is really asserting.
+  **Do:** the test's subject is that seeding is linear rather than quadratic, and 21.09x against a
+  20x bar does not distinguish those — quadratic would be nearer 64x. Give the bar enough headroom to
+  separate the two hypotheses it exists to tell apart, rather than nudging it just past the reading
+  that failed. Best-of-5 on a noisy shared runner still carries real variance; consider whether the
+  ratio needs a more robust statistic than a single best-of pair.
+  **Risk:** raising a threshold to silence a test is how a real regression later ships unnoticed.
+  The bar has to stay tight enough that genuine quadratic growth still fails it, and the report has
+  to say what margin it now has.
+  **Mitigation:** state the measured linear ratio and the ratio a quadratic implementation would
+  produce, and put the new bar between them with the reasoning written down.
+
 - **`main` is red: three tests broke on the predator-prey trio.** The full suite runs 5884 and fails
   3. All three sit outside the files that track's brief named as its blast radius, which is the
   brief's fault, not the track's — `predator-prey.mjs` reaches further than
@@ -853,63 +802,12 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** only re-record after naming which change moved it and why that move is wanted. If
   the gating default is not reaching the fixture's path, that is a bug in the flag, not in the tape.
 
-- **`e2e-web-index` and `e2e:deployed:shell` both fail on pipeline 2725071231 (4866f26d).**
-  `public/index.html` now carries 11 claim chips, 11 plates and numerals I through XI, with `mudiii`
-  last (`id="feature-mudiii"`, `Plate XI`). Its screenshot and manifest entry already exist, so no
-  `PENDING_PLATES` change is needed. Jobs 15664444086 and 15664479225.
-  **Tier:** Haiku.
-  **Do:** two test files, not one. `test-e2e/pages-index.test.mjs`: append `"mudiii"` to `PAGE_ORDER`
-  (`:15`-`:26`) and `"XI"` to the numerals assertion (`:67`).
-  `test-e2e/pages-home.test.mjs`: append `"mudiii"` to its own separate `PAGE_ORDER` (`:23`-`:34`);
-  it asserts `claims.count() === PAGE_ORDER.length` at `:126`.
-  **Risk:** `pages-home.test.mjs` runs in both failing jobs (`.gitlab-ci.yml:313` and `:657`) and
-  pins the same stale count by the same mechanism. Fixing only the file the item used to name would
-  leave it failing and looking like a second, unrelated bug.
-  **Mitigation:** run `node --test test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs`
-  against a fresh `npm run demo:build` before re-running the jobs.
-
-- **A memory-backend parity test pins a wall-clock-derived trust score and flakes.**
-  `test/adapters/memory-backend-memory.test.mjs:48`, asserting at `:91`, deep-equals a whole
-  individual's property list including `mgx:trustScore`. It failed a full-suite run on `main` with
-  actual `0.953926` against expected `0.953925`, one unit in the sixth decimal. `createdAt` is fixed
-  at `2026-07-10T09:00:00.000Z` and `mgx:trustInputs` reports the same `recency: 0.95849` on both
-  sides, so the drift is in the score's own rounding as real time moves away from that fixed date.
-  Nothing in the batch touches this path, and the same suite passed twice earlier the same day.
-  **Tier:** Haiku for the test-side fix; report rather than edit if the scorer itself needs changing,
-  since a concurrent track owns the memory modules.
-  **The operator's decision:** compare the score at **3 significant figures**. Both readings become
-  `0.954`. The value stays asserted, at a precision the recency drift cannot move. No placeholder, no
-  tolerance band.
-  **Do:** apply the same 3sf transform to the actual and the expected side, so the assertion cannot
-  pass by one side alone being normalized. Every other property in the list stays compared exactly.
-  Give any sibling assertion in the file that pins a score the same treatment in the same commit,
-  whether or not it has failed yet.
-  **Risk:** loosening the whole deep-equal would drop real parity coverage. Narrow the treatment to
-  the one time-derived field and leave every other property compared exactly.
-  **Mitigation:** show a score differing in the sixth decimal now compares equal, and that one
-  differing in the third significant figure still fails. The second half matters as much as the
-  first: the assertion must still catch a real change.
-
-- **Two `pages-home.test.mjs` tests time out waiting for a page element.** "the adventure claim leads
-  to a real room scene" waits on `#roomFrame` becoming visible (`:291`-`:298`) and "the ledger claim
-  leads to a real taught fact store" waits on `#chatform` (`:300`-`:310`). Both failed in a worktree
-  run of that file against a fresh `npm run demo:build`, while the same file's page-count assertions
-  passed. Reported as unrelated to the page-order change that surfaced them, which is a claim to
-  check rather than accept.
-  **They do not reproduce.** On merged `main`, after `npm run demo:build`,
-  `node --test test-e2e/pages-home.test.mjs` passes 18/18. Both pages render their element. What
-  differed is load: the worktree run happened while six sibling agents were saturating the machine,
-  and both failures are waits on a default locator timeout. So the pages are fine and the tests are
-  timing-fragile under contention, which CI will hit too.
-  **Tier:** Haiku. Two waits.
-  **Do:** give the `#roomFrame` and `#chatform` waits an explicit timeout generous enough to survive
-  a loaded runner, rather than leaning on the locator default. Check whether this file's other page
-  waits already pass one, and match that number instead of inventing a second convention.
-  **Risk:** a longer timeout on a wait that is genuinely broken turns a fast red into a slow red.
-  That is the trade being made deliberately here, because the element does render when the machine
-  is not thrashing.
-  **Mitigation:** re-run the file under real load (start the full suite alongside it) and confirm
-  both tests survive.
+- **The two page-order jobs are fixed in the tree but have not re-run.** `pages-index.test.mjs` and
+  `pages-home.test.mjs` both carry `mudiii` and the numeral XI now, and both pass locally against a
+  fresh `npm run demo:build`. `e2e-web-index` and `e2e:deployed:shell` have not been exercised since,
+  because nothing has been pushed.
+  **Tier:** none. It closes on the next green pipeline.
+  **Do:** confirm both jobs pass on the push that clears the red suite. If they do, delete this item.
 
 - **Stale header comments in `mudiii-browser-entry.mjs`, `mudiii-viz.mjs` and `mudiii-scene.mjs`.**
   They say sibling modules "do not exist in every worktree yet"; all are on `main`.
@@ -944,10 +842,15 @@ until it does. Then the grid-size item, because the deception rail and the map p
 Three answers are outstanding. Each names the item it blocks. The three settled ones are recorded
 against their own items above and are repeated here only so nothing is looked for twice.
 
-- **Who fetches and vets the KayKit food models?** Blocks the food-primitives item. It needs a real
-  download from a third-party site and a read of the pack's actual licence text, which an agent
-  should not self-certify. Default: hand the sourcing to the operator and keep the manifest and
-  render wiring as the agent's half.
+- **Which model stands in for a pile of animal feed?** Partly answered. The operator asked for feed
+  on the ground — seeds, a sack or hay — and `haybale.glb` is committed and credited, tied to
+  KayKit's Dungeon Remastered pack through a real CC0 row rather than assumed from its filename. So
+  the food item is unblocked and needs no download. What is still open is whether a hay bale is the
+  wanted reading for both `crumb` and `morsel`, since one file now serves both at different heights.
+  The `world-of-claudecraft` `resources/` directory holds `food_pile_small/medium/large.glb`,
+  `food_flour.glb` and `gems_sack.glb`, which look closer to seeds and sacks, but that directory has
+  no pack provenance recorded anywhere, so none of them can be used until someone can name their
+  pack. Default: ship the hay bale and revisit only if the operator wants a different shape.
 - **Which second role pair?** Blocks the second-cast item. It is a choice among CC0 assets in
   `../world-of-claudecraft`, subject to `PLAN_MUD_MUDIII.md`'s Tier-C licence trap. Default: none;
   the item cannot start without a pick.
