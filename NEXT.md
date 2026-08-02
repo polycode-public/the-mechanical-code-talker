@@ -121,22 +121,30 @@ only a code push exercises the deployed tier.
   couple of vision radii, and record what the numbers say. If they still favour the chain, delete
   this item and leave the flag off.
 
-### Teach mode
-
 ### Pipeline
 
-- **`e2e:deployed:pages` fails on the teach-frame test's own precondition.** Job 15665986632, against
-  `ab32c1ce`: "an addressed teach-frame moves the board and the page redraws it, with nothing
-  playing" fails at `the opening cast has both a fox and a goblin to address`. The precondition
-  fails, not the behaviour under test — the deployed page's opening cast did not hold one of each.
-  **Tier:** Sonnet, and it may already be fixed.
-  **Do:** the roster mint in flight replaces `pickRoster`, which decides the opening cast and today
-  slices from a layout casting fewer agents than the sliders ask for. Re-run the job once that lands
-  before diagnosing further. If it still fails, the test should pick its two addressees from whatever
-  cast exists rather than assuming one of each — cast size is a slider value, so hardcoding a shape
-  repeats the mistake the Reset wait made by pinning a pre-Reset count.
-  **Risk:** its title also says "with nothing playing", which stops being true once the page opens
-  playing. Settle both in the same change.
+- **`e2e:deployed:pages` is red on a facing disagreement.** Job 15666435111, pipeline 2725436237,
+  the last of its 25 and the only one not green. The teach-frame precondition that failed on 5.0.4 is
+  fixed — this is a different failure:
+  `fox-2 stepped east but its applied yaw (3.141592653589793) faces a different way (dot 1.22e-16)`.
+  Yaw π is north, and a dot of zero means perpendicular, so the mesh faced **90 degrees off** the step
+  it took, not 180. That rules out the `yawForFacing` table, whose east/west swap was fixed and
+  verified against `FACING_VECTOR` at all four cardinals.
+  So the engine reported a facing that disagrees with the movement. `decide()` sets
+  `facing = plan[0] ?? state.facing`, and `plan[0]` is meant to be the step actually taken.
+  **Tier:** Sonnet. Reproduction first; static reading has not settled it.
+  **Do:** reproduce locally before changing anything. Candidates, in order: the multi-step branch,
+  where `plan = path.actions` and `nextCell = path.states[1]` — if the first action does not
+  correspond to that first state transition, facing and movement part company. Then
+  `mgx:driven-facing`, which the fold reads in the same case as `mgx:facing` ranked by epoch and
+  turn: a driven facing landing on the same turn as a planner step could outrank it. Then the
+  ground-click route, which now writes facing through the same path.
+  **Risk:** this ran green locally and failed on the deployed site, so first establish whether the
+  deployed page is the commit you think it is. `e2e:deployed:*` runs against what `deploy:website`
+  just published, and a stale edge cache would produce exactly this shape of mystery.
+  **Mitigation:** the reproduction must fail before the fix. A change aimed at `yawForFacing`, which
+  reads correctly, would look plausible and pass a shallow check while leaving the real fault.
+
 
 - **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
