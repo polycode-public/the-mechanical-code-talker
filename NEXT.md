@@ -134,6 +134,21 @@ outrank every cosmetic item below.
 
 ### Pipeline
 
+- **Two mudiii e2e tests fail against the deployed site and predate the facing fix.** Found while
+  fixing the facing sampler, checked out to a scratch copy and re-run against the pre-change file:
+  both fail identically before those commits, and neither touches what changed.
+  - "a visitor who asked for reduced motion…" fails on *the opening cast is still drawn*.
+  - "switching to the 14x14 chapel yard…" times out on a 20s `waitForFunction`.
+  **Tier:** Sonnet. Diagnosis first; the two may not share a cause.
+  **Do:** run both against the deployed site and again against a local build. If they pass locally
+  and fail deployed, the difference is latency to CloudFront or something the deploy does to the
+  page, and that distinction is the finding. The reduced-motion one is the more interesting: it
+  asserts the board is drawn but still, so a failure there could mean the opening cast never
+  rendered, which would be a real fault rather than a timing artifact.
+  **Risk:** raising a timeout is the fix that always appears to work. Establish what the page is
+  actually doing before touching either test.
+
+
 - **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
   batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
