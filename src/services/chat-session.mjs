@@ -148,6 +148,12 @@ export async function createSession({
   // lifetime (four mud.html characters means four sessions, not one session
   // switching identity turn to turn).
   actingSubject,
+  // The session-log filesystem seam: mkdir/createWriteStream, injectable so a
+  // test can exercise the unwritable-log guard by rejecting at the seam
+  // itself rather than by making a real directory unwritable — chmod-based
+  // unwritability is invisible to a process running as root (CI's container
+  // user), which the real filesystem can't be made to enforce portably.
+  logFs = { mkdir, createWriteStream },
   // Marks a world already LIVE for this session, bypassing openAdventure's
   // "play <world>" opener — that opener requires a shipped "player"
   // individual (its own protection against mis-firing on a non-adventure
@@ -303,13 +309,13 @@ export async function createSession({
     + "Point --repo at a writable directory, or run with --ephemeral to keep the session in a temp dir.",
   );
   try {
-    await mkdir(logDir, { recursive: true });
-    await mkdir(sessionsDir, { recursive: true });
+    await logFs.mkdir(logDir, { recursive: true });
+    await logFs.mkdir(sessionsDir, { recursive: true });
   } catch (e) { throw unwritable(e); }
   const logFile = join(logDir, `session-${sessionId}.md`);
   const sidecarFile = join(sessionsDir, `session-${sessionId}.jsonl`);
-  const stream = createWriteStream(logFile, { flags: "a" });
-  const sidecar = createWriteStream(sidecarFile, { flags: "a" });
+  const stream = logFs.createWriteStream(logFile, { flags: "a" });
+  const sidecar = logFs.createWriteStream(sidecarFile, { flags: "a" });
   // A stream with no "error" listener turns a failed open into an unhandled
   // 'error' event, which is a raw Node stack trace and a dead process. The
   // write callbacks below reject with the same error, so the listener only has
