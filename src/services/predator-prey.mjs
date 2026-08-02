@@ -67,10 +67,19 @@ const MODEL_PREDICATE = "mgx:model";
 const ROTATION_PREDICATE = "mgx:rotation";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
 
+// One row per tick, whatever else the turn did, on a subject the board itself
+// owns. It is what the next tick's turn number counts, and it exists as its own
+// predicate rather than being read off the mood rows because a board with
+// nothing alive on it writes no moods — and a turn counter that stops advancing
+// leaves every later tick replaying the same turn number forever.
+const TURN_PLAYED_PREDICATE = "mgx:turn-played";
+const BOARD_SUBJECT = "square";
+
 const MUDIII_STATE_PREDICATE_SET = new Set([
   PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE,
   EATEN_BY_PREDICATE, STARVED_PREDICATE, PLACED_BY_PREDICATE,
-  MODEL_PREDICATE, ROTATION_PREDICATE, "rdf:type", WORLD_EPOCH_PREDICATE,
+  MODEL_PREDICATE, ROTATION_PREDICATE, TURN_PLAYED_PREDICATE,
+  "rdf:type", WORLD_EPOCH_PREDICATE,
 ]);
 
 /** Every predicate that carries live town-square state — where a thing stands,
@@ -113,10 +122,11 @@ function seededPick(options, contextString) {
  *
  *  Two counters come out, and they are not the same number. `turnCount` is the
  *  largest turn stamped on ANY row in the current epoch. `tickCount` is the
- *  largest turn a TICK actually ran, read off the mood rows only a tick writes.
- *  The next tick is tickCount + 1, and so is the stamp on a food the player
- *  places before it — which is how a placement and the tick that resolves it
- *  share one turn number instead of the placement quietly consuming one.
+ *  largest turn a TICK actually ran, read off the one marker row a tick always
+ *  writes. The next tick is tickCount + 1, and so is the stamp on a food the
+ *  player places before it — which is how a placement and the tick that
+ *  resolves it share one turn number instead of the placement quietly
+ *  consuming one.
  *
  *  Pure. */
 export function foldTownSquareState(factRows) {
@@ -166,8 +176,10 @@ export function foldTownSquareState(factRows) {
         break;
       }
       case MOOD_PREDICATE:
-        if (snap && rowEpoch === epoch) tickCount = Math.max(tickCount, turn);
         if (outranks(rowEpoch, turn, mood.get(base))) mood.set(base, { value: row.object, turn, epoch: rowEpoch });
+        break;
+      case TURN_PLAYED_PREDICATE:
+        if (snap && rowEpoch === epoch) tickCount = Math.max(tickCount, turn);
         break;
       case FACING_PREDICATE:
         if (outranks(rowEpoch, turn, facing.get(base))) facing.set(base, { value: row.object, turn, epoch: rowEpoch });
@@ -789,7 +801,8 @@ export async function runTownSquareTick(memoryDir, {
     items[arrival.id] = { kind: arrival.kind, cell: arrival.cell };
   }
 
-  const writes = [...movementWrites, ...pass.writes, ...moodWrites];
+  const turnMarker = { subject: stamp(BOARD_SUBJECT), predicate: TURN_PLAYED_PREDICATE, object: String(k) };
+  const writes = [...movementWrites, ...pass.writes, ...moodWrites, turnMarker];
   await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance: `${worldProvenanceTag(lay.name)}:turn${k}` })));
 
   return {

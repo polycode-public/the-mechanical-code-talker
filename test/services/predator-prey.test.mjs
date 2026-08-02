@@ -69,10 +69,11 @@ test("the fold takes the newest snapshot per subject and separates every termina
     { subject: "goblin-2@turn2", predicate: "mgx:starved", object: "true" },
     { subject: "goblin-3@turn1", predicate: "mgx:eaten-by", object: "fox-1" },
     { subject: "goblin-1@turn3", predicate: "mgx:feels", object: "scared" },
+    { subject: "square@turn3", predicate: "mgx:turn-played", object: "3" },
   ]);
   assert.equal(state.epoch, 0);
   assert.equal(state.turnCount, 3);
-  assert.equal(state.tickCount, 3, "read off the mood rows only a tick writes");
+  assert.equal(state.tickCount, 3, "read off the one marker row a tick always writes");
   assert.deepEqual(state.placements.get("fox-1"), { cell: "cell-3-2", turn: 3, epoch: 0 });
   assert.deepEqual(state.mass.get("goblin-1"), { value: 7.88, turn: 2, epoch: 0 });
   assert.deepEqual([...state.removed].sort(), ["goblin-2", "goblin-3"]);
@@ -84,7 +85,8 @@ test("rows rank by (epoch, turn), so a recast's turn-1 snapshot beats the previo
     place("fox-1", "cell-1-1"),
     { subject: "fox-1@turn9", predicate: "mgx:currently-in", object: "cell-9-9" },
     { subject: "fox-1@epoch2@turn1", predicate: "mgx:currently-in", object: "cell-4-4" },
-    { subject: "fox-1@epoch2@turn1", predicate: "mgx:feels", object: "calm" },
+    { subject: "square@turn9", predicate: "mgx:turn-played", object: "9" },
+    { subject: "square@epoch2@turn1", predicate: "mgx:turn-played", object: "1" },
   ]);
   assert.equal(state.epoch, 2);
   assert.deepEqual(state.placements.get("fox-1"), { cell: "cell-4-4", turn: 1, epoch: 2 });
@@ -397,7 +399,7 @@ test("whatever ate this turn survives it, because eating resolves before starvin
 test("prey arrive on the perimeter minus prop cells, and food lands anywhere open", async () => {
   const dir = await boardWith([
     classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
-    { subject: "fox-1@turn14", predicate: "mgx:feels", object: "calm" },
+    { subject: "square@turn14", predicate: "mgx:turn-played", object: "14" },
     { subject: "fox-1@turn14", predicate: "mgx:currently-in", object: "cell-5-5" },
   ], "spawn");
   try {
@@ -424,7 +426,7 @@ test("both spawn caps are checked before a spawn, so a full board simply skips t
   }
   const dir = await boardWith([
     ...prey,
-    { subject: "goblin-1@turn4", predicate: "mgx:feels", object: "calm" },
+    { subject: "square@turn4", predicate: "mgx:turn-played", object: "4" },
   ], "caps");
   try {
     const tick = await runTownSquareTick(dir, { layout: LAYOUT });
@@ -619,4 +621,20 @@ test("a tick names the layout it runs, and refuses a name no pack holds", async 
 
 test("pathStateKey collapses a search state onto its cell alone", () => {
   assert.equal(pathStateKey({ x: 3, y: 9 }), "cell-3-9");
+});
+
+test("the turn counter keeps advancing on a board with nothing alive left on it", async () => {
+  const dir = await boardWith([classify("goblin-1", "goblin"), place("goblin-1", "cell-9-9"), weigh("goblin-1", 0.01)], "empty-board");
+  try {
+    const first = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(first.ecology.map((e) => e.type), ["starve"]);
+    assert.deepEqual(first.agents, {}, "nothing left to write a mood for");
+    const second = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(second.turn, 2, "the turn marker is a row of its own, so an empty board still counts turns");
+    const third = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(third.turn, 3);
+    assert.deepEqual(third.ecology.map((e) => e.type), ["spawn-food"], "and a spawn interval still comes round");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
