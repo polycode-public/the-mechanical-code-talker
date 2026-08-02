@@ -95,6 +95,36 @@ test("renderMudiiiHtml: several town squares ship a dropdown, opening on the fir
   assert.match(html, /<option value="1">harbour square \(1 fox, 1 goblin\)<\/option>/);
 });
 
+test("renderMudiiiHtml: each scenario carries its own board size, and the page reads the picked one", () => {
+  const second = { ...WORLD_PAYLOAD, name: "harbour-square" };
+  const html = renderMudiiiHtml({
+    worldPayload: WORLD_PAYLOAD,
+    agents: AGENTS,
+    scenarios: [
+      { label: "market square", worldPayload: WORLD_PAYLOAD, agents: AGENTS, gridSize: 10 },
+      { label: "harbour square", worldPayload: second, agents: AGENTS, gridSize: 14 },
+    ],
+  });
+  const dataBlock = /const MUDIII_PAGE_DATA = (\{[\s\S]*?\});\s*<\/script>/.exec(html);
+  const data = JSON.parse(dataBlock[1]);
+  assert.deepEqual(data.scenarios.map((s) => s.gridSize), [10, 14]);
+  assert.equal(data.gridSize, 10, "the page-level default is the opening square's own size");
+  assert.match(html, /gridSizeOf = function \(\) \{ return scenario\(\)\.gridSize \|\| DATA\.gridSize; \}/);
+  assert.match(html, /mapDotsFor\(agentsList\(\), itemsList\(\), gridSizeOf\(\)\)/, "the map panel scales to the picked square");
+});
+
+test("renderMudiiiHtml: a scenario naming no board size falls back to the page default", () => {
+  const html = renderMudiiiHtml({
+    worldPayload: WORLD_PAYLOAD,
+    agents: AGENTS,
+    scenarios: [{ label: "market square", worldPayload: WORLD_PAYLOAD, agents: AGENTS }],
+  });
+  const dataBlock = /const MUDIII_PAGE_DATA = (\{[\s\S]*?\});\s*<\/script>/.exec(html);
+  const data = JSON.parse(dataBlock[1]);
+  assert.equal(data.scenarios[0].gridSize, undefined);
+  assert.equal(data.gridSize, GRID_SIZE);
+});
+
 test("renderMudiiiHtml: the camera control ships three modes, follow selected by default", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /id="cameraMode"/);
@@ -139,7 +169,7 @@ test("renderMudiiiHtml: booting calls window.mudiiiScene.boot with the resolved 
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS, assetManifest: ASSETS });
   assert.match(
     html,
-    /callScene\("boot", \{ propPlacements: props, assetManifest: DATA\.assetManifest, gridSize: DATA\.gridSize, cellSize: 1 \}\)/,
+    /callScene\("boot", \{ propPlacements: props, assetManifest: DATA\.assetManifest, gridSize: gridSizeOf\(\), cellSize: 1 \}\)/,
   );
 });
 
