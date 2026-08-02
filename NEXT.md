@@ -33,9 +33,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Six tracks. When the backlog's own files were all claimed, the answer was to generate work rather
-than idle — a playtest, a benchmark sweep, a docs audit and a weights refresh all touch files no
-track owns, and they produce the next wave's items.
+Five tracks, and **four of them are generating work rather than closing items**. The thirteen-item
+mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
+exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
+the slots. Their output is the next wave's items.
 
 - **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
   three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
