@@ -580,7 +580,17 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
 
     const before = await turnCountOf(page);
     const box = await page.locator("#sceneCanvas").boundingBox();
-    await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.62);
+    // Aimed at the board's own drawn footprint rather than a fixed share of
+    // the canvas. A square board on a canvas several times wider than it is
+    // tall leaves most of the width as sky, and a fraction picked by hand
+    // lands on that sky as the framing moves. Half way out from the middle on
+    // each axis is inside the board and off its centre, so the route has
+    // somewhere to run.
+    const frame = await page.evaluate(() => window.mudiiiScene.boardFrameFraction());
+    await page.mouse.click(
+      box.x + box.width * (0.5 - frame.width / 4),
+      box.y + box.height * (0.5 + frame.height / 4),
+    );
 
     await page.waitForFunction(
       (n) => {

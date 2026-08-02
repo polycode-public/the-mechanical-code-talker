@@ -814,9 +814,9 @@ test("cameraRigFor: every shipped board sits fully inside a wide window and a ta
 test("cameraRigFor: the tighter axis is filled, whichever axis that turns out to be", () => {
   for (const gridSize of SHIPPED_BOARDS) {
     const wide = overheadBoardShare(gridSize, WIDE_VIEW);
-    assert.ok(wide.height > 0.85, `a wide window is bound by height, and ${gridSize} fills only ${wide.height} of it`);
+    assert.ok(wide.height > 0.8, `a wide window is bound by height, and ${gridSize} fills only ${wide.height} of it`);
     const tall = overheadBoardShare(gridSize, TALL_VIEW);
-    assert.ok(tall.width > 0.85, `a tall window is bound by width, and ${gridSize} fills only ${tall.width} of it`);
+    assert.ok(tall.width > 0.8, `a tall window is bound by width, and ${gridSize} fills only ${tall.width} of it`);
   }
 });
 

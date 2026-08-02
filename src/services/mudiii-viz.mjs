@@ -303,10 +303,11 @@ export function cameraRigFor(mode, agent, gridSize, view) {
     const FALLBACK_FOV_DEGREES = 55;
     // Looking straight down pushes the TOP of a standing model outward from
     // the centre of frame, so a fit measured on the flat ground plane alone
-    // would cut the head off whoever stands in an outermost cell. This is the
-    // room the tallest of the cast (a goblin, a shade over two units) needs
-    // out there. Props run taller and are allowed to overhang.
-    const EDGE_ROOM = 1.15;
+    // cuts the head off whoever stands in an outermost cell. This is the room
+    // the tallest of the cast needs out there, counting the id label floating
+    // above it, which is the part a visitor most needs to read. Props run
+    // taller still and are allowed to overhang.
+    const EDGE_ROOM = 1.2;
     const board = Math.max(4, Number(gridSize) || FALLBACK_GRID_SIZE) * cellSize;
     const fovDegrees = Number(view && view.fovDegrees) > 0 ? Number(view.fovDegrees) : FALLBACK_FOV_DEGREES;
     const aspect = Number(view && view.aspect) > 0 ? Number(view.aspect) : 1;
