@@ -46,6 +46,7 @@ function main() {
 
   let errors = [];
   let totalBytes = 0;
+  const countedPaths = new Set();
   const table = [];
 
   // Check for forbidden sourcePaths (belt and braces).
@@ -90,7 +91,11 @@ function main() {
       errors.push(`invalid licence: ${asset.destPath} has licence "${asset.licence}", must be CC0-1.0 or MIT`);
     }
 
-    totalBytes += actualBytes;
+    // Two keys can point at one file, so count bytes per file rather than per row.
+    if (!countedPaths.has(asset.destPath)) {
+      countedPaths.add(asset.destPath);
+      totalBytes += actualBytes;
+    }
 
     table.push({
       key: asset.key,
@@ -136,7 +141,7 @@ function main() {
   }
 
   console.log("─".repeat(95));
-  console.log(`Total: ${allowlist.length} files, ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)\n`);
+  console.log(`Total: ${countedPaths.size} files, ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)\n`);
 
   // Report errors if any.
   if (errors.length) {
