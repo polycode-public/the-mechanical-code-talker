@@ -446,7 +446,7 @@
 {"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:lose","object":"0.06 mass per turn by default"}
 {"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:arrive","object":"every 5 turns at the edge of the board by default"}
 {"world":"town-square-market","kind":"fact","subject":"crumb","predicate":"mgx:arrive","object":"every 3 turns on any open cell by default"}
-{"world":"town-square-market","kind":"fact","subject":"crumb","predicate":"mgx:start-with","object":"mass 1 by default"}
+{"world":"town-square-market","kind":"fact","subject":"crumb","predicate":"mgx:start-with","object":"mass 2 by default"}
 {"world":"town-square-market","kind":"fact","subject":"morsel","predicate":"mgx:start-with","object":"mass 2 by default"}
 {"world":"town-square-market","kind":"fact","subject":"morsel","predicate":"mgx:arrive","object":"where the player puts it"}
 {"world":"town-square-market","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"4 cells for the fox by default"}
