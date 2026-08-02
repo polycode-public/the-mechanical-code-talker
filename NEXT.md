@@ -154,18 +154,6 @@ exist before its third link has a target).
   it for them.
 
 
-- **The map is inside the control panel and nobody has looked at it.** The layout landed: `#mapPanel`
-  now sits in the deck beside the sliders rather than in a two-column grid that collapsed under
-  900px, at roughly half the width in portrait and a third in landscape, where the sliders also go
-  two to a row via `@media (max-width: 900px) and (orientation: landscape)`. `.map-panel-board` keeps
-  `aspect-ratio: 1` with a lower `min-height`. 88/88 on the unit tests.
-  **What is missing is the look.** The track that built it died before it could screenshot anything.
-  **Tier:** Haiku, and it is a look rather than an edit.
-  **Do:** screenshot 375x667 and 812x375, **open both PNGs with the Read tool**, and check the map
-  actually sits beside the sliders, reads at that size, and leaves the 3D view visible without
-  scrolling past a band of map. Check edit mode too — `body.editing` used to hide the map by
-  selecting `.deck-row .map-panel`, and the element has moved.
-
 - **The goblin sizing fix is green locally and unproven on CI.** Goblins used to render at a
   different wrong scale on every load, with one coming out many times house height, its foot above
   the ground. The cause was a race with the spawn tween: a cached loader handed every agent of a kind
