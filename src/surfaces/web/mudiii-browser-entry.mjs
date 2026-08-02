@@ -22,7 +22,7 @@ import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { layoutNamed } from "../../domain/town-square-world.mjs";
-import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
+import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
@@ -53,6 +53,31 @@ export function pickMudiiiRoster(roster, { count = 1, random = Math.random } = {
   return pool.slice(0, Math.min(count, pool.length));
 }
 
+/** The roster arguments `startTownSquareGame` needs, from whatever shape a
+ *  caller cast. A page casts by NAME — `["fox-1", "goblin-3"]`, or the
+ *  `[{ id, role }]` rows its scenario data carries — because that is what its
+ *  own dropdown and HUD are keyed on. The engine seeds by COUNT: it mints
+ *  `<prefix>-1..N` at seeded cells, which is the only place cells are chosen.
+ *  So a named roster is translated to counts here, and the engine's mint is
+ *  what the page then reads back through `board()`.
+ *
+ *  A caller that already knows its cells (a recorded fixture pinning a starting
+ *  board) passes the engine's own keyed object and it travels through
+ *  untouched. Pure. */
+export function townSquareRosterArgs(agents, roleOf) {
+  if (!agents || (Array.isArray(agents) && agents.length === 0)) return {};
+  if (!Array.isArray(agents)) return { agents };
+  let predatorCount = 0;
+  let preyCount = 0;
+  for (const entry of agents) {
+    const id = typeof entry === "string" ? entry : entry?.id;
+    const role = (typeof entry === "object" && entry?.role) || roleOf(id);
+    if (role === "predator") predatorCount += 1;
+    else if (role === "prey") preyCount += 1;
+  }
+  return { predatorCount, preyCount };
+}
+
 /** A live, shared town-square world one visitor watches and talks over.
  *  `worldPayload` is `{ name, facts, rules, opening }`, read once at build
  *  time the same way every other viz page's world payload is. `agents` is
@@ -62,12 +87,15 @@ export function pickMudiiiRoster(roster, { count = 1, random = Math.random } = {
  *  per-character `windows` map: mudiii's simulation is a single global step
  *  (`runTownSquareTick`) and its conversation is a single shared dock.
  *
- *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick,
+ *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick, board,
  *  snapshot, applyEdit, placeFood }`. A reset is not a method here: the
  *  page re-opens a whole session for it, which is what a reset means when the
  *  store is in memory and belongs to one visitor. */
 export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0 } = {}) {
-  const { startTownSquareGame, runTownSquareTick, foldTownSquareState, placeFood: engPlaceFood } = await loadEngine();
+  const {
+    startTownSquareGame, runTownSquareTick, townSquareBoard, foldTownSquareState,
+    placeFood: engPlaceFood, roleOfId,
+  } = await loadEngine();
 
   // Every engine call is layout-scoped: the world pack ships the BOARD, and
   // the layout carries the geometry plus the cast counts the engine mints the
@@ -83,9 +111,18 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
   for (const rule of worldPayload.rules || []) {
     await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
   }
-  await startTownSquareGame(memoryDir, { layout, agents: agents.length ? agents : null, epoch });
+  await startTownSquareGame(memoryDir, {
+    layout, epoch, ...townSquareRosterArgs(agents, (id) => roleOfId(id)),
+  });
 
-  const planHolder = { state: { adventure: { world: worldPayload.name } } };
+  // The slot holds one game at a time, and the lane a line reaches is decided
+  // by which key is in it. This session's world is a town square, so the slot
+  // says `mudiii` — the same shape mudiii-turn.mjs's own opening turn writes.
+  // Labelled `adventure` instead, every line here is claimed by the adventure
+  // lane first, and the town square's own verbs ("put food at cell-3-4",
+  // "@fox-1 the goblin is east", "tick") are answered with "an adventure is
+  // running" rather than run.
+  const planHolder = { state: { mudiii: { world: worldPayload.name, turn: 0 } } };
   const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
 
@@ -113,6 +150,15 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     return runTownSquareTick(memoryDir, { layout });
   }
 
+  /** The board as it stands, in the same payload shape `tick` returns, with no
+   *  turn spent. A page opens a session and then draws THIS — otherwise its
+   *  first sight of where anything stands is the first tick, and every mesh
+   *  sits unplaced until the visitor presses play. `ecology` is empty and
+   *  `turn` is the last tick played (0 on a fresh board). */
+  async function board() {
+    return townSquareBoard(memoryDir, { layout });
+  }
+
   /** The one OMNISCIENT read this module exposes — every agent, every item,
    *  no fog of war, mirroring mud-browser-entry.mjs's own `snapshot`. */
   async function snapshot() {
@@ -127,7 +173,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
   async function applyEdit(text) {
     const allRows = readFactRows(await loadMemory(memoryDir));
     const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
-    const state = foldTownSquareState(worldRows);
+    const state = gridWorldEditorState(foldTownSquareState(worldRows));
     const { triples, unrecognized } = parseMudEditorText(text);
     const { toAppend, toRemoveIds } = planMudEditorSync(worldRows, state, triples);
     if (toAppend.length) {
@@ -155,6 +201,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     refreshGraph,
     turn: turnSession.turn,
     tick,
+    board,
     snapshot,
     applyEdit,
     placeFood,

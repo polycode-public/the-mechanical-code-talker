@@ -1,0 +1,125 @@
+// mudiii-browser-entry: casting a town square. The page names its cast
+// ("fox-1", "goblin-3") because its dropdown and HUD are keyed on names; the
+// engine casts by count, because minting is the only place cells are chosen.
+// These tests pin the translation between the two, and the opening board the
+// page reads back once the mint has happened — the read that puts every mesh
+// on the board before the first turn rather than after it.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
+import { roleOfId, foldTownSquareState } from "../../src/services/predator-prey.mjs";
+import { renderMudEditorText, gridWorldEditorState } from "../../src/services/mud-editor.mjs";
+import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
+import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+
+const LAYOUT = TOWN_SQUARE_LAYOUTS["town-square"];
+const roleOf = (id) => roleOfId(id);
+
+const worldPayload = {
+  name: "town-square",
+  facts: [...worldFactRows(LAYOUT)].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+  rules: [],
+  opening: "a town square",
+};
+
+test("townSquareRosterArgs counts a cast the page named, so the engine seeds cells for exactly that many", () => {
+  assert.deepEqual(
+    townSquareRosterArgs(["fox-1", "goblin-1", "goblin-3"], roleOf),
+    { predatorCount: 1, preyCount: 2 },
+  );
+});
+
+test("townSquareRosterArgs reads the role off a [{ id, role }] row rather than re-deriving it from the id", () => {
+  assert.deepEqual(
+    townSquareRosterArgs([{ id: "fox-1", role: "predator" }, { id: "fox-2", role: "predator" }], roleOf),
+    { predatorCount: 2, preyCount: 0 },
+  );
+});
+
+test("townSquareRosterArgs passes a keyed roster through untouched, so a fixture can still pin its own cells", () => {
+  const pinned = { "fox-1": { role: "predator", cell: "cell-2-2" } };
+  assert.deepEqual(townSquareRosterArgs(pinned, roleOf), { agents: pinned });
+});
+
+test("townSquareRosterArgs asks for nothing when no cast was named, leaving the layout's own counts to stand", () => {
+  assert.deepEqual(townSquareRosterArgs([], roleOf), {});
+  assert.deepEqual(townSquareRosterArgs(null, roleOf), {});
+});
+
+test("an id-named cast is actually placed on the board — never written as array indices with no cell", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-entry-cast-"));
+  try {
+    const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+    const state = foldTownSquareState(readFactRows(await loadMemory(session.memoryDir)));
+    assert.deepEqual([...state.placements.keys()].filter((id) => /^fox-\d+$/.test(id)), ["fox-1"]);
+    assert.deepEqual([...state.placements.keys()].filter((id) => /^goblin-\d+$/.test(id)).sort(), ["goblin-1", "goblin-2"]);
+    assert.deepEqual([...state.placements.keys()].filter((id) => /^\d+$/.test(id)), [], "no array index was ever written as a subject");
+    for (const id of ["fox-1", "goblin-1", "goblin-2"]) {
+      assert.match(state.placements.get(id).cell, /^cell-\d+-\d+$/, `${id} stands on a real cell`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("session.board() hands back the opening cast at real cells, with no turn spent", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+  const board = await session.board();
+  assert.equal(board.turn, 0);
+  assert.deepEqual(board.ecology, []);
+  assert.deepEqual(Object.keys(board.agents).sort(), ["fox-1", "goblin-1", "goblin-2"]);
+  for (const [id, agent] of Object.entries(board.agents)) {
+    assert.match(agent.cell, /^cell-\d+-\d+$/, `${id} reports a cell the scene can place a mesh on`);
+  }
+});
+
+test("session.board() and session.tick() agree on the field set a renderer reads", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  const board = await session.board();
+  const tick = await session.tick(1);
+  assert.deepEqual(Object.keys(board).sort(), ["agents", "ecology", "epoch", "items", "turn"]);
+  assert.deepEqual(
+    Object.keys(board.agents["fox-1"]).sort(),
+    Object.keys(tick.agents["fox-1"]).sort(),
+  );
+});
+
+test("a grid fold's placements survive the trip into the editor's own state shape", () => {
+  const fold = {
+    placements: new Map([["fox-1", { cell: "cell-5-5", turn: 3, epoch: 0 }]]),
+    mass: new Map([["fox-1", { value: 20, turn: 3, epoch: 0 }]]),
+  };
+  const editorState = gridWorldEditorState(fold);
+  assert.deepEqual(editorState.placements.get("fox-1"), { predicate: "mgx:currently-in", object: "cell-5-5" });
+  assert.deepEqual(editorState.masses.get("fox-1"), { value: 20 });
+  assert.equal(editorState.openness.size, 0, "a board has nothing to open");
+});
+
+test("edit mode says where a placed morsel stands, not merely that one exists", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  await session.turn("put food at cell-3-4");
+  const snap = await session.snapshot();
+  const lines = renderMudEditorText(snap.rows, gridWorldEditorState(snap.state)).split("\n");
+  assert.ok(lines.some((l) => /morsel-1 is a morsel/i.test(l)), "the morsel's own kind is a sentence");
+  assert.ok(lines.some((l) => /morsel-1 stands in the cell-3-4/i.test(l)), "and so is where it stands");
+  assert.ok(lines.some((l) => /fox-1 stands in the cell-\d+-\d+/i.test(l)), "every agent's cell is a sentence too");
+});
+
+test("syncing the editor's own unchanged text back writes nothing and retracts nothing", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  await session.turn("put food at cell-3-4");
+  const snap = await session.snapshot();
+  const text = renderMudEditorText(snap.rows, gridWorldEditorState(snap.state));
+  const result = await session.applyEdit(text);
+  assert.deepEqual(result.unrecognized, [], "every sentence the renderer wrote reads back");
+  assert.equal(result.added, 0, "a placement already true is not re-appended on every sync");
+});
+
+test("pickMudiiiRoster draws without repeats and never more than the pool holds", () => {
+  const drawn = pickMudiiiRoster(["fox-1", "fox-2", "fox-3"], { count: 5, random: () => 0 });
+  assert.equal(drawn.length, 3);
+  assert.equal(new Set(drawn).size, 3);
+});
