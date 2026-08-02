@@ -43,9 +43,6 @@ the slots. Their output is the next wave's items.
 - **T48 the deck's four stacks** — the operator's own layout, from three screenshots: foxes/goblins
   over the follow select, delay/max-turns over the camera buttons, place-food over teach, then the
   map. This is also what fills the empty band. `mudiii-viz.mjs`. Sonnet. Status: started.
-- **T46 inference benchmark** — grades the classical-logic engine on the INF ladder and reports the
-  rung, separating honest misses from wrong answers. Measure-only: an engine change would collide
-  with the tracks working the tree. Top tier. Status: started.
 - **T49 the fifteen remaining CLI findings** — the retract-twice wall, `/help` never mentioning
   retraction, "how do you know" dead-ending, `define dog` routing to the code lane, `cli`/`serve` not
   reading the memory store, `--repo <typo>` silently scaffolding a repo, spider-and-fly never naming
@@ -64,6 +61,36 @@ green. A docs-only push gets a 4-job pipeline that runs no tests, so those green
 only a code push exercises the deployed tier.
 
 ## Open items
+
+### Inference
+
+- **INF-4's ceiling is a chat-layer bound, not a missing rule.** The benchmark at 5.0.5 reaches INF-8
+  on the chat arm with zero fabrications across 499 rows. Of its 56 ceiling declines, **30 are
+  already provable**: the bench's own read-only kernel proves all thirty at chain lengths 3, 4 and 5.
+  The chat layer declines them because `chat.mjs:9696` and `:9717` pass `{ maxHops: 2 }` to
+  `findIsaChain`, which declares `maxHops = 6` itself (`syllogise.mjs:1715`), check-then-extend and
+  cycle-safe. So the cheapest next rung buys 30 of 56 with no new inference rule.
+  **Tier:** Sonnet. Small edit, sharp trap.
+  **The trap, and it will bite:** the generator pins those 30 as `expect: { verdict: "unproven" }`
+  with a `ceiling` field. **Raising the bound alone turns 30 correct answers into 30 grader-counted
+  fabrications and takes INF-4 from PASS to FAIL.** The pin flip has to land in the same commit.
+  **Do:** raise the bound, flip the pins together, and re-run the bench to confirm INF-4 still passes
+  and the ceiling count drops to 26. `reports/BENCHMARK_INFERENCE_5.0.5.md` briefs it in six steps.
+  **Feasibility:** INF-7 needs Stage EL saturation and INF-8 a Stage DL tableau plus phase-0
+  `unionOf`/`complementOf`/negative-assertion representation. Those are the path above, not this.
+  **Risk:** deeper chains cost more per turn, and the per-turn cost has already grown (below).
+
+- **A chat turn has got much heavier since 3.0.3.** The inference bench took roughly 25 minutes
+  wall-clock for its double replay against about 4.5 minutes for the whole 3.0.3 cycle, while the
+  case pool grew only 5%. Nothing about the verdicts changed, so this is cost rather than
+  correctness.
+  **Tier:** Sonnet. Measurement before any optimisation.
+  **Do:** find where the time goes before changing anything. The bench replays a real chat turn per
+  case, so the growth is in the turn itself, and the honest first step is a profile rather than a
+  guess about which lane got expensive.
+  **Risk:** the obvious suspects are the ones that landed recently, which makes it tempting to blame
+  the newest change. Measure.
+
 
 ### mudiii.html — camera
 
