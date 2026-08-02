@@ -34,7 +34,7 @@
 // page's own edit mode already makes.
 import { appendFacts, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
-import { correctMisspellings } from "../domain/interpret/normalize.mjs";
+import { correctMisspellings, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
 import {
   classMassFacts, foldWorldState, freshObjectId, snapshotSubject, worldActionRows, worldRelook,
 } from "./adventure.mjs";
@@ -44,8 +44,8 @@ import {
 // word earlier, run over the closed misspelling repair so a typo'd "wat is the
 // lamp" goes back to the question side rather than reading as a declarative.
 // Both mirror chat.mjs's own teach lane, which stands the whole lane down on
-// either — a world teach has exactly the same reason to.
-const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+// either — a world teach has exactly the same reason to (see
+// normalize.mjs's QUESTION_LEAD_RE).
 
 // A subject with no referent of its own. The generic "X is a Y." fallback in
 // both sentence tables would otherwise read "There is a book in the study" as

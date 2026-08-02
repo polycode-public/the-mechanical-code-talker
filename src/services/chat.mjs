@@ -40,7 +40,7 @@ import {
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
   locativePreposition,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix } from "../domain/interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -2366,9 +2366,6 @@ const COMPARATIVE_ASK_RE = new RegExp(`^(?:is|are)\\s+(.+?)\\s+(${COMPARATIVE_SR
  *  preposition into a minted predicate (the general-verb teach/query lanes
  *  and the action-rule frames) — a single source so the set never forks. */
 const PREP_SRC = "on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside";
-/** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
- *  ("what is a cache", "is a module a component"), never a teach declarative. */
-const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
 /** A plain declarative "X is a kind of Y" / "X is a Y" shape (subject-first, no
  *  question lead — paired with QUESTION_LEAD_RE at every call site), tolerating
  *  an infix "kind of"/"type of" (teachLane's own stripKindOf handles this same

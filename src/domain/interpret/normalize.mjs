@@ -123,6 +123,10 @@ export function correctMisspellings(text) {
   return String(text || "").replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
 }
 
+/** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
+ *  ("what is a cache", "is a module a component"), never a teach declarative. */
+export const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+
 const FILLER_RE = FILLER_WORDS.length
   ? new RegExp(
       "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b\\s*,?",
