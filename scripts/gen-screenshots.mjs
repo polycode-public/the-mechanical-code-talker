@@ -141,6 +141,8 @@ const READY_CHECKS = {
   mudiii: async (page) => {
     await page.waitForFunction(() => window.mudiiiScene?.ready() === true, null, { timeout: MUDIII_READY_TIMEOUT_MS });
 
+    const startingCell = await page.evaluate(() => window.mudiiiScene?.cellOf("fox-1") ?? null);
+
     // The cast is drawn from the resting board before any turn runs, so this
     // is what "the square is populated" looks like at rest.
     await page.waitForFunction(
@@ -163,14 +165,13 @@ const READY_CHECKS = {
       { timeout: MUDIII_BUSY_TIMEOUT_MS },
     );
 
-    // Only now is a mesh guaranteed to carry a cell: the scene tracks agent
-    // positions from ticks, so it has none to report until one has run. This
-    // wait is what keeps the shot off an empty plaza — the turn counter above
-    // proves the simulation advanced, and this proves the 3D view drew it.
+    // The turn counter above proves the simulation advanced, not that any
+    // mesh actually moved: seededWander can hold an agent on its starting
+    // cell for a turn or two. Waiting for fox-1's own cell to change from its
+    // starting value is what proves the shot won't land on an empty step.
     await page.waitForFunction(
-      () => Object.keys(window.mudiiiScene?.cells?.() ?? {}).length > 0
-        || Boolean(window.mudiiiScene?.cellOf("fox-1")),
-      null,
+      (before) => window.mudiiiScene?.cellOf("fox-1") !== before,
+      startingCell,
       { timeout: MUDIII_BUSY_TIMEOUT_MS },
     );
 
