@@ -43,6 +43,9 @@ const FETCH_TIMEOUT_MS = 20_000;
 // Well below the ~93MB the seed actually measures (see build-chat-seed.mjs),
 // comfortably above anything a truncated upload or an error page would serve.
 const MIN_SEED_BYTES = 50 * 1024 * 1024;
+// Every transfer encoding a real client can end up on. Each one is a separate
+// stored object behind a separate cache key.
+const BROWSER_ENCODINGS = ["br, gzip", "br", "gzip"];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -110,14 +113,18 @@ async function seedReady(stamp) {
  *
  * Reads only the first chunk of the body — enough to see whether it starts
  * like JSON — then cancels, so the check costs nothing near the file's size.
+ *
+ * Runs once per encoding a client can negotiate. Brotli and gzip are separate
+ * stored objects behind separate cache keys, so one being readable says
+ * nothing about the other.
  */
-async function seedDecodesForABrowser(stamp) {
+async function seedDecodesForABrowser(stamp, accept) {
   const url = new URL(`chat-seed.json${stamp ? `?b=${stamp}` : ""}`, SITE_URL).href;
   const res = await fetch(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { "cache-control": "no-cache", "accept-encoding": "br, gzip", "user-agent": "tmct wait-for-site" },
+    headers: { "cache-control": "no-cache", "accept-encoding": accept, "user-agent": "tmct wait-for-site" },
   });
-  if (!res.ok) throw new Error(`chat-seed.json (browser encoding): ${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(`chat-seed.json (accept-encoding ${accept}): ${res.status} ${res.statusText}`);
   const encoding = res.headers.get("content-encoding") ?? "identity";
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: false });
@@ -139,6 +146,9 @@ async function seedDecodesForABrowser(stamp) {
       + "so one decode leaves the browser holding compressed bytes. Serve that path with CDN compression off, or without the precompressed sibling.",
     );
   }
+  if (encoding === "identity") {
+    throw new Error(`chat-seed.json came back uncompressed to a client asking "${accept}" — the precompressed sibling is not being served, so every visitor pays the full ~93MB`);
+  }
   return encoding;
 }
 
@@ -150,8 +160,9 @@ async function checkOnce() {
   }
   const stamp = await chatSeedStamp();
   const bytes = await seedReady(stamp);
-  const encoding = await seedDecodesForABrowser(stamp);
-  return { version: seenVersion, commit: seenCommit, stamp, bytes, encoding };
+  const encodings = [];
+  for (const accept of BROWSER_ENCODINGS) encodings.push(await seedDecodesForABrowser(stamp, accept));
+  return { version: seenVersion, commit: seenCommit, stamp, bytes, encodings };
 }
 
 async function main() {
@@ -159,8 +170,9 @@ async function main() {
   console.log(`waiting for ${SITE_URL} to serve ${wanted} with a ready chat-seed.json (up to ${ATTEMPTS} attempts, ${DELAY_MS}ms apart, ~${Math.round((ATTEMPTS * DELAY_MS) / 60_000)}min cap)`);
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      const { version: seenVersion, commit: seenCommit, stamp, bytes, encoding } = await checkOnce();
-      console.log(`attempt ${attempt}/${ATTEMPTS}: home=${seenVersion}@${seenCommit ?? "(none stamped)"} chat-seed.json(b=${stamp})=${bytes} bytes, decodes as JSON under "${encoding}"`);
+      const { version: seenVersion, commit: seenCommit, stamp, bytes, encodings } = await checkOnce();
+      const served = BROWSER_ENCODINGS.map((accept, i) => `${accept} -> ${encodings[i]}`).join(", ");
+      console.log(`attempt ${attempt}/${ATTEMPTS}: home=${seenVersion}@${seenCommit ?? "(none stamped)"} chat-seed.json(b=${stamp})=${bytes} bytes, decodes as JSON for every client (${served})`);
       console.log(`${SITE_URL} is serving ${wanted} with a ${bytes}-byte chat-seed.json — the deployed-e2e jobs can start`);
       return 0;
     } catch (err) {

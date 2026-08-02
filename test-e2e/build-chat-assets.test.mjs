@@ -3,7 +3,8 @@
 // behind the embedded chat's starter memory. The seed mirrors the CLI's
 // init:xl band set (scale-capped, never band-capped), so this also guards
 // the browser/CLI band parity and the byte ceiling that keeps the page's
-// boot budget realistic.
+// boot budget realistic. The last test picks the seed up again at the other
+// end, as the deployed edge hands it to a client.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -13,6 +14,8 @@ import { join } from "node:path";
 import { main as buildChatSeed, SEED_BAND_CAPS, SEED_BYTE_CEILING } from "../scripts/build-chat-seed.mjs";
 import { factAnswer } from "../src/services/chat.mjs";
 import { createInMemoryStore } from "../src/adapters/memory/core.mjs";
+
+const DEPLOYED_ORIGIN = process.env.TMCT_E2E_BASE_URL?.replace(/\/+$/, "");
 
 const INIT_XL_BANDS = [
   "human", "human-medium", "human-large",
@@ -75,3 +78,52 @@ test("build-chat-seed: band and ceiling overrides reproduce a smaller configurat
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+/**
+ * The seed as the edge actually hands it over, one client encoding at a time.
+ * The tests above prove the file the build wrote; this proves the copy a
+ * visitor receives is still JSON once the transfer encoding has been undone.
+ * Those came apart in production: the edge re-compressed an object that was
+ * already brotli, so a browser's single decode left JSON.parse holding binary
+ * and chat.html booted with no starter memory at all.
+ *
+ * The local static server serves the plain file with no encoding at all, so
+ * there is nothing here for a local run to check.
+ */
+test(
+  "the deployed chat-seed.json decodes to JSON for every encoding a client can negotiate",
+  { skip: DEPLOYED_ORIGIN ? false : "needs a deployed origin (TMCT_E2E_BASE_URL)" },
+  async (t) => {
+    for (const accept of ["br, gzip", "br", "gzip"]) {
+      const res = await fetch(`${DEPLOYED_ORIGIN}/chat-seed.json`, {
+        signal: AbortSignal.timeout(60_000),
+        headers: { "accept-encoding": accept, "cache-control": "no-cache" },
+      });
+      assert.equal(res.status, 200, `chat-seed.json for a client asking "${accept}"`);
+      const encoding = res.headers.get("content-encoding") ?? "identity";
+      assert.notEqual(encoding, "identity", `the edge serves a compressed variant to a client asking "${accept}"`);
+
+      // Only the first chunk: enough to tell JSON from compressed bytes,
+      // without pulling ~93 MB three times.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8", { fatal: false });
+      let head = "";
+      try {
+        while (head.length < 64) {
+          const step = await reader.read();
+          if (step.done) break;
+          head += decoder.decode(step.value, { stream: true });
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+      }
+      assert.equal(
+        head.trimStart().slice(0, 1),
+        "{",
+        `"${accept}" got content-encoding "${encoding}" whose body starts ${JSON.stringify(head.slice(0, 24))} — `
+        + "a second layer of compression at the edge is the usual cause",
+      );
+      t.diagnostic(`${accept} -> ${encoding}, decodes as JSON`);
+    }
+  },
+);

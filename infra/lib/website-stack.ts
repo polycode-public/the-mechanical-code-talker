@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2026 Polycode Limited
 
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join, relative, sep } from "node:path";
@@ -13,6 +14,7 @@ import {
   Size,
   Tags,
   aws_s3 as s3,
+  aws_s3_assets as s3assets,
   aws_s3_deployment as s3deploy,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
@@ -153,6 +155,14 @@ export class WebsiteStack extends Stack {
     });
 
     // ---------- CloudFront distribution ----------
+    const siteOrigin = origins.S3BucketOrigin.withOriginAccessControl(publishBucket);
+    const rewriteAssociation = [
+      {
+        function: oversizedRewriteFn,
+        eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+      },
+    ];
+
     const distribution = new cloudfront.Distribution(this, "CDN", {
       comment: `tmct ${envName}/${slug}`,
       defaultRootObject: "index.html",
@@ -160,23 +170,43 @@ export class WebsiteStack extends Stack {
       certificate: cert,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(publishBucket),
+        origin: siteOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         // Handles every asset up to the 10 MB ceiling (incl. vendor/wink.js,
         // 3.7 MB) — the post-deploy smoke's vendorEncoding() check passes with
         // no extra work for those.
         compress: true,
-        functionAssociations: [
-          {
-            function: oversizedRewriteFn,
-            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-          },
-        ],
+        functionAssociations: rewriteAssociation,
       },
+      // The oversized paths are the only ones the rewrite function ever swaps
+      // for a sibling that is already brotli or gzip on disk. An object that
+      // arrives at the edge already compressed must not be compressed again:
+      // the browser undoes exactly one layer, so a second one leaves JSON.parse
+      // holding compressed bytes. CACHING_OPTIMIZED still varies the cache key
+      // by Accept-Encoding with compression off, which is what keeps one cached
+      // entry per sibling. The trailing `*` also covers a direct request for
+      // `<path>.br`/`<path>.gz`, which the function leaves alone.
+      additionalBehaviors: Object.fromEntries(
+        oversizedPaths.map((assetPath) => [
+          `${assetPath.slice(1)}*`,
+          {
+            origin: siteOrigin,
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+            compress: false,
+            functionAssociations: rewriteAssociation,
+          },
+        ]),
+      ),
     });
 
     // ---------- publish the built site + invalidate on deploy ----------
+    // Staged as its own asset rather than inline in the deployment below, so
+    // the sibling metadata pass further down can key its own asset hash off
+    // this one and re-run whenever this deployment does.
+    const siteAsset = new s3assets.Asset(this, "SiteAsset", { path: SITE_SOURCE_DIR });
+
     // The 85 MB payload is bigger than seonix's `../site`; raise the
     // deployment Lambda's memory/ephemeral storage above CDK defaults so the
     // zip/unzip doesn't run out of room. If asset churn or Lambda limits still
@@ -185,7 +215,7 @@ export class WebsiteStack extends Stack {
     // metadata-only passes, leaving CDK to own only the infra.
     const mainDeployment = new s3deploy.BucketDeployment(this, "WebDeployment", {
       destinationBucket: publishBucket,
-      sources: [s3deploy.Source.asset(SITE_SOURCE_DIR)],
+      sources: [s3deploy.Source.bucket(siteAsset.bucket, siteAsset.s3ObjectKey)],
       distribution,
       distributionPaths: ["/*"],
       cacheControl: [
@@ -205,6 +235,14 @@ export class WebsiteStack extends Stack {
     // just the sibling objects the rewrite function above serves, so a client
     // that gets redirected to `chat-seed.json.br` receives it with
     // `Content-Encoding: br` and the original mime type.
+    //
+    // Each staged source folds the whole site's asset hash into its own, so
+    // this pass runs on every deploy the main deployment runs. Keyed on the
+    // sibling's own bytes alone it would skip any deploy where the seed did not
+    // change, leaving the main pass's header-less copy at the edge for a
+    // browser to fail on. Each one invalidates its own path too: the main
+    // deployment's `/*` invalidation fires before this pass, so without it the
+    // edge can cache the header-less copy for its whole TTL.
     let previousOversizedDeployment: s3deploy.BucketDeployment | undefined;
     for (const assetPath of oversizedPaths) {
       const relativeAsset = assetPath.slice(1); // strip leading "/"
@@ -226,10 +264,19 @@ export class WebsiteStack extends Stack {
           `OversizedSibling${encoding === "br" ? "Br" : "Gz"}${relativeAsset.replace(/[^a-zA-Z0-9]/g, "")}`,
           {
             destinationBucket: publishBucket,
-            sources: [s3deploy.Source.asset(stagingDir)],
+            sources: [
+              s3deploy.Source.asset(stagingDir, {
+                assetHash: createHash("sha256")
+                  .update(siteAsset.assetHash)
+                  .update(siblingFileName)
+                  .digest("hex"),
+              }),
+            ],
             destinationKeyPrefix: relativeAsset.includes("/")
               ? relativeAsset.slice(0, relativeAsset.lastIndexOf("/"))
               : undefined,
+            distribution,
+            distributionPaths: [`${assetPath}*`],
             prune: false,
             retainOnDelete: false,
             extract: true,
