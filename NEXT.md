@@ -37,8 +37,8 @@ Batch 2, running alongside the one batch-1 track still open. Each track owns fil
 touches. Every remaining mudiii item that edits `mudiii-viz.mjs` waits for T1, because that file is
 the whole collision point and the goblin item has to land first anyway.
 
-- **T11 p2p retraction replication** — new `memory/retraction.mjs`, the `p2p-room.mjs` merge hook,
-  `sync-filter.mjs`'s covered set. Top tier. Status: started.
+- **T14 feed models** — `data/mudiii-assets.json`, `CREDITS.md`, the committed model files. Sonnet.
+  Status: started.
 - **T13 goblin e2e regressions** — the byte-cache loader rework in `mudiii-scene.mjs` and the two
   failing tests in `test-e2e/pages-mudiii.test.mjs`. Sonnet. Status: started.
 
@@ -56,6 +56,9 @@ Landed:
   shorter than Playwright's own 30s default and so made the flake likelier. Both waits now share a
   named 60s constant.
 - **T8 teach mode UI for adventure and mud** — merged. mudiii's third stays open below.
+- **T11 p2p retraction replication** — merged. Blast radius 356/356. It also found that
+  `relabelForBroadcast` files the same assertion under a different id locally and at the peer, so a
+  retraction naming only local ids bit on one store and missed the other.
 - **T12 trust-score flake** — merged, 8/8. It found the same wall-clock bug a second time in
   `readFactRows`' folded `trust`, which had not flipped yet only because its two calls land closer
   together in real time.
@@ -762,40 +765,38 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### p2p
 
-- **Retraction does not replicate.** `removeFacts` is a real local delete, reached by chat's
-  `/retract` and by mud EDIT mode for the non-fold-versioned predicates. Those predicates are exactly
-  the ones the sync filter replicates, and nothing broadcasts a removal, so over a mesh a retraction
-  is undone by the next sync from any peer that still holds the fact.
-  **The operator's decision on granularity:** a retraction suppresses **one source's assertion**, not
-  the whole triple group. If two peers independently taught the same fact, one retracting leaves the
-  fact standing and cited to the other, and the retraction stays on record rather than erasing what
-  was asserted. `removeFacts` already supports this: it matches on `ind.id` before falling back to
-  `groupId`, which is what both current callers pass.
-  **Tier:** top for the design and the merge-time reconciliation; Sonnet can wire the call sites once
-  the shape is fixed.
-  **Do:** a replicated summary record carrying the ids it absorbs, so absorption merges by union and
-  stays a join. Both callers today pass specific record ids: `syllogise.mjs`'s closure cascade
-  (`removeFacts(repoDir, order)`) and mud EDIT mode's `applyEdit`. That matches compaction's pool-2
-  shape (`ROLLUP_RECORD_IDS_PROP`, per-source chain, no trust prior), so mirror
-  `chainRollupIdFor`/`planChainRollup`, not `planHeadRollup`. Put it in its own module
-  (`src/domain/memory/retraction.mjs`) under its own id scheme and predicate. A retraction record
-  and a compaction record mean opposite things, and sharing a namespace would let a compacted record
-  read as retracted.
-  **Feasibility:** `appendFacts`'s G-Set union only unions provenance tags on an identical triple,
-  and two peers' retraction records for one group differ in their absorbed-ids value, so they will
-  not auto-union. `compaction.mjs`'s `mergeRollups` is only ever called by explicit application
-  code; a retraction needs the same hook inside `p2p-room.mjs`'s `mergeIncomingFacts`. The read-time
-  enforcement has a working precedent in `core.mjs`'s `dropAbsorbedRecords` (`:2084`) and
-  `isAbsorbedSource`/`isAbsorbedRecord` (`compaction.mjs:270`-`:286`); retraction needs both halves,
-  the strip on read and the refusal to re-materialize a stale copy on ingest. And the new predicate
-  has to reach `sync-filter.mjs`'s covered set (or its documented `extraPredicates` mechanism) or
-  nothing crosses the wire. `docs/references/papers/crdt.md` already did the literature work
-  justifying this shape over an OR-Set.
-  **Risk:** getting the granularity wrong either under-retracts or over-retracts. See the questions
-  section.
-  **Mitigation:** a two-peer test in `test/services/p2p-room.test.mjs`'s style: peer A retracts, peer
-  B still holds the fact, sync in both orders, assert both converge on retracted. Nothing exercises
-  order-independence for a delete today.
+- **Both `removeFacts` callers still delete a whole triple group, not one source's assertion.**
+  Retraction replication has landed: `src/domain/memory/retraction.mjs` mints one
+  `${groupId}@${sourceId}#retracted` record per source, classed `Retraction` so it never folds as a
+  Fact, carrying the concrete record ids it absorbs. `sync-filter.mjs` admits `mgx:retracted`
+  unconditionally, `p2p-room.mjs` merges retractions ahead of assertions in a batch, the fold strips
+  retracted records on read, and ingest refuses to re-materialize a stale copy. Two peers converge in
+  either order, pinned in `test/services/p2p-room.test.mjs`.
+  What did not change is the callers, and the item's original premise about them was wrong. Neither
+  passes record ids. `syllogise.mjs:1631` passes `order`, built from `readFactRows` row ids at
+  `:1567`, and `adventure-editor.mjs:354`-`:356` builds `toRemoveIds` from `currentKeys`, also row
+  ids. `removeFacts`' group-id path removes every source's record, which
+  `test/adapters/memory-backend-sqlite.test.mjs:419` pins deliberately. So the per-source granularity
+  is honoured in the record layer and at the mesh, and not yet at the two places a person triggers a
+  retraction from.
+  **Tier:** Sonnet. The shape is fixed; this is choosing what each caller should mean.
+  **Do:** decide per caller whether `/retract` and mud EDIT mode should suppress the invoking
+  source's assertion or the whole group, then pass the matching ids. `removeFacts` already takes an
+  optional `{ provenance, retractedAt }` and returns `{ removed, records }`, so the record ids are
+  available to hand it.
+  **Risk:** changing what `/retract` means to a person is a product decision, not a refactor. The
+  sqlite test pins today's group-wide behaviour on purpose.
+  **Mitigation:** whichever way each caller goes, assert it at the caller's own level rather than
+  only in the memory layer, since that is where the two disagree today.
+
+- **A retraction tombstone is never dropped.** Nothing decides when a retraction record has been
+  seen by enough peers to retire. `docs/references/papers/crdt.md` records this as an open problem
+  and notes compaction's rollup records carry the same gap.
+  **Tier:** top. Causal stability is a research question, not a patch.
+  **Do:** read the crdt reference's own account first. Until a rule exists, tombstones accumulate,
+  which is correct and cheap at current fact volumes.
+  **Risk:** a rule that drops a tombstone too early lets a stale copy resurrect the fact, which is
+  the exact bug retraction replication just closed.
 
 ### Pipeline
 
