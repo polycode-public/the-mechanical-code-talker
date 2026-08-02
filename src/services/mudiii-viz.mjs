@@ -90,6 +90,14 @@ const DEFAULT_MAX_TURNS = 400;
 const DEFAULT_GRID_SIZE = 12;
 const DEFAULT_FACING = "south";
 const CAMERA_MODES = ["follow", "pov", "overhead"];
+// The ring reads ABSOLUTE, not relative to whichever way an agent happens to
+// face: every other direction word on this page is a compass point (a told
+// fact says "the goblin is east", the map is north-up), and driveRequest takes
+// a compass point directly — a cardinal steps and faces that way, an
+// intercardinal turns on the spot. Ordered north-first, clockwise.
+const RING_POINTS = [
+  "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
+];
 
 const MUDIII_NOTE_LINES = [
   "One fox and a handful of goblins share a town square, rendered in three dimensions rather than mud.html's flat rooms. The foxes slider picks how many predators are cast; the goblins slider adds more prey. Nothing here is a player either — you watch from whichever camera you pick.",
@@ -406,6 +414,7 @@ export function clipForAction(role, action, clipMap) {
   const kindFor = {
     wander: "walk",
     forage: "walk",
+    driven: "walk",
     chase: "run",
     evade: "run",
     "eat-agent": role === "predator" ? "attack" : "death",
@@ -591,6 +600,9 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
   </div>
   <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions">
     <canvas id="sceneCanvas"></canvas>
+    <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows">
+${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(point)}</button></span>`).join("\n")}
+    </div>
     <p class="scene-status" id="sceneStatus" role="status"></p>
   </section>
   <div class="edit-stage" id="mudiiiEditStage" aria-label="the square's own facts, in plain sentences">
@@ -771,6 +783,26 @@ const MUDIII_STYLE = `
     border-radius: 3px; padding: .28rem .55rem;
   }
   .scene-status:empty { display: none; }
+
+  /* Each press sits where it points, mud.html's own ring idiom. */
+  .dir-ring { position: absolute; inset: .3rem; pointer-events: none; }
+  .dir-ring[hidden] { display: none; }
+  .dir-slot { position: absolute; pointer-events: auto; }
+  .dir-north { top: 0; left: 50%; transform: translateX(-50%); }
+  .dir-south { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .dir-west { left: 0; top: 50%; transform: translateY(-50%); }
+  .dir-east { right: 0; top: 50%; transform: translateY(-50%); }
+  .dir-northwest { top: 0; left: 0; }
+  .dir-northeast { top: 0; right: 0; }
+  .dir-southwest { bottom: 0; left: 0; }
+  .dir-southeast { bottom: 0; right: 0; }
+  .dir-pill {
+    font-family: ${MONO_STACK}; font-size: .58rem; letter-spacing: .06em; line-height: 1;
+    padding: .24rem .42rem; border-radius: 2px; border: 1px solid var(--square-stone-dark);
+    background: var(--parchment); color: var(--square-ink); white-space: nowrap;
+  }
+  .dir-pill:hover:not(:disabled) { border-color: var(--square-accent); background: var(--square-accent); }
+  .dir-pill:disabled { opacity: .35; cursor: default; }
 
   .hud-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
   .hud-card {
@@ -1002,7 +1034,9 @@ function pageScript() {
     if (typeof result.turn === "number") globalTurn = result.turn;
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
-    callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
+    callScene("applyTick", {
+      agents: result.agents, items: result.items, ecology: result.ecology, rungs: result.rungs,
+    });
     const nextCamera = nextCameraSelection(camera, agentsList(), result.ecology || []);
     if (nextCamera.status && camera.mode !== "overhead") cameraModeBeforeFallback = camera.mode;
     camera = nextCamera;
@@ -1175,7 +1209,8 @@ function pageScript() {
   // still refused entirely client-side — nothing is written, and the food
   // pill stays armed for another try.
   window.mudiiiHandleSceneClick = function (cellId) {
-    if (!foodArmed || !session) return;
+    if (!session || editing) return;
+    if (!foodArmed) { walkFollowedTo(cellId); return; }
     const reason = blockedCellReason(cellId, props, agentsList());
     if (reason) { setSceneStatus(reason); return; }
     sendCommand("put food at " + cellId).then(function () {
@@ -1183,6 +1218,72 @@ function pageScript() {
       el("foodPill").setAttribute("aria-pressed", "false");
     });
   };
+
+  // ---- driving one agent by hand ------------------------------------------
+  // Every press here spends a turn: driveAgent runs the SAME whole-world tick
+  // autoplay runs, so the ecology pass runs and every other agent decides and
+  // moves with it. That is what the status line has to say, or the ring reads
+  // as a free nudge that costs nothing.
+  function followedAgentId() {
+    const id = camera.selectedId;
+    return id && agentsById[id] ? id : null;
+  }
+
+  function renderDriveRing() {
+    const followed = followedAgentId();
+    const buttons = el("driveRing").querySelectorAll("[data-drive]");
+    for (let i = 0; i < buttons.length; i += 1) buttons[i].disabled = !followed;
+  }
+
+  function drivePress(direction) {
+    const followed = followedAgentId();
+    if (!session || !followed) { setSceneStatus("pick an agent to follow \\u2014 the ring walks whoever the camera is on."); return; }
+    // A hand-driven turn is a deliberate one, so autoplay stands down rather
+    // than racing the press.
+    autoOn = false;
+    if (ticker) ticker.pause();
+    return serializeTick(async function () {
+      const result = await session.driveAgent(followed, direction);
+      applyTickResult(result);
+      renderAll();
+      const driven = result.driven || {};
+      setSceneStatus(driven.accepted
+        ? followed + " went " + driven.direction + " to " + driven.cell + " \\u2014 turn " + result.turn + ", and the whole square moved with it."
+        : followed + " could not go " + direction + " \\u2014 the turn was spent anyway, and the whole square moved.");
+      return result;
+    });
+  }
+
+  el("driveRing").addEventListener("click", function (e) {
+    const btn = e.target.closest("[data-drive]");
+    if (!btn || btn.disabled) return;
+    drivePress(btn.getAttribute("data-drive"));
+  });
+
+  // A ground click with nothing armed walks the followed agent one step along
+  // the route to the cell, and draws the whole route it is heading down. The
+  // route comes from the world's own exit search, so a cell behind a building
+  // is declined rather than drawn as a line through the wall.
+  async function walkFollowedTo(target) {
+    const followed = followedAgentId();
+    if (!followed) { setSceneStatus("pick an agent to follow \\u2014 a click on the ground walks whoever the camera is on."); return; }
+    const from = agentsById[followed].cell;
+    if (target === from) { setSceneStatus(followed + " is already at " + target + "."); return; }
+    callScene("flashCell", target);
+    const snap = await session.snapshot();
+    const route = await window.tmct.page.routeBetweenCells(snap.rows, from, target);
+    if (!route || !route.directions.length) {
+      callScene("clearRoute");
+      setSceneStatus("no way through to " + target + " from " + from + ".");
+      return;
+    }
+    callScene("showRoute", route.cells);
+    await drivePress(route.directions[0]);
+    const left = route.directions.length - 1;
+    setSceneStatus(left
+      ? followed + " is heading for " + target + " \\u2014 " + left + " more step" + (left === 1 ? "" : "s") + ", one turn each."
+      : followed + " reached " + target + ".");
+  }
 
   // ---- the HUD row --------------------------------------------------------
   function renderHudRow() {
@@ -1282,6 +1383,7 @@ function pageScript() {
     cameraModeBeforeFallback = null;
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
+    renderDriveRing();
     callScene("setCamera", camera);
   });
 
@@ -1546,6 +1648,7 @@ function pageScript() {
     renderMapPanel();
     renderAgentSelect();
     renderCameraButtons();
+    renderDriveRing();
     renderChatPills();
     el("globalTurnCount").textContent = "turns: " + globalTurn;
   }

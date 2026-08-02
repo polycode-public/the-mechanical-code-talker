@@ -22,8 +22,9 @@ import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import {
-  COMPASS_POINTS, DEFAULT_FACING, layoutNamed, reverseFacing, stepCellFrom, turnedFacing,
+  COMPASS_POINTS, DEFAULT_FACING, cellId, layoutNamed, parseCellId, reverseFacing, stepCellFrom, turnedFacing,
 } from "../../domain/town-square-world.mjs";
+import { findActionPath } from "../../domain/planning.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
 import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
@@ -128,6 +129,30 @@ export function driveRequest(direction, { cell, facing = DEFAULT_FACING } = {}) 
   const target = stepCellFrom(cell, press);
   if (target) return { cell: target, facing: press };
   return COMPASS_POINTS.includes(press) ? { facing: press } : null;
+}
+
+/** The shortest route from `fromCell` to `toCell` over `factRows`' own exit
+ *  facts, as `{ cells, directions }` — `cells` runs from one end to the other
+ *  inclusive, `directions` names one hop each. Null when nothing connects
+ *  them, so a caller declines visibly rather than drawing a line through a
+ *  building the board would never let anyone walk through.
+ *
+ *  The exit table is the one legality answer, the same rows the engine's own
+ *  chase and forage searches read, so a route drawn here is a route the world
+ *  agrees with. */
+export async function routeBetweenCells(factRows, fromCell, toCell) {
+  const { gridApplyActions, pathStateKey } = await loadEngine();
+  const from = parseCellId(fromCell);
+  const to = parseCellId(toCell);
+  if (!from || !to) return null;
+  const found = findActionPath(
+    from,
+    (searchState) => searchState.x === to.x && searchState.y === to.y,
+    gridApplyActions(factRows),
+    { stateKey: pathStateKey },
+  );
+  if (!found) return null;
+  return { cells: found.states.map((s) => cellId(s.x, s.y)), directions: found.actions };
 }
 
 /** A live, shared town-square world one visitor watches and talks over.
@@ -313,5 +338,6 @@ publishTmctSurface({
     // What the editor's own suggestion rail reads for the word under the
     // cursor: the lateral SKOS neighbourhood and the vertical is-a chain.
     relatedForTerm, classAncestorChain,
+    routeBetweenCells,
   },
 });

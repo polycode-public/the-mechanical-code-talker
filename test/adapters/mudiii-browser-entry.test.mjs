@@ -9,7 +9,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster, driveRequest } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
+import {
+  createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster, driveRequest, routeBetweenCells,
+} from "../../src/surfaces/web/mudiii-browser-entry.mjs";
 import { roleOfId, foldTownSquareState } from "../../src/services/predator-prey.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "../../src/services/mud-editor.mjs";
 import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
@@ -197,4 +199,21 @@ test("pickMudiiiRoster draws without repeats and never more than the pool holds"
   const drawn = pickMudiiiRoster(["fox-1", "fox-2", "fox-3"], { count: 5, random: () => 0 });
   assert.equal(drawn.length, 3);
   assert.equal(new Set(drawn).size, 3);
+});
+
+test("routeBetweenCells walks the world's own exit facts, and returns one direction per hop", async () => {
+  const route = await routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-4-2");
+  assert.ok(route, "two open cells on the same row are connected");
+  assert.equal(route.cells[0], "cell-2-2");
+  assert.equal(route.cells[route.cells.length - 1], "cell-4-2");
+  assert.equal(route.directions.length, route.cells.length - 1, "one direction per hop between the cells");
+  for (const direction of route.directions) {
+    assert.ok(["north", "south", "east", "west"].includes(direction), `${direction} is a step the board grants`);
+  }
+});
+
+test("routeBetweenCells declines rather than drawing a route to a cell nothing reaches", async () => {
+  assert.equal(await routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-99-99"), null);
+  assert.equal(await routeBetweenCells(worldPayload.facts, "not-a-cell", "cell-2-2"), null);
+  assert.equal(await routeBetweenCells([], "cell-2-2", "cell-4-2"), null, "no exit facts, no route");
 });

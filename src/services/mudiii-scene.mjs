@@ -366,6 +366,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // removal (source "ecology") apart from applyTick's own diff no-op
   // (source "diff") without guessing from a vanished mesh alone.
   var removalLog = [];
+  var routeLine = null, routeCells = [];
+  var flashMesh = null, flashUntil = 0;
+  var FLASH_MS = 600;
+  var tickRungs = {};
   var cameraState = { mode: "overhead", selectedId: null };
   var cameraTween = null, lookAtTween = null;
   var lastFrameTs = null;
@@ -764,7 +768,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
     if (entry.clipMap) {
       var moving = singleHop;
-      playClip(entry, clipForAction(agent.role, currentActionFor(id, lastAgentsById, moving), entry.clipMap));
+      // A hand-driven step is a walk, whatever the agent believes: it did not
+      // choose to chase or flee, the visitor chose for it.
+      var action = moving && tickRungs[id] === "driven" ? "driven" : currentActionFor(id, lastAgentsById, moving);
+      playClip(entry, clipForAction(agent.role, action, entry.clipMap));
     }
   }
 
@@ -797,6 +804,61 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
         }
       }
     }
+  }
+
+  // ---- the clicked cell, and the route to it --------------------------------
+  // The line follows the cells the world's own exit search returned, never a
+  // straight segment from agent to target: a straight one cuts through
+  // buildings and promises a walk the board would refuse.
+  function clearRoute() {
+    routeCells = [];
+    if (!routeLine) return;
+    if (routeLine.parent) routeLine.parent.remove(routeLine);
+    routeLine.geometry.dispose();
+    routeLine.material.dispose();
+    routeLine = null;
+  }
+
+  function showRoute(cells) {
+    clearRoute();
+    if (!scene || !cells || cells.length < 2) return;
+    var points = [];
+    for (var i = 0; i < cells.length; i += 1) {
+      var world = cellToWorld(cells[i], GRID_SIZE, CELL_SIZE);
+      if (!world) return;
+      points.push(new THREE.Vector3(world.x, 0.09, world.z));
+    }
+    routeLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color: 0xd98a2b }),
+    );
+    routeLine.name = "route";
+    scene.add(routeLine);
+    routeCells = cells.slice();
+  }
+
+  function clearFlash() {
+    if (!flashMesh) return;
+    if (flashMesh.parent) flashMesh.parent.remove(flashMesh);
+    flashMesh.geometry.dispose();
+    flashMesh.material.dispose();
+    flashMesh = null;
+  }
+
+  function flashCell(cell) {
+    if (!scene) return;
+    var world = cellToWorld(cell, GRID_SIZE, CELL_SIZE);
+    if (!world) return;
+    clearFlash();
+    flashMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(CELL_SIZE, CELL_SIZE),
+      new THREE.MeshBasicMaterial({ color: 0xd98a2b, transparent: true, opacity: 0.75 }),
+    );
+    flashMesh.name = "cell-flash";
+    flashMesh.rotation.x = -Math.PI / 2;
+    flashMesh.position.set(world.x, 0.03, world.z);
+    scene.add(flashMesh);
+    flashUntil = performance.now() + FLASH_MS;
   }
 
   // ---- camera ---------------------------------------------------------------
@@ -850,6 +912,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     itemMeshes = {};
     lastAgentsById = {};
     lastItemsById = {};
+    tickRungs = {};
+    clearRoute();
+    clearFlash();
     removalLog = [];
     manifestByKind = buildManifestByKind(input && input.assetManifest);
     await placeProps((input && input.propPlacements) || []);
@@ -862,6 +927,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var now = performance.now();
     var agents = (tick && tick.agents) || {};
     var items = (tick && tick.items) || {};
+    tickRungs = (tick && tick.rungs) || {};
     for (var id in agents) if (Object.prototype.hasOwnProperty.call(agents, id)) applyAgentTick(id, agents[id], now);
     for (var itemId in items) if (Object.prototype.hasOwnProperty.call(items, itemId)) applyItemTick(itemId, items[itemId], now);
     // Ecology first: an eaten agent/item is already gone from this tick's own
@@ -892,6 +958,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       }
       if (entry.mixer) entry.mixer.update(deltaSec);
     }
+    if (flashMesh) {
+      var flashLeft = flashUntil - performance.now();
+      if (flashLeft <= 0) clearFlash();
+      else flashMesh.material.opacity = 0.75 * (flashLeft / FLASH_MS);
+    }
     if (cameraTween) { var cp = tweenStep(cameraTween, ts); camera3.position.set(cp.x, cp.y, cp.z); }
     if (lookAtTween) { var lp = tweenStep(lookAtTween, ts); camera3.lookAt(lp.x, lp.y, lp.z); }
     if (orbitControls && orbitControls.enabled) orbitControls.update();
@@ -902,6 +973,13 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     boot: boot,
     applyTick: applyTick,
     setCamera: setCamera,
+    flashCell: flashCell,
+    showRoute: showRoute,
+    clearRoute: clearRoute,
+    // The route currently drawn, cell by cell — an e2e assertion's read, so
+    // it can check the line follows the board's own exits rather than
+    // counting pixels on a software renderer.
+    routeCellsDrawn: function () { return routeCells.slice(); },
     cellOf: function (id) {
       if (agentGroups[id]) return agentGroups[id].cell;
       if (itemMeshes[id]) return itemMeshes[id].cell;

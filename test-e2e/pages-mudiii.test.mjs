@@ -404,6 +404,96 @@ test("an expanded belief panel stays with its own agent across two ticks, not wi
   }
 });
 
+test("a ring press walks the followed agent and spends a whole-world turn", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    const followed = await page.locator("#agentSelect").inputValue();
+    assert.ok(followed, "someone is followed by default");
+
+    const before = await turnCountOf(page);
+    const cellsBefore = await agentCellsOf(page);
+    // Press every point on the ring in turn: some are refused by the board,
+    // and a refusal must still cost a turn rather than doing nothing at all.
+    const points = await page.$$eval("#driveRing [data-drive]", (btns) => btns.map((b) => b.dataset.drive));
+    assert.deepEqual(
+      points,
+      ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"],
+      "the ring names all eight compass points, clockwise from north",
+    );
+
+    await page.locator('#driveRing [data-drive="north"]').click();
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) > n;
+      },
+      before,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    assert.ok(await turnCountOf(page) > before, "the press spent a turn");
+    assert.match(
+      await page.locator("#sceneStatus").textContent(),
+      /the whole square moved with it|the turn was spent anyway/,
+      "and the status says so, so the ring never reads as a free nudge",
+    );
+
+    const cellsAfter = await agentCellsOf(page);
+    const anyoneMoved = Object.keys(cellsBefore).some((id) => cellsBefore[id] !== cellsAfter[id]);
+    assert.ok(anyoneMoved, "the rest of the board decided and moved on that same turn");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error driving an agent by hand");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking the ground with nothing armed heads the followed agent that way, along a route the board allows", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await page.waitForFunction(
+      () => window.mudiiiScene && typeof window.mudiiiScene.ready === "function" && window.mudiiiScene.ready(),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+    assert.equal(await page.locator("#foodPill").getAttribute("aria-pressed"), "false", "nothing is armed");
+
+    const before = await turnCountOf(page);
+    const box = await page.locator("#sceneCanvas").boundingBox();
+    await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.62);
+
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) > n;
+      },
+      before,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+
+    const route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
+    const status = await page.locator("#sceneStatus").textContent();
+    if (route.length) {
+      assert.ok(route.length >= 2, "a drawn route runs from the agent to the cell");
+      for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
+      // Every hop is one orthogonal step, which is what "along the board's own
+      // exits" means — a straight segment would jump diagonally through walls.
+      for (let i = 1; i < route.length; i += 1) {
+        assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
+      }
+    } else {
+      assert.match(status, /no way through to/, "an unreachable cell is declined visibly, never drawn");
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error clicking the ground unarmed");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the 3D scene canvas boots without a console error, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

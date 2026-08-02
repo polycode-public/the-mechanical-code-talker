@@ -333,6 +333,24 @@ test("mudiiiSceneScript measures a mesh through the loaded model, never the grou
   assert.match(script, /entry\.model = gltf\.scene;/);
 });
 
+test("mudiiiSceneScript draws a clicked cell's route along the board's own cells, never a straight segment", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /function showRoute\(cells\)/);
+  assert.match(script, /for \(var i = 0; i < cells\.length; i \+= 1\)[\s\S]*cellToWorld\(cells\[i\]/, "one point per cell the search returned");
+  assert.match(script, /function flashCell\(cell\)/);
+  assert.match(script, /flashUntil = performance\.now\(\) \+ FLASH_MS;/, "the flash times itself out rather than lingering");
+  assert.match(script, /routeCellsDrawn:/, "the drawn route is readable for an e2e assertion");
+  assert.match(script, /clearRoute\(\);\s*clearFlash\(\);/, "a reboot leaves no route or flash from the old world behind");
+});
+
+test("mudiiiSceneScript plays a walk for a hand-driven step, whatever that agent believes", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /tickRungs = \(tick && tick\.rungs\) \|\| \{\};/, "the tick's own decision per agent reaches the clip choice");
+  assert.match(script, /moving && tickRungs\[id\] === "driven" \? "driven" : currentActionFor\(/);
+});
+
 test("mudiiiSceneScript falls back to a default grid size and cell size for missing/invalid opts", async () => {
   const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
   const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus" });

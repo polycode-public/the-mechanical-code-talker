@@ -177,7 +177,7 @@ test("renderMudiiiHtml: every tick calls window.mudiiiScene.applyTick with the r
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(
     html,
-    /callScene\("applyTick", \{ agents: result\.agents, items: result\.items, ecology: result\.ecology \}\)/,
+    /callScene\("applyTick", \{\s*agents: result\.agents, items: result\.items, ecology: result\.ecology, rungs: result\.rungs,\s*\}\)/,
   );
 });
 
@@ -269,7 +269,33 @@ test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absen
   assert.doesNotMatch(html, /id="shareBtn"/);
   assert.doesNotMatch(html, /id="joinOpenBtn"/);
   assert.doesNotMatch(html, /wave-btn/);
-  assert.doesNotMatch(html, /dir-ring/, "the compass ring dies with the free camera");
+});
+
+test("renderMudiiiHtml: the ring walks the followed agent, and every press spends a whole-world turn", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<div class="dir-ring" id="driveRing"/);
+  for (const point of ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]) {
+    assert.match(html, new RegExp(`data-drive="${point}"`), `the ring carries ${point}`);
+  }
+  assert.match(html, /await session\.driveAgent\(followed, direction\)/);
+  assert.match(html, /the whole square moved with it/, "the status says a press cost a turn, so it never reads as a free nudge");
+  assert.match(html, /the turn was spent anyway/, "a refused press cost the same turn");
+  assert.match(html, /buttons\[i\]\.disabled = !followed;/, "with nobody followed there is nothing to walk");
+});
+
+test("renderMudiiiHtml: an unarmed ground click walks toward the cell along the world's own exits", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /if \(!foodArmed\) \{ walkFollowedTo\(cellId\); return; \}/, "the click no longer dead-ends when nothing is armed");
+  assert.match(html, /callScene\("flashCell", target\)/);
+  assert.match(html, /routeBetweenCells\(snap\.rows, from, target\)/, "the route is the exit table's answer, not a straight line");
+  assert.match(html, /callScene\("clearRoute"\);\s*setSceneStatus\("no way through to "/, "an unreachable cell is declined visibly");
+  assert.match(html, /callScene\("showRoute", route\.cells\)/);
+  assert.match(html, /await drivePress\(route\.directions\[0\]\)/, "and the first step is taken through the same drive path");
+});
+
+test("clipForAction: a hand-driven step walks rather than falling to idle", () => {
+  assert.equal(clipForAction("predator", "driven", { idle: "Idle", walk: "Walk", run: "Run" }), "Walk");
+  assert.equal(clipForAction("prey", "driven", { idle: "Idle", walk: "Walk" }), "Walk");
 });
 
 test("renderMudiiiHtml: the board opens playing, and a reduced-motion visitor gets it drawn but still", () => {
