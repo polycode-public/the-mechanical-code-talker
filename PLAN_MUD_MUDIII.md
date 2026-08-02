@@ -39,17 +39,16 @@ share/join P2P layer follows as its own phase, in PLAN_MUD_MUDIII_SHARED.md.
   `DIRECTION_DELTA`, plus generators for the world's fact rows (`worldFactRows`: cell typing,
   `mgx:has-exit-<direction>` adjacency, taxonomy) and self-describing `structuralFactRows` so
   "what is the board?" grounds in chat. MUDIII gets a sibling, `town-square-world.mjs`.
-- `src/services/spider-fly.mjs` — the tick engine: `foldSpiderFlyState` (fold fact rows to
-  current state), `gridApplyActions` (successors from `has-exit` facts), `planSpiderPath`
-  (multi-step BFS chase), `greedyFlyMove`/`greedySpiderApproach`/`greedySpiderAvoid` (one-ply
-  Chebyshev scoring), `believedCellOf`/`beliefSnapshotFor` (vision-gated belief with a told-facts
-  channel), `runEcologyPass` (catch/eat/starve/lay/hatch/spawn in one fixed-order pass), all
-  seeded-deterministic (`mulberry32(fnv1a32(...))`, never `Math.random`). This is the machinery
-  MUDIII instantiates with new roles. The grid-planning question is already settled here:
-  hand-written `applyActions` over the world's own `has-exit` facts, because the taught
-  action-rule DSL's precondition shapes cannot express grid adjacency (the header of
-  `gridApplyActions` records this; `compileDomain`/`movesFromRules` in `src/domain/domain.mjs`
-  stay the plan lane's tool, not this game's).
+- `src/services/predator-prey.mjs` — the tick engine both boards run: `foldTownSquareState` (fold
+  fact rows to current state), `gridApplyActions` (successors from `has-exit` facts),
+  `findActionPath` for the multi-step chase, `greedyAway`/`greedyToward` (one-ply Chebyshev
+  scoring), `believedCellOf`/`beliefSnapshotFor` (vision-gated belief with a told-facts channel),
+  and one fixed-order ecology pass, all seeded-deterministic (`mulberry32(fnv1a32(...))`, never
+  `Math.random`). This is the machinery each cast instantiates with its own roles. The
+  grid-planning question is settled here: hand-written `applyActions` over the world's own
+  `has-exit` facts, because the taught action-rule DSL's precondition shapes cannot express grid
+  adjacency (the header of `gridApplyActions` records this; `compileDomain`/`movesFromRules` in
+  `src/domain/domain.mjs` stay the plan lane's tool, not this game's).
 - `src/services/spider-fly-turn.mjs` — the chat lane pattern: closed-regex openers/stop/tick, the
   addressed spatial teach-frame (`@spider the fly is east` / `at cell-7-3`), the read-only belief
   question ("what does the fly see?"), in-game orientation asides, and `pillsForSpiderFly` (the
@@ -99,10 +98,15 @@ MUDIII does not copy that pattern. Two options:
 1. Parameterize `spider-fly.mjs` itself and make spider-fly one instantiation. Touches a shipped,
    tested engine and its chat lane; largest payoff, largest regression surface.
 2. Write the new engine role-parameterized from day one — `src/services/predator-prey.mjs`,
-   taking a roles object — and leave spider-fly untouched. spider-fly can migrate onto it later
-   if that ever earns its cost.
+   taking a roles object — and leave spider-fly untouched, to keep the regression surface small
+   while MUDIII was built. spider-fly migrates onto it once that reason expires.
 
-Option 2 is the design. The roles object is plain data:
+Option 2 is the design, and the migration has since landed: `spider-fly.mjs` is gone, and the
+spider-and-fly board runs on `predator-prey.mjs` with its own layout, roles and knobs (see
+`spider-fly-turn.mjs`'s bindings section). Carrying a catch to a web, spinning webs and laying
+eggs arrived in the shared engine as opt-in features, so the town square gained none of them.
+
+The roles object is plain data:
 
     { predator: { kind: "fox",    idPrefix: "fox"    },
       prey:     { kind: "goblin", idPrefix: "goblin" },

@@ -37,7 +37,6 @@ import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embed
 import { createTicker } from "./viz-ticker.mjs";
 import { loadWinkVendor } from "./viz-boot.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId, agentKindOf } from "../domain/spider-fly-world.mjs";
-import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
 import { believedFactSentence } from "./spider-fly-turn.mjs";
 import { DEFAULT_GAME_CONFIG, massScaleFor } from "../domain/game-config.mjs";
 import { resolveSpriteRequest } from "../domain/sprite-request.mjs";
@@ -69,11 +68,11 @@ function webCellIds() {
 /**
  * Reconstruct the spider's remaining silk-thread path — the sequence of
  * cell ids from its CURRENT cell (after this tick's one executed step) to
- * wherever `findActionPath` was aiming — from spider-fly.mjs's own
+ * wherever `findActionPath` was aiming — from spider-fly-turn.mjs's own
  * `agents[spiderId]` shape ({ cell, plan }), where `plan` is the FULL
  * direction list `findActionPath` returned (the step already taken this
  * tick, `plan[0]`, plus every step still to come). Only a spider with a
- * REAL multi-step plan draws a thread at all: spider-fly.mjs's own
+ * REAL multi-step plan draws a thread at all: spider-fly-turn.mjs's own
  * `planSpiderPath` only ever returns one when the believed fly cell sits
  * inside the web block (its `isGoal`'s own requirement) — most ticks the
  * spider is greedily closing distance with no such plan, and this
@@ -104,7 +103,7 @@ export function threadCellsForSpiderPlan(agents, geometry) {
 }
 
 /** The sprite-facing rotation (degrees) for one agent this tick, driven by
- *  its CURRENT plan's first step (spider-fly.mjs's own `agents[id].plan`),
+ *  its CURRENT plan's first step (spider-fly-turn.mjs's own `agents[id].plan`),
  *  never its actual next move — the two usually coincide, but re-planning
  *  fresh every tick means they can visibly diverge as a plan gets clobbered
  *  and replaced, which is the intended, honest demonstration of "plans get
@@ -188,13 +187,11 @@ export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [
     previewMaxTurns: PREVIEW_MAX_TURNS,
     tickWaitMs: TICK_WAIT_MS,
     corpseLingerTurns: CORPSE_LINGER_TURNS,
-    maxFlyMass: FLY_INITIAL_MASS,
-    // The spider's mass bar now scales against the EGG-LAY threshold, not
-    // its own starting mass — "how close to laying" is the meaningful cap
-    // to visualize under the new mass-gated lay mechanic (§A.2.2); the old
-    // denominator (a flat starting mass) said nothing about progress toward
-    // the spider's actual goal.
-    maxSpiderMass: EGG_LAY_MASS_THRESHOLD,
+    maxFlyMass: DEFAULT_GAME_CONFIG.spiderFly.flyInitialMass,
+    // The spider's mass bar scales against the egg-lay threshold rather than
+    // its own starting mass: "how close to laying" is what a viewer wants to
+    // read, and a flat starting mass says nothing about progress toward it.
+    maxSpiderMass: DEFAULT_GAME_CONFIG.spiderFly.eggLayMassThreshold,
     defaultConfig: DEFAULT_GAME_CONFIG.spiderFly,
     spriteTemplates,
   });
@@ -349,7 +346,7 @@ ${THEME_TOKENS_CSS}
   .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
   /* the click-expand facts panel (§28): beside the clicked spider/fly's own
      row, never a separate popover or a second panel elsewhere on the page —
-     the same believedCellOf/beliefSnapshotFor read path spider-fly.mjs
+     the same believedCellOf/beliefSnapshotFor read path spider-fly-turn.mjs
      already computes every tick for planning, rendered here as full
      sentences instead of the compact believes:-line above. */
   .hud-detail { flex: 1 1 auto; min-width: 0; font-family: ${MONO_STACK}; font-size: .64rem; line-height: 1.5; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .35rem .5rem; }

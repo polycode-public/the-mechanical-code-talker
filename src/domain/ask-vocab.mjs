@@ -222,7 +222,7 @@ export const WORLD_RELATIONS = Object.freeze({
     reads: "feels",
   }),
   mass: Object.freeze({
-    predicate: "mgx:mass",
+    predicate: "mgx:hasMass",
     comment: "individual -> number: the subject's current mass.",
     nouns: Object.freeze(["mass", "masses", "weight", "weights"]),
     reads: "has mass",

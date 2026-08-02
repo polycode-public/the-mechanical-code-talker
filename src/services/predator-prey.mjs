@@ -1,34 +1,32 @@
-// predator-prey.mjs — the headless town-square turn engine: an (epoch, turn)
+// predator-prey.mjs — the headless predator/prey turn engine: an (epoch, turn)
 // state fold, vision-gated belief over agents AND inert food, the two decision
 // chains, and one fixed-order ecology pass, all reading and writing plain fact
 // rows through the shared memory store. No chat, no rendering.
 //
-// Role-parameterized from the first line. Nothing below names a fox or a
-// goblin: the cast arrives as MUDIII_ROLES, the numbers arrive role-keyed from
-// DEFAULT_GAME_CONFIG.mudiii, and the board arrives as a layout. A later cast
-// is a new roles object plus new model keys, with no edit here.
+// Role-parameterized from the first line. Nothing below names a fox, a goblin,
+// a spider or a fly: the cast arrives as a roles object, the numbers arrive
+// role-keyed in `config`, and the board arrives as a layout. A new cast is a
+// new roles object plus new model keys, with no edit here. Two casts run on it
+// today — the town square (fox and goblin) and the spider-and-fly board.
 //
 // Grid geometry, the prop tables and what "solid" means all come from
 // domain/town-square-world.mjs. Belief comes from domain/agent-belief.mjs,
 // which is board-size agnostic and models vision as plain Chebyshev distance
 // with no line of sight — a building blocks movement, never sight.
 //
-// Two things this file deliberately does NOT borrow from spider-fly.mjs, its
-// nearest sibling:
+// Three mechanics are OPT-IN, off unless `config` asks for them by name, so a
+// cast that does not want them sees the same board it always did:
 //
-//   - Its snapshot regex. `/^(.+)@turn(\d+)$/` is greedy, so it reads
-//     `goblin-1@epoch2@turn3`'s base as `goblin-1@epoch2` — an id no roster
-//     matches, which drops every post-recast fact out of the fold silently.
-//     parseSnapshotSubject/snapshotSubject from adventure.mjs are lazy and
-//     read both forms, and are imported here rather than re-derived.
-//   - Its `mgx:mass` predicate. Mass is rewritten every turn for every agent,
-//     and mgx:mass is unlisted in the memory resolution table, so it falls to
-//     the contradiction policy. mgx:hasMass is the listed one.
-//
-// gridApplyActions is written out below rather than imported from
-// spider-fly.mjs on purpose: spider-fly is the pattern this engine mirrors,
-// not a library underneath it, and the design has spider-fly migrating onto
-// this engine later — an import in this direction would become a cycle then.
+//   - `carryPreyToWeb` splits catching from eating. A predator that shares a
+//     cell with prey claims it (mgx:carrying) and only eats standing in a web.
+//     Off, a predator eats where it catches, in one step.
+//   - `buildWebs` gives the predator's last rung a job — hold and spin a web
+//     (web-N + mgx:web-built-at-turn) instead of wandering — and traps prey
+//     that ends a move inside a live one. A layout may also declare an
+//     always-on web block through `staticWebAt`.
+//   - `layEggs` adds the reproduction stage: an egg (mgx:laid-at-turn) laid in
+//     a web once mass crosses a threshold, hatching (mgx:hatched-into) into
+//     hatchlings that split the egg's mass.
 
 import {
   DEFAULT_FACING, TOWN_SQUARE_LAYOUTS,
@@ -67,6 +65,18 @@ const MODEL_PREDICATE = "mgx:model";
 const ROTATION_PREDICATE = "mgx:rotation";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
 
+// The four predicates only an opt-in mechanic ever writes. They are listed
+// here, and folded below, whatever the cast: a fold that skipped them would
+// have to know which features its caller turned on, and the rows simply never
+// appear on a board that never writes them.
+const CARRYING_PREDICATE = "mgx:carrying";
+const PREY_EATEN_PREDICATE = "mgx:prey-eaten";
+const WEB_BUILT_PREDICATE = "mgx:web-built-at-turn";
+const LAID_AT_TURN_PREDICATE = "mgx:laid-at-turn";
+const HATCHED_INTO_PREDICATE = "mgx:hatched-into";
+
+const EGG_KIND = "egg";
+
 // One row per tick, whatever else the turn did, on a subject the board itself
 // owns. It is what the next tick's turn number counts, and it exists as its own
 // predicate rather than being read off the mood rows because a board with
@@ -79,6 +89,8 @@ const MUDIII_STATE_PREDICATE_SET = new Set([
   PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE,
   EATEN_BY_PREDICATE, STARVED_PREDICATE, PLACED_BY_PREDICATE,
   MODEL_PREDICATE, ROTATION_PREDICATE, TURN_PLAYED_PREDICATE,
+  CARRYING_PREDICATE, PREY_EATEN_PREDICATE, WEB_BUILT_PREDICATE,
+  LAID_AT_TURN_PREDICATE, HATCHED_INTO_PREDICATE,
   "rdf:type", WORLD_EPOCH_PREDICATE,
 ]);
 
@@ -107,6 +119,14 @@ const seedKey = (layoutName, epoch, turn, id, purpose) => `${layoutName}:${epoch
 function seededPick(options, contextString) {
   const rng = mulberry32(fnv1a32(contextString));
   return options[Math.floor(rng() * options.length)];
+}
+
+/** One placement cell drawn on this engine's own seed scheme, for a cast layer
+ *  minting a starting roster of its own rather than taking seededRoster's.
+ *  Exported so a hand-built roster and an engine spawn draw from the same
+ *  keyspace instead of a second, silently different one. */
+export function seededSpawnCell(options, { layoutName, epoch = 0, turn = 0, id }) {
+  return seededPick(options, seedKey(layoutName, epoch, turn, id, "spawn"));
 }
 
 // ---- the (epoch, turn) fold ---------------------------------------------------
@@ -151,6 +171,12 @@ export function foldTownSquareState(factRows) {
   const types = new Map();      // subject -> class named by its bare rdf:type row
   const models = new Map();     // prop subject -> asset key
   const starved = new Set();
+  const carrying = new Map();   // predator -> { prey, turn, epoch }
+  const carryingRank = new Map(); // predator -> the (epoch, turn) its newest carrying row carries
+  const preyEaten = new Map();  // predator -> { value, turn, epoch }
+  const laidAtTurn = new Map(); // egg -> { value, turn, epoch }
+  const webBuiltAt = new Map(); // web -> { value, turn, epoch }
+  const hatchedInto = new Map();// egg -> { into, turn, epoch }
   let turnCount = 0;
   let tickCount = 0;
 
@@ -193,6 +219,36 @@ export function foldTownSquareState(factRows) {
       case STARVED_PREDICATE:
         if (rowEpoch === epoch) starved.add(base);
         break;
+      // A predator re-asserts what it holds every turn, and "none" is a real
+      // answer. The rank is tracked apart from the value so a dropped catch
+      // cannot be undone by an older row arriving later in the array.
+      case CARRYING_PREDICATE:
+        if (!outranks(rowEpoch, turn, carryingRank.get(base))) break;
+        carryingRank.set(base, { turn, epoch: rowEpoch });
+        if (row.object === "none") carrying.delete(base);
+        else carrying.set(base, { prey: row.object, turn, epoch: rowEpoch });
+        break;
+      case PREY_EATEN_PREDICATE: {
+        const value = Number(row.object);
+        if (!Number.isFinite(value)) break;
+        if (outranks(rowEpoch, turn, preyEaten.get(base))) preyEaten.set(base, { value, turn, epoch: rowEpoch });
+        break;
+      }
+      case LAID_AT_TURN_PREDICATE: {
+        const value = Number(row.object);
+        if (!Number.isInteger(value)) break;
+        if (outranks(rowEpoch, turn, laidAtTurn.get(base))) laidAtTurn.set(base, { value, turn, epoch: rowEpoch });
+        break;
+      }
+      case WEB_BUILT_PREDICATE: {
+        const value = Number(row.object);
+        if (!Number.isInteger(value)) break;
+        if (outranks(rowEpoch, turn, webBuiltAt.get(base))) webBuiltAt.set(base, { value, turn, epoch: rowEpoch });
+        break;
+      }
+      case HATCHED_INTO_PREDICATE:
+        if (outranks(rowEpoch, turn, hatchedInto.get(base))) hatchedInto.set(base, { into: row.object, turn, epoch: rowEpoch });
+        break;
       case MODEL_PREDICATE:
         models.set(base, row.object);
         break;
@@ -211,8 +267,24 @@ export function foldTownSquareState(factRows) {
   for (const [subject, { epoch: rowEpoch }] of eatenBy) {
     if (rowEpoch === epoch) removed.add(subject);
   }
+  for (const [subject, { epoch: rowEpoch }] of hatchedInto) {
+    if (rowEpoch === epoch) removed.add(subject);
+  }
 
-  return { placements, mass, mood, facing, eatenBy, placedBy, types, models, starved, removed, turnCount, tickCount, epoch };
+  // A web is a placed individual plus the turn it was spun. Both halves are
+  // needed, and only this epoch's webs stand: a recast leaves the board bare.
+  const webs = new Map(); // web subject -> { cell, builtAtTurn }
+  for (const [id, built] of webBuiltAt) {
+    if (built.epoch !== epoch) continue;
+    const place = placements.get(id);
+    if (place) webs.set(id, { cell: place.cell, builtAtTurn: built.value });
+  }
+
+  return {
+    placements, mass, mood, facing, eatenBy, placedBy, types, models, starved,
+    carrying, preyEaten, laidAtTurn, hatchedInto, webs,
+    removed, turnCount, tickCount, epoch,
+  };
 }
 
 /** Every live subject whose id names `kind`, sorted. */
@@ -324,6 +396,49 @@ export function seededWander(fromCell, applyActions, { layoutName, epoch, turn, 
   return seededPick(oneStepOptions(fromCell, applyActions), seedKey(layoutName, epoch, turn, id, "wander"));
 }
 
+// ---- webs, when a cast asks for them ---------------------------------------------
+// One predicate answers "is this cell webbed right now", and both the eat gate
+// and the prey's movement gate read it, so a layout's always-on block and a
+// predator-spun web are ONE concept rather than two code paths.
+
+/** Whether (x, y) is webbed on `turn`: inside the layout's own always-on block
+ *  (`layout.staticWebAt`, absent on a layout with no such block), or covered by
+ *  a predator-built web still inside `webDurationTurns` of the turn it was
+ *  spun. False for a board that has neither. Pure. */
+export function hasActiveWebAt(layout, state, turn, x, y, webDurationTurns) {
+  if (layout?.staticWebAt?.(x, y)) return true;
+  if (!state?.webs?.size || !webDurationTurns) return false;
+  const target = cellId(x, y);
+  for (const { cell, builtAtTurn } of state.webs.values()) {
+    if (cell === target && builtAtTurn + webDurationTurns > turn) return true;
+  }
+  return false;
+}
+
+/** Every unexpired predator-built web in `websMap` (a folded state's own
+ *  `.webs`, or that widened with one spun THIS tick before it has been read
+ *  back), as `{ id, cell, builtAtTurn, expiresAtTurn }` — a renderer draws
+ *  these apart from the layout's static block, which is fixed geometry rather
+ *  than runtime state. Pure. */
+export function liveWebs(websMap, turn, webDurationTurns) {
+  const out = [];
+  for (const [id, { cell, builtAtTurn }] of websMap || []) {
+    if (builtAtTurn + webDurationTurns > turn) out.push({ id, cell, builtAtTurn, expiresAtTurn: builtAtTurn + webDurationTurns });
+  }
+  return out;
+}
+
+/** A carrying predator's own path home: the shortest route to ANY webbed cell,
+ *  rather than to one named target. Null when no web is reachable at all. */
+function pathToAnyWeb(fromCell, applyActions, { layout, state, turn, webDurationTurns }) {
+  return findActionPath(
+    fromCell,
+    (s) => hasActiveWebAt(layout, state, turn, s.x, s.y, webDurationTurns),
+    applyActions,
+    { stateKey: pathStateKey },
+  );
+}
+
 /** A one-step "plan" for a greedy or held move — the direction as a length-1
  *  array, or `[]` when the agent held still. A genuine multi-step search result
  *  supplies its own full direction list instead. Either way plan[0] is the
@@ -342,13 +457,21 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // is scared, anything wandering or foraging is calm, and anything that just ate
 // is happy.
 
-function goalLine(kind, { subject, cell, arrived } = {}) {
+function goalLine(kind, { subject, cell, arrived, boardNoun = "square", catches = false } = {}) {
   switch (kind) {
     case "avoid": return `avoiding ${subject}, last seen at ${cell}.`;
-    case "chase": return arrived ? `standing over ${subject} — taking it.` : `chasing ${subject}, last seen at ${cell}.`;
+    case "chase":
+      if (!arrived) return `chasing ${subject}, last seen at ${cell}.`;
+      return catches ? `co-located with ${subject} — catching it.` : `standing over ${subject} — taking it.`;
     case "evade": return `evading — last saw ${subject} at ${cell}.`;
     case "forage": return arrived ? `standing on ${subject} — eating it.` : `foraging — heading for ${subject} at ${cell}.`;
-    default: return "nothing in sight — wandering the square.";
+    case "carry": return `carrying ${subject} toward the web.`;
+    case "deliver": return `carrying ${subject} — already in the web, delivering it now.`;
+    case "carried": return `being carried by ${subject}.`;
+    case "trapped": return "trapped in an active web — can't move.";
+    case "hold-web": return "nothing in sight — holding position in the web.";
+    case "build-web": return "nothing in sight — building a web here.";
+    default: return `nothing in sight — wandering the ${boardNoun}.`;
   }
 }
 
@@ -358,20 +481,30 @@ function goalLine(kind, { subject, cell, arrived } = {}) {
 //   1. eat-agent — a predator sharing a cell with prey takes it, and gains the
 //      prey's remaining mass. Catch and eat are one step: a predator needs no
 //      apparatus, so nothing is ever carried and no state survives the turn.
+//      Under `carryPreyToWeb` this splits in two — catch-prey claims the prey
+//      wherever they meet, and the eat waits until the captor is standing in a
+//      web. At most one catch per predator per turn.
 //   2. eat-item  — prey standing on food eat it. AFTER eat-agent, so a prey
 //      taken this turn is never also credited with a crumb. A prey on two
 //      crumbs eats both.
 //   3. starve    — mass reached zero, and nothing this turn already claimed it.
-//      Whatever ate this turn survives it, because eating resolved first.
-//   4. spawn-prey — arrivals wander in from the edge, so the pick is the
+//      Whatever ate this turn survives it, because eating resolved first. A
+//      carried prey starves like a free one, and its captor's claim drops.
+//   4. lay-egg   — `layEggs` only. A predator standing in a web whose mass has
+//      reached the threshold lays one egg and resets to its own starting mass;
+//      the surplus becomes the egg's. One live egg at a time.
+//   5. hatch-egg — `layEggs` only. An egg laid exactly eggHatchDelayTurns ago
+//      splits its mass across its hatchlings, fewer of them rather than
+//      emaciated ones when the egg is small.
+//   6. spawn-prey — arrivals wander in from the edge, so the pick is the
 //      perimeter minus prop cells. That subtraction is not a nicety: the
 //      headline layout has buildings sitting on two whole edges.
-//   5. spawn-food — dropped bread lands anywhere open, so the pick is every
+//   7. spawn-food — dropped bread lands anywhere open, so the pick is every
 //      open cell minus whatever stands or lies on one. Last, so it reads the
 //      board as every earlier step left it.
 //
 // Both spawns check their cap first, so a full board simply skips that turn's
-// arrival.
+// arrival, and a cast that sets no interval never spawns that kind at all.
 
 function runEcologyPass({
   state, layout, roles, config, turn, epoch,
@@ -381,6 +514,9 @@ function runEcologyPass({
   const writes = [];
   const events = [];
   const stamp = (base) => snapshotSubject(base, k, epoch);
+  const carriesPrey = config.carryPreyToWeb === true;
+  const laysEggs = config.layEggs === true;
+  const webbedAt = (c) => hasActiveWebAt(layout, state, k, c.x, c.y, config.webDurationTurns);
 
   const predators = [...postMovePlacements.keys()].filter((id) => roleOfId(id, roles) === "predator").sort();
   const prey = [...postMovePlacements.keys()].filter((id) => roleOfId(id, roles) === "prey").sort();
@@ -388,18 +524,59 @@ function runEcologyPass({
   const takenAgents = new Set();
   const takenItems = new Set();
 
-  // 1. eat-agent
-  for (const predatorId of predators) {
-    const pc = postMovePlacements.get(predatorId);
-    for (const preyId of prey) {
-      if (takenAgents.has(preyId)) continue;
-      const qc = postMovePlacements.get(preyId);
-      if (pc.x !== qc.x || pc.y !== qc.y) continue;
+  // 1. eat-agent, or catch-then-eat for a cast that carries.
+  const carriedBy = new Map(); // predator -> prey it holds at the end of this turn
+  if (!carriesPrey) {
+    for (const predatorId of predators) {
+      const pc = postMovePlacements.get(predatorId);
+      for (const preyId of prey) {
+        if (takenAgents.has(preyId)) continue;
+        const qc = postMovePlacements.get(preyId);
+        if (pc.x !== qc.x || pc.y !== qc.y) continue;
+        takenAgents.add(preyId);
+        const gained = finalMass.get(preyId) ?? 0;
+        finalMass.set(predatorId, (finalMass.get(predatorId) ?? 0) + gained);
+        writes.push({ subject: stamp(preyId), predicate: EATEN_BY_PREDICATE, object: predatorId });
+        events.push({ type: "eat-agent", predator: predatorId, prey: preyId, cell: cellId(pc.x, pc.y), massGained: round2(gained) });
+      }
+    }
+  } else {
+    // Whatever each predator was already holding before this tick, dropped for
+    // a captor or a prey that has since left the board.
+    for (const [predatorId, { prey: preyId }] of state.carrying) {
+      if (postMovePlacements.has(predatorId) && postMovePlacements.has(preyId)) carriedBy.set(predatorId, preyId);
+    }
+    const claimed = new Set(carriedBy.values());
+    for (const predatorId of predators) {
+      if (carriedBy.has(predatorId)) continue;
+      const pc = postMovePlacements.get(predatorId);
+      for (const preyId of prey) {
+        if (claimed.has(preyId)) continue;
+        const qc = postMovePlacements.get(preyId);
+        if (pc.x !== qc.x || pc.y !== qc.y) continue;
+        carriedBy.set(predatorId, preyId);
+        claimed.add(preyId);
+        events.push({ type: "catch-prey", predator: predatorId, prey: preyId, cell: cellId(pc.x, pc.y) });
+        break;
+      }
+    }
+    const eatenDelta = new Map();
+    for (const predatorId of predators) {
+      const preyId = carriedBy.get(predatorId);
+      if (!preyId) continue;
+      const pc = postMovePlacements.get(predatorId);
+      if (!webbedAt(pc)) continue;
+      carriedBy.delete(predatorId);
       takenAgents.add(preyId);
       const gained = finalMass.get(preyId) ?? 0;
       finalMass.set(predatorId, (finalMass.get(predatorId) ?? 0) + gained);
+      eatenDelta.set(predatorId, (eatenDelta.get(predatorId) ?? 0) + 1);
       writes.push({ subject: stamp(preyId), predicate: EATEN_BY_PREDICATE, object: predatorId });
       events.push({ type: "eat-agent", predator: predatorId, prey: preyId, cell: cellId(pc.x, pc.y), massGained: round2(gained) });
+    }
+    for (const [predatorId, delta] of eatenDelta) {
+      const count = (state.preyEaten.get(predatorId)?.value ?? 0) + delta;
+      writes.push({ subject: stamp(predatorId), predicate: PREY_EATEN_PREDICATE, object: String(count) });
     }
   }
 
@@ -432,22 +609,93 @@ function runEcologyPass({
   }
 
   const goneThisTurn = new Set([...takenAgents, ...starvedThisTurn]);
+  const spawned = [];
+
+  // A predator re-asserts what it holds every turn, whether or not that
+  // changed: a write that merely stopped would leave a stale claim standing
+  // for the fold to keep honoring. A prey that starved mid-carry is dropped.
+  if (carriesPrey) {
+    for (const [predatorId, preyId] of carriedBy) {
+      if (starvedThisTurn.has(preyId)) carriedBy.delete(predatorId);
+    }
+    for (const predatorId of predators) {
+      writes.push({ subject: stamp(predatorId), predicate: CARRYING_PREDICATE, object: carriedBy.get(predatorId) ?? "none" });
+    }
+  }
+
+  // 4. lay-egg
+  const liveEggIds = laysEggs ? [...state.laidAtTurn.keys()].filter((id) => !state.removed.has(id)).sort() : [];
+  if (laysEggs && !liveEggIds.length) {
+    for (const predatorId of predators) {
+      if (goneThisTurn.has(predatorId)) continue;
+      if (!webbedAt(postMovePlacements.get(predatorId))) continue;
+      const predatorMass = finalMass.get(predatorId) ?? 0;
+      if (predatorMass < config.eggLayMassThreshold) continue;
+      const eggMass = predatorMass - config.predatorInitialMass;
+      finalMass.set(predatorId, config.predatorInitialMass);
+      const c = postMovePlacements.get(predatorId);
+      const eggCell = cellId(c.x, c.y);
+      const eggId = `${EGG_KIND}-${1 + maxIdSuffix(state.placements.keys(), EGG_KIND)}`;
+      writes.push({ subject: eggId, predicate: "rdf:type", object: EGG_KIND });
+      writes.push({ subject: stamp(eggId), predicate: PLACEMENT_PREDICATE, object: eggCell });
+      writes.push({ subject: stamp(eggId), predicate: LAID_AT_TURN_PREDICATE, object: String(k) });
+      writes.push({ subject: stamp(eggId), predicate: MASS_PREDICATE, object: String(eggMass) });
+      events.push({ type: "lay-egg", agent: predatorId, egg: eggId, cell: eggCell, mass: round2(eggMass) });
+      break; // one live egg at a time — the first qualifying predator lays it
+    }
+  }
+
+  // 5. hatch-egg. Reads the egg slot as it stood BEFORE this tick's own lay, so
+  // a hatch and a fresh lay never land on the same turn.
+  const hatchedCells = new Set();
+  if (laysEggs) {
+    let nextHatchlingNum = 1 + maxIdSuffix(state.placements.keys(), roles.predator.kind);
+    for (const eggId of liveEggIds) {
+      if (state.laidAtTurn.get(eggId).value + config.eggHatchDelayTurns !== k) continue;
+      const eggCell = state.placements.get(eggId)?.cell;
+      if (!eggCell) continue;
+      const eggMass = state.mass.get(eggId)?.value ?? config.predatorInitialMass;
+      const hatchCount = Math.max(1, Math.min(config.eggHatchCount, Math.floor(eggMass / config.minHatchlingMass)));
+      const share = Math.floor(eggMass / hatchCount);
+      const remainder = eggMass - share * hatchCount;
+      const hatchlings = [];
+      for (let i = 0; i < hatchCount; i += 1) {
+        const hatchlingId = `${roles.predator.idPrefix}-${nextHatchlingNum}`;
+        nextHatchlingNum += 1;
+        const hatchlingMass = share + (i === 0 ? remainder : 0);
+        writes.push({ subject: hatchlingId, predicate: "rdf:type", object: roles.predator.kind });
+        writes.push({ subject: stamp(hatchlingId), predicate: PLACEMENT_PREDICATE, object: eggCell });
+        writes.push({ subject: stamp(hatchlingId), predicate: MASS_PREDICATE, object: String(hatchlingMass) });
+        writes.push({ subject: stamp(hatchlingId), predicate: FACING_PREDICATE, object: DEFAULT_FACING });
+        hatchlings.push({ id: hatchlingId, mass: round2(hatchlingMass) });
+        spawned.push({ id: hatchlingId, role: "predator", cell: eggCell, mass: hatchlingMass, goal: "just hatched — no goal yet." });
+      }
+      writes.push({ subject: stamp(eggId), predicate: HATCHED_INTO_PREDICATE, object: hatchlings[0].id });
+      events.push({ type: "hatch-egg", egg: eggId, cell: eggCell, hatchlings });
+      hatchedCells.add(eggCell);
+    }
+  }
+
   const occupied = new Set();
   for (const [id, c] of postMovePlacements) {
     if (goneThisTurn.has(id)) continue;
     occupied.add(cellId(c.x, c.y));
   }
+  for (const eggId of liveEggIds) {
+    const eggCell = state.placements.get(eggId)?.cell;
+    if (eggCell) occupied.add(eggCell);
+  }
+  for (const cell of hatchedCells) occupied.add(cell);
   const itemCells = new Set();
   for (const itemId of liveItemIds) {
     if (takenItems.has(itemId)) continue;
     itemCells.add(itemCellOf.get(itemId));
   }
 
-  const spawned = [];
-
-  // 4. spawn-prey
+  // 6. spawn-prey
   const livePreyAfter = prey.filter((id) => !goneThisTurn.has(id)).length;
-  if (k % config.preySpawnIntervalTurns === 0 && livePreyAfter < config.maxPreyPopulation) {
+  const preyCap = config.maxPreyPopulation ?? Infinity;
+  if (config.preySpawnIntervalTurns && k % config.preySpawnIntervalTurns === 0 && livePreyAfter < preyCap) {
     const free = perimeterCells(layout).filter((c) => !occupied.has(c));
     if (free.length) {
       const preyId = `${roles.prey.idPrefix}-${1 + maxIdSuffix(state.placements.keys(), roles.prey.kind)}`;
@@ -462,9 +710,10 @@ function runEcologyPass({
     }
   }
 
-  // 5. spawn-food
+  // 7. spawn-food
   const liveFoodAfter = liveItemIds.filter((id) => !takenItems.has(id)).length;
-  if (k % config.foodSpawnIntervalTurns === 0 && liveFoodAfter < config.maxFoodItems) {
+  const foodCap = config.maxFoodItems ?? Infinity;
+  if (config.foodSpawnIntervalTurns && k % config.foodSpawnIntervalTurns === 0 && liveFoodAfter < foodCap) {
     const free = openCells(layout).filter((c) => !occupied.has(c) && !itemCells.has(c));
     if (free.length) {
       const itemId = `${roles.food.spawnedKind}-${1 + maxIdSuffix(state.placements.keys(), roles.food.spawnedKind)}`;
@@ -692,7 +941,11 @@ export async function placeFood(memoryDir, {
 function readLiveBoard(rows, state, { config, roles }) {
   const predators = liveOfKind(state, roles.predator.kind);
   const prey = liveOfKind(state, roles.prey.kind);
-  const liveItemIds = [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort();
+  // `roles.food` is null for a cast with nothing inert on its board. Every
+  // reader downstream walks the item roster, so an empty one is all it takes.
+  const liveItemIds = roles.food
+    ? [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort()
+    : [];
   return {
     predators,
     prey,
@@ -727,13 +980,16 @@ function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
  * to where the predator was when it looked), while eating resolves on the
  * post-move ones (it is caught where the predator actually ends up).
  *
- * Returns `{ turn, epoch, agents, items, ecology, rungs, writes }`. `agents`
- * and `items` and `ecology` are the frozen render payload — see
+ * Returns `{ turn, epoch, agents, items, ecology, rungs, activeWebs, writes }`.
+ * `agents` and `items` and `ecology` are the frozen render payload — see
  * townSquareTickPayload, which projects exactly those three plus the turn.
  * `rungs` is the decision each live agent reached this turn ("chase", "evade",
- * "forage", "avoid", "wander"); an agent that decided and then died still has a
- * rung and no longer has an `agents` entry, which is the difference between a
- * decision and a survivor.
+ * "forage", "avoid", "wander", and — on a cast that carries or spins webs —
+ * "carry", "deliver", "carried", "trapped", "hold-web", "build-web"); an agent
+ * that decided and then died still has a rung and no longer has an `agents`
+ * entry, which is the difference between a decision and a survivor.
+ * `activeWebs` is every unexpired predator-built web, empty on a board with
+ * none.
  */
 export async function runTownSquareTick(memoryDir, {
   layout, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
@@ -753,6 +1009,25 @@ export async function runTownSquareTick(memoryDir, {
   const postMovePlacements = new Map();
   const agents = {};
   const rungs = {};
+
+  const carriesPrey = config.carryPreyToWeb === true;
+  const buildsWebs = config.buildWebs === true;
+  const boardNoun = lay.boardNoun ?? "square";
+  const webbedAt = (c) => hasActiveWebAt(lay, state, k, c.x, c.y, config.webDurationTurns);
+  // Widened in place as predators spin webs this tick, for the renderer's own
+  // list. The gates above keep reading `state`, so a web spun this turn is not
+  // yet active for this turn's eat, lay or trap.
+  const tickWebs = new Map(state.webs);
+  let nextWebNum = 1 + maxIdSuffix(state.webs.keys(), "web");
+  // Prey a still-live predator was already holding when the tick opened. It
+  // rides its captor's move instead of scoring one, and a captor that has left
+  // the board simply isn't here, which frees the prey again.
+  const captorOfPrey = new Map();
+  if (carriesPrey) {
+    for (const [predatorId, { prey: preyId }] of state.carrying) {
+      if (predators.includes(predatorId) && prey.includes(preyId)) captorOfPrey.set(preyId, predatorId);
+    }
+  }
 
   const decide = (agentId, role) => {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
@@ -777,7 +1052,48 @@ export async function runTownSquareTick(memoryDir, {
     let plan;
     let goal;
     let mood;
-    if (threat) {
+    // A carried prey and its captor both leave the ordinary chain. A carrying
+    // predator never drops its catch to dodge a rival or chase a second one:
+    // nothing here eats a predator, so "avoid" is contention, not survival.
+    const carriedPreyId = (carriesPrey && role === "predator") ? (state.carrying.get(agentId)?.prey ?? null) : null;
+    const isCarrying = Boolean(carriedPreyId) && prey.includes(carriedPreyId);
+    const captorId = (carriesPrey && role === "prey") ? (captorOfPrey.get(agentId) ?? null) : null;
+    let beliefCell = fromCell;
+
+    if (isCarrying && webbedAt(fromCell)) {
+      // Already standing in a web: hold, so the pass's own eat gate reads this
+      // same cell and resolves the delivery on this exact tick.
+      rung = "deliver";
+      nextCell = fromCell;
+      plan = [];
+      goal = goalLine("deliver", { subject: carriedPreyId });
+      mood = "angry";
+    } else if (isCarrying) {
+      rung = "carry";
+      const path = pathToAnyWeb(fromCell, applyActions, { layout: lay, state, turn: k, webDurationTurns: config.webDurationTurns });
+      if (path && path.actions.length) {
+        nextCell = path.states[1];
+        plan = path.actions;
+      } else {
+        nextCell = greedyToward(fromCell, parseCellId(lay.webHomeCell) ?? fromCell, applyActions);
+        plan = stepPlan(fromCell, nextCell);
+      }
+      goal = goalLine("carry", { subject: carriedPreyId });
+      mood = "angry";
+    } else if (captorId) {
+      rung = "carried";
+      nextCell = postMovePlacements.get(captorId);
+      beliefCell = nextCell;
+      plan = [];
+      goal = goalLine("carried", { subject: captorId });
+      mood = "scared";
+    } else if (role === "prey" && buildsWebs && webbedAt(fromCell)) {
+      rung = "trapped";
+      nextCell = fromCell;
+      plan = [];
+      goal = goalLine("trapped");
+      mood = "scared";
+    } else if (threat) {
       rung = role === "predator" ? "avoid" : "evade";
       // A fleeing prey that already knows where food is should flee toward
       // it, not away from it — among cells that are equally safe, break the
@@ -808,18 +1124,38 @@ export async function runTownSquareTick(memoryDir, {
           plan = stepPlan(fromCell, nextCell);
         }
         const arrived = nextCell.x === quarry.cell.x && nextCell.y === quarry.cell.y;
-        goal = goalLine(rung, { subject: quarry.subject, cell: cellId(quarry.cell.x, quarry.cell.y), arrived });
+        goal = goalLine(rung, { subject: quarry.subject, cell: cellId(quarry.cell.x, quarry.cell.y), arrived, catches: carriesPrey });
         mood = role === "predator" ? "angry" : "calm";
+      } else if (role === "predator" && buildsWebs) {
+        // A web-spinning predator with nothing in sight has something better to
+        // do than wander: hold this cell, and spin a web here unless a live one
+        // already covers it.
+        nextCell = fromCell;
+        plan = [];
+        mood = "calm";
+        if (webbedAt(fromCell)) {
+          rung = "hold-web";
+          goal = goalLine("hold-web");
+        } else {
+          rung = "build-web";
+          const webId = `web-${nextWebNum}`;
+          nextWebNum += 1;
+          const here = cellId(fromCell.x, fromCell.y);
+          tickWebs.set(webId, { cell: here, builtAtTurn: k });
+          movementWrites.push({ subject: stamp(webId), predicate: PLACEMENT_PREDICATE, object: here });
+          movementWrites.push({ subject: stamp(webId), predicate: WEB_BUILT_PREDICATE, object: String(k) });
+          goal = goalLine("build-web");
+        }
       } else {
         rung = "wander";
         nextCell = seededWander(fromCell, applyActions, { layoutName: lay.name, epoch, turn: k, id: agentId });
         plan = stepPlan(fromCell, nextCell);
-        goal = goalLine("wander");
+        goal = goalLine("wander", { boardNoun });
         mood = "calm";
       }
     }
 
-    const belief = beliefSnapshotFor(agentId, fromCell, beliefCandidates, state, beliefOpts);
+    const belief = beliefSnapshotFor(agentId, beliefCell, beliefCandidates, state, beliefOpts);
     // beliefSnapshotFor's one call covers every candidate, food included, so
     // an ungated food call needs the food entries re-taken at the widened
     // radius too — otherwise the panel would show a crumb null while the
@@ -828,7 +1164,7 @@ export async function runTownSquareTick(memoryDir, {
     // reorder the panel.
     if (!foodVisionGated) {
       const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
-      Object.assign(belief, beliefSnapshotFor(agentId, fromCell, foodCandidates, state, foodBeliefOpts));
+      Object.assign(belief, beliefSnapshotFor(agentId, beliefCell, foodCandidates, state, foodBeliefOpts));
     }
     const facing = plan[0] ?? state.facing.get(agentId)?.value ?? DEFAULT_FACING;
     postMovePlacements.set(agentId, nextCell);
@@ -904,17 +1240,32 @@ export async function runTownSquareTick(memoryDir, {
   for (const id of [...pass.takenAgents, ...pass.starvedThisTurn]) delete agents[id];
   for (const [eater, meals] of ateBy) {
     if (!agents[eater]) continue;
-    agents[eater].goal = `just ate ${meals.join(" and ")}.`;
+    agents[eater].goal = carriesPrey ? `just ate ${meals.join(" and ")} in the web.` : `just ate ${meals.join(" and ")}.`;
     agents[eater].mood = "happy";
+  }
+  // A catch that wasn't also delivered and eaten this same tick leaves both
+  // sides' goals stale: they were assigned during movement, before the pass
+  // resolved the catch, so neither one mentions it.
+  for (const event of ecology) {
+    if (event.type !== "catch-prey") continue;
+    if (ateBy.has(event.predator)) continue;
+    if (agents[event.predator]) {
+      agents[event.predator].goal = goalLine("carry", { subject: event.prey });
+      agents[event.predator].mood = "angry";
+    }
+    if (agents[event.prey]) {
+      agents[event.prey].goal = `just caught by ${event.predator} — being carried.`;
+      agents[event.prey].mood = "scared";
+    }
   }
   // A prey the pass minted arrives after the movement loops built `agents`, so
   // without this it would be announced by its own turn's event and still be
-  // invisible on the board until the next one.
+  // invisible on the board until the next one. A hatchling is the same case.
   for (const arrival of pass.spawned) {
     if (arrival.isItem) continue;
     agents[arrival.id] = {
       role: arrival.role, cell: arrival.cell, facing: DEFAULT_FACING,
-      goal: "just arrived — no goal yet.", mood: "calm", plan: [], mass: round2(arrival.mass), belief: {},
+      goal: arrival.goal ?? "just arrived — no goal yet.", mood: "calm", plan: [], mass: round2(arrival.mass), belief: {},
     };
   }
 
@@ -938,6 +1289,7 @@ export async function runTownSquareTick(memoryDir, {
     items: sortedByKey(items),
     ecology,
     rungs: sortedByKey(rungs),
+    activeWebs: liveWebs(tickWebs, k, config.webDurationTurns),
     writes,
   };
 }
@@ -993,13 +1345,18 @@ export async function townSquareBoard(memoryDir, {
     };
   }
 
-  return {
+  // A resting board's whole return IS the render payload, so `activeWebs`
+  // appears only for a cast that spins webs. A board with none would otherwise
+  // grow a field that is always empty for it.
+  const resting = {
     turn: state.tickCount,
     epoch: state.epoch,
     agents: sortedByKey(agents),
     items: sortedByKey(itemsPayload(board.liveItemIds, { state, itemCellOf: board.itemCellOf, roles })),
     ecology: [],
   };
+  if (config.buildWebs === true) resting.activeWebs = liveWebs(state.webs, state.tickCount, config.webDurationTurns);
+  return resting;
 }
 
 /** The frozen render payload, projected off a tick result: exactly

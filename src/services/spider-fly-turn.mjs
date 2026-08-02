@@ -1,29 +1,84 @@
-// spider-fly-turn.mjs — the chat lane for the headless spider-and-fly game
-// (PLAN_SPIDER_FLY.md §6): loading the shipped board into the session's
-// memory store, the stop command, the addressed spatial teach-frame that
-// feeds a told-fact into the next tick, and the bare "tick" command this
-// game's no-player-controlled-entity posture (§1 — both agents move on
-// their own, every turn) needs for CLI use. Mirrors adventure.mjs's own
-// shape exactly: closed-regex openers/stop, a slot-tagged one-at-a-time
-// coexistence check against the other two lanes, a lane function returning
-// { text, goal?, lane, note, miss? } or null when the turn is not this
-// lane's to answer. The fourth of the four lanes sharing planState's slot.
+// spider-fly-turn.mjs — the spider-and-fly cast: its bindings onto the shared
+// predator/prey engine, and its chat lane.
 //
-// This module never plans a path or scores a move itself — every bit of
-// game logic (fold, pathfinding, belief, ecology) lives in spider-fly.mjs;
-// this file only recognizes chat shapes, resolves them to the shapes
-// runSpiderFlyTick's own interface accepts, and renders its return value as
-// chat text.
+// The bindings are the first section below, and they are the whole of what this
+// game adds to predator-prey.mjs. Every piece of game logic — the (epoch, turn)
+// fold, the pathfinding, belief, the decision chains, the ecology pass — is the
+// shared engine's, run with this board's layout, this board's roles and this
+// board's knobs. Carrying a catch to a web, spinning webs and laying eggs are
+// three opt-in engine features spiderFlyEngineConfig switches on; nothing about
+// them is written twice.
+//
+// The lane is everything after that: loading the shipped board into the
+// session's memory store, the stop command, the addressed spatial teach-frame
+// that feeds a told-fact into the next tick, and the bare "tick" command this
+// game's no-player-controlled-entity posture (both agents move on their own,
+// every turn) needs for CLI use. It mirrors adventure.mjs's own shape exactly:
+// closed-regex openers/stop, a slot-tagged one-at-a-time coexistence check
+// against the other lanes, a lane function returning { text, goal?, lane, note,
+// miss? } or null when the turn is not this lane's to answer.
 
 import {
-  DIRECTION_DELTA, WORLD_NAME, cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
+  DIRECTION_DELTA, WORLD_NAME, SPIDER_FLY_LAYOUT, SPIDER_FLY_ROLES, spiderFlyEngineConfig,
+  cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
   agentKindOf, liveIdsOfKind,
 } from "../domain/spider-fly-world.mjs";
-import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, beliefSnapshotFor } from "./spider-fly.mjs";
+import { perimeterCells } from "../domain/town-square-world.mjs";
+import {
+  beliefSnapshotFor, foldTownSquareState, liveWebs, runTownSquareTick, seededSpawnCell,
+  startTownSquareGame, townSquareBoard,
+} from "./predator-prey.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+
+// ---- the cast's bindings onto the shared engine ------------------------------
+
+/** Fold fact rows into the current board state — the engine's own fold, named
+ *  for the game whose readers ask for it. */
+export const foldSpiderFlyState = foldTownSquareState;
+
+export { beliefSnapshotFor, liveWebs };
+
+const engineOpts = (config) => ({
+  layout: SPIDER_FLY_LAYOUT,
+  roles: SPIDER_FLY_ROLES,
+  config: spiderFlyEngineConfig(config),
+});
+
+/** Mint spider-1 in its web and a spread of flies around the board edge — a
+ *  fresh session's own starting state, never part of the shipped (reusable,
+ *  static) world pack. A no-op once this epoch already holds a roster, so it is
+ *  safe to call from a caller unsure whether the game has started. The flies'
+ *  cells are seeded picks over the same perimeter list, and off the same
+ *  keyspace, a mid-game arrival draws from. */
+export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEFAULT_GAME_CONFIG.spiderFly } = {}) {
+  const homeCell = SPIDER_FLY_LAYOUT.webHomeCell;
+  const agents = { "spider-1": { role: "predator", cell: homeCell } };
+  const edge = perimeterCells(SPIDER_FLY_LAYOUT);
+  const taken = new Set([homeCell]);
+  for (let i = 1; i <= flyCount; i += 1) {
+    const flyId = `fly-${i}`;
+    const free = edge.filter((c) => !taken.has(c));
+    const cell = seededSpawnCell(free.length ? free : edge, { layoutName: SPIDER_FLY_LAYOUT.name, id: flyId });
+    taken.add(cell);
+    agents[flyId] = { role: "prey", cell };
+  }
+  return startTownSquareGame(memoryDir, { ...engineOpts(config), agents });
+}
+
+/** One full turn on this board. `toldFacts` is the belief layer's chat channel:
+ *  `{ subject, toAgent, cell, turn }` rows, empty for an unaddressed tick. */
+export function runSpiderFlyTick(memoryDir, { toldFacts = [], config = DEFAULT_GAME_CONFIG.spiderFly } = {}) {
+  return runTownSquareTick(memoryDir, { ...engineOpts(config), toldFacts });
+}
+
+/** The board as it stands, in a tick's own payload shape, without running one —
+ *  what a renderer draws between opening a session and the first tick. */
+export function spiderFlyBoard(memoryDir, { toldFacts = [], config = DEFAULT_GAME_CONFIG.spiderFly } = {}) {
+  return townSquareBoard(memoryDir, { ...engineOpts(config), toldFacts });
+}
 
 // ---- recognizers: the closed opening/stop/tick/address set -------------------
 
@@ -42,15 +97,14 @@ const SPIDER_FLY_OPEN_RE =
 // player thinks of the session.
 const SPIDER_FLY_STOP_RE =
   /^(?:stop\s+(?:watching|playing)|quit\s+(?:the\s+)?(?:spider\s+and\s+fly\s+)?game|end\s+the\s+spider(?:\s+and\s+fly)?\s+game|leave\s+the\s+game)[.!?\s]*$/i;
-// The bare tick command — NOT specified by PLAN_SPIDER_FLY.md itself (§11's
-// Play/step button is the page's own answer to "nothing requires the human
-// to act"; this is that same need's CLI/chat equivalent). Styled after the
-// plan lane's own PLAN_NEXT_RE ("next"/"next move"/"go on"/"continue").
+// The chat equivalent of the page's own Play/step button: nothing here
+// requires the human to act, so a watcher needs a word that advances a turn.
+// Styled after the plan lane's own PLAN_NEXT_RE ("next"/"next move"/"go on").
 const SPIDER_FLY_TICK_RE = /^(?:tick|next\s+turn|advance(?:\s+the\s+turn)?)[.!?\s]*$/i;
 
-// The spatial teach-frame (§6.1): "@spider the fly is east" / "@spider the
-// fly is at cell-7-3". Its own closed regex, not a route through
-// parseRelation/parseCopula/parseOfForm — §6.1 found both hit real grammar
+// The spatial teach-frame: "@spider the fly is east" / "@spider the fly is at
+// cell-7-3". Its own closed regex, not a route through
+// parseRelation/parseCopula/parseOfForm — both hit real grammar
 // gaps for this exact shape (the bare copula reading mints a nonsense
 // subclass axiom; the "of" form hits parseAce's own hard-null guard before
 // ever reaching parseRelation/parseCopula). A fixed compass set — north,
@@ -284,6 +338,21 @@ export function pillsForSpiderFly(agents, explicitAddresseeId, opts = {}) {
 
 // ---- rendering one tick's return value as plain chat text --------------------
 
+/** One ecology event as the clause a player reads. Null for an event type this
+ *  board never produces, so a cast that grows one later reads as silence rather
+ *  than as a broken sentence. */
+function ecologyClause(event) {
+  switch (event.type) {
+    case "catch-prey": return `${event.predator} caught ${event.prey} at ${event.cell}`;
+    case "eat-agent": return `${event.prey} was eaten by ${event.predator} at ${event.cell}`;
+    case "starve": return `${event.agent} starved`;
+    case "lay-egg": return `${event.egg} was laid`;
+    case "hatch-egg": return `${event.egg} hatched into ${event.hatchlings.map((h) => h.id).join(" and ")} at ${event.cell}`;
+    case "spawn-prey": return `${event.agent} arrived at the board edge`;
+    default: return null;
+  }
+}
+
 function renderTickText(tick, addressedNote) {
   const parts = [];
   if (addressedNote) parts.push(`${addressedNote}.`);
@@ -291,15 +360,8 @@ function renderTickText(tick, addressedNote) {
   parts.push(ids.length
     ? `Turn ${tick.turn} — ${ids.map((id) => `${id} is now at ${tick.agents[id].cell}`).join("; ")}.`
     : `Turn ${tick.turn} — no agents remain on the board.`);
-  const eco = tick.ecology;
-  const events = [];
-  for (const c of eco.caught) events.push(`${c.spider} caught ${c.fly} at ${c.cell}`);
-  for (const e of eco.eaten) events.push(`${e.fly} was eaten by ${e.spider} at ${e.cell}`);
-  for (const f of eco.starved) events.push(`${f} starved`);
-  if (eco.laid) events.push(`${eco.laid} was laid`);
-  for (const h of eco.hatched) events.push(`${h.egg} hatched into ${h.spiders.map((s) => s.spider).join(" and ")} at ${h.cell}`);
-  if (eco.spawned) events.push(`${eco.spawned} arrived at the board edge`);
-  if (events.length) parts.push(`${events.join("; ")}.`);
+  const clauses = tick.ecology.map(ecologyClause).filter(Boolean);
+  if (clauses.length) parts.push(`${clauses.join("; ")}.`);
   return parts.join(" ");
 }
 
@@ -316,14 +378,26 @@ function combinedGoalLine(agents) {
   return ids.map((id) => `${id} — ${agents[id].goal.replace(/\.\s*$/, "")}`).join("; ");
 }
 
-function describeEcologyNote(eco) {
-  const bits = [];
-  if (eco.caught.length) bits.push(`${eco.caught.length} caught`);
-  if (eco.eaten.length) bits.push(`${eco.eaten.length} eaten`);
-  if (eco.starved.length) bits.push(`${eco.starved.length} starved`);
-  if (eco.laid) bits.push("1 laid");
-  if (eco.hatched.length) bits.push(`${eco.hatched.reduce((n, h) => n + h.spiders.length, 0)} hatched`);
-  if (eco.spawned) bits.push("1 spawned");
+const ECOLOGY_NOTE_WORDS = Object.freeze({
+  "catch-prey": "caught",
+  "eat-agent": "eaten",
+  starve: "starved",
+  "lay-egg": "laid",
+  "hatch-egg": "hatched",
+  "spawn-prey": "spawned",
+});
+
+function describeEcologyNote(events) {
+  const tally = new Map();
+  for (const event of events) {
+    const word = ECOLOGY_NOTE_WORDS[event.type];
+    if (!word) continue;
+    const n = event.type === "hatch-egg" ? event.hatchlings.length : 1;
+    tally.set(word, (tally.get(word) ?? 0) + n);
+  }
+  const bits = Object.values(ECOLOGY_NOTE_WORDS)
+    .filter((word) => tally.has(word))
+    .map((word) => `${tally.get(word)} ${word}`);
   return bits.length ? `; ${bits.join(", ")}` : "";
 }
 
@@ -352,8 +426,8 @@ export function believedFactSentence(id, believedCell) {
 }
 
 /** "what does the fly see?" / "what does the spider see?" rendered as plain
- *  text: the same beliefSnapshotFor read spider-fly.mjs's own tick loop and
- *  the browser panel already use, over the CURRENT board state — read-only,
+ *  text: the same beliefSnapshotFor read the engine's own tick loop and the
+ *  browser panel already use, over the CURRENT board state — read-only,
  *  no tick runs, nothing is written. Candidates are every OTHER live agent
  *  of either kind; toldFacts is empty (a told position only ever arrives
  *  fresh alongside a tick — see runToldFactTurn — so there is none standing
@@ -385,11 +459,10 @@ async function spiderFlyBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GA
 /** The addressed teach-frame turn: resolve the addressee and the belief
  *  subject, resolve the told cell, and run ONE tick with that told-fact fed
  *  in. Told-facts are NOT persisted on the session slot across turns — each
- *  addressed line supplies belief for the NEXT tick only, then is gone
- *  (the simplest of the plan doc's own named options, §4's "carry only the
- *  current turn's told-facts"). This also matches how runSpiderFlyTick
- *  itself already works: it holds no standing plan or belief between calls,
- *  recomputing everything fresh from the folded fact rows every tick. */
+ *  addressed line supplies belief for the NEXT tick only, then is gone. That
+ *  matches how the engine itself already works: it holds no standing plan or
+ *  belief between calls, recomputing everything fresh from the folded fact
+ *  rows every tick. */
 async function runToldFactTurn(match, { planHolder, memoryDir, cache, gameConfig = DEFAULT_GAME_CONFIG }) {
   const [, addrKindRaw, addrNum, subjKindRaw, subjNum, direction, cellLiteral] = match;
   const addrKind = addrKindRaw.toLowerCase();
@@ -414,7 +487,7 @@ async function runToldFactTurn(match, { planHolder, memoryDir, cache, gameConfig
   }
 
   const targetCellId = cellId(targetCell.x, targetCell.y);
-  const toldFacts = [{ subject: subjectId, toAgent: addresseeId, cell: targetCellId, turn: state.turnCount + 1 }];
+  const toldFacts = [{ subject: subjectId, toAgent: addresseeId, cell: targetCellId, turn: state.tickCount + 1 }];
   return runTickAndRender({
     planHolder, memoryDir, cache, toldFacts, gameConfig,
     addressedNote: `told the ${addresseeId} the ${subjectId} is at ${targetCellId}`,
@@ -487,13 +560,12 @@ async function spiderFlyContextAnswer(line, { memoryDir }) {
 
 /**
  * The whole spider-and-fly lane for one turn: the opening moves, the stop
- * command, the addressed spatial teach-frame (§6.1), the bare tick command,
- * and the one-at-a-time declines across the shared plan slot both other
- * lanes already implement pairwise. Returns { text, lane, note, goal?,
- * miss? } or null when the turn is not this lane's to answer — an
- * unaddressed aside (e.g. "where is the spider") falls through to the
- * ordinary lanes unchanged, board untouched (§6.2 — no special-cased
- * spider-fly code path for plain questions).
+ * command, the addressed spatial teach-frame, the bare tick command, and the
+ * one-at-a-time declines across the shared plan slot the other lanes already
+ * implement pairwise. Returns { text, lane, note, goal?, miss? } or null when
+ * the turn is not this lane's to answer — an unaddressed aside (e.g. "where is
+ * the spider") falls through to the ordinary lanes unchanged, board untouched,
+ * with no special-cased code path for plain questions.
  */
 export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = null, isPlanFrameLine = () => false, gameConfig = DEFAULT_GAME_CONFIG }) {
   const slot = planHolder?.state ?? null;

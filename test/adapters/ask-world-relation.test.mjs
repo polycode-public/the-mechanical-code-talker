@@ -18,12 +18,12 @@ import { WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePrep
 import { memoryFactGraphPayload } from "../../src/domain/memory-facts.mjs";
 import { createInMemoryStore, loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
 import { worldFactRows, agentKindOf, isLiveRenderableAgent, WORLD_NAME } from "../../src/domain/spider-fly-world.mjs";
-import { startSpiderFlyGame, runSpiderFlyTick, foldSpiderFlyState } from "../../src/services/spider-fly.mjs";
+import { startSpiderFlyGame, runSpiderFlyTick, foldSpiderFlyState } from "../../src/services/spider-fly-turn.mjs";
 
 const BOARD_ROWS = [
   { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
   { subject: "spider-1", predicate: "mgx:feels", object: "calm" },
-  { subject: "spider-1", predicate: "mgx:mass", object: "15" },
+  { subject: "spider-1", predicate: "mgx:hasMass", object: "15" },
   { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-1-5" },
   { subject: "fly-1", predicate: "mgx:feels", object: "calm" },
   // a later turn moves both and sours the spider's mood
@@ -89,6 +89,20 @@ test("world-relation listing: a turn-stamped row wins over the starting one, and
   assert.deepEqual(
     placements.map((e) => `${e.subject}=${e.object}`).sort(),
     ["fly-1=cell-2-4", "fly-2=cell-9-9", "spider-1=cell-3-3"],
+  );
+});
+
+test("world-relation projection: an epoch-stamped subject folds onto its own base, and the newer epoch wins", () => {
+  const payload = worldRelationGraphPayload([
+    { subject: "fox-1", predicate: "mgx:currently-in", object: "cell-1-1" },
+    { subject: "fox-1@turn9", predicate: "mgx:currently-in", object: "cell-2-2" },
+    { subject: "fox-1@epoch2@turn1", predicate: "mgx:currently-in", object: "cell-3-3" },
+  ], { classOf: agentKindOf });
+  assert.deepEqual(payload.individuals.map((i) => i.id), ["fox-1"], "never fox-1@epoch2");
+  assert.deepEqual(
+    payload.objectProperties.find((g) => g.prop === "mgx:currently-in").examples,
+    [{ subject: "fox-1", object: "cell-3-3" }],
+    "a recast's turn 1 outranks the previous run's turn 9",
   );
 });
 
@@ -298,7 +312,7 @@ test("locativePreposition reads the folded tail, and only the folded tail", () =
   assert.equal(locativePreposition("mgx:life-in"), "in");
   assert.equal(locativePreposition("mgx:work-at"), "at");
   assert.equal(locativePreposition("mgx:hide-inside"), "inside");
-  for (const p of ["mgx:feels", "mgx:mass", "mgx:smaller-than", "mgx:top-disk", "mgx:moves-onto", "mgx:usedFor", ""]) {
+  for (const p of ["mgx:feels", "mgx:hasMass", "mgx:smaller-than", "mgx:top-disk", "mgx:moves-onto", "mgx:usedFor", ""]) {
     assert.equal(locativePreposition(p), null, p);
   }
 });

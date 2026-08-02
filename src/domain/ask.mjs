@@ -4575,12 +4575,16 @@ function evalWorldRelation(graph, ast) {
   const wantedClasses = ast.classes ? new Set(ast.classes) : null;
   const wantedSubjects = ast.subjects ? new Set(ast.subjects) : null;
   const entry = WORLD_RELATIONS[ast.relation];
+  // Both sides go through normalizePredicate: a curated predicate is written in
+  // whatever case its own vocabulary uses (mgx:hasMass), and comparing a
+  // lowercased row against a mixed-case constant matches nothing.
+  const wantedPredicate = normalizePredicate(entry.predicate);
   const stated = new Map();
   const taught = new Map();
   for (const group of graph?.relations || []) {
     const prop = normalizePredicate(group.prop);
     const predicate = normalizePredicate(group.predicate);
-    const statesRelation = prop === entry.predicate || predicate === entry.predicate;
+    const statesRelation = prop === wantedPredicate || predicate === wantedPredicate;
     const prep = statesRelation ? null : taughtLocativePreposition(ast.relation, group);
     if (!statesRelation && !prep) continue;
     for (const edge of group.edges || []) {
@@ -4617,15 +4621,22 @@ function evalWorldRelation(graph, ast) {
 }
 
 // A world writes each turn's facts against a stamped subject ("spider-1@turn3",
-// "player@step7") and folds them back onto the base id, newest stamp winning —
-// spider-fly.mjs's foldSpiderFlyState and domain.mjs's foldWorldState both do
-// exactly this. An unstamped row is the world's own starting value, stamp 0.
-const WORLD_SNAPSHOT_RE = /^(.+)@(?:turn|step)(\d+)$/;
+// "player@step7", "fox-1@epoch2@turn3" once a recast has moved it on) and folds
+// them back onto the base id, the newest (epoch, turn) winning — the same fold
+// predator-prey.mjs and domain.mjs both do. An unstamped row is the world's own
+// starting value, epoch 0, stamp 0. The base capture is lazy for the epoch
+// form's sake: a greedy one reads "fox-1@epoch2" as the base, an id no roster
+// matches, which drops every post-recast row out of the projection silently.
+const WORLD_SNAPSHOT_RE = /^(.+?)@(?:epoch(\d+)@)?(?:turn|step)(\d+)$/;
 
 function splitWorldSnapshot(term) {
   const m = WORLD_SNAPSHOT_RE.exec(String(term ?? ""));
-  return m ? { base: m[1], stamp: Number(m[2]) } : { base: String(term ?? ""), stamp: 0 };
+  if (!m) return { base: String(term ?? ""), epoch: 0, stamp: 0 };
+  return { base: m[1], epoch: m[2] ? Number(m[2]) : 0, stamp: Number(m[3]) };
 }
+
+const outranksSnapshot = (prior, epoch, stamp) =>
+  !prior || prior.epoch < epoch || (prior.epoch === epoch && prior.stamp <= stamp);
 
 /** Project plain world fact rows (`{subject, predicate, object}`, the shape
  *  memory/core.mjs's readFactRows returns) into the `{individuals,
@@ -4654,14 +4665,13 @@ export function worldRelationGraphPayload(rows, { classOf = () => null } = {}) {
   const newest = new Map();
   for (const row of rows || []) {
     if (!row?.subject || !wanted.has(row.predicate)) continue;
-    const { base, stamp } = splitWorldSnapshot(row.subject);
+    const { base, epoch, stamp } = splitWorldSnapshot(row.subject);
     const cls = declaredClass.get(base) || classOf(base);
     if (!cls) continue;
     const key = `${row.predicate}\u0000${base}`;
-    const prior = newest.get(key);
-    if (prior && prior.stamp > stamp) continue;
+    if (!outranksSnapshot(newest.get(key), epoch, stamp)) continue;
     individuals.set(base, { id: base, label: base, class: cls });
-    newest.set(key, { stamp, predicate: row.predicate, subject: base, object: splitWorldSnapshot(row.object).base });
+    newest.set(key, { epoch, stamp, predicate: row.predicate, subject: base, object: splitWorldSnapshot(row.object).base });
   }
   const groups = new Map();
   for (const edge of newest.values()) {

@@ -1,7 +1,7 @@
 // mud-turn.mjs — one acting character's whole turn in a mud world: investigate
 // the room it stands in, walk toward food it actually knows about, roll for
 // digging out of the room's frontier, and (when none of that came to anything)
-// set off for a room it has never stood in. The split mirrors spider-fly.mjs /
+// set off for a room it has never stood in. The split mirrors predator-prey.mjs /
 // spider-fly-turn.mjs: adventure.mjs owns the read/fold/write primitives, this
 // file owns the per-tick decisions that drive them. Nothing here writes a fact
 // of its own — every change goes out through runWorldCommand, recordTold,

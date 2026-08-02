@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
-  foldTownSquareState, gridApplyActions, greedyAway, greedyToward, isMudiiiStatePredicate,
-  pathStateKey, placeFood, recastTownSquare, roleOfId, runTownSquareTick, seededWander, startTownSquareGame,
-  townSquareBoard, townSquareTickPayload,
+  foldTownSquareState, gridApplyActions, greedyAway, greedyToward, hasActiveWebAt, isMudiiiStatePredicate,
+  liveWebs, pathStateKey, placeFood, recastTownSquare, roleOfId, runTownSquareTick, seededWander,
+  startTownSquareGame, townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
 import { TOWN_SQUARE_LAYOUTS, cellId, openCells, worldFactRows } from "../../src/domain/town-square-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
@@ -894,6 +894,171 @@ test("the turn counter keeps advancing on a board with nothing alive left on it"
     const third = await runTownSquareTick(dir, { layout: LAYOUT });
     assert.equal(third.turn, 3);
     assert.deepEqual(third.ecology.map((e) => e.type), ["spawn-food"], "and a spawn interval still comes round");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the opt-in mechanics --------------------------------------------------------
+// Carrying, webs and eggs are off unless a config names them, so every test
+// above this line runs the board the town square has always run. These use a
+// layout with an always-on web block and a config that turns all three on.
+
+const WEB_LAYOUT = {
+  ...LAYOUT,
+  boardNoun: "board",
+  webHomeCell: cellId(2, 2),
+  staticWebAt: (x, y) => x === 2 && y === 2,
+};
+const CARRY_CONFIG = {
+  ...CONFIG,
+  carryPreyToWeb: true,
+  buildWebs: true,
+  layEggs: true,
+  webDurationTurns: 10,
+  eggLayMassThreshold: 25,
+  eggHatchDelayTurns: 3,
+  eggHatchCount: 2,
+  minHatchlingMass: 3,
+};
+
+const carries = (predatorId, preyId) => ({ subject: predatorId, predicate: "mgx:carrying", object: preyId });
+
+test("hasActiveWebAt reads the layout's own block and any unexpired built web, and nothing else", () => {
+  const state = { webs: new Map([["web-1", { cell: cellId(7, 7), builtAtTurn: 4 }]]) };
+  assert.equal(hasActiveWebAt(WEB_LAYOUT, state, 5, 2, 2, 10), true, "the static block never expires");
+  assert.equal(hasActiveWebAt(WEB_LAYOUT, state, 5, 7, 7, 10), true);
+  assert.equal(hasActiveWebAt(WEB_LAYOUT, state, 13, 7, 7, 10), true, "built at 4, live through turn 13");
+  assert.equal(hasActiveWebAt(WEB_LAYOUT, state, 14, 7, 7, 10), false);
+  assert.equal(hasActiveWebAt(LAYOUT, { webs: new Map() }, 5, 2, 2, 10), false, "a layout with no block and no webs is bare");
+  assert.deepEqual(
+    liveWebs(state.webs, 5, 10),
+    [{ id: "web-1", cell: cellId(7, 7), builtAtTurn: 4, expiresAtTurn: 14 }],
+  );
+  assert.deepEqual(liveWebs(state.webs, 14, 10), [], "an expired web is off the renderer's list too");
+});
+
+test("a carrying predator hauls its catch toward the web, and the prey rides along", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-6-6"), weigh("fox-1", 20), carries("fox-1", "goblin-1"),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-6-6"), weigh("goblin-1", 8),
+  ], "carry-transit");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    assert.equal(tick.rungs["fox-1"], "carry");
+    assert.equal(tick.rungs["goblin-1"], "carried");
+    assert.equal(tick.agents["fox-1"].cell, tick.agents["goblin-1"].cell, "the prey is wherever its captor ended up");
+    assert.notEqual(tick.agents["fox-1"].cell, "cell-6-6", "and the captor moved toward the web");
+    assert.equal(tick.agents["fox-1"].goal, "carrying goblin-1 toward the web.");
+    assert.equal(tick.agents["goblin-1"].goal, "being carried by fox-1.");
+    assert.deepEqual(tick.ecology, [], "a catch already made is not re-announced, and no eat happens outside a web");
+    assert.ok(tick.writes.some((w) => w.predicate === "mgx:carrying" && w.object === "goblin-1"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a catch made in a web is eaten the same turn, and the count goes on record", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 10),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-2-2"), weigh("goblin-1", 8),
+  ], "carry-in-web");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    assert.deepEqual(tick.ecology.map((e) => e.type), ["catch-prey", "eat-agent"]);
+    assert.equal(tick.rungs["goblin-1"], "trapped", "a prey standing in a web cannot flee it");
+    assert.equal(tick.agents["fox-1"].goal, "just ate goblin-1 in the web.");
+    assert.ok(tick.writes.some((w) => w.predicate === "mgx:prey-eaten" && w.object === "1"));
+    assert.ok(tick.writes.some((w) => w.predicate === "mgx:carrying" && w.object === "none"), "and the claim is released");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the same trapped pair with only the carrying flag off eats in one step, with no catch and no claim", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 10),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-2-2"), weigh("goblin-1", 8),
+  ], "carry-off");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: { ...CARRY_CONFIG, carryPreyToWeb: false } });
+    assert.deepEqual(tick.ecology.map((e) => e.type), ["eat-agent"], "co-location alone takes the prey");
+    assert.equal(tick.agents["goblin-1"], undefined);
+    assert.equal(tick.writes.some((w) => w.predicate === "mgx:carrying"), false);
+    assert.equal(tick.agents["fox-1"].goal, "just ate goblin-1.", "and the line says nothing about a web");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a web-spinning predator with nothing in sight holds its cell and spins one", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-6-6"), weigh("fox-1", 20)], "build-web");
+  try {
+    const first = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    assert.equal(first.rungs["fox-1"], "build-web");
+    assert.equal(first.agents["fox-1"].cell, "cell-6-6", "spinning a web means staying put");
+    assert.equal(first.agents["fox-1"].goal, "nothing in sight — building a web here.");
+    assert.deepEqual(first.activeWebs, [{ id: "web-1", cell: "cell-6-6", builtAtTurn: 1, expiresAtTurn: 11 }]);
+
+    const second = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    assert.equal(second.rungs["fox-1"], "hold-web", "a live web already covers this cell");
+    assert.equal(second.agents["fox-1"].goal, "nothing in sight — holding position in the web.");
+    assert.equal(second.activeWebs.length, 1, "and no second web is spun on top of it");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("without the web flag the same lone predator wanders, and names its layout's own board noun", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-6-6"), weigh("fox-1", 20)], "no-web");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: CONFIG });
+    assert.equal(tick.rungs["fox-1"], "wander");
+    assert.equal(tick.agents["fox-1"].goal, "nothing in sight — wandering the square.");
+    assert.equal(tick.writes.some((w) => w.predicate === "mgx:web-built-at-turn"), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a predator in a web lays an egg once its mass crosses the threshold, and the egg hatches on time", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 25.08)], "lay-hatch");
+  try {
+    const first = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    const laid = first.ecology.find((e) => e.type === "lay-egg");
+    assert.deepEqual(laid, { type: "lay-egg", agent: "fox-1", egg: "egg-1", cell: "cell-2-2", mass: 5 });
+    assert.equal(first.agents["fox-1"].mass, CARRY_CONFIG.predatorInitialMass, "the layer resets to its own starting mass");
+
+    await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    const third = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    assert.equal(third.ecology.some((e) => e.type === "hatch-egg"), false, "three turns after laying, not two");
+
+    const fourth = await runTownSquareTick(dir, { layout: WEB_LAYOUT, config: CARRY_CONFIG });
+    const hatch = fourth.ecology.find((e) => e.type === "hatch-egg");
+    assert.deepEqual(hatch, {
+      type: "hatch-egg", egg: "egg-1", cell: "cell-2-2",
+      hatchlings: [{ id: "fox-2", mass: 5 }],
+    }, "a 5-mass egg makes one viable hatchling rather than two starved ones");
+    assert.equal(fourth.agents["fox-2"].goal, "just hatched — no goal yet.");
+    assert.ok(fourth.writes.some((w) => w.predicate === "mgx:hatched-into" && w.object === "fox-2"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the town square's own config asks for none of it, so a plain turn writes none of the opt-in rows", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 99),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-9-9"), weigh("goblin-1", 8),
+  ], "no-opt-in");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: CONFIG });
+    const optIn = ["mgx:carrying", "mgx:prey-eaten", "mgx:web-built-at-turn", "mgx:laid-at-turn", "mgx:hatched-into"];
+    for (const predicate of optIn) {
+      assert.equal(tick.writes.some((w) => w.predicate === predicate), false, predicate);
+      assert.ok(isMudiiiStatePredicate(predicate), `${predicate} still syncs for a cast that does write it`);
+    }
+    assert.equal(tick.ecology.some((e) => ["catch-prey", "lay-egg", "hatch-egg"].includes(e.type)), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
