@@ -266,7 +266,7 @@ export function createP2pRoom({
   // is a change worth broadcasting even though its provenance never moved.
   let cachedRetractions = [];
   const seenRetractionValueById = new Map();
-  const retractionDiffValue = (fact) => `${fact.provenance} ${fact.object}`;
+  const retractionDiffValue = (fact) => `${fact.provenance}\u0000${fact.object}`;
 
   // Store-touching work runs one job at a time, in arrival order. Every path
   // that reads or writes memoryDir/seenProvenanceById/cachedRows crosses at
