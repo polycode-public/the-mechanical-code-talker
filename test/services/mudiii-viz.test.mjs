@@ -280,7 +280,20 @@ test("renderMudiiiHtml: the ring walks the followed agent, and every press spend
   assert.match(html, /await session\.driveAgent\(followed, direction\)/);
   assert.match(html, /the whole square moved with it/, "the status says a press cost a turn, so it never reads as a free nudge");
   assert.match(html, /the turn was spent anyway/, "a refused press cost the same turn");
-  assert.match(html, /buttons\[i\]\.disabled = !followed;/, "with nobody followed there is nothing to walk");
+  assert.match(html, /ring\.hidden = !followed;/, "with nobody followed there is nothing to walk and no facing to show");
+});
+
+test("renderMudiiiHtml: the ring lights one glyph, and it is the followed agent's own facing", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /data-drive="north" title="walk north" aria-label="walk north" aria-pressed="false">▲ N</);
+  assert.match(html, /data-drive="east"[^>]*>E ▶</);
+  assert.match(html, /data-drive="northwest"[^>]*>↖</);
+  assert.match(
+    html,
+    /buttons\[i\]\.getAttribute\("data-drive"\) === facing \? "true" : "false"/,
+    "exactly the facing glyph is lit, never every step the board happens to grant",
+  );
+  assert.match(html, /\.dir-pill\[aria-pressed="true"\] \{/, "and the lit glyph has a rule to show it with");
 });
 
 test("renderMudiiiHtml: an unarmed ground click walks toward the cell along the world's own exits", () => {

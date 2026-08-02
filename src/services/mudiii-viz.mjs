@@ -98,6 +98,15 @@ const CAMERA_MODES = ["follow", "pov", "overhead"];
 const RING_POINTS = [
   "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
 ];
+// mud.html's own glyph vocabulary, widened to the four diagonals. The reading
+// differs from mud's: its ring lights every available exit, because a room has
+// a fixed handful. An open grid grants a step almost everywhere, so lighting
+// what is available would light nearly all of it and say nothing. The one lit
+// glyph here is the followed agent's own facing.
+const DIR_GLYPH = Object.freeze({
+  north: "▲ N", northeast: "↗", east: "E ▶", southeast: "↘",
+  south: "▼ S", southwest: "↙", west: "◀ W", northwest: "↖",
+});
 
 const MUDIII_NOTE_LINES = [
   "One fox and a handful of goblins share a town square, rendered in three dimensions rather than mud.html's flat rooms. The foxes slider picks how many predators are cast; the goblins slider adds more prey. Nothing here is a player either — you watch from whichever camera you pick.",
@@ -600,8 +609,8 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
   </div>
   <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions">
     <canvas id="sceneCanvas"></canvas>
-    <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows">
-${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(point)}</button></span>`).join("\n")}
+    <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows" hidden>
+${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(DIR_GLYPH[point])}</button></span>`).join("\n")}
     </div>
     <p class="scene-status" id="sceneStatus" role="status"></p>
   </section>
@@ -803,6 +812,10 @@ const MUDIII_STYLE = `
   }
   .dir-pill:hover:not(:disabled) { border-color: var(--square-accent); background: var(--square-accent); }
   .dir-pill:disabled { opacity: .35; cursor: default; }
+  .dir-pill[aria-pressed="true"] {
+    background: var(--square-accent); border-color: var(--square-stone-dark);
+    box-shadow: 0 0 0 2px rgba(217,138,43,.4);
+  }
 
   .hud-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
   .hud-card {
@@ -1229,10 +1242,20 @@ function pageScript() {
     return id && agentsById[id] ? id : null;
   }
 
+  // One lit glyph, and it is the followed agent's own facing — the reading
+  // that makes sense on an open grid, where nearly every step is available and
+  // lighting what is available would say nothing. With nobody followed there
+  // is no facing to show and nothing to walk, so the ring goes away.
   function renderDriveRing() {
     const followed = followedAgentId();
-    const buttons = el("driveRing").querySelectorAll("[data-drive]");
-    for (let i = 0; i < buttons.length; i += 1) buttons[i].disabled = !followed;
+    const ring = el("driveRing");
+    ring.hidden = !followed;
+    if (!followed) return;
+    const facing = agentsById[followed].facing || DATA.defaultFacing;
+    const buttons = ring.querySelectorAll("[data-drive]");
+    for (let i = 0; i < buttons.length; i += 1) {
+      buttons[i].setAttribute("aria-pressed", buttons[i].getAttribute("data-drive") === facing ? "true" : "false");
+    }
   }
 
   function drivePress(direction) {
