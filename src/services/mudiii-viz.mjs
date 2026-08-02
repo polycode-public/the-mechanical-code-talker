@@ -927,19 +927,27 @@ const MUDIII_STYLE = `
      The map is also taller than a single row of controls, which used to
      leave a tall empty stripe of parchment under them. On a landscape phone
      and a desktop window alike, the deck becomes one grid with three control
-     columns beside the map, so the columns can stretch to the map's own
-     height and close that gap. display:contents lifts .deck-panels' three
+     columns beside the map. display:contents lifts .deck-panels' three
      .deck-stack children, and .map-panel, out of .deck-body so all four are
-     grid items of the deck itself. */
+     grid items of the deck itself. A stack sits at its own natural height,
+     top-aligned, rather than stretching its items apart to match the map —
+     stretching them just traded the empty stripe for gaps between controls
+     that belong together, and a hint drifting away from the select it
+     describes. A shorter stack beside a taller map is fine; the leftover
+     space stays honest whitespace instead. */
   @media (min-width: 901px), (max-width: 900px) and (orientation: landscape) {
     .deck-body, .deck-panels { display: contents; }
     .deck-stack {
-      display: flex; flex-direction: column; justify-content: space-between; gap: .5rem;
-      grid-row: 2;
+      display: flex; flex-direction: column; gap: .5rem;
+      grid-row: 2; align-self: start;
     }
     .deck-stack-1 { grid-column: 1; }
     .deck-stack-2 { grid-column: 2; }
     .deck-stack-3 { grid-column: 3; }
+    /* Stretch is the flex column's default cross-axis behaviour, and the
+       food pill is the one control here with a visible border — without
+       this it grows to the stack's full width as a wide dashed box. */
+    .deck-stack .pill.affordance { align-self: flex-start; }
     .map-panel { grid-column: 4; grid-row: 2; flex: 0 0 auto; max-width: none; }
   }
 
