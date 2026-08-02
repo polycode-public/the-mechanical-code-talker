@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Two.
+Three.
 
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
@@ -54,6 +54,17 @@ Two.
   **Do:** count the unobserved rather than naming them, keeping the named ones for what is in view.
   **Risk:** the deception rail's whole point is that a lie about a specific individual lands visibly,
   so a taught individual has to keep its name even while unseen.
+
+- **Two fixture assertions fail on ANSI colour, not on a broken fixture.**
+  `test/index/example-fixtures.test.mjs:68` and `:106`. Both fixture suites pass — tiny-webapp-src
+  reports `tests 12, pass 12, fail 0`, tiny-lib-py reports `Ran 5 tests / OK`. The captured child
+  output carries colour escapes, so the anchored regexes cannot match: `^` and `$` sit against
+  `\x1B[34m` and `\x1B[39m` rather than a line boundary.
+  **Owner:** a track is on it. **Tier:** Sonnet.
+  **Do:** either stop the child emitting colour (`NO_COLOR` in the spawn env) or strip ANSI before
+  asserting. Whichever, prove the assertion still fails on a genuinely broken fixture.
+  **Risk:** an assertion that stops looking is worse than the red one. Also worth knowing why this
+  started now, since the fixtures themselves did not change.
 
 ### Questions blocking work
 
