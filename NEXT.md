@@ -43,6 +43,9 @@ the slots. Their output is the next wave's items.
 - **T45 the red deployed job** — a fox stepped east with its mesh facing north, 90 degrees off, so
   the engine's facing disagrees with the step taken. `predator-prey.mjs`, the two mudiii files.
   Top tier. Status: started.
+- **T46 inference benchmark** — grades the classical-logic engine on the INF ladder and reports the
+  rung, separating honest misses from wrong answers. Measure-only: an engine change would collide
+  with the tracks working the tree. Top tier. Status: started.
 - **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
   three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
   Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
