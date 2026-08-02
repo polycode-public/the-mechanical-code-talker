@@ -106,6 +106,19 @@ export function roleOfAgentId(id) {
   return String(id).replace(/-\d+$/, "");
 }
 
+/** A manifest row's `destPath` as a URL the page can actually fetch.
+ *  `data/mudiii-assets.json` records paths from the repository root
+ *  ("public/models/props/well.glb"), because that is where the checker and
+ *  the credits generator read them from. The deployed site is rooted AT
+ *  `public/`, so the leading segment has to come off or every model 404s
+ *  under a doubled prefix. One function so the rule is written once: the
+ *  loader, the cache key and any future preload all go through it. Pure. */
+export function modelUrlFor(destPath) {
+  const path = String(destPath == null ? "" : destPath).trim();
+  if (!path) return null;
+  return `./${path.replace(/^\.?\/?public\//, "")}`;
+}
+
 /** `cell-<x>-<y>` (x, y both 1..gridSize) to a ground-plane world position,
  *  `{ x, z }`, centred on the grid's own middle so a `gridSize`-square board
  *  sits symmetrically around the origin regardless of size. `cellSize` is

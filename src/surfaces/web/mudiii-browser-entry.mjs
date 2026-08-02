@@ -5,7 +5,7 @@
 // conversation rather than one pane per character (`turn(line)` never routes
 // on `{ as: character }` — the addressee is in the sentence, "@fox-1 look"),
 // and the simulation itself advances as ONE whole-world tick
-// (`runPredatorPreyTick`) rather than mud's per-character `autoplayTick`.
+// (`runTownSquareTick`) rather than mud's per-character `autoplayTick`.
 //
 // `src/services/predator-prey.mjs` — the engine this file drives — does not
 // exist in every worktree yet; a concurrent track owns it. The import below
@@ -21,6 +21,7 @@ import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
+import { layoutNamed } from "../../domain/town-square-world.mjs";
 import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
@@ -59,12 +60,20 @@ export function pickMudiiiRoster(roster, { count = 1, random = Math.random } = {
  *  "prey" (MUDIII_ROLES). Unlike mud-browser-entry.mjs's `createMudSession`,
  *  this returns ONE `turn`/`tick` pair for the whole world, never a
  *  per-character `windows` map: mudiii's simulation is a single global step
- *  (`runPredatorPreyTick`) and its conversation is a single shared dock.
+ *  (`runTownSquareTick`) and its conversation is a single shared dock.
  *
  *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick,
- *  snapshot, applyEdit, placeFood, recast }`. */
+ *  snapshot, applyEdit, placeFood }`. A reset is not a method here: the
+ *  page re-opens a whole session for it, which is what a reset means when the
+ *  store is in memory and belongs to one visitor. */
 export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0 } = {}) {
-  const { startTownSquareGame, runPredatorPreyTick, foldPredatorPreyState, recastTownSquare, placeFood: engPlaceFood } = await loadEngine();
+  const { startTownSquareGame, runTownSquareTick, foldTownSquareState, placeFood: engPlaceFood } = await loadEngine();
+
+  // Every engine call is layout-scoped: the world pack ships the BOARD, and
+  // the layout carries the geometry plus the cast counts the engine mints the
+  // animals from. Resolved once here so no call site has to remember it.
+  const layout = layoutNamed(worldPayload.name);
+  if (!layout) throw new Error(`createMudiiiSession: no town-square layout named "${worldPayload.name}"`);
 
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
@@ -74,7 +83,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
   for (const rule of worldPayload.rules || []) {
     await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
   }
-  await startTownSquareGame(memoryDir, { agents, epoch, provenance: tag });
+  await startTownSquareGame(memoryDir, { layout, agents: agents.length ? agents : null, epoch });
 
   const planHolder = { state: { adventure: { world: worldPayload.name } } };
   const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
@@ -96,19 +105,19 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     },
   });
 
-  /** ONE whole-world step (`runPredatorPreyTick`) — every live agent moves,
+  /** ONE whole-world step (`runTownSquareTick`) — every live agent moves,
    *  the ecology pass runs, and the result names what happened this turn.
    *  `k` is the caller's own global turn counter, mirroring mud-viz.mjs's
    *  page-level serialization. */
   async function tick(k) {
-    return runPredatorPreyTick(memoryDir, { turn: k });
+    return runTownSquareTick(memoryDir, { layout });
   }
 
   /** The one OMNISCIENT read this module exposes — every agent, every item,
    *  no fog of war, mirroring mud-browser-entry.mjs's own `snapshot`. */
   async function snapshot() {
     const rows = readFactRows(await loadMemory(memoryDir));
-    return { rows, state: foldPredatorPreyState(rows) };
+    return { rows, state: foldTownSquareState(rows) };
   }
 
   /** The world editor's own store sync, reusing mud-editor.mjs UNCHANGED —
@@ -118,7 +127,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
   async function applyEdit(text) {
     const allRows = readFactRows(await loadMemory(memoryDir));
     const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
-    const state = foldPredatorPreyState(worldRows);
+    const state = foldTownSquareState(worldRows);
     const { triples, unrecognized } = parseMudEditorText(text);
     const { toAppend, toRemoveIds } = planMudEditorSync(worldRows, state, triples);
     if (toAppend.length) {
@@ -136,11 +145,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
    *  the world tag — the same "who put that there?" grounding
    *  test/fixtures/mudiii-ticks.json's turn-8 `place-food` event names. */
   async function placeFood(opts) {
-    return engPlaceFood(memoryDir, opts);
-  }
-
-  async function recast(opts) {
-    return recastTownSquare(memoryDir, opts);
+    return engPlaceFood(memoryDir, { layout, ...opts });
   }
 
   return {
@@ -153,7 +158,6 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     snapshot,
     applyEdit,
     placeFood,
-    recast,
   };
 }
 

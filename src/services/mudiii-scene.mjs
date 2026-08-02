@@ -61,7 +61,7 @@
 // finish evaluating, neither ever does, and the symptom is a silent hang with
 // no error rather than a resolution failure.
 import {
-  roleOfAgentId, cellToWorld, cellFromGroundPoint, cameraRigFor, clipForAction,
+  roleOfAgentId, cellToWorld, cellFromGroundPoint, cameraRigFor, clipForAction, modelUrlFor,
 } from "./mudiii-viz.mjs";
 import { prefersReducedMotion } from "./viz-ticker.mjs";
 
@@ -333,6 +333,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var cellFromGroundPoint = ${cellFromGroundPoint.toString()};
   var cameraRigFor = ${cameraRigFor.toString()};
   var clipForAction = ${clipForAction.toString()};
+  var modelUrlFor = ${modelUrlFor.toString()};
 
   var canvas = document.getElementById(CANVAS_ID);
   var statusEl = document.getElementById(STATUS_ID);
@@ -484,10 +485,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   }
 
   async function loadPropTemplate(asset) {
-    if (propTemplates[asset.destPath]) return propTemplates[asset.destPath];
-    var gltf = await loadGlb(asset.destPath);
+    var url = modelUrlFor(asset.destPath);
+    if (propTemplates[url]) return propTemplates[url];
+    var gltf = await loadGlb(url);
     normalizeToHeight(gltf.scene, asset.targetHeight);
-    propTemplates[asset.destPath] = gltf.scene;
+    propTemplates[url] = gltf.scene;
     return gltf.scene;
   }
 
@@ -577,7 +579,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     agentGroups[id] = entry;
     var asset = manifestByKind[kind];
     if (asset) {
-      loadGlb(asset.destPath).then(function (gltf) {
+      loadGlb(modelUrlFor(asset.destPath)).then(function (gltf) {
         normalizeToHeight(gltf.scene, asset.targetHeight);
         entry.group.add(gltf.scene);
         entry.group.visible = true;

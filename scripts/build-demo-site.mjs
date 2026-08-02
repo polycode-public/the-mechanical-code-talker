@@ -436,6 +436,15 @@ const MUD_SCENARIO_LABELS = {
   "mud-warren": "mud warren (8 rooms, fox and owl)",
 };
 
+// Each label names the difference that made the layout worth shipping, not
+// just its size: what the board does to the chase is the reason to switch to
+// it.
+const MUDIII_SCENARIO_LABELS = {
+  "town-square": "town square (12x12, 1 fox, 3 goblins)",
+  "town-square-market": "market row (10x10, stall lanes to corner a goblin in)",
+  "town-square-chapel": "chapel yard (14x14, open ground, two foxes)",
+};
+
 // The world payload every game page embeds: one shipped world's real
 // facts+rules, read through the same Node worlds-pack provider the CLI itself
 // uses (the viz headers explain why — a world's canonical definition is a
@@ -536,6 +545,55 @@ async function loadScenarioWorlds(names) {
   }
 }
 
+// The mudiii demo: the town square in three, plus the two alternates its
+// scenario dropdown offers. The three vendor asset is built inside this block
+// rather than beside the wink one, because it is the only page that loads it —
+// a build with no town-square world in the pack should not pay an 800 KB
+// compile for a page it is not going to write.
+{
+  const worlds = await loadScenarioWorlds(["town-square", "town-square-market", "town-square-chapel"]);
+  if (!worlds.length) {
+    console.log("no town-square worlds found in the worlds pack — the mudiii demo has no world to embed, so this is a heads-up, not a build failure");
+  } else {
+    const { buildThreeVendor } = await import(join(here, "build-three-vendor.mjs"));
+    const { outPath: threePath, bytes: threeBytes } = await buildThreeVendor(SITE);
+    console.log(`wrote ${threePath} (${(threeBytes / 1024).toFixed(0)} KB)`);
+    const { main: buildMudiiiBundle } = await import(join(here, "build-mudiii-bundle.mjs"));
+    const { outPath: mudiiiBundlePath, size: mudiiiBundleBytes } = await buildMudiiiBundle(SITE);
+    console.log(`wrote ${mudiiiBundlePath} (${(mudiiiBundleBytes / 1024).toFixed(0)} KB)`);
+    const { renderMudiiiHtml } = await import(join(ROOT, "src", "services", "mudiii-viz.mjs"));
+    const { MUDIII_ROLES } = await import(join(ROOT, "src", "services", "predator-prey.mjs"));
+    const { layoutNamed } = await import(join(ROOT, "src", "domain", "town-square-world.mjs"));
+    const assetManifest = JSON.parse(readFileSync(join(ROOT, "data", "mudiii-assets.json"), "utf8")).assets;
+    // The cast each square opens with. It comes from the layout's own counts
+    // rather than the world's fact rows, because a town-square world ships the
+    // BOARD only — the engine mints the animals onto it at start, at seeded
+    // cells, so there is no cast in the pack to read. The ids here are the
+    // ones startTownSquareGame will mint, so the deck and the HUD can draw the
+    // opening cast before the first turn runs.
+    const castOf = (worldPayload) => {
+      const { cast } = layoutNamed(worldPayload.name);
+      return [
+        ...Array.from({ length: cast.predators }, (_, i) => ({ id: `${MUDIII_ROLES.predator.idPrefix}-${i + 1}`, role: "predator" })),
+        ...Array.from({ length: cast.prey }, (_, i) => ({ id: `${MUDIII_ROLES.prey.idPrefix}-${i + 1}`, role: "prey" })),
+      ];
+    };
+    const scenarios = worlds.map((worldPayload) => ({
+      label: MUDIII_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+      worldPayload,
+      agents: castOf(worldPayload),
+    }));
+    const mudiiiPath = join(SITE, "mudiii.html");
+    await writeF(mudiiiPath, renderMudiiiHtml({
+      worldPayload: scenarios[0].worldPayload,
+      agents: scenarios[0].agents,
+      scenarios,
+      assetManifest,
+    }));
+    console.log(`wrote ${mudiiiPath}`);
+  }
+}
+
 // The site's service worker. What it caches is best-effort and volatile —
 // browser storage can be evicted or cleared; every page works identically
 // without it, this only stops a RETURN visitor re-paying for the big boot
@@ -563,6 +621,7 @@ const CONTENT_ADDRESSED = [
   ${JSON.stringify(seedPath)},
   "./vendor/wink.js",
   "./vendor/p2p.js",
+  "./vendor/three.js",
   "./reference-pack/index.json",
 ];
 // Pages and bundles: precached for an offline second visit, but always read
@@ -655,7 +714,7 @@ self.addEventListener("fetch", (event) => {
   const hashedAssets = [
     ["index.html", null], ["chat.html", null], ["ingest.html", null], ["research.html", null],
     ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
-    ["vendor/wink.js", null], ["vendor/p2p.js", null],
+    ["vendor/wink.js", null], ["vendor/p2p.js", null], ["vendor/three.js", null],
     ["chat-seed.json", seedStamp], ["reference-pack/index.json", null],
   ];
   const buildHash = createHash("sha256")
