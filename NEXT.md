@@ -167,6 +167,43 @@ gaps between it and the shipped page.
   *moved*, which is what the plan's done-check asks for.
   **Do:** delete the dead disjunct and compare two `cellOf` reads across ticks.
 
+- **The belief panels sit above the command box.** On a phone the cast fills the screen between
+  the board and the chat, so the input is off-screen and every card has to be scrolled past to
+  reach it. The same order is wrong in landscape.
+  **Do:** move `#hudRow` below the chat console in both orientations.
+
+- **The map has no key.** Dots are coloured by role and nothing says which colour is which.
+  **Do:** add a legend to the map panel naming predator and prey against their own tokens, and
+  the food marker.
+
+- **The foxes slider snaps back to 1.** Moving it shows the new value briefly, then it reads 1
+  whatever was chosen. The roster is capped by the layout's authored cast, so the control is
+  reporting the cast it actually got.
+  **Do:** fix with the roster item above — the display bug and the cap are the same fault seen
+  from two ends.
+
+- **The follow dropdown resets to fox-1.** Selecting a goblin snaps the selection back.
+  **Do:** find why the change handler's selection does not survive the next redraw. Likely the
+  same rebuild that repopulates `#agentSelect` discards the current value.
+
+- **There is an unidentified prop on the board.** A large stone structure appears in the scene
+  that nothing names, and it does not appear on the map at all.
+  **Do:** identify which manifest key it resolves from, give it a display name the lane can
+  answer with, and draw every prop on the map — the map currently draws agents and food only, so
+  no prop is on it.
+
+- **Agents carry no label in the scene or on the map.** Nothing on the board says which goblin is
+  which; the id only exists in the HUD card.
+  **Do:** add a billboarded label above each agent in the scene and beside each dot on the map.
+
+- **Clicking a cell does not turn the followed agent.** The click places food and nothing else.
+  **Do:** face the followed agent toward the clicked cell on any ground click.
+
+- **Clicking a camera-mode button does nothing on the board.** There is no feedback tying the
+  button to a place.
+  **Do:** flash the cell under the click, draw a line from the followed agent to it, and have
+  that agent plan a route there.
+
 ### mudiii.html — further work
 
 - **A second role pair has not been cast.** The engine is role-parameterized and the asset
