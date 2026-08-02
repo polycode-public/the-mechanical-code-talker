@@ -1,7 +1,8 @@
 // The share control on each demo card.
 //
-// Every demo carries five written posts. They are here rather than generated
-// because each one takes a different angle and lands on a different page, and
+// Every demo carries a handful of written posts (five for most, six where a
+// demo earns an extra angle). They are here rather than generated because
+// each one takes a different angle and lands on a different page, and
 // a template cannot do either. Deep links point at the about pages' own section
 // ids (#what, #play, #shots, #inference, #build, #papers, #credits), which is
 // what those ids are for.
@@ -203,6 +204,17 @@ const POSTS = {
   },
 };
 
+const COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+
+/** "Five ways to post about it." for 5 posts, "Six ways…" for 6, and so on —
+ *  read off the actual post count so the sheet can never claim a number its
+ *  own list does not match. */
+function waysToPostLine(count) {
+  const word = COUNT_WORDS[count] || String(count);
+  const capitalized = word.charAt(0).toUpperCase() + word.slice(1);
+  return `${capitalized} way${count === 1 ? "" : "s"} to post about it. Each one takes a different angle and opens a different page.`;
+}
+
 const HERE = new URL(".", location.href);
 const absolute = (to) => new URL(to, HERE).href;
 
@@ -213,7 +225,7 @@ function buildSheet() {
     <div class="share-head">
       <div>
         <h2 class="share-title"></h2>
-        <p>Five ways to post about it. Each one takes a different angle and opens a different page.</p>
+        <p class="share-count"></p>
       </div>
       <button class="share-close" type="button" aria-label="Close">&times;</button>
     </div>
@@ -273,6 +285,7 @@ function flash(button, word) {
 function fillSheet(sheet, demo) {
   const entry = POSTS[demo];
   sheet.querySelector(".share-title").textContent = `Share: ${entry.title}`;
+  sheet.querySelector(".share-count").textContent = waysToPostLine(entry.posts.length);
   const canShare = typeof navigator.share === "function";
   sheet.querySelector(".share-note").textContent = canShare
     ? "Your device's share sheet carries the screenshot too, where it supports files."
