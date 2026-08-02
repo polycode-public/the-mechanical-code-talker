@@ -406,6 +406,7 @@ ${MUD_SHARE_SKIN}
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
+        <button type="button" id="stepBtn">step</button>
         <button type="button" id="resetBtn">reset</button>
 ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which burrow to play">
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
@@ -2092,6 +2093,7 @@ function pageScript() {
   // that could start one is disabled for as long as the editor is open.
   function setPlayControlsEnabled(on) {
     el("autoToggle").disabled = !on;
+    el("stepBtn").disabled = !on || autoOn;
     el("playerCountSlider").disabled = !on;
     el("resetBtn").disabled = !on;
     for (const character of cast) {
@@ -2889,6 +2891,7 @@ function pageScript() {
 
   function wireDeck() {
     const playBtn = el("autoToggle");
+    const stepBtn = el("stepBtn");
     const delaySlider = el("delaySlider");
     const maxTurnsSlider = el("maxTurnsSlider");
     const playerCountSlider = el("playerCountSlider");
@@ -2898,6 +2901,7 @@ function pageScript() {
       autoOn = !autoOn;
       playBtn.setAttribute("aria-pressed", autoOn ? "true" : "false");
       playBtn.textContent = autoOn ? "\\u23F8 pause" : "\\u25B6 play";
+      stepBtn.disabled = autoOn;
       // Every animal in the world, pane or none: the deck's play control is the
       // world running, and an npc has no other control that could start it.
       for (const character of everyone()) {
@@ -2905,6 +2909,19 @@ function pageScript() {
         if (!ticker) continue;
         if (autoOn) ticker.play(); else ticker.pause();
       }
+    });
+    // One whole turn: every animal in the world (pane or none, same "everyone"
+    // the play toggle above drives) takes exactly one tick, so every pane's own
+    // "turn N" reading is one higher once every stepOnce() below has settled.
+    // Each character keeps its own independent tick count (mud has no single
+    // shared "round" the way adventure/spider-fly's one-ticker world does), so
+    // stepping the whole deck is stepping every one of those counters once,
+    // not advancing one shared counter by one.
+    stepBtn.addEventListener("click", function () {
+      if (!session || autoOn) return;
+      stepBtn.disabled = true;
+      const steps = everyone().map(function (character) { return ensureTicker(character).stepOnce(); });
+      Promise.all(steps).finally(function () { stepBtn.disabled = autoOn; });
     });
     delaySlider.addEventListener("input", function () {
       delayMs = Number(delaySlider.value);

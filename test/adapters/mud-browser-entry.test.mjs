@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import {
   createMudSession, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
 } from "../../src/surfaces/web/mud-browser-entry.mjs";
+import { personKnownFoodLines, foldWorldState, worldActionRows } from "../../src/services/adventure.mjs";
+import { readFactRows, loadMemory } from "../../src/adapters/memory/core.mjs";
 
 const ROSTER = ["mole-1", "vole-1", "badger-2", "groundhog-1"];
 
@@ -104,6 +106,29 @@ test("a minted character is an ordinary room-mate: the authored one's own look s
   const looked = await session.windows["mole-1"].turn("look");
   assert.match(looked.answer, /mole-2/, "the room digest names the minted animal standing in it");
   assert.match(looked.answer, /talk to mole-2/, "and offers the same talk the authored cast would get");
+});
+
+test("a character starts already knowing about food already sitting in its own starting room, before any turn runs", async () => {
+  const worldWithFoodClass = {
+    ...worldPayload,
+    facts: [...worldPayload.facts, { subject: "carrot", predicate: "rdfs:subClassOf", object: "food" }],
+  };
+  const session = await createMudSession(worldWithFoodClass, { characters: ["mole-1", "badger-2"] });
+  const rows = readFactRows(await loadMemory(session.memoryDir));
+  const state = foldWorldState(worldActionRows(rows));
+
+  assert.deepEqual(
+    personKnownFoodLines(rows, state, "mole-1"), ["carrot"],
+    "mole-1 starts in the garden, right where the carrot is seeded, so it already knows about it",
+  );
+  assert.deepEqual(
+    personKnownFoodLines(rows, state, "badger-2"), [],
+    "badger-2 starts in burrow-1, nowhere near the carrot, so it starts knowing nothing — the honest answer for it",
+  );
+  assert.equal(
+    session.windows["mole-1"].turnsTaken(), 0,
+    "the seeded knowledge is not counted as a turn the character took",
+  );
 });
 
 const rowsFor = (rows, predicate) => rows.filter((r) => r.predicate === predicate);
