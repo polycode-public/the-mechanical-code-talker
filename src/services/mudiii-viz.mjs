@@ -8,13 +8,10 @@
 // mud.html's burrow survey.
 //
 // This module owns the PAGE SHELL only. The 3D scene itself — the actual
-// three.js renderer, the model loader, the per-frame camera update — is a
-// concurrent track's file, src/services/mudiii-scene.mjs, reached through
-// exactly one frozen function: `mudiiiSceneScript(opts) -> string`, a
-// standalone inline <script> this page embeds next to its own. That module
-// does not exist in every worktree yet (see the guarded import below), so
-// this file also ships a "" stub until it lands — no edit needed here when
-// it does.
+// three.js renderer, the model loader, the per-frame camera update — lives in
+// src/services/mudiii-scene.mjs, reached through exactly one frozen function:
+// `mudiiiSceneScript(opts) -> string`, a standalone inline <script> this page
+// embeds next to its own.
 //
 // The contract runs both ways. Scene -> shell: the scene script calls
 // `window.mudiiiHandleSceneClick(cellId)` on a raycast hit. Shell -> scene:
@@ -49,7 +46,7 @@
 // was actually asking for.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
-  rowsForWorld, appendLogLine,
+  rowsForWorld, appendLogLine, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue, prefersReducedMotion } from "./viz-ticker.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "./mud-editor.mjs";
@@ -57,15 +54,13 @@ import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
 } from "./pill-complete.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { believedFactSentence } from "./mudiii-turn.mjs";
 
 // The scene module and this one import each other: this file embeds the
 // scene's generated IIFE, and the scene splices this file's pure geometry
-// helpers into it. A static cycle is fine here because every binding crossing
-// it is a hoisted function declaration that nothing calls at module-evaluation
-// time — the same shape world-teach.mjs and adventure.mjs already rely on. It
-// must NOT be a top-level `await import()`: two modules awaiting each other at
-// evaluation time never settle, and the failure is a silent hang rather than
-// an error.
+// helpers into it. The cycle holds because every binding crossing it is a
+// hoisted function declaration that nothing calls at module-evaluation time —
+// the same shape world-teach.mjs and adventure.mjs already rely on.
 import { mudiiiSceneScript } from "./mudiii-scene.mjs";
 
 const DEFAULT_TITLE = "tmct — mudiii";
@@ -89,6 +84,23 @@ const DEFAULT_MAX_TURNS = 400;
 const DEFAULT_GRID_SIZE = 12;
 const DEFAULT_FACING = "south";
 const CAMERA_MODES = ["follow", "pov", "overhead"];
+// The ring reads ABSOLUTE, not relative to whichever way an agent happens to
+// face: every other direction word on this page is a compass point (a told
+// fact says "the goblin is east", the map is north-up), and driveRequest takes
+// a compass point directly — a cardinal steps and faces that way, an
+// intercardinal turns on the spot. Ordered north-first, clockwise.
+const RING_POINTS = [
+  "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
+];
+// mud.html's own glyph vocabulary, widened to the four diagonals. The reading
+// differs from mud's: its ring lights every available exit, because a room has
+// a fixed handful. An open grid grants a step almost everywhere, so lighting
+// what is available would light nearly all of it and say nothing. The one lit
+// glyph here is the followed agent's own facing.
+const DIR_GLYPH = Object.freeze({
+  north: "▲ N", northeast: "↗", east: "E ▶", southeast: "↘",
+  south: "▼ S", southwest: "↙", west: "◀ W", northwest: "↖",
+});
 
 const MUDIII_NOTE_LINES = [
   "One fox and a handful of goblins share a town square, rendered in three dimensions rather than mud.html's flat rooms. The foxes slider picks how many predators are cast; the goblins slider adds more prey. Nothing here is a player either — you watch from whichever camera you pick.",
@@ -336,6 +348,30 @@ export function mapDotsFor(agents, items, gridSize) {
   return dots;
 }
 
+/** Every static prop's own filled cell for the 2D map panel, as percentage
+ *  coordinates within the same square board `mapDotsFor` draws into
+ *  (`{ id, xPct, yPct, sizePct }[]`). `props` is `propPlacementsFrom`'s own
+ *  output. A block is drawn from the cell's own top-left corner and fills it,
+ *  so the offset is `- 1` where `mapDotsFor`'s dot, centred on the cell, takes
+ *  `- 0.5`. A placement with no parseable cell is dropped rather than drawn at
+ *  a guessed position. Pure, self-contained. */
+export function mapBlocksFor(props, gridSize) {
+  const size = Number(gridSize);
+  if (!Number.isFinite(size) || size <= 0) return [];
+  const blocks = [];
+  for (const prop of props || []) {
+    const match = /^cell-(\d+)-(\d+)$/.exec(String(prop && prop.cell != null ? prop.cell : ""));
+    if (!match) continue;
+    blocks.push({
+      id: prop.id,
+      xPct: ((Number(match[1]) - 1) / size) * 100,
+      yPct: ((Number(match[2]) - 1) / size) * 100,
+      sizePct: 100 / size,
+    });
+  }
+  return blocks;
+}
+
 /** One HUD card's own field set, read off `agent` (`{ id, role, goal, mood,
  *  plan, mass, belief }`, this turn's slice of the tick payload) and a
  *  resolved `mudiiiConfig` (DEFAULT_GAME_CONFIG.mudiii's own shape). `massPct`
@@ -381,6 +417,7 @@ export function clipForAction(role, action, clipMap) {
   const kindFor = {
     wander: "walk",
     forage: "walk",
+    driven: "walk",
     chase: "run",
     evade: "run",
     "eat-agent": role === "predator" ? "attack" : "death",
@@ -412,7 +449,11 @@ export function agentCardMarkup(slot) {
       <div class="hud-meter" id="${w}-meter"><div class="hud-meter-fill" id="${w}-meter-fill"></div></div>
       <p class="hud-goal" id="${w}-goal"></p>
       <p class="hud-plan mono" id="${w}-plan"></p>
-      <p class="hud-belief mono" id="${w}-belief"></p>
+      <button type="button" class="hud-belief-toggle" id="${w}-belief-toggle"
+              aria-expanded="false" aria-controls="${w}-detail" hidden>
+        <span class="hud-belief mono" id="${w}-belief"></span>
+      </button>
+      <div class="hud-detail mono" id="${w}-detail" hidden></div>
     </div>`;
 }
 
@@ -481,7 +522,7 @@ ${PILL_COMPLETE_CSS}
 <body>
 <main>
   <header class="mudiii-topbar">
-    <h1 class="eyebrow">tmct &middot; mudiii</h1>
+    <h1 class="eyebrow">${demoEyebrowHtml("mudiii", "mudiii")}</h1>
     <a class="mudiii-topbar-help" href="./help.html" target="_blank" rel="noopener"
        title="how this demo works, in a new tab" aria-label="how this demo works, opens in a new tab">?</a>
   </header>
@@ -531,6 +572,12 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
             <span class="mono map-panel-turn" id="mapPanelTurn">turn 0</span>
           </div>
           <div class="map-panel-board" id="mapPanelBoard"></div>
+          <div class="map-legend">
+            <span class="map-key"><i class="map-swatch map-swatch-predator"></i>predator</span>
+            <span class="map-key"><i class="map-swatch map-swatch-prey"></i>prey</span>
+            <span class="map-key"><i class="map-swatch map-swatch-food"></i>food</span>
+            <span class="map-key"><i class="map-swatch map-swatch-prop"></i>building</span>
+          </div>
         </section>
       </div>
       <div class="deck-camera">
@@ -547,6 +594,10 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
           <button type="button" data-mode="overhead" aria-pressed="false">overhead</button>
         </div>
         <button type="button" class="pill affordance" id="foodPill" data-command="place food" aria-pressed="false">place food</button>
+        <label class="deck-teach" title="With this on, a sentence like &quot;The fox is at cell-3-4.&quot; writes a fact into the square instead of running as a command.">
+          <input type="checkbox" id="teachToggle">
+          teach
+        </label>
       </div>
       <div class="deck-info-popup mudiii-note" id="deckInfoPopup" role="dialog" aria-label="about this demo" hidden>
         ${MUDIII_NOTE_LINES.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n        ")}
@@ -556,6 +607,9 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
   </div>
   <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions">
     <canvas id="sceneCanvas"></canvas>
+    <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows" hidden>
+${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(DIR_GLYPH[point])}</button></span>`).join("\n")}
+    </div>
     <p class="scene-status" id="sceneStatus" role="status"></p>
   </section>
   <div class="edit-stage" id="mudiiiEditStage" aria-label="the square's own facts, in plain sentences">
@@ -587,7 +641,7 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
         <span class="prompt mono">tmct&gt;</span>
         ${pillCompleteMarkup({
           inputId: "chatInput",
-          inputHtml: '<input id="chatInput" type="text" placeholder="@fox-1 look" aria-label="type a command" disabled>',
+          inputHtml: '<input id="chatInput" type="text" placeholder="@fox the goblin is east" aria-label="type a command" disabled>',
         })}
       </form>
     </div>
@@ -619,6 +673,7 @@ const MUDIII_STYLE = `
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1280px; margin: 0 auto; padding: 1.1rem 1.2rem 2.4rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--square-ink); opacity: .85; margin: 0; }
+  ${EYEBROW_LINKS_CSS}
   h2 { font-family: ${DISPLAY_STACK}; font-size: 1rem; margin: 0; }
   h3 { font-family: ${MONO_STACK}; font-size: .58rem; margin: 0 0 .3rem; text-transform: uppercase; letter-spacing: .12em; color: var(--square-stone-dark); }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
@@ -673,6 +728,8 @@ const MUDIII_STYLE = `
   .deck-sliders { display: flex; flex-wrap: wrap; gap: 1rem; flex: 1 1 auto; min-width: 0; }
   .deck-slider { display: flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--square-stone-dark); min-width: 0; }
   .deck-slider input[type="range"] { accent-color: var(--square-accent); flex: 1 1 4rem; min-width: 2.5rem; width: auto; max-width: 8rem; }
+  .deck-teach { display: flex; align-items: center; gap: .3rem; font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--square-stone-dark); cursor: pointer; }
+  .deck-teach input[type="checkbox"] { accent-color: var(--square-accent); }
   .camera-mode { display: inline-flex; gap: .25rem; }
   .camera-mode button[aria-pressed="true"] { background: var(--square-accent); border-color: var(--square-accent); color: var(--square-ink); }
   .deck-info-popup {
@@ -699,11 +756,35 @@ const MUDIII_STYLE = `
   .map-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: .4rem; }
   .map-panel-title { font-family: ${MONO_STACK}; font-size: .54rem; text-transform: uppercase; letter-spacing: .1em; opacity: .85; }
   .map-panel-turn { font-size: .58rem; opacity: .7; }
-  .map-panel-board { position: relative; flex: 1; min-height: 110px; aspect-ratio: 1; background: rgba(124,154,91,.25); border: 1px solid rgba(233,217,182,.35); border-radius: 3px; }
+  .map-panel-board {
+    position: relative; flex: 1; min-height: 110px; aspect-ratio: 1;
+    --map-cell-pct: 8.3333%;
+    background-color: rgba(124,154,91,.25);
+    background-image:
+      repeating-linear-gradient(90deg, rgba(233,217,182,.22) 0 1px, transparent 1px var(--map-cell-pct)),
+      repeating-linear-gradient(180deg, rgba(233,217,182,.22) 0 1px, transparent 1px var(--map-cell-pct));
+    border: 1px solid rgba(233,217,182,.35); border-radius: 3px;
+  }
+  .map-block { position: absolute; box-sizing: border-box; background: rgba(89,80,63,.9); border: 1px solid rgba(0,0,0,.35); border-radius: 1px; }
   .map-dot { position: absolute; width: .55rem; height: .55rem; margin: -.28rem 0 0 -.28rem; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
   .map-dot-predator { background: var(--square-predator); }
   .map-dot-prey { background: var(--square-prey); }
   .map-dot-crumb, .map-dot-morsel, .map-dot-item { background: var(--square-accent); width: .34rem; height: .34rem; margin: -.17rem 0 0 -.17rem; }
+  .map-label {
+    position: absolute; margin: -.66rem 0 0 .26rem; font-size: .44rem; line-height: 1; letter-spacing: .02em;
+    color: var(--parchment); text-shadow: 0 1px 2px rgba(0,0,0,.85); white-space: nowrap; pointer-events: none;
+  }
+  .map-label-left { margin-left: -.3rem; transform: translateX(-100%); }
+  /* Plain inline-block swatches, never .map-dot: that class is absolutely
+     positioned with a centring margin, so a legend reusing it would position
+     against the board and disappear. */
+  .map-legend { display: flex; flex-wrap: wrap; gap: .12rem .5rem; font-family: ${MONO_STACK}; font-size: .5rem; text-transform: uppercase; letter-spacing: .08em; opacity: .85; }
+  .map-key { display: inline-flex; align-items: center; gap: .24rem; }
+  .map-swatch { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
+  .map-swatch-predator { background: var(--square-predator); }
+  .map-swatch-prey { background: var(--square-prey); }
+  .map-swatch-food { background: var(--square-accent); }
+  .map-swatch-prop { background: rgba(89,80,63,.9); border-radius: 1px; }
 
   .scene-stage { position: relative; margin-bottom: 1rem; border: 1px solid var(--square-stone-dark); border-radius: 4px; overflow: hidden; background: #10161B; min-height: 360px; }
   .scene-stage canvas { display: block; width: 100%; height: 360px; }
@@ -713,6 +794,30 @@ const MUDIII_STYLE = `
     border-radius: 3px; padding: .28rem .55rem;
   }
   .scene-status:empty { display: none; }
+
+  /* Each press sits where it points, mud.html's own ring idiom. */
+  .dir-ring { position: absolute; inset: .3rem; pointer-events: none; }
+  .dir-ring[hidden] { display: none; }
+  .dir-slot { position: absolute; pointer-events: auto; }
+  .dir-north { top: 0; left: 50%; transform: translateX(-50%); }
+  .dir-south { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .dir-west { left: 0; top: 50%; transform: translateY(-50%); }
+  .dir-east { right: 0; top: 50%; transform: translateY(-50%); }
+  .dir-northwest { top: 0; left: 0; }
+  .dir-northeast { top: 0; right: 0; }
+  .dir-southwest { bottom: 0; left: 0; }
+  .dir-southeast { bottom: 0; right: 0; }
+  .dir-pill {
+    font-family: ${MONO_STACK}; font-size: .58rem; letter-spacing: .06em; line-height: 1;
+    padding: .24rem .42rem; border-radius: 2px; border: 1px solid var(--square-stone-dark);
+    background: var(--parchment); color: var(--square-ink); white-space: nowrap;
+  }
+  .dir-pill:hover:not(:disabled) { border-color: var(--square-accent); background: var(--square-accent); }
+  .dir-pill:disabled { opacity: .35; cursor: default; }
+  .dir-pill[aria-pressed="true"] {
+    background: var(--square-accent); border-color: var(--square-stone-dark);
+    box-shadow: 0 0 0 2px rgba(217,138,43,.4);
+  }
 
   .hud-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
   .hud-card {
@@ -727,6 +832,14 @@ const MUDIII_STYLE = `
   .hud-meter-fill { height: 100%; background: var(--square-accent); width: 0%; transition: width .3s ease; }
   .hud-goal { margin: 0; font-size: .74rem; }
   .hud-plan, .hud-belief { margin: 0; font-size: .62rem; color: var(--square-stone-dark); }
+  .hud-belief-toggle { display: flex; align-items: baseline; gap: .25rem; width: 100%; text-align: left; padding: 0; border: 0; background: none; }
+  .hud-belief-toggle[hidden] { display: none; }
+  .hud-belief-toggle .hud-belief { flex: 1; min-width: 0; }
+  .hud-belief-toggle::after { content: "\\25BE"; font-size: .55rem; color: var(--square-stone-dark); }
+  .hud-belief-toggle[aria-expanded="true"]::after { content: "\\25B4"; }
+  .hud-belief-toggle:hover .hud-belief, .hud-belief-toggle:hover::after { color: var(--square-ink); }
+  .hud-detail { display: flex; flex-direction: column; gap: .1rem; font-size: .6rem; color: var(--square-stone-dark); border-top: 1px solid rgba(0,0,0,.12); padding-top: .25rem; }
+  .hud-detail[hidden] { display: none; }
   @media (prefers-reduced-motion: reduce) { .hud-meter-fill { transition: none; } }
 
   .edit-stage { display: none; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; margin-bottom: 1rem; }
@@ -781,6 +894,14 @@ const MUDIII_STYLE = `
   .pill:hover:not(:disabled) { border-color: var(--square-accent); background: var(--square-accent); }
   .pill.affordance { border-style: dashed; border-color: var(--square-stone); }
   .pill.affordance[aria-pressed="true"] { background: var(--square-accent); border-style: solid; }
+  /* The tick and the cross live in ::before so the tag stays on the screen and
+     out of the submitted sentence — a clicked lie must be indistinguishable
+     from a typed one by the time the lane reads it. */
+  .pill[data-role="dyn-addr"][data-active="1"] { border-color: var(--taught); color: var(--taught); }
+  .pill[data-role="dyn-claim"][data-truth="true"] { border-color: var(--taught); }
+  .pill[data-role="dyn-claim"][data-truth="true"]::before { content: "\\2713 "; opacity: .55; }
+  .pill[data-role="dyn-claim"][data-truth="false"] { border-style: dashed; border-color: var(--alert); }
+  .pill[data-role="dyn-claim"][data-truth="false"]::before { content: "\\2715 "; opacity: .6; }
 
   @media (max-width: 900px) {
     .edit-stage { grid-template-columns: 1fr; }
@@ -799,6 +920,27 @@ const MUDIII_STYLE = `
        here it follows the two-row slider stack's own height instead. */
     .map-panel-board { aspect-ratio: auto; min-height: 90px; }
   }
+
+  /* Half the deck is right on a phone and absurd on a 2000px window: a
+     percentage has no ceiling, so a square board grew to roughly 950px tall
+     and pushed the 3D view off the screen. Wide viewports get an absolute
+     size instead, and keep the square — there is room for it here.
+
+     The map is also taller than the sliders beside it, which left a tall
+     empty stripe of parchment under them. On a wide screen the deck becomes
+     one grid so the map can stand beside the sliders AND the camera row at
+     once, and the space under the controls closes up. display:contents lifts
+     .deck-sliders and .map-panel out of .deck-body so both are grid items of
+     the deck itself. */
+  @media (min-width: 901px) {
+    .deck { display: grid; grid-template-columns: minmax(0, 1fr) 240px; grid-template-rows: auto 1fr auto; column-gap: .8rem; }
+    .deck-controls { grid-column: 1 / -1; grid-row: 1; }
+    .deck-body { display: contents; }
+    .deck-sliders { grid-column: 1; grid-row: 2; align-self: start; }
+    .deck-camera { grid-column: 1; grid-row: 3; align-self: end; }
+    .map-panel { grid-column: 2; grid-row: 2 / 4; flex: 0 0 auto; max-width: none; align-self: start; }
+  }
+
 `;
 
 /** The inlined page script, spliced the same way mud-viz.mjs's own
@@ -821,6 +963,7 @@ function pageScript() {
   const rowsForWorld = ${rowsForWorld.toString()};
   const renderMudEditorText = ${renderMudEditorText.toString()};
   const gridWorldEditorState = ${gridWorldEditorState.toString()};
+  const wordBeforeCursor = ${wordBeforeCursor.toString()};
   const pillCandidates = ${pillCandidates.toString()};
   const matchPills = ${matchPills.toString()};
   const createPillComplete = ${createPillComplete.toString()};
@@ -833,11 +976,14 @@ function pageScript() {
   const cameraRigFor = ${cameraRigFor.toString()};
   const nextCameraSelection = ${nextCameraSelection.toString()};
   const mapDotsFor = ${mapDotsFor.toString()};
+  const mapBlocksFor = ${mapBlocksFor.toString()};
   const hudCardFieldsFor = ${hudCardFieldsFor.toString()};
   const clipForAction = ${clipForAction.toString()};
   const agentCardMarkup = ${agentCardMarkup.toString()};
+  const believedFactSentence = ${believedFactSentence.toString()};
 
   const el = (id) => document.getElementById(id);
+  const SEED_COMMANDS = ["tick", "what does the fox see", "where is the goblin", "what can I do"];
   let scenarioIndex = 0;
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
   const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
@@ -878,6 +1024,8 @@ function pageScript() {
   let cameraModeBeforeFallback = null;
   let foodArmed = false;
   let livePills = [];
+  let selectedAddresseeId = null;
+  const expandedAgents = new Set();
   let pillComplete = null;
   let autoOn = false;
   let editing = false;
@@ -921,7 +1069,9 @@ function pageScript() {
     if (typeof result.turn === "number") globalTurn = result.turn;
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
-    callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
+    callScene("applyTick", {
+      agents: result.agents, items: result.items, ecology: result.ecology, rungs: result.rungs,
+    });
     const nextCamera = nextCameraSelection(camera, agentsList(), result.ecology || []);
     if (nextCamera.status && camera.mode !== "overhead") cameraModeBeforeFallback = camera.mode;
     camera = nextCamera;
@@ -998,19 +1148,71 @@ function pageScript() {
   el("chatLogPopupClose").addEventListener("click", function () { el("chatLogPopup").hidden = true; });
 
   // ---- the pill rail and its typeahead ----------------------------------
+  // The deception rail is tmct.page.pillsForMudiii's own output, rendered and
+  // nothing more: an address pill per live agent, then a true and a false
+  // claim about every individual the addressee could act on. The false cell is
+  // the board's own point reflection, so a lie is always in bounds and never
+  // accidentally true. Which one a pill carries is shown by a glyph in CSS
+  // ::before, never in the submitted text — a clicked lie reads exactly like a
+  // typed one once it is in the input.
+  //
+  // The fixed seeds ahead of it are the town square's OWN verbs, checked
+  // against the lane's regexes rather than borrowed from another page: this
+  // world has no "look".
   function renderChatPills() {
-    const pills = [{ command: "look", label: "look" }];
-    for (const id of Object.keys(agentsById)) pills.push({ command: "@" + id + " look", label: "@" + id + " look" });
-    livePills = pills;
-    el("chatPills").innerHTML = pills.map(function (p) {
+    const seeds = SEED_COMMANDS.map(function (c) { return { command: c, label: c }; });
+    const seedHtml = seeds.map(function (p) {
       return '<button type="button" class="pill" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
     }).join("");
-    const buttons = el("chatPills").querySelectorAll(".pill");
-    for (let i = 0; i < buttons.length; i += 1) {
-      buttons[i].addEventListener("click", function (e) { sendCommand(e.currentTarget.getAttribute("data-command")); });
-    }
+    const rail = window.tmct.page.pillsForMudiii(agentsById, itemsById, selectedAddresseeId, { gridSize: gridSizeOf() });
+    selectedAddresseeId = rail.addresseeId;
+    const addrHtml = rail.addressPills.map(function (p) {
+      return '<button type="button" class="pill" data-role="dyn-addr" data-id="' + esc(p.id) + '"'
+        + (p.id === selectedAddresseeId ? ' data-active="1"' : "") + ">" + esc(p.label) + "</button>";
+    }).join("");
+    const claims = rail.claimPills.map(function (p) {
+      return { command: p.sentence, label: p.text, truth: p.truth };
+    });
+    const claimHtml = claims.map(function (p) {
+      return '<button type="button" class="pill" data-role="dyn-claim" data-truth="' + (p.truth ? "true" : "false")
+        + '" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
+    }).join("");
+    livePills = seeds.concat(claims);
+    el("chatPills").innerHTML = seedHtml + addrHtml + claimHtml;
     if (pillComplete) pillComplete.refresh();
   }
+
+  // A pill APPENDS rather than replacing, so two clicks compose one line. The
+  // second click of a double is what submits: the text it would have appended
+  // went in on the first click of that same pair, which is why nothing is
+  // appended again here.
+  function appendToChatInput(text) {
+    const input = el("chatInput");
+    const head = input.value.replace(/\\s+$/, "");
+    input.value = (head ? head + " " : "") + text;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  el("chatPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    if (btn.getAttribute("data-role") === "dyn-addr") {
+      selectedAddresseeId = btn.getAttribute("data-id");
+      renderChatPills();
+      return;
+    }
+    const command = btn.getAttribute("data-command");
+    if (!command) return;
+    if (e.detail > 1) {
+      const input = el("chatInput");
+      const line = input.value.trim();
+      input.value = "";
+      if (line) sendCommand(line);
+      return;
+    }
+    appendToChatInput(command);
+  });
 
   function wirePillComplete() {
     pillComplete = createPillComplete({
@@ -1042,7 +1244,8 @@ function pageScript() {
   // still refused entirely client-side — nothing is written, and the food
   // pill stays armed for another try.
   window.mudiiiHandleSceneClick = function (cellId) {
-    if (!foodArmed || !session) return;
+    if (!session || editing) return;
+    if (!foodArmed) { walkFollowedTo(cellId); return; }
     const reason = blockedCellReason(cellId, props, agentsList());
     if (reason) { setSceneStatus(reason); return; }
     sendCommand("put food at " + cellId).then(function () {
@@ -1050,6 +1253,82 @@ function pageScript() {
       el("foodPill").setAttribute("aria-pressed", "false");
     });
   };
+
+  // ---- driving one agent by hand ------------------------------------------
+  // Every press here spends a turn: driveAgent runs the SAME whole-world tick
+  // autoplay runs, so the ecology pass runs and every other agent decides and
+  // moves with it. That is what the status line has to say, or the ring reads
+  // as a free nudge that costs nothing.
+  function followedAgentId() {
+    const id = camera.selectedId;
+    return id && agentsById[id] ? id : null;
+  }
+
+  // One lit glyph, and it is the followed agent's own facing — the reading
+  // that makes sense on an open grid, where nearly every step is available and
+  // lighting what is available would say nothing. With nobody followed there
+  // is no facing to show and nothing to walk, so the ring goes away.
+  function renderDriveRing() {
+    const followed = followedAgentId();
+    const ring = el("driveRing");
+    ring.hidden = !followed;
+    if (!followed) return;
+    const facing = agentsById[followed].facing || DATA.defaultFacing;
+    const buttons = ring.querySelectorAll("[data-drive]");
+    for (let i = 0; i < buttons.length; i += 1) {
+      buttons[i].setAttribute("aria-pressed", buttons[i].getAttribute("data-drive") === facing ? "true" : "false");
+    }
+  }
+
+  function drivePress(direction) {
+    const followed = followedAgentId();
+    if (!session || !followed) { setSceneStatus("pick an agent to follow \\u2014 the ring walks whoever the camera is on."); return; }
+    // A hand-driven turn is a deliberate one, so autoplay stands down rather
+    // than racing the press.
+    autoOn = false;
+    if (ticker) ticker.pause();
+    return serializeTick(async function () {
+      const result = await session.driveAgent(followed, direction);
+      applyTickResult(result);
+      renderAll();
+      const driven = result.driven || {};
+      setSceneStatus(driven.accepted
+        ? followed + " went " + driven.direction + " to " + driven.cell + " \\u2014 turn " + result.turn + ", and the whole square moved with it."
+        : followed + " could not go " + direction + " \\u2014 the turn was spent anyway, and the whole square moved.");
+      return result;
+    });
+  }
+
+  el("driveRing").addEventListener("click", function (e) {
+    const btn = e.target.closest("[data-drive]");
+    if (!btn || btn.disabled) return;
+    drivePress(btn.getAttribute("data-drive"));
+  });
+
+  // A ground click with nothing armed walks the followed agent one step along
+  // the route to the cell, and draws the whole route it is heading down. The
+  // route comes from the world's own exit search, so a cell behind a building
+  // is declined rather than drawn as a line through the wall.
+  async function walkFollowedTo(target) {
+    const followed = followedAgentId();
+    if (!followed) { setSceneStatus("pick an agent to follow \\u2014 a click on the ground walks whoever the camera is on."); return; }
+    const from = agentsById[followed].cell;
+    if (target === from) { setSceneStatus(followed + " is already at " + target + "."); return; }
+    callScene("flashCell", target);
+    const snap = await session.snapshot();
+    const route = window.tmct.page.routeBetweenCells(snap.rows, from, target);
+    if (!route || !route.directions.length) {
+      callScene("clearRoute");
+      setSceneStatus("no way through to " + target + " from " + from + ".");
+      return;
+    }
+    callScene("showRoute", route.cells);
+    await drivePress(route.directions[0]);
+    const left = route.directions.length - 1;
+    setSceneStatus(left
+      ? followed + " is heading for " + target + " \\u2014 " + left + " more step" + (left === 1 ? "" : "s") + ", one turn each."
+      : followed + " reached " + target + ".");
+  }
 
   // ---- the HUD row --------------------------------------------------------
   function renderHudRow() {
@@ -1070,19 +1349,69 @@ function pageScript() {
       card.querySelector(".hud-meter-fill").style.width = (fields.massPct === null ? 0 : fields.massPct) + "%";
       card.querySelector(".hud-goal").textContent = fields.goal;
       card.querySelector(".hud-plan").textContent = "plan: " + fields.planText;
-      card.querySelector(".hud-belief").textContent = fields.beliefEntries.length
-        ? "believes: " + fields.beliefEntries.map(function (entry) {
-          return entry[0] + (entry[1] ? " @ " + entry[1] : " unseen");
-        }).join(" \\u00b7 ")
-        : "";
+      renderBelief(card, id, fields.beliefEntries);
     }
   }
 
+  // A belief map grows with the cast, so the card shows the first three and a
+  // count and keeps the rest behind a toggle. Which cards are open is held
+  // against the AGENT ID, never the DOM: renderHudRow only rebuilds its
+  // markup when the card count changes, and card slots are positional while
+  // agents re-bind by sorted id, so state left in a card would follow the
+  // slot rather than the animal.
+  const BELIEF_SUMMARY_LIMIT = 3;
+  function renderBelief(card, id, entries) {
+    const toggle = card.querySelector(".hud-belief-toggle");
+    const detail = card.querySelector(".hud-detail");
+    const expanded = expandedAgents.has(id);
+    const shown = entries.slice(0, BELIEF_SUMMARY_LIMIT).map(function (entry) {
+      return entry[0] + (entry[1] ? " @ " + entry[1] : " unseen");
+    }).join(" \\u00b7 ");
+    const rest = entries.length - BELIEF_SUMMARY_LIMIT;
+    card.querySelector(".hud-belief").textContent = entries.length
+      ? "believes: " + shown + (rest > 0 ? " +" + rest + " more" : "")
+      : "";
+    toggle.hidden = entries.length === 0;
+    toggle.setAttribute("aria-expanded", expanded && entries.length ? "true" : "false");
+    detail.hidden = !expanded || entries.length === 0;
+    detail.innerHTML = entries.map(function (entry) {
+      return '<div class="hud-detail-line">' + esc(believedFactSentence(entry[0], entry[1])) + "</div>";
+    }).join("");
+  }
+
+  el("hudRow").addEventListener("click", function (e) {
+    const toggle = e.target.closest(".hud-belief-toggle");
+    if (!toggle) return;
+    const card = toggle.closest(".hud-card");
+    const id = card && card.getAttribute("data-agent");
+    if (!id) return;
+    if (expandedAgents.has(id)) expandedAgents.delete(id); else expandedAgents.add(id);
+    renderHudRow();
+  });
+
   // ---- the top-down map panel ---------------------------------------------
   function renderMapPanel() {
-    const dots = mapDotsFor(agentsList(), itemsList(), gridSizeOf());
-    el("mapPanelBoard").innerHTML = dots.map(function (d) {
-      return '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
+    const board = el("mapPanelBoard");
+    const size = gridSizeOf();
+    // The cell divisions are two gradients stepped by this, so the drawn grid
+    // and the dots' own percentages read off the same board size.
+    board.style.setProperty("--map-cell-pct", (100 / size) + "%");
+    const blocks = mapBlocksFor(props, size);
+    const dots = mapDotsFor(agentsList(), itemsList(), size);
+    // Blocks first, dots second: a live agent standing beside a building has
+    // to sit on top of it, not under it.
+    board.innerHTML = blocks.map(function (b) {
+      return '<span class="map-block" style="left:' + b.xPct + '%;top:' + b.yPct + '%;width:' + b.sizePct
+        + '%;height:' + b.sizePct + '%" title="' + esc(b.id) + '"></span>';
+    }).join("") + dots.map(function (d) {
+      const dot = '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
+      // Items are named by their colour in the key; only the cast, which the
+      // HUD and the follow control both name, carries its id on the board.
+      if (d.kind !== "predator" && d.kind !== "prey") return dot;
+      // A label on a dot near the right edge would run off the board, so
+      // those hang to the left of their dot instead.
+      const side = d.xPct > 70 ? " map-label-left" : "";
+      return dot + '<span class="map-label mono' + side + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%">' + esc(d.id) + "</span>";
     }).join("");
     el("mapPanelTurn").textContent = "turn " + globalTurn;
   }
@@ -1102,6 +1431,7 @@ function pageScript() {
     cameraModeBeforeFallback = null;
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
+    renderDriveRing();
     callScene("setCamera", camera);
   });
 
@@ -1150,7 +1480,7 @@ function pageScript() {
     el("playerCountSlider").addEventListener("change", function () { boot(); });
     el("npcCountSlider").addEventListener("input", function () { showGoblinCount(chosenGoblinCount()); });
     el("npcCountSlider").addEventListener("change", function () { boot(); });
-    el("resetBtn").addEventListener("click", function () { boot(); });
+    el("resetBtn").addEventListener("click", function () { resetBoard(); });
     const scenarioSelect = el("scenarioSelect");
     if (scenarioSelect) {
       scenarioSelect.addEventListener("change", function () {
@@ -1185,6 +1515,9 @@ function pageScript() {
   // graph.
   function worldOnlyRows(rows) { return rowsForWorld(rows, scenario().worldPayload.name); }
   let editRows = [];
+  // The FULL store, not the world's own rows: a term's synonyms and its is-a
+  // chain mostly live in the background corpus, not in the square's vocabulary.
+  let allStoreRows = [];
 
   function renderEditPlacements() {
     const placements = {};
@@ -1209,11 +1542,12 @@ function pageScript() {
     el("editModeBtn").textContent = "back to playing";
     el("editModeBtn").setAttribute("aria-pressed", "true");
     const snap = await session.snapshot();
+    allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
     el("editorText").value = renderMudEditorText(editRows, gridWorldEditorState(snap.state));
     el("editorStatus").className = "edit-status";
     el("editorStatus").textContent = "";
-    el("editorPills").innerHTML = "";
+    renderSuggestionPills();
     renderEditPlacements();
   }
 
@@ -1224,9 +1558,74 @@ function pageScript() {
     el("editModeBtn").setAttribute("aria-pressed", "false");
   }
 
+  // The lateral SKOS neighbourhood plus the vertical is-a chain for whatever
+  // word the cursor sits behind. Nothing found is nothing shown — an honest
+  // miss, never a guessed suggestion.
+  function renderSuggestionPills() {
+    const box = el("editorPills");
+    const term = wordBeforeCursor(el("editorText").value, el("editorText").selectionStart);
+    if (!term || !window.tmct) { box.innerHTML = ""; return; }
+    const related = window.tmct.page.relatedForTerm ? window.tmct.page.relatedForTerm(allStoreRows, term) : null;
+    const chain = window.tmct.page.classAncestorChain ? window.tmct.page.classAncestorChain(term, allStoreRows) : [];
+    const seen = {};
+    seen[term] = true;
+    const out = [];
+    const push = function (label) { if (label && !seen[label]) { seen[label] = true; out.push(label); } };
+    if (related) {
+      related.synonyms.forEach(push);
+      related.related.forEach(function (r) { push(r.prefLabel); });
+    }
+    chain.slice(1).forEach(push);
+    box.innerHTML = out.slice(0, 8).map(function (s) {
+      return '<button type="button" class="pill" data-insert="' + esc(s) + '">' + esc(s) + "</button>";
+    }).join("");
+  }
+
+  el("editorPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const area = el("editorText");
+    const pos = area.selectionStart;
+    const word = wordBeforeCursor(area.value, pos);
+    const insert = btn.getAttribute("data-insert");
+    area.value = area.value.slice(0, pos - word.length) + insert + area.value.slice(pos);
+    const next = pos - word.length + insert.length;
+    area.setSelectionRange(next, next);
+    area.focus();
+    onEditorChanged();
+  });
+
+  let suggestTimer = null;
   let syncTimer = null;
+  function scheduleSuggestions() { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderSuggestionPills, 180); }
   function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(applyEditorText, 450); }
-  el("editorText").addEventListener("input", scheduleSync);
+  function onEditorChanged() { scheduleSuggestions(); scheduleSync(); }
+  el("editorText").addEventListener("input", onEditorChanged);
+  el("editorText").addEventListener("click", scheduleSuggestions);
+  el("editorText").addEventListener("keyup", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].indexOf(e.key) !== -1) scheduleSuggestions();
+  });
+
+  // An edit changes the facts, so the meshes have to move with them —
+  // otherwise a deleted well stands in the square until the next Reset.
+  // boot() drops the camera back to overhead and empties the scene's own
+  // agent groups, so the visitor's camera is put back and the live cast is
+  // redrawn straight after: autoplay is paused in edit mode, so nothing else
+  // would repopulate them.
+  async function rebuildSceneFromEdit(result) {
+    props = propPlacementsFrom(editRows, DATA.assetManifest);
+    // A prop may now stand where an animal was, so a change re-casts onto the
+    // edited board. An edit that wrote and retracted nothing leaves the cast
+    // exactly where it stood.
+    if (result && (result.added || result.removed)) {
+      applyTickResult(await session.recast({ agents: cast }));
+    }
+    await callScene("boot", {
+      propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+    });
+    callScene("setCamera", camera);
+    callScene("applyTick", { agents: agentsById, items: itemsById, ecology: [] });
+  }
 
   async function applyEditorText() {
     if (!session) return;
@@ -1235,7 +1634,9 @@ function pageScript() {
     status.textContent = "reading the square\\u2026";
     const result = await serializeTick(function () { return session.applyEdit(el("editorText").value); });
     const snap = await session.snapshot();
+    allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
+    await rebuildSceneFromEdit(result);
     if (result && result.unrecognized && result.unrecognized.length) {
       status.className = "edit-status pending";
       status.textContent = result.unrecognized.length + " line" + (result.unrecognized.length === 1 ? "" : "s")
@@ -1264,6 +1665,7 @@ function pageScript() {
     tickQueue = createSerialQueue();
     camera = { mode: "follow", selectedId: null, status: null };
     cameraModeBeforeFallback = null;
+    expandedAgents.clear();
     const s = scenario();
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
@@ -1271,7 +1673,11 @@ function pageScript() {
     showFoxCount(foxes.length);
     showGoblinCount(goblins.length);
     props = propPlacementsFrom((s.worldPayload && s.worldPayload.facts) || [], DATA.assetManifest);
-    const opened = await window.tmct.open(s.worldPayload, { agents: cast, epoch: 0 });
+    const opened = await window.tmct.open(s.worldPayload, {
+      agents: cast,
+      epoch: 0,
+      getTeachEnabled: function () { return el("teachToggle").checked; },
+    });
     if (seq !== bootSeq) return;
     session = opened;
     agentsById = {};
@@ -1295,11 +1701,42 @@ function pageScript() {
     }
   }
 
+  // Reset re-casts the store it already has rather than opening a new one:
+  // the world's facts, everything taught into it and every editor change all
+  // stand, and only the animals are minted again. Re-opening would throw the
+  // taught facts away with the cast, which is not what "reset the board" says.
+  // The engine owns the turn count, so a re-cast does not rewind it — the
+  // status line says as much, because a counter that keeps climbing after a
+  // Reset otherwise reads as a bug.
+  async function resetBoard() {
+    if (!session) return boot();
+    autoOn = false;
+    if (ticker) { ticker.pause(); ticker = null; }
+    expandedAgents.clear();
+    const s = scenario();
+    const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
+    const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
+    cast = foxes.concat(goblins);
+    showFoxCount(foxes.length);
+    showGoblinCount(goblins.length);
+    const board = await serializeTick(function () { return session.recast({ agents: cast }); });
+    camera = { mode: "follow", selectedId: Object.keys(board.agents || {}).sort()[0] || null, status: null };
+    cameraModeBeforeFallback = null;
+    applyTickResult(board);
+    renderAll();
+    setSceneStatus("re-cast \\u2014 the square's own facts stand, and its clock keeps running.");
+    if (!prefersReducedMotion()) {
+      autoOn = true;
+      ensureTicker().play();
+    }
+  }
+
   function renderAll() {
     renderHudRow();
     renderMapPanel();
     renderAgentSelect();
     renderCameraButtons();
+    renderDriveRing();
     renderChatPills();
     el("globalTurnCount").textContent = "turns: " + globalTurn;
   }

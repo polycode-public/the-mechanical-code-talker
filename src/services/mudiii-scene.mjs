@@ -42,12 +42,10 @@
 //         agent or item, never the mid-lerp position. This is what an e2e
 //         assertion reads, and what a later screenshot ready-check reads too
 //         (see test-e2e/pages-mudiii.test.mjs's own header).
+//       .flashCell(cellId) / .showRoute(cells) / .clearRoute() — the clicked
+//         cell and the route the followed agent is walking to it, drawn along
+//         the cells the world's own exit search returned.
 //       .ready() — whether boot() has finished at least once.
-//   These three calls are not yet wired into mudiii-viz.mjs's own
-//   boot()/applyTickResult()/camera handlers — that file is owned by the viz
-//   track, not this one; the coordinator's own report names the exact call
-//   sites needed, mirroring how window.mudiiiHandleSceneClick was already
-//   added for the reverse direction.
 //
 // Reused from mudiii-viz.mjs rather than re-derived, off its own frozen
 // exports: `roleOfAgentId`, `cellToWorld`, `cellFromGroundPoint`,
@@ -366,6 +364,13 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // removal (source "ecology") apart from applyTick's own diff no-op
   // (source "diff") without guessing from a vanished mesh alone.
   var removalLog = [];
+  var routeLine = null, routeCells = [];
+  var flashMesh = null, flashUntil = 0;
+  var FLASH_MS = 600;
+  // The floor a one-shot flourish is held for when its own clip is shorter,
+  // long enough that a bite reads as a bite at the deck's fastest tick.
+  var ONE_SHOT_HOLD_MIN_MS = 450;
+  var tickRungs = {};
   var cameraState = { mode: "overhead", selectedId: null };
   var cameraTween = null, lookAtTween = null;
   var lastFrameTs = null;
@@ -557,10 +562,8 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
   }
 
-  // ---- items: crumbs and morsels, the committed hay bale at two target
-  // heights (food-crumb 0.16, food-morsel 0.36 in data/mudiii-assets.json),
-  // matching the on-ground footprint the primitive spheres they replace were
-  // already tuned to. ---------------------------------------------------------
+  // ---- items: crumbs and morsels, both the committed hay bale, each at
+  // whatever targetHeight its own data/mudiii-assets.json row names. ----------
   function itemAssetKeyFor(kind) { return kind === "morsel" ? "food-morsel" : "food-crumb"; }
 
   function animateScaleTo(object3D, target, now) {
@@ -635,21 +638,56 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // correctly clone a SkinnedMesh, and at this roster size — a handful of
   // foxes and goblins — the extra memory of a separate load per agent is
   // trivial next to that whole class of bug). ---------------------------------
+  // The id, drawn to a canvas and hung above the agent as a sprite. Parenting
+  // it to the agent's own group means it rides the movement tween with no
+  // per-frame bookkeeping, and a sprite always faces the camera, so there is
+  // no facing maths either. sizeAttenuation off holds it at a constant size on
+  // screen — an id that shrinks to nothing as the camera pulls back is worse
+  // than no id at all — which is why the scale below is in screen fractions
+  // rather than world units.
+  var LABEL_SCREEN_WIDTH = 0.13;
+  function makeAgentLabel(id, height) {
+    var canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 64;
+    var ctx = canvas.getContext("2d");
+    ctx.font = "bold 38px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(20,16,10,.85)";
+    ctx.strokeText(id, 128, 34);
+    ctx.fillStyle = "#F3ECDD";
+    ctx.fillText(id, 128, 34);
+    var material = new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(canvas), transparent: true, sizeAttenuation: false, depthWrite: false,
+    });
+    var sprite = new THREE.Sprite(material);
+    sprite.scale.set(LABEL_SCREEN_WIDTH, LABEL_SCREEN_WIDTH / 4, 1);
+    sprite.position.y = height + 0.3;
+    sprite.name = "label-" + id;
+    return sprite;
+  }
+
   function ensureAgent(id, agent) {
     if (agentGroups[id]) return agentGroups[id];
     var kind = roleOfAgentId(id);
     var entry = {
       group: new THREE.Group(), tween: null, cell: null, facing: agent.facing, role: agent.role,
       kind: kind, mixer: null, actions: {}, currentClip: null, clipMap: null, oneShotAction: null,
+      oneShotUntil: 0, model: null,
     };
     entry.group.visible = false;
     scene.add(entry.group);
     agentGroups[id] = entry;
     var asset = manifestByKind[kind];
+    entry.group.add(makeAgentLabel(id, asset ? asset.targetHeight : 1));
     if (asset) {
       loadGlbRaw(modelUrlFor(asset.destPath)).then(function (gltf) {
         normalizeToHeight(gltf.scene, asset.targetHeight);
         entry.group.add(gltf.scene);
+        entry.model = gltf.scene;
         entry.group.visible = true;
         entry.clipMap = asset.clips || {};
         entry.mixer = new THREE.AnimationMixer(gltf.scene);
@@ -671,6 +709,12 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     // keep blending into every clip after it, forever). Fade it out before
     // any of the guards below can skip the rest of this call.
     if (entry.oneShotAction) {
+      // A flourish holds for its own clip length, floored, before anything may
+      // fade it out. At the deck's 220ms default the next tick otherwise
+      // landed during the wind-up and a bite read as a twitch. This holds the
+      // ANIMATION only: the tick that arrived has already moved the agent, so
+      // the simulation never waits on a flourish.
+      if (performance.now() < entry.oneShotUntil) return;
       entry.oneShotAction.fadeOut(0.15);
       entry.oneShotAction = null;
     }
@@ -702,6 +746,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     action.fadeIn(0.15).play();
     if (prev) prev.fadeOut(0.15);
     entry.oneShotAction = action;
+    var clip = typeof action.getClip === "function" ? action.getClip() : null;
+    entry.oneShotUntil = performance.now()
+      + Math.max(ONE_SHOT_HOLD_MIN_MS, clip && clip.duration ? clip.duration * 1000 : 0);
     entry.currentClip = null;
   }
 
@@ -731,7 +778,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
     if (entry.clipMap) {
       var moving = singleHop;
-      playClip(entry, clipForAction(agent.role, currentActionFor(id, lastAgentsById, moving), entry.clipMap));
+      // A hand-driven step is a walk, whatever the agent believes: it did not
+      // choose to chase or flee, the visitor chose for it.
+      var action = moving && tickRungs[id] === "driven" ? "driven" : currentActionFor(id, lastAgentsById, moving);
+      playClip(entry, clipForAction(agent.role, action, entry.clipMap));
     }
   }
 
@@ -764,6 +814,61 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
         }
       }
     }
+  }
+
+  // ---- the clicked cell, and the route to it --------------------------------
+  // The line follows the cells the world's own exit search returned, never a
+  // straight segment from agent to target: a straight one cuts through
+  // buildings and promises a walk the board would refuse.
+  function clearRoute() {
+    routeCells = [];
+    if (!routeLine) return;
+    if (routeLine.parent) routeLine.parent.remove(routeLine);
+    routeLine.geometry.dispose();
+    routeLine.material.dispose();
+    routeLine = null;
+  }
+
+  function showRoute(cells) {
+    clearRoute();
+    if (!scene || !cells || cells.length < 2) return;
+    var points = [];
+    for (var i = 0; i < cells.length; i += 1) {
+      var world = cellToWorld(cells[i], GRID_SIZE, CELL_SIZE);
+      if (!world) return;
+      points.push(new THREE.Vector3(world.x, 0.09, world.z));
+    }
+    routeLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color: 0xd98a2b }),
+    );
+    routeLine.name = "route";
+    scene.add(routeLine);
+    routeCells = cells.slice();
+  }
+
+  function clearFlash() {
+    if (!flashMesh) return;
+    if (flashMesh.parent) flashMesh.parent.remove(flashMesh);
+    flashMesh.geometry.dispose();
+    flashMesh.material.dispose();
+    flashMesh = null;
+  }
+
+  function flashCell(cell) {
+    if (!scene) return;
+    var world = cellToWorld(cell, GRID_SIZE, CELL_SIZE);
+    if (!world) return;
+    clearFlash();
+    flashMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(CELL_SIZE, CELL_SIZE),
+      new THREE.MeshBasicMaterial({ color: 0xd98a2b, transparent: true, opacity: 0.75 }),
+    );
+    flashMesh.name = "cell-flash";
+    flashMesh.rotation.x = -Math.PI / 2;
+    flashMesh.position.set(world.x, 0.03, world.z);
+    scene.add(flashMesh);
+    flashUntil = performance.now() + FLASH_MS;
   }
 
   // ---- camera ---------------------------------------------------------------
@@ -817,6 +922,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     itemMeshes = {};
     lastAgentsById = {};
     lastItemsById = {};
+    tickRungs = {};
+    clearRoute();
+    clearFlash();
     removalLog = [];
     manifestByKind = buildManifestByKind(input && input.assetManifest);
     await placeProps((input && input.propPlacements) || []);
@@ -829,6 +937,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var now = performance.now();
     var agents = (tick && tick.agents) || {};
     var items = (tick && tick.items) || {};
+    tickRungs = (tick && tick.rungs) || {};
     for (var id in agents) if (Object.prototype.hasOwnProperty.call(agents, id)) applyAgentTick(id, agents[id], now);
     for (var itemId in items) if (Object.prototype.hasOwnProperty.call(items, itemId)) applyItemTick(itemId, items[itemId], now);
     // Ecology first: an eaten agent/item is already gone from this tick's own
@@ -859,6 +968,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       }
       if (entry.mixer) entry.mixer.update(deltaSec);
     }
+    if (flashMesh) {
+      var flashLeft = flashUntil - performance.now();
+      if (flashLeft <= 0) clearFlash();
+      else flashMesh.material.opacity = 0.75 * (flashLeft / FLASH_MS);
+    }
     if (cameraTween) { var cp = tweenStep(cameraTween, ts); camera3.position.set(cp.x, cp.y, cp.z); }
     if (lookAtTween) { var lp = tweenStep(lookAtTween, ts); camera3.lookAt(lp.x, lp.y, lp.z); }
     if (orbitControls && orbitControls.enabled) orbitControls.update();
@@ -869,6 +983,13 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     boot: boot,
     applyTick: applyTick,
     setCamera: setCamera,
+    flashCell: flashCell,
+    showRoute: showRoute,
+    clearRoute: clearRoute,
+    // The route currently drawn, cell by cell — an e2e assertion's read, so
+    // it can check the line follows the board's own exits rather than
+    // counting pixels on a software renderer.
+    routeCellsDrawn: function () { return routeCells.slice(); },
     cellOf: function (id) {
       if (agentGroups[id]) return agentGroups[id].cell;
       if (itemMeshes[id]) return itemMeshes[id].cell;
@@ -886,10 +1007,13 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     // manifest's own targetHeight to compare it against — an e2e assertion's
     // read, so it goes through the group actually in the scene rather than a
     // second, locally invented measurement.
+    // Measured through the loaded MODEL, never the whole group: the group
+    // also carries the id label, whose sprite geometry would widen the box
+    // and report a height nobody rendered.
     meshHeightOf: function (id) {
       var entry = agentGroups[id];
-      if (!entry || !entry.group || entry.group.children.length === 0) return null;
-      var box = new THREE.Box3().setFromObject(entry.group);
+      if (!entry || !entry.model) return null;
+      var box = new THREE.Box3().setFromObject(entry.model);
       var size = new THREE.Vector3();
       box.getSize(size);
       var asset = manifestByKind[entry.kind];

@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
   propPlacementsFrom, occupiedCells, blockedCellReason, cameraRigFor, nextCameraSelection,
-  mapDotsFor, hudCardFieldsFor, clipForAction,
+  mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 import FIXTURE from "../fixtures/mudiii-ticks.json" with { type: "json" };
@@ -110,7 +110,7 @@ test("renderMudiiiHtml: each scenario carries its own board size, and the page r
   assert.deepEqual(data.scenarios.map((s) => s.gridSize), [10, 14]);
   assert.equal(data.gridSize, 10, "the page-level default is the opening square's own size");
   assert.match(html, /gridSizeOf = function \(\) \{ return scenario\(\)\.gridSize \|\| DATA\.gridSize; \}/);
-  assert.match(html, /mapDotsFor\(agentsList\(\), itemsList\(\), gridSizeOf\(\)\)/, "the map panel scales to the picked square");
+  assert.match(html, /const size = gridSizeOf\(\);[\s\S]*mapDotsFor\(agentsList\(\), itemsList\(\), size\)/, "the map panel scales to the picked square");
 });
 
 test("renderMudiiiHtml: a scenario naming no board size falls back to the page default", () => {
@@ -177,7 +177,7 @@ test("renderMudiiiHtml: every tick calls window.mudiiiScene.applyTick with the r
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(
     html,
-    /callScene\("applyTick", \{ agents: result\.agents, items: result\.items, ecology: result\.ecology \}\)/,
+    /callScene\("applyTick", \{\s*agents: result\.agents, items: result\.items, ecology: result\.ecology, rungs: result\.rungs,\s*\}\)/,
   );
 });
 
@@ -269,7 +269,46 @@ test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absen
   assert.doesNotMatch(html, /id="shareBtn"/);
   assert.doesNotMatch(html, /id="joinOpenBtn"/);
   assert.doesNotMatch(html, /wave-btn/);
-  assert.doesNotMatch(html, /dir-ring/, "the compass ring dies with the free camera");
+});
+
+test("renderMudiiiHtml: the ring walks the followed agent, and every press spends a whole-world turn", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<div class="dir-ring" id="driveRing"/);
+  for (const point of ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]) {
+    assert.match(html, new RegExp(`data-drive="${point}"`), `the ring carries ${point}`);
+  }
+  assert.match(html, /await session\.driveAgent\(followed, direction\)/);
+  assert.match(html, /the whole square moved with it/, "the status says a press cost a turn, so it never reads as a free nudge");
+  assert.match(html, /the turn was spent anyway/, "a refused press cost the same turn");
+  assert.match(html, /ring\.hidden = !followed;/, "with nobody followed there is nothing to walk and no facing to show");
+});
+
+test("renderMudiiiHtml: the ring lights one glyph, and it is the followed agent's own facing", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /data-drive="north" title="walk north" aria-label="walk north" aria-pressed="false">▲ N</);
+  assert.match(html, /data-drive="east"[^>]*>E ▶</);
+  assert.match(html, /data-drive="northwest"[^>]*>↖</);
+  assert.match(
+    html,
+    /buttons\[i\]\.getAttribute\("data-drive"\) === facing \? "true" : "false"/,
+    "exactly the facing glyph is lit, never every step the board happens to grant",
+  );
+  assert.match(html, /\.dir-pill\[aria-pressed="true"\] \{/, "and the lit glyph has a rule to show it with");
+});
+
+test("renderMudiiiHtml: an unarmed ground click walks toward the cell along the world's own exits", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /if \(!foodArmed\) \{ walkFollowedTo\(cellId\); return; \}/, "the click no longer dead-ends when nothing is armed");
+  assert.match(html, /callScene\("flashCell", target\)/);
+  assert.match(html, /routeBetweenCells\(snap\.rows, from, target\)/, "the route is the exit table's answer, not a straight line");
+  assert.match(html, /callScene\("clearRoute"\);\s*setSceneStatus\("no way through to "/, "an unreachable cell is declined visibly");
+  assert.match(html, /callScene\("showRoute", route\.cells\)/);
+  assert.match(html, /await drivePress\(route\.directions\[0\]\)/, "and the first step is taken through the same drive path");
+});
+
+test("clipForAction: a hand-driven step walks rather than falling to idle", () => {
+  assert.equal(clipForAction("predator", "driven", { idle: "Idle", walk: "Walk", run: "Run" }), "Walk");
+  assert.equal(clipForAction("prey", "driven", { idle: "Idle", walk: "Walk" }), "Walk");
 });
 
 test("renderMudiiiHtml: the board opens playing, and a reduced-motion visitor gets it drawn but still", () => {
@@ -290,11 +329,16 @@ test("renderMudiiiHtml: a reset draws its own cast and starts it, so the deck's 
   const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.match(bootBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
     "a reboot stops whatever was running before it draws anything");
-  assert.match(
-    html,
-    /el\("resetBtn"\)\.addEventListener\("click", function \(\) \{ boot\(\); \}\)/,
-    "reset is the same boot path, so it lands on the same play state",
-  );
+  assert.match(html, /el\("resetBtn"\)\.addEventListener\("click", function \(\) \{ resetBoard\(\); \}\)/);
+  const resetBlock = /async function resetBoard\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(resetBlock, "reset has its own path");
+  assert.match(resetBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
+    "a re-cast stops whatever was running before it draws anything");
+  assert.match(resetBlock[1], /session\.recast\(\{ agents: cast \}\)/,
+    "the live store is re-cast rather than thrown away with everything taught into it");
+  assert.match(resetBlock[1], /if \(!prefersReducedMotion\(\)\) \{\s*autoOn = true;\s*ensureTicker\(\)\.play\(\);/,
+    "and it lands on the same play state a fresh boot does");
+  assert.match(resetBlock[1], /if \(!session\) return boot\(\);/, "with nothing open there is nothing to re-cast");
 });
 
 test("renderMudiiiHtml: the page script has no Math.random — two loads of a square cast identically", () => {
@@ -409,12 +453,128 @@ test("renderMudiiiHtml: exactly the three splice-safe functions are spliced unde
   assert.doesNotMatch(html, /const pillCompleteMarkup = /, "pillCompleteMarkup runs once at render time, never spliced");
 });
 
-test("renderMudiiiHtml: pill buttons carry data-command, so the rail promotes to createPillComplete's combobox", () => {
+test("renderMudiiiHtml: claim pills carry data-command, so the rail promotes to createPillComplete's combobox", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /'<button type="button" class="pill" data-command="' \+ esc\(p\.command\)/, "renderChatPills stamps data-command on every pill");
+  assert.match(html, /data-role="dyn-claim"/, "the deception rail renders claim pills");
+  assert.match(html, /data-command="/, "a claim pill carries the sentence it submits");
+});
+
+test("renderMudiiiHtml: address pills switch the addressee and carry no submittable command", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /data-role="dyn-addr"/);
+  assert.match(html, /selectedAddresseeId = btn\.getAttribute\("data-id"\)/, "clicking an address pill only moves the rail's own addressee");
+  assert.match(html, /pillsForMudiii\(agentsById, itemsById, selectedAddresseeId/, "the rail is the engine's own pure function, never a page reimplementation");
+});
+
+test("renderMudiiiHtml: a true and a false claim pill are told apart by a CSS glyph, never by the submitted text", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /\.pill\[data-role="dyn-claim"\]\[data-truth="true"\]::before \{ content: "\\2713 "/);
+  assert.match(html, /\.pill\[data-role="dyn-claim"\]\[data-truth="false"\]::before \{ content: "\\2715 "/);
+  assert.match(html, /\[data-truth="false"\] \{ border-style: dashed; border-color: var\(--alert\); \}/);
+});
+
+test("renderMudiiiHtml: the rail seeds only verbs mudiii-turn.mjs actually parses, and never 'look'", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const SEED_COMMANDS = \["tick", "what does the fox see", "where is the goblin", "what can I do"\]/);
+  assert.doesNotMatch(html, /command: "look"/, "the town square has no look verb");
+  assert.doesNotMatch(html, /"@" \+ id \+ " look"/, "and no per-agent look either");
+});
+
+test("renderMudiiiHtml: the map panel draws its grid, its buildings and a key for the colours", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const mapBlocksFor = /, "the block geometry is spliced beside the dot geometry");
+  assert.match(html, /blocks\.map[\s\S]*class="map-block"[\s\S]*\+ dots\.map/, "blocks are drawn before dots, so a dot sits on top of a building");
+  assert.match(html, /setProperty\("--map-cell-pct", \(100 \/ size\) \+ "%"\)/, "the drawn grid is stepped by the live board size");
+  assert.match(html, /repeating-linear-gradient\(90deg, rgba\(233,217,182,\.22\) 0 1px, transparent 1px var\(--map-cell-pct\)\)/);
+  assert.match(html, /class="map-legend"/);
+  assert.match(html, /map-swatch map-swatch-predator/);
+  assert.match(html, /map-swatch map-swatch-prey/);
+  assert.match(html, /map-swatch map-swatch-food/);
+  assert.doesNotMatch(html, /class="map-dot[^"]*"><\/i>/, "the legend uses plain swatches, never the absolutely-positioned dot class");
+});
+
+test("renderMudiiiHtml: the map names the cast beside each dot, and leaves items to the key", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /if \(d\.kind !== "predator" && d\.kind !== "prey"\) return dot;/);
+  assert.match(html, /'<span class="map-label mono' \+ side \+ '" style="left:/);
+  assert.match(html, /\.map-label \{[\s\S]*pointer-events: none;/, "a label never steals a click meant for the board");
+});
+
+test("renderMudiiiHtml: the map is a square minimap on a wide window, not half the deck", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/, "the square the dot percentages assume");
+  assert.match(
+    html,
+    /@media \(min-width: 901px\) \{\s*\.deck \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 240px;/,
+    "a percentage has no ceiling, so a wide viewport gets an absolute size",
+  );
+  assert.match(html, /\.map-panel \{ grid-column: 2; grid-row: 2 \/ 4;/, "and the map stands beside the sliders and the camera row at once");
+});
+
+test("renderMudiiiHtml: a map label near the right edge hangs to the left of its dot", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const side = d\.xPct > 70 \? " map-label-left" : "";/);
+  assert.match(html, /\.map-label-left \{ margin-left: -\.3rem; transform: translateX\(-100%\); \}/);
+});
+
+test("renderMudiiiHtml: the eyebrow is the shared demo nav, not a bare page name", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<h1 class="eyebrow"><span class="eyebrow-links">/);
+  assert.match(html, /<a href="\.\/index\.html">tmct<\/a>/);
+  assert.match(html, /<a href="\.\/mudiii\.html">mudiii<\/a>/);
+  assert.match(html, /<a href="\.\/mudiii-about\.html">about<\/a>/);
+  assert.match(html, /\.eyebrow-links a \{ color: inherit; text-decoration: none; \}/);
+});
+
+test("renderMudiiiHtml: the deck carries a teach box, hinting a sentence this square can parse", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<input type="checkbox" id="teachToggle">/);
+  assert.match(html, /The fox is at cell-3-4\./, "the hint is the town square's own vocabulary");
+  assert.doesNotMatch(html, /lies in the garden/, "never the manor's sentence, which this lane cannot read");
+  assert.match(html, /getTeachEnabled: function \(\) \{ return el\("teachToggle"\)\.checked; \}/, "read fresh, so ticking it mid-session lands on the next line");
+});
+
+test("renderMudiiiHtml: the chat placeholder is a line the town square can read", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /placeholder="@fox the goblin is east"/);
+});
+
+test("renderMudiiiHtml: a pill click appends to the input rather than replacing what is typed", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /function appendToChatInput/);
+  assert.match(html, /input\.value = \(head \? head \+ " " : ""\) \+ text;/, "the new text lands after a separating space");
+  assert.doesNotMatch(html, /chatInput"\)\.value = btn\.textContent/, "no rail on this page overwrites the input the way adventure's and mud's do");
 });
 
 // ---- edit mode reuses mud-editor.mjs -----------------------------------
+
+test("renderMudiiiHtml: the editor's suggestion rail is populated and wired, not dead markup", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const wordBeforeCursor = /);
+  assert.match(html, /function renderSuggestionPills\(\)/);
+  assert.match(html, /el\("editorPills"\)\.addEventListener\("click"/, "clicking a suggestion inserts it");
+  assert.match(html, /function onEditorChanged\(\) \{ scheduleSuggestions\(\); scheduleSync\(\); \}/);
+  assert.match(html, /el\("editorText"\)\.addEventListener\("input", onEditorChanged\);/);
+  assert.doesNotMatch(html, /addEventListener\("input", scheduleSync\)/, "the bare sync-only listener is gone");
+  assert.match(html, /renderSuggestionPills\(\);\s*renderEditPlacements\(\);/, "the rail is drawn once on entering edit mode");
+});
+
+test("renderMudiiiHtml: an edit reboots the 3D scene and puts back the camera and the cast", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /async function rebuildSceneFromEdit\(result\)/);
+  assert.match(html, /props = propPlacementsFrom\(editRows, DATA\.assetManifest\);/, "the meshes are rebuilt from the edited facts");
+  assert.match(
+    html,
+    /if \(result && \(result\.added \|\| result\.removed\)\) \{\s*applyTickResult\(await session\.recast\(\{ agents: cast \}\)\);/,
+    "an edit that moved a building re-casts onto the edited board; one that changed nothing leaves the animals alone",
+  );
+  assert.match(
+    html,
+    /await callScene\("boot",[\s\S]*?\);\s*callScene\("setCamera", camera\);\s*callScene\("applyTick", \{ agents: agentsById, items: itemsById, ecology: \[\] \}\);/,
+    "boot resets the camera and clears the agent groups, so both are restored right after it",
+  );
+  assert.match(html, /await rebuildSceneFromEdit\(result\);/);
+});
 
 test("renderMudiiiHtml: edit mode reuses mud-editor.mjs's renderMudEditorText unchanged", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
@@ -625,6 +785,30 @@ test("mapDotsFor: an entry with no parseable cell is dropped, never drawn at a g
   assert.deepEqual(dots, []);
 });
 
+// ---- mapBlocksFor ----------------------------------------------------------
+
+test("mapBlocksFor: one block per prop, filling its cell from the cell's own corner", () => {
+  const blocks = mapBlocksFor([{ id: "well-1", cell: "cell-2-9" }], GRID_SIZE);
+  assert.deepEqual(blocks, [{
+    id: "well-1",
+    xPct: (1 / GRID_SIZE) * 100,
+    yPct: (8 / GRID_SIZE) * 100,
+    sizePct: 100 / GRID_SIZE,
+  }]);
+});
+
+test("mapBlocksFor: a block's corner sits half a cell before the dot that shares its cell", () => {
+  const [block] = mapBlocksFor([{ id: "well-1", cell: "cell-4-4" }], GRID_SIZE);
+  const [dot] = mapDotsFor([{ id: "fox-1", role: "predator", cell: "cell-4-4" }], [], GRID_SIZE);
+  assert.ok(Math.abs((dot.xPct - block.xPct) - block.sizePct / 2) < 1e-9, "the dot is centred on the cell the block fills");
+  assert.ok(Math.abs((dot.yPct - block.yPct) - block.sizePct / 2) < 1e-9);
+});
+
+test("mapBlocksFor: a placement with no parseable cell is dropped, never drawn at a guessed position", () => {
+  assert.deepEqual(mapBlocksFor([{ id: "well-1", cell: null }, { id: "cart-1" }], GRID_SIZE), []);
+  assert.deepEqual(mapBlocksFor([{ id: "well-1", cell: "cell-1-1" }], 0), []);
+});
+
 // ---- hudCardFieldsFor ------------------------------------------------------
 
 test("hudCardFieldsFor: scales mass against the role's own initial mass, from the resolved mudiii config", () => {
@@ -687,4 +871,28 @@ test("agentCardMarkup: one card's whole markup, keyed on the slot alone, charact
   assert.match(html, /id="hud-2-goal"/);
   assert.match(html, /id="hud-2-plan"/);
   assert.match(html, /id="hud-2-belief"/);
+});
+
+test("agentCardMarkup: the belief line sits inside a button that controls its own detail panel", () => {
+  const html = agentCardMarkup("2");
+  assert.match(html, /<button type="button" class="hud-belief-toggle" id="hud-2-belief-toggle"/);
+  assert.match(html, /aria-expanded="false" aria-controls="hud-2-detail"/);
+  assert.match(html, /<div class="hud-detail mono" id="hud-2-detail" hidden><\/div>/);
+  assert.match(html, /aria-controls="hud-2-detail"[\s\S]*id="hud-2-belief"/, "the summary id the HUD writes into is kept, inside the toggle");
+});
+
+test("renderMudiiiHtml: which belief panel is open is keyed on the agent id, never left in the DOM", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const expandedAgents = new Set\(\);/);
+  assert.match(html, /const id = card && card\.getAttribute\("data-agent"\);/, "the toggle reads the agent off the card, not the slot");
+  assert.match(html, /if \(expandedAgents\.has\(id\)\) expandedAgents\.delete\(id\); else expandedAgents\.add\(id\);/, "the set is keyed on that id");
+  assert.match(html, /const expanded = expandedAgents\.has\(id\);/, "and every render re-applies it");
+});
+
+test("renderMudiiiHtml: the belief summary is capped, and the full list comes from believedFactSentence", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const BELIEF_SUMMARY_LIMIT = 3;/);
+  assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
+  assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
+  assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
 });

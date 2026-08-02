@@ -259,6 +259,241 @@ test("pausing and pressing play again moves at least one agent and advances the 
   }
 });
 
+test("every pill on the chat rail submits a line the town square can actually read", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+
+    const commands = await page.$$eval(
+      "#chatPills .pill",
+      (pills) => pills.map((p) => p.getAttribute("data-command")).filter(Boolean),
+    );
+    assert.ok(commands.length >= 4, "the rail offers the square's own verbs alongside its claim pills");
+    assert.ok(commands.includes("tick"), "the one verb that advances the world is on the rail");
+
+    // Address pills carry no command — they move the rail's own addressee —
+    // so they are clicked for their own sake rather than for an answer.
+    const addressCount = await page.locator('#chatPills [data-role="dyn-addr"]').count();
+    assert.ok(addressCount > 0, "the rail says who a claim is addressed to");
+    for (let i = 0; i < addressCount; i += 1) {
+      await page.locator('#chatPills [data-role="dyn-addr"]').nth(i).click();
+      assert.equal(
+        await page.locator("#chatInput").inputValue(),
+        "",
+        "an address pill switches the addressee and types nothing",
+      );
+    }
+
+    for (const command of commands) {
+      await page.fill("#chatInput", "");
+      const answered = await page.locator("#chatLog .a").count();
+      const pill = page.locator(`#chatPills [data-command="${command}"]`);
+      // The rail redraws after every submitted line, so a claim about a cell
+      // an agent has since left is gone by the time its turn comes round —
+      // typed instead, because the point is whether the LINE reads, not
+      // whether that one button survived.
+      if (await pill.count()) await pill.first().dblclick();
+      else {
+        await page.fill("#chatInput", command);
+        await page.locator("#chatInput").press("Enter");
+      }
+      await page.waitForFunction(
+        (n) => document.querySelectorAll("#chatLog .a").length > n,
+        answered,
+        { timeout: TICK_TIMEOUT_MS },
+      );
+      const answer = await page.locator("#chatLog .a").last().textContent();
+      assert.doesNotMatch(answer, /couldn't read a position/i, `the rail offers "${command}", which the lane cannot read`);
+      assert.doesNotMatch(answer, /^I'm tmct\b/, `the rail offers "${command}", which falls through to the generic decline`);
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error working the whole pill rail");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a single pill click appends to what is already typed, so two clicks compose one line", async () => {
+  const { context, page, consoleErrors } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    await page.fill("#chatInput", "");
+    const first = page.locator("#chatPills [data-command]").first();
+    const firstText = await first.getAttribute("data-command");
+    await first.click();
+    assert.equal(await page.locator("#chatInput").inputValue(), firstText, "the first click fills an empty field");
+
+    const second = page.locator("#chatPills [data-command]").nth(1);
+    const secondText = await second.getAttribute("data-command");
+    await second.click();
+    assert.equal(
+      await page.locator("#chatInput").inputValue(),
+      `${firstText} ${secondText}`,
+      "the second click appends after a separating space rather than replacing",
+    );
+
+    assert.deepEqual(consoleErrors, [], "no console error composing a line from two pills");
+  } finally {
+    await context.close();
+  }
+});
+
+test("an expanded belief panel stays with its own agent across two ticks, not with the card slot", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    // A belief only exists once someone has seen something, so the board runs
+    // until at least one card has a toggle to press.
+    await page.waitForFunction(
+      () => [...document.querySelectorAll("#hudRow .hud-belief-toggle")].some((b) => !b.hidden),
+      null,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+
+    const expandedId = await page.evaluate(() => {
+      const toggle = [...document.querySelectorAll("#hudRow .hud-belief-toggle")].find((b) => !b.hidden);
+      const card = toggle.closest(".hud-card");
+      toggle.click();
+      return card.getAttribute("data-agent");
+    });
+    assert.ok(expandedId, "a card with a belief was opened");
+
+    const detailOf = (id) => page.evaluate((agent) => {
+      const card = document.querySelector(`#hudRow .hud-card[data-agent="${agent}"]`);
+      if (!card) return null;
+      return {
+        expanded: card.querySelector(".hud-belief-toggle").getAttribute("aria-expanded"),
+        detailHidden: card.querySelector(".hud-detail").hidden,
+        lines: card.querySelectorAll(".hud-detail-line").length,
+      };
+    }, id);
+
+    const opened = await detailOf(expandedId);
+    assert.equal(opened.expanded, "true", "the toggle reports itself open");
+    assert.equal(opened.detailHidden, false, "and the panel under it is showing");
+    assert.ok(opened.lines > 0, "with one sentence per thing that agent believes");
+
+    const startedAt = await turnCountOf(page);
+    await page.locator("#autoToggle").click();
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) >= n;
+      },
+      startedAt + 2,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+
+    const after = await detailOf(expandedId);
+    if (after) {
+      assert.equal(after.expanded, "true", "two ticks later the same agent's panel is still open");
+      assert.equal(after.detailHidden, false);
+    }
+    const openedElsewhere = await page.evaluate((agent) => [...document.querySelectorAll("#hudRow .hud-card")]
+      .filter((c) => c.getAttribute("data-agent") !== agent)
+      .filter((c) => c.querySelector(".hud-belief-toggle").getAttribute("aria-expanded") === "true")
+      .map((c) => c.getAttribute("data-agent")), expandedId);
+    assert.deepEqual(openedElsewhere, [], "and no other agent inherited the open state through its card slot");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error expanding a belief panel");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a ring press walks the followed agent and spends a whole-world turn", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    const followed = await page.locator("#agentSelect").inputValue();
+    assert.ok(followed, "someone is followed by default");
+
+    const before = await turnCountOf(page);
+    const cellsBefore = await agentCellsOf(page);
+    // Press every point on the ring in turn: some are refused by the board,
+    // and a refusal must still cost a turn rather than doing nothing at all.
+    const points = await page.$$eval("#driveRing [data-drive]", (btns) => btns.map((b) => b.dataset.drive));
+    assert.deepEqual(
+      points,
+      ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"],
+      "the ring names all eight compass points, clockwise from north",
+    );
+
+    await page.locator('#driveRing [data-drive="north"]').click();
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) > n;
+      },
+      before,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    assert.ok(await turnCountOf(page) > before, "the press spent a turn");
+    assert.match(
+      await page.locator("#sceneStatus").textContent(),
+      /the whole square moved with it|the turn was spent anyway/,
+      "and the status says so, so the ring never reads as a free nudge",
+    );
+
+    const cellsAfter = await agentCellsOf(page);
+    const anyoneMoved = Object.keys(cellsBefore).some((id) => cellsBefore[id] !== cellsAfter[id]);
+    assert.ok(anyoneMoved, "the rest of the board decided and moved on that same turn");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error driving an agent by hand");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking the ground with nothing armed heads the followed agent that way, along a route the board allows", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await page.waitForFunction(
+      () => window.mudiiiScene && typeof window.mudiiiScene.ready === "function" && window.mudiiiScene.ready(),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+    assert.equal(await page.locator("#foodPill").getAttribute("aria-pressed"), "false", "nothing is armed");
+
+    const before = await turnCountOf(page);
+    const box = await page.locator("#sceneCanvas").boundingBox();
+    await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.62);
+
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) > n;
+      },
+      before,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+
+    const route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
+    const status = await page.locator("#sceneStatus").textContent();
+    if (route.length) {
+      assert.ok(route.length >= 2, "a drawn route runs from the agent to the cell");
+      for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
+      // Every hop is one orthogonal step, which is what "along the board's own
+      // exits" means — a straight segment would jump diagonally through walls.
+      for (let i = 1; i < route.length; i += 1) {
+        assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
+      }
+    } else {
+      assert.match(status, /no way through to/, "an unreachable cell is declined visibly, never drawn");
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error clicking the ground unarmed");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the 3D scene canvas boots without a console error, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

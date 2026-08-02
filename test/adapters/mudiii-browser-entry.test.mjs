@@ -9,7 +9,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster, driveRequest } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
+import {
+  createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster, driveRequest, routeBetweenCells,
+} from "../../src/surfaces/web/mudiii-browser-entry.mjs";
 import { roleOfId, foldTownSquareState } from "../../src/services/predator-prey.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "../../src/services/mud-editor.mjs";
 import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
@@ -197,4 +199,36 @@ test("pickMudiiiRoster draws without repeats and never more than the pool holds"
   const drawn = pickMudiiiRoster(["fox-1", "fox-2", "fox-3"], { count: 5, random: () => 0 });
   assert.equal(drawn.length, 3);
   assert.equal(new Set(drawn).size, 3);
+});
+
+test("teaching is off unless the page says otherwise, and the flag is read fresh every turn", async () => {
+  let teaching = false;
+  const session = await createMudiiiSession(worldPayload, {
+    agents: ["fox-1", "goblin-1"], epoch: 0, getTeachEnabled: () => teaching,
+  });
+  const before = await session.turn("The fox is at cell-3-4.");
+  assert.doesNotMatch(before.answer, /noted|stored|wrote/i, "with teaching off the square does not take the sentence as a fact");
+
+  teaching = true;
+  const after = await session.turn("The fox is at cell-3-4.");
+  assert.notEqual(after.answer, before.answer, "ticking the box mid-session changes what the very next line means");
+  const state = foldTownSquareState(readFactRows(await loadMemory(session.memoryDir)));
+  assert.equal(state.placements.get("fox-1").cell, "cell-3-4", "the taught cell is where the fox now stands");
+});
+
+test("routeBetweenCells walks the world's own exit facts, and returns one direction per hop", async () => {
+  const route = routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-4-2");
+  assert.ok(route, "two open cells on the same row are connected");
+  assert.equal(route.cells[0], "cell-2-2");
+  assert.equal(route.cells[route.cells.length - 1], "cell-4-2");
+  assert.equal(route.directions.length, route.cells.length - 1, "one direction per hop between the cells");
+  for (const direction of route.directions) {
+    assert.ok(["north", "south", "east", "west"].includes(direction), `${direction} is a step the board grants`);
+  }
+});
+
+test("routeBetweenCells declines rather than drawing a route to a cell nothing reaches", async () => {
+  assert.equal(routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-99-99"), null);
+  assert.equal(routeBetweenCells(worldPayload.facts, "not-a-cell", "cell-2-2"), null);
+  assert.equal(routeBetweenCells([], "cell-2-2", "cell-4-2"), null, "no exit facts, no route");
 });

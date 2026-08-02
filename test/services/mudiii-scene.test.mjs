@@ -315,6 +315,57 @@ test("mudiiiSceneScript ships a one-shot clip player and an e2e-observable remov
   );
 });
 
+test("mudiiiSceneScript hangs each agent's id above it as a screen-sized billboard sprite", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /function makeAgentLabel\(id, height\)/);
+  assert.match(script, /new THREE\.CanvasTexture\(canvas\)/, "the id is drawn to a canvas rather than loaded as an asset");
+  assert.match(script, /sizeAttenuation: false/, "the label holds one size on screen however far the camera pulls back");
+  assert.match(script, /sprite\.scale\.set\(LABEL_SCREEN_WIDTH, LABEL_SCREEN_WIDTH \/ 4, 1\)/, "the scale is chosen, not left to a default");
+  assert.match(script, /sprite\.position\.y = height \+ 0\.3;/, "it sits just above the model's own top");
+  assert.match(script, /entry\.group\.add\(makeAgentLabel\(id, asset \? asset\.targetHeight : 1\)\)/, "parented to the group, so it rides the movement tween");
+});
+
+test("mudiiiSceneScript measures a mesh through the loaded model, never the group the label also sits in", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /if \(!entry \|\| !entry\.model\) return null;\s*var box = new THREE\.Box3\(\)\.setFromObject\(entry\.model\);/);
+  assert.match(script, /entry\.model = gltf\.scene;/);
+});
+
+test("mudiiiSceneScript holds a one-shot flourish long enough to read, without holding the turn", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /var ONE_SHOT_HOLD_MIN_MS = 450;/, "a floor, for a clip shorter than one tick");
+  assert.match(
+    script,
+    /entry\.oneShotUntil = performance\.now\(\)\s*\+ Math\.max\(ONE_SHOT_HOLD_MIN_MS, clip && clip\.duration \? clip\.duration \* 1000 : 0\)/,
+    "a longer clip gets its own length rather than being cut to the floor",
+  );
+  assert.match(script, /if \(performance\.now\(\) < entry\.oneShotUntil\) return;/, "nothing may fade the flourish out inside the hold");
+  const applyAgentTick = /function applyAgentTick\([\s\S]*?\n  \}/.exec(script)[0];
+  assert.match(applyAgentTick, /entry\.tween = reseedTween/, "the agent still moves on a tick that lands inside a hold");
+  assert.doesNotMatch(applyAgentTick, /oneShotUntil/, "the hold lives in the clip player, never in the movement path");
+});
+
+test("mudiiiSceneScript draws a clicked cell's route along the board's own cells, never a straight segment", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /function showRoute\(cells\)/);
+  assert.match(script, /for \(var i = 0; i < cells\.length; i \+= 1\)[\s\S]*cellToWorld\(cells\[i\]/, "one point per cell the search returned");
+  assert.match(script, /function flashCell\(cell\)/);
+  assert.match(script, /flashUntil = performance\.now\(\) \+ FLASH_MS;/, "the flash times itself out rather than lingering");
+  assert.match(script, /routeCellsDrawn:/, "the drawn route is readable for an e2e assertion");
+  assert.match(script, /clearRoute\(\);\s*clearFlash\(\);/, "a reboot leaves no route or flash from the old world behind");
+});
+
+test("mudiiiSceneScript plays a walk for a hand-driven step, whatever that agent believes", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /tickRungs = \(tick && tick\.rungs\) \|\| \{\};/, "the tick's own decision per agent reaches the clip choice");
+  assert.match(script, /moving && tickRungs\[id\] === "driven" \? "driven" : currentActionFor\(/);
+});
+
 test("mudiiiSceneScript falls back to a default grid size and cell size for missing/invalid opts", async () => {
   const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
   const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus" });
