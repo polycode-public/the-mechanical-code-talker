@@ -579,13 +579,25 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
     await page.waitForTimeout(600);
 
     const before = await turnCountOf(page);
+    const standing = (await agentCellsOf(page))[firstAgent];
     const box = await page.locator("#sceneCanvas").boundingBox();
-    await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.62);
+    // The overhead camera looks straight down at the middle of the board, so
+    // the whole square draws as a square centred on the canvas — and its size
+    // is set by the canvas's HEIGHT, about two thirds of it across, whatever
+    // the width happens to be. The 3D stage is far wider than it is tall, so a
+    // click placed by a fraction of the WIDTH lands on the sky beside the
+    // board and the ray hits no ground at all.
+    const reach = box.height * 0.22;
+    await page.mouse.click(box.x + box.width / 2 + reach, box.y + box.height / 2 + reach);
 
+    // Either answer ends the click, and only one of them spends a turn: a
+    // route walks its first step, and a cell with nothing leading to it is
+    // declined on the spot.
     await page.waitForFunction(
       (n) => {
         const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
-        return m && Number(m[0]) > n;
+        return (m && Number(m[0]) > n)
+          || /no way through to/.test(document.querySelector("#sceneStatus")?.textContent ?? "");
       },
       before,
       { timeout: TICK_TIMEOUT_MS },
@@ -594,7 +606,9 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
     const route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
     const status = await page.locator("#sceneStatus").textContent();
     if (route.length) {
+      assert.ok(await turnCountOf(page) > before, "walking the route's first step spends a whole-world turn");
       assert.ok(route.length >= 2, "a drawn route runs from the agent to the cell");
+      assert.equal(route[0], standing, "and it starts where the followed agent was standing");
       for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
       // Every hop is one orthogonal step, which is what "along the board's own
       // exits" means — a straight segment would jump diagonally through walls.
