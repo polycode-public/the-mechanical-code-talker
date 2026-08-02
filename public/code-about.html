@@ -36,20 +36,20 @@
       <p class="lede">Point it at a code graph and ask about the code in English. Imports, calls, members, reverse dependencies. Ask a follow-up with &ldquo;it&rdquo; and it still knows what you meant.</p>
     </header>
 
-      <section class="about-section" id="what">
-        <h2>What it demonstrates</h2>
-        <p>This is retrieval over a codebase without an embedding model. The graph carries typed edges, and a question resolves to a walk over them.</p>
-        <p>The page opens on a demo graph built from a small fixture app that ships in the repository. You can open your own graph file, or point it at a repository.</p>
-        <p>The left panel lists the facts around whatever term is in focus. The right panel is the conversation, with suggested follow-up questions underneath.</p>
-        <p>The thing to demonstrate is the follow-up. Ask what talks to a module, then ask &ldquo;what calls it?&rdquo; without naming anything. The pronoun binds to the last resolved answer. Ask the same question cold and it tells you the pronoun resolved to nothing.</p>
-        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>This is retrieval over a codebase without an embedding model. The graph carries typed edges, and a question resolves to a walk over them.</p>
+      <p>The page opens on a demo graph built from a small fixture app that ships in the repository. You can open your own graph file, or point it at a repository.</p>
+      <p>The left panel lists the facts around whatever term is in focus. The right panel is the conversation, with suggested follow-up questions underneath.</p>
+      <p>The thing to demonstrate is the follow-up. Ask what talks to a module, then ask &ldquo;what calls it?&rdquo; without naming anything. The pronoun binds to the last resolved answer. Ask the same question cold and it tells you the pronoun resolved to nothing.</p>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="play">
-        <h2>Chat you can replay</h2>
-        <p>The first exchange below was captured by running the command line against the fixture app in this repository. The rest are assertions in the tool-layer test file.</p>
-        <p>Two turns, one pronoun. The trace lines are the engine's own.</p>
-        <pre class="transcript"><span class="you">tmct&gt; what talks to store.mjs?</span>
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>The first exchange below was captured by running the command line against the fixture app in this repository. The rest are assertions in the tool-layer test file.</p>
+      <p>Two turns, one pronoun. The trace lines are the engine's own.</p>
+      <pre class="transcript"><span class="you">tmct&gt; what talks to store.mjs?</span>
 src/handlers/tasks.mjs and src/handlers/users.mjs.
 <span class="cite">Goal (inferred): Understand a dependency/usage relationship (imports and/or calls).</span>
 <span class="cite">Canonical: uses "store.mjs" — reverse(uses, "store.mjs")</span>
@@ -57,86 +57,86 @@ src/handlers/tasks.mjs and src/handlers/users.mjs.
 src/handlers/tasks.mjs.
 <span class="cite">Goal (inferred): Understand a call relationship.</span>
 <span class="cite">Canonical: calls "it" — reverse(calls, "it")</span></pre>
-        <p class="source-note">Captured by running <code>tmct chat --repo examples/mini-webapp --ephemeral</code> in this repository.</p>
-        <p>A yes/no question answers with the edge it found, named.</p>
-        <pre class="transcript"><span class="you">tmct&gt; does myFile import logging</span>
+      <p class="source-note">Captured by running <code>tmct chat --repo examples/mini-webapp --ephemeral</code> in this repository.</p>
+      <p>A yes/no question answers with the edge it found, named.</p>
+      <pre class="transcript"><span class="you">tmct&gt; does myFile import logging</span>
 Yes — imports edge from myFile.mjs to src/logging.mjs.</pre>
-        <p class="source-note">Asserted as an exact string in <code>test/tools/ask.test.mjs</code>.</p>
-        <p>Direct and transitive are different questions, and it treats them that way.</p>
-        <pre class="transcript"><span class="you">tmct&gt; which modules import logging</span>
+      <p class="source-note">Asserted as an exact string in <code>test/tools/ask.test.mjs</code>.</p>
+      <p>Direct and transitive are different questions, and it treats them that way.</p>
+      <pre class="transcript"><span class="you">tmct&gt; which modules import logging</span>
 myFile.mjs, src/someOtherFile.mjs
 <span class="you">tmct&gt; which modules transitively import logging</span>
 myFile.mjs, src/someOtherFile.mjs, app/entrypoint.mjs
 <span class="cite">traversal: reverse dependency closure</span></pre>
-        <p class="source-note">Asserted in <code>test/tools/ask.test.mjs</code>. The two hop result is the extra one.</p>
-        <p>When a class has no recorded members, it moves up to the module rather than claiming nothing calls it.</p>
-        <pre class="transcript"><span class="you">tmct&gt; who calls Router</span>
-(refined up to the containing module rather than answering "nothing")</pre>
-        <p class="source-note">Asserted in <code>test/tools/ask.test.mjs</code>. A false &ldquo;nothing calls it&rdquo; would be a confident wrong answer, which is the thing this project is built to avoid.</p>
-        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+      <p class="source-note">Asserted in <code>test/tools/ask.test.mjs</code>. The two hop result is the extra one.</p>
+      <p>When a class has no recorded members, it moves up to the module rather than claiming nothing calls it.</p>
+      <pre class="transcript"><span class="you">tmct&gt; who calls Router</span>
+<span class="cite">it refines up to the containing module rather than answering "nothing"</span></pre>
+      <p class="source-note">Asserted in <code>test/tools/ask.test.mjs</code>. A false &ldquo;nothing calls it&rdquo; would be a confident wrong answer, which is the thing this project is built to avoid.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="shots">
-        <h2>What it looks like</h2>
-        <p>The facts panel on the left, the conversation on the right.</p>
-        <figure class="shot">
-          <img src="./screenshots/code.png" width="1024" height="600" alt="The tmct code explorer page showing imports, calls and members around a symbol of the demo code graph with a chat dock alongside" loading="lazy">
-          <figcaption>code.html. Imports, calls and members around one symbol, with the conversation alongside.</figcaption>
-        </figure>
-        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The facts panel on the left, the conversation on the right.</p>
+      <figure class="shot">
+        <img src="./screenshots/code.png" width="1024" height="600" alt="The tmct code explorer page showing imports, calls and members around a symbol of the demo code graph with a chat dock alongside" loading="lazy">
+        <figcaption>code.html. Imports, calls and members around one symbol, with the conversation alongside.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="inference">
-        <h2>What it works out</h2>
-        <p><strong>What the graph carries.</strong> Typed edges, not text similarity: <code>imports</code>, <code>calls</code>, <code>defines</code>, <code>tests</code>, <code>touches</code>, <code>contains</code>, <code>inherits</code>, <code>callsSymbol</code>, <code>touchesSymbol</code>, plus a derived co-change edge.</p>
-        <p><strong>How a question resolves.</strong> Four steps. Parse the sentence into a query. Resolve the terms in it against the graph. Walk the edges. Render the answer. Each step can decline, and a decline produces a miss.</p>
-        <p>The walk handles more than one hop. It does forward relations, reverse closures for a transitive question, negation (&ldquo;which modules do not import logger&rdquo;), superlatives, and set anaphora, so &ldquo;count them&rdquo; after a list works.</p>
-        <p><strong>How the thread is carried.</strong> The session keeps the last resolved subject as a standing focus and passes it into every question. A pronoun binds to that focus. With no focus behind it, the pronoun resolves to nothing and the engine reports that, rather than picking whatever was nearest.</p>
-        <p><strong>What the vocabulary comes from.</strong> The graph's classes are SEON's code ontology: module, class, attribute, method. That is why a question like &ldquo;what is a module&rdquo; resolves against the same store as a question about your own code.</p>
-        <ul class="factlist">
-          <li>src/handlers/tasks.mjs   imports    store.mjs</li>
-          <li>src/handlers/tasks.mjs   calls      store.mjs</li>
-          <li>Router                   rdf:type   Class</li>
-        </ul>
-        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p><strong>What the graph carries.</strong> Typed edges, not text similarity: <code>imports</code>, <code>calls</code>, <code>defines</code>, <code>tests</code>, <code>touches</code>, <code>contains</code>, <code>inherits</code>, <code>callsSymbol</code>, <code>touchesSymbol</code>, plus a derived co-change edge.</p>
+      <p><strong>How a question resolves.</strong> Four steps. Parse the sentence into a query. Resolve the terms in it against the graph. Walk the edges. Render the answer. Each step can decline, and a decline produces a miss.</p>
+      <p>The walk handles more than one hop. It does forward relations, reverse closures for a transitive question, negation (&ldquo;which modules do not import logger&rdquo;), superlatives, and set anaphora, so &ldquo;count them&rdquo; after a list works.</p>
+      <p><strong>How the thread is carried.</strong> The session keeps the last resolved subject as a standing focus and passes it into every question. A pronoun binds to that focus. With no focus behind it, the pronoun resolves to nothing and the engine reports that, rather than picking whatever was nearest.</p>
+      <p><strong>What the vocabulary comes from.</strong> The graph's classes are SEON's code ontology: module, class, attribute, method. That is why a question like &ldquo;what is a module&rdquo; resolves against the same store as a question about your own code.</p>
+      <ul class="factlist">
+        <li>src/handlers/tasks.mjs   imports    store.mjs</li>
+        <li>src/handlers/tasks.mjs   calls      store.mjs</li>
+        <li>Router                   rdf:type   Class</li>
+      </ul>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="build">
-        <h2>How it is built</h2>
-        <p><code>src/domain/codegraph.mjs</code> parses entities into an in-memory graph. <code>src/adapters/graph-build.mjs</code> builds those entities from a repository.</p>
-        <p><code>src/domain/ask.mjs</code> is the question grammar and the traversal. It is the same module every other page's ask box goes through.</p>
-        <p><code>scripts/build-demo-graph.mjs</code> builds the deployed page's graph from a real committed fixture, <code>examples/mini-webapp/.tmct/graph.json</code>, and merges in the schema documents so vocabulary questions resolve too.</p>
-        <p><code>src/services/code-explorer-viz.mjs</code> renders the page. The desktop shell builds the identical page from the same function; the only difference on the web is a link back to the desktop build.</p>
-        <p><code>src/tools/</code> exposes the same engine as a tool surface, which is what <code>test/tools/ask.test.mjs</code> exercises: 125 assertions in about 0.4 seconds.</p>
-        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p><code>src/domain/codegraph.mjs</code> parses entities into an in-memory graph. <code>src/adapters/graph-build.mjs</code> builds those entities from a repository.</p>
+      <p><code>src/domain/ask.mjs</code> is the question grammar and the traversal. It is the same module every other page's ask box goes through.</p>
+      <p><code>scripts/build-demo-graph.mjs</code> builds the deployed page's graph from a real committed fixture, <code>examples/mini-webapp/.tmct/graph.json</code>, and merges in the schema documents so vocabulary questions resolve too.</p>
+      <p><code>src/services/code-explorer-viz.mjs</code> renders the page. The desktop shell builds the identical page from the same function; the only difference on the web is a link back to the desktop build.</p>
+      <p><code>src/tools/</code> exposes the same engine as a tool surface, which is what <code>test/tools/ask.test.mjs</code> exercises: 125 assertions in about 0.4 seconds.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="papers">
-        <h2>Related work</h2>
-        <p>The vocabulary and the retrieval model.</p>
-        <ul class="refs">
-          <li>SEON, <code>code.owl</code>, 2012/02.<span class="ref-note">The software engineering ontology the code classes come from. Not to be confused with the unrelated &ldquo;SEON: A Software Engineering Ontology Network&rdquo; by Ruy et al., a name collision the repository notes.</span></li>
-          <li>W3C, <em>OWL 2 Primer</em>, Recommendation, 11 December 2012.<span class="ref-note">The class and property model SEON is written in.</span></li>
-          <li>W3C, <em>RDF 1.1 Semantics</em>, Recommendation, 25 February 2014.<span class="ref-note">What an edge in this graph means formally.</span></li>
-          <li>Opdyke, 1992; Fowler, <em>Refactoring</em>, 1999.<span class="ref-note">Cited in <code>src/domain/codeplan/operators.mjs</code> for the refactoring operator set built on this graph.</span></li>
-          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Why an unindexed relation is a miss rather than a &ldquo;no&rdquo;.</span></li>
-          <li>Damerau, <em>CACM</em> 7(3), 1964; Levenshtein, <em>Soviet Physics Doklady</em> 10(8), 1966.<span class="ref-note">Edit distance, for resolving a mistyped symbol name.</span></li>
-        </ul>
-        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>The vocabulary and the retrieval model.</p>
+      <ul class="refs">
+        <li>SEON, <code>code.owl</code>, 2012/02.<span class="ref-note">The software engineering ontology the code classes come from. Not to be confused with the unrelated &ldquo;SEON: A Software Engineering Ontology Network&rdquo; by Ruy et al., a name collision the repository notes.</span></li>
+        <li>W3C, <em>OWL 2 Primer</em>, Recommendation, 11 December 2012.<span class="ref-note">The class and property model SEON is written in.</span></li>
+        <li>W3C, <em>RDF 1.1 Semantics</em>, Recommendation, 25 February 2014.<span class="ref-note">What an edge in this graph means formally.</span></li>
+        <li>Opdyke, 1992; Fowler, <em>Refactoring</em>, 1999.<span class="ref-note">Cited in <code>src/domain/codeplan/operators.mjs</code> for the refactoring operator set built on this graph.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Why an unindexed relation is a miss rather than a &ldquo;no&rdquo;.</span></li>
+        <li>Damerau, <em>CACM</em> 7(3), 1964; Levenshtein, <em>Soviet Physics Doklady</em> 10(8), 1966.<span class="ref-note">Edit distance, for resolving a mistyped symbol name.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="credits">
-        <h2>Credits and further reading</h2>
-        <p>Related work in the Polycode family and in this repository.</p>
-        <ul class="refs">
-          <li><a href="https://seonix.polycode.co.uk/">Seonix</a>, the deterministic offline code indexer this engine was seeded from. It now opens tmct's conversation over its own graph.</li>
-          <li><a href="http://se-on.org/">SEON</a>, for the code ontology.</li>
-          <li><code>docs/references/schemas/seon-code-ontology.md</code>, the repository's own notes on the mapping.</li>
-          <li><a href="./chat-about.html">Natural language understanding</a>, for the question grammar this page shares.</li>
-          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
-        </ul>
-        <a class="next-link" href="./ingest-about.html"><span class="next-label">Next demo</span> Synthesise Facts from free text <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>Related work in the Polycode family and in this repository.</p>
+      <ul class="refs">
+        <li><a href="https://seonix.polycode.co.uk/">Seonix</a>, the deterministic offline code indexer this engine was seeded from. It now opens tmct's conversation over its own graph.</li>
+        <li><a href="http://se-on.org/">SEON</a>, for the code ontology.</li>
+        <li><code>docs/references/schemas/seon-code-ontology.md</code>, the repository's own notes on the mapping.</li>
+        <li><a href="./chat-about.html">Natural language understanding</a>, for the question grammar this page shares.</li>
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+      </ul>
+      <a class="next-link" href="./ingest-about.html"><span class="next-label">Next demo</span> Synthesise Facts from free text <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
     <footer>
       <p>MPL-2.0 &middot;

@@ -36,26 +36,26 @@
       <p class="lede">Teach it the rules of a game in English, then ask it to solve one. It searches, finds the shortest plan, replays it move by move, and prints the plan as a PDDL problem and as OWL triples.</p>
     </header>
 
-      <section class="about-section" id="what">
-        <h2>What it demonstrates</h2>
-        <p>This is the page to open when someone asks whether a system without a model can actually reason. It can, and this page shows the working.</p>
-        <p>The rules go in as twenty-one English sentences through the same turn entry point the chat page uses. No special planner input format. Then you say <code>solve it</code>.</p>
-        <p>What comes back is not a stored answer. Change the disk count and press solve again and it searches afresh. Three disks take seven moves, four take fifteen, and the page will tell you it found the shortest one.</p>
-        <p>A panel on the right prints the plan twice. Once as a PDDL problem, the standard planning-domain format, and once as OWL triples. Both are generated from the plan, not written alongside it.</p>
-        <ul>
-          <li>A transport bar steps through the solution one move at a time.</li>
-          <li>A facts panel shows the board as triples at the current step.</li>
-          <li>A board-question dock lets you ask about the position rather than read it.</li>
-          <li>A chat dock lets you assert something and see whether the board agrees.</li>
-        </ul>
-        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>This is the page to open when someone asks whether a system without a model can actually reason. It can, and this page shows the working.</p>
+      <p>The rules go in as twenty-one English sentences through the same turn entry point the chat page uses. No special planner input format. Then you say <code>solve it</code>.</p>
+      <p>What comes back is not a stored answer. Change the disk count and press solve again and it searches afresh. Three disks take seven moves, four take fifteen, and the page will tell you it found the shortest one.</p>
+      <p>A panel on the right prints the plan twice. Once as a PDDL problem, the standard planning-domain format, and once as OWL triples. Both are generated from the plan, not written alongside it.</p>
+      <ul>
+        <li>A transport bar steps through the solution one move at a time.</li>
+        <li>A facts panel shows the board as triples at the current step.</li>
+        <li>A board-question dock lets you ask about the position rather than read it.</li>
+        <li>A chat dock lets you assert something and see whether the board agrees.</li>
+      </ul>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="play">
-        <h2>Chat you can replay</h2>
-        <p>These are corpus rows. Each one is a test that runs on every build, so the wording is the engine's, not ours.</p>
-        <p>Teach the lesson, set a goal, solve. Seven moves, and it says why it could.</p>
-        <pre class="transcript"><span class="you">tmct&gt; the goal is that every disk rests on peg-c.</span>
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>These are corpus rows. Each one is a test that runs on every build, so the wording is the engine's, not ours.</p>
+      <p>Teach the lesson, set a goal, solve. Seven moves, and it says why it could.</p>
+      <pre class="transcript"><span class="you">tmct&gt; the goal is that every disk rests on peg-c.</span>
 noted — the goal is that every disk rests on peg-c
 <span class="you">tmct&gt; solve it</span>
 plan found — 7 moves (shortest):
@@ -63,47 +63,47 @@ plan found — 7 moves (shortest):
 ...
 7. move disk-1 onto disk-2
 because — you taught me the "move onto" rule</pre>
-        <p class="source-note">Corpus row <code>planning-hanoi-solve-finds-the-7-move-optimum-with-the-plan-attached</code> in <code>test/corpus/planning.jsonl</code>.</p>
-        <p>Ask what is legal right now and it answers from one step of grounding, without searching.</p>
-        <pre class="transcript"><span class="you">tmct&gt; what moves are legal now?</span>
+      <p class="source-note">Corpus row <code>planning-hanoi-solve-finds-the-7-move-optimum-with-the-plan-attached</code> in <code>test/corpus/planning.jsonl</code>.</p>
+      <p>Ask what is legal right now and it answers from one step of grounding, without searching.</p>
+      <pre class="transcript"><span class="you">tmct&gt; what moves are legal now?</span>
 2 legal moves from here:</pre>
-        <p class="source-note">Corpus row <code>planning-legal-moves-answers-one-ply-without-search</code> in <code>test/corpus/planning.jsonl</code>.</p>
-        <p>Walk the plan with <code>next</code>. At the end it checks the goal against what is actually written, and says that is what it did.</p>
-        <pre class="transcript"><span class="you">tmct&gt; next</span>
+      <p class="source-note">Corpus row <code>planning-legal-moves-answers-one-ply-without-search</code> in <code>test/corpus/planning.jsonl</code>.</p>
+      <p>Walk the plan with <code>next</code>. At the end it checks the goal against what is actually written, and says that is what it did.</p>
+      <pre class="transcript"><span class="you">tmct&gt; next</span>
 <span class="cite">(seven times)</span>
 done — every disk rests on peg-c (checked against board@step7's written facts, not assumed).</pre>
-        <p class="source-note">Corpus row <code>planning-next-walks-the-plan-and-confirms-the-goal-from-written-facts</code> in <code>test/corpus/planning.jsonl</code>.</p>
-        <p>Ask it to solve with no rules taught and it names the gap instead of trying.</p>
-        <pre class="transcript"><span class="you">tmct&gt; disk-1 rests on disk-2.</span>
+      <p class="source-note">Corpus row <code>planning-next-walks-the-plan-and-confirms-the-goal-from-written-facts</code> in <code>test/corpus/planning.jsonl</code>.</p>
+      <p>Ask it to solve with no rules taught and it names the gap instead of trying.</p>
+      <pre class="transcript"><span class="you">tmct&gt; disk-1 rests on disk-2.</span>
 <span class="you">tmct&gt; solve it</span>
 no action rules taught yet — teach the game first</pre>
-        <p class="source-note">Corpus row <code>planning-solve-without-action-rules-declines-naming-the-gap</code> in <code>test/corpus/planning.jsonl</code>.</p>
-        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+      <p class="source-note">Corpus row <code>planning-solve-without-action-rules-declines-naming-the-gap</code> in <code>test/corpus/planning.jsonl</code>.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="shots">
-        <h2>What it looks like</h2>
-        <p>The board mid-solve, the move list, and the PDDL panel.</p>
-        <figure class="shot">
-          <img src="./screenshots/plan.png" width="1024" height="600" alt="The tmct plan page showing a Tower of Hanoi board mid-solve with the move list and the PDDL plan artifact alongside" loading="lazy">
-          <figcaption>plan.html. A three-disk board part way through its seven moves, with the plan artifact alongside.</figcaption>
-        </figure>
-        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The board mid-solve, the move list, and the PDDL panel.</p>
+      <figure class="shot">
+        <img src="./screenshots/plan.png" width="1024" height="600" alt="The tmct plan page showing a Tower of Hanoi board mid-solve with the move list and the PDDL plan artifact alongside" loading="lazy">
+        <figcaption>plan.html. A three-disk board part way through its seven moves, with the plan artifact alongside.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="inference">
-        <h2>What it works out</h2>
-        <p><strong>The search.</strong> <code>findActionPath</code> in <code>src/domain/planning.mjs</code> is a bounded, cycle-safe breadth-first search. Breadth-first is why the answer is the shortest plan rather than any plan. It is capped by a depth limit, and it returns nothing when it exhausts the cap. Nothing is a miss. It never returns a partial plan dressed up as a solution.</p>
-        <p><strong>The state.</strong> A state is a flat list of triples. There is no special planner data structure underneath.</p>
-        <ul class="factlist">
-          <li>disk-1  mgx:rest-on   disk-2</li>
-          <li>disk-3  mgx:rest-on   peg-a</li>
-          <li>disk-1  mgx:smaller-than  disk-2</li>
-        </ul>
-        <p><strong>The moves.</strong> Successors come from grounding the taught action rules against the current state. That grounding has its own budget. Past it, the engine raises a budget error rather than searching without bound.</p>
-        <p><strong>The goal.</strong> A goal spec compiles into a predicate over states. Universally quantified goals work, which is why &ldquo;every disk rests on peg-c&rdquo; is a goal rather than three goals.</p>
-        <p><strong>The PDDL.</strong> Each action's precondition and effect are a mechanical diff between two consecutive snapshots of the plan. Nothing is inferred beyond what actually changed between them:</p>
-        <pre>(:action move-onto-step1
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p><strong>The search.</strong> <code>findActionPath</code> in <code>src/domain/planning.mjs</code> is a bounded, cycle-safe breadth-first search. Breadth-first is why the answer is the shortest plan rather than any plan. It is capped by a depth limit, and it returns nothing when it exhausts the cap. Nothing is a miss. It never returns a partial plan dressed up as a solution.</p>
+      <p><strong>The state.</strong> A state is a flat list of triples. There is no special planner data structure underneath.</p>
+      <ul class="factlist">
+        <li>disk-1  mgx:rest-on   disk-2</li>
+        <li>disk-3  mgx:rest-on   peg-a</li>
+        <li>disk-1  mgx:smaller-than  disk-2</li>
+      </ul>
+      <p><strong>The moves.</strong> Successors come from grounding the taught action rules against the current state. That grounding has its own budget. Past it, the engine raises a budget error rather than searching without bound.</p>
+      <p><strong>The goal.</strong> A goal spec compiles into a predicate over states. Universally quantified goals work, which is why &ldquo;every disk rests on peg-c&rdquo; is a goal rather than three goals.</p>
+      <p><strong>The PDDL.</strong> Each action's precondition and effect are a mechanical diff between two consecutive snapshots of the plan. Nothing is inferred beyond what actually changed between them:</p>
+      <pre>(:action move-onto-step1
   :label "move disk-1 onto peg-c"
   :subject disk-1
   :target peg-c
@@ -115,52 +115,52 @@ no action rules taught yet — teach the game first</pre>
     (mgx:rest-on disk-1 peg-c)
   )
 )</pre>
-        <p><strong>The OWL.</strong> The problem's ontology block emits real <code>rdf:type</code> and <code>rdfs:subClassOf</code> rows off the domain's class membership. A member that is itself a declared class becomes a subclass edge; anything else becomes a type edge.</p>
-        <pre>(rdf:type disk-1 disk)
+      <p><strong>The OWL.</strong> The problem's ontology block emits real <code>rdf:type</code> and <code>rdfs:subClassOf</code> rows off the domain's class membership. A member that is itself a declared class becomes a subclass edge; anything else becomes a type edge.</p>
+      <pre>(rdf:type disk-1 disk)
 (rdf:type peg-c peg)
 (rdfs:subClassOf disk game-piece)
 (rdfs:subClassOf peg place)</pre>
-        <p><strong>What the board dock retrieves.</strong> A step's position is projected into rows the ordinary question engine can walk: direct support, the support chain chased down to the peg, a derived top-disk edge, and the size ordering. So you can ask about the board with the same grammar you use to ask about anything else.</p>
-        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+      <p><strong>What the board dock retrieves.</strong> A step's position is projected into rows the ordinary question engine can walk: direct support, the support chain chased down to the peg, a derived top-disk edge, and the size ordering. So you can ask about the board with the same grammar you use to ask about anything else.</p>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="build">
-        <h2>How it is built</h2>
-        <p><code>src/domain/hanoi-lesson.mjs</code> generates the teaching sentences for any disk count. The site build and the live browser session both use it, so what the deployed page ships and what your click produces run the same path.</p>
-        <p><code>src/surfaces/web/plan-browser-entry.mjs</code> opens a session, teaches the lesson, and solves. <code>src/services/chat.mjs</code> routes <code>solve it</code> to the planner. <code>src/domain/planning.mjs</code> does the search.</p>
-        <p><code>src/services/plan-pddl.mjs</code> writes the PDDL. <code>src/domain/hanoi-board.mjs</code> projects a board position into queryable rows. <code>src/services/plan-viz.mjs</code> lays out the page and draws the board.</p>
-        <p>The site build runs the solve in process at build time and embeds the result, then the page's own controls re-solve live. There is no second code path for &ldquo;how the site built it&rdquo; versus &ldquo;how a re-solve works&rdquo;.</p>
-        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p><code>src/domain/hanoi-lesson.mjs</code> generates the teaching sentences for any disk count. The site build and the live browser session both use it, so what the deployed page ships and what your click produces run the same path.</p>
+      <p><code>src/surfaces/web/plan-browser-entry.mjs</code> opens a session, teaches the lesson, and solves. <code>src/services/chat.mjs</code> routes <code>solve it</code> to the planner. <code>src/domain/planning.mjs</code> does the search.</p>
+      <p><code>src/services/plan-pddl.mjs</code> writes the PDDL. <code>src/domain/hanoi-board.mjs</code> projects a board position into queryable rows. <code>src/services/plan-viz.mjs</code> lays out the page and draws the board.</p>
+      <p>The site build runs the solve in process at build time and embeds the result, then the page's own controls re-solve live. There is no second code path for &ldquo;how the site built it&rdquo; versus &ldquo;how a re-solve works&rdquo;.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="papers">
-        <h2>Related work</h2>
-        <p>Planning has a long published record, and this page sits squarely in it.</p>
-        <ul class="refs">
-          <li>Fikes and Nilsson, &ldquo;STRIPS: A New Approach to the Application of Theorem Proving to Problem Solving&rdquo;, <em>Artificial Intelligence</em> 2(3&ndash;4), 1971.<span class="ref-note">The add/delete effect model. The precondition and effect blocks above are the same idea.</span></li>
-          <li>McDermott et al., <em>PDDL: The Planning Domain Definition Language</em>, Yale CVC TR-98-003, 1998.<span class="ref-note">The format the plan panel writes. Fox and Long's PDDL 2.1, <em>JAIR</em> 20, 2003, extends it.</span></li>
-          <li>Fikes and Nilsson, &ldquo;STRIPS, a retrospective&rdquo;, <em>Artificial Intelligence</em> 59(1&ndash;2), 1993.<span class="ref-note">The authors on what the original got right and wrong.</span></li>
-          <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">The standing textbook. The repository's planning notes are indexed against it in <code>docs/references/planning/</code>.</span></li>
-          <li>Tate, <em>Project Planning Using a Hierarchic Non-linear Planner</em>, DAI Research Report 25, Edinburgh, 1976; and &ldquo;Generating Project Networks&rdquo;, IJCAI-77, pp. 888&ndash;893.<span class="ref-note">Nonlin, and the hierarchical line this repository keeps notes on.</span></li>
-          <li>McAllester and Rosenblitt, &ldquo;Systematic Nonlinear Planning&rdquo;, AAAI-91; Penberthy and Weld, &ldquo;UCPOP&rdquo;, 1992.<span class="ref-note">Partial order planning, noted in <code>docs/references/planning/PARTIAL_ORDER_PLANNING.md</code>.</span></li>
-          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Why an exhausted search reports no plan rather than reporting that no plan exists.</span></li>
-          <li>Aristotle, <em>Prior Analytics</em> I.1 (24b18&ndash;20).<span class="ref-note">Cited in the repository for the syllogistic core the inference lane rests on.</span></li>
-        </ul>
-        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>Planning has a long published record, and this page sits squarely in it.</p>
+      <ul class="refs">
+        <li>Fikes and Nilsson, &ldquo;STRIPS: A New Approach to the Application of Theorem Proving to Problem Solving&rdquo;, <em>Artificial Intelligence</em> 2(3&ndash;4), 1971.<span class="ref-note">The add/delete effect model. The precondition and effect blocks above are the same idea.</span></li>
+        <li>McDermott et al., <em>PDDL: The Planning Domain Definition Language</em>, Yale CVC TR-98-003, 1998.<span class="ref-note">The format the plan panel writes. Fox and Long's PDDL 2.1, <em>JAIR</em> 20, 2003, extends it.</span></li>
+        <li>Fikes and Nilsson, &ldquo;STRIPS, a retrospective&rdquo;, <em>Artificial Intelligence</em> 59(1&ndash;2), 1993.<span class="ref-note">The authors on what the original got right and wrong.</span></li>
+        <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">The standing textbook. The repository's planning notes are indexed against it in <code>docs/references/planning/</code>.</span></li>
+        <li>Tate, <em>Project Planning Using a Hierarchic Non-linear Planner</em>, DAI Research Report 25, Edinburgh, 1976; and &ldquo;Generating Project Networks&rdquo;, IJCAI-77, pp. 888&ndash;893.<span class="ref-note">Nonlin, and the hierarchical line this repository keeps notes on.</span></li>
+        <li>McAllester and Rosenblitt, &ldquo;Systematic Nonlinear Planning&rdquo;, AAAI-91; Penberthy and Weld, &ldquo;UCPOP&rdquo;, 1992.<span class="ref-note">Partial order planning, noted in <code>docs/references/planning/PARTIAL_ORDER_PLANNING.md</code>.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Why an exhausted search reports no plan rather than reporting that no plan exists.</span></li>
+        <li>Aristotle, <em>Prior Analytics</em> I.1 (24b18&ndash;20).<span class="ref-note">Cited in the repository for the syllogistic core the inference lane rests on.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="credits">
-        <h2>Credits and further reading</h2>
-        <p>Notes and reading in the repository itself.</p>
-        <ul class="refs">
-          <li><code>docs/references/planning/STRIPS_PDDL.md</code>, the repository's own working notes on STRIPS and PDDL.</li>
-          <li><code>docs/references/planning/NONLIN.md</code>, on Tate's Nonlin and SHOP2.</li>
-          <li><code>docs/references/planning/PARTIAL_ORDER_PLANNING.md</code> and <code>BDI_GOAL_DRIVEN_AUTONOMY.md</code>.</li>
-          <li><a href="./spider-fly-about.html">The competitive multi-agent demo</a>, which calls this same search once per agent per turn.</li>
-          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
-        </ul>
-        <a class="next-link" href="./adventure-about.html"><span class="next-label">Next demo</span> Fact based world visualisation <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>Notes and reading in the repository itself.</p>
+      <ul class="refs">
+        <li><code>docs/references/planning/STRIPS_PDDL.md</code>, the repository's own working notes on STRIPS and PDDL.</li>
+        <li><code>docs/references/planning/NONLIN.md</code>, on Tate's Nonlin and SHOP2.</li>
+        <li><code>docs/references/planning/PARTIAL_ORDER_PLANNING.md</code> and <code>BDI_GOAL_DRIVEN_AUTONOMY.md</code>.</li>
+        <li><a href="./spider-fly-about.html">The competitive multi-agent demo</a>, which calls this same search once per agent per turn.</li>
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+      </ul>
+      <a class="next-link" href="./adventure-about.html"><span class="next-label">Next demo</span> Fact based world visualisation <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
     <footer>
       <p>MPL-2.0 &middot;

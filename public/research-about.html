@@ -36,107 +36,107 @@
       <p class="lede">One graph, grown three ways. Research a term over Simple English Wikipedia, teach a fact by typing it, or paste a document. Then ask a question with only the sources you trust switched on.</p>
     </header>
 
-      <section class="about-section" id="what">
-        <h2>What it demonstrates</h2>
-        <p>The other pages each show one way of getting facts in. This one puts all three side by side and then does something none of them can do alone: it lets you turn a source off and ask the same question again.</p>
-        <p>Three panels sit in a row. Research a term, which reads Simple English Wikipedia and grounds what it finds. Teach by telling, an ordinary sentence. Ingest documents, the same recognizer the ingest page uses.</p>
-        <p>Under them, an ask box with a checkbox per source. Uncheck a source and its facts stop answering. A question that only the unchecked source could answer becomes an honest miss, in front of you, on demand.</p>
-        <p>That is the demonstration worth doing live. Ask something, get an answer, untick where it came from, ask again, and watch it decline.</p>
-        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>The other pages each show one way of getting facts in. This one puts all three side by side and then does something none of them can do alone: it lets you turn a source off and ask the same question again.</p>
+      <p>Three panels sit in a row. Research a term, which reads Simple English Wikipedia and grounds what it finds. Teach by telling, an ordinary sentence. Ingest documents, the same recognizer the ingest page uses.</p>
+      <p>Under them, an ask box with a checkbox per source. Uncheck a source and its facts stop answering. A question that only the unchecked source could answer becomes an honest miss, in front of you, on demand.</p>
+      <p>That is the demonstration worth doing live. Ask something, get an answer, untick where it came from, ask again, and watch it decline.</p>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="play">
-        <h2>Chat you can replay</h2>
-        <p>These come from the browser test that drives the page against a fixture Wikipedia, so the research run is reproducible.</p>
-        <p>Teach one fact and ingest a document. Two sources, two terms.</p>
-        <pre class="transcript"><span class="you">tmct&gt; a wozzle is a kind of dog</span>
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>These come from the browser test that drives the page against a fixture Wikipedia, so the research run is reproducible.</p>
+      <p>Teach one fact and ingest a document. Two sources, two terms.</p>
+      <pre class="transcript"><span class="you">tmct&gt; a wozzle is a kind of dog</span>
 <span class="cite">source "taught" appears; fact count +1; recent list shows subject "wozzle"</span>
 <span class="cite">ingest: A florp is a kind of animal. A florp has a tail. How are you today?</span>
 3 sentences read, 2 grounded, 1 skipped
 <span class="cite">source "ingest" appears; fact count +2</span></pre>
-        <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>.</p>
-        <p>Now scope it. The same question answers with every source on, and misses with only the ingest source on.</p>
-        <pre class="transcript"><span class="you">tmct&gt; what is a wozzle</span>
-(all sources on) answers, naming wozzle
+      <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>.</p>
+      <p>Now scope it. The same question answers with every source on, and misses with only the ingest source on.</p>
+      <pre class="transcript"><span class="you">tmct&gt; what is a wozzle</span>
+<span class="cite">with every source checked: answers, naming wozzle</span>
 <span class="you">tmct&gt; what is a wozzle</span>
-(scoped to ingest only) a miss — it abstains
+<span class="cite">scoped to the ingest source only: a miss, it abstains</span>
 <span class="you">tmct&gt; what is a florp</span>
-(still scoped to ingest only) answers, naming florp</pre>
-        <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>, which checks the miss flag on each of the three calls. The taught fact goes out of scope; the ingested fact stays in.</p>
-        <p>A research run stops on its budget and says so, rather than quietly running out of links.</p>
-        <pre class="transcript"><span class="you">tmct&gt; research owl</span>
+<span class="cite">still scoped to ingest only: answers, naming florp</span></pre>
+      <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>, which checks the miss flag on each of the three calls. The taught fact goes out of scope; the ingested fact stays in.</p>
+      <p>A research run stops on its budget and says so, rather than quietly running out of links.</p>
+      <pre class="transcript"><span class="you">tmct&gt; research owl</span>
 <span class="cite">max nodes 3, max depth 2</span>
 research "owl" complete — 3 topics grounded (depth 2, budget 3) — node budget reached</pre>
-        <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code> against a fixture wiki where Owl links to Bird, Night and Feather.</p>
-        <p>Reading a grown term back as prose, and asking for one that was never grown.</p>
-        <pre class="transcript"><span class="you">tmct&gt; digest florp</span>
-florp ... animal ... (sources: ...)
+      <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code> against a fixture wiki where Owl links to Bird, Night and Feather.</p>
+      <p>Reading a grown term back as prose, and asking for one that was never grown.</p>
+      <pre class="transcript"><span class="you">tmct&gt; digest florp</span>
+<span class="cite">a digest card whose paragraphs name florp and animal, over a (sources: ...) line</span>
 <span class="you">tmct&gt; digest zzzznonexistentzzz</span>
-(no card — the miss text says nothing is stored)</pre>
-        <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>, which checks the digest paragraphs, the sources line and the absence of a card for the unknown term.</p>
-        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+<span class="cite">no card at all, and the miss text says nothing is stored</span></pre>
+      <p class="source-note">Asserted in <code>test-e2e/pages-research.test.mjs</code>, which checks the digest paragraphs, the sources line and the absence of a card for the unknown term.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="shots">
-        <h2>What it looks like</h2>
-        <p>The three growth panels along the top, the source-scoped ask underneath.</p>
-        <figure class="shot">
-          <img src="./screenshots/research.png" width="1024" height="600" alt="The tmct research page showing one graph grown by research, teaching and ingest, with a source-scoped ask" loading="lazy">
-          <figcaption>research.html. One graph grown three ways, with a checkbox per source on the question.</figcaption>
-        </figure>
-        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The three growth panels along the top, the source-scoped ask underneath.</p>
+      <figure class="shot">
+        <img src="./screenshots/research.png" width="1024" height="600" alt="The tmct research page showing one graph grown by research, teaching and ingest, with a source-scoped ask" loading="lazy">
+        <figcaption>research.html. One graph grown three ways, with a checkbox per source on the question.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="inference">
-        <h2>What it works out</h2>
-        <p><strong>How a source is decided.</strong> Every fact's provenance tag folds to one page-level source key. Anything you typed becomes <code>taught</code>. Anything the ingest session grounded becomes <code>ingest</code>. Anything a Wikipedia read produced becomes <code>research</code>. Corpus rows become <code>seed:&lt;band&gt;</code>, one key per band.</p>
-        <p><strong>How scoping works.</strong> Unchecking a source does not filter the answer. It removes those facts from a copy of the store and asks the real question against what is left. So a scoped answer is a genuine answer over a smaller graph, and a scoped miss is a genuine miss.</p>
-        <p>Entailed facts are kept under every scope. They rest on premises rather than on one source, so removing a source removes the premise and the entailment falls with it.</p>
-        <p><strong>What a research run does.</strong> It fetches an article, grounds its summary, and follows links out to a bounded number of further topics. Three numbers bound it: how many links to follow from one article, how deep to go, and how many topics in total. The defaults are 5, 1 and 12; the caps are 12, 3 and 50. A run reports which bound stopped it.</p>
-        <p><strong>What it stores.</strong> A researched fact is tagged <code>research:&lt;topic&gt;@&lt;depth&gt;</code> and cites the article by title, revision id and licence:</p>
-        <ul class="factlist">
-          <li>polar bear — &lt;summary&gt; (source: research article "Polar bear", Simple English Wikipedia, CC BY-SA 4.0 — &lt;url&gt;?oldid=912)</li>
-        </ul>
-        <p>A live read scores 0.5. The curated reference pack scores 0.6. Something you taught scores 0.95. So a Wikipedia sentence never outranks you.</p>
-        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p><strong>How a source is decided.</strong> Every fact's provenance tag folds to one page-level source key. Anything you typed becomes <code>taught</code>. Anything the ingest session grounded becomes <code>ingest</code>. Anything a Wikipedia read produced becomes <code>research</code>. Corpus rows become <code>seed:&lt;band&gt;</code>, one key per band.</p>
+      <p><strong>How scoping works.</strong> Unchecking a source does not filter the answer. It removes those facts from a copy of the store and asks the real question against what is left. So a scoped answer is a genuine answer over a smaller graph, and a scoped miss is a genuine miss.</p>
+      <p>Entailed facts are kept under every scope. They rest on premises rather than on one source, so removing a source removes the premise and the entailment falls with it.</p>
+      <p><strong>What a research run does.</strong> It fetches an article, grounds its summary, and follows links out to a bounded number of further topics. Three numbers bound it: how many links to follow from one article, how deep to go, and how many topics in total. The defaults are 5, 1 and 12; the caps are 12, 3 and 50. A run reports which bound stopped it.</p>
+      <p><strong>What it stores.</strong> A researched fact is tagged <code>research:&lt;topic&gt;@&lt;depth&gt;</code> and cites the article by title, revision id and licence:</p>
+      <ul class="factlist">
+        <li>polar bear — &lt;summary&gt; (source: research article "Polar bear", Simple English Wikipedia, CC BY-SA 4.0 — &lt;url&gt;?oldid=912)</li>
+      </ul>
+      <p>A live read scores 0.5. The curated reference pack scores 0.6. Something you taught scores 0.95. So a Wikipedia sentence never outranks you.</p>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="build">
-        <h2>How it is built</h2>
-        <p><code>src/services/research-viz.mjs</code> renders the page. <code>src/surfaces/web/research-browser-entry.mjs</code> is the bundle, and it grows one in-memory store through three real engine paths rather than three copies of one.</p>
-        <p>The ingest panel imports <code>groundTextToFacts</code> directly from the ingest page's own entry module. It is the same function, not a second implementation.</p>
-        <p>The research lane is <code>src/services/research.mjs</code>. Its request grammar takes <code>research &lt;topic&gt;</code>, <code>research next</code>, <code>research status</code> and <code>research stop</code>, with optional <code>limit N</code> and <code>depth D</code>.</p>
-        <p>The curated reference pack is <code>src/adapters/corpus/reference-pack.mjs</code>: a gzipped term index plus gzipped JSONL shards, one shard read per hit. It never throws. A missing or corrupt pack is an ordinary miss. The browser swaps the filesystem loader for a <code>fetch</code>-backed provider over <code>public/reference-pack/</code> through the same seam.</p>
-        <p>One snapshot function computes the source list, the recent facts and the hub terms together, so the three panels can never disagree with each other.</p>
-        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p><code>src/services/research-viz.mjs</code> renders the page. <code>src/surfaces/web/research-browser-entry.mjs</code> is the bundle, and it grows one in-memory store through three real engine paths rather than three copies of one.</p>
+      <p>The ingest panel imports <code>groundTextToFacts</code> directly from the ingest page's own entry module. It is the same function, not a second implementation.</p>
+      <p>The research lane is <code>src/services/research.mjs</code>. Its request grammar takes <code>research &lt;topic&gt;</code>, <code>research next</code>, <code>research status</code> and <code>research stop</code>, with optional <code>limit N</code> and <code>depth D</code>.</p>
+      <p>The curated reference pack is <code>src/adapters/corpus/reference-pack.mjs</code>: a gzipped term index plus gzipped JSONL shards, one shard read per hit. It never throws. A missing or corrupt pack is an ordinary miss. The browser swaps the filesystem loader for a <code>fetch</code>-backed provider over <code>public/reference-pack/</code> through the same seam.</p>
+      <p>One snapshot function computes the source list, the recent facts and the hub terms together, so the three panels can never disagree with each other.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="papers">
-        <h2>Related work</h2>
-        <p>Retrieval that names its sources, and a question that can be asked over a subset of them.</p>
-        <ul class="refs">
-          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Unchecking a source shrinks what is known. Under the open world assumption that produces a miss, not a denial.</span></li>
-          <li>Chow, &ldquo;On optimum recognition error and reject tradeoff&rdquo;, <em>IEEE Trans. Information Theory</em> 16(1), 1970.<span class="ref-note">The scoped miss is the reject option, made switchable.</span></li>
-          <li>Green, Karvounarakis and Tannen, &ldquo;Provenance Semirings&rdquo;, PODS 2007.<span class="ref-note">The algebra for which answers survive when a source is removed.</span></li>
-          <li>W3C, <em>PROV-O</em>, Recommendation, 30 April 2013.<span class="ref-note">The provenance vocabulary the source keys fold from.</span></li>
-          <li>W3C, <em>SKOS Reference</em>, Recommendation, 18 August 2009.<span class="ref-note">The concept scheme vocabulary for terms grown out of an encyclopaedia.</span></li>
-          <li>Artz and Gil, &ldquo;A survey of trust in computer science and the Semantic Web&rdquo;, <em>Journal of Web Semantics</em> 5(2), 2007.<span class="ref-note">Read as candidate literature for source trust. The priors here are engineering, not a claim to implement this survey.</span></li>
-        </ul>
-        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>Retrieval that names its sources, and a question that can be asked over a subset of them.</p>
+      <ul class="refs">
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">Unchecking a source shrinks what is known. Under the open world assumption that produces a miss, not a denial.</span></li>
+        <li>Chow, &ldquo;On optimum recognition error and reject tradeoff&rdquo;, <em>IEEE Trans. Information Theory</em> 16(1), 1970.<span class="ref-note">The scoped miss is the reject option, made switchable.</span></li>
+        <li>Green, Karvounarakis and Tannen, &ldquo;Provenance Semirings&rdquo;, PODS 2007.<span class="ref-note">The algebra for which answers survive when a source is removed.</span></li>
+        <li>W3C, <em>PROV-O</em>, Recommendation, 30 April 2013.<span class="ref-note">The provenance vocabulary the source keys fold from.</span></li>
+        <li>W3C, <em>SKOS Reference</em>, Recommendation, 18 August 2009.<span class="ref-note">The concept scheme vocabulary for terms grown out of an encyclopaedia.</span></li>
+        <li>Artz and Gil, &ldquo;A survey of trust in computer science and the Semantic Web&rdquo;, <em>Journal of Web Semantics</em> 5(2), 2007.<span class="ref-note">Read as candidate literature for source trust. The priors here are engineering, not a claim to implement this survey.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
-      <section class="about-section" id="credits">
-        <h2>Credits and further reading</h2>
-        <p>Sources and licences.</p>
-        <ul class="refs">
-          <li>Simple English Wikipedia, read live in research mode. Article text is CC BY-SA 4.0, and each stored fact cites the article title, its revision id and the licence.</li>
-          <li><a href="https://www.w3.org/TR/prov-o/">PROV-O</a>, for the provenance model behind the source keys.</li>
-          <li><a href="./ingest-about.html">Synthesise facts from free text</a>, for the recognizer this page reuses.</li>
-          <li><a href="./ledger-about.html">Facts as RDF/OWL triples</a>, for the trust priors in full.</li>
-          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
-        </ul>
-        <a class="next-link" href="./mud-about.html"><span class="next-label">Next demo</span> Competitive multi-agent system with Fact based visualisation (MUD) <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-      </section>
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>Sources and licences.</p>
+      <ul class="refs">
+        <li>Simple English Wikipedia, read live in research mode. Article text is CC BY-SA 4.0, and each stored fact cites the article title, its revision id and the licence.</li>
+        <li><a href="https://www.w3.org/TR/prov-o/">PROV-O</a>, for the provenance model behind the source keys.</li>
+        <li><a href="./ingest-about.html">Synthesise facts from free text</a>, for the recognizer this page reuses.</li>
+        <li><a href="./ledger-about.html">Facts as RDF/OWL triples</a>, for the trust priors in full.</li>
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+      </ul>
+      <a class="next-link" href="./mud-about.html"><span class="next-label">Next demo</span> Competitive multi-agent system with Fact based visualisation (MUD) <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
 
     <footer>
       <p>MPL-2.0 &middot;
