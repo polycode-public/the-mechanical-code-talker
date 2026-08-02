@@ -294,12 +294,28 @@ export async function createSession({
   const sessionId = uuidv7();
   const logDir = join(repo, SESSION_LOG_DIR);
   const sessionsDir = join(repo, SESSIONS_DIR_REL);
-  await mkdir(logDir, { recursive: true });
-  await mkdir(sessionsDir, { recursive: true });
+  // Every session records what it answered, so an unwritable target is the end
+  // of the session. Say so once, in one place, whichever step hits it: the
+  // mkdir, the stream's open, or the header write below.
+  const unwritable = (e) => new Error(
+    `cannot write the session log under ${logDir} (${e?.code || e?.message || e}). `
+    + "Every session records what it answered, so chat needs write access there. "
+    + "Point --repo at a writable directory, or run with --ephemeral to keep the session in a temp dir.",
+  );
+  try {
+    await mkdir(logDir, { recursive: true });
+    await mkdir(sessionsDir, { recursive: true });
+  } catch (e) { throw unwritable(e); }
   const logFile = join(logDir, `session-${sessionId}.md`);
   const sidecarFile = join(sessionsDir, `session-${sessionId}.jsonl`);
   const stream = createWriteStream(logFile, { flags: "a" });
   const sidecar = createWriteStream(sidecarFile, { flags: "a" });
+  // A stream with no "error" listener turns a failed open into an unhandled
+  // 'error' event, which is a raw Node stack trace and a dead process. The
+  // write callbacks below reject with the same error, so the listener only has
+  // to keep the event handled.
+  stream.on("error", () => {});
+  sidecar.on("error", () => {});
   // Awaited writes: each chunk is handed to the OS before the turn completes, so a
   // killed session keeps everything up to the last completed turn — in both files.
   const flush = (s, text) =>
@@ -308,8 +324,14 @@ export async function createSession({
   const writeSidecar = (obj) => flush(sidecar, JSON.stringify(obj) + "\n");
 
   const startIso = new Date().toISOString();
-  await writeLog(sessionLogHeaderMarkdown({ version, sessionId, startedAt: startIso, repo }));
-  await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
+  try {
+    await writeLog(sessionLogHeaderMarkdown({ version, sessionId, startedAt: startIso, repo }));
+    await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
+  } catch (e) {
+    stream.destroy();
+    sidecar.destroy();
+    throw unwritable(e);
+  }
 
   // Read-time graph upsert (sessions.mjs): after every turn, the session becomes /
   // stays a first-class Session individual in graph.json (crash-safe: turn n is in

@@ -11,6 +11,35 @@ import { createSession } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { freshBootstrapRepo } from "../helpers/seeded-fixture.mjs";
 
+test("an unwritable session-log directory fails with a message and a remedy, never a stack trace", async () => {
+  const { chmod, mkdir } = await import("node:fs/promises");
+  clearCache();
+  // Two shapes reach the same wall: a repo whose .tmct/ has no sessions/ dir
+  // yet (the mkdir fails) and one where it exists (the stream's open fails).
+  for (const preexistingSessionsDir of [false, true]) {
+    const dir = await mkdtemp(join(tmpdir(), "tmct-nolog-"));
+    const logDir = join(dir, ".tmct");
+    await mkdir(preexistingSessionsDir ? join(logDir, "sessions") : logDir, { recursive: true });
+    await chmod(logDir, 0o500);
+    try {
+      await assert.rejects(
+        () => createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } }),
+        (e) => {
+          assert.ok(e instanceof Error);
+          assert.match(e.message, /cannot write the session log/);
+          assert.match(e.message, /EACCES/, "names what the filesystem said");
+          assert.match(e.message, /--ephemeral/, "offers a way to run anyway");
+          return true;
+        },
+      );
+    } finally {
+      await chmod(logDir, 0o700);
+      clearCache();
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("the seeded banner offers the corpus-verified 'what is a dog' example", async () => {
   clearCache();
   const dir = await freshBootstrapRepo("tmct-banner-");
