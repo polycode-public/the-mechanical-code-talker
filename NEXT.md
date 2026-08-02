@@ -751,7 +751,7 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### Pipeline
 
-- **`memory-seed-perf.test.mjs:65` fails on CI at 21.09x against a "well under 20x" bar.** The
+- **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
   batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
   retraction work, so nothing in this batch caused it. A shared CI runner and a bar the measurement
@@ -760,29 +760,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   wall-clock terms rather than sitting on top of the linear band's own noise. Quadratic still fails
   with a 2x margin. Green locally.
   **Tier:** none. It closes on the next green pipeline.
-
-- **`main` is red: three tests broke on the predator-prey trio.** The full suite runs 5884 and fails
-  3. All three sit outside the files that track's brief named as its blast radius, which is the
-  brief's fault, not the track's — `predator-prey.mjs` reaches further than
-  `predator-prey.test.mjs` and `spider-fly.test.mjs`.
-  - `test/services/mudiii-turn.test.mjs:31` and `:47` both fail on the `predatorInitialMass` fact no
-    longer being where they look. The recast work stamped the roster's bootstrap facts through
-    `snapshotSubject(id, 0, epoch)` instead of writing them bare, so the subject shape those
-    assertions search for changed.
-  - `test/services/predator-prey-fixture.test.mjs:67` fails its frozen replay at turn 4: `goblin-2`
-    and `goblin-3` now decide `forage` where the tape recorded `wander`. That is a behaviour move
-    from either the evade tie-break or the food vision gating, and the fixture is exactly the
-    contract meant to catch it.
-  **Tier:** Sonnet. Two different questions, and the second is the real one.
-  **Do:** for the mass tests, decide whether they should read the stamped subject or whether the
-  bootstrap facts should stay bare, then make both sides agree. For the fixture, work out which of
-  the two behaviour changes moved the rung before touching the tape. `foodVisionGated` defaults to
-  `true`, which is meant to preserve the old gated behaviour, so a flip to `forage` suggests the
-  default is not reaching the path the fixture exercises.
-  **Risk:** re-recording the tape to match new output is the move that always passes and destroys
-  the contract. The tape is there to notice exactly this.
-  **Mitigation:** only re-record after naming which change moved it and why that move is wanted. If
-  the gating default is not reaching the fixture's path, that is a bug in the flag, not in the tape.
 
 - **The two page-order jobs are fixed in the tree but have not re-run.** `pages-index.test.mjs` and
   `pages-home.test.mjs` both carry `mudiii` and the numeral XI now, and both pass locally against a
