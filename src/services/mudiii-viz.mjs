@@ -16,6 +16,15 @@
 // this file also ships a "" stub until it lands — no edit needed here when
 // it does.
 //
+// The contract runs both ways. Scene -> shell: the scene script calls
+// `window.mudiiiHandleSceneClick(cellId)` on a raycast hit. Shell -> scene:
+// this page's own script calls `window.mudiiiScene.boot(...)` once per
+// world/reset/scenario switch, `.applyTick(...)` every tick, and
+// `.setCamera(...)` on every camera-mode change, agent-select change and
+// `nextCameraSelection` fallback (see `callScene`, below) — every call
+// guarded, because a failed three.js vendor load (~800 KB) must never take
+// the map panel, the HUD, the deck or the chat down with it.
+//
 // Deliberately absent, all P2P (mud.html's #statePill, share/join buttons,
 // the share overlay, the wave button, the compass ring): this is the
 // 1-player page. A later document adds sharing back from the same bundle.
@@ -845,11 +854,28 @@ function pageScript() {
     if (node) node.textContent = text || "";
   }
 
+  // The scene track's own half of the frozen contract: window.mudiiiScene.
+  // three.js is ~800 KB and can fail to vendor-load independently of
+  // anything this page does, so every call is guarded the same way — a
+  // missing or throwing scene must never take the map panel, the HUD, the
+  // deck or the chat down with it.
+  function callScene(method) {
+    const scene = window.mudiiiScene;
+    if (!scene || typeof scene[method] !== "function") return;
+    try {
+      return scene[method].apply(scene, Array.prototype.slice.call(arguments, 1));
+    } catch (err) {
+      setSceneStatus("the 3D scene hit an error and stopped updating \\u2014 the rest of the page still works.");
+    }
+  }
+
   function applyTickResult(result) {
     if (!result) return;
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
+    callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
     camera = nextCameraSelection(camera, agentsList(), result.ecology || []);
+    callScene("setCamera", camera);
     if (camera.status) setSceneStatus(camera.status);
   }
 
@@ -944,14 +970,21 @@ function pageScript() {
   // as a plain global rather than a spliced closure binding, because the
   // scene script is embedded as its OWN standalone <script> tag and shares
   // no lexical scope with this one.
+  //
+  // Routed through tmct.turn (sendCommand), never session.placeFood
+  // directly: a typed "put food at cell-3-4" and this click must write the
+  // same facts through the same provenance stamp, so "who put that there?"
+  // grounds and answers identically either way, and the click's own result
+  // lands in the chat log instead of vanishing silently. A blocked cell is
+  // still refused entirely client-side — nothing is written, and the food
+  // pill stays armed for another try.
   window.mudiiiHandleSceneClick = function (cellId) {
     if (!foodArmed || !session) return;
     const reason = blockedCellReason(cellId, props, agentsList());
     if (reason) { setSceneStatus(reason); return; }
-    serializeTick(function () { return session.placeFood({ cell: cellId }); }).then(function () {
+    sendCommand("put food at " + cellId).then(function () {
       foodArmed = false;
       el("foodPill").setAttribute("aria-pressed", "false");
-      renderAll();
     });
   };
 
@@ -1003,6 +1036,7 @@ function pageScript() {
   el("agentSelect").addEventListener("change", function () {
     const id = el("agentSelect").value || null;
     camera = { mode: camera.mode, selectedId: id, status: null };
+    callScene("setCamera", camera);
   });
 
   function renderCameraButtons() {
@@ -1016,6 +1050,7 @@ function pageScript() {
     if (!btn) return;
     camera = { mode: btn.getAttribute("data-mode"), selectedId: camera.selectedId, status: null };
     renderCameraButtons();
+    callScene("setCamera", camera);
   });
 
   // ---- the control deck ----------------------------------------------------
@@ -1179,6 +1214,8 @@ function pageScript() {
     itemsById = {};
     camera.selectedId = cast[0] || null;
     el("chatInput").disabled = false;
+    callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: DATA.gridSize, cellSize: 1 });
+    callScene("setCamera", camera);
     renderAll();
   }
 

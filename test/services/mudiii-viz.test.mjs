@@ -135,6 +135,54 @@ test("renderMudiiiHtml: one shared chat log and one shared input, never one per 
   assert.doesNotMatch(html, /window-a-chatlog|window-b-chatlog/, "no per-character panes");
 });
 
+test("renderMudiiiHtml: booting calls window.mudiiiScene.boot with the resolved prop placements and asset manifest", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS, assetManifest: ASSETS });
+  assert.match(
+    html,
+    /callScene\("boot", \{ propPlacements: props, assetManifest: DATA\.assetManifest, gridSize: DATA\.gridSize, cellSize: 1 \}\)/,
+  );
+});
+
+test("renderMudiiiHtml: every tick calls window.mudiiiScene.applyTick with the raw tick-payload shape", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(
+    html,
+    /callScene\("applyTick", \{ agents: result\.agents, items: result\.items, ecology: result\.ecology \}\)/,
+  );
+});
+
+test("renderMudiiiHtml: window.mudiiiScene.setCamera is called on boot, every tick's fallback, camera-mode clicks and the follow select", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.equal((html.match(/callScene\("setCamera", camera\)/g) || []).length, 4);
+});
+
+test("renderMudiiiHtml: every window.mudiiiScene call is guarded — a missing or throwing scene never takes the page down", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const callScene = /function callScene\(method\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(callScene, "callScene is in the page script");
+  assert.match(callScene[1], /typeof scene\[method\] !== "function"/);
+  assert.match(callScene[1], /try \{/);
+  assert.match(callScene[1], /catch \(err\)/);
+});
+
+test("renderMudiiiHtml: a scene click routes food placement through tmct.turn, never session.placeFood directly", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const handler = /window\.mudiiiHandleSceneClick = function \(cellId\) \{([\s\S]*?)\n  \};/.exec(html);
+  assert.ok(handler, "the scene-click handler is in the page script");
+  assert.match(handler[1], /sendCommand\("put food at " \+ cellId\)/, "the same lane verb a typed command would use");
+  assert.doesNotMatch(handler[1], /session\.placeFood/, "no separate write path for the click");
+  assert.match(handler[1], /blockedCellReason\(cellId, props, agentsList\(\)\)/, "the blocked-cell refusal is still a client-side pre-check");
+});
+
+test("renderMudiiiHtml: sendCommand appends both the typed line and the answer to the chat log", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const sendCommand = /function sendCommand\(line\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(sendCommand);
+  assert.match(sendCommand[1], /appendChat\("u", line\)/);
+  assert.match(sendCommand[1], /appendChat\("a", res\.answer\)/);
+  assert.match(sendCommand[1], /tmct\.turn\(line\)/);
+});
+
 test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absent here", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.doesNotMatch(html, /id="statePill"/);
