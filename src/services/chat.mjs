@@ -2988,6 +2988,23 @@ function singularizeSurface(word) {
 
 export { singularizeSurface };
 
+/** Does the complement of this payload wear its own article ("all foxes are A
+ *  SPECIES")? An article marks the complement singular already, so the plural
+ *  fold below must leave it alone. */
+const objectCarriesArticle = (payload) => /\s(?:is|are)\s+(?:an?\s+)/i.test(String(payload || ""));
+
+/** The complement as it should be STORED. The subject of a plural membership
+ *  sentence has always folded ("all foxes are mammals" stores "fox"); the
+ *  object had not, so the pair landed as fox ⊑ mammals and the next turn's
+ *  "is a fox a mammal" looked up a class spelled a different way and missed
+ *  the fact it had just been told. Gated exactly as the subject fold is: only
+ *  a genuinely plural "are" phrasing, and only where no article already marks
+ *  the complement singular. */
+function storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun }) {
+  if (!/^are$/i.test(verb) || objectCarriesArticle(payload)) return objectRaw;
+  return lookupNoun(lex, objectRaw)?.lemma || singularizeSurface(objectRaw);
+}
+
 /** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
  *  fallback recognizes (group 2 = X, group 4 = Y); group 1 (when present)
  *  names the determiner, so the caller can tell a genuine "every" universal
@@ -3132,19 +3149,25 @@ async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, gra
   if (!memoryDir) return "";
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
-  const [, , subjectRaw, , objectRaw] = m;
-  const { loadLexicon } = await import("../domain/grammar/lexicon.mjs");
+  const [, , subjectRaw, verb, objectRaw] = m;
+  const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return "";
   if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return "";
+  // The sentences suggested here have to be the ones that actually store, so
+  // both sides fold to the singular a plural surface named ("all zorps are
+  // florbs" → "every zorp is a thing"). Following the plural verbatim teaches
+  // a second class under a spelling nothing else uses.
+  const subject = /^are$/i.test(verb) ? singularOf(subjectRaw, lex, lookupNoun) : subjectRaw;
+  const object = storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun });
   // Chaining the second term UNDER the first's now-grounded proper name
   // ("every man is a john") is technically accepted by the grammar (once
   // "john" is grounded, ANY term can be taught as a kind of it), but reads as
   // nonsense to a human, since a proper name is never a category. Ground both
   // sides independently instead — two clear, parallel, semantically sane
   // suggestions, not a confusing chain through an arbitrary first term.
-  return ` I don't know "${subjectRaw}" or "${objectRaw}" yet. Try grounding each one first, e.g. `
-    + `"every ${subjectRaw} is a thing" and "every ${objectRaw} is a thing", then re-teach the`
+  return ` I don't know "${subject}" or "${object}" yet. Try grounding each one first, e.g. `
+    + `"every ${subject} is a thing" and "every ${object} is a thing", then re-teach the`
     + ` original fact.`;
 }
 
@@ -3221,7 +3244,12 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
-      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
+      subject,
+      predicate: SUBCLASS_PREDICATE,
+      object: storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun }),
+      quantifier,
+      observedAt,
+      dateText,
     });
   }
   if (lookupAdjective(lex, objectRaw)) {
@@ -3350,7 +3378,12 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
     ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
     : subjectRaw;
   return teachFact(memoryDir, sessionId, {
-    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier, observedAt, dateText,
+    subject,
+    predicate: SUBCLASS_PREDICATE,
+    object: storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun }),
+    quantifier,
+    observedAt,
+    dateText,
   });
 }
 
@@ -4189,9 +4222,20 @@ function matchBareCanTeach(text) {
 function teachSuggestion(payload) {
   const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (is|are) (a |an )?([\w-]+)[.!?]*$/i);
   if (!m) return null;
-  const subject = (/^are$/i.test(m[2]) ? singularizeSurface(m[1]) : m[1]).toLowerCase();
-  const object = m[4].toLowerCase();
-  if (!m[3]) return `every ${subject} is ${object}`;
+  const plural = /^are$/i.test(m[2]);
+  const subject = (plural ? singularizeSurface(m[1]) : m[1]).toLowerCase();
+  let object = m[4].toLowerCase();
+  let articled = !!m[3];
+  // A plural complement with no article of its own ("all lynxes are mammals")
+  // folds like the subject does, and the fold itself is what proves it was a
+  // plural NOUN rather than a bare adjective — so it earns the article the
+  // singular membership sentence needs. Without this the repair suggested the
+  // very spelling the same sentence had just called unrecognized.
+  if (plural && !articled) {
+    const folded = singularizeSurface(object);
+    if (folded !== object) { object = folded; articled = true; }
+  }
+  if (!articled) return `every ${subject} is ${object}`;
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
   return `every ${subject} is ${article} ${object}`;
