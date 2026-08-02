@@ -57,7 +57,6 @@
     "src/",
     "!src/adapters/pii-scan.mjs",
     "!src/domain/corpus-matrix.mjs",
-    "!src/domain/inflect.mjs",
     "!src/domain/licences.mjs",
     "!src/domain/markdown-links.mjs",
     "!src/domain/pack-manifest.mjs",

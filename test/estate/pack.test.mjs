@@ -1,6 +1,7 @@
 // Package hygiene: what `npm pack` would publish matches the committed
-// manifest exactly (no stray file ships, nothing expected goes missing), and
-// publint finds no error in the package metadata / exports map.
+// manifest exactly (no stray file ships, nothing expected goes missing), every
+// import inside that shipped tree resolves to another shipped file, and publint
+// finds no error in the package metadata / exports map.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -10,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { publint } from "publint";
 import { formatMessage } from "publint/utils";
 import { packedPaths, comparePackManifest, MANIFEST_FILE } from "../../scripts/check-pack-manifest.mjs";
+import { unshippedImports, packageEntryPaths } from "../../src/domain/pack-manifest.mjs";
 
 const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 
@@ -33,6 +35,32 @@ test("npm pack would ship exactly the committed manifest", async () => {
     { missing, unexpected },
     { missing: [], unexpected: [] },
     "pack contents drifted from test/estate/pack-manifest.json — if intentional, regenerate and commit the manifest",
+  );
+});
+
+// `files` takes src/ wholesale and subtracts maintainer-tier modules by name,
+// so a shipped module can start importing a subtracted one without changing the
+// packed list at all. The manifest check above stays green and the tarball still
+// throws ERR_MODULE_NOT_FOUND on a consumer's first run. This walks the graph
+// from the package's own entry points instead, over the same pack output.
+test("every import the packed tree reaches resolves to a packed file", async () => {
+  const shipped = packedPaths(await packDryRunStdout);
+  const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  const broken = unshippedImports({
+    packedPaths: shipped,
+    entryPaths: packageEntryPaths(pkg),
+    readSource: (rel) => {
+      try {
+        return readFileSync(path.join(REPO_ROOT, rel), "utf8");
+      } catch {
+        return null;
+      }
+    },
+  });
+  assert.deepEqual(
+    broken.map((b) => `${b.from} imports ${b.specifier}, which does not ship`),
+    [],
+    "the published tarball would fail to load — ship the target, or stop importing it from a shipped module",
   );
 });
 
