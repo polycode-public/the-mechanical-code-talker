@@ -36,7 +36,7 @@ import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
-  personKnowledgeLines, personKnownFoodLines,
+  personKnowledgeLines, personKnownFoodLines, objectClassChain, recordExamined,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
   roomKindOf, isMudStatePredicate, worldEpochFact, snapshotSubject,
 } from "../../services/adventure.mjs";
@@ -51,6 +51,12 @@ import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
+
+// The class chain a room-mate object needs to reach for a starting character
+// to be seeded as already knowing about it — mirrors mud-turn.mjs's own
+// private FOOD_CLASS, kept as this file's own copy for the same reason that
+// file gives: nothing here reaches into another module's private constant.
+const MUD_STARTING_FOOD_CLASS = "food";
 
 /** A live, shared mud world several characters can each act in. `worldPayload`
  *  is `{ name, facts, rules, opening }` — the same shape adventure-browser-
@@ -129,6 +135,32 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
   async function roomOf(character) {
     const { state } = await readWorld();
     return state.placements.get(character)?.object ?? null;
+  }
+
+  // Every character already stands somewhere in the world this store was
+  // just seeded with, and food sitting loose in ITS OWN starting room is
+  // something it would see just by being there — the room's own "You can:"
+  // affordances and the pouch already read straight off this same seeded
+  // state, no play button required. Without this, personKnownFoodLines
+  // reads pure testimony (the mgx:knows-about facts recordTold/recordExamined
+  // write from the scripted tick loop), so "what food do you know about"
+  // stayed empty until the sim had ticked at least once, even with a carrot
+  // sitting in plain view. One recordExamined per character per food item
+  // already in its own room, written once here at open, closes that gap —
+  // a character standing three rooms away from every carrot on the board
+  // still starts knowing nothing, the honest answer for it.
+  {
+    const { rows, state } = await readWorld();
+    for (const character of characters) {
+      const room = state.placements.get(character)?.object ?? null;
+      if (!room) continue;
+      for (const [thing, place] of state.placements) {
+        if (thing === character) continue;
+        if (place.predicate !== "mgx:located-in" || place.object !== room) continue;
+        if (!objectClassChain(rows, thing).includes(MUD_STARTING_FOOD_CLASS)) continue;
+        await recordExamined(memoryDir, { observer: character, thing, k: 0, epoch });
+      }
+    }
   }
 
   const windows = {};

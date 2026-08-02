@@ -121,6 +121,23 @@ test("an object with no taught mgx:madeOf value still resolves to a complete, pl
   assert.ok(!svg.includes("{{FILL"));
 });
 
+// lamp.toml and cabinet.toml each carry only a [parameters.material] template
+// at the sprite tier, no plain sibling — so an untaught instance has no
+// filled variant to render. Before resolveAtTerm's own unfilled-placeholder
+// fallback, that meant resolveSpriteAsset fell all the way through the
+// ancestor chain to the animal-root fallback: the compose box drew a lamp
+// and a cabinet as the same generic four-legged animal.
+for (const cls of ["lamp", "cabinet"]) {
+  test(`an untaught ${cls} resolves to its own dedicated sprite, never the animal-root fallback`, () => {
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const own = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls));
+    assert.ok(own, `sprite-large/${cls}.toml not found`);
+    const animalSvg = resolveSpriteAsset("animal", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.notEqual(svg, animalSvg, `an untaught ${cls} must not render as the generic animal-root sprite`);
+    assert.ok(!svg.includes("{{FILL"), `${cls} left an unresolved placeholder token`);
+  });
+}
+
 test("an object with no material vocabulary at all (dog) never carries a [parameters.material] table at the sprite tier", () => {
   const dog = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion && !t.match);
   assert.ok(dog, "sprite-large/dog.toml not found");

@@ -1008,12 +1008,19 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       chatqEl.focus();
     });
   }
+  // A direction pill REPLACES the claim rather than appending to it — unlike
+  // adventure.html/mud.html's claim pills, which are meant to compose ("look
+  // at" then "the book"), these four are mutually exclusive readings of the
+  // SAME fact (where one agent is), so a second click was building
+  // "@spider the fly is north the fly is east", which the grammar has never
+  // accepted and never will: a thing has one position, not several at once.
+  // The address prefix survives a direction click (so "@fly" then a
+  // direction still addresses the fly), the same way it already did before
+  // this fix — only the claim after it is replaced rather than grown.
   for (const btn of directionPillEls) {
     btn.addEventListener("click", () => {
       const kind = addresseeKindOf(chatqEl.value) || "spider";
-      let value = chatqEl.value;
-      if (!addresseeKindOf(value)) value = "@" + kind + " " + value.trimStart();
-      chatqEl.value = value.replace(/\\s+$/, "") + " " + btn.textContent;
+      chatqEl.value = "@" + kind + " " + btn.textContent;
       refreshPills();
       chatqEl.focus();
     });
