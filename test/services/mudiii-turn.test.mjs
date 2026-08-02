@@ -300,6 +300,61 @@ test("what does the crab see?: an unrecognized kind never matches", () => withMe
   assert.equal(result, null);
 }));
 
+// ---- the provenance read: "who put that there?" -----------------------------
+
+test("who put morsel-1 there?: names the player who placed it", () => withMemoryDir("tmct-mudiii-turn-who-placed-item-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  await mudiiiTurn("put food at cell-3-4", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("who put morsel-1 there?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /player put morsel-1 at cell-3-4/);
+  assert.equal(result.miss, undefined);
+}));
+
+test("who placed food at cell-3-4?: the same read, addressed by cell instead of item id", () => withMemoryDir("tmct-mudiii-turn-who-placed-cell-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  await mudiiiTurn("put food at cell-3-4", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("who placed food at cell-3-4?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /player put morsel-1 at cell-3-4/);
+  assert.equal(result.miss, undefined);
+}));
+
+test("who put crumb-9 there?: spawned food carries no placedBy row, so the lane declines rather than guessing", () => withMemoryDir("tmct-mudiii-turn-who-placed-spawned-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  await appendFacts(memoryDir, [
+    { subject: "crumb-9", predicate: "rdf:type", object: "crumb", provenance: "test:mudiii-turn" },
+    { subject: "crumb-9@turn1", predicate: "mgx:currently-in", object: "cell-6-7", provenance: "test:mudiii-turn" },
+  ]);
+  const result = await mudiiiTurn("who put crumb-9 there?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /crumb-9 was never placed/);
+  assert.equal(result.miss, true);
+}));
+
+test("who put morsel-4 there?: an item id not on the board declines by name rather than guessing", () => withMemoryDir("tmct-mudiii-turn-who-placed-missing-item-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("who put morsel-4 there?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /no live morsel on the board/);
+  assert.equal(result.miss, true);
+}));
+
+test("who put food at cell-9-9?: an empty cell declines rather than guessing", () => withMemoryDir("tmct-mudiii-turn-who-placed-empty-cell-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("who put food at cell-9-9?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /no food at cell-9-9/);
+  assert.equal(result.miss, true);
+}));
+
+test("who is the fox?: an unrelated who-question is not captured by the who-placed recognizer", () => withMemoryDir("tmct-mudiii-turn-who-placed-unrelated-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("who is the fox?", { planHolder, memoryDir, env: {} });
+  assert.equal(result, null);
+}));
+
 // ---- orientation asides -------------------------------------------------
 
 test("where is the goblin / where am I / what can I do / what is the goal — the live board's own orientation asides", () => withMemoryDir("tmct-mudiii-turn-asides-", async (memoryDir) => {

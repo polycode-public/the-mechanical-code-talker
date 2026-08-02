@@ -15,7 +15,7 @@
 import {
   TOWN_SQUARE_LAYOUTS, DEFAULT_GRID_SIZE, DIRECTION_DELTA,
   cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
-  agentKindOf, liveIdsOfKind, layoutNamed,
+  agentKindOf, liveIdsOfKind, layoutNamed, isFoodId,
 } from "../domain/town-square-world.mjs";
 import {
   MUDIII_ROLES, foldTownSquareState, startTownSquareGame, runTownSquareTick,
@@ -87,6 +87,25 @@ const MUDIII_TOLD_RE = new RegExp(
 // The observable-facts read: "what does the goblin see?" — belief only,
 // never ground truth.
 const MUDIII_SEE_RE = /^what (?:does|can) the (fox|goblin)(?:-(\d+))?\s+see[.!?\s]*$/i;
+
+// "who put/placed that there?" — provenance, ground truth (not belief), read
+// from placeFood's own mgx:placed-by row. The subject must be named, either
+// an item id ("who put morsel-1 there?") or a cell ("who put food at
+// cell-3-4?") — a bare "who put that there?" with no referent at all names
+// nothing to look up and is left to the ordinary lanes. Requires the leading
+// "who put/placed/dropped" verb, so it never collides with an unrelated "who"
+// question (the fox's own catches, the goblins' names, anything not about a
+// placement) — those never start with this verb at all.
+const MUDIII_WHO_PLACED_RE = new RegExp(
+  "^who\\s+(?:put|placed|dropped)\\s+"
+  + "(?:"
+  + "(?:the\\s+)?(morsel|crumb)(?:-(\\d+))?"
+  + "|"
+  + "(?:(?:the\\s+)?(?:food|morsel|crumb|that|it)\\s+)?(?:at|on)\\s+(cell-\\d+-\\d+)"
+  + ")"
+  + "(?:\\s+there)?[?.!\\s]*$",
+  "i",
+);
 
 // The player's own verb: "put food at cell-3-4" (primary, never shadowed —
 // the adventure imperative grammar's own "put" arm hard-requires a literal
@@ -441,6 +460,63 @@ async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_
   };
 }
 
+function noLivePlacedSubjectAnswer(kind) {
+  return {
+    text: `there's no live ${kind} on the board for that to be about.`,
+    lane: "game-inform",
+    note: `MUDIII — who-placed declined: no live ${kind} resolves`,
+    miss: true,
+  };
+}
+
+/** "who put/placed <item|cell> there?": ground truth read off the folded
+ *  state's own placedBy Map (predator-prey.mjs's fold of every mgx:placed-by
+ *  row), never belief. Resolves the subject the same way the told-fact and
+ *  see recognizers already do — resolveAgentId for a named item, a direct
+ *  placements scan for a cell — then declines, naming the reason, when the
+ *  item isn't on the board at all or is on the board but carries no placedBy
+ *  row (spawned food never does; placeFood is the only writer of that row). */
+async function mudiiiWhoPlacedAnswer(match, { memoryDir }) {
+  const [, kindRaw, num, cellLiteral] = match;
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldTownSquareState(rows);
+
+  let itemId = null;
+  if (kindRaw) {
+    itemId = resolveAgentId(kindRaw.toLowerCase(), num, state);
+  } else {
+    const entry = [...state.placements.entries()].find(([id, place]) =>
+      isFoodId(id) && !state.removed.has(id) && place.cell === cellLiteral);
+    itemId = entry ? entry[0] : null;
+  }
+
+  if (!itemId) {
+    if (kindRaw) return noLivePlacedSubjectAnswer(kindRaw.toLowerCase());
+    return {
+      text: `there's no food at ${cellLiteral} to ask about.`,
+      lane: "game-inform",
+      note: `MUDIII — who-placed declined: no live food item sits at ${cellLiteral}`,
+      miss: true,
+    };
+  }
+
+  const placed = state.placedBy.get(itemId);
+  if (!placed) {
+    return {
+      text: `${itemId} was never placed — it spawned on its own.`,
+      lane: "game-inform",
+      note: `MUDIII — who-placed declined: ${itemId} carries no mgx:placed-by row (spawned food)`,
+      miss: true,
+    };
+  }
+
+  return {
+    text: `${placed.by} put ${itemId} at ${state.placements.get(itemId).cell}.`,
+    lane: "game-inform",
+    note: `MUDIII — who-placed answered from state.placedBy for ${itemId}`,
+  };
+}
+
 /** The addressed teach-frame turn: resolve the addressee and the belief
  *  subject (an agent OR a food item), resolve the told cell, and run ONE tick
  *  with that told-fact fed in. Told-facts are not persisted across turns —
@@ -657,6 +733,11 @@ export async function mudiiiTurn(line, { planHolder, memoryDir, env, cache = nul
   const seeMatch = trimmed.match(MUDIII_SEE_RE);
   if (seeMatch) {
     return mudiiiBeliefAnswer(seeMatch, { memoryDir, gameConfig });
+  }
+
+  const whoPlacedMatch = trimmed.match(MUDIII_WHO_PLACED_RE);
+  if (whoPlacedMatch) {
+    return mudiiiWhoPlacedAnswer(whoPlacedMatch, { memoryDir });
   }
 
   if (MUDIII_TICK_RE.test(line)) {
