@@ -84,16 +84,6 @@ only a code push exercises the deployed tier.
   **Tier:** none. It closes on the next green pipeline.
   **Do:** confirm the job passes on the push that clears the red suite, then delete this item.
 
-- **`smoke:deploy`'s new `mudiii.html` probe has not run against a real deployed URL.** The probe
-  itself has landed: `mudiiiPage()` in `scripts/post-deploy-smoke.mjs` fetches `mudiii.html`
-  relative to `PAGES_URL` and asserts both `res.ok` and a present `content-encoding`, registered in
-  `checkOnce()` and folded into the `ok` boolean.
-  **Tier:** Haiku, and it is a run rather than an edit.
-  **Do:** run `npm run smoke:deploy` once after the next real deploy and confirm the `mudiii` row
-  reports an encoding rather than an error. A wrong path is the only way this fails, and nothing
-  local can tell you.
-  **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
-
 ### mudiii.html — further work
 
 - **The desktop deck still carries a wide empty band.** With the map reduced to a 240px minimap in
