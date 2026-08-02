@@ -72,23 +72,41 @@ test("appendFact/appendFacts/appendUtterance(s)/appendRule over a handle: same b
     const memMemory = await loadMemory(handle);
     const fileMemory = await loadMemory(dir);
 
-    // Same fact rows (content-addressed ids, same subject/predicate/object,
-    // same trust — deterministic since both runs pass identical createdAt).
-    const stripSourceIds = (rows) => rows.map(({ sourceIds, ...rest }) => rest)
+    // mgx:updatedAt and the trust score are genuine LIVE wall-clock values, not
+    // derived from the fixture's own fixed `createdAt`s: the two `ops()` runs
+    // above (and the two readFactRows calls below) are sequential real-time
+    // calls, so a recency-decayed number can legitimately land a rounding tick
+    // apart between the two backends even though both ran the identical
+    // formula over the identical inputs. mgx:updatedAt has no meaningful value
+    // to assert at all, so it is redacted to a placeholder. The trust score
+    // does carry a meaningful value, so it stays asserted, just at the 3
+    // significant figures that is coarse enough to absorb the wall-clock
+    // noise while still catching a real change in the score. Applying the
+    // same `toPrecision(3)` transform to both sides is what keeps this an
+    // actual comparison rather than a pass-by-normalizing-one-side trick.
+    const at3sf = (n) => Number(n).toPrecision(3);
+
+    // Same fact rows (content-addressed ids, same subject/predicate/object).
+    // `trust` is folded fresh at read time against the current clock, not
+    // stored, so it carries the same wall-clock noise as the Rule's
+    // mgx:trustScore below — round it to 3sf in place rather than dropping it.
+    const roundTrust = (rows) => rows.map(({ sourceIds, trust, ...rest }) => ({ ...rest, trust: at3sf(trust) }))
       .sort((a, b) => a.id.localeCompare(b.id));
-    assert.deepEqual(stripSourceIds(readFactRows(memMemory)), stripSourceIds(readFactRows(fileMemory)));
+    assert.deepEqual(roundTrust(readFactRows(memMemory)), roundTrust(readFactRows(fileMemory)));
 
     // Same Rule lookup. mgx:updatedAt (recomputeFactTrust re-stamps it — class-agnostic, so a
-    // Rule rides it too) is a genuine LIVE wall-clock value, not derived from the
-    // fixture's own fixed `createdAt`s — the two `ops()` runs above are sequential real-time
-    // calls, so it legitimately differs by a millisecond or two between the two backends. Redact
-    // it before the structural attribute comparison, same reasoning as memory-core.test.mjs's
-    // GOLDEN EQUIVALENCE test's `norm()`.
-    const redactUpdatedAt = (attrs) => attrs.map((a) => (a.prop === "mgx:updatedAt" ? { ...a, value: "<ts>" } : a));
+    // Rule rides it too) and mgx:trustScore ride the same recency term. Placeholder the former,
+    // round the latter to 3sf, same reasoning as memory-core.test.mjs's GOLDEN EQUIVALENCE
+    // test's `norm()`.
+    const normalizeVolatileAttrs = (attrs) => attrs.map((a) => {
+      if (a.prop === "mgx:updatedAt") return { ...a, value: "<ts>" };
+      if (a.prop === "mgx:trustScore") return { ...a, value: at3sf(a.value) };
+      return a;
+    });
     const memRule = findRuleByName(memMemory, "grandparent");
     const fileRule = findRuleByName(fileMemory, "grandparent");
     assert.equal(memRule.id, fileRule.id);
-    assert.deepEqual(redactUpdatedAt(memRule.attributes), redactUpdatedAt(fileRule.attributes));
+    assert.deepEqual(normalizeVolatileAttrs(memRule.attributes), normalizeVolatileAttrs(fileRule.attributes));
 
     // Same utterance/reply/session wiring.
     assert.equal(memMemory.individuals.filter((i) => i.class === UTTERANCE_CLASS).length,
