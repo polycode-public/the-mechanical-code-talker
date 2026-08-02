@@ -164,6 +164,95 @@ test("the 3D scene canvas boots without a console error, when the model catalogu
   }
 });
 
+// The world direction each facing word means, mirrored from cameraRigFor's
+// own FACING_VECTOR table (mudiii-viz.mjs) — the convention yawForFacing's
+// own header says a rotated mesh has to match.
+const FACING_VECTOR = { north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, east: { x: 1, z: 0 }, west: { x: -1, z: 0 } };
+
+/** Every HUD-drawn agent's own stored cell and applied Y rotation this
+ *  instant, id -> { cell, yaw } — the same two live reads a screenshot-based
+ *  eyeball check would otherwise stand in for. */
+const agentCellsAndYawOf = (page) => page.evaluate(() => {
+  const out = {};
+  for (const card of document.querySelectorAll("#hudRow .hud-card[data-agent]")) {
+    const id = card.getAttribute("data-agent");
+    if (!id || !window.mudiiiScene) continue;
+    out[id] = { cell: window.mudiiiScene.cellOf(id), yaw: window.mudiiiScene.yawOf(id) };
+  }
+  return out;
+});
+
+function cellToXY(cell) {
+  const m = /^cell-(\d+)-(\d+)$/.exec(cell || "");
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+}
+
+/** The cardinal word a one-cell move from `a` to `b` travelled, or null for
+ *  anything that is not exactly one orthogonal step (a multi-cell jump, a
+ *  diagonal, or holding still). */
+function directionOfHop(a, b) {
+  const from = cellToXY(a), to = cellToXY(b);
+  if (!from || !to) return null;
+  const dx = to.x - from.x, dy = to.y - from.y;
+  if (dx === 1 && dy === 0) return "east";
+  if (dx === -1 && dy === 0) return "west";
+  if (dx === 0 && dy === 1) return "south";
+  if (dx === 0 && dy === -1) return "north";
+  return null;
+}
+
+test("every agent that takes a one-cell step renders facing the way it actually travelled, when the model catalogue is present", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await page.waitForFunction(
+      () => window.mudiiiScene && typeof window.mudiiiScene.ready === "function" && window.mudiiiScene.ready(),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    let prev = await agentCellsAndYawOf(page);
+    const samples = [];
+    await page.locator("#autoToggle").click();
+    // A generous tick budget: the samples this test cares about are whatever
+    // single-cell hops actually happen along the way, not a forced direction
+    // (the engine's own movement choices are a sibling track's, not driven
+    // here), so this runs long enough to almost certainly see every cardinal
+    // at least once across the live roster.
+    for (let tick = 1; tick <= 16; tick += 1) {
+      await page.waitForFunction((n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) >= n;
+      }, tick, { timeout: TICK_TIMEOUT_MS });
+      const cur = await agentCellsAndYawOf(page);
+      for (const id of Object.keys(cur)) {
+        const before = prev[id];
+        const after = cur[id];
+        if (!before || !after || !before.cell || !after.cell) continue;
+        const direction = directionOfHop(before.cell, after.cell);
+        if (!direction) continue;
+        samples.push({ id, direction, yaw: after.yaw });
+      }
+      prev = cur;
+    }
+    await page.locator("#autoToggle").click();
+
+    assert.ok(samples.length > 0, "at least one live agent took a one-cell step across the run");
+    for (const sample of samples) {
+      const modelForward = { x: Math.sin(sample.yaw), z: Math.cos(sample.yaw) };
+      const wanted = FACING_VECTOR[sample.direction];
+      const dot = modelForward.x * wanted.x + modelForward.z * wanted.z;
+      assert.ok(
+        dot > 0.9,
+        `${sample.id} stepped ${sample.direction} but its applied yaw (${sample.yaw}) faces a different way (dot ${dot})`,
+      );
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error stepping the cast around the square");
+  } finally {
+    await context.close();
+  }
+});
+
 /** Every HUD-drawn agent id's own mesh reading, id -> { height, minY,
  *  targetHeight } | null, read through window.mudiiiScene.meshHeightOf —
  *  the live group's own measured world-space box, not a second, locally
