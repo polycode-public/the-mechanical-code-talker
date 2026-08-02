@@ -1,7 +1,7 @@
 {
   "_": [
     "The register of terms tmct coins or borrows that name a concept from a discipline.",
-    "One row per term: the area it belongs to, the verdict from PLAN_NORMATIVE.md, and the",
+    "One row per term: the area it belongs to, the verdict from archive/PLAN_NORMATIVE.md, and the",
     "authoritative source it traces to. Checked by `node scripts/term-inventory.mjs --register`:",
     "every term must still occur in the tree, so a row cannot outlive the code it describes.",
     "",

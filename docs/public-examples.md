@@ -136,18 +136,19 @@ this section warns about, in the file that describes it.
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `examples/teach-and-infer.mjs` | the whole script | `runChat` | `test/readme/readme.test.mjs` via `README.md:59` | output |
-| `examples/rover-infer.mjs` | the whole script | `runChat`, first-run corpus bootstrap | `test/readme/readme.test.mjs` via `README.md:137`, `test-e2e/pages-examples.test.mjs` via `index.html:734` | output |
-| `examples/raw-fact-shape.mjs` | the whole script | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` via `README.md:153` | output |
+| `examples/teach-and-infer.mjs` | the whole script | `runChat` | `test/readme/readme.test.mjs`, via README's "Teach it, then ask it to reason" section | output |
+| `examples/rover-infer.mjs` | the whole script | `runChat`, first-run corpus bootstrap | `test/readme/readme.test.mjs`, via the same section; `test-e2e/pages-examples.test.mjs`, via `index.html`'s teach-and-ask transcript | output |
+| `examples/raw-fact-shape.mjs` | the whole script | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs`, via the same section | output |
 | `examples/mini-webapp` | the fixture graph | `parseEntities` | `test/estate/fixture-repos.test.mjs` | estate |
 
 `teach-and-infer.mjs`, `rover-infer.mjs`, and `raw-fact-shape.mjs` carry no
 `assert` of their own. They do not need one: the README pins each one's
 **entire** stdout with no elision (session-id/timestamp normalized to a
 literal placeholder first), so any drift fails the suite. `rover-infer.mjs`
-is also replayed as `index.html:734`'s `data-tmct-session` command — pointing
-that block at the example script itself, rather than the raw `tmct` binary,
-is what makes the same non-deterministic citation checkable there too.
+is also replayed as the teach-and-ask transcript's `data-tmct-session`
+command in `index.html` — pointing that block at the example script itself,
+rather than the raw `tmct` binary, is what makes the same non-deterministic
+citation checkable there too.
 
 ## .tmct/TOOLS.md
 

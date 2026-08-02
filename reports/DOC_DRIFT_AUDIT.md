@@ -154,6 +154,16 @@ match.
 One live example had disappeared entirely: the `what is a dog` / `what is a
 quokka` transcript is now only an image alt text, so its row went.
 
+**Verified in a later pass, and found to have rotted again:** the section-name
+fix above covered the file's `## README.md` table but missed a second table,
+under `## examples/`, that still cited raw line numbers (`README.md:59`,
+`README.md:137`, `README.md:153`, `index.html:734`). Checked against the
+current files: `teach-and-infer.mjs`'s output block now starts at README.md
+line 83, not 59, so the citation had rotted; the other two were close but
+still line numbers, the same failure mode this file's own rule warns about.
+All four rows now name the section instead, matching the convention the
+`## README.md` table already uses.
+
 ## Reference-path sweep
 
 Twenty-nine bare references to archived plan docs (`PLAN_NORMATIVE.md`,
@@ -162,6 +172,10 @@ Twenty-nine bare references to archived plan docs (`PLAN_NORMATIVE.md`,
 `archive/`, which is the convention `PLAN_CODE_PLANNING.md` already follows.
 `npm run check:links` does not catch these: they are backtick mentions, not
 markdown links.
+
+A later pass found one more: `docs/references/term-register.json`'s own header
+comment named `PLAN_NORMATIVE.md` bare, inside a JSON string the link checker
+cannot see either. Fixed the same way, to `archive/PLAN_NORMATIVE.md`.
 
 `docs/references/README.md`'s contents tree and its planning section both omitted
 `BDI_GOAL_DRIVEN_AUTONOMY.md`, a substantial entry. Both now name it.
@@ -219,10 +233,14 @@ rediscovered:
   `mergeEffective` strips it. The README makes no such promise, so this is a
   code/comment gap only.
 - `STATUS.md`'s header reads "Measured tree: 3.0.3 … Repo now at 3.0.10" against
-  a `package.json` at 5.0.5.
-- `src/services/p2p-room.mjs` is classified by `file(1)` as `data`, so a plain
-  `grep` silently skips it and returns nothing. Any grep-based sweep over
-  `src/services/` is quietly missing that file.
+  a `package.json` now at 5.0.6 (5.0.5 when this row was first written — another
+  track is committing against `main` while this pass runs, so the exact number
+  will keep moving; the mismatch itself is the standing finding).
+
+**Struck, re-checked in a later pass:** `src/services/p2p-room.mjs`'s `file(1)`
+classification no longer reads `data` on this session's tooling, and a plain
+`grep -rn` over `src/services/` finds its matches same as any other file. The
+grep-skips-it risk does not reproduce here.
 
 ## What the checks read
 
