@@ -557,10 +557,8 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
   }
 
-  // ---- items: crumbs and morsels, the committed hay bale at two target
-  // heights (food-crumb 0.16, food-morsel 0.36 in data/mudiii-assets.json),
-  // matching the on-ground footprint the primitive spheres they replace were
-  // already tuned to. ---------------------------------------------------------
+  // ---- items: crumbs and morsels, both the committed hay bale, each at
+  // whatever targetHeight its own data/mudiii-assets.json row names. ----------
   function itemAssetKeyFor(kind) { return kind === "morsel" ? "food-morsel" : "food-crumb"; }
 
   function animateScaleTo(object3D, target, now) {

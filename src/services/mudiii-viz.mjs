@@ -781,6 +781,14 @@ const MUDIII_STYLE = `
   .pill:hover:not(:disabled) { border-color: var(--square-accent); background: var(--square-accent); }
   .pill.affordance { border-style: dashed; border-color: var(--square-stone); }
   .pill.affordance[aria-pressed="true"] { background: var(--square-accent); border-style: solid; }
+  /* The tick and the cross live in ::before so the tag stays on the screen and
+     out of the submitted sentence — a clicked lie must be indistinguishable
+     from a typed one by the time the lane reads it. */
+  .pill[data-role="dyn-addr"][data-active="1"] { border-color: var(--taught); color: var(--taught); }
+  .pill[data-role="dyn-claim"][data-truth="true"] { border-color: var(--taught); }
+  .pill[data-role="dyn-claim"][data-truth="true"]::before { content: "\\2713 "; opacity: .55; }
+  .pill[data-role="dyn-claim"][data-truth="false"] { border-style: dashed; border-color: var(--alert); }
+  .pill[data-role="dyn-claim"][data-truth="false"]::before { content: "\\2715 "; opacity: .6; }
 
   @media (max-width: 900px) {
     .edit-stage { grid-template-columns: 1fr; }
@@ -878,6 +886,7 @@ function pageScript() {
   let cameraModeBeforeFallback = null;
   let foodArmed = false;
   let livePills = [];
+  let selectedAddresseeId = null;
   let pillComplete = null;
   let autoOn = false;
   let editing = false;
@@ -998,19 +1007,63 @@ function pageScript() {
   el("chatLogPopupClose").addEventListener("click", function () { el("chatLogPopup").hidden = true; });
 
   // ---- the pill rail and its typeahead ----------------------------------
+  // The deception rail is tmct.page.pillsForMudiii's own output, rendered and
+  // nothing more: an address pill per live agent, then a true and a false
+  // claim about every individual the addressee could act on. The false cell is
+  // the board's own point reflection, so a lie is always in bounds and never
+  // accidentally true. Which one a pill carries is shown by a glyph in CSS
+  // ::before, never in the submitted text — a clicked lie reads exactly like a
+  // typed one once it is in the input.
   function renderChatPills() {
-    const pills = [{ command: "look", label: "look" }];
-    for (const id of Object.keys(agentsById)) pills.push({ command: "@" + id + " look", label: "@" + id + " look" });
-    livePills = pills;
-    el("chatPills").innerHTML = pills.map(function (p) {
-      return '<button type="button" class="pill" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
+    const rail = window.tmct.page.pillsForMudiii(agentsById, itemsById, selectedAddresseeId, { gridSize: gridSizeOf() });
+    selectedAddresseeId = rail.addresseeId;
+    const addrHtml = rail.addressPills.map(function (p) {
+      return '<button type="button" class="pill" data-role="dyn-addr" data-id="' + esc(p.id) + '"'
+        + (p.id === selectedAddresseeId ? ' data-active="1"' : "") + ">" + esc(p.label) + "</button>";
     }).join("");
-    const buttons = el("chatPills").querySelectorAll(".pill");
-    for (let i = 0; i < buttons.length; i += 1) {
-      buttons[i].addEventListener("click", function (e) { sendCommand(e.currentTarget.getAttribute("data-command")); });
-    }
+    const claims = rail.claimPills.map(function (p) {
+      return { command: p.sentence, label: p.text, truth: p.truth };
+    });
+    const claimHtml = claims.map(function (p) {
+      return '<button type="button" class="pill" data-role="dyn-claim" data-truth="' + (p.truth ? "true" : "false")
+        + '" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
+    }).join("");
+    livePills = claims;
+    el("chatPills").innerHTML = addrHtml + claimHtml;
     if (pillComplete) pillComplete.refresh();
   }
+
+  // A pill APPENDS rather than replacing, so two clicks compose one line. The
+  // second click of a double is what submits: the text it would have appended
+  // went in on the first click of that same pair, which is why nothing is
+  // appended again here.
+  function appendToChatInput(text) {
+    const input = el("chatInput");
+    const head = input.value.replace(/\\s+$/, "");
+    input.value = (head ? head + " " : "") + text;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  el("chatPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    if (btn.getAttribute("data-role") === "dyn-addr") {
+      selectedAddresseeId = btn.getAttribute("data-id");
+      renderChatPills();
+      return;
+    }
+    const command = btn.getAttribute("data-command");
+    if (!command) return;
+    if (e.detail > 1) {
+      const input = el("chatInput");
+      const line = input.value.trim();
+      input.value = "";
+      if (line) sendCommand(line);
+      return;
+    }
+    appendToChatInput(command);
+  });
 
   function wirePillComplete() {
     pillComplete = createPillComplete({

@@ -25,6 +25,7 @@ import {
   COMPASS_POINTS, DEFAULT_FACING, layoutNamed, reverseFacing, stepCellFrom, turnedFacing,
 } from "../../domain/town-square-world.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
+import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
@@ -304,5 +305,8 @@ publishTmctSurface({
   plan: enginePlan,
   page: {
     pickMudiiiRoster,
+    // pillsForMudiii closes over two other modules' bindings, so the page
+    // reaches it through this bag rather than a `.toString()` splice.
+    pillsForMudiii,
   },
 });

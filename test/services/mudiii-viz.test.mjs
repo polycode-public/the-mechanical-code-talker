@@ -409,9 +409,31 @@ test("renderMudiiiHtml: exactly the three splice-safe functions are spliced unde
   assert.doesNotMatch(html, /const pillCompleteMarkup = /, "pillCompleteMarkup runs once at render time, never spliced");
 });
 
-test("renderMudiiiHtml: pill buttons carry data-command, so the rail promotes to createPillComplete's combobox", () => {
+test("renderMudiiiHtml: claim pills carry data-command, so the rail promotes to createPillComplete's combobox", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /'<button type="button" class="pill" data-command="' \+ esc\(p\.command\)/, "renderChatPills stamps data-command on every pill");
+  assert.match(html, /data-role="dyn-claim"/, "the deception rail renders claim pills");
+  assert.match(html, /data-command="/, "a claim pill carries the sentence it submits");
+});
+
+test("renderMudiiiHtml: address pills switch the addressee and carry no submittable command", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /data-role="dyn-addr"/);
+  assert.match(html, /selectedAddresseeId = btn\.getAttribute\("data-id"\)/, "clicking an address pill only moves the rail's own addressee");
+  assert.match(html, /pillsForMudiii\(agentsById, itemsById, selectedAddresseeId/, "the rail is the engine's own pure function, never a page reimplementation");
+});
+
+test("renderMudiiiHtml: a true and a false claim pill are told apart by a CSS glyph, never by the submitted text", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /\.pill\[data-role="dyn-claim"\]\[data-truth="true"\]::before \{ content: "\\2713 "/);
+  assert.match(html, /\.pill\[data-role="dyn-claim"\]\[data-truth="false"\]::before \{ content: "\\2715 "/);
+  assert.match(html, /\[data-truth="false"\] \{ border-style: dashed; border-color: var\(--alert\); \}/);
+});
+
+test("renderMudiiiHtml: a pill click appends to the input rather than replacing what is typed", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /function appendToChatInput/);
+  assert.match(html, /input\.value = \(head \? head \+ " " : ""\) \+ text;/, "the new text lands after a separating space");
+  assert.doesNotMatch(html, /chatInput"\)\.value = btn\.textContent/, "no rail on this page overwrites the input the way adventure's and mud's do");
 });
 
 // ---- edit mode reuses mud-editor.mjs -----------------------------------
