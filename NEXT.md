@@ -290,6 +290,28 @@ until it does. Then the grid-size item, because the deception rail and the map p
   the flourish path. A vanished mesh alone does not say which branch removed it, so expose a counter
   if that is the only way to see it.
 
+- **The page opens in overhead, not follow.** The operator's decision: mudiii.html opens in FOLLOW
+  mode on an agent, not looking down at the board. The page already intends this and does not get it.
+  `let camera` (`mudiii-viz.mjs:843`) is already `{ mode: "follow", selectedId: null, status: null }`,
+  but `boot()` (`mudiii-scene.mjs:715`) then calls `setCamera({ mode: "overhead", selectedId: null })`
+  unconditionally, and nothing ever writes a `selectedId`. Even without that reset,
+  `cameraRigFor(mode, null, …)` falls back to the overhead rig (`mudiii-scene.mjs:671`), because
+  follow with no agent has nowhere to sit.
+  **Tier:** Sonnet. Two small edits, but the ordering against `boot` is the whole job.
+  **Do:** after the awaited boot in `mudiii-viz.mjs` (`:1219`), set `camera.selectedId` to the same
+  id `renderAgentSelect` (`:1038`-`:1045`) marks selected by default, then `callScene("setCamera",
+  camera)`. Drive it off the roster the page already has rather than a hardcoded `fox-1`, which is a
+  roster pick and not present in every scenario/slider combination. Leave
+  `mudiii-scene.mjs:715`'s reset in place: EDIT mode's re-boot needs a defined camera state, and the
+  EDIT-mode item's own mitigation is to re-apply `setCamera` right after the boot, which is the same
+  shape as this fix.
+  **Risk:** the despawn-fallback item below adds `cameraModeBeforeFallback` next to `let camera`, and
+  both items write `camera` around `applyTickResult`. Land them in the same agent or sequence them.
+  A follow camera on load also means the opening frame depends on an agent mesh existing, so this
+  reads as broken until the goblin-render item lands.
+  **Mitigation:** e2e that loads the page and asserts `#cameraMode button[data-mode="follow"]` reads
+  `aria-pressed="true"` and `#agentSelect` has a non-empty `inputValue()` before any tick.
+
 - **Picking an agent after a despawn fallback does not resume follow.** `nextCameraSelection`
   correctly falls back to `{ mode: "overhead", selectedId: null }` with a status line, but the
   dropdown's change handler preserves `camera.mode`, so choosing a new agent leaves you in overhead
