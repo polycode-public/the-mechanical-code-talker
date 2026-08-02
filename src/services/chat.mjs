@@ -2025,6 +2025,11 @@ function conversationalTurn(line, ctx) {
   // mid-game. The exact/closed-set farewell just above and below this guard
   // stays live either way (a real "bye"/"exit" is unambiguous, never a guess).
   const gameActive = Boolean(ctx.planHolder?.state?.adventure || ctx.planHolder?.state?.spiderFly || ctx.planHolder?.state?.game);
+  // A bare word the live game owns is a move or a hint, never small talk. "help"
+  // mid-adventure asks what the world takes, not what tmct's commands are, and
+  // the orientation card used to front it. Falling through leaves it to the
+  // game's own nudge downstream.
+  if (gameOwnWord(raw, ctx.planHolder)) return null;
   const t = (id, slots = {}) => tRender(ctx.templates, id, slots) ?? TEMPLATES_UNAVAILABLE;
   const mk = (answer, { end = false, miss = false, via = "template", lane = null } = {}) => {
     const ts = new Date().toISOString();
@@ -6413,6 +6418,31 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
   }
   const verdict = lines.join("; ");
   return { text: holds ? `${verdict}. ${subjEnt.label} does ${split.verb} ${objEnt.label}.` : `${verdict} — the premise doesn't hold.` };
+}
+
+/** The bare words a live game owns. Typed mid-game they are that game's own
+ *  hints and controls, so a vocabulary lookup on them answers a question nobody
+ *  asked: "lower" in a running guessing game came back with a ConceptNet
+ *  synonym for the word, and "watch"/"step" on the spider-and-fly board read as
+ *  questions about clocks and stairs. Each game's own turn handler runs first,
+ *  so a word listed here only reaches this check when that handler declined it.
+ *  Closed and per-game — a real aside ("what is a dog") is untouched. */
+const GAME_OWN_WORDS = Object.freeze({
+  game: ["higher", "lower", "warmer", "colder", "hotter", "up", "down", "guess"],
+  spiderFly: ["watch", "step", "tick", "move", "board", "web"],
+  adventure: ["help", "xyzzy", "wait", "hint", "plugh"],
+});
+
+/** Which live game claims this bare word, or null. */
+function gameOwnWord(query, planHolder) {
+  const state = planHolder?.state;
+  if (!state) return null;
+  const word = String(query).trim().toLowerCase().replace(/[?.!]+$/, "");
+  if (!word || /\s/.test(word)) return null;
+  for (const kind of ["game", "spiderFly", "adventure"]) {
+    if (state[kind] && GAME_OWN_WORDS[kind].includes(word)) return kind;
+  }
+  return null;
 }
 
 /** The wall-repeat one-liner. MUST NOT match
@@ -13335,6 +13365,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // that blurb (a dispatched turn) then becomes `last`, wiping the very
   // antecedent the next pronoun turn needs.
   const isConversationalCandidate = conversationalCandidateBaseGate && !vocabAntecedent && isConversational(query);
+  const liveGameOwnWord = gameOwnWord(query, planHolder);
   // "what is X" with NO article ("what is john") is BOTH conversational-shaped
   // (isConversational() would claim it) AND a legitimate bare meta/fact-lookup
   // form (BARE_WHATIS_RE). Diverts ONLY when a REAL fact actually resolves for
@@ -13472,6 +13503,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
+  // A word the live game owns is a move or a hint, not a term to define — drop
+  // whatever the vocabulary lanes found for it so the turn lands on the game's
+  // own nudge below.
+  if (liveGameOwnWord) bareMetaHit = null;
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
   let selfContainedMiss = false;
   if (bareMetaHit?.reference) {
@@ -13535,7 +13570,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     via = "template"; handled = true;
     note(trace, "lane: (2) COLD PRONOUN — a subject pronoun with no antecedent bound and no focus standing; named the pronoun instead of the orientation card");
     note(trace, "goal: resolve a pronoun to a subject (nothing named yet)");
-  } else if (isConversationalCandidate && planHolder?.state?.game) {
+  } else if ((isConversationalCandidate || liveGameOwnWord) && planHolder?.state?.game) {
     // MID-GAME: a short line that parsed as nothing ("you said lower", "is it
     // warm in here") stays INSIDE the game frame with a nudge naming the
     // state — the identity card answers a question nobody asked, and it used
@@ -13549,6 +13584,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     dialogueLaneOverride = "game-inform";
     note(trace, "lane: (2) MID-GAME NUDGE — an unparsed short turn stayed inside the live game frame instead of the identity card");
     note(trace, "goal: keep the running guess-the-number game on track");
+  } else if (liveGameOwnWord === "spiderFly") {
+    answer = 'that word belongs to the board, and nothing on it takes it as a move. Say "tick" to advance a turn, '
+      + 'or address one, e.g. "@spider the fly is east". "stop watching" ends it.';
+    via = "game"; handled = true;
+    dialogueLaneOverride = "game-inform";
+    note(trace, "lane: (2) MID-GAME NUDGE — a word the live spider-and-fly board owns stayed in the game frame");
+    note(trace, "goal: keep the running spider-and-fly board on track");
+  } else if (liveGameOwnWord === "adventure") {
+    answer = 'we\'re mid-adventure, and that word isn\'t one the world takes. Try "look", "inventory", '
+      + '"go north" or "take the lamp" — "stop playing" leaves.';
+    via = "game"; handled = true;
+    dialogueLaneOverride = "game-inform";
+    note(trace, "lane: (2) MID-GAME NUDGE — a word the live adventure owns stayed in the game frame");
+    note(trace, "goal: keep the running adventure on track");
   } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)
       && !bareRetractSubject(gateQuery) && !bareRetractSubject(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
