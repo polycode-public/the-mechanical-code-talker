@@ -79,12 +79,27 @@ test("session.board() hands back the opening cast at real cells, with no turn sp
 test("session.board() and session.tick() agree on the field set a renderer reads", async () => {
   const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
   const board = await session.board();
-  const tick = await session.tick(1);
+  const tick = await session.tick();
   assert.deepEqual(Object.keys(board).sort(), ["agents", "ecology", "epoch", "items", "turn"]);
   assert.deepEqual(
     Object.keys(board.agents["fox-1"]).sort(),
     Object.keys(tick.agents["fox-1"]).sort(),
   );
+});
+
+test("session.tick() counts its own turns, and session.board() reports the same count without spending one", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  assert.equal((await session.board()).turn, 0);
+  assert.equal((await session.tick()).turn, 1);
+  assert.equal((await session.tick()).turn, 2);
+  assert.equal((await session.board()).turn, 2, "a resting read repeats the last turn played");
+});
+
+test("a chat turn that runs a tick moves the count the page then reads back off the board", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  await session.tick();
+  await session.turn("@fox-1 the goblin-1 is east");
+  assert.equal((await session.board()).turn, 2, "the chat frame's own tick is counted like any other");
 });
 
 test("a grid fold's placements survive the trip into the editor's own state shape", () => {

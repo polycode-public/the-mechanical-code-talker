@@ -882,6 +882,9 @@ function pageScript() {
 
   function applyTickResult(result) {
     if (!result) return;
+    // The engine owns the count. Anything that advances a turn — the deck, a
+    // chat frame — lands here, so the page never keeps a rival tally.
+    if (typeof result.turn === "number") globalTurn = result.turn;
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
     callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
@@ -893,8 +896,7 @@ function pageScript() {
   async function runOneTick() {
     return serializeTick(async function () {
       if (!session) return null;
-      globalTurn += 1;
-      const result = await session.tick(globalTurn);
+      const result = await session.tick();
       applyTickResult(result);
       renderAll();
       return result;
@@ -922,8 +924,16 @@ function pageScript() {
   function sendCommand(line) {
     appendChat("u", line);
     if (!session) { appendChat("a", "no session is open yet \\u2014 reset to start one."); return Promise.resolve(); }
-    return serializeTick(function () { return tmct.turn(line); }).then(function (res) {
+    // A chat line can run a real turn. An addressed told-fact does, and the
+    // visitor should watch the lie land, so the board is read back in the same
+    // queue slot. board() spends no turn, so a line that ran none costs
+    // nothing. It reports no goal or plan either, because a resting board has
+    // decided nothing, which is the blank boot() already draws at turn 0.
+    return serializeTick(async function () {
+      const res = await tmct.turn(line);
+      const board = await session.board();
       appendChat("a", res.answer);
+      applyTickResult(board);
       renderAll();
       return res;
     });
@@ -1226,7 +1236,6 @@ function pageScript() {
     // the cells both come back from it rather than being guessed here.
     const opening = await session.board();
     if (seq !== bootSeq) return;
-    globalTurn = opening.turn || 0;
     camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
     applyTickResult(opening);
     renderAll();

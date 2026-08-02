@@ -234,6 +234,35 @@ test("renderMudiiiHtml: sendCommand appends both the typed line and the answer t
   assert.match(sendCommand[1], /tmct\.turn\(line\)/);
 });
 
+test("renderMudiiiHtml: a chat turn reads the board back, so a frame that ran a real turn redraws the page", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const sendCommand = /function sendCommand\(line\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(sendCommand, "sendCommand is in the page script");
+  assert.match(sendCommand[1], /await session\.board\(\)/, "the board is re-read after every chat turn");
+  assert.match(sendCommand[1], /applyTickResult\(board\)/, "and drawn through the one path a tick takes");
+  assert.match(
+    sendCommand[1],
+    /serializeTick\(async function \(\) \{[\s\S]*applyTickResult\(board\)/,
+    "the turn and the read-back share one queue slot, so a deck tick cannot land between them",
+  );
+});
+
+test("renderMudiiiHtml: the turn counter is read off the engine's own payload, never counted twice by the page", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const apply = /function applyTickResult\(result\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(apply, "applyTickResult is in the page script");
+  assert.match(apply[1], /globalTurn = result\.turn/, "the one place the page's counter is set");
+
+  const runOneTick = /async function runOneTick\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(runOneTick, "runOneTick is in the page script");
+  assert.doesNotMatch(runOneTick[1], /globalTurn \+= 1/, "the page keeps no rival tally");
+  assert.match(runOneTick[1], /session\.tick\(\)/, "the engine is asked for a turn, not told which one");
+
+  const boot = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(boot, "boot() is in the page script");
+  assert.doesNotMatch(boot[1], /globalTurn = opening\.turn/, "the opening board sets it through the same path a tick does");
+});
+
 test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absent here", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.doesNotMatch(html, /id="statePill"/);

@@ -554,3 +554,58 @@ test("switching to the 14x14 chapel yard redraws the board at its own size and p
     await context.close();
   }
 });
+
+test("an addressed teach-frame moves the board and the page redraws it, with nothing playing", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    assert.equal(await turnCountOf(page), 0, "no turn has run on load");
+    const ids = await page.$$eval(
+      "#hudRow .hud-card[data-agent]",
+      (cards) => cards.map((card) => card.getAttribute("data-agent")),
+    );
+    const fox = ids.find((id) => id.startsWith("fox-"));
+    const goblin = ids.find((id) => id.startsWith("goblin-"));
+    assert.ok(fox && goblin, "the opening cast has both a fox and a goblin to address");
+
+    // A teach-frame is the frame where watching a lie land is the point, and
+    // it runs a real turn. cell-5-5 is on every square this page casts, so the
+    // line is never declined for falling off the board.
+    await sendAndSettle(page, () => page.locator("#chatInput").press("Enter"), {
+      prepare: () => page.locator("#chatInput").fill(`@${fox} the ${goblin} is at cell-5-5`),
+    });
+
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "the deck was never started");
+    assert.equal(await turnCountOf(page), 1, "the teach-frame's own turn is counted like a deck-driven one");
+    assert.match(await page.locator("#mapPanelTurn").textContent(), /turn 1\b/, "the map panel agrees with the deck's counter");
+
+    // The page's own dots against the store's own sentences. This is the read
+    // that catches a chat turn whose result never reached the renderer.
+    const stored = {};
+    for (const line of (await readWorldSentences(page)).split("\n")) {
+      const match = /^(\S+) stands in the (cell-\d+-\d+)/i.exec(line.trim());
+      if (match) stored[match[1].toLowerCase()] = match[2];
+    }
+    const gridSize = await page.evaluate(
+      () => MUDIII_PAGE_DATA.scenarios[Number(document.getElementById("scenarioSelect").value) || 0].gridSize,
+    );
+    const dots = await mapDotCellsUnder(page, gridSize);
+    assert.ok(dots.length > 0, "the map panel draws the live cast");
+    let checked = 0;
+    for (const dot of dots) {
+      const cell = stored[(dot.id || "").toLowerCase()];
+      if (!cell) continue;
+      checked += 1;
+      assert.equal(
+        `cell-${Math.round(dot.x)}-${Math.round(dot.y)}`,
+        cell,
+        `${dot.id} is drawn where the store says it now stands, not where it stood before the chat turn`,
+      );
+    }
+    assert.ok(checked > 0, "at least one drawn dot was matched against its stored cell");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error running a teach-frame turn from the chat dock");
+  } finally {
+    await context.close();
+  }
+});
