@@ -8,13 +8,10 @@
 // mud.html's burrow survey.
 //
 // This module owns the PAGE SHELL only. The 3D scene itself — the actual
-// three.js renderer, the model loader, the per-frame camera update — is a
-// concurrent track's file, src/services/mudiii-scene.mjs, reached through
-// exactly one frozen function: `mudiiiSceneScript(opts) -> string`, a
-// standalone inline <script> this page embeds next to its own. That module
-// does not exist in every worktree yet (see the guarded import below), so
-// this file also ships a "" stub until it lands — no edit needed here when
-// it does.
+// three.js renderer, the model loader, the per-frame camera update — lives in
+// src/services/mudiii-scene.mjs, reached through exactly one frozen function:
+// `mudiiiSceneScript(opts) -> string`, a standalone inline <script> this page
+// embeds next to its own.
 //
 // The contract runs both ways. Scene -> shell: the scene script calls
 // `window.mudiiiHandleSceneClick(cellId)` on a raycast hit. Shell -> scene:
@@ -61,12 +58,9 @@ import { believedFactSentence } from "./mudiii-turn.mjs";
 
 // The scene module and this one import each other: this file embeds the
 // scene's generated IIFE, and the scene splices this file's pure geometry
-// helpers into it. A static cycle is fine here because every binding crossing
-// it is a hoisted function declaration that nothing calls at module-evaluation
-// time — the same shape world-teach.mjs and adventure.mjs already rely on. It
-// must NOT be a top-level `await import()`: two modules awaiting each other at
-// evaluation time never settle, and the failure is a silent hang rather than
-// an error.
+// helpers into it. The cycle holds because every binding crossing it is a
+// hoisted function declaration that nothing calls at module-evaluation time —
+// the same shape world-teach.mjs and adventure.mjs already rely on.
 import { mudiiiSceneScript } from "./mudiii-scene.mjs";
 
 const DEFAULT_TITLE = "tmct — mudiii";
@@ -920,12 +914,20 @@ const MUDIII_STYLE = `
     .deck-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem 1rem; }
     .deck-body { align-items: stretch; }
     .map-panel { flex-basis: 33%; max-width: 33%; }
-    /* The board stays square here too. A stretched board moves every dot away
-       from where its cell really is, and the panel's whole job is to be read
-       against the 3D view — so the height problem gets a height fix (cap the
-       square and centre it) rather than a distortion. */
-    .map-panel-board { flex: 0 0 auto; width: min(100%, 108px); min-height: 0; margin: 0 auto; }
+    /* The square aspect-ratio that suits a tall portrait column would blow
+       the map back up to full column width in a short landscape viewport —
+       here it follows the two-row slider stack's own height instead. */
+    .map-panel-board { aspect-ratio: auto; min-height: 90px; }
   }
+
+  /* Half the deck is right on a phone and absurd on a 2000px window: a
+     percentage has no ceiling, so a square board grew to roughly 950px tall
+     and pushed the 3D view off the screen. Wide viewports get an absolute
+     size instead, and keep the square — there is room for it here. */
+  @media (min-width: 901px) {
+    .map-panel { flex: 0 0 320px; max-width: 320px; }
+  }
+
 `;
 
 /** The inlined page script, spliced the same way mud-viz.mjs's own
@@ -1301,7 +1303,7 @@ function pageScript() {
     if (target === from) { setSceneStatus(followed + " is already at " + target + "."); return; }
     callScene("flashCell", target);
     const snap = await session.snapshot();
-    const route = await window.tmct.page.routeBetweenCells(snap.rows, from, target);
+    const route = window.tmct.page.routeBetweenCells(snap.rows, from, target);
     if (!route || !route.directions.length) {
       callScene("clearRoute");
       setSceneStatus("no way through to " + target + " from " + from + ".");
@@ -1462,7 +1464,7 @@ function pageScript() {
     el("playerCountSlider").addEventListener("change", function () { boot(); });
     el("npcCountSlider").addEventListener("input", function () { showGoblinCount(chosenGoblinCount()); });
     el("npcCountSlider").addEventListener("change", function () { boot(); });
-    el("resetBtn").addEventListener("click", function () { boot(); });
+    el("resetBtn").addEventListener("click", function () { resetBoard(); });
     const scenarioSelect = el("scenarioSelect");
     if (scenarioSelect) {
       scenarioSelect.addEventListener("change", function () {
@@ -1594,8 +1596,14 @@ function pageScript() {
   // agent groups, so the visitor's camera is put back and the live cast is
   // redrawn straight after: autoplay is paused in edit mode, so nothing else
   // would repopulate them.
-  async function rebuildSceneFromEdit() {
+  async function rebuildSceneFromEdit(result) {
     props = propPlacementsFrom(editRows, DATA.assetManifest);
+    // A prop may now stand where an animal was, so a change re-casts onto the
+    // edited board. An edit that wrote and retracted nothing leaves the cast
+    // exactly where it stood.
+    if (result && (result.added || result.removed)) {
+      applyTickResult(await session.recast({ agents: cast }));
+    }
     await callScene("boot", {
       propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
     });
@@ -1612,7 +1620,7 @@ function pageScript() {
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
-    await rebuildSceneFromEdit();
+    await rebuildSceneFromEdit(result);
     if (result && result.unrecognized && result.unrecognized.length) {
       status.className = "edit-status pending";
       status.textContent = result.unrecognized.length + " line" + (result.unrecognized.length === 1 ? "" : "s")
@@ -1671,6 +1679,36 @@ function pageScript() {
     camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
     applyTickResult(opening);
     renderAll();
+    if (!prefersReducedMotion()) {
+      autoOn = true;
+      ensureTicker().play();
+    }
+  }
+
+  // Reset re-casts the store it already has rather than opening a new one:
+  // the world's facts, everything taught into it and every editor change all
+  // stand, and only the animals are minted again. Re-opening would throw the
+  // taught facts away with the cast, which is not what "reset the board" says.
+  // The engine owns the turn count, so a re-cast does not rewind it — the
+  // status line says as much, because a counter that keeps climbing after a
+  // Reset otherwise reads as a bug.
+  async function resetBoard() {
+    if (!session) return boot();
+    autoOn = false;
+    if (ticker) { ticker.pause(); ticker = null; }
+    expandedAgents.clear();
+    const s = scenario();
+    const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
+    const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
+    cast = foxes.concat(goblins);
+    showFoxCount(foxes.length);
+    showGoblinCount(goblins.length);
+    const board = await serializeTick(function () { return session.recast({ agents: cast }); });
+    camera = { mode: "follow", selectedId: Object.keys(board.agents || {}).sort()[0] || null, status: null };
+    cameraModeBeforeFallback = null;
+    applyTickResult(board);
+    renderAll();
+    setSceneStatus("re-cast \\u2014 the square's own facts stand, and its clock keeps running.");
     if (!prefersReducedMotion()) {
       autoOn = true;
       ensureTicker().play();

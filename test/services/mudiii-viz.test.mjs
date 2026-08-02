@@ -329,11 +329,16 @@ test("renderMudiiiHtml: a reset draws its own cast and starts it, so the deck's 
   const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.match(bootBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
     "a reboot stops whatever was running before it draws anything");
-  assert.match(
-    html,
-    /el\("resetBtn"\)\.addEventListener\("click", function \(\) \{ boot\(\); \}\)/,
-    "reset is the same boot path, so it lands on the same play state",
-  );
+  assert.match(html, /el\("resetBtn"\)\.addEventListener\("click", function \(\) \{ resetBoard\(\); \}\)/);
+  const resetBlock = /async function resetBoard\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(resetBlock, "reset has its own path");
+  assert.match(resetBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
+    "a re-cast stops whatever was running before it draws anything");
+  assert.match(resetBlock[1], /session\.recast\(\{ agents: cast \}\)/,
+    "the live store is re-cast rather than thrown away with everything taught into it");
+  assert.match(resetBlock[1], /if \(!prefersReducedMotion\(\)\) \{\s*autoOn = true;\s*ensureTicker\(\)\.play\(\);/,
+    "and it lands on the same play state a fresh boot does");
+  assert.match(resetBlock[1], /if \(!session\) return boot\(\);/, "with nothing open there is nothing to re-cast");
 });
 
 test("renderMudiiiHtml: the page script has no Math.random — two loads of a square cast identically", () => {
@@ -495,11 +500,14 @@ test("renderMudiiiHtml: the map names the cast beside each dot, and leaves items
   assert.match(html, /\.map-label \{[\s\S]*pointer-events: none;/, "a label never steals a click meant for the board");
 });
 
-test("renderMudiiiHtml: the map board stays square in landscape, capped rather than stretched", () => {
+test("renderMudiiiHtml: the map is a square minimap on a wide window, not half the deck", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/);
-  assert.doesNotMatch(html, /aspect-ratio: auto/, "no breakpoint gives up the square the dot percentages assume");
-  assert.match(html, /\.map-panel-board \{ flex: 0 0 auto; width: min\(100%, 108px\); min-height: 0; margin: 0 auto; \}/);
+  assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/, "the square the dot percentages assume");
+  assert.match(
+    html,
+    /@media \(min-width: 901px\) \{\s*\.map-panel \{ flex: 0 0 320px; max-width: 320px; \}/,
+    "a percentage has no ceiling, so a wide viewport gets an absolute size",
+  );
 });
 
 test("renderMudiiiHtml: the eyebrow is the shared demo nav, not a bare page name", () => {
@@ -546,14 +554,19 @@ test("renderMudiiiHtml: the editor's suggestion rail is populated and wired, not
 
 test("renderMudiiiHtml: an edit reboots the 3D scene and puts back the camera and the cast", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /async function rebuildSceneFromEdit\(\)/);
+  assert.match(html, /async function rebuildSceneFromEdit\(result\)/);
   assert.match(html, /props = propPlacementsFrom\(editRows, DATA\.assetManifest\);/, "the meshes are rebuilt from the edited facts");
+  assert.match(
+    html,
+    /if \(result && \(result\.added \|\| result\.removed\)\) \{\s*applyTickResult\(await session\.recast\(\{ agents: cast \}\)\);/,
+    "an edit that moved a building re-casts onto the edited board; one that changed nothing leaves the animals alone",
+  );
   assert.match(
     html,
     /await callScene\("boot",[\s\S]*?\);\s*callScene\("setCamera", camera\);\s*callScene\("applyTick", \{ agents: agentsById, items: itemsById, ecology: \[\] \}\);/,
     "boot resets the camera and clears the agent groups, so both are restored right after it",
   );
-  assert.match(html, /await rebuildSceneFromEdit\(\);/);
+  assert.match(html, /await rebuildSceneFromEdit\(result\);/);
 });
 
 test("renderMudiiiHtml: edit mode reuses mud-editor.mjs's renderMudEditorText unchanged", () => {

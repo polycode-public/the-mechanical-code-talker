@@ -6,14 +6,6 @@
 // on `{ as: character }` — the addressee is in the sentence, "@fox-1 look"),
 // and the simulation itself advances as ONE whole-world tick
 // (`runTownSquareTick`) rather than mud's per-character `autoplayTick`.
-//
-// `src/services/predator-prey.mjs` — the engine this file drives — does not
-// exist in every worktree yet; a concurrent track owns it. The import below
-// is guarded (dynamic, try/catch) so this module still loads, and every
-// test that imports mudiii-viz.mjs (which never imports this file) is
-// unaffected either way. `createMudiiiSession` throws a clear "the engine
-// isn't built yet" error if actually called before that track lands, rather
-// than a bare ERR_MODULE_NOT_FOUND with no context.
 import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
@@ -33,20 +25,10 @@ import { classAncestorChain } from "../../domain/sprite-map.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
-
-let engine = null;
-async function loadEngine() {
-  if (engine) return engine;
-  try {
-    engine = await import("../../services/predator-prey.mjs");
-  } catch (err) {
-    throw new Error(
-      "mudiii's engine (src/services/predator-prey.mjs) is not built in this worktree yet "
-      + `(${err && err.message ? err.message : err})`,
-    );
-  }
-  return engine;
-}
+import {
+  foldTownSquareState, gridApplyActions, pathStateKey, placeFood as engPlaceFood, recastTownSquare,
+  roleOfId, runTownSquareTick, startTownSquareGame, townSquareBoard,
+} from "../../services/predator-prey.mjs";
 
 /** `count` entries drawn at random from `roster`, in random order, without
  *  repeats — mirrors mud-browser-entry.mjs's own `pickMudRoster`. `random` is
@@ -141,8 +123,7 @@ export function driveRequest(direction, { cell, facing = DEFAULT_FACING } = {}) 
  *  The exit table is the one legality answer, the same rows the engine's own
  *  chase and forage searches read, so a route drawn here is a route the world
  *  agrees with. */
-export async function routeBetweenCells(factRows, fromCell, toCell) {
-  const { gridApplyActions, pathStateKey } = await loadEngine();
+export function routeBetweenCells(factRows, fromCell, toCell) {
   const from = parseCellId(fromCell);
   const to = parseCellId(toCell);
   if (!from || !to) return null;
@@ -166,9 +147,7 @@ export async function routeBetweenCells(factRows, fromCell, toCell) {
  *  (`runTownSquareTick`) and its conversation is a single shared dock.
  *
  *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick, board,
- *  snapshot, applyEdit, placeFood, driveAgent }`. A reset is not a method here: the
- *  page re-opens a whole session for it, which is what a reset means when the
- *  store is in memory and belongs to one visitor.
+ *  snapshot, applyEdit, placeFood, driveAgent, recast }`.
  *
  *  `getTeachEnabled` is read fresh on every turn, so a visitor can tick the
  *  page's teach box mid-session and have the very next line read as a fact to
@@ -176,11 +155,6 @@ export async function routeBetweenCells(factRows, fromCell, toCell) {
 export async function createMudiiiSession(
   worldPayload, { agents = [], epoch = 0, getTeachEnabled = () => false } = {},
 ) {
-  const {
-    startTownSquareGame, runTownSquareTick, townSquareBoard, foldTownSquareState,
-    placeFood: engPlaceFood, roleOfId,
-  } = await loadEngine();
-
   // Every engine call is layout-scoped: the world pack ships the BOARD, and
   // the layout carries the geometry plus the cast counts the engine mints the
   // animals from. Resolved once here so no call site has to remember it.
@@ -271,6 +245,22 @@ export async function createMudiiiSession(
     };
   }
 
+  /** Re-cast this same store onto a fresh epoch and hand back the opening
+   *  board. This is what a Reset means once a store is live: the world's own
+   *  facts, everything taught into it and everything the editor changed all
+   *  stand, and only the animals are minted again. Re-opening a whole session
+   *  instead would throw away the taught facts along with the cast, which is
+   *  not what "reset the board" says.
+   *
+   *  `agents` sizes the new cast the same way `createMudiiiSession`'s own
+   *  roster does; `epoch` defaults to one past whatever the store is on. */
+  async function recast({ agents: nextAgents = [], epoch: nextEpoch = null } = {}) {
+    await recastTownSquare(memoryDir, {
+      layout, epoch: nextEpoch, ...townSquareRosterArgs(nextAgents, (id) => roleOfId(id)),
+    });
+    return townSquareBoard(memoryDir, { layout });
+  }
+
   /** The board as it stands, in the same payload shape `tick` returns, with no
    *  turn spent. A page opens a session and then draws THIS — otherwise its
    *  first sight of where anything stands is the first tick, and every mesh
@@ -323,6 +313,7 @@ export async function createMudiiiSession(
     turn: turnSession.turn,
     tick,
     driveAgent,
+    recast,
     board,
     snapshot,
     applyEdit,

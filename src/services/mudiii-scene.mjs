@@ -42,12 +42,10 @@
 //         agent or item, never the mid-lerp position. This is what an e2e
 //         assertion reads, and what a later screenshot ready-check reads too
 //         (see test-e2e/pages-mudiii.test.mjs's own header).
+//       .flashCell(cellId) / .showRoute(cells) / .clearRoute() — the clicked
+//         cell and the route the followed agent is walking to it, drawn along
+//         the cells the world's own exit search returned.
 //       .ready() — whether boot() has finished at least once.
-//   These three calls are not yet wired into mudiii-viz.mjs's own
-//   boot()/applyTickResult()/camera handlers — that file is owned by the viz
-//   track, not this one; the coordinator's own report names the exact call
-//   sites needed, mirroring how window.mudiiiHandleSceneClick was already
-//   added for the reverse direction.
 //
 // Reused from mudiii-viz.mjs rather than re-derived, off its own frozen
 // exports: `roleOfAgentId`, `cellToWorld`, `cellFromGroundPoint`,

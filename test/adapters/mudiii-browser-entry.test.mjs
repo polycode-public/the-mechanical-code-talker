@@ -217,7 +217,7 @@ test("teaching is off unless the page says otherwise, and the flag is read fresh
 });
 
 test("routeBetweenCells walks the world's own exit facts, and returns one direction per hop", async () => {
-  const route = await routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-4-2");
+  const route = routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-4-2");
   assert.ok(route, "two open cells on the same row are connected");
   assert.equal(route.cells[0], "cell-2-2");
   assert.equal(route.cells[route.cells.length - 1], "cell-4-2");
@@ -228,7 +228,7 @@ test("routeBetweenCells walks the world's own exit facts, and returns one direct
 });
 
 test("routeBetweenCells declines rather than drawing a route to a cell nothing reaches", async () => {
-  assert.equal(await routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-99-99"), null);
-  assert.equal(await routeBetweenCells(worldPayload.facts, "not-a-cell", "cell-2-2"), null);
-  assert.equal(await routeBetweenCells([], "cell-2-2", "cell-4-2"), null, "no exit facts, no route");
+  assert.equal(routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-99-99"), null);
+  assert.equal(routeBetweenCells(worldPayload.facts, "not-a-cell", "cell-2-2"), null);
+  assert.equal(routeBetweenCells([], "cell-2-2", "cell-4-2"), null, "no exit facts, no route");
 });
