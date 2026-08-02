@@ -95,6 +95,12 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `data-role="dyn-addr"` with no `data-command` (they switch mode, and `pill-complete.mjs:268` only
   scans `[data-command]`), and claim pills as `data-role="dyn-claim" data-truth="true|false"` with
   `data-command` set to the sentence.
+  **The operator's decision on clicking a pill:** a single click **appends** the pill's text to
+  whatever is already in the input, with a separating space and the caret at the end. Pills compose
+  that way: click `look at`, then click `the book`. Return submits. A double-click appends and
+  submits in one gesture. This differs from every other pill rail in the repo — adventure
+  (`adventure-viz.mjs:1537`) and mud both assign `chatqEl.value = btn.textContent`, replacing what
+  was typed. Do not copy that line; write the append.
   **Feasibility:** `pillsForMudiii` is not `.toString()`-splice safe. It closes over `agentKindOf`,
   `liveIdsOfKind`, `parseCellId`, `cellId`, `oneStepDirectionBetween` and `MUDIII_ROLES` from two
   other modules, so the `tmct.page` bag is the only route. Needs `gridSizeOf()` from the grid-size
@@ -534,12 +540,14 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 - **Clicking a camera-mode button does nothing on the board.** There is no feedback tying the button
   to a place.
-  **Tier:** top, and blocked. The item's own title and Do contradict each other, so read the
-  questions section before starting.
+  **Settled:** this belongs to ground clicks, not to the camera buttons. FOLLOW / POV / OVERHEAD
+  switch the camera and do nothing else. **Merge this item into the click-to-turn item above**: a
+  click on a cell flashes it, draws a line from the followed agent, and has that agent plan a route
+  there.
+  **Tier:** Sonnet.
   **Do:** the buttons are `#cameraMode button[data-mode=…]` (`mudiii-viz.mjs:533`-`:537`), plain deck
-  controls carrying no cell, and their handler (`:1058`-`:1064`) reads only `data-mode`. There is no
-  "cell under the click" for a text button, so the stated Do (flash the cell, draw a line, plan a
-  route) cannot be built against them as written.
+  controls carrying no cell, and their handler (`:1058`-`:1064`) reads only `data-mode`. Leave them
+  alone. Build the flash, the line and the route on the existing ground-click path.
   **Feasibility:** if the intent is a route preview on a ground click, the pathfinding half is fully
   groundable. Call `findActionPath` (`src/domain/planning.mjs:30`-`:61`) against the same
   `gridApplyActions(rows)` closure the engine uses, reachable client-side because
@@ -750,6 +758,11 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `/retract` and by mud EDIT mode for the non-fold-versioned predicates. Those predicates are exactly
   the ones the sync filter replicates, and nothing broadcasts a removal, so over a mesh a retraction
   is undone by the next sync from any peer that still holds the fact.
+  **The operator's decision on granularity:** a retraction suppresses **one source's assertion**, not
+  the whole triple group. If two peers independently taught the same fact, one retracting leaves the
+  fact standing and cited to the other, and the retraction stays on record rather than erasing what
+  was asserted. `removeFacts` already supports this: it matches on `ind.id` before falling back to
+  `groupId`, which is what both current callers pass.
   **Tier:** top for the design and the merge-time reconciliation; Sonnet can wire the call sites once
   the shape is fixed.
   **Do:** a replicated summary record carrying the ids it absorbs, so absorption merges by union and
@@ -847,24 +860,9 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### Questions blocking work
 
-Six answers are outstanding. Each names the item it blocks and the default we take on silence.
+Three answers are outstanding. Each names the item it blocks. The three settled ones are recorded
+against their own items above and are repeated here only so nothing is looked for twice.
 
-- **Do claim pills submit, or fill the input?** Blocks the deception rail. `renderChatPills` wires
-  every pill to `sendCommand` today, so a claim pill would submit on one click; spider-fly fills the
-  input and waits for Enter (`spider-fly-viz.mjs:1058`). A one-click lie spends a turn without
-  confirmation. Default: fill the input for claim pills, submit immediately for `tick` and the read
-  verbs.
-- **What does "flash the square below where I click" mean for a camera-mode button?** Blocks the
-  camera-mode feedback item, whose title and Do describe different features. Either the Do belongs to
-  ground and map clicks and should merge into the click-to-turn item, giving every ground click a
-  flash plus a real-path route preview, or the buttons need their own narrower feedback such as a
-  locate pulse on the followed agent's current cell with no line or route. Default: the first
-  reading. The two share almost no code, so this has to be settled before dispatch.
-- **Does a retraction suppress one source's assertion, or the whole triple group?** Blocks
-  p2p retraction. `removeFacts` already supports both (it matches on `ind.id` or falls back to
-  `groupId`). Suppressing one source lets a peer's independent assertion keep the fact alive;
-  suppressing the group suppresses every source because one copy was retracted. Default: record
-  level, matching what both current callers pass.
 - **Who fetches and vets the KayKit food models?** Blocks the food-primitives item. It needs a real
   download from a third-party site and a read of the pack's actual licence text, which an agent
   should not self-certify. Default: hand the sourcing to the operator and keep the manifest and
@@ -874,8 +872,22 @@ Six answers are outstanding. Each names the item it blocks and the default we ta
   the item cannot start without a pick.
 - **Is the spider-fly migration worth doing?** Blocks that item. Its cost is now concrete: three
   missing mechanics, a predicate mismatch, a snapshot-subject mismatch and a seed-key change that
-  moves replay output. The plan doc frames it as a claim to validate "if that ever earns its cost".
-  Default: leave it open and unstarted until the operator says go.
+  moves replay output. Default: leave it open and unstarted until the operator says go.
+
+Settled, and written into the items themselves:
+
+- **Claim pills append rather than replace or submit.** A single click appends the pill's text to
+  whatever is already in the input, so pills compose: click `look at`, then click `the book`. Return
+  submits, and a double-click appends and submits in one gesture. This is a change from every other
+  pill rail in the repo — adventure and mud both assign `chatqEl.value = btn.textContent`, replacing
+  what was typed. The mudiii rail must append with a separating space and put the caret at the end.
+  Recorded on the deception-rail item.
+- **Board feedback belongs to ground clicks, not camera buttons.** Clicking a cell flashes it, draws
+  a line from the followed agent, and has that agent plan a route there. FOLLOW / POV / OVERHEAD
+  switch the camera and do nothing else. The camera-feedback item merges into the click-to-turn item.
+- **A retraction suppresses one source's assertion, not the whole triple group.** If two peers
+  independently taught the same fact, one retracting leaves the fact standing, cited to the other,
+  and the retraction stays on record rather than erasing the assertion. Recorded on the p2p item.
 
 ## Discipline
 
