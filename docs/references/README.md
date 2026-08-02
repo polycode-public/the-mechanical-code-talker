@@ -57,6 +57,7 @@ docs/references/
     NONLIN.md                     <- Tate 1976: the first HTN partial-order planner
     STRIPS_PDDL.md                <- the operator/effect model + its declaration language
     STEEL_AND_HO.md               <- planning + execution under uncertainty (link-only, scanned)
+    BDI_GOAL_DRIVEN_AUTONOMY.md   <- the deduce-goals -> plan -> act meta-loop (Rao & Georgeff; GDA)
 ```
 
 ## 1. OWL 2 / RDF / RDFS vocabulary — [`schemas/owl2-vocabulary.md`](schemas/owl2-vocabulary.md)
@@ -99,9 +100,9 @@ link+excerpt stubs.
 ## 5. Classical planning & KR — [`planning/`](planning/)
 
 The 40-plus-year body of **deterministic, no-LLM, goal-directed planning** —
-partial-order planning, HTN/NONLIN, STRIPS/PDDL, Steel & Ho — behind the
-capability-router RFC. Its load-bearing point: *open-ended planning is not an
-LLM-only capability*. Within a declared operator model, a planner does
+partial-order planning, HTN/NONLIN, STRIPS/PDDL, Steel & Ho, and BDI/goal-driven
+autonomy — behind the capability-router RFC. The point it makes: *open-ended
+planning is not an LLM-only capability*. Within a declared operator model, a planner does
 goal-directed multi-step decomposition deterministically, so what the agentic
 ladder's C1 rung runs into is **the open world**, not planning itself. That
 boundary is a research horizon with live literatures — Ghallab, Nau & Traverso's
@@ -117,7 +118,7 @@ honest miss turn out to share one Reiter citation. Primary papers are link-only
 
 The published standards tmct's vocabulary is checked against — PROV-O, SKOS, SEON, ACE 6.7,
 ConceptNet, ISO 24617-2 — each pinned to an edition and a date, each naming what could not be
-verified. `PLAN_NORMATIVE.md` holds the reconciliation: one verdict per coined term, and the
+verified. `archive/PLAN_NORMATIVE.md` holds the reconciliation: one verdict per coined term, and the
 `owl:equivalentProperty` / `rdfs:subPropertyOf` triples that pin the alignments in
 `ontology/tmct-core.ttl`.
 

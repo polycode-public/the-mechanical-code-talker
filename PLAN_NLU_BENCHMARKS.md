@@ -332,7 +332,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
   NOT move intent F1 — its benchmark surface is L6 (richer hypernym/role chains behind
   entity typing) plus chatbench groundedness; its main value is product capability
   (kinship, part-whole, role reasoning). Product-path work, delivered under the
-  Syllogist track (`PLAN_SYLLOGIST.md` carries the survey of this territory), recorded
+  Syllogist track (`archive/PLAN_SYLLOGIST.md` carries the survey of this territory), recorded
   here so the scoreboard linkage stays explicit.
 - **L8 — inference uplift: generalize the 1.11.0 rule-teach frames to full Horn rules.**
   What shipped (compose-2 / filter / recursive frames, query-side hop-counted chase in

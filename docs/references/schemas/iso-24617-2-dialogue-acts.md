@@ -14,7 +14,7 @@ lane→act lookup — declared as `dact:` terms in `ontology/tmct-core.ttl` §1d
 `/narrate` trace, pinned by `test/adapters/chat-dialogue-act-labels.test.mjs` (teach→inform,
 setQuestion/propositionalQuestion by shape, the honest miss→autoNegative in autoFeedback,
 greeting→initialGreeting, game turns task-dimension). The naming decision predates the build; see
-`PLAN_NORMATIVE.md` §4.5.
+`archive/PLAN_NORMATIVE.md` §4.5.
 
 ## Sources actually read
 

@@ -3,7 +3,7 @@
 Status: RESEARCH / DESIGN — the general verifier this document designs is not yet implemented.
 One narrow slice of the same declared goal already shipped separately and predates this doc:
 `src/domain/paraphrase.mjs` (`verifySubClassParaphrase` / `paraphraseVerifiedSubClass`, isa-family
-only, closure-backed, with `test/paraphrase.test.mjs`), and it reaches the user: the teach
+only, closure-backed, with `test/adapters/paraphrase.test.mjs`), and it reaches the user: the teach
 confirmation appends the verified paraphrase as a suffix on "noted — remembered … facts"
 (`paraphraseSuffix` in `src/services/chat.mjs`), so a paraphrase is only ever shown when the
 closure entails it. The multi-technique `verifyParaphrase(originalFactRow, candidateText,
@@ -129,7 +129,7 @@ to render, not consumed from the static file. This document treats **adapting
 `scripts/generate-template-variants.mjs`'s substitution technique into a live, per-answer call** as a
 real, named prerequisite (Phase 1 below), not something already available to import.
 
-One more existing mechanism, checked and ruled out as the vehicle here: `src/domain/answer-variants.mjs` /
+One more existing mechanism, checked and not the vehicle here: `src/domain/answer-variants.mjs` /
 `src/domain/answer-variants.json`. Its own header is explicit about scope (`src/domain/answer-variants.mjs:5-13`):
 "A SMALL, curated, committed table... of safe cosmetic/locational/connector-word rephrasings for a
 deliberately narrow set of answer templates... never a relation verb..., never an entity id/label/
@@ -183,8 +183,8 @@ silently fail open or fail closed on most predicates — a real risk this docume
 than discovering during implementation. Reconstructing the original's triple from the Fact row
 directly (which is already correct, by construction) sidesteps that risk entirely.
 
-**Was `scripts/extract-facts-from-text.mjs`'s recognizer considered?** Yes, and ruled out for this
-specific job. It reuses `runTurn` (`src/services/chat.mjs:4604`/`8922`) against a real or ephemeral memory
+**Was `scripts/extract-facts-from-text.mjs`'s recognizer considered?** Yes, and it is not the fit
+for this specific job. It reuses `runTurn` (`src/services/chat.mjs:4604`/`8922`) against a real or ephemeral memory
 directory (`scripts/extract-facts-from-text.mjs:91-99`) — broader than `parseAce` alone (it also
 covers the teach lane's "natural frames," e.g. general-verb-teach shapes `parseAce` doesn't reach),
 but it does real `fs` I/O and writes into a memory graph (even an ephemeral scratch one) to determine
@@ -216,7 +216,7 @@ subject-term or object-term differs from the original. The replacement word must
 re-verified* member of the same WordNet synset as the original word, for the same part of speech
 (recompute via `scripts/lib/wordnet-synonyms.mjs`'s `synsetsFor` at verification time — never trust
 a flag the generator set, the same "verify, don't just re-render" discipline `retractSubClassOf`
-already uses for retraction, `PLAN_SYLLOGIST.md`'s §3), **and** that replacement word must already be
+already uses for retraction, `archive/PLAN_SYLLOGIST.md`'s §3), **and** that replacement word must already be
 declared in tmct's own lexicon for that part of speech (`src/domain/grammar/lexicon-core.json`, the same
 "both ends of the swap are tmct's own curated vocabulary" rule `generate-template-variants.mjs`
 already applies at generation time, `scripts/generate-template-variants.mjs:15-18`). This is the

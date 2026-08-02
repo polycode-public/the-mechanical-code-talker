@@ -84,9 +84,9 @@ graph sizes.
 Moved here from `NEXT.md` (2026-07-30) — a related but distinct ask, no timeline pressure,
 planning ahead only. marginalia wants bedrock-meter-proxy's embedded over-cap fallback session
 grounded in marginalia's own memory graph, not tmct's default seeded persona. The Repository
-Interface itself was already ruled out for this (memory is documented as "tmct's alone", and its
-type vocabulary is code-graph-shaped, not conversational-fact-shaped — a correct call, not
-something to revisit). The real seam is the same one this document's own backend registry
+Interface itself is not the seam for this: memory is documented as "tmct's alone", and the
+interface's type vocabulary is code-graph-shaped rather than conversational-fact-shaped. The real
+seam is the same one this document's own backend registry
 (`openMemoryBackend`/`openConfiguredMemoryBackend`, `src/adapters/memory/core.mjs`) would extend
 — these two concerns are related, and possibly worth designing together once this backend lands.
 

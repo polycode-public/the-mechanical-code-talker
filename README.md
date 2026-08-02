@@ -27,6 +27,7 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 | `data/` | seed data assets: sprites, phrasebook, games, response templates |
 | `ontology/` | the software ontology (`tmct-core.ttl`) and memory shapes, in Turtle |
 | `scripts/` | build, check, and maintenance scripts (`npm run` targets live here) |
+| `infra/` | the AWS CDK app that provisions the deployed site and its OIDC/deploy roles |
 | `examples/` | runnable example scripts and fixture repos used by the README's own examples and the test suite |
 | `demo/` | standalone demo scripts (e.g. the agentic-loop demo) |
 | `electron/` | the Electron desktop app wrapper |
@@ -37,7 +38,7 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 | `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
 | `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
 | `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
-| `public/` | the built demo site — a gitignored output of `npm run demo:build`, never hand-edited |
+| `public/` | the demo site: the hand-written home page, the eleven about pages, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
 
 `node_modules/` (dependencies) and dotfiles/hidden tooling directories are omitted above.
 
@@ -319,16 +320,19 @@ tmct> /exit
 
 **[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
-page answers codebase questions live, and eight more pages each ground their
+page answers codebase questions live, and eleven more pages each ground their
 own domain: a full chat seeded with 63,470 facts (the same nine bands as
 `npm run init:xl`), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
 terms inside), and the **code explorer** (the same ledger UI refocused on a
 code graph, with a hint rail of suggested next questions). An **ingest
 page** turns pasted or dropped text into grounded facts and downloads them
-as canonical JSONL. The rest are a Towers-of-Hanoi plan replayed move by
-move, the spider-and-fly and text-adventure games, and a sprite gallery
-whose chat dock answers from 1,033 generated sprite facts. The chat page and
+as canonical JSONL, and a **research page** walks a stub wiki graph link by
+link. The rest are a Towers-of-Hanoi plan replayed move by move, the
+spider-and-fly and text-adventure games, a sprite gallery whose chat dock
+answers from 1,480 generated sprite facts, and two multi-agent worlds: a
+burrow that shares one world across browsers over WebRTC, and a Three.js
+town square where a wolf hunts goblins. The chat page and
 the ledger take the same paste-or-drop text in place; every page that holds
 a fact store exports it as JSONL.
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
@@ -373,8 +377,8 @@ functions". Every suggestion resolves to a real answer.
 The identical page also runs as a plain hosted page over the demo code
 graph, with nothing to install:
 **[try it live →](https://tmct.polycode.co.uk/code.html)**.
-The desktop build below is for exploring your own repo or graph, which the
-hosted page cannot reach.
+The desktop build below is for exploring your own repo or graph: a browser page
+gets no filesystem access, so the hosted page reads the demo graph it ships with.
 
 Electron is a dev-only dependency and never ships in the npm package. Because
 `.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime
@@ -659,7 +663,7 @@ now consults two shipped, lazily-loaded packs before giving up:
   triples into memory (provenance `child:conceptnet:kettle`, ranked below
   anything you teach) and answers from them; the next ask answers from
   memory directly.
-- `corpus/reference/`: 3,887 Simple English Wikipedia summaries. When the
+- `corpus/reference/`: 3,888 Simple English Wikipedia summaries. When the
   triples cannot answer, a matching article answers as a cited read-out
   (`source: reference article "Otter"…, CC BY-SA 4.0`).
 
@@ -712,7 +716,7 @@ the shipped `npm run example:*` demos) reads a graph but writes nothing back.
 
 The default persona also comes in three sizes: Small (~664 facts, the
 default), Medium (~1,608, `tmct init --persona-size medium`) and Large
-(~13,609, `--persona-size large`, deep enough to chain real multi-hop
+(~13,600, `--persona-size large`, deep enough to chain real multi-hop
 reasoning).
 
 ### Memory backends
@@ -935,6 +939,17 @@ provenance record. Most of its flags choose what gets seeded and where config is
                                in this repo picks it up with no flag needed
 ```
 
+`tmct index` is the producer side of the graph seam. It walks a repo's own source
+and writes the `.tmct/graph.json` that chat, serve and the CLI then read.
+
+```output:help:index
+  tmct index [--repo <abs>]    produce a code graph from a repo's OWN source (default: cwd):
+       [--no-history]          walk the tree, parse JS/TS with the TypeScript compiler
+                               API, read git history, and write <repo>/.tmct/graph.json —
+                               the artifact chat/serve/cli then read. --no-history skips
+                               the git passes (no commit/touches/cochange edges)
+```
+
 `tmct import` does the same activation as `tmct init`, but against a repo that is
 already set up. Its `--graph` flag works differently from the others: it appends to
 `tmct.toml`'s `graph_files` array instead of activating a bundle.
@@ -1055,6 +1070,15 @@ kill $SERVE_PID
        [--graph <path>]        the same thing. --graph names the graph file outright
        [--config <path>]       (repeatable), --config an alternate tmct.toml
   tmct cli digest '{…}'        architecture map + per-module context bundles
+  tmct --help                  show this help
+```
+
+The help closes with two notes on where a chat session runs and what it leaves
+behind:
+
+```output:help:notes
+On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
+In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.md.
 ```
 
 Two precedence chains apply across every command above, in this order:
@@ -1116,6 +1140,12 @@ graph_file = ".tmct/graph.json"
 # Extra graphs, merged alongside graph_file (ids that collide are auto-prefixed).
 graph_files = [".tmct/graph.json", ".tmct/legacy-graph.json"]
 
+[graph]
+# A chat session reads this repo's graph and writes nothing back into its
+# .tmct/: no session upsert, no transcript, no memory. The committed example
+# fixtures set it so `tmct chat --repo examples/<x>` can't rewrite them.
+read_only = false
+
 [corpus]
 # "tier1" (committed slice only, $0/offline, the default), "tier2" (also fetch
 # growable corpora at seed time), or "tier3" (also consult live sources per query).
@@ -1124,6 +1154,8 @@ tier = "tier1"
 [seed]
 enabled = true      # seed the committed corpus into .tmct/memory during init
 limit = 500         # cap the seeded fact count (definitional band first); unset = no cap
+capture_unknown_context = true   # keep the sentence around an unrecognized term
+unknown_context_limit = 200      # cap how many of those contexts are kept
 
 # One [extensions.<name>] table per bundle. A recognized name (human, seon,
 # conceptnet, human-medium, human-large, tier2-aws, tier2-python, tier2-java,
@@ -1177,7 +1209,6 @@ call_adjacency = true       # boost callers/callees of a matched symbol
 impl_of_interface = true    # boost an interface's implementations
 beam_search = true          # use beam search over the graph walk
 beam_width = 8
-embed_rank = false          # rerank by embedding similarity (off by default)
 prose_layers = 2            # how many prose-generation passes to run
 
 [tune.expansion]
@@ -1185,6 +1216,17 @@ strategy = "beam"           # graph-walk expansion strategy
 nodes = 50                  # node budget for the walk
 q = 0.5                     # expansion breadth parameter
 depth = 3                   # max hops
+
+# Research-lane knobs (src/services/research.mjs).
+[research]
+fanout_limit = 8            # links followed per page
+max_depth = 3               # hops from the starting topic
+max_topics = 40             # topics visited in one crawl
+min_interval_ms = 1000      # politeness delay between fetches
+
+# Discourse record (src/domain/discourse.mjs).
+[discourse]
+max_referents = 12          # how many referents stay resolvable across turns
 
 [telemetry]
 enabled = false             # local-only counters; never phones home
@@ -1202,10 +1244,13 @@ spider_initial_mass = 15
 spider_mass_decrement_per_turn = 0.5   # lower = slower to starve
 fly_initial_mass = 10
 fly_mass_decrement_per_turn = 1
-vision_radius = 4                      # Chebyshev radius an agent can see other agents within
+spider_vision_radius = 4               # Chebyshev radius a spider sees other agents within
+fly_vision_radius = 4                  # the same radius for a fly
 egg_hatch_delay_turns = 3              # turns between a lay and its hatch
 fly_spawn_interval_turns = 3           # a new fly arrives every Nth turn
-eggs_eaten_threshold = 2               # flies eaten since the last egg before the next one lays
+egg_lay_mass_threshold = 25            # mass a spider must reach before it lays
+egg_hatch_count = 2                    # hatchlings per egg
+min_hatchling_mass = 3                 # mass a hatchling starts with
 web_duration_turns = 10                # turns a spider-built web stays active
 
 [games.guess-number]
@@ -1219,8 +1264,9 @@ max_depth = 300  # the "solve it" plan lane's search-depth cap (hanoi, river-cro
 
 ### Try it on an example graph
 
-tmct *consumes* a code graph at `<repo>/.tmct/graph.json`. It does not build
-one. Two ready-made example graphs live in `examples/` in this repo (clone the
+tmct reads a code graph at `<repo>/.tmct/graph.json`. `tmct index` builds one
+from a repo's own source, and any other producer can write the same file. Two
+ready-made example graphs live in `examples/` in this repo (clone the
 repo to use them; they are not in the published npm package), so you can see
 it answer real questions with no setup:
 
@@ -1402,7 +1448,7 @@ and transcripts are in the linked write-ups.
 | Determinism | Byte-identical on rerun: a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `archive/BENCHMARK_INFERENCE_2.7.12.md` |
 | Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check. The single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `NEXT.md`). | `archive/BENCHMARK_CONVERSATION_2.7.11.md` |
 
-Three offline benchmark rigs live in a clone (they are not in the npm
+Seven offline benchmark rigs live in a clone (they are not in the npm
 package). Each replays a committed case set through the real product and
 writes graded rows you can diff between runs:
 
@@ -1412,7 +1458,14 @@ writes graded rows you can diff between runs:
 - `npm run infbench` generates inference cases, then runs each through both
   drive points, the reasoning kernel and the chat surface;
 - `npm run agentbench:run` measures the tool-loop behaviour, and every
-  verdict carries a hallucination axis.
+  verdict carries a hallucination axis;
+- `npm run idxbench:run` grades how faithfully the code-index producer
+  restates source as a graph;
+- `npm run ingestbench:run` (with `ingestbench:judge`) grades text-to-facts
+  extraction;
+- `npm run researchbench:run` grades the research lane's link traversal
+  against a frozen stub wiki graph;
+- `npm run synthbench:code` grades deterministic code synthesis.
 
 The smallest real slice of each, the same invocations the test suite's
 bench-smoke lane replays:
@@ -1457,7 +1510,7 @@ tmct's vocabulary is grounded in published standards where they exist, and says 
 Each alignment below is a triple in `ontology/tmct-core.ttl` and a test in
 `test/adapters/grammar-ontology.test.mjs`. `docs/references/` holds an entry per source: the
 edition, the retrieval date, the terms tmct uses, and what could not be verified.
-`PLAN_NORMATIVE.md` holds the reconciliation, one verdict per term.
+`archive/PLAN_NORMATIVE.md` holds the reconciliation, one verdict per term.
 
 ### The data model
 
@@ -1476,7 +1529,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 | [Attempto Controlled English](http://attempto.ifi.uzh.ch/site/docs/) | ACE 6.7, 2013 | The controlled-English fragment. tmct implements 9 of ACE's declarative sentence patterns. |
 | Kuhn, "A Survey and Classification of Controlled Natural Languages" | *Computational Linguistics* 40(1), 2014 | Where ACE sits among controlled languages. |
 | [ConceptNet](https://github.com/commonsense/conceptnet5/wiki/Relations) | slice pins 5.7.0 | The commonsense corpus. 25 relations are mirrored into `mgx:` and each cites its `/r/` origin. |
-| Damerau, *CACM* 7(3), 1964 · Levenshtein, *Soviet Physics Doklady* 10(8), 1966 | — | Fuzzy matching. `fuzzy.mjs` implements **Optimal String Alignment** — restricted Damerau-Levenshtein, which allows adjacent transposition but edits no substring twice. |
+| Damerau, *CACM* 7(3), 1964 · Levenshtein, *Soviet Physics Doklady* 10(8), 1966 | — | Fuzzy matching. `src/domain/interpret/fuzzy.mjs` implements **Optimal String Alignment** — restricted Damerau-Levenshtein, which allows adjacent transposition but edits no substring twice. |
 
 ### Reasoning and planning
 
@@ -1492,7 +1545,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 
 | source | edition | what tmct uses it for |
 |---|---|---|
-| Jensen et al., "A Consensus Glossary of Temporal Database Concepts" | *SIGMOD Record* 23(1), 1994 | The time vocabulary. `mgx:utteranceTs` is valid time; `mgx:createdAt` is a transaction-time start. tmct is **not** bitemporal: `mgx:updatedAt` is an audit stamp, so tmct cannot answer what it believed last Tuesday. |
+| Jensen et al., "A Consensus Glossary of Temporal Database Concepts" | *SIGMOD Record* 23(1), 1994 | The time vocabulary. `mgx:utteranceTs` is valid time; `mgx:createdAt` is a transaction-time start. tmct is **not** bitemporal: `mgx:updatedAt` is an audit stamp, so "what did it believe last Tuesday" lands on the honest miss wall. |
 | RFC 9923, "The FNV Non-Cryptographic Hash Algorithm" | Informational, 2026 | FNV hashes the narrow non-fact-id pools (paraphrase keys, per-URL source ids, corpus dedupe). Fact ids are content-addressed with a **64-bit truncation of SHA-256**, so a fact id is collision-resistant at tmct's corpus sizes; tmct is still **not** a Merkle tree and offers no tamper-evidence. |
 | Green, Karvounarakis, Tannen, "Provenance Semirings" | PODS 2007 | The distinction tmct's docs keep: it records source annotation and PROV-style attribution, not how-provenance. |
 

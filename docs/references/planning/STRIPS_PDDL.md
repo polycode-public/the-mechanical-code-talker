@@ -12,7 +12,7 @@ DCS TR-1165**, Yale Center for Computational Vision and Control, **October 1998*
 https://homepages.inf.ed.ac.uk/mfourman/tools/propplan/pddl.pdf (the `cs.yale.edu` copy 404s).
 Retrospective: Fikes & Nilsson (1993), "STRIPS, a retrospective", *Artificial Intelligence* 59(1–2),
 pp. 227–232.
-**Licence:** link-only. · **Consumer:** `PLAN_AGENTS.md` (Stage 0, the capability
+**Licence:** link-only. · **Consumer:** `archive/PLAN_AGENTS.md` (Stage 0, the capability
 declaration format; Stage 1, the resolver; router status at §1.3). · **Status:** **VERIFIED
 2026-07-17** — the STRIPS DOI resolves and the free PDF is the correct paper; PDDL's two report
 numbers were read from the TR's own title page.
@@ -112,7 +112,7 @@ This matters for how tmct's abstention is described. The ML abstention literatur
 option, selective classification) is **threshold-based**: it rejects when a confidence score falls
 below *t*. tmct has no confidence score to threshold — it abstains because no rule matched, which is
 not low confidence but **outside the function's domain**. The open-world/unknown lineage names the
-mechanism; the abstention literature names the goal. `PLAN_NORMATIVE.md` §9.8 keeps them apart.
+mechanism; the abstention literature names the goal. `archive/PLAN_NORMATIVE.md` §9.8 keeps them apart.
 
 ## Links
 

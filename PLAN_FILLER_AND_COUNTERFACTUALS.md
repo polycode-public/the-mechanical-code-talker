@@ -47,7 +47,7 @@ then closed the two-word tier only.
 Five independently phrased justification/counterfactual questions across three puzzle domains
 wall ("why did you move disk-1 first instead of disk-2?", "what if disk-1 started on peg-c
 instead?"), even though the planner prints its own unprompted "because —" line after every
-solve. `src/services/chat.mjs:2361-2365` records the standing decision: the BFS computes no
+solve. `src/services/chat.mjs`'s counterfactual note records the standing decision: the BFS computes no
 untaken path. "Why is that the shortest solution?" and the optimality confirm already answer
 from the solve-time reason; the counterfactual family is what remains.
 
@@ -60,7 +60,7 @@ alternative has no plan, the answer names the constraint that blocks it, never a
   start state, re-run the same `findActionPath` BFS from it, and present the result as a
   hypothetical ("from that start it takes N moves: …" / "no plan from that start within the
   bound"). Cost is one extra solve on demand; the general non-plan counterfactual wrapper
-  (`COUNTERFACTUAL_RE`, applied at `chat.mjs:11961-11966`) already demonstrates the
+  (`COUNTERFACTUAL_RE` in `src/services/chat.mjs`) already demonstrates the
   "hypothetically, if X: …" answer framing over graph reads — this extends the idea to the plan
   slot.
 - **Forced-alternative compare ("why A instead of B").** The explainable-planning literature

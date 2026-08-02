@@ -1,7 +1,7 @@
 # The testing vocabulary — what the terms mean, and who says so
 
 **Consumer in repo:** `CLAUDE.md`'s "Test the blast radius" section, `package.json`'s `test:*`
-scripts, `test/**`, `PLAN_NORMATIVE.md` §9.5.
+scripts, `test/**`, `archive/PLAN_NORMATIVE.md` §9.5.
 **Retrieval date:** 2026-07-17.
 **Licence:** link + brief factual excerpt, except where noted — **SEVOCAB definitions are free to
 quote with attribution** (see below), and are quoted here on that basis.

@@ -132,7 +132,7 @@ The cost is that tmct cannot express ACE's existential reading at all, and a sen
 "some particular module is a file" has nowhere to go. Pattern 2 covers the named case
 (`PROPERNAME is a N`), which is the form a user reaches for anyway.
 
-**A README that says "ACE-inspired" should say this.** The draft in `PLAN_NORMATIVE.md` §8 does.
+**A README that says "ACE-inspired" should say this.** The draft in `archive/PLAN_NORMATIVE.md` §8 does.
 
 ## Deepen-next
 

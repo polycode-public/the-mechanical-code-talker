@@ -109,7 +109,7 @@ Checked by grepping the full import closure.
   and tmct no longer emits any of them.** `seon:subKind` → `mgx:subKind` (owned — its type flavour
   has no SEON term); the router's `seon:Module` → `mgx:Module` (SEON's nearest are Namespace and
   main:File, neither a JS module) and `seon:ClassDefinition` → `seon:ClassType` (SEON's real class
-  for a class definition); `seon:Attribute` was realigned earlier. See `PLAN_NORMATIVE.md` §4.3,
+  for a class definition); `seon:Attribute` was realigned earlier. See `archive/PLAN_NORMATIVE.md` §4.3,
   §7.1 and §7.2 for the verdicts.
 
 ## A latent bug in SEON itself

@@ -5,7 +5,7 @@ AAAI-91, https://cdn.aaai.org/AAAI/1991/AAAI91-099.pdf · Penberthy & Weld (1992
 Complete, Partial Order Planner for ADL*, KR'92,
 https://homes.cs.washington.edu/~weld/papers/ucpop-kr92.pdf · overview:
 https://en.wikipedia.org/wiki/Partial-order_planning
-**Licence:** link-only (publisher/author copyright). · **Consumer:** `PLAN_AGENTS.md`
+**Licence:** link-only (publisher/author copyright). · **Consumer:** `archive/PLAN_AGENTS.md`
 (Stages 1 & 5; router status at §1.3). · **Status:** UNVERIFIED-pending-web-check (authored from established knowledge).
 
 ## What it is

@@ -25,30 +25,36 @@ Every fence carries a harness tag, and `test/readme/readme.test.mjs` asserts tha
 (an untagged fence fails the suite). `attrs.e2e` blocks run from
 `test-e2e/readme-examples.test.mjs`; `skip=` blocks never run.
 
-| surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
+Rows name the README section rather than a line number. Line numbers here rot on
+the next edit anywhere above them, and nothing fails when they do.
+
+| section | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `README.md:27` | `js` — packaged exports smoke | `runChat` | `test/readme/readme.test.mjs` | replay |
-| `README.md:59` | `node examples/teach-and-infer.mjs` | `runChat`, `appendFact` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
-| `README.md:137` | `node examples/rover-infer.mjs` | `runChat`, first-run corpus bootstrap (`seedBootstrapMemory`) | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
-| `README.md:153` | `node examples/raw-fact-shape.mjs` | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
-| `README.md:109` | `what does app.mjs talk to?` / `what talks to store.mjs?` | `runTurn` → `reverse(uses)` | `test/readme/readme.test.mjs` | replay |
-| `README.md:130` | `npm run demo:build` / `build:ask-bundle` | `scripts/build-demo-site.mjs` | `test-e2e/readme-examples.test.mjs` | replay |
-| `README.md:137` | `npx tmct viz` / `init` / `import` / `chat --render blocks` | `renderLedger`, `renderPlanHtml` | `test-e2e/readme-examples.test.mjs` | replay |
-| `README.md:234` | session — taught-fact recall | `runTurn` | `test/readme/readme.test.mjs` | replay |
-| `README.md:243` | `js` — library call | `runChat` | `test/readme/readme.test.mjs` | replay |
-| `README.md:271` | session — 23 pinned lines | `runTurn` | `test/readme/readme.test.mjs` | replay |
-| `README.md:308` | session — 3 pinned lines, 1 elided | `runTurn` | `test/readme/readme.test.mjs` | replay |
-| `README.md:339` | hanoi-3 solve, 10 pinned lines | `compileDomain`, `compileGoal`, `movesFromRules` | `test-e2e/readme-examples.test.mjs` | replay |
-| `README.md:404`, `:426`, `:803`, `:898`, `:934`, `:973` | `bash` — CLI invocations | `bin/tmct.mjs`, `CLI_VERBS` | `test/readme/readme.test.mjs` | replay |
-| `README.md:431` | `output` — full stdout, no elision | `bin/tmct.mjs`, `CLI_VERBS` | `test/readme/readme.test.mjs` | output |
-| `README.md:499`–`:678` | 13 `output:help:*` excerpts | `renderUsage`, `CLI_VERBS` | `test/readme/readme.test.mjs` (verbatim in live `--help`) | replay |
-| `README.md:634`, `:688` | `bash e2e` | `bin/tmct.mjs`, `CLI_VERBS` | `test-e2e/readme-examples.test.mjs` | replay |
-| `README.md:706` | `tmct.toml` reference | `loadTomlConfig` | `test/readme/readme.test.mjs` | replay |
-| `README.md:811`, `:823` | `text` — illustrative | — | never run, by tag | — |
-| `README.md:834`, `:846` | `js` — library snippets | `runChat` | `test/readme/readme.test.mjs` | replay |
-| `README.md` tool section | `tmct_untested` and the tool table | `TOOL_DEFINITIONS` | `test/estate/tool-docs.test.mjs` | estate |
-| `README.md:463` | `skip=network` | — | never run: would touch the network | — |
-| `README.md:983` | `skip=offline-eval-only` | — | never run: needs an LLM judge | — |
+| Teach it, then ask it to reason | `js` — the `teach-and-infer` source, listed for copy-paste | `runChat`, `appendFact` | `test/readme/readme.test.mjs` | replay |
+| Teach it, then ask it to reason | `node examples/teach-and-infer.mjs` | `runChat`, `appendFact` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| Teach it, then ask it to reason | `node examples/rover-infer.mjs` | `runChat`, first-run corpus bootstrap (`seedBootstrapMemory`) | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| Teach it, then ask it to reason | `node examples/raw-fact-shape.mjs` | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| Teach it, then ask it to reason | session — `what does app.mjs talk to?` / `what talks to store.mjs?` | `runTurn` → `reverse(uses)` | `test/readme/readme.test.mjs` | replay |
+| Teach it, then ask it to reason | `npm run demo:build` / `build:ask-bundle` | `scripts/build-demo-site.mjs` | `test-e2e/readme-examples.test.mjs` | replay |
+| Teach it, then ask it to reason | `npx tmct viz` / `init` / `import` / `chat --render blocks` | `renderLedger`, `renderPlanHtml` | `test-e2e/readme-examples.test.mjs` | replay |
+| The code explorer (desktop) | `skip=network` — the Electron fetch-and-build | — | never run: would touch the network | — |
+| Detailed, grounded answers | session — the cited read-out | `runTurn` | `test/readme/readme.test.mjs` | replay |
+| Detailed, grounded answers | `js` — the completions/graph-adapter seam | `generateCompletion`, `createCompletionsGraphAdapter` | `test/readme/readme.test.mjs` | replay |
+| Planning across the graph | two sessions — the router and goal drivers | `runCapabilityPlan` | `test/readme/readme.test.mjs` | replay |
+| Teach it a game, then ask it to plan | hanoi-3 solve | `compileDomain`, `compileGoal`, `movesFromRules` | `test-e2e/readme-examples.test.mjs` | replay |
+| Memory backends | `bash` + `output` — the backend flag, full stdout, no elision | `bin/tmct.mjs`, `CLI_VERBS` | `test/readme/readme.test.mjs` | output |
+| Install & use | `skip=network` — global install | — | never run: would touch the network | — |
+| Full command reference | 15 `output:help:*` excerpts | `renderUsage`, `CLI_VERBS` | `test/readme/readme.test.mjs` (verbatim in live `--help`) | replay |
+| Full command reference | two `bash e2e` — the `init` + `import` chains | `bin/tmct.mjs`, `CLI_VERBS` | `test-e2e/readme-examples.test.mjs` | replay |
+| tmct.toml reference | the one config with every recognized key | `loadTomlConfig` | `test/readme/readme.test.mjs` (parses, then loads) | replay |
+| Try it on an example graph | `npm run example:mini` / `example:polyglot` / `chat:repo` | `parseEntities` | `test/readme/readme.test.mjs` | replay |
+| Try it on an example graph | two `text` blocks — the questions each graph answers | — | never run, by tag | — |
+| As a library | two `js` — the import line and the `/plan` subpath | `runChat`, `runCapabilityPlan` | `test/readme/readme.test.mjs` | replay |
+| Asking in plain English | `tmct cli ask` | `dispatchTool`, `ask` | `test/readme/readme.test.mjs` | replay |
+| The tool surface | `tmct_untested` and the tool table | `TOOL_DEFINITIONS` | `test/estate/tool-docs.test.mjs` | estate |
+| The rest of the tools | `bash` — a cold-tool invocation | `dispatchTool` | `test/readme/readme.test.mjs` | replay |
+| Measuring it | the four bench-smoke invocations | the bench `run.mjs` entry points | `test/corpus/bench-smoke.test.mjs` | replay |
+| Measuring it | `skip=offline-eval-only` — `chatbench:judge` | — | never run: needs an LLM judge | — |
 
 ## public/index.html
 
@@ -58,14 +64,13 @@ harness the README fences use.
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `index.html:227` | `what is a dog` / `what is a quokka` | `runTurn`, corpus seed | `test-e2e/pages-examples.test.mjs` | replay |
-| `index.html:734` | `Rover is a dog.` / `Does Rover bark?` (via `examples/rover-infer.mjs`) | `runChat`, first-run corpus bootstrap | `test-e2e/pages-examples.test.mjs` | replay |
-| `index.html:290` | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `test-e2e/pages-examples.test.mjs` | replay |
-| `index.html:287` | `npm install -g @polycode-projects/…` | — | `test-e2e/pages-home.test.mjs` | dom |
-| `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `test-e2e/pages-home.test.mjs` | dom |
+| the code-question transcript | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `test-e2e/pages-examples.test.mjs` | replay |
+| the teach-and-ask transcript | `Rover is a dog.` / `Does Rover bark?` (via `examples/rover-infer.mjs`) | `runChat`, first-run corpus bootstrap | `test-e2e/pages-examples.test.mjs` | replay |
+| the hero install line, and the same line in the get-started block | `npm install -g @polycode-projects/…` | — | `test-e2e/pages-home.test.mjs` | dom |
+| the get-started block | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `test-e2e/pages-home.test.mjs` | dom |
 | `demo-ui.mjs` `HISTORY` | the 5 scripted turns the demo box types out | `runTurn`, `ask` | `test-e2e/pages-demo-history.test.mjs` (each answer verbatim) | replay |
-| `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `test-e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
-| `index.html:311` | `runChat` library block | `runChat` | `test/tools/chat-library-block.test.mjs` (runs the block, asserts the answer) | tool |
+| `demo-templates.mjs` `TEMPLATES` | 10 template shapes, 56 question/substitution pairs the box can pick | `ask` | `test-e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
+| the library block | `runChat` | `runChat` | `test/tools/chat-library-block.test.mjs` (runs the block, asserts the answer) | tool |
 | ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `test-e2e/pages-home.test.mjs`, `test-e2e/pages-index.test.mjs` | dom |
 | plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `test-e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
 | version stamp | `version.txt` | `scripts/build-demo-site.mjs` | `test-e2e/pages-home.test.mjs`, `test/adapters/version-stamp.test.mjs` | dom |
@@ -95,7 +100,7 @@ passes just as happily when it names the whole memory.
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `docs/repository-interface.schema.json` | the machine shape | `REPOSITORY_INTERFACE` | `test/adapters/repository-interface.test.mjs` | tool |
-| `docs/repository-interface.md` | 16 services, 11 edge kinds, 4 miss reasons, v1.1.0 | `SERVICES`, `EDGE_KINDS`, `MISS_REASONS`, `INTERFACE_VERSION` | `test/adapters/repository-interface.test.mjs` | tool |
+| `docs/repository-interface.md` | 16 services, 13 edge kinds, 4 miss reasons, v1.1.0 | `SERVICES`, `EDGE_KINDS`, `MISS_REASONS`, `INTERFACE_VERSION` | `test/adapters/repository-interface.test.mjs` | tool |
 | `docs/adapter-contract.md` | the entities payload | `parseEntities`, `buildEntities` | `test/adapters/memory-adapter.test.mjs` | tool |
 
 `docs/repository-interface.md` names every service, edge kind and miss reason.
@@ -110,9 +115,11 @@ const — every name, and the version — beside the schema it already held ther
 | `corpus/seon/README.md` | 399 facts, 288 definitions, 9 relations | `concepts/definitions/relations.jsonl` | `test/estate/corpus-schema.test.mjs` | estate |
 | `corpus/wordnet/README.md` | 107,526 upstream synsets; 192,498 facts | `manifest.json` | `test/estate/corpus-schema.test.mjs` | estate |
 
-Counts were checked against the files for this table and all match. The row
-counts are not asserted as numbers, so a regrow that forgets the README drifts
-silently.
+The row counts are not asserted as numbers, so a regrow that forgets the README
+drifts silently, and two have. ConceptNet's 44,947 and WordNet's 192,498 match
+their files. SEON's 399 and 288 match; its **9 relations is 11**.
+WordNet's 107,526 synsets is an upstream figure the manifest does not carry, so
+nothing here can check it.
 
 ## test-benchmarks/chatbench/
 
@@ -121,7 +128,9 @@ silently.
 | `test-benchmarks/chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 | `test-benchmarks/chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 
-Both figures were counted off the pools for this table and both match.
+`graded-pool-max.jsonl` holds 1,075 rows and matches. `graded-pool.jsonl` holds
+**139**, and its README says 138 in three places and 139 in a fourth — the drift
+this section warns about, in the file that describes it.
 
 ## examples/
 

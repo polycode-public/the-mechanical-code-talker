@@ -16,7 +16,7 @@ denial — tmct's `cax-maxc0`, which is NOT a W3C rule name but a universal gene
 W3C `cls-maxc1` (Table 6). `cls-maxc1` derives `false` for one individual; `cax-maxc0` derives a
 CLASS-level negative fact, a strictly stronger step RL does not license. All run under
 budget/focus/screen/trust guards, materialising off the hot path so a query-time miss becomes a
-lookup. `PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
+lookup. `archive/PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
 solved; DL satisfiability is tableau-shaped and solved; tmct's trust/provenance layer is
 the part the literature is silent on) and owns the incrementality/retraction horizon.
 
@@ -187,7 +187,7 @@ stages.
 - FOL, arithmetic, temporal/event reasoning, defaults, probabilistic weighting — each a
   further tier past DL; the "where the edge shifts" section above names the candidate
   literatures for whichever gets designed next.
-- Incremental/RETE materialisation and retraction algorithms (`PLAN_SYLLOGIST.md` owns
+- Incremental/RETE materialisation and retraction algorithms (`archive/PLAN_SYLLOGIST.md` owns
   that horizon).
 - LLM involvement, including for proof rendering — proofs render through the same
   template machinery as every other answer, per the project's no-LLM product path.

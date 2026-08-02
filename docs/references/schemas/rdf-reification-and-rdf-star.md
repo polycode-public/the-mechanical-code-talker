@@ -1,7 +1,7 @@
 # RDF reification, RDF-star, and named graphs — how to attach data to a triple
 
 **Consumer in repo:** `src/adapters/memory/core.mjs` (`tmct:Fact rdfs:subClassOf rdf:Statement`),
-`ontology/tmct-core.ttl`, `PLAN_NORMATIVE.md` §9.2.
+`ontology/tmct-core.ttl`, `archive/PLAN_NORMATIVE.md` §9.2.
 **Retrieval date:** 2026-07-17 — VERIFIED. Every status line and date below was read from the
 document's own header, and the reification claims were checked by grepping the specs' raw HTML.
 **Licence:** W3C Document License. Brief factual excerpts with attribution; no specification is

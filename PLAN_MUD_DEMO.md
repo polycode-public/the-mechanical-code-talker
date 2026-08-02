@@ -30,14 +30,15 @@ a real connected graph — named chambers, tunnels as strokes, a vertical shaft 
 a flat text list, so it reads as an actual map of the burrow.
 
 **Palette** — named for the subject, not a template default (not cream+terracotta, not
-near-black+acid-green): `--soil-deep #2B1D14` (background), `--soil-mid #4A3324`, `--soil-light
+near-black+acid-green): `--soil-deep #241710` (background), `--soil-mid #4A3324`, `--soil-light
 #7A5A3D` (upper strata), `--root-moss #6B7A4F` (the garden surface), `--parchment #EFE6D8`
-(pane/card background — dug clay, not white), `--ink #2A211A` (text, warm near-black),
-`--burrow-glow #E8A33D` (the one warm accent — active panes, the current turn, a freshly-dug
-room's flourish — spent in one place, not scattered).
+(pane/card background — dug clay, not white), `--mud-ink #2A211A` (text, warm near-black),
+`--chalk #D9CDB9` (muted text on dark), `--burrow-glow #E8A33D` (the one warm accent — active
+panes, the current turn, a freshly-dug room's flourish — spent in one place, not scattered).
 
-**Type** — a characterful, slightly hand-cut display face for headings and room names (something
-in Fraunces' register — an ink-trap serif with real personality, used with restraint), a plain
+**Type** — a characterful, slightly hand-cut display face for headings and room names (Fraunces'
+register was the brief; no web font ships, so `DISPLAY_STACK` is the serif stack's own web-safe
+serif and the one constant to repoint if a font pipeline ever lands), a plain
 sans body face for descriptive text (IBM Plex Sans or Inter), and a monospace utility face for the
 dense simulation readouts — turn counters, coordinates, mass/pouch stats (IBM Plex Mono) — so the
 page's two registers (storybook burrow, live simulation telemetry) read as deliberately distinct
@@ -71,8 +72,9 @@ on the page, everything else stays quiet and disciplined around it.
 
 ### Per-pane UI (×2)
 
-- **Character**: the burrowing animals (mole, vole, badger, groundhog) are drawn at random each
-  time the world starts or resets, one per pane. The world hand-authors four; a cast bigger than
+- **Character**: the burrowing animals (mole, vole, badger, groundhog, meerkat) are drawn at random
+  each time the world starts or resets, one per pane. Each world hand-authors its own cast — garden
+  four, warren five, hollow two — and a cast bigger than
   that mints more instances of the same species (`mole-2`, `badger-3`), each opening with the
   authored animal's own type, room and mass, and an authored animal nobody is playing is left out
   of the world rather than standing in it inert.
@@ -136,28 +138,35 @@ on the page, everything else stays quiet and disciplined around it.
 ### World / map model
 
 - **The garden is the surface** — pre-authored, all outdoor, and can only be dug straight down
-  from, never sideways; the surface is the ceiling. A stationary fox lives in a den one dig off
-  the underground start room and never moves on its own; a character that digs into it is eaten.
+  from, never sideways; the surface is the ceiling. A stationary predator lives in a den one dig
+  off the underground start room and never moves on its own; a character that digs into it is
+  eaten. Garden and warren both cast `fox-1`; warren adds `owl-1` on a stump, so the count is the
+  world's to say, not one per world.
 - **One level underground**, reached by digging down from the garden and extended sideways from
   there by digging any side with no exit yet.
 - **The burrow has an edge.** The world names its own origin (`garden mgx:is-origin true`) and no
-  dig may open a room more than six exits from it. A room at that distance offers no dig at all,
-  so the compass ring never suggests one and the verb never has to refuse one; typing the dig
-  anyway is declined in the world's own terms. Without the cap a character digs itself twenty-odd
-  hops out into rooms nobody else will ever reach.
-- **Some digs open a den.** One dug room in five is a food store rather than a bare tunnel, and
-  one den in three is lived in — a resident mouse that knows what its own den holds, so a
-  character that digs one out has somebody new to ask about food. What a dig turns up is the
-  world's to say, through `mgx:dig-spawns`, `mgx:den-spawns` and `mgx:den-resident` on the room
-  kind; the engine only decides how many and how often.
+  dig may open a room more than `mgx:dig-reach` exits from it. A room at that distance offers no
+  dig at all, so the compass ring never suggests one and the verb never has to refuse one; typing
+  the dig anyway is declined in the world's own terms. Without the cap a character digs itself
+  twenty-odd hops out into rooms nobody else will ever reach. The three shipped burrows set 6
+  (garden), 3 (hollow) and 10 (warren); `DEFAULT_DIG_REACH` is 6 for a world that names none.
+- **Some digs open a den.** A dug room is sometimes a food store rather than a bare tunnel, and
+  some dens are lived in — a resident mouse that knows what its own den holds, so a
+  character that digs one out has somebody new to ask about food. The rates are the world's too,
+  through `mgx:dig-spawn-max`, `mgx:den-chance-in` and `mgx:den-resident-chance-in`: garden runs
+  one in five and one in three, hollow one in three and one in six, warren one in eight and one
+  in two. What a dig turns up is likewise world-authored, through `mgx:dig-spawns`,
+  `mgx:den-spawns` and `mgx:den-resident` on the room kind.
 - **The central survey is the operator's omniscient view** — every dug room, every character, no
   fog of war, drawn as a real graph rather than a flat list. Each pane's own "known ground" is
   where fog of war still applies.
 
 ### Creature stats
 
-Per-species mass and hunger-drain rate, generalizing `game-config.mjs`'s per-species constants —
-one table entry per species. The fox is stationary and doesn't carry the same move/dig-reach stat
+Per-species mass and hunger-drain rate. `game-config.mjs` holds one table entry per species, and a
+world overrides any of them on its own cast — warren runs its badger at 12 where the config says
+20, hollow drains its mole at 0.04 where the config says 0.06. The config is the fallback, the
+world pack is the authority. The fox is stationary and doesn't carry the same move/dig-reach stat
 the roaming species do; it only ever needs to be present in its den.
 
 The drain is charged for real, at the end of every scripted turn, and a character that reaches
@@ -178,7 +187,10 @@ Every acting character's turn, in order:
    3. If an unexamined object or food item is present, examine it and remember the detail, also as
       a durable, provenanced fact.
    4. Randomly do one of: take an object, put an object, eat an object (if it's food and the
-      character is below 50% mass) — eating transfers the eaten item's remaining mass.
+      character weighs under 10, half of the engine's `ASSUMED_FULL_MASS` of 20) — eating
+      transfers the eaten item's remaining mass. The threshold is one number for every species,
+      not half of each animal's own mass, so a mole starting at 8 is always hungry and a badger
+      starting at 20 eats nothing until it has lost half.
    5. Update memory with whatever changed.
 2. **Walk toward the nearest unexplored edge**, via a room-graph pathfinder. The goal is a room
    holding a food fact this character actually knows about. A character with no food fact yet has
@@ -211,9 +223,8 @@ Mole, vole, badger, and groundhog all have hand-authored sprites; badger set the
 (a fixed-palette marking carrying the animal's own identity, limbs breaking the silhouette, a
 highlight that stays inside the body), and vole, mole, and groundhog have since been brought up to
 match it. A new fox sprite, sitting and marked as a predator rather than one of the playable
-species, was added for the den. The meerkat sprite, used elsewhere in the sprite set and not part
-of this demo's own roster, is now the visually weakest of the group and is a candidate for the
-same treatment. Nature-corpus content (real facts about each animal and its food) is unchanged
+species, was added for the den. The meerkat sprite, which mud-warren casts as `meerkat-1`, is now
+the visually weakest of the group and is a candidate for the same treatment. Nature-corpus content (real facts about each animal and its food) is unchanged
 from the original plan.
 
 Every object a player can find now has a sprite of its own too: carrot, lettuce, tomato, seed,
@@ -228,5 +239,5 @@ chain with nothing anywhere lands on a plain tied bundle.
 Done: `adventure.mjs` threads a real acting-subject parameter through its command path instead of
 a hardcoded `"player"`, and this demo casts as many simultaneous characters as it needs from that
 — no shared "agent loop" abstraction across spider-fly/adventure/plan/mud was needed to get there,
-consistent with `PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
+consistent with `archive/PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
 

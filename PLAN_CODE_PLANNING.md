@@ -330,7 +330,7 @@ at that stage" admits two readings:
 
 **Recommendation: build (b) first; add (a) later inside the adaptor.** Reading (b) is
 structural — it IS the plan-act-observe-replan loop the repo already runs for hidden state
-(`PLAN_GUESS_NUMBER.md`'s posture), and it is what makes the mid-plan re-index (§3.6) safe
+(`archive/PLAN_GUESS_NUMBER.md`'s posture), and it is what makes the mid-plan re-index (§3.6) safe
 rather than decorative. Reading (a) is an adaptor feature, not a loop change: it needs (b)'s
 verifier-in-the-loop to exist before "verifier-selected" means anything, and until the catalogue
 is big enough for spelling variants to matter, k=1 is the right k. Both readings keep the

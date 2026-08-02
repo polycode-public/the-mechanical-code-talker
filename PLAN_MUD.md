@@ -13,10 +13,11 @@ documents link back here rather than restating them.
   multi-character world shape with no server anywhere. SHIPPED.
 - **`PLAN_MUD_WEBRTC.md`** — multi-browser worlds over WebRTC: serverless share/join by
   copy-paste signaling, CRDT replication over the fact store. SHIPPED 2026-07-29 on mud.html
-  and chat.html; the 3+-peer scenarios are still design.
-- **`PLAN_MUD_MUDIII.md`** — MUDIII: a Three.js town square (wolf and goblins) over the
-  spider-fly planning engine, with its coordinator/sub-agent delivery packaging. DESIGN; its
-  scope completes with `mudiii.html` deployed alongside https://tmct.polycode.co.uk/mud.html.
+  and chat.html, mesh introduction included; retraction replicates too, with a causal-stability
+  rule behind a gate.
+- **`PLAN_MUD_MUDIII.md`** — MUDIII: a Three.js town square (fox and goblins) over the
+  spider-fly planning engine, with its coordinator/sub-agent delivery packaging. BUILT AND
+  DEPLOYED: `mudiii.html` is live alongside https://tmct.polycode.co.uk/mud.html.
 - **`PLAN_MUD_MUDIII_SHARED.md`** — mud.html's share/join layer arriving on mudiii.html, a
   phase of its own after that page ships. DESIGN.
 - **`PLAN_MUD_MUDMMORPG.md`** — MUDIII's published shared world: HLS-style snapshot/delta
@@ -68,7 +69,7 @@ order, since each round revised the design and the reasoning for the revision ma
    design.**
 
 Still named `PLAN_MUD.md`: a persistent, shared world-state multiple users mutate together is still
-the governing shape (`PLAN_ADVENTURE.md`'s single-player groundwork is a different axis — grammar,
+the governing shape (`archive/PLAN_ADVENTURE.md`'s single-player groundwork is a different axis — grammar,
 not multi-user persistence). What changed across the six rounds is entirely *how a client reaches
 that shared state, and who it says it is once there* — SSH-into-a-shared-host, then
 Lambda-as-SSH-server (rejected, Lambda has no raw TCP listener), then a remote storage backend
@@ -77,22 +78,22 @@ carried on every fact that backend writes.
 
 ## Confirmed baseline (tmct's own code, verified 2026-07-12)
 
-- tmct now has a real, working multi-backend memory seam, landed this same session
-  (`src/adapters/memory/core.mjs`): **Backend A** (the flat OWL-labelled JSON file, the default, unchanged),
-  **Backend B** (`createInMemoryStore`, pure in-process, `core.mjs:199-220`), **Backend C**
-  (`createSqliteMemoryStore`, a resident `node:sqlite` connection, WAL mode, `core.mjs:221-308`).
-  Selected via `openMemoryBackend(repoRoot, backendChoice)` (`core.mjs:339`), the ONE shared resolver
-  both `tmct init`'s corpus seeding and `chat.mjs`'s `createSession` now call — closing a real bug
-  found and fixed this same session where seeding didn't respect the configured backend.
+- tmct has a real, working multi-backend memory seam (`src/adapters/memory/core.mjs`): **Backend B**
+  (`createInMemoryStore`, pure in-process), **Backend C** (`createSqliteMemoryStore`, a resident
+  `node:sqlite` connection, WAL mode). Backend A, the flat OWL-labelled JSON file, was the default
+  when this was written and has since been retired; `core.mjs` routes an old `graph.json` to a fresh
+  sqlite store and says so. Selected via `openMemoryBackend(repoRoot, backendChoice)`, the ONE
+  shared resolver both `tmct init`'s corpus seeding and `chat.mjs`'s `createSession` call.
 - Selection precedence, already real and tested: `--memory-backend <value>` CLI flag (on
   `init`/`import`/`chat`) > `TMCT_MEMORY_BACKEND` env > `tmct.toml`'s `[memory] backend` field >
-  `"default"` (`src/services/chat.mjs:9444`). A flag on `init` writes straight into `tmct.toml`
+  sqlite (resolved in `src/services/chat-session.mjs`). A flag on `init` writes straight into `tmct.toml`
   (`src/services/init.mjs`), so a later flagless `tmct chat` in that repo picks it up automatically — the
   exact mechanism `PLAN_MUD_SERVER.md`'s `server:<name>` value plugs into as a fourth backend,
   "Backend D."
-- **The closed-set validator needs one small, precise extension.** `enumFlag` (`src/services/cli-args.mjs:82`)
-  currently validates `--memory-backend` against an exact-match closed list
-  (`["default","memory","sqlite"]`). `server:<handle>@<name>` isn't a member of a closed set — it's a
+- **The closed-set validator needs one small, precise extension.** `enumFlag`
+  (`src/services/cli-args.mjs`) is generic; `bin/tmct.mjs` hands it the exact-match closed list
+  (`["default","memory","sqlite"]`) at each `--memory-backend` call site, so the extension lands in
+  `bin/`. `server:<handle>@<name>` isn't a member of a closed set — it's a
   parameterized value, the same *shape* (not reusing the same function) as this codebase's own
   well-established `scheme:value` provenance-tag convention (`corpus:`, `corpus-weak:`, `web:`,
   `ace:chat:`, `extracted:` — all parsed by prefix in `src/adapters/memory/core.mjs`'s
@@ -103,7 +104,7 @@ carried on every fact that backend writes.
   handle is optional, not required to reach a server). `openMemoryBackend` gets a matching new branch
   dispatching to `PLAN_MUD_SERVER.md`'s Backend D module.
 - **Existing precedent for exactly this per-source trust/reliability tracking already exists** —
-  `memory/trust.mjs`'s `sessionReliabilityFrom` (`trust.mjs:219`) and `mgx:sourceReliability`
+  `memory/trust.mjs`'s `sessionReliabilityFrom` and `mgx:sourceReliability`
   already implement "one Source accumulates a track record across multiple writes, nudging its own
   trust contribution up or down," currently keyed by SESSION id. A handle is the natural
   generalization:
