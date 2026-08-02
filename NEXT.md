@@ -47,15 +47,19 @@ gaps between it and the shipped page.
   scene tracks them with correct cells (`cellOf("goblin-3")` returns `cell-11-4`), the HUD cards
   are right, and no request fails. So the group is created and positioned and its mesh never
   becomes visible.
-  Where to look: `addAgent` in `src/services/mudiii-scene.mjs` sets `entry.group.visible = true`
-  only inside the GLB `.then`, so anything that makes that promise not settle leaves an invisible
-  group behind with a valid cell. Two differences between the two rigs are worth checking first:
-  `goblin.glb` carries `EXT_texture_webp` where `fox.glb` has no textures at all, and its
-  `targetHeight` is 2.1 against the fox's 1.0, so a `normalizeToHeight` that measures a degenerate
-  `Box3` on a skinned mesh would scale it very differently.
-  **Do:** find why the goblin's load path does not reach `visible = true`, and add an e2e
-  assertion that every live agent has a visible mesh, not merely a tracked cell — the current
-  smoke asserts cells, which is exactly why this shipped.
+  There is also a huge unidentified shape in the scene, many times the height of the houses, whose
+  foot floats well above the ground plane. **These are most likely the same fault, and the shape is
+  a goblin.** `normalizeToHeight` in `src/services/mudiii-scene.mjs` measures a `Box3` on the
+  loaded scene and scales by `targetHeight / measuredHeight`; `Box3.setFromObject` on a
+  `SkinnedMesh` reads bind-pose geometry and can come back near-zero, which gives an enormous
+  scale and a seat computed from the same bad box — a giant, floating, unrecognisable goblin
+  rather than a missing one. The goblin's `targetHeight` is 2.1 against the fox's 1.0, and
+  `goblin.glb` carries `EXT_texture_webp` where `fox.glb` has no textures at all.
+  **Do:** log the measured box for both rigs first to confirm. Fix by measuring the geometry's own
+  bounding box with the skeleton at rest, or by using three's `SkeletonUtils`/`computeBoundingBox`
+  path rather than `Box3.setFromObject` on a skinned root. Then add an e2e assertion that every
+  live agent has a mesh of plausible height seated on the ground — the current smoke asserts
+  cells, which is exactly why this shipped.
 
 - **The deception rail is not on the page.** `pillsForMudiii` is fully implemented and
   unit-tested in `src/services/mudiii-turn.mjs` — address pills, true/false claim pairs, a
@@ -126,10 +130,13 @@ gaps between it and the shipped page.
   in overhead until you press follow.
   **Do:** remember the pre-fallback mode and restore it when a new agent is selected.
 
-- **The 2D map panel has no grid.** `.map-panel-board` is a flat tinted rectangle with
-  absolutely-positioned dots; the plan specifies the grid plus one dot per live agent. It is
-  also hidden under `body.editing`.
-  **Do:** draw cell divisions from `gridSize` — a repeating-linear-gradient is enough.
+- **The 2D map panel has no grid, and draws no props.** `.map-panel-board` is a flat tinted
+  rectangle with absolutely-positioned dots for agents and food only; the plan specifies the grid
+  plus one dot per live agent, and a square whose buildings are invisible on the map cannot be
+  read against the 3D view. It is also hidden under `body.editing`.
+  **Do:** draw cell divisions from `gridSize` — a repeating-linear-gradient is enough — and draw
+  every prop cell as a solid block, so the map shows the same obstacles the planner routes
+  around.
 
 - **The HUD belief panel is not expandable.** It renders as a single always-on
   `<p class="hud-belief">` line, not the collapsible panel the plan specifies. The card grows
@@ -177,20 +184,14 @@ gaps between it and the shipped page.
   the food marker.
 
 - **The foxes slider snaps back to 1.** Moving it shows the new value briefly, then it reads 1
-  whatever was chosen. The roster is capped by the layout's authored cast, so the control is
-  reporting the cast it actually got.
-  **Do:** fix with the roster item above — the display bug and the cap are the same fault seen
-  from two ends.
+  whatever was chosen — the control is honestly reporting the cast it got, because the roster is
+  capped by the layout's authored count. Same fault as the sliders item above, seen from the
+  other end.
+  **Do:** close both together: mint agents beyond the layout count, and the readout follows.
 
 - **The follow dropdown resets to fox-1.** Selecting a goblin snaps the selection back.
   **Do:** find why the change handler's selection does not survive the next redraw. Likely the
   same rebuild that repopulates `#agentSelect` discards the current value.
-
-- **There is an unidentified prop on the board.** A large stone structure appears in the scene
-  that nothing names, and it does not appear on the map at all.
-  **Do:** identify which manifest key it resolves from, give it a display name the lane can
-  answer with, and draw every prop on the map — the map currently draws agents and food only, so
-  no prop is on it.
 
 - **Agents carry no label in the scene or on the map.** Nothing on the board says which goblin is
   which; the id only exists in the HUD card.
@@ -198,6 +199,13 @@ gaps between it and the shipped page.
 
 - **Clicking a cell does not turn the followed agent.** The click places food and nothing else.
   **Do:** face the followed agent toward the clicked cell on any ground click.
+
+- **There is no way to drive an agent by hand.** Every movement comes from the planner; a visitor
+  watching a chase cannot step in.
+  **Do:** add a ring of directional controls around the view — up moves the followed agent one
+  cell along its facing, down steps back, left and right turn ninety degrees, the diagonals turn
+  forty-five. It writes the same move the planner would, through the same fact path, so a
+  hand-driven step and a planned one are indistinguishable in the store.
 
 - **Clicking a camera-mode button does nothing on the board.** There is no feedback tying the
   button to a place.
