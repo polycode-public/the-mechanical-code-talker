@@ -23,8 +23,19 @@ const hasPython = spawnSync(PYTHON, ["--version"]).status === 0;
 // run; a plain `node --test` spawned as a subprocess without stripping it treats
 // itself as a recursive test run and silently skips everything it was asked to
 // run — so a spawned test-suite child never inherits this env var.
-const CHILD_ENV = Object.fromEntries(
-  Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT"));
+//
+// FORCE_COLOR is dropped rather than overridden to "0": Node's own colour
+// decision treats any FORCE_COLOR key as a forced-on signal regardless of its
+// value and then ignores NO_COLOR outright, so the key has to be absent, not
+// falsy. NO_COLOR is then added because a caller's real terminal session (or
+// npm forwarding its own colour choice into a lifecycle script) can otherwise
+// hand the fixture's own test runner colour and break the anchored regexes
+// below that assert against its captured stdout.
+const CHILD_ENV = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT" && k !== "FORCE_COLOR")),
+  NO_COLOR: "1",
+};
 
 const edgesFor = (entities, predicate) =>
   (entities.objectProperties.find((g) => g.predicate === predicate)?.examples || [])
