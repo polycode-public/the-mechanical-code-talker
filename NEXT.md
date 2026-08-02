@@ -37,20 +37,9 @@ Three tracks, all live. Two of them want a browser, which is one more than the c
 set — the deck track was already holding that slot when the layout work came in, so the layout track
 is capped at a single `demo:build` and told to report rather than retry if it fails.
 
-- **T28 presentation deck** — the ten claim renames, an about page per demo with left-nav sections
-  and a Next button, five-plus share posts per demo, the capability table, and the header strip's
-  links. `public/index.html`, the new `public/*-about.html` pages, `build-demo-site.mjs`, and the two
-  e2e page-order files. Top tier. Status: started.
 - **T29 deck layout** — the map moves inside the control panel at both orientations.
   `mudiii-viz.mjs`. Sonnet. Status: started, uncommitted work in its worktree.
 
-- **T31 teach mode** — mudiii's own teach lane (sentence table, `planTaughtTownSquareTriple`, the
-  gate inside `mudiiiTurn`), then browser legs for adventure's and mud's existing checkbox.
-  `mudiii-turn.mjs` and two e2e page files. Top tier. Status: started.
-- **T32 tombstone retirement** — causal stability for retraction and rollup records: read the
-  literature note, establish what the room knows about its own membership, write the design into
-  `crdt.md`, implement only what is defensible behind a gate. `memory/`, `p2p-room.mjs`. Top tier.
-  Status: started.
 
 **On batch size.** The operator asked for wider concurrency, with each agent taking several items.
 The limit is file ownership, not agent count: `mudiii-viz.mjs` alone carries a dozen open items and
@@ -590,45 +579,25 @@ exist before its third link has a target).
 
 ### Teach mode
 
-- **mudiii.html has no teach mode, and there is no engine content to wire one to.** adventure.html
-  and mud.html now carry a `#teachToggle`, its `Candle is in the study.` hint, and a
-  `getTeachEnabled` option their browser entries read fresh on every turn into
-  `gameConfig.adventure.teach`. mudiii has none of that, and cannot simply copy it: `mudiiiTurn` is a
-  closed-regex lane that never calls `liveWorldAnswer`, and there is no `mudiii-editor.mjs`, so no
-  `parseLine`/`planTriple` pair exists for town-square vocabulary. Relates to the mudiii item "Who
-  put that there?": both write player provenance nobody reads back.
-  **Tier:** top. This is engine content, not page wiring.
-  **Do:** write a sentence table for town-square vocabulary, a `planTaughtTownSquareTriple`, and a
-  teach-gate branch inside `mudiiiTurn`, which already accepts `gameConfig`. Only then add the
-  checkbox, copying what adventure and mud now do.
-  **Risk:** a teach lane that mints cells or agents the fold does not recognize writes facts the
-  board cannot show, which reads as the teach silently failing.
-  **Mitigation:** the same two legs the other pages got: toggle off, the sentence takes the ordinary
-  path; toggle on, it writes a fact and the confirmation matches `confirmation()`'s shape in
-  `world-teach.mjs`. Add a third leg asserting the taught fact actually moves the board.
-
-- **The teach checkbox is asserted at the session layer, never in a browser.** T8's tests call
-  `createAdventureSession`/`createMudSession` directly, which is the layer the existing tests for
-  those files use and which does prove the flag reaches `liveWorldAnswer` through the real turn
-  pipeline. Nothing clicks the actual checkbox.
+- **The mudiii teach checkbox is not on the page.** The lane is built and gated on
+  `gameConfig.mudiii.teach`, off by default. Five sentence families, every one a predicate
+  `foldTownSquareState` folds, and nothing mints. Two one-line changes remain, both in files another
+  track holds: `createMudiiiSession` takes a `getTeachEnabled` and passes
+  `gameConfig: { ...DEFAULT_GAME_CONFIG, mudiii: { ...DEFAULT_GAME_CONFIG.mudiii, teach:
+  getTeachEnabled() } }` through `buildExtraOptions`, and the deck grows the checkbox.
   **Tier:** Haiku.
-  **Do:** add a leg to each page's e2e that ticks `#teachToggle`, submits `Candle is in the study.`,
-  and asserts the reply matches `confirmation()`'s shape rather than the miss text.
-  **Risk:** low. The failure mode it covers is a checkbox that renders but is never read, which is
-  exactly the state both pages were in before.
+  **Do:** copy `mud-browser-entry.mjs:158` and `mud-viz.mjs:415`. The hint must be the town square's
+  own vocabulary — `The fox is at cell-3-4.` — not the manor's sentence.
+  **Risk:** none beyond copying the wrong hint, which is the bug below.
 
-### p2p
-
-- **A retraction tombstone is never dropped.** Nothing decides when a retraction record has been
-  seen by enough peers to retire. `docs/references/papers/crdt.md` records this as an open problem
-  and notes compaction's rollup records carry the same gap.
-  **Tier:** top. Causal stability is a research question, not a patch.
-  **Do:** read the crdt reference's own account first. Until a rule exists, tombstones accumulate,
-  which is correct and cheap at current fact volumes.
-  **Risk:** a rule that drops a tombstone too early lets a stale copy resurrect the fact, which is
-  the exact bug retraction replication just closed.
-
-### Pipeline
+- **mud.html's teach hint is a sentence mud.html cannot parse.** `mud-viz.mjs:414` says
+  `Candle is in the study.`, copied from `adventure-viz.mjs:1047`. `mud-garden` is a burrow, so
+  `liveWorldAnswer` picks `parseMudEditorLine`, whose table has `lies in` / `stands in` /
+  `is fixed in` / `is hidden in` and no `X is in the Y` rule at all — and the burrow has no study.
+  A visitor who ticks the box and types the hint gets nothing.
+  **Tier:** Haiku. A wording change in one `title` attribute.
+  **Do:** use a sentence the burrow parser takes. `Pebble lies in the garden.` works, and the mud
+  e2e leg already uses it.
 
 - **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
