@@ -38,6 +38,8 @@ three concurrent `npm run demo:build` runs, so that is now the cap. The other tw
 assertions but never run them; the coordinator runs the e2e tier after merge.
 
 - **T29 deck layout** — `mudiii-viz.mjs`. Sonnet. Status: started.
+- **T30 hand-driving, engine half** — `predator-prey.mjs`, `mudiii-browser-entry.mjs`. Top tier.
+  Status: started. The directional ring itself waits for T29 to release `mudiii-viz.mjs`.
 - **T27 food size** — `data/mudiii-assets.json` and the screenshot it must open. The batch's one
   browser track. Sonnet. Status: started.
 
@@ -469,6 +471,18 @@ until it does. Then the grid-size item, because the deception rail and the map p
   trusting this description.
   **Mitigation:** e2e that clicks an unarmed ground cell and asserts the followed agent's facing
   changed while `cellOf` did not, proving a turn rather than a move.
+
+- **The ring of directional controls is not built.** The engine seam is in flight as its own
+  track: a `manualMoves` option on `runTownSquareTick`, validated against the same legality table
+  the planner uses, wrapped as `session.driveAgent(agentId, direction)`. What is still open is the
+  page half — up steps along the facing, down steps back, left and right turn ninety degrees, the
+  diagonals forty-five. It waits for `mudiii-viz.mjs` to come free.
+  **Tier:** Sonnet once the seam exists.
+  **Do:** draw the ring around the view and call `driveAgent`. Land it with the click-to-turn item
+  below, which writes facing through the same predicate, so a clicked turn and a ring turn behave
+  the same way.
+  **Risk:** a press spends a turn and the whole board moves with it. The control has to read that
+  way rather than as a free nudge.
 
 - **There is no way to drive an agent by hand.** Every movement comes from the planner; a visitor
   watching a chase cannot step in.
