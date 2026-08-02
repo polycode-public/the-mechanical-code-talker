@@ -155,6 +155,13 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `sendCommand("put food at " + cellId)` and is unchanged.
   **Mitigation:** e2e that types `tick`, presses Enter, and asserts a `cellOf` read changed and
   `#globalTurnCount` moved. That also proves the turn-counter item.
+  **A caveat found while the first attempt was in flight:** `townSquareBoard` hardcodes `goal: ""`
+  and `plan: []` (`predator-prey.mjs:1341`-`:1343`), while a real tick fills both. So folding a
+  board after every chat turn blanks the goal line and prints `plan: holding` on every HUD card
+  until the next deck-driven tick — the same look `boot()` already gives at turn 0. Positions,
+  beliefs, mass and mood all still update, which is what the belief panel needs. Decide deliberately
+  whether to widen `townSquareBoard` to carry the stored goal and plan, or to accept the blank; do
+  not paper over it with a stale-goal cache in the page.
 
 - **The page's turn counter diverges from the engine's.** `session.tick(k)` ignores the `k` the page
   passes; the engine counts its own `tickCount`. They agree only while nothing else advances a turn,

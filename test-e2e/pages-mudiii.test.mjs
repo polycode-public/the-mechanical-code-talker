@@ -525,8 +525,19 @@ test("switching to the 14x14 chapel yard redraws the board at its own size and p
         onACell(dot.x) && onACell(dot.y),
         `${dot.id} sits on a whole cell of the 14-square board, not a fraction of a 12-square one (${dot.x}, ${dot.y})`,
       );
-      assert.ok(dot.x >= 1 && dot.x <= 14 && dot.y >= 1 && dot.y <= 14, `${dot.id} is on the board`);
+      // Round before bounding: the browser serializes the inline percentage
+      // with fewer digits than it was written with, so a dot on the last cell
+      // back-solves to 14.000004 and fails a bare <= 14.
+      const cell = { x: Math.round(dot.x), y: Math.round(dot.y) };
+      assert.ok(
+        cell.x >= 1 && cell.x <= 14 && cell.y >= 1 && cell.y <= 14,
+        `${dot.id} is on the board (cell-${cell.x}-${cell.y})`,
+      );
     }
+    assert.ok(
+      dots.some((d) => Math.round(d.x) > 12 || Math.round(d.y) > 12),
+      "at least one of the chapel yard's own opening cast stands past the 12-square board's edge",
+    );
 
     // cell-13-13 exists on the chapel yard alone.
     const before = await readWorldSentences(page);
