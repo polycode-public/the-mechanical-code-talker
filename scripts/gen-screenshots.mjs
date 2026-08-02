@@ -32,8 +32,16 @@ const SETTLE_MS = 250;
 const MUD_BUSY_TURN_THRESHOLD = 12;
 const MUD_BUSY_TIMEOUT_MS = 30_000;
 
+// mudiii.html carries the same busy-plate requirement as mud, on top of a
+// heavier boot: an 800 KB three.js bundle and 1.1 MB of models load before
+// the scene's own ready() signal ever fires, so both of its timeouts get
+// real headroom rather than reusing READY_TIMEOUT_MS/MUD_BUSY_TIMEOUT_MS.
+const MUDIII_BUSY_TURN_THRESHOLD = 12;
+const MUDIII_READY_TIMEOUT_MS = 60_000;
+const MUDIII_BUSY_TIMEOUT_MS = 60_000;
+
 // Same order the home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research", "mud"];
+const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research", "mud", "mudiii"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -120,12 +128,50 @@ const READY_CHECKS = {
     // above can leave the page scrolled to wherever the chat input sits.
     await page.evaluate(() => window.scrollTo(0, 0));
   },
+  // mudiii.html runs a live three.js animation loop from the moment it boots,
+  // so "networkidle" (used by every ready check above via the default in
+  // capturePage) would never resolve — same reason ingest and research use
+  // "load" instead, see GOTO_WAIT_UNTIL below. The scene exposes its own
+  // readiness signal (window.mudiiiScene.ready()) rather than a DOM element,
+  // because the composer input is enabled well before the 3D scene has
+  // finished loading its models and placed its cast.
+  mudiii: async (page) => {
+    await page.waitForFunction(() => window.mudiiiScene?.ready() === true, null, { timeout: MUDIII_READY_TIMEOUT_MS });
+
+    // fox-1 is the predator's id under the default single-predator roster
+    // (test/fixtures/mudiii-ticks.json's own `roles`/`initial` blocks — the
+    // frozen interface the engine and viz tracks both build against), so
+    // waiting on its placement is waiting for the scene to have drawn its
+    // first agent rather than an empty, still-loading square.
+    await page.waitForFunction(
+      () => Boolean(window.mudiiiScene?.cellOf("fox-1")),
+      null,
+      { timeout: MUDIII_READY_TIMEOUT_MS },
+    );
+
+    // A real page.click() scrolls the control into view, which can leave the
+    // 3D canvas out of the eventual screenshot — dispatching the click
+    // straight to the DOM fires the same listener without moving the page.
+    await page.evaluate(() => document.querySelector("#autoToggle")?.click());
+
+    await page.waitForFunction(
+      (threshold) => {
+        const turnText = document.querySelector("#globalTurnCount")?.textContent ?? "";
+        return Number((turnText.match(/\d+/) ?? ["0"])[0]) >= threshold;
+      },
+      MUDIII_BUSY_TURN_THRESHOLD,
+      { timeout: MUDIII_BUSY_TIMEOUT_MS },
+    );
+    await page.evaluate(() => window.scrollTo(0, 0));
+  },
 };
 
 // ingest.html's own e2e file loads with "load" rather than "networkidle" —
 // every other page uses "networkidle" in its own file, so each page keeps the
-// wait style its own test already trusts.
-const GOTO_WAIT_UNTIL = { ingest: "load", research: "load" };
+// wait style its own test already trusts. mudiii.html joins them for the same
+// reason: its live animation loop and rolling model fetches mean the network
+// never truly goes idle.
+const GOTO_WAIT_UNTIL = { ingest: "load", research: "load", mudiii: "load" };
 
 /** Read a PNG's pixel dimensions straight out of its IHDR chunk (bytes 16-23,
  *  big-endian width then height) — the only two fields this file needs, so
