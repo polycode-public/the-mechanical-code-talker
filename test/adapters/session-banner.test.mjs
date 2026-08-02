@@ -4,6 +4,7 @@
 // keep, and the unseeded/empty states must stay actionable, not apologetic.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,19 +12,32 @@ import { createSession } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { freshBootstrapRepo } from "../helpers/seeded-fixture.mjs";
 
+/** A createWriteStream stand-in whose write() always calls back with `err` —
+ *  the shape a real fs.WriteStream takes when its underlying open() failed:
+ *  queued writes surface the open error through their own callback. */
+class FailingWriteStream extends EventEmitter {
+  constructor(err) { super(); this.err = err; }
+  write(_text, cb) { queueMicrotask(() => cb(this.err)); return false; }
+  destroy() {}
+}
+
+const eacces = (path) => Object.assign(new Error(`EACCES: permission denied, open '${path}'`), { code: "EACCES" });
+
 test("an unwritable session-log directory fails with a message and a remedy, never a stack trace", async () => {
-  const { chmod, mkdir } = await import("node:fs/promises");
   clearCache();
-  // Two shapes reach the same wall: a repo whose .tmct/ has no sessions/ dir
-  // yet (the mkdir fails) and one where it exists (the stream's open fails).
-  for (const preexistingSessionsDir of [false, true]) {
+  // Two shapes reach the same wall, injected at the fs seam rather than via a
+  // real chmod: chmod-based unwritability is invisible to a process running
+  // as root, which is exactly what CI's container runs as. mkdirFails covers
+  // "the mkdir fails"; the other covers "the stream's open fails".
+  for (const mkdirFails of [true, false]) {
     const dir = await mkdtemp(join(tmpdir(), "tmct-nolog-"));
-    const logDir = join(dir, ".tmct");
-    await mkdir(preexistingSessionsDir ? join(logDir, "sessions") : logDir, { recursive: true });
-    await chmod(logDir, 0o500);
+    const logFs = {
+      mkdir: async (path) => { if (mkdirFails) throw eacces(path); },
+      createWriteStream: (path) => new FailingWriteStream(eacces(path)),
+    };
     try {
       await assert.rejects(
-        () => createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } }),
+        () => createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" }, logFs }),
         (e) => {
           assert.ok(e instanceof Error);
           assert.match(e.message, /cannot write the session log/);
@@ -33,7 +47,6 @@ test("an unwritable session-log directory fails with a message and a remedy, nev
         },
       );
     } finally {
-      await chmod(logDir, 0o700);
       clearCache();
       await rm(dir, { recursive: true, force: true });
     }
