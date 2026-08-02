@@ -38,8 +38,6 @@ the fox fix has merged since and is not pushed yet.
 
 - **T17 spider-fly migration** — `spider-fly*.mjs`, `predator-prey.mjs`, spider-fly's viz layer and
   corpus rows. Top tier. Status: started.
-- **T18 `/retract` granularity** — `syllogise.mjs`, `adventure-editor.mjs`. Sonnet.
-  Status: started.
 - **T19 hay-bale food render** — `mudiii-scene.mjs` and its two test files. Sonnet.
   Status: started.
 
@@ -685,34 +683,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   exactly the state both pages were in before.
 
 ### p2p
-
-- **Both `removeFacts` callers still delete a whole triple group, not one source's assertion.**
-  Retraction replication has landed: `src/domain/memory/retraction.mjs` mints one
-  `${groupId}@${sourceId}#retracted` record per source, classed `Retraction` so it never folds as a
-  Fact, carrying the concrete record ids it absorbs. `sync-filter.mjs` admits `mgx:retracted`
-  unconditionally, `p2p-room.mjs` merges retractions ahead of assertions in a batch, the fold strips
-  retracted records on read, and ingest refuses to re-materialize a stale copy. Two peers converge in
-  either order, pinned in `test/services/p2p-room.test.mjs`.
-  What did not change is the callers, and the item's original premise about them was wrong. Neither
-  passes record ids. `syllogise.mjs:1631` passes `order`, built from `readFactRows` row ids at
-  `:1567`, and `adventure-editor.mjs:354`-`:356` builds `toRemoveIds` from `currentKeys`, also row
-  ids. `removeFacts`' group-id path removes every source's record, which
-  `test/adapters/memory-backend-sqlite.test.mjs:419` pins deliberately. So the per-source granularity
-  is honoured in the record layer and at the mesh, and not yet at the two places a person triggers a
-  retraction from.
-  **The operator's decision: split them.** `/retract` suppresses **only the invoking source's own
-  assertion**, matching the granularity already settled for the mesh — if two peers taught the same
-  fact, one retracting leaves it standing and cited to the other. **mud EDIT mode deletes the whole
-  group**, because editing a world is an authoring act rather than a personal correction.
-  **Tier:** Sonnet. The shape is fixed; this is passing the right ids at each caller.
-  **Do:** give `syllogise.mjs`'s `/retract` path the invoking source's record ids rather than the row
-  ids it passes today. Leave `adventure-editor.mjs`'s `applyEdit` on the group-id path.
-  `removeFacts` already takes an optional `{ provenance, retractedAt }` and returns
-  `{ removed, records }`, so the record ids are available to hand it.
-  **Risk:** `test/adapters/memory-backend-sqlite.test.mjs:419` pins the group-wide path, which stays
-  correct for the EDIT-mode caller and must not be loosened to accommodate the other one.
-  **Mitigation:** whichever way each caller goes, assert it at the caller's own level rather than
-  only in the memory layer, since that is where the two disagree today.
 
 - **A retraction tombstone is never dropped.** Nothing decides when a retraction record has been
   seen by enough peers to retire. `docs/references/papers/crdt.md` records this as an open problem
