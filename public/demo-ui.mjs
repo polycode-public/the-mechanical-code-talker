@@ -123,7 +123,7 @@ async function run() {
   bootLine1.remove();
   addLine("tmct chat — examples/mini-webapp demo graph — 12 module(s)", "term-dim");
   await sleep(200);
-  addLine("ask a question, or /help for commands — running live, client-side, no server", "term-dim");
+  addLine("ask a question — running live, client-side, no server", "term-dim");
   await sleep(300);
 
   // A bit of history — as if mid-conversation. Real, verified Q&A (see module header).

@@ -244,12 +244,22 @@ function withUnfilledPlaceholdersDropped(template, svg) {
 /** Resolve ONE class term (no ancestor walk here — the caller repeats this
  *  at every level of the chain) against the template set, in specificity
  *  order: fully-specific match variant > parameterized template filled with
- *  an observed value > plain class template. Among satisfied match variants
- *  the most demanding one wins (bestSatisfiedVariant). A match variant that
- *  declares its own `[parameters.*]` is filled from them first, so a facing
- *  profile also carrying `[face]`/`[parameters.emotion]` renders the mood the
- *  instance's own mgx:feels fact names. Returns the SVG string, or null when
- *  nothing at this level matches. */
+ *  an observed value > plain class template > a parameterized template with
+ *  no fact to fill it, its own unfilled placeholders dropped. Among
+ *  satisfied match variants the most demanding one wins (bestSatisfiedVariant).
+ *  A match variant that declares its own `[parameters.*]` is filled from them
+ *  first, so a facing profile also carrying `[face]`/`[parameters.emotion]`
+ *  renders the mood the instance's own mgx:feels fact names. Returns the SVG
+ *  string, or null when nothing at this level matches.
+ *
+ *  The last step matters for a class whose only art IS a parameterized
+ *  template (e.g. lamp/cabinet at the sprite tier: one `[parameters.material]`
+ *  file, no plain sibling) — with no fact to fill it, `parameterizedFillAll`
+ *  correctly declines rather than guessing a material, but the class still
+ *  has real dedicated art. Dropping the unfilled tokens and returning that
+ *  art (the same treatment a satisfied match variant's own unfilled
+ *  placeholders already get) means an untaught instance renders as ITS OWN
+ *  class, not as whatever a less-specific ancestor happens to resolve to. */
 function resolveAtTerm(term, propertyFacts, templates) {
   const candidates = templatesForClass(term, templates);
   const matched = bestSatisfiedVariant(candidates, propertyFacts);
@@ -263,7 +273,9 @@ function resolveAtTerm(term, propertyFacts, templates) {
     if (filled) return filled;
   }
   const plain = candidates.find((t) => !t.match && !t.parameters);
-  return plain ? plain.svg : null;
+  if (plain) return plain.svg;
+  const parameterizedOnly = candidates.find((t) => !t.match && t.parameters);
+  return parameterizedOnly ? withUnfilledPlaceholdersDropped(parameterizedOnly, parameterizedOnly.svg) : null;
 }
 
 function resolveSpriteAssetRaw(className, factRows, propertyFacts, templates, spriteRegistry, rootFallback) {
