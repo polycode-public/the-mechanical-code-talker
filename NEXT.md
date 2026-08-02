@@ -91,28 +91,20 @@ only a code push exercises the deployed tier.
 `reports/CLI_EDGE_HUNT.md` holds the transcripts. These break the product's central promise, so they
 outrank every cosmetic item below.
 
-- **Four faults are in flight; fifteen more are not.** The worst four went out as one track:
-  `/untested` claiming full coverage of a repo it has no index for (`codegraph.mjs:1381` renders an
-  empty result and zero modules identically, while the sibling chat lane already guards it);
-  `forget Bertha is a baker` writing a fact called "forget bertha" through the `found:false`
-  fall-through at `chat.mjs:4852`; three-word unknown questions like `what is grelb` getting tmct's
-  self-description instead of the miss wall, from the `<= 3 words` catch-all at `chat.mjs:1413`,
-  where the four-word form refuses correctly; and `all foxes are mammals` storing the plural so the
-  next turn cannot find it.
-  **What is left:** the report's other fifteen. One high — covered above. Eight medium: the
+- **Fifteen further CLI faults, from the edge-hunt report.** The worst four are fixed: the empty
+  code index that claimed full test coverage, the forget that taught, the three-word question that
+  sold instead of refusing, and the plural teach that stored what it could not then find.
+  What remains, all in `reports/CLI_EDGE_HUNT.md` with transcripts: one high and eight medium — the
   retract-twice parse wall, `/help` never saying how to retract, "how do you know" dead-ending,
-  `define dog` routing to the code lane, `cli`/`serve` not seeing what chat answers from,
-  `--repo <typo>` silently scaffolding a new repo, spider-and-fly never telling a first-time player
-  the advance word is `tick`, and non-code questions getting an "index this repo" nudge. Six
-  low: mid-game lane leaks on `lower`/`watch`/`step`/`help`/`xyzzy`, an ungrammatical "did you mean",
-  the adventure describing a door that is not there, esbuild warning spew on `--render sprites`, and
-  extract's wrong skip reason.
+  `define dog` routing to the code lane, `cli`/`serve` not reading the memory store, `--repo <typo>`
+  silently scaffolding a new repo, spider-and-fly never telling a first-time player the advance word
+  is `tick`, and non-code questions getting an index-this-repo nudge — plus six cosmetics.
   **Tier:** Sonnet for the medium set; Haiku for the cosmetics.
-  **Do:** work the medium eight as one batch once `chat.mjs` is free. Read the report for each
-  transcript rather than re-deriving them.
-  **Risk:** `chat.mjs` is large and shared, and a fix that widens a lane can silently capture
-  sentences another lane owns. The corpus tests are where that shows up.
-
+  **Do:** three of them need routing work in `ask.mjs` and `server.mjs`, which the fix track did not
+  own. Every one of the rest is a correct refusal rather than a wrong answer, so they are comfort
+  items, not honesty ones. Work them as one batch.
+  **Risk:** each is a closed-set addition, and widening a lane can capture sentences another lane
+  owns. The corpus tests are where that shows.
 
 ### mudiii.html — further work
 
