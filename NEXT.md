@@ -33,58 +33,33 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 1 of 5, dispatched 2026-08-02. Plus two features the
+**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 3 of 5, dispatched 2026-08-02. Plus two features the
 operator added to the same run: world teach mode and pill-driven predictive text. Standing
 authorisation: run every remaining wave without pausing, push only for a pipeline fix or on
 completion of all waves.
 
-Wave 1, in flight:
+**Waves 0, 1 and 2 have landed.** `mudiii.html` builds and runs: the town square renders in three,
+the cast draws, the deck drives it, and the lane answers. Four of its five e2e assertions pass.
+
+Wave 3, in flight:
 
 | track | tier | worktree | status |
 |---|---|---|---|
-| W1-ENGINE — `town-square-world.mjs`, `predator-prey.mjs`, three world sources, the fixture's ticks | top | `.claude/worktrees/agent-abfd808e944937be1` | started |
-| W1-VIZ — `mudiii-viz.mjs`, `mudiii-browser-entry.mjs` | Sonnet | branch `worktree-agent-ac9f33b91b04d1731`, **held unmerged** | done, 51 tests — waits for the scene and engine files, because it imports both and merging early would leave `main` with a failing import-layer guard |
-| W2-SCENE — `mudiii-scene.mjs`, the e2e smoke | Sonnet | `.claude/worktrees/agent-a14424990d27876f6` | started |
-| W2-ASSETS — `public/models/`, the manifest checker and credits generator | Haiku | merged, worktree removed | **landed** — 14 models, 1.09 MB, every size and hash re-verified; the licence guard tested by planting an `eastbrook_*` file and confirming rejection. **This also fixes the red pipeline**: the wave-0 `TRACKED_SITE_FILES` entry needed a `public/models/` that did not exist yet, and `cpSync` threw `ENOENT` in every browser job |
-| W1-VENDOR — `build-three-vendor.mjs`, `build-mudiii-bundle.mjs` | Haiku | merged, worktree removed | **landed** — three.js vendors at 801 KB raw / 169 KB brotli, all four exports verified from a scratch rebuild |
+| W3-BOARD — push the opening board to the scene, get all five e2e cases green | top | `.claude/worktrees/agent-a26bef122150781af` | started |
+| W3-PLATE — the landing-page plate and the screenshot ready-check | Sonnet | `.claude/worktrees/agent-adc30b3986bbde357` | started |
 
-`mudiii-viz.mjs` and `mudiii-scene.mjs` are split up front so the page shell and the 3D scene are
-disjoint files rather than one contended one; the contract between them is a single exported
-function name, `mudiiiSceneScript(opts)`, pasted into both briefs.
+Left for the coordinator after those land: run `npm run gen:screenshots` and commit
+`public/screenshots/mudiii.png` **with** its regenerated manifest in one commit; register
+`test-e2e/pages-mudiii.test.mjs` in `.gitlab-ci.yml`'s e2e job (it enumerates files by name, so a
+new one is green by absence until listed); add `mudiii.html` to the deploy cache warm list; and add
+a `smoke:deploy` probe for the page and one model — the only check that would catch committed
+models never reaching the edge, which is plausible precisely because every other asset is generated.
 
-Wave 0, landed:
-
-Wave-0 prerequisites landed on `main` first (c45a6fc7): `three` as a devDependency, the two npm
-script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, and the
-`ensure-worlds-pack.mjs` freshness fix.
-
-| track | tier | worktree / branch | status |
-|---|---|---|---|
-| W0-SPIKE — belief extraction, tick fixture header, config sections | top | merged, worktree removed | **landed** — 120 tests in its radius; both belief fixes spot-checked directly on merged `main` |
-| W0-ASSETS — `data/mudiii-assets.json` allowlist | Sonnet | merged, worktree removed | **landed** — 14 CC0 rows, 1.14 MB, verified against disk by size and sha256 |
-| W0-AUDIT — lane/vocabulary collision check | Sonnet | read-only, no worktree | **landed** — findings below |
-| PC-CORE — `src/services/pill-complete.mjs` + unit test | Sonnet | merged, worktree removed | **landed** — 17 unit tests; adopters splice `matchPills`/`pillCandidates`/`createPillComplete` under those exact names, and call `.refresh()` from the page's own pill render pass |
-| WT-CORE — `world-teach.mjs`, the hook, both editor exports | top | merged, worktree removed | **landed** — 116 in its radius, adventure corpus 91 with the coordinator's `chat.mjs` argument applied |
-| REF-CRDT — `docs/references/papers/crdt.md` | top | merged, worktree removed | **landed** — estate 68, links OK |
-
-W0-AUDIT's findings, which the wave-2 lane brief is written against:
-
-- The new lane's `chat.mjs` block goes after the spider-fly block and before `unclaimedAdventureOpening`.
-  The phrasing at risk is `play mudiii` — the named-opener regex requires `play`/`let's play`, so
-  `visit the town square` and `enter the town square` are free and never reach that decline.
-- **There is no mud lane in `chat.mjs`.** `runMudTurn` is called only from the browser entry's
-  autoplay tick; a typed line on a mud page is claimed by `adventureTurn` like any other world.
-- `src/domain/real-word-collisions.json` is about fuzzy typo-repair for code-graph verbs, not game
-  vocabulary. Adding `fox`/`goblin`/`town`/`square` trips nothing there.
-- `test:fast`'s budget is 10s and it currently runs in ~2.1s, so a new lane's corpus has room.
-- Narrow collision to design around: `drop a morsel at cell-3-4` is free by default, but with an
-  adventure world live in the same session `drop` falls to the generic object arm and `adventureTurn`
-  claims it with an honest miss.
-
-Worktree paths and branches are filled in as each track reports; the coordinator holds these shared
-files for the whole build and no track may edit them: `chat.mjs`, `build-demo-site.mjs`,
-`public/index.html`, `package.json`, `test/estate/pack-manifest.json`, `test/fast/lanes.test.mjs`,
-`scripts/gen-screenshots.mjs`, `.gitlab-ci.yml`, `NEXT.md`.
+Integration bugs found and fixed while wiring the page, recorded because each was invisible until
+two tracks met: the viz and scene modules top-level-awaited each other and deadlocked; the asset
+manifest's repo-relative paths were used verbatim as URLs when `public/` is the site root; the site
+build read the cast off world facts when a town-square world ships only the board; and the browser
+entry called five engine functions that did not exist, having been written against predicted names.
 
 ## Open items
 
