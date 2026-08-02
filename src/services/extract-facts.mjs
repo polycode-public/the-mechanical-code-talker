@@ -92,11 +92,22 @@ export function parseArgs(argv) {
  */
 async function runSentence(sentence, { config, memoryDir }) {
   const before = readFactRows(await loadMemory(memoryDir));
-  const { record } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
-  if (record?.via !== "assert" || record?.miss) return { recognized: false, rows: [] };
+  const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
+  if (record?.via !== "assert" || record?.miss) return { recognized: false, rows: [], decline: String(answer || "") };
   const after = readFactRows(await loadMemory(memoryDir));
   return { recognized: true, rows: touchedFactRows(before, after) };
 }
+
+/** The recognizer's own words for why it turned a sentence down, when it named
+ *  an ungrounded term rather than the sentence's shape. "A wombat is a
+ *  marsupial." is the same shape as "A kestrel is a bird.", which IS recognized;
+ *  the difference is that "bird" is in the vocabulary and "marsupial" is not, so
+ *  reporting every skip as an unrecognized shape blames the wrong thing. */
+const UNGROUNDED_TERM_DECLINE_RE = /I don't recognize ((?:"[^"]+"(?:\s+(?:and|or)\s+)?)+) as (?:a )?words? I know/i;
+const ungroundedTermsIn = (decline) => {
+  const m = String(decline || "").match(UNGROUNDED_TERM_DECLINE_RE);
+  return m ? m[1].match(/"([^"]+)"/g).map((q) => q.slice(1, -1)) : null;
+};
 
 // The copula lemmas that read as class membership; a following noun phrase is
 // the class the subject is-a. "has/have" and other verbs are relations, not isa.
@@ -541,11 +552,17 @@ export async function ingestText(text, {
   let sentenceCount = 0;
   let recognizedSentences = 0;
   let optimisticSentences = 0;
+  // The terms a skipped sentence named that nothing grounds yet. Reported with
+  // the skip count so the summary names the real obstacle instead of blaming
+  // the sentence's shape for a shape it actually recognizes.
+  const ungroundedTerms = new Set();
 
   // One recognized read of some text form: null when the strict recognizer
   // grounds nothing, else the Fact rows it touched.
+  let lastDecline = "";
   const strictRows = async (form) => {
-    const { recognized, rows } = await runSentence(form, { config: cfg, memoryDir: dir });
+    const { recognized, rows, decline } = await runSentence(form, { config: cfg, memoryDir: dir });
+    if (!recognized) lastDecline = decline || lastDecline;
     return recognized && rows.length ? rows : null;
   };
 
@@ -557,6 +574,7 @@ export async function ingestText(text, {
       let carrySubject = null;
       for (const sentence of splitSentencesPreservingPaths(paragraph)) {
         sentenceCount += 1;
+        lastDecline = "";
         const cleaned = stripCitationResidue(sentence);
         // Whole sentence first, then each closed-marker clause as a fallback.
         let rows = null;
@@ -592,6 +610,8 @@ export async function ingestText(text, {
           }
           continue;
         }
+        const ungrounded = ungroundedTermsIn(lastDecline);
+        if (ungrounded) for (const term of ungrounded) ungroundedTerms.add(term);
         if (!optimistic) continue;
         const candidates = optimisticTriples(cleaned, { lexicon: lex, nlp });
         if (!candidates.length) continue;
@@ -612,6 +632,7 @@ export async function ingestText(text, {
       extracted,
       optimistic: optimisticFacts,
       skipped: sentenceCount - recognizedSentences - optimisticSentences,
+      ungroundedTerms: [...ungroundedTerms],
     };
     if (canonical) {
       result.canonical = canonicalLines([...extracted, ...optimisticFacts], readFactRows(await loadMemory(dir)));
@@ -663,7 +684,12 @@ export async function main(argv = process.argv.slice(2)) {
     + `(${result.extracted.length} fact row${result.extracted.length === 1 ? "" : "s"})`
     + (optimistic ? `, ${optimisticCount} optimistic candidate${optimisticCount === 1 ? "" : "s"}` : "")
     + `, ${result.skipped} skipped — not a recognized declarative shape (an honest, expected gap; this is `
-    + `an attempt, not full NLU).`,
+    + `an attempt, not full NLU).`
+    + (result.ungroundedTerms?.length
+      ? `\nSome of those skips were shapes I do read, held up by terms nothing grounds yet: `
+        + `${result.ungroundedTerms.map((t) => `"${t}"`).join(", ")}. `
+        + `Ground one side first (e.g. "every ${result.ungroundedTerms[0]} is a thing") and re-run.`
+      : ""),
   );
   if (repo) console.error(`facts written into ${memoryDir}'s tmct memory, tagged ${sourceTag}`);
   if (out) console.error(`facts written to ${out}`);
