@@ -385,9 +385,6 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       });
     });
   }
-  var glbCache = null;
-  function loadGlb(url) { return glbCache.load(url); }
-
   async function ensureThree() {
     if (THREE) return true;
     var result = await loadThreeVendor();
@@ -396,7 +393,6 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     OrbitControlsCtor = result.OrbitControls; MeshoptDecoderRef = result.MeshoptDecoder;
     gltfLoader = new GLTFLoaderCtor();
     gltfLoader.setMeshoptDecoder(MeshoptDecoderRef);
-    glbCache = createCachedLoader(loadGlbRaw);
     setUpScene();
     return true;
   }
@@ -513,13 +509,23 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     object3D.userData.tmctNormalized = true;
   }
 
-  async function loadPropTemplate(asset) {
-    var url = modelUrlFor(asset.destPath);
-    if (propTemplates[url]) return propTemplates[url];
-    var gltf = await loadGlb(url);
-    normalizeToHeight(gltf.scene, asset.targetHeight);
-    propTemplates[url] = gltf.scene;
-    return gltf.scene;
+  // Keyed on the manifest row's own key field, not its destPath: food-crumb
+  // and food-morsel share one GLB at two different targetHeights, and
+  // normalizeToHeight refuses a second call on the same object, so a
+  // destPath-keyed cache would hand the second row the first row's
+  // already-normalized graph and throw.
+  function loadPropTemplate(asset) {
+    var key = asset.key;
+    if (!propTemplates[key]) {
+      var url = modelUrlFor(asset.destPath);
+      var promise = loadGlbRaw(url).then(function (gltf) {
+        normalizeToHeight(gltf.scene, asset.targetHeight);
+        return gltf.scene;
+      });
+      promise.catch(function () { delete propTemplates[key]; });
+      propTemplates[key] = promise;
+    }
+    return propTemplates[key];
   }
 
   async function placeProps(propPlacements) {
@@ -544,13 +550,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
   }
 
-  // ---- items: crumbs and morsels, primitive geometry ------------------------
-  // Doubled from 0.08/0.18: against the fox's own 1m targetHeight and a 1-unit
-  // cell, the old radii read as barely-visible dots on the board.
-  var CRUMB_RADIUS = 0.16, MORSEL_RADIUS = 0.36;
-  function itemGeometryFor(kind) { return new THREE.SphereGeometry(kind === "morsel" ? MORSEL_RADIUS : CRUMB_RADIUS, 10, 8); }
-  function itemMaterialFor(kind) { return new THREE.MeshStandardMaterial({ color: kind === "morsel" ? 0xd98a2b : 0x8c6a3f }); }
-  function itemHeightFor(kind) { return kind === "morsel" ? MORSEL_RADIUS : CRUMB_RADIUS; }
+  // ---- items: crumbs and morsels, the committed hay bale at two target
+  // heights (food-crumb 0.16, food-morsel 0.36 in data/mudiii-assets.json),
+  // matching the on-ground footprint the primitive spheres they replace were
+  // already tuned to. ---------------------------------------------------------
+  function itemAssetKeyFor(kind) { return kind === "morsel" ? "food-morsel" : "food-crumb"; }
 
   function animateScaleTo(object3D, target, now) {
     var duration = tweenDurationMs;
@@ -566,23 +570,40 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     requestAnimationFrame(step);
   }
 
+  // A Group per live item, the same shape ensureAgent uses for agents: the
+  // group is in the scene (and in itemMeshes) synchronously so a second tick
+  // arriving before the GLB resolves finds an existing entry rather than
+  // starting a second load, but stays invisible until the model is in it.
   function applyItemTick(id, item, now) {
     var world = cellToWorld(item.cell, GRID_SIZE, CELL_SIZE);
     if (!world) return;
     var entry = itemMeshes[id];
-    if (!entry) {
-      var mesh = new THREE.Mesh(itemGeometryFor(item.kind), itemMaterialFor(item.kind));
-      mesh.name = "item-" + id;
-      mesh.position.set(world.x, itemHeightFor(item.kind), world.z);
-      mesh.scale.setScalar(0);
-      scene.add(mesh);
-      entry = { mesh: mesh, cell: item.cell, kind: item.kind };
-      itemMeshes[id] = entry;
-      animateScaleTo(mesh, 1, now);
+    if (entry) {
+      entry.cell = item.cell;
+      entry.mesh.position.set(world.x, 0, world.z);
       return;
     }
-    entry.cell = item.cell;
-    entry.mesh.position.set(world.x, itemHeightFor(item.kind), world.z);
+    var group = new THREE.Group();
+    group.name = "item-" + id;
+    group.position.set(world.x, 0, world.z);
+    group.visible = false;
+    scene.add(group);
+    entry = { mesh: group, cell: item.cell, kind: item.kind };
+    itemMeshes[id] = entry;
+    var asset = manifestByKind[itemAssetKeyFor(item.kind)];
+    if (!asset) return;
+    loadPropTemplate(asset).then(function (template) {
+      if (itemMeshes[id] !== entry) return; // removed while the model was still loading
+      var instance = template.clone();
+      instance.position.y = template.position.y;
+      group.add(instance);
+      group.visible = true;
+      group.scale.setScalar(0);
+      animateScaleTo(group, 1, performance.now());
+    }).catch(function (err) {
+      // eslint-disable-next-line no-console
+      console.warn("tmct: an item model failed to load", id, err);
+    });
   }
 
   function removeItem(id, withFlourish) {
