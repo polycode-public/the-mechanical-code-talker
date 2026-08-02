@@ -52,7 +52,7 @@ import {
   rowsForWorld, appendLogLine,
 } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
-import { renderMudEditorText } from "./mud-editor.mjs";
+import { renderMudEditorText, gridWorldEditorState } from "./mud-editor.mjs";
 import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
 } from "./pill-complete.mjs";
@@ -793,6 +793,7 @@ function pageScript() {
   const appendLogLine = ${appendLogLine.toString()};
   const rowsForWorld = ${rowsForWorld.toString()};
   const renderMudEditorText = ${renderMudEditorText.toString()};
+  const gridWorldEditorState = ${gridWorldEditorState.toString()};
   const pillCandidates = ${pillCandidates.toString()};
   const matchPills = ${matchPills.toString()};
   const createPillComplete = ${createPillComplete.toString()};
@@ -1152,7 +1153,7 @@ function pageScript() {
     el("editModeBtn").setAttribute("aria-pressed", "true");
     const snap = await session.snapshot();
     editRows = worldOnlyRows(snap.rows);
-    el("editorText").value = renderMudEditorText(editRows, snap.state || {});
+    el("editorText").value = renderMudEditorText(editRows, gridWorldEditorState(snap.state));
     el("editorStatus").className = "edit-status";
     el("editorStatus").textContent = "";
     el("editorPills").innerHTML = "";
@@ -1213,18 +1214,20 @@ function pageScript() {
     if (seq !== bootSeq) return;
     session = opened;
     agentsById = {};
-    for (const id of cast) {
-      const found = (s.agents || []).find(function (a) { return a.id === id; });
-      agentsById[id] = {
-        role: found ? found.role : null, cell: null, facing: DATA.defaultFacing,
-        goal: "", mood: "", plan: [], mass: null, belief: {},
-      };
-    }
     itemsById = {};
-    camera.selectedId = cast[0] || null;
     el("chatInput").disabled = false;
     callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: DATA.gridSize, cellSize: 1 });
-    callScene("setCamera", camera);
+
+    // The opening board, drawn through the very path a tick takes. Without
+    // this the page's first sight of where anything stands is the first tick,
+    // so every mesh sits unplaced and the map panel is blank until the visitor
+    // presses play. The engine mints the cast at seeded cells, so the ids and
+    // the cells both come back from it rather than being guessed here.
+    const opening = await session.board();
+    if (seq !== bootSeq) return;
+    globalTurn = opening.turn || 0;
+    camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
+    applyTickResult(opening);
     renderAll();
   }
 

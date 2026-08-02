@@ -69,6 +69,33 @@ const TRUE_ONLY_FLAG_PREDICATES = ["mgx:is-container", "mgx:is-predator", "mgx:i
 
 // ---- rendering ---------------------------------------------------------------
 
+/** A GRID world's folded state in the shape this module's own renderer and
+ *  differ read. A room world folds a placement into `{ predicate, object }`,
+ *  because a thing can be carried, hidden or fixed as well as stood in. A grid
+ *  world folds it into `{ cell, turn, epoch }`: on a board there is one way to
+ *  be somewhere, and the extra fields carry the (epoch, turn) rank instead.
+ *
+ *  Handed a grid fold directly, `renderMudEditorText` reads `place.predicate`
+ *  as undefined and renders no placement sentence at all, and
+ *  `planMudEditorSync` reads every placement line as a change and re-appends
+ *  it. One translation here keeps both honest, and keeps a second copy of the
+ *  mapping out of each page that needs it.
+ *
+ *  `masses` comes across too, since a grid fold names it `mass`. There is no
+ *  openness on a board, so that map is empty. Pure, self-contained (spliced by
+ *  `.toString()` alongside the two functions it feeds). */
+export function gridWorldEditorState(state) {
+  const placements = new Map();
+  for (const [subject, place] of (state && state.placements) || new Map()) {
+    if (place && place.cell) placements.set(subject, { predicate: "mgx:currently-in", object: place.cell });
+  }
+  const masses = new Map();
+  for (const [subject, mass] of (state && state.mass) || new Map()) {
+    if (mass && mass.value !== undefined) masses.set(subject, { value: mass.value });
+  }
+  return { placements, masses, openness: new Map() };
+}
+
 /** The whole burrow's editable facts as plain sentences, one per line, sorted by
  *  (subject, predicate, object) so two edits apart produce a reviewable diff
  *  rather than a reshuffle. Placement and openness come from the FOLDED state, so

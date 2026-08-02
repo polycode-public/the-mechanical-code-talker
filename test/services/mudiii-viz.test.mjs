@@ -151,9 +151,30 @@ test("renderMudiiiHtml: every tick calls window.mudiiiScene.applyTick with the r
   );
 });
 
-test("renderMudiiiHtml: window.mudiiiScene.setCamera is called on boot, every tick's fallback, camera-mode clicks and the follow select", () => {
+test("renderMudiiiHtml: window.mudiiiScene.setCamera is reached on boot, every tick's fallback, camera-mode clicks and the follow select", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.equal((html.match(/callScene\("setCamera", camera\)/g) || []).length, 4);
+  const bodyOf = (header) => {
+    const match = new RegExp(`${header}[\\s\\S]*?\\n  \\}`).exec(html);
+    assert.ok(match, `${header} is in the page script`);
+    return match[0];
+  };
+  // Boot reaches it through applyTickResult, the one path that draws a board —
+  // the opening one and every tick's alike, so the camera can never be rigged
+  // against a board the scene was never told about.
+  const boot = bodyOf("async function boot\\(\\) \\{");
+  assert.match(boot, /applyTickResult\(opening\)/, "boot draws the opening board through the tick path");
+  assert.match(bodyOf("function applyTickResult\\(result\\) \\{"), /callScene\("setCamera", camera\)/);
+  assert.match(bodyOf('el\\("cameraMode"\\)\\.addEventListener'), /callScene\("setCamera", camera\)/);
+  assert.match(bodyOf('el\\("agentSelect"\\)\\.addEventListener'), /callScene\("setCamera", camera\)/);
+});
+
+test("renderMudiiiHtml: boot draws the opening board from session.board(), never a fabricated cast with null cells", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const boot = /async function boot\(\) \{[\s\S]*?\n  \}/.exec(html);
+  assert.ok(boot, "boot() is in the page script");
+  assert.match(boot[0], /await session\.board\(\)/, "boot asks the engine where everything stands");
+  assert.doesNotMatch(boot[0], /cell: null/, "no agent is seeded at a null cell for the scene to fail to place");
+  assert.match(boot[0], /camera\.selectedId = Object\.keys\(opening\.agents/, "the follow target comes from the board the engine minted");
 });
 
 test("renderMudiiiHtml: every window.mudiiiScene call is guarded — a missing or throwing scene never takes the page down", () => {

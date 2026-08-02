@@ -7,7 +7,7 @@ import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
   foldTownSquareState, gridApplyActions, greedyAway, greedyToward, isMudiiiStatePredicate,
   pathStateKey, placeFood, roleOfId, runTownSquareTick, seededWander, startTownSquareGame,
-  townSquareTickPayload,
+  townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
 import { TOWN_SQUARE_LAYOUTS, cellId, openCells, worldFactRows } from "../../src/domain/town-square-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
@@ -192,6 +192,114 @@ test("a seeded roster never places anything on a prop's cell", async () => {
     for (const id of ["fox-1", "goblin-1", "goblin-2", "goblin-3"]) {
       assert.ok(open.has(state.placements.get(id).cell), `${id} was seeded onto a prop`);
     }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the board as it stands, with no turn spent ----------------------------------
+
+test("townSquareBoard reports the seeded cast at its real cells before any tick runs", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-board-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await startTownSquareGame(dir, { layout: LAYOUT });
+    const board = await townSquareBoard(dir, { layout: LAYOUT });
+
+    assert.equal(board.turn, 0, "no tick has been played");
+    assert.deepEqual(board.ecology, [], "no ecology pass has run, so nothing happened to report");
+    assert.deepEqual(Object.keys(board.agents), ["fox-1", "goblin-1", "goblin-2", "goblin-3"]);
+
+    const open = new Set(openCells(LAYOUT));
+    for (const [id, agent] of Object.entries(board.agents)) {
+      assert.ok(open.has(agent.cell), `${id} reports a real open cell, never null`);
+    }
+    assert.equal(board.agents["fox-1"].role, "predator");
+    assert.equal(board.agents["goblin-1"].role, "prey");
+    assert.equal(board.agents["fox-1"].mass, CONFIG.predatorInitialMass);
+    assert.equal(board.agents["goblin-1"].facing, "south");
+    assert.equal(board.agents["goblin-1"].mood, "calm");
+    assert.deepEqual(board.agents["fox-1"].plan, [], "nothing has been planned yet");
+    assert.equal(board.agents["fox-1"].goal, "", "no decision has been made, so no goal is claimed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("townSquareBoard spends no turn and writes no fact — reading the board twice leaves it identical", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-board-pure-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await startTownSquareGame(dir, { layout: LAYOUT });
+    const rowsBefore = readFactRows(await loadMemory(dir)).length;
+    const first = await townSquareBoard(dir, { layout: LAYOUT });
+    const second = await townSquareBoard(dir, { layout: LAYOUT });
+    assert.deepEqual(second, first, "a read is a read");
+    assert.equal(readFactRows(await loadMemory(dir)).length, rowsBefore, "nothing was appended");
+    assert.equal((await townSquareBoard(dir, { layout: LAYOUT })).turn, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("townSquareBoard carries the same agent and item field set a tick emits", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-7"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-6-6"), weigh("crumb-1", 1),
+  ], "board-shape");
+  try {
+    const board = await townSquareBoard(dir, { layout: LAYOUT });
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(
+      Object.keys(board.agents["fox-1"]).sort(),
+      Object.keys(tick.agents["fox-1"]).sort(),
+      "a renderer reads one agent shape whether it drew the opening board or a tick",
+    );
+    assert.deepEqual(Object.keys(board.items["crumb-1"]).sort(), ["cell", "kind"]);
+    assert.equal(board.items["crumb-1"].cell, "cell-6-6");
+    assert.equal(board.items["crumb-1"].kind, "crumb");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("townSquareBoard's belief is the engine's own vision-gated snapshot, not an empty stub", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-6"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-12-12"), weigh("goblin-2", 8),
+  ], "board-belief");
+  try {
+    const board = await townSquareBoard(dir, { layout: LAYOUT });
+    const belief = board.agents["fox-1"].belief;
+    assert.equal(belief["goblin-1"], "cell-5-6", "the neighbour one step away is seen where it stands");
+    assert.ok("goblin-2" in belief, "a candidate out of range is still named");
+    assert.equal(belief["goblin-2"], null, "and reported unseen rather than at a guessed cell");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("townSquareBoard reports the last tick played, so a caller's turn counter resumes from it", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+  ], "board-turn");
+  try {
+    await runTownSquareTick(dir, { layout: LAYOUT });
+    await runTownSquareTick(dir, { layout: LAYOUT });
+    const board = await townSquareBoard(dir, { layout: LAYOUT });
+    assert.equal(board.turn, 2);
+    assert.equal(board.agents["fox-1"].cell, (await townSquareBoard(dir, { layout: LAYOUT })).agents["fox-1"].cell);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("townSquareBoard refuses a layout name no pack holds, the same way a tick does", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-board-layout-"));
+  try {
+    await assert.rejects(() => townSquareBoard(dir, { layout: "no-such-square" }), /no such layout/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

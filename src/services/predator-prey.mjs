@@ -603,6 +603,49 @@ export async function placeFood(memoryDir, {
   };
 }
 
+// ---- what stands on the board right now -------------------------------------------
+
+/** Who and what is live in `state`, plus the derived maps a decision or a
+ *  render needs: the two agent rosters, the item roster, which of those items
+ *  count as food, and each item's cell and mass. `beliefCandidates` is the one
+ *  sorted list every belief snapshot is taken against, so an observer's view of
+ *  the board never depends on which caller asked.
+ *
+ *  Read by both the tick and `townSquareBoard`, so a resting board and a ticking
+ *  one can never disagree about who is on it. Pure.
+ *
+ *  objectClassChain re-filters the whole row array per node it walks, so the
+ *  food set is computed once here over the item roster and never inside an agent
+ *  loop. Inside the prey loop it would cost roughly one full row scan per prey
+ *  per item per tick — fine at three prey, unusable at the ten the slider
+ *  offers. */
+function readLiveBoard(rows, state, { config, roles }) {
+  const predators = liveOfKind(state, roles.predator.kind);
+  const prey = liveOfKind(state, roles.prey.kind);
+  const liveItemIds = [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort();
+  return {
+    predators,
+    prey,
+    liveItemIds,
+    foodIds: new Set(liveItemIds.filter((id) => objectClassChain(rows, id).includes("food"))),
+    itemCellOf: new Map(liveItemIds.map((id) => [id, state.placements.get(id).cell])),
+    itemMassOf: new Map(liveItemIds.map((id) => [id, state.mass.get(id)?.value ?? config.spawnedFoodMass])),
+    beliefCandidates: [...predators, ...prey, ...liveItemIds].sort(),
+  };
+}
+
+/** The render payload's `items` half — `{ id: { kind, cell } }` — over
+ *  `liveItemIds`, skipping anything in `taken` (a tick's eaten set; a resting
+ *  board passes none). Pure. */
+function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
+  const items = {};
+  for (const id of liveItemIds) {
+    if (taken && taken.has(id)) continue;
+    items[id] = { kind: state.types.get(id) ?? kindOfItem(id, roles), cell: itemCellOf.get(id) };
+  }
+  return items;
+}
+
 // ---- one tick --------------------------------------------------------------------
 
 /**
@@ -634,19 +677,8 @@ export async function runTownSquareTick(memoryDir, {
   const stamp = (base) => snapshotSubject(base, k, epoch);
   const applyActions = gridApplyActions(rows);
 
-  const predators = liveOfKind(state, roles.predator.kind);
-  const prey = liveOfKind(state, roles.prey.kind);
-  const liveItemIds = [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort();
-
-  // objectClassChain re-filters the whole row array per node it walks, so it is
-  // computed once per tick over the item roster and never inside an agent loop.
-  // Inside the prey loop it would cost roughly one full row scan per prey per
-  // item per tick — fine at three prey, unusable at the ten the slider offers.
-  const foodIds = new Set(liveItemIds.filter((id) => objectClassChain(rows, id).includes("food")));
-  const itemCellOf = new Map(liveItemIds.map((id) => [id, state.placements.get(id).cell]));
-  const itemMassOf = new Map(liveItemIds.map((id) => [id, state.mass.get(id)?.value ?? config.spawnedFoodMass]));
-
-  const beliefCandidates = [...predators, ...prey, ...liveItemIds].sort();
+  const { predators, prey, liveItemIds, foodIds, itemCellOf, itemMassOf, beliefCandidates } =
+    readLiveBoard(rows, state, { config, roles });
   const movementWrites = [];
   const postMovePlacements = new Map();
   const agents = {};
@@ -791,11 +823,7 @@ export async function runTownSquareTick(memoryDir, {
   const moodWrites = Object.keys(agents).sort()
     .map((id) => ({ subject: stamp(id), predicate: MOOD_PREDICATE, object: agents[id].mood }));
 
-  const items = {};
-  for (const id of liveItemIds) {
-    if (pass.takenItems.has(id)) continue;
-    items[id] = { kind: state.types.get(id) ?? kindOfItem(id, roles), cell: itemCellOf.get(id) };
-  }
+  const items = itemsPayload(liveItemIds, { state, itemCellOf, roles, taken: pass.takenItems });
   for (const arrival of pass.spawned) {
     if (!arrival.isItem) continue;
     items[arrival.id] = { kind: arrival.kind, cell: arrival.cell };
@@ -820,6 +848,61 @@ const kindOfItem = (id, roles) =>
   (id.startsWith(`${roles.food.placedKind}-`) ? roles.food.placedKind : roles.food.spawnedKind);
 
 const sortedByKey = (obj) => Object.fromEntries(Object.keys(obj).sort().map((key) => [key, obj[key]]));
+
+/**
+ * The board as it stands, in a tick's own render payload shape, without
+ * running one: `{ turn, epoch, agents, items, ecology }`, folded straight out of
+ * the stored facts.
+ *
+ * This is what a renderer draws between opening a session and the first tick.
+ * Every field is read from state rather than decided: `cell`, `facing`, `mood`
+ * and `mass` are whatever the last write left, `belief` is the engine's own
+ * `beliefSnapshotFor` taken against the same candidate list a tick uses, and
+ * `plan` is empty with `goal` blank because nobody has decided anything yet —
+ * a resting board reports what is true, never a decision it has not made.
+ * `ecology` is empty for the same reason: no pass has run.
+ *
+ * `turn` is the last tick actually played (0 on a fresh board), so a caller's
+ * own turn counter can start from it.
+ */
+export async function townSquareBoard(memoryDir, {
+  layout, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+} = {}) {
+  const lay = typeof layout === "string" ? TOWN_SQUARE_LAYOUTS[layout] : layout;
+  if (!lay) throw new Error(`townSquareBoard: no such layout "${layout}"`);
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldTownSquareState(rows);
+  const board = readLiveBoard(rows, state, { config, roles });
+
+  const agents = {};
+  const rostered = [
+    ...board.predators.map((id) => [id, "predator"]),
+    ...board.prey.map((id) => [id, "prey"]),
+  ];
+  for (const [id, role] of rostered) {
+    const cell = state.placements.get(id).cell;
+    const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
+    const initialMass = role === "predator" ? config.predatorInitialMass : config.preyInitialMass;
+    agents[id] = {
+      role,
+      cell,
+      facing: state.facing.get(id)?.value ?? DEFAULT_FACING,
+      goal: "",
+      mood: state.mood.get(id)?.value ?? "calm",
+      plan: [],
+      mass: round2(state.mass.get(id)?.value ?? initialMass),
+      belief: beliefSnapshotFor(id, parseCellId(cell), board.beliefCandidates, state, { visionRadius, toldFacts }),
+    };
+  }
+
+  return {
+    turn: state.tickCount,
+    epoch: state.epoch,
+    agents: sortedByKey(agents),
+    items: sortedByKey(itemsPayload(board.liveItemIds, { state, itemCellOf: board.itemCellOf, roles })),
+    ecology: [],
+  };
+}
 
 /** The frozen render payload, projected off a tick result: exactly
  *  `{ turn, agents, items, ecology }` and nothing else. The engine's own extras

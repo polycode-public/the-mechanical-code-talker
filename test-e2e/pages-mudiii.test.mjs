@@ -209,34 +209,45 @@ async function readWorldSentences(page) {
   return text;
 }
 
+/** Run `act` and wait for the chat to carry the whole exchange it starts —
+ *  the echoed command line and the answer under it, two entries. The baseline
+ *  is counted BEFORE anything is sent, because the echo lands the instant the
+ *  command is submitted: counted afterwards, it already includes the line it
+ *  is supposed to be waiting for, and the wait can only ever time out.
+ *  `prepare` runs first without being counted, for filling the input. */
+async function sendAndSettle(page, act, { prepare = null } = {}) {
+  if (prepare) await prepare();
+  const before = await page.locator("#chatLog > *").count();
+  await act();
+  await page.waitForFunction(
+    (n) => document.querySelectorAll("#chatLog > *").length >= n,
+    before + 2,
+    { timeout: TICK_TIMEOUT_MS },
+  );
+}
+
 test("a typed 'put food at cell-3-4' and a click on the same cell both place a morsel there", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
     const before = await readWorldSentences(page);
-    await page.locator("#chatInput").fill("put food at cell-3-4");
-    await page.locator("#chatForm button, #chatInput").first().press("Enter").catch(() => {});
-    await page.locator("#chatInput").press("Enter");
-    await page.waitForFunction(
-      (n) => document.querySelectorAll("#chatLog > *").length >= n,
-      (await page.locator("#chatLog > *").count()) + 1,
-      { timeout: TICK_TIMEOUT_MS },
-    );
+    await sendAndSettle(page, () => page.locator("#chatInput").press("Enter"), {
+      prepare: () => page.locator("#chatInput").fill("put food at cell-3-4"),
+    });
     const afterTyped = await readWorldSentences(page);
     const typedAdded = afterTyped.split("\n").filter((line) => !before.includes(line) && line.trim());
     // The subject id (morsel-N) is sequential and therefore never the same
     // between the two paths — every OTHER clause (type, class chain,
-    // location, provenance) is compared with the id normalized away.
-    const normalized = (lines) => lines.map((l) => l.replace(/\bmorsel-\d+\b/g, "morsel-X")).sort();
+    // location, provenance) is compared with the id normalized away. The match
+    // is case-insensitive because a sentence capitalizes its own subject
+    // ("Morsel-1 stands in the cell-3-4."), and an id left un-normalized makes
+    // the two sides differ for the one reason this comparison exists to ignore.
+    const normalized = (lines) => lines.map((l) => l.replace(/\bmorsel-\d+\b/gi, "morsel-X")).sort();
     assert.ok(typedAdded.some((l) => /is a morsel/i.test(l)), "the typed verb places a morsel, not a bare food row");
     assert.ok(typedAdded.some((l) => /cell-3-4/.test(l)), "the typed verb's morsel lands on the named cell");
 
     await page.locator("#foodPill").click();
-    await page.evaluate(() => window.mudiiiHandleSceneClick && window.mudiiiHandleSceneClick("cell-3-5"));
-    await page.waitForFunction(
-      (n) => document.querySelectorAll("#chatLog > *").length >= n,
-      (await page.locator("#chatLog > *").count()) + 1,
-      { timeout: TICK_TIMEOUT_MS },
-    ).catch(() => {});
+    await sendAndSettle(page, () =>
+      page.evaluate(() => window.mudiiiHandleSceneClick && window.mudiiiHandleSceneClick("cell-3-5")));
     const afterClicked = await readWorldSentences(page);
     const clickAdded = afterClicked.split("\n").filter((line) => !afterTyped.includes(line) && line.trim());
     assert.ok(clickAdded.some((l) => /is a morsel/i.test(l)), "the click places the same KIND of fact — a morsel — as the typed verb");
