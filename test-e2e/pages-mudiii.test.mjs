@@ -56,15 +56,20 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
-/** Open mudiii.html and wait for its own session to finish booting — the
- *  chat input starts disabled and flips once the session opens, and the deck's
+/** Open mudiii.html and wait for its own session to finish booting — the deck's
  *  play control turns itself on as the last thing boot() does, which is the
  *  signal that the opening board has actually been drawn. Third-party hosts
  *  are blocked and same-origin console errors/failed requests are tracked.
  *
  *  `reducedMotion: "reduce"` opens the page as a visitor who asked for less
- *  movement. That visitor's board never starts on its own, so the play-control
- *  wait is skipped. */
+ *  movement, and that visitor's board never starts on its own, so the play
+ *  control never flips. The chat input is no use as a stand-in: boot() enables
+ *  it several steps before it reads the opening board back and renders it,
+ *  which measured 0.7s to 3.2s of open window against the deployed site. The
+ *  chat rail is drawn by the same renderAll() pass that draws the HUD row and
+ *  the map panel, and it is a different surface from either, so a pill on it is
+ *  this visitor's own "the opening board is up" signal without standing in for
+ *  what the test asserts. */
 async function openMudiiiPage({ reducedMotion = null } = {}) {
   const context = await browser.newContext(reducedMotion ? { reducedMotion } : {});
   const page = await context.newPage();
@@ -92,13 +97,13 @@ async function openMudiiiPage({ reducedMotion = null } = {}) {
     null,
     { timeout: READY_TIMEOUT_MS },
   );
-  if (!reducedMotion) {
-    await page.waitForFunction(
-      () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true",
-      null,
-      { timeout: READY_TIMEOUT_MS },
-    );
-  }
+  await page.waitForFunction(
+    (stillBoard) => (stillBoard
+      ? document.querySelectorAll("#chatPills .pill").length > 0
+      : document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true"),
+    Boolean(reducedMotion),
+    { timeout: READY_TIMEOUT_MS },
+  );
   return { context, page, consoleErrors, failedRequests };
 }
 
@@ -913,6 +918,32 @@ const mapDotCellsUnder = (page, size) => page.evaluate((gridSize) => {
   }));
 }, size);
 
+/** A cell past column/row `edge` on a `size`-square board that nothing stands
+ *  on, or null when the board leaves none. Read off the map panel, which draws
+ *  a dot per agent and item (`(n - 0.5) / size`) and a block per prop
+ *  (`(n - 1) / size`), so this needs neither the 3D scene nor the store. Items
+ *  do not actually block a cell; counting them as taken only narrows the
+ *  choice, which costs nothing on a board this size. */
+const freeCellPast = (page, edge, size) => page.evaluate(([lastInnerColumn, gridSize]) => {
+  const board = document.getElementById("mapPanelBoard");
+  const percentOf = (value) => Number(String(value).replace("%", ""));
+  const taken = new Set();
+  for (const dot of board.querySelectorAll(".map-dot")) {
+    taken.add(`cell-${Math.round(percentOf(dot.style.left) * gridSize / 100 + 0.5)}`
+      + `-${Math.round(percentOf(dot.style.top) * gridSize / 100 + 0.5)}`);
+  }
+  for (const block of board.querySelectorAll(".map-block")) {
+    taken.add(`cell-${Math.round(percentOf(block.style.left) * gridSize / 100 + 1)}`
+      + `-${Math.round(percentOf(block.style.top) * gridSize / 100 + 1)}`);
+  }
+  for (let x = gridSize; x > lastInnerColumn; x -= 1) {
+    for (let y = gridSize; y >= 1; y -= 1) {
+      if (!taken.has(`cell-${x}-${y}`)) return `cell-${x}-${y}`;
+    }
+  }
+  return null;
+}, [edge, size]);
+
 test("switching to the 14x14 chapel yard redraws the board at its own size and places food outside a 12-cell square", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
@@ -941,14 +972,23 @@ test("switching to the 14x14 chapel yard redraws the board at its own size and p
       "at least one of the chapel yard's own opening cast stands past the 12-square board's edge",
     );
 
-    // cell-13-13 exists on the chapel yard alone.
+    // A column past 12 exists on the chapel yard alone, and the cell has to be
+    // EMPTY as well as far out: a click on an occupied cell is refused, and a
+    // refusal writes no chat line at all, so sendAndSettle would sit out its
+    // whole timeout waiting for an exchange that is never coming. The chapel's
+    // own goblins open on cell-14-14 and cross the far corner within the first
+    // few turns, so which cells are taken depends on how many turns ran before
+    // the board stopped — the target is read off the stopped board rather than
+    // named in advance.
+    const target = await freeCellPast(page, 12, gridSize);
+    assert.ok(target, "the stopped chapel board leaves a free cell past the 12-square edge to drop food on");
     const before = await readWorldSentences(page);
     await page.locator("#foodPill").click();
     await sendAndSettle(page, () =>
-      page.evaluate(() => window.mudiiiHandleSceneClick && window.mudiiiHandleSceneClick("cell-13-13")));
+      page.evaluate((cell) => window.mudiiiHandleSceneClick && window.mudiiiHandleSceneClick(cell), target));
     const added = (await readWorldSentences(page)).split("\n").filter((line) => !before.includes(line) && line.trim());
     assert.ok(added.some((l) => /is a morsel/i.test(l)), "the click places a morsel");
-    assert.ok(added.some((l) => /cell-13-13/.test(l)), "the morsel lands on the cell clicked, never clamped back onto a 12-square board");
+    assert.ok(added.some((l) => l.includes(target)), `the morsel lands on ${target}, the cell clicked, never clamped back onto a 12-square board`);
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error switching squares and placing food on the far corner");
