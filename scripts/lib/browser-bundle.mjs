@@ -130,8 +130,14 @@ export function makeOptionalAdapterStubs(stubMap) {
  *  inlining the bundle, a test evaluating it in a vm) always sees a complete
  *  file, old or new, never a truncated one mid-write. Minified by default —
  *  nothing depends on the shipped bundles being readable, and the wire cost
- *  is real. */
-export async function buildBundle({ entryFile, outFile, outDir, plugins, minify = true }) {
+ *  is real.
+ *
+ *  `quiet` drops esbuild's own log and the built-path line, for a caller that
+ *  builds a bundle as an implementation detail of something else (the CLI's
+ *  `--render`, which writes one page and should say so in one line). A build
+ *  script keeps the full log: its reader is a developer, who wants the
+ *  warnings. */
+export async function buildBundle({ entryFile, outFile, outDir, plugins, minify = true, quiet = false }) {
   const outPath = join(outDir, outFile);
   const result = await build({
     entryPoints: [join(srcDir, entryFile)],
@@ -143,7 +149,7 @@ export async function buildBundle({ entryFile, outFile, outDir, plugins, minify 
     write: false,
     minify,
     legalComments: "none",
-    logLevel: "info",
+    logLevel: quiet ? "silent" : "info",
     plugins,
     define: { "process.env.NODE_ENV": '"production"' },
   });
@@ -155,6 +161,6 @@ export async function buildBundle({ entryFile, outFile, outDir, plugins, minify 
   await mkdir(dirname(outPath), { recursive: true });
   await writeFile(tmpPath, result.outputFiles[0].contents);
   await rename(tmpPath, outPath);
-  console.log(`built ${outPath}`);
+  if (!quiet) console.log(`built ${outPath}`);
   return outPath;
 }

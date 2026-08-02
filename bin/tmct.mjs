@@ -571,7 +571,12 @@ async function buildEngineBundleJs(builderFile) {
   }
   const dir = await mkdtemp(join(tmpdir(), "tmct-render-"));
   try {
-    const { outPath } = await build(dir);
+    // Quiet: this build is an implementation detail of writing one page. Its
+    // esbuild log is eleven "import.meta is not available with the iife output
+    // format" warnings about Node-only paths the browser entry never reaches,
+    // and they arrived ahead of the single line the user asked for. A build
+    // script still prints them — its reader is a developer.
+    const { outPath } = await build(dir, { quiet: true });
     return await readFile(outPath, "utf8");
   } finally {
     await rm(dir, { recursive: true, force: true });
