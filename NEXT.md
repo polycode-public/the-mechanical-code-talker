@@ -33,45 +33,30 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 3 of 5, dispatched 2026-08-02. Plus two features the
-operator added to the same run: world teach mode and pill-driven predictive text. Standing
-authorisation: run every remaining wave without pausing, push only for a pipeline fix or on
-completion of all waves.
-
-**Waves 0, 1 and 2 have landed.** `mudiii.html` builds and runs: the town square renders in three,
-the cast draws, the deck drives it, and the lane answers. Four of its five e2e assertions pass.
-
-Wave 3, in flight:
-
-| track | tier | worktree | status |
-|---|---|---|---|
-| W3-BOARD — push the opening board to the scene, get all five e2e cases green | top | `.claude/worktrees/agent-a26bef122150781af` | started |
-| W3-PLATE — the landing-page plate and the screenshot ready-check | Sonnet | `.claude/worktrees/agent-adc30b3986bbde357` | started |
-
-Left for the coordinator after those land: run `npm run gen:screenshots` and commit
-`public/screenshots/mudiii.png` **with** its regenerated manifest in one commit; register
-`test-e2e/pages-mudiii.test.mjs` in `.gitlab-ci.yml`'s e2e job (it enumerates files by name, so a
-new one is green by absence until listed); add `mudiii.html` to the deploy cache warm list; and add
-a `smoke:deploy` probe for the page and one model — the only check that would catch committed
-models never reaching the edge, which is plausible precisely because every other asset is generated.
-
-Integration bugs found and fixed while wiring the page, recorded because each was invisible until
-two tracks met: the viz and scene modules top-level-awaited each other and deadlocked; the asset
-manifest's repo-relative paths were used verbatim as URLs when `public/` is the site root; the site
-build read the cast off world facts when a town-square world ships only the board; and the browser
-entry called five engine functions that did not exist, having been written against predicted names.
+Nothing in flight.
 
 ## Open items
 
-- **MUDIII ships as `mudiii.html`** alongside `mud.html`, per `PLAN_MUD_MUDIII.md`. Closes when
-  `smoke:deploy` passes against the live page. Known remainders folded in as sub-clauses:
-  - `gen-spider-fly-world.mjs` claims an estate freshness guard regenerates and compares its world
-    source. No such guard exists. Build it for the town square, and for spider-fly while there.
-  - The tick fixture's `expectedTape` fixes event types and decision rungs, not cells — every wander
-    is a seeded pick, so cells are an output and the starting board is the knob if a generated run
-    misses the tape. Its turn-8 "trap" note is honest about not springing on turn 8: any prey close
-    enough to believe a morsel one cell from a predator also believes the predator, and evade beats
-    forage. The turn-10 eat happens because the predator chased something else off the spot.
+- **MUDIII is built and deployed-pending.** `mudiii.html` renders the town square in three.js over
+  the same deterministic planner the other game demos use: the cast draws at rest, the deck drives
+  it, the chat lane answers, the food verb works from a typed line and from a click on the square,
+  and all five e2e assertions pass. It is on the landing page as Plate XI and registered in CI.
+  **Closes when `smoke:deploy` passes against the live page** — that run also exercises the new
+  models probe, which is the only check that would catch committed models never reaching the edge.
+  Remainders:
+  - The world-source freshness guard now exists for the town square and for spider-fly, closing the
+    gap where `gen-spider-fly-world.mjs`'s header claimed a guard that was never built.
+  - `test/fixtures/mudiii-ticks.json`'s `expectedTape` fixes event types and decision rungs, never
+    cells: every wander is a seeded pick, so cells are an output and the starting board is the knob.
+    Three rungs were corrected against the engine after a 685,000-board sweep reached the
+    hand-authored ones zero times.
+  - `mudiii-browser-entry.mjs` and `mudiii-viz.mjs` still carry header comments saying their sibling
+    modules "do not exist in every worktree yet". Both are on `main` now. The guarded dynamic
+    imports they describe are still live code, so removing them is a behavioural change rather than
+    a comment sweep.
+  - The engine ships no recast, so the page's reset re-opens a whole session. That is the right
+    shape for an in-memory store owned by one visitor, and it is why the session exposes no recast
+    method — worth knowing before the shared-worlds phase, which will need one.
 - **Teach mode** on adventure.html, mud.html and mudiii.html. The engine half has landed: a
   declarative sentence is read as a fact against the live world, general semantics, world-scoped
   provenance, mint or move depending on whether the world already answers to the subject. The
