@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Four, all with a track on them right now.
+Three.
 
 - **The deployed site serves the starter memory brotli-compressed twice.** Decompressing one layer
   gives 4,534,836 bytes of more brotli; twice gives the real 93,496,025-byte JSON. Every browser
@@ -65,27 +65,10 @@ Four, all with a track on them right now.
   **Do:** decide whether the test drives the click wrongly for the new model, or the threshold has a
   real bug a visitor would hit too. Not by lengthening a timeout.
 
-- **`PLAN_MUD_MUDIII.md` claims a status nobody has checked.** 515 lines, opening with "BUILT AND
-  DEPLOYED", never audited against the shipped page.
-  **Owner:** a track is on it. Top tier.
-  **Do:** every item into shipped-as-planned, shipped-differently, not-shipped, or no-longer-wanted,
-  then cut the doc to what is open and fix from the remainder.
-
-- **The prey blend is measured and shipped off; one regime is unmeasured.** The weighted
-  evade/forage score exists behind `blendPreyDecision`, default false, and the comparison harness is
-  committed at `scripts/compare-prey-decision.mjs`. Over 12 seeds the priority chain wins the mean on
-  10, the median on 9, and the longest-lived prey on 9, so the default stayed. The behavioural metric
-  cleared the trap: the blend forages within a predator's reach about 10% of the time where the chain
-  never does, so it is losing by foraging, not by evading more.
-  Chebyshev distances are integers and one step moves each by at most 1, so any weight above 0.5 is
-  byte-identical to the chain. The knob has three settings, not a continuum.
-  **What is unmeasured:** every run used one predator on town square with `preyVisionRadius: 3`, and
-  nothing starved on the shipped drain. A prey that sees further than it can be caught from, or a
-  board with more crumbs than foxes, could move where the trade breaks even.
-  **Tier:** Haiku. It is a re-run, not new work.
-  **Do:** the harness already takes `--layout` and `--set`. Sweep the chapel and market boards and a
-  couple of vision radii, and record what the numbers say. If they still favour the chain, delete
-  this item and leave the flag off.
+- **Three things the mudiii audit left open.** `PLAN_MUD_MUDIII.md` holds them: overhead frames the
+  board small in a wide window, the belief line names every unobserved crumb individually, and
+  `PAGE_WEIGHTS.md` has no figure for the three bundle.
+  **Owner:** nobody.
 
 ### Questions blocking work
 
