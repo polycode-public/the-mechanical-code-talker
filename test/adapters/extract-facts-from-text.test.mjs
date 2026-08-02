@@ -9,8 +9,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { main, ingestText, optimisticTriples, clauseCandidates } from "../../src/services/extract-facts.mjs";
+import { createSession } from "../../src/services/chat.mjs";
 import { splitSentences } from "../../src/services/sentences.mjs";
-import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, readFactRows, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
 import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
 
 const FIXTURE_TEXT = [
@@ -109,8 +110,12 @@ test("extract-facts-from-text: --repo writes straight into that repo's tmct memo
     const result = await main([file, "--repo", repoDir]);
     assert.equal(result.recognized, 3);
 
-    const mem = await loadMemory(repoDir);
-    const rows = readFactRows(mem);
+    // Read back through the SAME backend chat and `tmct memory` open, not the
+    // repo path: a fact only the retired flat file holds is a fact no reader
+    // ever sees, however loudly the command says it wrote one.
+    const store = await openConfiguredMemoryBackend(repoDir);
+    let rows;
+    try { rows = readFactRows(await loadMemory(store.dir)); } finally { await store.close(); }
     assert.equal(rows.length, 3);
 
     const moduleRow = rows.find((r) => r.subject === "module");
@@ -121,6 +126,27 @@ test("extract-facts-from-text: --repo writes straight into that repo's tmct memo
     assert.match(moduleRow.provenance, /extracted:sample\.txt/);
     assert.ok(moduleRow.sourceTypes.includes("extracted"));
     assert.ok(moduleRow.trust > 0, "trust is computed, not hand-set");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("extract-facts-from-text: a later chat session over the same repo reads a --repo fact back", async () => {
+  const repoDir = await mkdtemp(join(tmpdir(), "tmct-extract-readback-"));
+  const file = join(repoDir, "sample.txt");
+  await writeFile(file, "A kestrel is a bird.\n", "utf8");
+
+  try {
+    const result = await main([file, "--repo", repoDir]);
+    assert.equal(result.recognized, 1, "the sentence grounded");
+
+    const session = await createSession({ repoPath: repoDir });
+    let answer;
+    try { ({ answer } = await session.turn("is a kestrel a bird")); }
+    finally { await session.close(); }
+
+    assert.match(answer, /^yes\b/, `a session that cannot see the fact answers a miss; got: ${answer}`);
+    assert.match(answer, /extracted:sample\.txt/, "and cites where the fact came from");
   } finally {
     await rm(repoDir, { recursive: true, force: true });
   }

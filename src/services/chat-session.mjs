@@ -40,6 +40,12 @@ export const SESSION_LOG_DIR = ".tmct";
 /** The base (no-focus) prompt. With a focus set the shell shows `tmct(label)>`. */
 export const PROMPT = "tmct> ";
 
+/** What a teach or a retract carries in a session that keeps nothing (--ephemeral,
+ *  tmct.toml's [graph] read_only, or the "memory" backend). */
+export const DISCARDED_WRITE_NOTE =
+  "(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, "
+  + "or on a stored backend, to keep it.)";
+
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is unavailable).
@@ -250,6 +256,8 @@ export async function createSession({
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
   // target is never touched; the demo's memory simply doesn't persist across runs.
+  // The banner still names the repo the user asked about, not the scratch dir.
+  const readRepo = repo;
   if (ephemeral) repo = await mkdtemp(join(tmpdir(), "tmct-ephemeral-"));
 
   // Load the graph once up front — the banner needs the module count, and focus/`it`
@@ -286,12 +294,28 @@ export async function createSession({
   const sessionId = uuidv7();
   const logDir = join(repo, SESSION_LOG_DIR);
   const sessionsDir = join(repo, SESSIONS_DIR_REL);
-  await mkdir(logDir, { recursive: true });
-  await mkdir(sessionsDir, { recursive: true });
+  // Every session records what it answered, so an unwritable target is the end
+  // of the session. Say so once, in one place, whichever step hits it: the
+  // mkdir, the stream's open, or the header write below.
+  const unwritable = (e) => new Error(
+    `cannot write the session log under ${logDir} (${e?.code || e?.message || e}). `
+    + "Every session records what it answered, so chat needs write access there. "
+    + "Point --repo at a writable directory, or run with --ephemeral to keep the session in a temp dir.",
+  );
+  try {
+    await mkdir(logDir, { recursive: true });
+    await mkdir(sessionsDir, { recursive: true });
+  } catch (e) { throw unwritable(e); }
   const logFile = join(logDir, `session-${sessionId}.md`);
   const sidecarFile = join(sessionsDir, `session-${sessionId}.jsonl`);
   const stream = createWriteStream(logFile, { flags: "a" });
   const sidecar = createWriteStream(sidecarFile, { flags: "a" });
+  // A stream with no "error" listener turns a failed open into an unhandled
+  // 'error' event, which is a raw Node stack trace and a dead process. The
+  // write callbacks below reject with the same error, so the listener only has
+  // to keep the event handled.
+  stream.on("error", () => {});
+  sidecar.on("error", () => {});
   // Awaited writes: each chunk is handed to the OS before the turn completes, so a
   // killed session keeps everything up to the last completed turn — in both files.
   const flush = (s, text) =>
@@ -300,8 +324,14 @@ export async function createSession({
   const writeSidecar = (obj) => flush(sidecar, JSON.stringify(obj) + "\n");
 
   const startIso = new Date().toISOString();
-  await writeLog(sessionLogHeaderMarkdown({ version, sessionId, startedAt: startIso, repo }));
-  await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
+  try {
+    await writeLog(sessionLogHeaderMarkdown({ version, sessionId, startedAt: startIso, repo }));
+    await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
+  } catch (e) {
+    stream.destroy();
+    sidecar.destroy();
+    throw unwritable(e);
+  }
 
   // Read-time graph upsert (sessions.mjs): after every turn, the session becomes /
   // stays a first-class Session individual in graph.json (crash-safe: turn n is in
@@ -357,12 +387,20 @@ export async function createSession({
   // entities (the degenerate trap). Both get orienting, non-over-promising banner
   // + greeting messaging rather than a silent dead-end.
   const noCodeGraph = moduleCount === 0;
+  // A discarding session must not say the conversation is kept. Ephemeral
+  // diverts every write to a temp dir and suppresses the graph upsert; the
+  // "memory" backend keeps the store in-process. Both end when the process does.
+  const discardsWrites = ephemeral || backendChoice === "memory";
+  const whereItGoes = discardsWrites
+    ? "nothing is written back — this session's facts and log are dropped when it ends"
+    : `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`;
   const bannerLines = [
     noCodeGraph
       // No code graph: honest, orienting messaging — never an error before the prompt.
-      ? `tmct chat — ${repo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
-        `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
-      : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
+      ? `tmct chat — ${readRepo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
+        `${whereItGoes}`
+      : `tmct chat — ${readRepo} — ${moduleCount} module(s) — `
+        + (discardsWrites ? `${whereItGoes}` : `log ${logFile}`),
     // the honest seed line appears ONLY on the run that actually seeded — the count
     // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band
     // (+ any other active extension bundle, e.g. an activated tier-2 corpus).
@@ -429,7 +467,13 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { answer, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      // "noted — remembered" reports a durable write. In a session that keeps
+      // nothing it is the last word on a fact that dies with the process, so
+      // say where the fact actually went.
+      const answer = discardsWrites && (record.via === "assert" || record.via === "retract")
+        ? `${result.answer}\n${DISCARDED_WRITE_NOTE}`
+        : result.answer;
       focus = nextFocus;
       last = nextLast;
       if ("planState" in result) planState = result.planState;

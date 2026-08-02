@@ -73,6 +73,31 @@ test("createSession({ memoryBackend: 'memory' }): Backend B — the taught FACT 
   }
 });
 
+test("createSession({ memoryBackend: 'memory' }): a teach says the fact does not outlive the session; a stored backend says nothing of the kind", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    const inProcess = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" }, memoryBackend: "memory" });
+    const dropped = await inProcess.turn("every module is a component");
+    const bannerB = inProcess.bannerLines.join("\n");
+    await inProcess.close();
+
+    assert.match(dropped.answer, /noted/i, "the teach still confirms");
+    assert.match(dropped.answer, /keeps nothing/, "and says the fact goes with the session");
+    assert.doesNotMatch(bannerB, /the conversation is remembered to/);
+
+    const stored = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" }, memoryBackend: "sqlite" });
+    const kept = await stored.turn("every module is a component");
+    const bannerC = stored.bannerLines.join("\n");
+    await stored.close();
+
+    assert.doesNotMatch(kept.answer, /keeps nothing/, "a durable write carries no discard note");
+    assert.match(bannerC, /the conversation is remembered to/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createSession({ memoryBackend: 'sqlite' }): Backend C — the taught FACT round-trips through real SQLite, never lands in any flat-JSON Fact row", async () => {
   clearCache();
   const dir = await tmpRepo();

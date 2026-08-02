@@ -48,6 +48,36 @@ test("ephemeral: a multi-turn session leaves the target graph byte-identical and
   }
 });
 
+test("ephemeral: a teach says the fact is dropped, and the banner does not claim the conversation is kept", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ephem-claim-"));
+  try {
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
+
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {}, ephemeral: true });
+    const taught = await s.turn("every module is a component");
+    const asked = await s.turn("what is a module");
+    await s.close();
+
+    assert.match(taught.answer, /noted/i, "the teach still confirms");
+    assert.match(taught.answer, /keeps nothing/, "and says where the fact went");
+    assert.doesNotMatch(asked.answer, /keeps nothing/, "an ordinary question carries no such note");
+
+    const banner = s.bannerLines.join("\n");
+    assert.doesNotMatch(banner, /the conversation is remembered to/,
+      "a session that writes nothing back must not say it remembers the conversation");
+    assert.match(banner, /nothing is written back/);
+    // The scratch write dir is an implementation detail; the banner names the
+    // repo the user pointed at.
+    assert.ok(banner.includes(dir), `the banner names the target repo: ${banner}`);
+    assert.doesNotMatch(banner, /tmct-ephemeral-/, "and never the temp dir it writes into");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("ephemeral: TMCT_EPHEMERAL=1 in the env has the same effect as the option", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ephem-env-"));
   try {
