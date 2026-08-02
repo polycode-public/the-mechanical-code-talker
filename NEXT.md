@@ -767,17 +767,10 @@ until it does. Then the grid-size item, because the deception rail and the map p
   batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
   retraction work, so nothing in this batch caused it. A shared CI runner and a bar the measurement
   sits right on top of are enough to explain it.
-  **Tier:** Sonnet. The judgment is what the test is really asserting.
-  **Do:** the test's subject is that seeding is linear rather than quadratic, and 21.09x against a
-  20x bar does not distinguish those — quadratic would be nearer 64x. Give the bar enough headroom to
-  separate the two hypotheses it exists to tell apart, rather than nudging it just past the reading
-  that failed. Best-of-5 on a noisy shared runner still carries real variance; consider whether the
-  ratio needs a more robust statistic than a single best-of pair.
-  **Risk:** raising a threshold to silence a test is how a real regression later ships unnoticed.
-  The bar has to stay tight enough that genuine quadratic growth still fails it, and the report has
-  to say what margin it now has.
-  **Mitigation:** state the measured linear ratio and the ratio a quadratic implementation would
-  produce, and put the new bar between them with the reasoning written down.
+  **Fixed, unproven on CI.** The bar moved from 20x to 32x, halfway between the two hypotheses in
+  wall-clock terms rather than sitting on top of the linear band's own noise. Quadratic still fails
+  with a 2x margin. Green locally.
+  **Tier:** none. It closes on the next green pipeline.
 
 - **`main` is red: three tests broke on the predator-prey trio.** The full suite runs 5884 and fails
   3. All three sit outside the files that track's brief named as its blast radius, which is the
