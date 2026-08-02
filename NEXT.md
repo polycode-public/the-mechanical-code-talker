@@ -37,9 +37,6 @@ Two tracks, and that is saturation rather than idling: every other open item is 
 these two briefs, waiting on a CI pipeline to run, or waiting on a real deploy. There is no free file
 to dispatch against. Concurrency here is bounded by file ownership, not by batch cadence.
 
-- **T35 prey scoring** — the weighted evade/forage blend plus the comparison harness that can tell it
-  from the priority chain. `predator-prey.mjs`, `agent-belief.mjs`, a new `scripts/` sweep. Top tier.
-  Status: started.
 - **T38 the mudiii page remainder** — thirteen items across `mudiii-viz.mjs` and `mudiii-scene.mjs`:
   both pill rails, the map panel's grid/key/aspect, the belief panel, EDIT mode, agent labels,
   click-to-turn and the directional ring, the compass ring, the eat-flourish hold, the teach
@@ -332,27 +329,21 @@ real deploy.
   hold the animation, never the turn.
   **Mitigation:** watch it. This is a screenshot-or-video item, not a unit-test one.
 
-- **Prey decide by strict priority: evade beats forage beats wander.** A single score weighing
-  predator distance against food distance would let a goblin take a crumb that costs it nothing,
-  instead of abandoning food the moment anything is in view.
-  **Tier:** top for the scoring function and the comparison; Sonnet can wire the flag afterwards.
-  **Do:** the score is one weighted sum over the two rungs' existing distance terms,
-  `w * chebyshevDistance(cell, predatorCell) - (1 - w) * chebyshevDistance(cell, foodCell)`,
-  maximized, reusing `chebyshevDistance` and `bestOneStepBy`'s shape, so the new rung sits beside
-  `greedyAway`/`greedyToward`. `w` is the one knob, in `DEFAULT_GAME_CONFIG.mudiii`, started at 0.5
-  and tuned from the comparison. Build the comparison as a committed headless script: run
-  `runTownSquareTick` over N fixed seeds (the layout name plus a seed index, the convention `seedKey`
-  already uses), M turns each, once per mode, same starting roster. Survival is turns-until-starved-
-  or-eaten per prey id, keeping the full per-seed distribution rather than only the mean.
-  **Feasibility:** harder than the item implies. There is no existing benchmark harness for this
-  engine to copy; the `benchmark-*` skills cover chat, inference and agent capability. The code
-  change is a few hours; designing a comparison that answers the question is the real work.
-  **Risk:** a blend that scores higher on survival by being more evasive everywhere validates the
-  wrong hypothesis, and mushes the goal lines `PLAN_MUD_MUDIII.md` warns about ("mostly evading,
-  somewhat hungry"). Nothing asserts goal-line readability today.
-  **Mitigation:** measure a behavioural metric alongside survival, such as how often a prey forages
-  while a predator is within N cells. Keep the priority chain as the shipped default and land the
-  blend behind the flag, with the comparison script committed so a later session can re-run it.
+- **The prey blend is measured and shipped off; one regime is unmeasured.** The weighted
+  evade/forage score exists behind `blendPreyDecision`, default false, and the comparison harness is
+  committed at `scripts/compare-prey-decision.mjs`. Over 12 seeds the priority chain wins the mean on
+  10, the median on 9, and the longest-lived prey on 9, so the default stayed. The behavioural metric
+  cleared the trap: the blend forages within a predator's reach about 10% of the time where the chain
+  never does, so it is losing by foraging, not by evading more.
+  Chebyshev distances are integers and one step moves each by at most 1, so any weight above 0.5 is
+  byte-identical to the chain. The knob has three settings, not a continuum.
+  **What is unmeasured:** every run used one predator on town square with `preyVisionRadius: 3`, and
+  nothing starved on the shipped drain. A prey that sees further than it can be caught from, or a
+  board with more crumbs than foxes, could move where the trade breaks even.
+  **Tier:** Haiku. It is a re-run, not new work.
+  **Do:** the harness already takes `--layout` and `--set`. Sweep the chapel and market boards and a
+  couple of vision radii, and record what the numbers say. If they still favour the chain, delete
+  this item and leave the flag off.
 
 - **There is no compass ring.** mud.html's `DIR_GLYPH` ring is the working version to copy.
   **Tier:** Sonnet.
