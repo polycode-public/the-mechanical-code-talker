@@ -87,12 +87,16 @@ deployed site directly rather than serving its own.
   growing afterwards does not make it retrospectively a lie. So there is no "ready" boundary to build
   and nothing to gate the input on.
   **Tier:** top. **In flight** as T62.
-  **Do:** two separate things. On the product side, one visible indicator that the graph is still
-  loading, following the page's existing status pattern, gone when loading finishes. On the test
-  side, wait for the seed load to finish before asserting on seeded content — a test-correctness fix,
-  not a product contract, and not a bigger budget.
-  **Also measure**, to size the indicator's job: the real window in milliseconds from a cold context
-  against the deployed site, and the real seed size (`.gitlab-ci.yml:647`-`:651` says ~93MB).
+  **Do:** two separate things. On the product side, an indicator that reports real load state read off
+  the actual load — is it loading, has it loaded, and how far along as a percentage if a true number
+  is available. `Content-Length` against streamed bytes is the likely source; a service-worker cache
+  hit and any post-download parse phase both change what it means, so check rather than assume. On
+  the test side, wait for the same loaded signal before asserting on seeded content — a
+  test-correctness fix, not a product contract, and not a bigger budget.
+  **The percentage is real or absent.** No timer-driven bar, no interpolation against an expected
+  duration. A guessed percentage is the same fault in a progress bar that a guessed answer is in the
+  chat. With a real signal nobody has to measure a window and guess a timeout, so the timing
+  measurement stops being a design input and is only worth reporting.
   **Risk:** the cheap move is a longer budget or a retry, which turns a red test green while leaving
   it asserting against a store that has not finished arriving.
 
