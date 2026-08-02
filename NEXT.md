@@ -37,9 +37,6 @@ Loop batch 2. Three tracks, and **only one of them touches a browser** — batch
 three concurrent `npm run demo:build` runs, so that is now the cap. The other two write e2e
 assertions but never run them; the coordinator runs the e2e tier after merge.
 
-- **T25 mudiii-viz** — the turn counter, then the chat teach-frame tick. `mudiii-viz.mjs`,
-  `mudiii-browser-entry.mjs`. Top tier. Status: started.
-- **T26 eat flourish** — `mudiii-scene.mjs`. Sonnet. Status: started.
 - **T27 food size** — `data/mudiii-assets.json` and the screenshot it must open. The batch's one
   browser track. Sonnet. Status: started.
 
@@ -186,54 +183,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** add an e2e that clicks every button in `#chatPills` and asserts no answer contains
   `couldn't read a position` or the generic chat decline.
 
-- **A chat teach-frame runs a real tick whose result never reaches the page.** `sendCommand` never
-  calls `applyTickResult` or `callScene`, so an addressed teach-frame advances the engine, prints
-  text, and leaves `agentsById` and `itemsById` stale. The scene does not move and the HUD belief
-  line does not change until the next deck-driven tick. Watching a lie land is the point of the
-  frame.
-  **Tier:** Sonnet. Small, but the obvious approach fails.
-  **Do:** re-read the board after every chat turn. `runTickAndRender` (`mudiii-turn.mjs:363`)
-  returns `{ text, goal, lane, note }` and throws the tick payload away, so there is nothing on the
-  chat result to hand to `applyTickResult`. `session.board()` calls `townSquareBoard`
-  (`src/services/predator-prey.mjs:868`) and returns the same `{ turn, epoch, agents, items,
-  ecology }` shape a tick does, folded from stored facts, spending no turn. In `sendCommand`
-  (`mudiii-viz.mjs:921`), chain `session.board()` after `tmct.turn(line)` and feed it to
-  `applyTickResult`, then `renderAll()`. Call it on every chat turn. It is a fold, it is idempotent,
-  and it also fixes `put food at cell-3-4` leaving `itemsById` stale.
-  **Feasibility:** `board()`'s `ecology` is always `[]`, so a chat-driven turn plays no death or eat
-  flourish. Positions, beliefs, mass and mood all update, which is what the belief panel needs.
-  `serializeTick` keeps it behind the ticker's queue, so a chat line mid-autoplay cannot interleave.
-  **Risk:** `test/services/mudiii-viz.test.mjs:198` extracts `sendCommand`'s body with
-  `/function sendCommand\(line\) \{([\s\S]*?)\n  \}/`. A nested function in the new body can end
-  that non-greedy match early. `:189` pins the scene click routing through
-  `sendCommand("put food at " + cellId)` and is unchanged.
-  **Mitigation:** e2e that types `tick`, presses Enter, and asserts a `cellOf` read changed and
-  `#globalTurnCount` moved. That also proves the turn-counter item.
-  **A caveat found while the first attempt was in flight:** `townSquareBoard` hardcodes `goal: ""`
-  and `plan: []` (`predator-prey.mjs:1341`-`:1343`), while a real tick fills both. So folding a
-  board after every chat turn blanks the goal line and prints `plan: holding` on every HUD card
-  until the next deck-driven tick — the same look `boot()` already gives at turn 0. Positions,
-  beliefs, mass and mood all still update, which is what the belief panel needs. Decide deliberately
-  whether to widen `townSquareBoard` to carry the stored goal and plan, or to accept the blank; do
-  not paper over it with a stale-goal cache in the page.
-
-- **The page's turn counter diverges from the engine's.** `session.tick(k)` ignores the `k` the page
-  passes; the engine counts its own `tickCount`. They agree only while nothing else advances a turn,
-  which the item above breaks the moment it lands.
-  **Tier:** Haiku alone, Sonnet landed with the item above, which is where it belongs.
-  **Do:** in `applyTickResult` (`mudiii-viz.mjs:882`) set `globalTurn = result.turn` when it is a
-  number, as the first line after the null guard. Both `runTownSquareTick` (`predator-prey.mjs:837`)
-  and `townSquareBoard` (`:899`) carry `turn`. Delete `globalTurn += 1` in `runOneTick` (`:892`) and
-  call `session.tick()` with no argument. Delete `globalTurn = opening.turn || 0` in `boot`
-  (`:1228`). Drop the unused `k` parameter and its JSDoc line from
-  `mudiii-browser-entry.mjs:149`.
-  **Feasibility:** `hasNext()` (`:851`) then compares the engine's count against the slider, so a
-  session where chat ran ten ticks hits the max-turns cap ten turns earlier. That is correct.
-  **Risk:** no test pins `globalTurn += 1`. `test-e2e/pages-mudiii.test.mjs:125` asserts the counter
-  reaches 5 after five ticks and still holds.
-  **Mitigation:** assert in the e2e that typing `tick` and pressing play both move
-  `#globalTurnCount`, and that the two never disagree by more than the in-flight turn.
-
 - **The Players and Npcs sliders cannot reach their stated ranges.** The controls have the right
   ranges and defaults, but `pickRoster` slices from `scenario.agents`, which the site build derives
   from `layout.cast`. Town square casts 1 predator and 3 prey, so the default fox count of 2 already
@@ -274,32 +223,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   chooses the cells, so the two close in the same change. Fold it in rather than patching the
   shuffle.
   **Risk:** none beyond that item's own.
-
-- **The eat flourish never plays, on either side.** `applyTick` runs the `lastItemsById` diff loop
-  with `removeItem(id, false)` before `applyEcology`, so an eaten item's mesh is already gone when
-  the `"consume"` branch runs and the scale-to-zero never fires. There is no predator-side animation
-  at all: `clipForAction` maps `eat-agent` to `attack` and `applyEcology` only calls
-  `removeAgent(prey)`.
-  **Tier:** Sonnet. The reorder is trivial; the predator clip needs a one-shot.
-  **Do:** move `applyEcology(tick && tick.ecology)` (`mudiii-scene.mjs:728`) above the two
-  diff-removal loops at `:726`-`:727`. Both removals then no-op for anything ecology already took,
-  since `removeItem` (`:557`) and `removeAgent` (`:639`) delete their map entry first. Give
-  `flourishForEcologyEvent` (`:192`) an `actorId: event.predator` on the `eat-agent` branch only,
-  and in `applyEcology` (`:653`) play the actor's clip through a new `playClipOnce` helper that sets
-  `THREE.LoopOnce`, `clampWhenFinished`, and `entry.currentClip = null` so the next `applyAgentTick`
-  (`:635`) can fade back. `playClip` (`:599`) loops forever and refuses a repeat of
-  `entry.currentClip`, which is wrong for a one-shot.
-  **Feasibility:** use `clipForAction("predator", "eat-agent", …)`'s existing `attack` mapping
-  (`mudiii-viz.mjs:386`), pinned at `test/services/mudiii-viz.test.mjs:503`. The fox's `Eating` clip
-  is what `eat-item` resolves to; changing the table breaks a green test for a judgment call already
-  made. The attack plays for one `delayMs` before the next tick fades the fox back, so at the 80ms
-  end of the slider it barely reads.
-  **Risk:** `test/services/mudiii-scene.test.mjs:137` pins `flourishForEcologyEvent`'s exact return
-  objects per event type and breaks on `actorId`.
-  **Mitigation:** unit-test the new `actorId` first. Then place a morsel next to a goblin through
-  `window.mudiiiHandleSceneClick`, tick until `eat-item` fires, and assert the removal went through
-  the flourish path. A vanished mesh alone does not say which branch removed it, so expose a counter
-  if that is the only way to see it.
 
 - **The page opens in overhead, not follow.** The operator's decision: mudiii.html opens in FOLLOW
   mode on an agent, not looking down at the board. The page already intends this and does not get it.
@@ -580,6 +503,19 @@ until it does. Then the grid-size item, because the deception rail and the map p
   the same discipline `decide()` applies at `predator-prey.mjs:711`-`:721`.
 
 ### mudiii.html — further work
+
+- **The eat flourish barely reads at a 220ms tick.** The flourish now plays on both sides, but the
+  predator's clip fades in over 150ms and an attack animation runs several hundred ms, so the next
+  tick fades it out before it finishes. A viewer sees the wind-up blending into whatever comes next
+  rather than a legible bite. The 220ms default is the operator's own choice, so slowing the page
+  back down is not the answer.
+  **Tier:** Sonnet, and it is a pacing decision before it is code.
+  **Do:** give the one-shot a floor — hold it for its own clip duration, or a fixed minimum around
+  400 to 500ms, before the next tick's fade may start. That is a change to how a tick and an
+  animation share time, so decide it deliberately rather than tuning a number until it looks right.
+  **Risk:** a hold that blocks the ticker turns a visual flourish into a simulation stall. It has to
+  hold the animation, never the turn.
+  **Mitigation:** watch it. This is a screenshot-or-video item, not a unit-test one.
 
 - **Prey decide by strict priority: evade beats forage beats wander.** A single score weighing
   predator distance against food distance would let a goblin take a crumb that costs it nothing,
