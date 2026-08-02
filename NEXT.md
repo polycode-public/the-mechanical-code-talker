@@ -138,23 +138,6 @@ outrank every cosmetic item below.
   actually doing before touching either test.
 
 
-- **The seed-perf bar is widened and unproven on CI.** The
-  `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
-  batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
-  retraction work, so nothing in this batch caused it. A shared CI runner and a bar the measurement
-  sits right on top of are enough to explain it.
-  **Fixed, unproven on CI.** The bar moved from 20x to 32x, halfway between the two hypotheses in
-  wall-clock terms rather than sitting on top of the linear band's own noise. Quadratic still fails
-  with a 2x margin. Green locally.
-  **Tier:** none. It closes on the next green pipeline.
-
-- **The two page-order jobs are fixed in the tree but have not re-run.** `pages-index.test.mjs` and
-  `pages-home.test.mjs` both carry `mudiii` and the numeral XI now, and both pass locally against a
-  fresh `npm run demo:build`. `e2e-web-index` and `e2e:deployed:shell` have not been exercised since,
-  because nothing has been pushed.
-  **Tier:** none. It closes on the next green pipeline.
-  **Do:** confirm both jobs pass on the push that clears the red suite. If they do, delete this item.
-
 ### Questions blocking work
 
 Three answers are outstanding. Each names the item it blocks. The three settled ones are recorded
