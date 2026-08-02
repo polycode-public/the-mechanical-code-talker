@@ -40,9 +40,9 @@ mudiii batch landed, which took the open count from 23 to 7 — so the backlog's
 exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
 the slots. Their output is the next wave's items.
 
-- **T45 the red deployed job** — a fox stepped east with its mesh facing north, 90 degrees off, so
-  the engine's facing disagrees with the step taken. `predator-prey.mjs`, the two mudiii files.
-  Top tier. Status: started.
+- **T48 the deck's four stacks** — the operator's own layout, from three screenshots: foxes/goblins
+  over the follow select, delay/max-turns over the camera buttons, place-food over teach, then the
+  map. This is also what fills the empty band. `mudiii-viz.mjs`. Sonnet. Status: started.
 - **T46 inference benchmark** — grades the classical-logic engine on the INF ladder and reports the
   rung, separating honest misses from wrong answers. Measure-only: an engine change would collide
   with the tracks working the tree. Top tier. Status: started.
@@ -116,20 +116,6 @@ outrank every cosmetic item below.
 
 ### mudiii.html — further work
 
-- **The desktop deck still carries a wide empty band.** With the map reduced to a 240px minimap in
-  its own grid column, the left of the deck holds four sliders in one row and a camera row below,
-  with roughly 200px of blank parchment between them. The track that shrank the map called it
-  "spacing bracketed by controls"; on the screenshot it still reads as a void, because the deck
-  genuinely has fewer controls than the minimap is tall.
-  **Tier:** Haiku, but it is a design call before it is CSS.
-  **Do:** either give the column something to hold, or stop the deck stretching to the map's height.
-  Candidates for the space: the chat pill rail, which currently sits below the scene; the turn
-  counter; a compact legend. Or let the map sit in a shorter panel and allow the deck to close up.
-  **Risk:** the phone layouts are approved and must not move. Any fix belongs inside the
-  `min-width: 901px` query.
-  **Mitigation:** screenshot the desktop and both phone sizes, and confirm the phones are unchanged.
-
-
 - **The prey blend is measured and shipped off; one regime is unmeasured.** The weighted
   evade/forage score exists behind `blendPreyDecision`, default false, and the comparison harness is
   committed at `scripts/compare-prey-decision.mjs`. Over 12 seeds the priority chain wins the mean on
@@ -147,29 +133,6 @@ outrank every cosmetic item below.
   this item and leave the flag off.
 
 ### Pipeline
-
-- **`e2e:deployed:pages` is red on a facing disagreement.** Job 15666435111, pipeline 2725436237,
-  the last of its 25 and the only one not green. The teach-frame precondition that failed on 5.0.4 is
-  fixed — this is a different failure:
-  `fox-2 stepped east but its applied yaw (3.141592653589793) faces a different way (dot 1.22e-16)`.
-  Yaw π is north, and a dot of zero means perpendicular, so the mesh faced **90 degrees off** the step
-  it took, not 180. That rules out the `yawForFacing` table, whose east/west swap was fixed and
-  verified against `FACING_VECTOR` at all four cardinals.
-  So the engine reported a facing that disagrees with the movement. `decide()` sets
-  `facing = plan[0] ?? state.facing`, and `plan[0]` is meant to be the step actually taken.
-  **Tier:** Sonnet. Reproduction first; static reading has not settled it.
-  **Do:** reproduce locally before changing anything. Candidates, in order: the multi-step branch,
-  where `plan = path.actions` and `nextCell = path.states[1]` — if the first action does not
-  correspond to that first state transition, facing and movement part company. Then
-  `mgx:driven-facing`, which the fold reads in the same case as `mgx:facing` ranked by epoch and
-  turn: a driven facing landing on the same turn as a planner step could outrank it. Then the
-  ground-click route, which now writes facing through the same path.
-  **Risk:** this ran green locally and failed on the deployed site, so first establish whether the
-  deployed page is the commit you think it is. `e2e:deployed:*` runs against what `deploy:website`
-  just published, and a stale edge cache would produce exactly this shape of mystery.
-  **Mitigation:** the reproduction must fail before the fix. A change aimed at `yawForFacing`, which
-  reads correctly, would look plausible and pass a shallow check while leaving the real fault.
-
 
 - **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
