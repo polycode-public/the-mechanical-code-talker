@@ -1345,14 +1345,18 @@ export async function townSquareBoard(memoryDir, {
     };
   }
 
-  return {
+  // A resting board's whole return IS the render payload, so `activeWebs`
+  // appears only for a cast that spins webs. A board with none would otherwise
+  // grow a field that is always empty for it.
+  const resting = {
     turn: state.tickCount,
     epoch: state.epoch,
     agents: sortedByKey(agents),
     items: sortedByKey(itemsPayload(board.liveItemIds, { state, itemCellOf: board.itemCellOf, roles })),
     ecology: [],
-    activeWebs: liveWebs(state.webs, state.tickCount, config.webDurationTurns),
   };
+  if (config.buildWebs === true) resting.activeWebs = liveWebs(state.webs, state.tickCount, config.webDurationTurns);
+  return resting;
 }
 
 /** The frozen render payload, projected off a tick result: exactly
