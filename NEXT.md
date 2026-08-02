@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+Six tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
 them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
 router's phantom budget.
 
@@ -49,6 +49,10 @@ those two slots, so T56 (the page-behaviour playtest fixes on sprites, mud and s
 - **T55 mudiii's camera look and the double-minted cell** — drag to look in POV and FOLLOW, and two
   agents opening on one cell. `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier.
   Holds a build slot. Status: started.
+- **T59 the doc drift and the README examples** — act on `reports/DOC_DRIFT_AUDIT.md`, verifying each
+  finding against today's code first, and run `npm run check:readme`, which CI deliberately skips and
+  nobody has run for a while. `README.md`, `docs/`, the audit report. Sonnet. No build. Status:
+  started.
 - **T57 the untested pages and the stale probe** — the p2p handshake past the invite, file upload,
   the four sprite group pages, ingest's Document mode, reduced motion; plus the agentbench frontier
   probe's section 3, which still prints "router REFUSES" for a case the router now answers.
