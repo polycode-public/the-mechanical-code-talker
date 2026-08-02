@@ -56,24 +56,6 @@ exist before its third link has a target).
 
 ### The home page as a presentation deck
 
-- **Every demo page's header should be navigable.** Each page carries its own `.eyebrow` reading
-  "tmct · <demo>", hand-written per file with no shared helper: `adventure-viz.mjs:997`,
-  `ledger-viz.mjs:792`, `mud-viz.mjs:395`, `mudiii-viz.mjs:484`, `plan-viz.mjs:435`,
-  `spider-fly-viz.mjs:446`, `sprite-catalog-viz.mjs:985`, plus whatever chat, code, ingest and
-  research use. The operator wants **tmct** to link home, the **demo's own name** to link to that
-  demo's page, and a third **about** link to that demo's about page.
-  **Tier:** Sonnet. Seven-plus files, one idea.
-  **Do:** write one shared eyebrow helper and have every page call it, rather than editing seven
-  headers into near-agreement. That is the shared layer every caller already goes through, and it is
-  what stops the eighth page being written without links.
-  **Feasibility:** it needs the about pages to exist, so land it after they do.
-  **Risk:** the pages do not share a header component today, so several use a `<div>` and one uses an
-  `<h1>` and one an inline `<span>` beside a counts element. The helper has to take the wrapping
-  element rather than assume one, or a page loses its heading semantics.
-  **Mitigation:** check each page still has exactly one `<h1>` afterwards, and that the ledger's
-  `#counts` span survives beside its eyebrow.
-
-
 - **Rename every demo claim, and give each one an about page.** The operator's brief: turn
   `index.html` into a ready set of presentations. Two halves, and the item is not done until both
   land.
@@ -483,16 +465,16 @@ exist before its third link has a target).
   own vocabulary — `The fox is at cell-3-4.` — not the manor's sentence.
   **Risk:** none beyond copying the wrong hint, which is the bug below.
 
-- **mud.html's teach hint is a sentence mud.html cannot parse.** `mud-viz.mjs:414` says
-  `Candle is in the study.`, copied from `adventure-viz.mjs:1047`. `mud-garden` is a burrow, so
-  `liveWorldAnswer` picks `parseMudEditorLine`, whose table has `lies in` / `stands in` /
-  `is fixed in` / `is hidden in` and no `X is in the Y` rule at all — and the burrow has no study.
-  A visitor who ticks the box and types the hint gets nothing.
-  **Tier:** Haiku. A wording change in one `title` attribute.
-  **Do:** use a sentence the burrow parser takes. `Pebble lies in the garden.` works, and the mud
-  e2e leg already uses it.
-
 ### Pipeline
+
+- **Five demo pages ship with no `<h1>` at all.** `chat.html`, `ingest.html`, `ledger.html`,
+  `research.html` and `adventure.html` carry no top-level heading anywhere. Found while giving every
+  page a navigable eyebrow, unrelated to it, and left alone deliberately.
+  **Tier:** Sonnet. Five pages of heading hierarchy, not one insertion.
+  **Do:** work out what each page's real title should be before adding tags. An `<h1>` in the wrong
+  place reads worse to a screen reader than none at all.
+  **Risk:** the eyebrow is not the title. Several pages already carry a real page-title `<h1>`
+  elsewhere, so check before adding a second.
 
 - **`e2e:deployed:pages` fails on the teach-frame test's own precondition.** Job 15665986632, against
   `ab32c1ce`: "an addressed teach-frame moves the board and the page redraws it, with nothing
