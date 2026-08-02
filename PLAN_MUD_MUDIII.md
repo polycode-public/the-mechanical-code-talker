@@ -1,8 +1,11 @@
 # PLAN_MUD_MUDIII.md — MUDIII, a Three.js town square over the spider-fly planning engine
 
-Status: DESIGN, nothing built. This document's scope completes with `mudiii.html` deployed
-alongside https://tmct.polycode.co.uk/mud.html. Split out of `PLAN_MUD.md` (2026-08-01); that
-document keeps the shared origin and baseline, and indexes the sibling phases.
+Status: BUILT AND DEPLOYED. `mudiii.html` is live alongside https://tmct.polycode.co.uk/mud.html.
+The engine, world, page, scene, chat lane, assets and landing-page plate all ship. A number of the
+behaviours specified below are not built or are only half built — **every one of them is tracked as
+an open item in `NEXT.md`, not here.** This document is the design of record; `NEXT.md` is what to
+do next. Split out of `PLAN_MUD.md` (2026-08-01); that document keeps the shared origin and
+baseline, and indexes the sibling phases.
 
 ## MUDIII — a Three.js town square over the spider-fly planning engine
 
@@ -12,11 +15,10 @@ was unregistered as of 2026-07-30 (Nominet WHOIS: `No match for "mudiii.co.uk"`)
 
 2026-07-30 design pass, superseding the 2026-07-29 MUD3D assessment. That pass's
 world-of-claudecraft architecture findings are kept, compressed, in the claudecraft subsection
-below; its conclusion (render tmct-natively, keep the planning in tmct) stands. Nothing here is
-built.
+below; its conclusion (render tmct-natively, keep the planning in tmct) stands.
 
 **What it is.** One page. A Three.js view of a town square, with a prowling predator and a
-handful of scavengers visibly moving around it — v1 casts a wolf and goblins, and the pair is
+handful of scavengers visibly moving around it — v1 casts a fox and goblins, and the pair is
 swappable data (see the cast subsection). Each character plans for itself over the same
 fact-graph memory every other demo uses,
 with vision-gated belief, exactly as spider-fly.html's agents do today. Under the 3D view sits the
@@ -102,7 +104,7 @@ MUDIII does not copy that pattern. Two options:
 
 Option 2 is the design. The roles object is plain data:
 
-    { predator: { kind: "wolf",   idPrefix: "wolf"   },
+    { predator: { kind: "fox",    idPrefix: "fox"    },
       prey:     { kind: "goblin", idPrefix: "goblin" },
       food:     { spawnedKind: "crumb", placedKind: "morsel" } }
 
@@ -113,10 +115,10 @@ table went the other way (per-species keys: `moleInitialMass`, `badgerSpeed`, ..
 mud's authored-cast worlds, but MUDIII's cast is a role pair by construction, so role-keyed knobs
 fit here.
 
-**Which pair, and why.** Wolf and goblins is the v1 cast (the per-model rig evidence sits in the
+**Which pair.** Fox and goblins is the v1 cast (the per-model rig evidence sits in the
 claudecraft subsection below). Both bodies are CC0 with full wired ground rigs
 (idle/walk/run/death), and the fiction maps 1:1 onto the mechanics: goblins raiding a medieval
-square for scraps, a wolf hunting the goblins. Nothing in the crumb/forage/evade design bends to
+square for scraps, a fox hunting the goblins. Nothing in the crumb/forage/evade design bends to
 fit it.
 
 ### Mechanics, as planning-domain content
@@ -142,30 +144,30 @@ a crumb (or be told about it) before it will path to it. The alternative, food a
 knowledge on spawn, would send every scavenger beelining across the square and kill the
 foraging feel; it stays a config experiment, never the default.
 
-**The wolf plans to eat goblins.** The spider's chase priority chain, minus webs: a wolf that
+**The fox plans to eat goblins.** The spider's chase priority chain, minus webs: a fox that
 believes a goblin is visible paths toward the believed cell (multi-step BFS when one exists,
 one-ply greedy approach otherwise) and eats on co-location, gaining the goblin's remaining
-mass. spider-fly separates catch from eat because eating needs a web; a wolf needs no
+mass. spider-fly separates catch from eat because eating needs a web; a fox needs no
 apparatus, so catch and eat merge into one ecology step. Two wolves avoid each other
-(`greedySpiderAvoid`'s mirror), and a wolf with nothing in view wanders (seeded) rather than
+(`greedySpiderAvoid`'s mirror), and a fox with nothing in view wanders (seeded) rather than
 holding still — there is no web to build, and a motionless predator reads as a broken page in
 3D. Eggs and hatching stay out of v1; the goblin spawn interval keeps the population up, and
-the wolf count is a slider. Mass and starvation stay for both roles — hunger is what makes the
+the fox count is a slider. Mass and starvation stay for both roles — hunger is what makes the
 foraging real.
 
-**Goblins evade the wolf; the eat-versus-evade conflict resolves by priority order.** The fly
+**Goblins evade the fox; the eat-versus-evade conflict resolves by priority order.** The fly
 already resolves this shape: its move chain is trapped > evade > wander. The goblin's chain
 inserts the forage branch one rung down:
 
-    1. a wolf is believed visible -> evade: one-ply greedy, maximize Chebyshev distance
-                                     from the nearest believed wolf (greedyFlyMove verbatim)
+    1. a fox is believed visible  -> evade: one-ply greedy, maximize Chebyshev distance
+                                     from the nearest believed fox (greedyFlyMove verbatim)
     2. food is believed somewhere -> forage: first step of findActionPath toward it
     3. otherwise                  -> wander: seeded pick among stay + one-ply neighbors
 
 Threat response needs no event system: the whole engine replans every tick from the folded
-facts, so a wolf entering vision radius flips the goblin from rung 2 to rung 1 on the next tick
-by construction, and its goal line flips with it ("evading — last saw wolf-1 at cell-6-2"). The
-alternative — one blended one-ply score weighing wolf distance against crumb distance — was
+facts, so a fox entering vision radius flips the goblin from rung 2 to rung 1 on the next tick
+by construction, and its goal line flips with it ("evading — last saw fox-1 at cell-6-2"). The
+alternative — one blended one-ply score weighing fox distance against crumb distance — was
 considered and parked: it needs new scoring machinery, its weights need tuning against a real
 board, and it turns the goal line into mush ("mostly evading, somewhat hungry") that neither the
 HUD nor chat can narrate cleanly. A cheap middle ground exists later without restructuring:
@@ -183,11 +185,11 @@ rdfs:subClassOf food`, `mgx:currently-in cell-x-y`, with player provenance rathe
 tag — so "who put that there?" grounds, and the answer names the player. Goblins never
 distinguish crumbs from morsels: the forage read walks the `food` class chain
 (`objectClassChain`, as mud-turn.mjs's `isFood` does), so player food and world crumbs compete
-on distance alone. Placing food next to a lurking wolf is thereby a working trap, and nobody
+on distance alone. Placing food next to a lurking fox is thereby a working trap, and nobody
 wrote a trap mechanic — it falls out of the three rules above.
 
-**Telling characters things carries over whole.** The addressed teach-frame ("@goblin the wolf
-is east", "@wolf the goblin is at cell-7-3") and the true/false claim-pill rail lift from
+**Telling characters things carries over whole.** The addressed teach-frame ("@goblin the fox
+is east", "@fox the goblin is at cell-7-3") and the true/false claim-pill rail lift from
 spider-fly-turn.mjs with role vocabulary swapped, and the told-fact channel extends naturally
 to food ("@goblin the crumb is at cell-2-9"). Deception stays the page's sharpest trick: the
 belief panel shows the lie landing.
@@ -250,7 +252,7 @@ dashboard's agent-select dropdown (below) choosing which cast member the first t
    whole-burrow survey, for a full-board view at any time.
 
 If the followed agent is eaten or despawns, the camera falls back to overhead automatically with
-a status line naming what happened ("wolf-1 ate goblin-2 — switching to overhead"); picking
+a status line naming what happened ("fox-1 ate goblin-2 — switching to overhead"); picking
 another agent in the dropdown resumes follow. "NPCs wandering in and out of view" stays the
 agents' own vision model regardless of which camera mode is active: what each animal can see is
 vision-radius belief, surfaced through the belief panel and "what does the goblin see?", never
@@ -272,7 +274,7 @@ costs nothing to carry now.
 The deck adopts mud.html's own control set unchanged, same ranges and defaults: Play (starts
 every animal's ticker at once, wolves and goblins alike), the shared turn counter, Reset (starts
 a fresh world and redraws the whole cast), a Players slider (1/2/4, redrawn on release) sizing
-the wolf roster, an Npcs slider (1..10, default 2) sizing the goblin roster, a Delay slider
+the fox roster, an Npcs slider (1..10, default 2) sizing the goblin roster, a Delay slider
 (80-2000ms, default 650ms) and a Max-turns slider (20-2000, default 400). The agent-select
 dropdown (which cast member the POV camera follows) sits alongside them. Turn flow reuses
 `serializeTick` plus one ticker per animal. Below or beside the 3D view: the chat
@@ -280,7 +282,7 @@ log and input with the pill rail, and per-agent HUD cards (mass bar, goal line, 
 panel) following spider-fly's HUD. mud's EDIT mode (the facts-as-sentences textarea in
 `mud-editor.mjs`) applies to this world unchanged, because the world is the same kind of fact
 rows. Three scenarios ship in the scenario dropdown, mirroring mud.html's own three-burrow set —
-town-square variants of the wolf/goblin cast, each varying grid size, building layout, and
+town-square variants of the fox/goblin cast, each varying grid size, building layout, and
 predator/scavenger counts. The P2P layer arrives after this page ships (PLAN_MUD_MUDIII_SHARED.md), the same lazy way mud.html gained it, since the session store is the same shape;
 at that phase the deck gains the share control, the net panel and the `.state-pill`, and nothing
 in this section depends on them.
@@ -302,10 +304,10 @@ single convention, and no pointer-from-chat-into-the-viz anywhere. The real inve
 - **Pointer glyphs** — the compass/door rings: mud's `▲ N / ▼ S / ◀ W / E ▶` positioned around
   the room box, adventure's `▸` door prefix and unwalked-door dot.
 
-MUDIII carries forward: the affordance pills (addresses `@wolf`/`@goblin`, tick, the food verb),
+MUDIII carries forward: the affordance pills (addresses `@fox`/`@goblin`, tick, the food verb),
 the deception rail generalized to the role pair, and the goal/belief HUD. The compass ring dies
 here — the free 3D camera (POV or overhead) replaces it, and directions live on in the
-teach-frame pills ("the wolf is north"). `.state-pill` arrives with the shared-worlds phase (PLAN_MUD_MUDIII_SHARED.md), exactly as on mud.html. Provenance
+teach-frame pills ("the fox is north"). `.state-pill` arrives with the shared-worlds phase (PLAN_MUD_MUDIII_SHARED.md), exactly as on mud.html. Provenance
 chips stay a chat.html surface; this page's chat is a game lane whose answers are board reads,
 and it follows spider-fly (no provchips) rather than chat.html.
 
@@ -313,7 +315,7 @@ and it follows spider-fly (no provchips) rather than chat.html.
 
 `src/services/mudiii-turn.mjs`, the fifth lane on the shared plan-slot, shaped exactly like
 spider-fly-turn.mjs with vocabulary from the roles object: openers ("visit the town square",
-"watch the wolf and the goblins"), stop, tick, the addressed teach-frame, "what does the goblin
+"watch the fox and the goblins"), stop, tick, the addressed teach-frame, "what does the goblin
 see?", the orientation asides (where/options/goal), plus the one new verb: the food placement.
 Every
 lane answer stays a board read or an appended fact; a line the lane cannot read gets the
@@ -364,8 +366,12 @@ directly, since a model file proves nothing about its animations):
 - `goblin.glb` (47K, Quaternius, CC0) — wired as their `mob_kobold` with the ENEMY7 rig:
   Idle/Walk/Run/Attack/HitRecieve/Death. A full ground-locomotion set, and Death gives the
   eaten-flourish a real clip. The v1 scavenger.
-- `wolf_basic.glb` (325K, CC0) — their `mob_wolf`, the baked animal rig: Idle/Walk/Gallop plus
-  hit-reacts, Death, Sit and Fall. The v1 predator.
+- `fox.glb` (325K, Quaternius, CC0) — the baked quadruped rig: Idle/Walk/Gallop plus hit-reacts,
+  Death, and an `Eating` clip the eat step can use. The v1 predator.
+
+  `wolf_basic.glb` in the same directory is NOT CC0 — it is a custom Tripo-generated project
+  asset with no row in that repo's CREDITS.md. `scripts/check-model-manifest.mjs` fails on its
+  name so it cannot be picked up by mistake.
 
 The pipeline this sets up — drop a CC0 GLB in, map its clip names — is what makes every later
 role pair cheap.
@@ -465,8 +471,8 @@ sub-agent. The three scenario layouts get the same treatment: authored as prop-f
 workstream is data entry against this section's design.
 
 **The lane is enumerated.** The `mudiii-turn.mjs` brief lists every behavior with one example
-utterance and its reply shape: openers ("visit the town square" / "watch the wolf and the
-goblins"), stop, tick, the addressed teach-frame ("@goblin the wolf is west" / "@wolf the
+utterance and its reply shape: openers ("visit the town square" / "watch the fox and the
+goblins"), stop, tick, the addressed teach-frame ("@goblin the fox is west" / "@fox the
 goblin is at cell-7-3"), the belief question ("what does the goblin see?"), the orientation
 asides (where/options/goal), and the food verb ("put food at cell-3-4" / "drop a morsel at
 cell-3-4"). The brief names the two required checks: no opener/verb collision with the four
