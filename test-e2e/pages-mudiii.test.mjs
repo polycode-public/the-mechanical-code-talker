@@ -445,17 +445,21 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
     });
     await waitForReboot(page);
     await pauseBoard(page);
-    // Both counts are compared against the deck's own maxima, not the values
-    // held before the drag: the whole point is that 4 foxes and 10 goblins is
-    // a cast the page can actually build. Prey also arrive from the perimeter
-    // while the board plays, so the live cast is a floor, never an equality.
+    // Every predator the slider asked for is on the board. Four foxes is the
+    // proof the deck reaches its own stated range: this square's layout only
+    // ever built one, so a cast sliced from the opening list could never get
+    // here. The count is read as ids, not a total — four foxes eat goblins
+    // within the first few turns and fresh prey wander in from the perimeter,
+    // so the live cast is never 14 by the time anything can read it.
     await page.waitForFunction(() => {
       const fox = document.getElementById("playerCountSlider");
       const npc = document.getElementById("npcCountSlider");
       const foxCount = Number((fox.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
       const npcCount = Number((npc.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
-      const cards = document.querySelectorAll("#hudRow .hud-card[data-agent]").length;
-      return foxCount === 4 && npcCount === 10 && cards >= foxCount + npcCount;
+      const ids = [...document.querySelectorAll("#hudRow .hud-card[data-agent]")]
+        .map((card) => card.getAttribute("data-agent"));
+      const everyFox = ["fox-1", "fox-2", "fox-3", "fox-4"].every((id) => ids.includes(id));
+      return foxCount === 4 && npcCount === 10 && everyFox && ids.length >= 6;
     }, null, { timeout: READY_TIMEOUT_MS });
     await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
     assertEveryMeshWithinTolerance(await meshHeightsOf(page), "on load, largest cast");
