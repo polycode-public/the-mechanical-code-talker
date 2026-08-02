@@ -33,11 +33,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks, and **four of them are generating work rather than closing items**. The thirteen-item
+Six tracks. **T45 is the priority**: `e2e:deployed:pages` is red on a facing disagreement, and a red
+deployed job blocks the loop's own stop condition. Four of the others are generating work rather than
+closing items. The thirteen-item
 mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
 exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
 the slots. Their output is the next wave's items.
 
+- **T45 the red deployed job** — a fox stepped east with its mesh facing north, 90 degrees off, so
+  the engine's facing disagrees with the step taken. `predator-prey.mjs`, the two mudiii files.
+  Top tier. Status: started.
 - **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
   three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
   Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
