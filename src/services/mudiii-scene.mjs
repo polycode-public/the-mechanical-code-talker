@@ -352,7 +352,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
 
   var loadThreeVendor = createThreeVendorLoader();
   var THREE = null, GLTFLoaderCtor = null, OrbitControlsCtor = null, MeshoptDecoderRef = null;
-  var gltfLoader = null, loadQueue = createConcurrencyQueue(4), rawLoader = null;
+  var gltfLoader = null, loadQueue = createConcurrencyQueue(4);
   var scene = null, camera3 = null, renderer = null, orbitControls = null, groundMesh = null, raycaster = null;
   var agentGroups = {};
   var itemMeshes = {};
@@ -366,10 +366,24 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var lastFrameTs = null;
   var booted = false;
 
+  // Cache the fetched BYTES, not the parsed scene: one network request per
+  // model URL, however many agents share that kind, then a GLTFLoader.parse
+  // per caller off the shared ArrayBuffer. Each caller still ends up owning
+  // its own object graph, so normalizeToHeight's own guards still hold.
+  function fetchGlbBytes(url) {
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("model fetch failed with status " + res.status + ": " + url);
+      return res.arrayBuffer();
+    });
+  }
+  var glbBytesCache = createCachedLoader(fetchGlbBytes);
+
   function loadGlbRaw(url) {
-    return loadQueue.run(function () {
-      return new Promise(function (resolve, reject) {
-        gltfLoader.load(url, resolve, undefined, reject);
+    return glbBytesCache.load(url).then(function (buffer) {
+      return loadQueue.run(function () {
+        return new Promise(function (resolve, reject) {
+          gltfLoader.parse(buffer, THREE.LoaderUtils.extractUrlBase(url), resolve, reject);
+        });
       });
     });
   }
@@ -533,7 +547,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   }
 
   // ---- items: crumbs and morsels, primitive geometry ------------------------
-  var CRUMB_RADIUS = 0.08, MORSEL_RADIUS = 0.18;
+  // Doubled from 0.08/0.18: against the fox's own 1m targetHeight and a 1-unit
+  // cell, the old radii read as barely-visible dots on the board.
+  var CRUMB_RADIUS = 0.16, MORSEL_RADIUS = 0.36;
   function itemGeometryFor(kind) { return new THREE.SphereGeometry(kind === "morsel" ? MORSEL_RADIUS : CRUMB_RADIUS, 10, 8); }
   function itemMaterialFor(kind) { return new THREE.MeshStandardMaterial({ color: kind === "morsel" ? 0xd98a2b : 0x8c6a3f }); }
   function itemHeightFor(kind) { return kind === "morsel" ? MORSEL_RADIUS : CRUMB_RADIUS; }

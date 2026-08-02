@@ -227,12 +227,18 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
     // Drive both sliders to their own max before rebooting — the largest
     // cast is where the shared-cache bug compounds the hardest, and a
     // clamped roster still reports its own real count through aria-valuetext
-    // rather than the slider's own requested value.
+    // rather than the slider's own requested value. The page updates
+    // aria-valuetext from `input` and reboots from `change` — a real drag
+    // fires both, so this dispatches both on each slider rather than only
+    // the one event that happens to trigger a reboot.
     await page.evaluate(() => {
       const fox = document.getElementById("playerCountSlider");
       const npc = document.getElementById("npcCountSlider");
       fox.value = fox.max;
       npc.value = npc.max;
+      fox.dispatchEvent(new Event("input", { bubbles: true }));
+      npc.dispatchEvent(new Event("input", { bubbles: true }));
+      fox.dispatchEvent(new Event("change", { bubbles: true }));
       npc.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await page.waitForFunction(() => {
