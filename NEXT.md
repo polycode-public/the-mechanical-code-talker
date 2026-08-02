@@ -599,6 +599,21 @@ exist before its third link has a target).
   **Do:** use a sentence the burrow parser takes. `Pebble lies in the garden.` works, and the mud
   e2e leg already uses it.
 
+### Pipeline
+
+- **`e2e:deployed:pages` fails on the teach-frame test's own precondition.** Job 15665986632, against
+  `ab32c1ce`: "an addressed teach-frame moves the board and the page redraws it, with nothing
+  playing" fails at `the opening cast has both a fox and a goblin to address`. The precondition
+  fails, not the behaviour under test — the deployed page's opening cast did not hold one of each.
+  **Tier:** Sonnet, and it may already be fixed.
+  **Do:** the roster mint in flight replaces `pickRoster`, which decides the opening cast and today
+  slices from a layout casting fewer agents than the sliders ask for. Re-run the job once that lands
+  before diagnosing further. If it still fails, the test should pick its two addressees from whatever
+  cast exists rather than assuming one of each — cast size is a slider value, so hardcoding a shape
+  repeats the mistake the Reset wait made by pinning a pre-Reset count.
+  **Risk:** its title also says "with nothing playing", which stops being true once the page opens
+  playing. Settle both in the same change.
+
 - **The seed-perf bar is widened and unproven on CI.** The
   `unit` job on pipeline 2725214193 reports "16000-fact batch's best-of-5 took 3944ms vs 2000-fact
   batch's best-of-5 187ms (21.09x)". It does **not** fail locally, and the pushed commit predates the
