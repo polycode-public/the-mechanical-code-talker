@@ -30,333 +30,16 @@
 }
 </script>
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
-<style>
-  /* The home page carries its own quiet, near-monochrome palette and type — a
-     white ground, a neutral grey scale, and a single restrained green accent
-     reserved for grounding and provenance cues. It deliberately does NOT mirror
-     src/services/viz-theme.mjs; those trust-tier tokens stay the shared source
-     of truth for the ledger/plan/chat/sprite pages, which keep their own look.
-     --code-bg/--code-fg are this page's own terminal-block colours. */
-  :root {
-    --font-display: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-    --bg: #FFFFFF;
-    --ink: #1A1A1A;
-    --muted: #6F6F76;
-    --taught: #1B7A4B;
-    --entail: #3F3F46;
-    --entail-soft: rgba(63, 63, 70, 0.10);
-    --card: #FAFAF9;
-    --line: #E6E6E1;
-    --code-bg: #18181B;
-    --code-fg: #E4E4E7;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0B0B0C;
-      --ink: #F3F3F2;
-      --muted: #9A9AA1;
-      --taught: #4FB27C;
-      --entail: #A1A1AA;
-      --entail-soft: rgba(161, 161, 170, 0.12);
-      --card: #17171A;
-      --line: #2A2A2E;
-      --code-bg: #101012;
-      --code-fg: #D4D4D8;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0B0B0C; --ink: #F3F3F2; --muted: #9A9AA1; --taught: #4FB27C;
-    --entail: #A1A1AA; --entail-soft: rgba(161, 161, 170, 0.12);
-    --card: #17171A; --line: #2A2A2E; --code-bg: #101012; --code-fg: #D4D4D8;
-  }
-  :root[data-theme="light"] {
-    --bg: #FFFFFF; --ink: #1A1A1A; --muted: #6F6F76; --taught: #1B7A4B;
-    --entail: #3F3F46; --entail-soft: rgba(63, 63, 70, 0.10);
-    --card: #FAFAF9; --line: #E6E6E1; --code-bg: #18181B; --code-fg: #E4E4E7;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font: 16.5px/1.65 var(--font-body);
-    -webkit-font-smoothing: antialiased;
-    padding: clamp(2.75rem, 6vw, 4.5rem) 1.25rem 5rem;
-  }
-  main { max-width: 62rem; margin: 0 auto; }
-  .copy { max-width: 44rem; margin-left: auto; margin-right: auto; }
-  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
-  h2 {
-    font-size: 1.3rem;
-    margin: 2.6rem 0 0.7rem;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 0.35rem;
-  }
-  p { margin: 0.7rem 0; }
-  em { color: var(--taught); font-style: normal; font-weight: 600; }
-  a { color: var(--taught); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 3px; }
-  a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; border-radius: 2px; }
-  pre {
-    background: var(--code-bg);
-    color: var(--code-fg);
-    font: 13.5px/1.6 var(--font-mono);
-    padding: 1rem 1.2rem;
-    border-radius: 12px;
-    overflow-x: auto;
-    margin: 0.9rem 0;
-  }
-  code {
-    font: 0.88em var(--font-mono);
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    padding: 0.05em 0.32em;
-  }
-  pre code { background: none; border: none; padding: 0; }
-  .eyebrow {
-    font: 600 0.72rem/1.5 var(--font-mono);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 0.7rem;
-  }
-  footer {
-    margin-top: 3.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--line);
-    font-size: 0.9rem;
-    color: var(--muted);
-  }
-
-  /* ---- hero ------------------------------------------------------------------------ */
-  .hero { text-align: center; max-width: 48rem; margin: 0 auto 4rem; }
-  .hero h1 {
-    font-size: clamp(2.15rem, 5.5vw, 3rem);
-    font-weight: 600;
-    line-height: 1.08;
-    letter-spacing: -0.025em;
-  }
-  .hero h1 .long {
-    display: block; font-family: var(--font-body); font-size: 1.05rem;
-    font-weight: 400; color: var(--muted);
-    margin-top: 0.6rem; font-style: normal; line-height: 1.5; letter-spacing: 0;
-  }
-  .lede {
-    font-size: 1.15rem; color: var(--muted);
-    margin: 1.2rem auto 0; max-width: 36rem;
-  }
-  .hero-install {
-    display: inline-block;
-    margin-top: 1.6rem;
-    background: var(--card);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    font: 0.85rem/1 var(--font-mono);
-    padding: 0.8em 1.15em;
-    border-radius: 10px;
-    max-width: 100%;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-  .hero-install .ps1 { color: var(--muted); }
-
-  /* ---- claim grid (each claim links to the page that shows it) --------------------- */
-  .band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.75rem; }
-  .band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.6rem; }
-  .claim-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
-    gap: 1rem; margin: 0 0 1rem;
-  }
-  .claim {
-    display: flex; flex-direction: column; gap: 0.5rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-  }
-  .claim:hover, .claim:focus-visible {
-    border-color: var(--entail);
-  }
-  .claim .claim-icon { height: 26px; color: var(--entail); }
-  .claim .claim-icon svg { width: 26px; height: 26px; }
-  .claim .claim-icon.dual svg { width: 22px; height: 22px; }
-  .claim h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
-  .claim p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
-  .claim .claim-page {
-    margin-top: auto; align-self: flex-start;
-    font: 0.7rem/1 var(--font-mono);
-    color: var(--muted); background: var(--bg);
-    border: 1px solid var(--line); border-radius: 999px;
-    padding: 0.32em 0.8em;
-  }
-  .claim:hover .claim-page, .claim:focus-visible .claim-page {
-    color: var(--entail); border-color: var(--entail);
-  }
-
-  /* ---- new-tab cue: every demo-page link opens in a new tab -------------------------
-     .newtab-icon is the inline glyph inside .claim-page/.open-link; .plate-frame's own
-     override turns it into an absolutely-positioned corner badge, since that family has
-     no inline text to hang the glyph on. */
-  .newtab-icon { display: inline-block; vertical-align: -0.15em; width: 0.85em; height: 0.85em; color: currentColor; }
-  .sr-only {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-  }
-
-  /* ---- feature sections, each screenshot framed as a numbered plate ---------------- */
-  .feature {
-    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: 1.6rem 3.5rem; align-items: center;
-    margin: 4.2rem 0;
-  }
-  .feature.flip .plate { order: -1; }
-  .feature h2 { border-bottom: none; padding-bottom: 0; margin: 0.2rem 0 0; font-size: 1.5rem; }
-  .feature .feature-copy p { font-size: 1rem; color: var(--muted); }
-  .feature .open-link { font-size: 0.92rem; }
-  /* The plate frame and alt text keep a feature readable while its screenshot
-     is still awaiting capture, so the section never shows a bare broken image. */
-  .plate { margin: 0; }
-  .plate .plate-frame {
-    display: block;
-    position: relative;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 0.6rem;
-    outline: 1px solid var(--entail-soft);
-    outline-offset: 4px;
-  }
-  /* .plate-frame has no inline text to hang the new-tab glyph on, so it becomes
-     a pill badge in the frame's top-right corner instead, echoing .claim-page's
-     own pill styling. */
-  .plate-frame .newtab-icon {
-    position: absolute; top: 0.85rem; right: 0.85rem; width: 20px; height: 20px;
-    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-    padding: 5px; box-sizing: content-box; color: var(--entail);
-  }
-  .plate img {
-    display: block; width: 100%; height: auto;
-    aspect-ratio: 1024 / 600; object-fit: cover;
-    border-radius: 8px;
-    background: var(--bg); border: 1px solid var(--line);
-    color: var(--muted); font: 12px/1.5 var(--font-mono);
-  }
-  .plate figcaption {
-    margin-top: 0.65rem; text-align: center;
-    font: 0.7rem/1.5 var(--font-mono);
-    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
-  }
-  .plate figcaption .plate-no { color: var(--entail); }
-  @media (max-width: 760px) {
-    .feature { grid-template-columns: 1fr; gap: 1rem; margin: 3rem 0; }
-    .feature.flip .plate { order: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .claim, .showcase-card { transition: none; }
-  }
-
-  /* ---- live chat demo (inside the code-explorer feature) --------------------------- */
-  .demo-wrap { margin: 1.2rem 0 0.6rem; }
-  .demo-label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin-bottom: 0.4rem;
-  }
-  #tmct-demo {
-    background: var(--code-bg);
-    color: var(--code-fg);
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    font: 13.5px/1.6 var(--font-mono);
-    overflow-x: auto;
-    min-height: 3.5em;
-  }
-  #tmct-demo .term-lines > div { white-space: pre-wrap; word-break: break-word; }
-  #tmct-demo .term-dim { color: var(--muted); }
-  #tmct-demo .term-error { color: #d9704f; }
-  #tmct-demo .term-answer { color: var(--code-fg); margin-bottom: 0.5em; }
-  #tmct-demo .term-prompt-line { color: var(--code-fg); }
-  #tmct-demo .term-prompt { color: var(--taught); }
-  #tmct-demo.compact .term-lines > div { margin: 0; }
-  #tmct-demo .term-input-row {
-    display: none;
-    align-items: baseline;
-    margin-top: 0.3em;
-  }
-  #tmct-demo .term-input-row.ready { display: flex; }
-  #tmct-demo .term-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--code-fg);
-    font: inherit;
-    padding: 0;
-    min-width: 0;
-  }
-  #tmct-demo .term-input::placeholder { color: var(--muted); }
-  #tmct-demo .term-input:disabled { opacity: 0.5; }
-  .demo-status {
-    font-size: 0.78rem;
-    color: var(--muted);
-    margin-top: 0.5rem;
-  }
-  .demo-cli {
-    margin-top: 0.5rem;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-  .demo-cli pre {
-    background: transparent;
-    border: 1px dashed var(--line);
-    color: var(--muted);
-    padding: 0.5rem 0.8rem;
-    margin: 0.3rem 0 0;
-    font-size: 0.78rem;
-  }
-
-  /* ---- sprite teaser chips (inside the sprite-library feature) --------------------- */
-  .sprite-teaser { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
-  .sprite-chip {
-    display: flex; align-items: center; gap: 0.4rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-    padding: 0.28rem 0.65rem 0.28rem 0.28rem;
-  }
-  .sprite-chip svg { width: 20px; height: 20px; color: var(--taught); flex: 0 0 auto; }
-  .sprite-chip.size-sm svg { width: 14px; height: 14px; }
-  .sprite-chip.size-lg svg { width: 27px; height: 27px; }
-  .sprite-chip.size-xl svg { width: 34px; height: 34px; }
-  .sprite-chain { font: 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; }
-  .sprite-chain .own { color: var(--ink); }
-  .sprite-chain .arrow { opacity: 0.55; padding: 0 0.15em; }
-
-  /* ---- Polycode showcase ----------------------------------------------------------- */
-  .showcase-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-    gap: 0.9rem; margin: 1.1rem 0 0.4rem;
-  }
-  .showcase-card {
-    display: flex; flex-direction: column; gap: 0.4rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
-    transition: border-color 0.15s ease;
-  }
-  .showcase-card:hover, .showcase-card:focus-visible { border-color: var(--entail); }
-  .showcase-card h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
-  .showcase-card p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
-  .showcase-card .showcase-domain {
-    font: 0.72rem/1.4 var(--font-mono);
-    color: var(--taught);
-  }
-</style>
+<link rel="stylesheet" href="./site.css">
 </head>
 <body>
 <main>
   <header class="hero">
-    <p class="eyebrow">Polycode projects &middot; pure JS &middot; no LLM &middot; offline &middot; $0</p>
+    <p class="eyebrow"><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">Polycode projects</a>
+      &middot; <a href="#library">pure JS</a>
+      &middot; <a href="#capabilities">no LLM</a>
+      &middot; <a href="#live-demo">offline</a>
+      &middot; $0</p>
     <h1>tmct
       <span class="long">&nbsp;</span>
     </h1>
@@ -368,104 +51,378 @@
     <p class="hero-install"><span class="ps1">$</span> npm install -g @polycode-projects/the-mechanical-code-talker</p>
   </header>
 
-  <section class="claims" aria-label="what the demo pages show">
+  <section class="claims" id="demos" aria-label="what the demo pages show">
     <div class="band-head">
-      <p class="eyebrow">ten demonstrations</p>
+      <p class="eyebrow">eleven demonstrations</p>
     </div>
     <div class="claim-grid">
-      <a class="claim" href="./chat.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.2" cy="11" r="1" fill="currentColor"/><circle cx="12" cy="11" r="1" fill="currentColor"/><circle cx="15.8" cy="11" r="1" fill="currentColor"/></svg>
+      <div class="claim-cell">
+        <a class="claim" href="./chat.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.2" cy="11" r="1" fill="currentColor"/><circle cx="12" cy="11" r="1" fill="currentColor"/><circle cx="15.8" cy="11" r="1" fill="currentColor"/></svg>
+          </span>
+          <h3>Natural Language Understanding</h3>
+          <p>The same chat engine as the CLI, running in your browser. Every answer names its source.</p>
+          <span class="claim-page">chat.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./chat-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Natural Language Understanding</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="chat"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Natural Language Understanding</span></button>
         </span>
-        <h3>Natural Language Understanding</h3>
-        <p>The same chat engine as the CLI, running in your browser. Every answer names its source.</p>
-        <span class="claim-page">chat.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./spider-fly.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon dual" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
-          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./spider-fly.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon dual" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
+            <svg viewBox="0 0 24 24"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
+          </span>
+          <h3>Competitive multi-agent system</h3>
+          <p>A spider and a fly each plan their own moves over the same graph, seeing only part of the board.</p>
+          <span class="claim-page">spider-fly.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./spider-fly-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Competitive multi-agent system</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="spider-fly"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Competitive multi-agent system</span></button>
         </span>
-        <h3>Competitive multi-agent system</h3>
-        <p>A spider and a fly each plan their own moves over the same graph, seeing only part of the board.</p>
-        <span class="claim-page">spider-fly.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./plan.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4v4"/><path d="M4 20h16"/></g><rect x="9.5" y="8" width="5" height="2.6" rx="1.3" fill="currentColor"/><rect x="7.5" y="11.6" width="9" height="2.6" rx="1.3" fill="currentColor"/><rect x="5.5" y="15.2" width="13" height="2.6" rx="1.3" fill="currentColor"/></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./plan.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4v4"/><path d="M4 20h16"/></g><rect x="9.5" y="8" width="5" height="2.6" rx="1.3" fill="currentColor"/><rect x="7.5" y="11.6" width="9" height="2.6" rx="1.3" fill="currentColor"/><rect x="5.5" y="15.2" width="13" height="2.6" rx="1.3" fill="currentColor"/></svg>
+          </span>
+          <h3>Classical AI Planning</h3>
+          <p>Tower of Hanoi solved move by move, with the plan on show as PDDL and OWL artifacts.</p>
+          <span class="claim-page">plan.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./plan-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Classical AI Planning</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="plan"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Classical AI Planning</span></button>
         </span>
-        <h3>Classical AI Planning</h3>
-        <p>Tower of Hanoi solved move by move, with the plan on show as PDDL and OWL artifacts.</p>
-        <span class="claim-page">plan.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./adventure.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="6.5" y="7.5" width="11" height="9" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12" cy="12.5" r="1.7" fill="currentColor"/></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./adventure.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="6.5" y="7.5" width="11" height="9" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12" cy="12.5" r="1.7" fill="currentColor"/></svg>
+          </span>
+          <h3>Fact based world visualisation</h3>
+          <p>Ashcombe Hall renders exactly what its facts say is in the room, and nothing else.</p>
+          <span class="claim-page">adventure.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./adventure-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Fact based world visualisation</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="adventure"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Fact based world visualisation</span></button>
         </span>
-        <h3>Fact based world visualisation</h3>
-        <p>Ashcombe Hall renders exactly what its facts say is in the room, and nothing else.</p>
-        <span class="claim-page">adventure.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./ledger.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16" stroke="currentColor" stroke-width="1"/><g stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M11.5 8.5h5"/><path d="M11.5 12h5"/><path d="M11.5 15.5h5"/></g></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./ledger.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16" stroke="currentColor" stroke-width="1"/><g stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M11.5 8.5h5"/><path d="M11.5 12h5"/><path d="M11.5 15.5h5"/></g></svg>
+          </span>
+          <h3>Facts as RDF/OWL triples</h3>
+          <p>Every fact, where it came from, and how far to trust it.</p>
+          <span class="claim-page">ledger.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./ledger-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Facts as RDF/OWL triples</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="ledger"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Facts as RDF/OWL triples</span></button>
         </span>
-        <h3>Facts as RDF/OWL tripples</h3>
-        <p>Every fact, where it came from, and how far to trust it.</p>
-        <span class="claim-page">ledger.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./code.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 4 12l5 6"/><path d="M15 6l5 6-5 6"/></g></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./code.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 4 12l5 6"/><path d="M15 6l5 6-5 6"/></g></svg>
+          </span>
+          <h3>Code Index for RAG</h3>
+          <p>Imports, calls and members around any symbol in a code graph.</p>
+          <span class="claim-page">code.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./code-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Code Index for RAG</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="code"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Code Index for RAG</span></button>
         </span>
-        <h3>Code Index for RAG</h3>
-        <p>Imports, calls and members around any symbol in a code graph.</p>
-        <span class="claim-page">code.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./ingest.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></g></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./ingest.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></g></svg>
+          </span>
+          <h3>Synthesise Facts from free text</h3>
+          <p>Paste text. Each sentence becomes a checkable fact, or it is refused.</p>
+          <span class="claim-page">ingest.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./ingest-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Synthesise Facts from free text</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="ingest"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Synthesise Facts from free text</span></button>
         </span>
-        <h3>Synthesise Facts from free text</h3>
-        <p>Paste text. Each sentence becomes a checkable fact, or it is refused.</p>
-        <span class="claim-page">ingest.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./sprites.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="currentColor"/><circle cx="7" cy="9" r="3.6" fill="currentColor"/><ellipse cx="6.1" cy="8" rx="1" ry="1.3" fill="currentColor" opacity="0.3"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="currentColor"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./sprites.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="currentColor"/><circle cx="7" cy="9" r="3.6" fill="currentColor"/><ellipse cx="6.1" cy="8" rx="1" ry="1.3" fill="currentColor" opacity="0.3"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="currentColor"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>
+          </span>
+          <h3>The sprite library</h3>
+          <p>Every shape the site can draw, mapped to the ontology class it belongs to.</p>
+          <span class="claim-page">sprites.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./sprites-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About The sprite library</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="sprites"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share The sprite library</span></button>
         </span>
-        <h3>The sprite library</h3>
-        <p>Every shape the site can draw, mapped to the ontology class it belongs to.</p>
-        <span class="claim-page">sprites.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./research.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="7" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="8" cy="16" r="2"/><path d="M8 7.6 15 6.4M7 9 7.6 14" stroke-linecap="round"/></g><circle cx="15.5" cy="15" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 17.4 21 20.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./research.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="7" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="8" cy="16" r="2"/><path d="M8 7.6 15 6.4M7 9 7.6 14" stroke-linecap="round"/></g><circle cx="15.5" cy="15" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 17.4 21 20.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <h3>Search backed knowledge base</h3>
+          <p>Research a term, teach a fact, or ingest text into one graph. Then ask a question scoped to the sources you trust.</p>
+          <span class="claim-page">research.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./research-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Search backed knowledge base</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="research"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Search backed knowledge base</span></button>
         </span>
-        <h3>Search backed knowledge base</h3>
-        <p>Research a term, teach a fact, or ingest text into one graph. Then ask a question scoped to the sources you trust.</p>
-        <span class="claim-page">research.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./mud.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M2 9h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 9v3a2 2 0 0 0 2 2h1"/><path d="M18 9v2a2 2 0 0 1-2 2h-2"/><path d="M11 9v6a2 2 0 0 0 2 2h1"/></g><circle cx="9" cy="14" r="1.4" fill="currentColor"/><circle cx="15" cy="13" r="1.4" fill="currentColor"/><circle cx="14" cy="17" r="1.4" fill="currentColor"/></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./mud.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M2 9h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 9v3a2 2 0 0 0 2 2h1"/><path d="M18 9v2a2 2 0 0 1-2 2h-2"/><path d="M11 9v6a2 2 0 0 0 2 2h1"/></g><circle cx="9" cy="14" r="1.4" fill="currentColor"/><circle cx="15" cy="13" r="1.4" fill="currentColor"/><circle cx="14" cy="17" r="1.4" fill="currentColor"/></svg>
+          </span>
+          <h3>Competitive multi-agent system with Fact based visualisation (MUD)</h3>
+          <p>Four burrowing animals dig, eat, and explore one shared muddy world. Each only knows what it has personally found out.</p>
+          <span class="claim-page">mud.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./mud-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Competitive multi-agent system with Fact based visualisation (MUD)</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="mud"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Competitive multi-agent system with Fact based visualisation (MUD)</span></button>
         </span>
-        <h3>Competitive multi-agent system with Fact based visualisation (MUD)</h3>
-        <p>Four burrowing animals dig, eat, and explore one shared muddy world. Each only knows what it has personally found out.</p>
-        <span class="claim-page">mud.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
-      <a class="claim" href="./mudiii.html" target="_blank" rel="noopener noreferrer">
-        <span class="claim-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></g><circle cx="9" cy="9.4" r="1.3" fill="currentColor"/><circle cx="15.2" cy="15" r="1.3" fill="currentColor"/></svg>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./mudiii.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5"/><path d="M12 12v9"/></g><circle cx="9" cy="9.4" r="1.3" fill="currentColor"/><circle cx="15.2" cy="15" r="1.3" fill="currentColor"/></svg>
+          </span>
+          <h3>MMORPG</h3>
+          <p>A fox and goblins plan their own moves through a town square, each acting only on what it has seen.</p>
+          <span class="claim-page">mudiii.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./mudiii-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About MMORPG</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="mudiii"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share MMORPG</span></button>
         </span>
-        <h3>MMORPG</h3>
-        <p>A fox and goblins plan their own moves through a town square, each acting only on what it has seen.</p>
-        <span class="claim-page">mudiii.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
-      </a>
+      </div>
     </div>
   </section>
 
-  <!-- The ten features below repeat the claims in the same order, each with its
+  <section class="capabilities" id="capabilities">
+    <div class="band-head">
+      <p class="eyebrow">the map of the deck</p>
+      <h2>What each demo demonstrates</h2>
+    </div>
+    <div class="copy">
+      <p>
+        Eleven demos, twelve capabilities between them. A tick means the demo shows that
+        capability. An eye means it is what the demo is for. Nothing in this table calls a
+        model: every tick is deterministic code you can read in the repository, and each
+        demo's own about page says which files back it.
+      </p>
+    </div>
+    <div class="matrix-wrap" tabindex="0" role="region" aria-label="Capability table, scrolls sideways">
+      <table class="matrix">
+        <caption class="sr-only">Which capability each demo page demonstrates, and which one it focuses on</caption>
+        <thead>
+          <tr>
+            <th scope="col">Demo page</th>
+          <th scope="col" title="reads a plain English question or command">Natural language</th>
+          <th scope="col" title="walks rdfs:subClassOf to reach an answer">Class hierarchy</th>
+          <th scope="col" title="shows you the facts as triples">RDF/OWL triples</th>
+          <th scope="col" title="shows where a fact came from and how far to trust it">Provenance &amp; trust</th>
+          <th scope="col" title="answers by walking edges, not by scoring text">Graph retrieval</th>
+          <th scope="col" title="turns free text into checkable facts">Fact synthesis</th>
+          <th scope="col" title="brings in an outside source and cites it">Search backed</th>
+          <th scope="col" title="searches for a plan and reports the shortest one">Classical planning</th>
+          <th scope="col" title="more than one actor, each deciding for itself">Multi-agent</th>
+          <th scope="col" title="each actor acts on what it alone has found out">Partial knowledge</th>
+          <th scope="col" title="draws exactly what the facts say is there">Fact-driven scene</th>
+          <th scope="col" title="the scene is drawn in three dimensions">3D rendering</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <th scope="row"><a href="./chat.html" target="_blank" rel="noopener noreferrer">chat.html</a></th>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./spider-fly.html" target="_blank" rel="noopener noreferrer">spider-fly.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./plan.html" target="_blank" rel="noopener noreferrer">plan.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./adventure.html" target="_blank" rel="noopener noreferrer">adventure.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./ledger.html" target="_blank" rel="noopener noreferrer">ledger.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./code.html" target="_blank" rel="noopener noreferrer">code.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./ingest.html" target="_blank" rel="noopener noreferrer">ingest.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./sprites.html" target="_blank" rel="noopener noreferrer">sprites.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./research.html" target="_blank" rel="noopener noreferrer">research.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./mud.html" target="_blank" rel="noopener noreferrer">mud.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./mudiii.html" target="_blank" rel="noopener noreferrer">mudiii.html</a></th>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="matrix-key">
+      <span><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> demonstrates it</span>
+      <span class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg> it is what the demo is for</span>
+    </p>
+  </section>
+
+  <!-- The eleven features below repeat the claims in the same order, each with its
        page's screenshot framed as a numbered plate. -->
 
   <section class="feature" id="feature-chat">
@@ -555,7 +512,7 @@
 
   <section class="feature" id="feature-ledger">
     <div class="feature-copy">
-      <h2>Facts as RDF/OWL tripples</h2>
+      <h2>Facts as RDF/OWL triples</h2>
       <p>
         Browse the taught graph. Every fact shows its provenance and its trust tier,
         and every term inside a fact is a link, so you can drill from any answer down
@@ -595,7 +552,7 @@
   </section>
 
   <div class="copy">
-    <div class="demo-wrap">
+    <div class="demo-wrap" id="live-demo">
       <div class="demo-label">Live demo: the real engine, running right now in your browser</div>
       <div id="tmct-demo">
         <div class="term-lines"></div>
@@ -773,7 +730,7 @@ yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kin
       Point it at a codebase and it reasons over that too.
     </p>
 
-    <h2>Use it as a library</h2>
+    <h2 id="library">Use it as a library</h2>
     <p>
       The chat surface is a function. Feed it lines, read the answers, and the same
       grounding and provenance rules apply.
@@ -837,5 +794,6 @@ await runChat({
   </footer>
 </main>
 <script type="module" src="./demo-ui.mjs"></script>
+<script type="module" src="./share.mjs"></script>
 </body>
 </html>

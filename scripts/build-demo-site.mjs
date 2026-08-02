@@ -38,6 +38,7 @@ import { shortCommit, versionFileText } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
+import { ABOUT_PAGES, SHARED_STYLESHEET } from "./site-pages.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
@@ -625,13 +626,17 @@ const CONTENT_ADDRESSED = [
   "./vendor/three.js",
   "./reference-pack/index.json",
 ];
-// Pages and bundles: precached for an offline second visit, but always read
-// network-first so a deploy reaches the browser on the next load.
+// Pages, stylesheets and bundles: precached for an offline second visit, but
+// always read network-first so a deploy reaches the browser on the next load.
+// The about pages come from scripts/site-pages.mjs, so adding one to that list
+// caches it here without a second edit.
 const DEPLOY_TRACKING = [
   "./index.html",
   "./chat.html",
   "./ingest.html",
   "./research.html",
+${ABOUT_PAGES.map((p) => `  ${JSON.stringify(`./${p}`)},`).join("\n")}
+  ${JSON.stringify(`./${SHARED_STYLESHEET}`)},
   "./chat-browser.bundle.js",
   "./sprites-browser.bundle.js",
 ];
@@ -667,7 +672,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   const packArticle = url.pathname.includes("/reference-pack/articles/");
-  const pageOrBundle = url.pathname.endsWith(".html") || url.pathname.endsWith("/") || url.pathname.endsWith(".bundle.js");
+  const pageOrBundle = url.pathname.endsWith(".html") || url.pathname.endsWith("/")
+    || url.pathname.endsWith(".bundle.js") || url.pathname.endsWith(".css");
   // A page's own URL carries query strings of its own (an invite link), so the
   // deploy-tracking test comes first and reads the path alone.
   const contentAddressed = !pageOrBundle
@@ -714,6 +720,7 @@ self.addEventListener("fetch", (event) => {
   // recomputed over its 90-odd MB a second time.
   const hashedAssets = [
     ["index.html", null], ["chat.html", null], ["ingest.html", null], ["research.html", null],
+    ...ABOUT_PAGES.map((p) => [p, null]), [SHARED_STYLESHEET, null],
     ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
     ["vendor/wink.js", null], ["vendor/p2p.js", null], ["vendor/three.js", null],
     ["chat-seed.json", seedStamp], ["reference-pack/index.json", null],
