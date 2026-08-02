@@ -136,8 +136,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Feasibility:** leave `#foodPill`'s `data-command="place food"` (`:538`) alone. It is never
   submitted, its listener at `:973` only toggles `foodArmed`, and it sits outside `#chatPills`.
   Don't add a `put food at …` pill; that verb needs a cell, and click-to-place is how you supply one.
-  The species names in the static pills become a second place to edit when a second role pair is
-  cast.
   **Risk:** same pin at `test/services/mudiii-viz.test.mjs:265`. Nothing clicks a pill in the e2e
   today, which is why a dead pill shipped.
   **Mitigation:** add an e2e that clicks every button in `#chatPills` and asserts no answer contains
@@ -610,25 +608,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### mudiii.html — further work
 
-- **A second role pair has not been cast.** The engine is role-parameterized and the asset pipeline
-  is "drop a CC0 GLB in, map its clip names". That is the claim the parameterization was built to
-  make.
-  **Tier:** Sonnet. Vetting a CC0 pair needs judgment; the edits are small and localized.
-  **Do:** `predator-prey.mjs` carries no species literal anywhere. `MUDIII_ROLES` (`:53`) is the only
-  place "fox" and "goblin" appear, and `roleOfId`, `readLiveBoard`, `decide`, `runEcologyPass`,
-  `seededRoster`, `startTownSquareGame` and `placeFood` all key off the `roles`/`layout` parameters.
-  `mudiii-viz.mjs`'s `roleOfAgentId` (`:105`) strips the `-N` suffix generically and resolves models
-  through `data/mudiii-assets.json`'s `key` column. What is hardcoded is user-facing copy only: the
-  slider labels (`:501`-`:511`), the chat placeholder (`:587`), the intro copy (`:94`-`:96`) and the
-  `aria-valuetext` strings (`:1070`-`:1075`). So: add two manifest rows, a new roles object beside
-  `MUDIII_ROLES`, and update those copy strings. Read `PLAN_MUD_MUDIII.md`'s claudecraft subsection
-  for the Tier-C licence trap before picking files.
-  **Risk:** editing `predator-prey.mjs` "to be safe" is itself the regression risk, since it is
-  shared with spider-fly-adjacent coverage. `scripts/check-model-manifest.mjs` covers the asset
-  side; nothing covers whether the copy strings actually updated.
-  **Mitigation:** run `predator-prey.mjs`'s own test file unchanged and green as the proof the engine
-  needed no edit, then screenshot the new cast.
-
 - **Prey decide by strict priority: evade beats forage beats wander.** A single score weighing
   predator distance against food distance would let a goblin take a crumb that costs it nothing,
   instead of abandoning food the moment anything is in view.
@@ -688,6 +667,10 @@ until it does. Then the grid-size item, because the deception rail and the map p
   features so fox and goblin do not gain them by accident; reconcile the mass predicate and the
   snapshot subject shape; reconcile the seed key; only then delete `spider-fly.mjs` and repoint
   `spider-fly-turn.mjs` and spider-fly's viz layer.
+  **The operator's decision: do it, and do not freeze a fixture first.** Build it straight through
+  the sequence above. Spider-fly's own test file and its corpus rows are the contract; a seed-key
+  change moves their expected output, and that output gets updated to whatever the migrated engine
+  really produces.
   **Risk:** `test/services/spider-fly.test.mjs` and the spider-fly corpus rows are the must-not-move
   contract. The seed-key change alone moves spider-fly's output without touching a single assertion
   the migration author wrote, because the affected assertions live in the corpus and that test file.
@@ -741,13 +724,17 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `test/adapters/memory-backend-sqlite.test.mjs:419` pins deliberately. So the per-source granularity
   is honoured in the record layer and at the mesh, and not yet at the two places a person triggers a
   retraction from.
-  **Tier:** Sonnet. The shape is fixed; this is choosing what each caller should mean.
-  **Do:** decide per caller whether `/retract` and mud EDIT mode should suppress the invoking
-  source's assertion or the whole group, then pass the matching ids. `removeFacts` already takes an
-  optional `{ provenance, retractedAt }` and returns `{ removed, records }`, so the record ids are
-  available to hand it.
-  **Risk:** changing what `/retract` means to a person is a product decision, not a refactor. The
-  sqlite test pins today's group-wide behaviour on purpose.
+  **The operator's decision: split them.** `/retract` suppresses **only the invoking source's own
+  assertion**, matching the granularity already settled for the mesh — if two peers taught the same
+  fact, one retracting leaves it standing and cited to the other. **mud EDIT mode deletes the whole
+  group**, because editing a world is an authoring act rather than a personal correction.
+  **Tier:** Sonnet. The shape is fixed; this is passing the right ids at each caller.
+  **Do:** give `syllogise.mjs`'s `/retract` path the invoking source's record ids rather than the row
+  ids it passes today. Leave `adventure-editor.mjs`'s `applyEdit` on the group-id path.
+  `removeFacts` already takes an optional `{ provenance, retractedAt }` and returns
+  `{ removed, records }`, so the record ids are available to hand it.
+  **Risk:** `test/adapters/memory-backend-sqlite.test.mjs:419` pins the group-wide path, which stays
+  correct for the EDIT-mode caller and must not be loosened to accommodate the other one.
   **Mitigation:** whichever way each caller goes, assert it at the caller's own level rather than
   only in the memory layer, since that is where the two disagree today.
 
@@ -844,12 +831,8 @@ against their own items above and are repeated here only so nothing is looked fo
   `food_flour.glb` and `gems_sack.glb`, which look closer to seeds and sacks, but that directory has
   no pack provenance recorded anywhere, so none of them can be used until someone can name their
   pack. Default: ship the hay bale and revisit only if the operator wants a different shape.
-- **Which second role pair?** Blocks the second-cast item. It is a choice among CC0 assets in
-  `../world-of-claudecraft`, subject to `PLAN_MUD_MUDIII.md`'s Tier-C licence trap. Default: none;
-  the item cannot start without a pick.
-- **Is the spider-fly migration worth doing?** Blocks that item. Its cost is now concrete: three
-  missing mechanics, a predicate mismatch, a snapshot-subject mismatch and a seed-key change that
-  moves replay output. Default: leave it open and unstarted until the operator says go.
+Nothing is blocked. The three questions that used to sit here are answered and written into their
+own items.
 
 Settled, and written into the items themselves:
 

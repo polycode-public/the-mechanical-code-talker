@@ -58,9 +58,18 @@ one's work the moment it's ready rather than waiting for the whole batch.
      never `git stash`/`reset --hard`/`checkout --`/`clean`, never push, never merge to `main`,
      never edit `NEXT.md` (the coordinator owns it — concurrent edits from multiple tracks are a
      guaranteed collision on one file).
+   - **For any item whose result is visual, a screenshot the agent actually looks at.** A rendered
+     scene, a panel's layout, a legend, a label, a camera angle — an assertion can prove a mesh
+     exists at the right height and still say nothing about whether the board reads correctly. The
+     brief must tell the agent to drive the page with Playwright, save a PNG, **open that PNG with
+     the Read tool**, and describe what it sees against what the item asked for. Reading the image
+     is the step that gets skipped; name it explicitly. `scripts/gen-screenshots.mjs` is the
+     existing pattern for driving the page and capturing plates. Ask for the before-and-after pair
+     when the item is a fix, and require the file paths in the report so the coordinator can look
+     too.
    - **A report-back contract**: what it implemented and why, any bugs found along the way even if
-     unrelated to the task (name file/line), exact test commands run with pass/fail counts, and
-     anything deliberately left out of scope and why.
+     unrelated to the task (name file/line), exact test commands run with pass/fail counts, the
+     screenshot paths and what they show, and anything deliberately left out of scope and why.
 7. **As each track's completion notification arrives**, land it immediately — don't wait for
    siblings:
    - `git status --short` inside the agent's worktree first. Uncommitted work is a real loss if
