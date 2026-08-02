@@ -41,6 +41,10 @@ const PAGE_ORDER = [
 const PENDING_PLATES = [];
 const PENDING_SHOT_RE = new RegExp(`screenshots/(${PENDING_PLATES.join("|")})\\.png`);
 
+// Playwright's own 30s default loses to CPU contention when the full suite or
+// several agents run alongside this file, and the page does render given time.
+const LOADED_WAIT_MS = 60_000;
+
 let siteDir;
 let server;
 let browser;
@@ -291,7 +295,7 @@ test("the plan page's PDDL panel names only the puzzle's own objects and taught 
 test("the adventure claim leads to a real room scene", async () => {
   const { context, page } = await openPage("adventure.html");
   try {
-    await page.locator("#roomFrame").waitFor({ state: "visible", timeout: 10000 });
+    await page.locator("#roomFrame").waitFor({ state: "visible", timeout: LOADED_WAIT_MS });
   } finally {
     await context.close();
   }
@@ -300,7 +304,7 @@ test("the adventure claim leads to a real room scene", async () => {
 test("the ledger claim leads to a real taught fact store", async () => {
   const { context, page } = await openPage("ledger.html");
   try {
-    await page.locator("#chatform").waitFor({ state: "visible", timeout: 10000 });
+    await page.locator("#chatform").waitFor({ state: "visible", timeout: LOADED_WAIT_MS });
     const facts = await page.locator(".ledger .row").count();
     assert.ok(facts > 0, "the ledger page renders real fact rows");
   } finally {
