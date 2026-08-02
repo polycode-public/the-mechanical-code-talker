@@ -17,8 +17,10 @@
 //                   checking those two capabilities are wider than the 3 cases
 //                   each rung carries, with negative controls.
 //   3. BOUND      — the member-filter step budget against the real-repo fixture,
-//                   showing what the router declines beside what the same
-//                   module's fold already computes.
+//                   showing which classes exceed the budget and fall back to a
+//                   single graph-fold proof step in place of a per-member hop
+//                   chain. The router answers either way; the budget only
+//                   changes how the proof is shaped, never whether it refuses.
 //
 // Deterministic: no Date.now, no network, no LLM. Two runs print the same bytes.
 
@@ -183,24 +185,27 @@ function runBoundProbe() {
     for (const edge of group.edges || []) callTargets.add(edge.objectLabel);
   }
 
-  let over = 0;
+  let folded = 0;
   for (const [label, n] of counts) {
     const steps = 1 + n;
-    const refuses = steps > MAX_STEPS;
-    if (refuses) over += 1;
-    console.log(`\n  ${label}: ${n} callable members => a ${steps}-step plan against a budget of ${MAX_STEPS} => router ${refuses ? "REFUSES" : "answers"}`);
+    const overBudget = steps > MAX_STEPS;
+    if (overBudget) folded += 1;
+    const shape = overBudget
+      ? `over budget => one graph-fold proof step stands in for the ${n}-hop chain`
+      : "within budget => a per-member tmct_callees hop chain";
+    console.log(`\n  ${label}: ${n} callable members => a ${steps}-step plan against a budget of ${MAX_STEPS} => router answers (${shape})`);
     const classInd = graph.individuals.find((i) => i.label === label && i.class === "Class");
     let shown = 0;
     for (const target of callTargets) {
       if (shown >= 2) break;
       const reached = membersReaching(graph, classInd, target);
       if (!reached.length) continue;
-      console.log(`    membersReaching(${label}, "${target}") already folds ${reached.length} member(s): ${reached.slice(0, 4).join(", ")}${reached.length > 4 ? ", …" : ""}`);
+      console.log(`    membersReaching(${label}, "${target}") folds ${reached.length} member(s): ${reached.slice(0, 4).join(", ")}${reached.length > 4 ? ", …" : ""}`);
       shown += 1;
     }
     if (!shown) console.log("    membersReaching folds nothing for any recorded call target");
   }
-  console.log(`\n  ${over} of ${counts.length} classes with callable members trip the budget while the fold still computes.`);
+  console.log(`\n  ${folded} of ${counts.length} classes with callable members exceed the step budget and answer via graph-fold instead of a hop chain. The router refuses none of them.`);
 }
 
 const { ctx, cleanup } = await createRunCtx();
