@@ -18,7 +18,7 @@
 //
 // Pure and import-free of core.mjs, exactly like trust.mjs beside it.
 
-import { findIsaChain, SUBCLASS_PREDICATE, TYPE_PREDICATE } from "../syllogise.mjs";
+import { findIsaChain, buildSubClassSuccessors, SUBCLASS_PREDICATE, TYPE_PREDICATE } from "../syllogise.mjs";
 
 /** The negative-polarity CURIE prefix. A separate prefix, never an
  *  "mgx:not-<lemma>" mint: chat.mjs's predicatePhrase reads "mgx:not-fly" as
@@ -78,10 +78,14 @@ const byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || String(a.su
 
 const asSet = (v) => (v instanceof Set ? v : new Set(Array.isArray(v) ? v : [v]));
 
-const isaEdgesOf = (facts) => ({
-  typeEdges: facts.filter((f) => f.predicate === TYPE_PREDICATE).map((f) => [f.subject, f.object]),
-  subClassEdges: facts.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]),
-});
+// The ⊑ adjacency is built here, once per call, rather than inside each chase:
+// every caller below chases many subjects over the same edges, and rebuilding
+// the index per chase makes one small search cost the whole edge set.
+const isaEdgesOf = (facts) => {
+  const typeEdges = facts.filter((f) => f.predicate === TYPE_PREDICATE).map((f) => [f.subject, f.object]);
+  const subClassEdges = facts.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]);
+  return { typeEdges, subClassSucc: buildSubClassSuccessors(subClassEdges) };
+};
 
 /** The shortest isa chain from any spelling of `subjects` up to `target`, or
  *  null. The chase is corpus-INCLUSIVE on purpose, and that is a considered
@@ -90,11 +94,11 @@ const isaEdgesOf = (facts) => ({
  *  would be fabrication. Here the premise being chased to — "bird can fly" — is
  *  itself corpus data on a fresh install, so a taught-only chase would find
  *  nothing to inherit and the whole feature would never fire. */
-function shortestChainTo(subjects, target, typeEdges, subClassEdges, maxHops) {
+function shortestChainTo(subjects, target, typeEdges, subClassSucc, maxHops) {
   let best = null;
   for (const s of subjects) {
     if (s === target) return [];
-    const chain = findIsaChain(s, new Set([target]), typeEdges, subClassEdges, { maxHops });
+    const chain = findIsaChain(s, new Set([target]), typeEdges, subClassSucc, { maxHops });
     if (chain && (!best || chain.length < best.length)) best = chain;
   }
   return best;
@@ -126,7 +130,7 @@ export function resolveCapabilityPolarity(subject, object, facts, { maxHops = 3 
   const subjects = asSet(subject);
   const objects = asSet(object);
   const rows = Array.isArray(facts) ? facts : [];
-  const { typeEdges, subClassEdges } = isaEdgesOf(rows);
+  const { typeEdges, subClassSucc } = isaEdgesOf(rows);
 
   const carriers = rows.filter(
     (f) => (f.predicate === CAPABLE_OF_PREDICATE || f.predicate === NEG_CAPABLE_OF_PREDICATE) && objects.has(f.object),
@@ -139,7 +143,7 @@ export function resolveCapabilityPolarity(subject, object, facts, { maxHops = 3 
       candidates.push({ fact, polarity, hops: 0, chain: null });
       continue;
     }
-    const chain = shortestChainTo(subjects, fact.subject, typeEdges, subClassEdges, maxHops);
+    const chain = shortestChainTo(subjects, fact.subject, typeEdges, subClassSucc, maxHops);
     if (chain && chain.length) candidates.push({ fact, polarity, hops: chain.length, chain });
   }
 
@@ -212,14 +216,14 @@ export function capabilityBaseRate(subject, object, facts, { maxHops = 3 } = {})
   };
 
   const split = siblings.map(capabilityOf);
-  const { typeEdges, subClassEdges } = isaEdgesOf(rows);
+  const { typeEdges, subClassSucc } = isaEdgesOf(rows);
   return {
     klass,
     kinds: siblings.length,
     positive: split.filter((s) => s.polarity === "positive"),
     negative: split.filter((s) => s.polarity === "negative"),
     unknown: split.filter((s) => s.polarity === "unknown"),
-    chain: shortestChainTo(subjects, klass, typeEdges, subClassEdges, maxHops),
+    chain: shortestChainTo(subjects, klass, typeEdges, subClassSucc, maxHops),
   };
 }
 

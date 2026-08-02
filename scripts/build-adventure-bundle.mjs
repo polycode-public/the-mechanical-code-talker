@@ -41,12 +41,13 @@ const OPTIONAL_ADAPTER_STUBS = {
 /** Build public/adventure-browser.bundle.js into `outDir` (default the
  *  repo's own public/; TMCT_ADVENTURE_BUNDLE_OUT redirects it for tests and
  *  the site build). */
-export async function main(outDir = process.env.TMCT_ADVENTURE_BUNDLE_OUT ? resolve(process.env.TMCT_ADVENTURE_BUNDLE_OUT) : join(ROOT, "public")) {
+export async function main(outDir = process.env.TMCT_ADVENTURE_BUNDLE_OUT ? resolve(process.env.TMCT_ADVENTURE_BUNDLE_OUT) : join(ROOT, "public"), { quiet = false } = {}) {
   const outPath = await buildBundle({
     entryFile: "surfaces/web/adventure-browser-entry.mjs",
     outFile: "adventure-browser.bundle.js",
     outDir,
     plugins: [stubNodeZlib, makeOptionalAdapterStubs(OPTIONAL_ADAPTER_STUBS), stubNodeBuiltins],
+    quiet,
   });
   const { size } = await stat(outPath);
   return { outPath, size };

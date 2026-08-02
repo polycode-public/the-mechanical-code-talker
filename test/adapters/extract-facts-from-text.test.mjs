@@ -447,3 +447,19 @@ test("optimisticTriples: the widened tiers leave every abstention and clean-isa 
     optimisticTriples("An identifier can be termed as a name given to something unique, an object, or a set of objects."),
     [{ subject: "identifier", predicate: "rdfs:subClassOf", object: "name" }]);
 });
+
+test("a skip held up by an ungrounded term is reported as that, not as an unrecognized shape", async () => {
+  // "A wombat is a marsupial." is the same shape as "A kestrel is a bird.",
+  // which IS recognized. The difference is the vocabulary, so the summary has
+  // to name the terms rather than blame the sentence.
+  const result = await ingestText("A kestrel is a bird. A wombat is a marsupial.");
+  assert.equal(result.recognized, 1, "the grounded sentence still lands");
+  assert.equal(result.skipped, 1);
+  assert.deepEqual([...result.ungroundedTerms].sort(), ["marsupial", "wombat"]);
+});
+
+test("a skip that really is an unrecognized shape names no ungrounded term", async () => {
+  const result = await ingestText("Tell me a joke.");
+  assert.equal(result.recognized, 0);
+  assert.deepEqual(result.ungroundedTerms, []);
+});

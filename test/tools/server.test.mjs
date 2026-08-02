@@ -285,6 +285,55 @@ test("bridge: /subclasses on a code-map miss falls through to memory facts (with
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("tmct_ask: a code-graph miss is offered to the injected memory reader before it stands", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  const { openExistingMemoryBackend, readOnlyMemorySnapshot } = await import("../../src/adapters/memory/core.mjs");
+  const { factAnswer } = await import("../../src/services/chat.mjs");
+  const store = await openExistingMemoryBackend(dir);
+  try {
+    const snapshot = await readOnlyMemorySnapshot(store.dir);
+    const factLookup = (query, envelope) => factAnswer(snapshot, query, envelope, true);
+    const graphOnly = await dispatchToolStructured("tmct_ask", { query: "what is a gizmo" }, { config: memConfig, source: stubSource });
+    assert.equal(graphOnly.data.miss, true, "the code graph alone has no answer");
+
+    const withMemory = await dispatchToolStructured("tmct_ask", { query: "what is a gizmo" }, { config: memConfig, source: stubSource, factLookup });
+    assert.equal(withMemory.data.miss, false, "the memory store answered");
+    assert.match(withMemory.content, /software/, "the taught superclass is named");
+    assert.match(withMemory.content, /corpus:conceptnet/, "provenance is cited");
+  } finally {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tmct_ask: a term neither surface holds stays a miss even with the memory reader wired", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  const { openExistingMemoryBackend, readOnlyMemorySnapshot } = await import("../../src/adapters/memory/core.mjs");
+  const { factAnswer } = await import("../../src/services/chat.mjs");
+  const store = await openExistingMemoryBackend(dir);
+  try {
+    const snapshot = await readOnlyMemorySnapshot(store.dir);
+    const out = await dispatchToolStructured("tmct_ask", { query: "what is a florblenaut" }, {
+      config: memConfig, source: stubSource, factLookup: (q, e) => factAnswer(snapshot, q, e, true),
+    });
+    assert.equal(out.data.miss, true, "an ungroundable term still refuses");
+    assert.match(out.content, /florblenaut/);
+  } finally {
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("openExistingMemoryBackend: a repo with no store reads as null and gains no memory directory", async () => {
+  const { openExistingMemoryBackend } = await import("../../src/adapters/memory/core.mjs");
+  const { existsSync } = await import("node:fs");
+  const dir = await mkdtemp(join(tmpdir(), "tmct-nostore-"));
+  try {
+    assert.equal(await openExistingMemoryBackend(dir), null);
+    assert.equal(existsSync(join(dir, ".tmct")), false, "the cold read created nothing");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("bridge: /describe on a code-map miss reports the concept's superclasses + subclasses from memory", async () => {
   const { dir, config: memConfig } = await repoWithMemoryFacts();
   try {

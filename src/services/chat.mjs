@@ -491,6 +491,11 @@ const countClass = (graph, cls) => (cls === "Package"
   ? packageCounts(modulesOf(graph)).size
   : graph.individuals.filter((i) => (i.class || "") === cls).length);
 
+/** Every kind the counter answers to, as a human list — what it can count once a
+ *  graph is loaded, as opposed to countableKinds, which is what THIS graph holds. */
+const COUNTABLE_KIND_WORDS = [...new Set(Object.values(COUNT_NOUNS))]
+  .map((cls) => CLASS_LABELS[cls]?.[1] ?? `${cls}s`);
+
 /** The classes this graph can actually count, as a human list ("classes, functions, …"). */
 function countableKinds(graph) {
   const present = new Set(graph.individuals.map((i) => i.class).filter(Boolean));
@@ -623,8 +628,11 @@ export function answerCount(graph, query, { uiContext = "cli" } = {}) {
       if (uiContext === "browser") {
         return `I can't count "${noun}" — this page holds taught facts only, so there's no code structure to count.`;
       }
-      return `I can't count "${noun}" — no code graph is loaded yet, so there's nothing to count ` +
-        `(index this repo with "tmct index", point me at another with --repo, or run "npm run example:mini").`;
+      // No remedy here: the noun is one the count vocabulary doesn't hold at
+      // all (a known kind takes the counted branch above, empty graph or not).
+      // "how many moons does Pluto have" used to come back with "index this
+      // repo", which reads as a promise that indexing would let it count moons.
+      return `I can't count "${noun}" — I count the kinds a code graph holds: ${COUNTABLE_KIND_WORDS.join(", ")}.`;
     }
     return `I can't count "${noun}". I count: ${kinds.join(", ")}. ` +
       `Try "how many classes are there".`;
@@ -1425,8 +1433,8 @@ const SESSION_REFERENT_TERMS = new Set([
   "going", "happening", "possible", "available", "supported", "included",
 ]);
 
-/** The term a short "what is X" / "who is X" asks about, or null when the line
- *  isn't that shape or names the session itself.
+/** The term a short "what is X" / "who is X" / "define X" asks about, or null
+ *  when the line isn't that shape or names the session itself.
  *
  *  isConversational's catch-all counts words, so "what is grelb" (three) took
  *  the orientation card while "what is a grelb" (four, one article apart)
@@ -1436,7 +1444,7 @@ const SESSION_REFERENT_TERMS = new Set([
  *  wall; only the closed set above is really about the product. */
 function shortTermQuestionTerm(query) {
   const m = String(query).trim().replace(/[?.!]+\s*$/, "")
-    .match(/^(?:what|who)\s+(?:is|are|was|were)\s+([a-z][\w'-]*)$/i);
+    .match(/^(?:(?:what|who)\s+(?:is|are|was|were)|define|definition\s+of)\s+([a-z][\w'-]*)$/i);
   if (!m) return null;
   const term = m[1].toLowerCase();
   return SESSION_REFERENT_TERMS.has(term) ? null : term;
@@ -1679,6 +1687,21 @@ const BYE = new Set([
 const WHY = new Set([
   "why", "how", "how so", "how come", "explain", "say more", "go on",
   "elaborate", "tell me more", "more detail", "expand",
+  // Provenance follow-ups. Grounding is the pitch, so "how do you know" is a
+  // likely next line after any answer, and the answer it follows already
+  // carries its own source citation and traversal receipt — the same two
+  // things a verbose re-render prints. Without these the same ask landed on
+  // the orientation card ("prove it"), the grammar wall ("how do you know"),
+  // or a vocabulary lookup of the words themselves ("what is your source").
+  "how do you know", "how do you know that", "how do you know this",
+  "how do you know it", "how do u know", "how did you know that",
+  "prove it", "prove that", "are you sure", "are you sure about that",
+  "you sure", "show your working", "show your work", "show me your working",
+  "what is your source", "what's your source", "whats your source",
+  "what are your sources", "what's your evidence", "whats your evidence",
+  "what is your evidence", "says who", "based on what", "on what basis",
+  "where did you get that", "where did you learn that", "where did that come from",
+  "how did you get that", "who told you that", "who told you",
 ]);
 /** Bare acknowledgements — routed identically to THANKS (an "ok"/"cool" after an
  *  answer reads the same as a thanks, not a new question). Kept separate from
@@ -2002,6 +2025,11 @@ function conversationalTurn(line, ctx) {
   // mid-game. The exact/closed-set farewell just above and below this guard
   // stays live either way (a real "bye"/"exit" is unambiguous, never a guess).
   const gameActive = Boolean(ctx.planHolder?.state?.adventure || ctx.planHolder?.state?.spiderFly || ctx.planHolder?.state?.game);
+  // A bare word the live game owns is a move or a hint, never small talk. "help"
+  // mid-adventure asks what the world takes, not what tmct's commands are, and
+  // the orientation card used to front it. Falling through leaves it to the
+  // game's own nudge downstream.
+  if (gameOwnWord(raw, ctx.planHolder)) return null;
   const t = (id, slots = {}) => tRender(ctx.templates, id, slots) ?? TEMPLATES_UNAVAILABLE;
   const mk = (answer, { end = false, miss = false, via = "template", lane = null } = {}) => {
     const ts = new Date().toISOString();
@@ -2485,16 +2513,41 @@ function buildAliasSubClassTrees(rows, predicate = SUBCLASS_PREDICATE) {
     broadEdges.push([f.subject, f.object]);
     if (isOperatorTaught(f)) strictEdges.push([f.subject, f.object]);
   }
-  return { strictEdges, broadEdges };
+  // The chase runs once per candidate row over these same edges, so the
+  // adjacency the search walks is built HERE, once, and handed to findIsaChain
+  // ready-made — rebuilt per call it costs the whole edge set for a search that
+  // usually touches a handful of nodes. `reachableHeads` is every node an edge
+  // points at: the only nodes a chain can finish on.
+  const strictSucc = new Map();
+  const broadSucc = new Map();
+  const reachableHeads = new Set();
+  const link = (succ, a, b) => {
+    if (!a || !b || a === b) return;
+    if (!succ.has(a)) succ.set(a, new Set());
+    succ.get(a).add(b);
+  };
+  for (const [a, b] of broadEdges) { link(broadSucc, a, b); if (b) reachableHeads.add(b); }
+  for (const [a, b] of strictEdges) link(strictSucc, a, b);
+  return { strictEdges, broadEdges, strictSucc, broadSucc, reachableHeads };
 }
 
 /** Chase `role` toward `targetSet` over the strict (taught-only) tree first,
  *  falling back to the broad tree only when the strict chase comes up empty
  *  — the strict attempt is tried first specifically so a hop resolvable
- *  either way still cites via the (fuller-provenance) taught path. */
+ *  either way still cites via the (fuller-provenance) taught path.
+ *
+ *  A chain has to END on one of `targetSet`, so a target no subClassOf edge
+ *  points at can never be reached and the two searches are skipped outright.
+ *  That is the whole cost of a question about an unknown relation name: this
+ *  chase runs once per stored fact, and over a seeded store that is tens of
+ *  thousands of searches whose answer was fixed before the first one started. */
 function chaseAliasEitherTree(chaseFn, role, targetSet, trees, opts) {
-  return chaseFn(role, targetSet, [], trees.strictEdges, opts)
-    || chaseFn(role, targetSet, [], trees.broadEdges, opts);
+  const heads = trees.reachableHeads;
+  let anyReachable = false;
+  for (const t of targetSet) if (heads.has(t)) { anyReachable = true; break; }
+  if (!anyReachable) return null;
+  return chaseFn(role, targetSet, [], trees.strictSucc, opts)
+    || chaseFn(role, targetSet, [], trees.broadSucc, opts);
 }
 
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
@@ -4400,14 +4453,43 @@ const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)
  *  remember/note/keep in mind/…), so this is matched against the RAW
  *  (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which is tried against
  *  the remember-wrapped surface too. */
-const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+/** The verbs that lead a retraction. "forget" is the one /help names; the other
+ *  three are what people type meaning the same thing, and each landed on the
+ *  parse wall. None is a TEACH_RE lead verb, so widening the set here cannot
+ *  make a teach sentence read as a retraction. */
+const RETRACT_LEAD_VERBS = "forget|unlearn|delete|remove";
+const RETRACT_FORGET_RE = new RegExp(
+  `^(?:${RETRACT_LEAD_VERBS})\\s+(?:that\\s+)?(?:a\\s+|an\\s+)?([\\w-]+(?:\\s+[\\w-]+)?)`
+  + "\\s+(?:is|are)\\s+(?:an?\\s+)?(?:(?:kind|type)\\s+of\\s+)?([\\w-]+)$",
+  "i",
+);
+/** "forget mira" / "forget about mira" — a retraction that names the subject and
+ *  no fact. There is nothing to remove without knowing WHICH fact, so this never
+ *  deletes; it answers with what is stored about the subject and the phrasing
+ *  that removes one. Two tokens wide, matching the retraction subject above.
+ *  Narrower than the full-sentence lead set: "delete the readme" is a plausible
+ *  request about a file, and reading it as a memory retraction would answer a
+ *  question nobody asked. */
+const RETRACT_BARE_SUBJECT_RE = /^(?:forget|unlearn)\s+(?:about\s+)?(?:the\s+)?([\w-]+(?:\s+[\w-]+)?)$/i;
+
+/** The subject a bare retraction names, or null when the line isn't that shape
+ *  or names no subject at all — "forget it"/"nevermind" is someone dropping the
+ *  thread, and a pronoun names nothing the store can look up. */
+function bareRetractSubject(query) {
+  const q = String(query).trim().replace(/[?.!]+\s*$/, "");
+  if (DISMISSAL.has(q.toLowerCase())) return null;
+  const m = q.match(RETRACT_BARE_SUBJECT_RE);
+  if (!m) return null;
+  const subject = m[1].trim();
+  return (isTeachPronoun(subject) || SESSION_REFERENT_TERMS.has(subject.toLowerCase())) ? null : subject;
+}
 /** The locative teach shape ("disk-1 rests on peg-b") — the board-fact
  *  surface, shared by the mid-plan write guard and the locative forget. */
 const BOARD_TEACH_LOCATIVE_RE = new RegExp(`^([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 /** "forget that disk-1 rests on peg-b" — the locative twin of
  *  RETRACT_FORGET_RE: a plain minted mgx:<verb>-<prep> fact has no entailment
  *  cascade, so removing the one row IS the retraction. */
-const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^forget\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
+const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^(?:${RETRACT_LEAD_VERBS})\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 
 /** The closed related-to pair — "X relates to Y" / "X is related to Y" —
  *  minted onto mgx:relatedTo (the SKOS view's skos:related source), so the
@@ -4534,7 +4616,8 @@ async function teachExclusionReason(sentence) {
   if (TEACH_EXCLUDE_REQUEST_LEAD_RE.test(s) || (await hasMidSentenceInterrogative(s))) return "interrogative";
   const unpunctuated = s.replace(/[.!?]+\s*$/, "");
   if (TEACH_EXCLUDE_IMPERATIVE_LEAD_RE.test(s)
-    && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)) return "imperative";
+    && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)
+    && !bareRetractSubject(unpunctuated)) return "imperative";
   if (TEACH_EXCLUDE_META_TOKEN_RE.test(s) && !TEACH_PRONOUN_BARE_RE.test(s)) return "self-referential";
   return null;
 }
@@ -4928,6 +5011,34 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         text: `"${retractSubject} is a kind of ${retractObject}" isn't stored, so there's nothing to forget.`,
         via: "retract", miss: true,
       };
+    }
+  }
+
+  // BARE RETRACTION — "forget mira", with no fact named. Nothing is removed:
+  // which fact to drop is exactly what the sentence leaves out. Answering with
+  // what IS stored about the subject, plus the phrasing that removes one, beats
+  // the orientation card the short form used to get.
+  {
+    const subject = memoryDir && !QUESTION_LEAD_RE.test(forgetSrc) ? bareRetractSubject(forgetSrc) : null;
+    if (subject) {
+      try {
+        const { loadMemory: loadMemForBare, normFactTerm: normTermForBare, readFactRows: readRowsForBare } = await import("../adapters/memory/core.mjs");
+        const variants = factTermVariants(normTermForBare, subject);
+        const held = readRowsForBare(await loadMemForBare(memoryDir)).filter((r) => variants.has(r.subject));
+        if (held.length) {
+          const shown = held.slice(0, 3).map((r) => `"${r.subject} ${predicatePhrase(r.predicate)} ${r.object}"`).join(", ");
+          const more = held.length > 3 ? `, and ${held.length - 3} more` : "";
+          return {
+            text: `I need to know which fact to drop. About ${subject} I hold ${shown}${more}. `
+              + `Say "forget that ${subject} is a <kind>" to remove one.`,
+            via: "retract", miss: true,
+          };
+        }
+        return {
+          text: `I hold nothing about "${subject}", so there's nothing to forget.`,
+          via: "retract", miss: true,
+        };
+      } catch { /* store unavailable — fall through to the ordinary cascade */ }
     }
   }
 
@@ -6309,6 +6420,31 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
   return { text: holds ? `${verdict}. ${subjEnt.label} does ${split.verb} ${objEnt.label}.` : `${verdict} — the premise doesn't hold.` };
 }
 
+/** The bare words a live game owns. Typed mid-game they are that game's own
+ *  hints and controls, so a vocabulary lookup on them answers a question nobody
+ *  asked: "lower" in a running guessing game came back with a ConceptNet
+ *  synonym for the word, and "watch"/"step" on the spider-and-fly board read as
+ *  questions about clocks and stairs. Each game's own turn handler runs first,
+ *  so a word listed here only reaches this check when that handler declined it.
+ *  Closed and per-game — a real aside ("what is a dog") is untouched. */
+const GAME_OWN_WORDS = Object.freeze({
+  game: ["higher", "lower", "warmer", "colder", "hotter", "up", "down", "guess"],
+  spiderFly: ["watch", "step", "tick", "move", "board", "web"],
+  adventure: ["help", "xyzzy", "wait", "hint", "plugh"],
+});
+
+/** Which live game claims this bare word, or null. */
+function gameOwnWord(query, planHolder) {
+  const state = planHolder?.state;
+  if (!state) return null;
+  const word = String(query).trim().toLowerCase().replace(/[?.!]+$/, "");
+  if (!word || /\s/.test(word)) return null;
+  for (const kind of ["game", "spiderFly", "adventure"]) {
+    if (state[kind] && GAME_OWN_WORDS[kind].includes(word)) return kind;
+  }
+  return null;
+}
+
 /** The wall-repeat one-liner. MUST NOT match
  *  WALL_MISS_RE: the suppression keys on the PREVIOUS answer matching it, so this
  *  text self-limits — a third consecutive miss re-offers the tailored hint. */
@@ -6368,6 +6504,8 @@ export async function helpText() {
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
+    ["remember <X> is a <Y>", "teach a fact in plain English (\"every X is a Y\" and a bare \"X is a Y\" work too)"],
+    ["forget that <X> is a <Y>", "withdraw a fact you taught, and anything derived from it — the phrasing the retract lane reads"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
     ["research <topic> [limit N] [depth D]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
@@ -7961,6 +8099,15 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // tail, verbatim.
     if (m) metaTerm = stripTrailingScopeFiller(m[1]);
   }
+  // "define X" parses cleanly as the code lane's reverse-defines query, so it
+  // OWNS the turn and the guard above never arms — a person typing "define dog"
+  // at a vocabulary chatbot got told no module matches. Read as a vocabulary
+  // ask only once the code lane has actually missed, so "define parseQuery"
+  // over an indexed repo keeps the module answer it parsed to.
+  if (!metaTerm && miss) {
+    const d = q.match(DEFINE_IMPERATIVE_RE);
+    if (d) metaTerm = stripTrailingScopeFiller(stripTrailingDiscourseTag(d[1].trim()));
+  }
   // An ambiguous parse tie ({ambiguousParse}) reaches this lane with
   // envelope.parsed nulled and miss=false, so NEITHER branch above arms —
   // but when one tied reading is META and memory holds facts for its term
@@ -8400,18 +8547,24 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)))
       .filter((f) => resolveCapabilityPolarity(new Set([f.subject]), verbVariants, facts).verdict === "yes");
     if (capable.length) {
-      const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("../domain/syllogise.mjs");
+      const {
+        findIsaChain, buildSubClassSuccessors: buildKindSuccessors,
+        SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED,
+      } = await import("../domain/syllogise.mjs");
       const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
       const typeRows = facts.filter((f) => f.predicate === TYPE_PRED);
       const subClassEdges = subClassRows.map((f) => [f.subject, f.object]);
       const typeEdges = typeRows.map((f) => [f.subject, f.object]);
+      // One chase per capable subject over the same edges, so the adjacency is
+      // built here instead of inside every search.
+      const subClassSucc = buildKindSuccessors(subClassEdges);
       const rowForStep = (step) => (step.predicate === SC_PRED ? subClassRows : typeRows)
         .find((g) => g.subject === step.subject && g.object === step.object);
       const chainBySubject = new Map();
       const inKind = capable.filter((f) => {
         if (kindVariants.has(f.subject)) return true;
         if (!chainBySubject.has(f.subject)) {
-          chainBySubject.set(f.subject, findIsaChain(f.subject, kindVariants, typeEdges, subClassEdges, { maxHops: 3 }));
+          chainBySubject.set(f.subject, findIsaChain(f.subject, kindVariants, typeEdges, subClassSucc, { maxHops: 3 }));
         }
         return !!chainBySubject.get(f.subject);
       });
@@ -9520,7 +9673,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const noun = await entityClassNoun(graph, isaSubject);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
     const {
-      findIsaChain, deriveDisjointViolations,
+      findIsaChain, buildSubClassSuccessors: buildChaseSuccessors, deriveDisjointViolations,
       SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE, DISJOINT_PREDICATE,
     } = await import("../domain/syllogise.mjs");
     const isTaught = isOperatorTaught;
@@ -9532,6 +9685,10 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
     const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
     const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
+    // Both chases below run once per candidate subject over these same edges,
+    // so the adjacency is built here rather than inside each search.
+    const chainSubClassSucc = buildChaseSuccessors(chainSubClassEdges);
+    const mixedSubClassSucc = buildChaseSuccessors(mixedSubClassEdges);
     const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
     const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
     // CAX-DW GATE, COMPUTED BEFORE ANY "YES" MAY RETURN: every taught
@@ -9693,7 +9850,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
     for (const subj of subjCandidates) {
-      const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: 2 });
+      const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
       if (chainRefusal) return chainRefusal;
@@ -9714,7 +9871,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
     for (const subj of subjCandidates) {
-      const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassEdges, { maxHops: 2 });
+      const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
       if (chainRefusal) return chainRefusal;
@@ -9844,7 +10001,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         ? deriveSomeValuesFromSubsumption(restrictionEdges, chainSubClassEdges, { budget: 10 })
         : [];
       if (svfSubsumption.length) {
-        const enlargedSubClassEdges = chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object]));
+        const enlargedSubClassSucc = buildChaseSuccessors(
+          chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object])),
+        );
         // The SAME `min(premiseTrusts) x
         // ruleConfidence` discipline syllogise()'s own batch pass now applies
         // to scm-svf1 (src/domain/syllogise.mjs), computed here for this LIVE,
@@ -9892,7 +10051,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
             : undefined;
         };
         for (const subj of subjCandidates) {
-          const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassEdges, { maxHops: 3 });
+          const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassSucc, { maxHops: 3 });
           if (!chain) continue;
           const premises = chain.map(factForStepOrSvf);
           if (premises.every(Boolean)) {
@@ -9934,7 +10093,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // edge lists the chases use, and /syllogise closes over a superset of
     // them, so a chain found here is one it can really materialize.
     const deeperChainExists = [...subjCandidates].some(
-      (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
+      (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
     );
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
@@ -10881,6 +11040,12 @@ const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
  *  subject or a relation object); with no such facts it returns null and the
  *  turn falls through to the author/relation who-readers unchanged. */
 const WHO_IS_BARE_RE = /^who\s+(?:is|are|was|were)\s+(?:an?\s+|the\s+)?([\w'-]+)[?.!\s]*$/i;
+/** "define X" / "please define a dog" / "definition of X" — the imperative twin
+ *  of "what does X mean". Read as a vocabulary ask only where the code lane has
+ *  already missed, so "define parseQuery" over an indexed repo keeps the module
+ *  answer it parses to. */
+const DEFINE_IMPERATIVE_RE =
+  /^(?:please\s+|can\s+you\s+|could\s+you\s+)*(?:define|definition\s+of|give\s+me\s+the\s+definition\s+of)\s+(?:the\s+(?:term|word)\s+)?(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 
 /** The meta term a "what is a X" / "what is X" / "what does X mean" / "define X"
  *  question asks about — from the parse when present, else recognized directly
@@ -10899,7 +11064,7 @@ function metaTermOf(query, envelope) {
   const q = String(query).trim();
   const m = q.match(BARE_WHATIS_RE)
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
-    || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
+    || q.match(DEFINE_IMPERATIVE_RE);
   return m ? stripTrailingScopeFiller(stripTrailingDiscourseTag(m[1].trim())) : null;
 }
 
@@ -13200,6 +13365,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // that blurb (a dispatched turn) then becomes `last`, wiping the very
   // antecedent the next pronoun turn needs.
   const isConversationalCandidate = conversationalCandidateBaseGate && !vocabAntecedent && isConversational(query);
+  const liveGameOwnWord = gameOwnWord(query, planHolder);
   // "what is X" with NO article ("what is john") is BOTH conversational-shaped
   // (isConversational() would claim it) AND a legitimate bare meta/fact-lookup
   // form (BARE_WHATIS_RE). Diverts ONLY when a REAL fact actually resolves for
@@ -13337,6 +13503,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
+  // A word the live game owns is a move or a hint, not a term to define — drop
+  // whatever the vocabulary lanes found for it so the turn lands on the game's
+  // own nudge below.
+  if (liveGameOwnWord) bareMetaHit = null;
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
   let selfContainedMiss = false;
   if (bareMetaHit?.reference) {
@@ -13400,7 +13570,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     via = "template"; handled = true;
     note(trace, "lane: (2) COLD PRONOUN — a subject pronoun with no antecedent bound and no focus standing; named the pronoun instead of the orientation card");
     note(trace, "goal: resolve a pronoun to a subject (nothing named yet)");
-  } else if (isConversationalCandidate && planHolder?.state?.game) {
+  } else if ((isConversationalCandidate || liveGameOwnWord) && planHolder?.state?.game) {
     // MID-GAME: a short line that parsed as nothing ("you said lower", "is it
     // warm in here") stays INSIDE the game frame with a nudge naming the
     // state — the identity card answers a question nobody asked, and it used
@@ -13414,7 +13584,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     dialogueLaneOverride = "game-inform";
     note(trace, "lane: (2) MID-GAME NUDGE — an unparsed short turn stayed inside the live game frame instead of the identity card");
     note(trace, "goal: keep the running guess-the-number game on track");
-  } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)) {
+  } else if (liveGameOwnWord === "spiderFly") {
+    answer = 'that word belongs to the board, and nothing on it takes it as a move. Say "tick" to advance a turn, '
+      + 'or address one, e.g. "@spider the fly is east". "stop watching" ends it.';
+    via = "game"; handled = true;
+    dialogueLaneOverride = "game-inform";
+    note(trace, "lane: (2) MID-GAME NUDGE — a word the live spider-and-fly board owns stayed in the game frame");
+    note(trace, "goal: keep the running spider-and-fly board on track");
+  } else if (liveGameOwnWord === "adventure") {
+    answer = 'we\'re mid-adventure, and that word isn\'t one the world takes. Try "look", "inventory", '
+      + '"go north" or "take the lamp" — "stop playing" leaves.';
+    via = "game"; handled = true;
+    dialogueLaneOverride = "game-inform";
+    note(trace, "lane: (2) MID-GAME NUDGE — a word the live adventure owns stayed in the game frame");
+    note(trace, "goal: keep the running adventure on track");
+  } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)
+      && !bareRetractSubject(gateQuery) && !bareRetractSubject(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // A short question naming a TERM is excluded: nothing above resolved it, so
@@ -13492,6 +13677,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (fact.generalVerbQuery) {
         deduced = TAUGHT_FACT_LOOKUP_GOAL;
         note(trace, `goal: ${deduced} (revised — a general-verb direct-question fact lookup answered this turn)`);
+      }
+      // Same revision for "define X" answered out of the vocabulary store: the
+      // parsed AST is the code lane's reverse-defines shape, so a goal line read
+      // off it names a module search this turn never made.
+      const definedTerm = !fact.miss && DEFINE_IMPERATIVE_RE.test(String(query).trim())
+        ? metaTermOf(query, null)
+        : null;
+      if (definedTerm) {
+        deduced = deduceGoalFromParsed({ shape: "meta", object: definedTerm });
+        note(trace, `goal: ${deduced} (revised — "define X" answered from the vocabulary store, not the code index)`);
       }
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
@@ -13924,9 +14119,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     } else if (browser) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
-    } else {
+    } else if (looksCodeish(String(query), String(query).toLowerCase())) {
       answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
+    } else {
+      // Nothing in the question is code-shaped, so indexing a repo would not
+      // help. "who won the 2031 world cup" used to carry the pointer anyway,
+      // which reads as a remedy for a question the remedy cannot touch.
+      note(trace, "intermediate: HONEST-EMPTY POLISH — held back: nothing in the question is code-shaped, so the index/--repo remedy would not apply");
     }
   }
   if (teachOffer) {

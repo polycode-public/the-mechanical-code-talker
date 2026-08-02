@@ -183,6 +183,34 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
   process.stdout.write([header, ...body].join("\n") + "\n");
 }
 
+/** The conversational memory store's vocabulary reader, bound to whatever store
+ *  the target repo already has. `cli tmct_ask` and chat answer over the same
+ *  `--repo`, so a term chat knows used to come back from the cold route as a
+ *  miss purely because the cold route reads the code graph and nothing else.
+ *
+ *  Read-only by construction: the reader is handed a throwaway in-memory copy
+ *  of the store, so a repo with no memory yet stays that way (opening a backend
+ *  would create one) and nothing a reader writes reaches disk. `{ factLookup:
+ *  null }` when the repo has no store, which leaves the graph-only answer. */
+async function openColdMemoryReader(config) {
+  const empty = { factLookup: null, close: async () => {} };
+  if (!config?.graphFile) return empty;
+  const { dirname: dirnameOf } = await import("node:path");
+  const repoRoot = dirnameOf(dirnameOf(config.graphFile));
+  const { openExistingMemoryBackend, readOnlyMemorySnapshot } = await import("../src/adapters/memory/core.mjs");
+  const store = await openExistingMemoryBackend(repoRoot);
+  if (!store) return empty;
+  let snapshot = null;
+  try { snapshot = await readOnlyMemorySnapshot(store.dir); }
+  finally { await store.close(); }
+  if (!snapshot) return empty;
+  const { factAnswer } = await import("../src/services/chat.mjs");
+  return {
+    factLookup: (query, envelope) => factAnswer(snapshot, query, envelope, true),
+    close: async () => {},
+  };
+}
+
 /** The carried `cli` dispatcher (digest / tmct_locate / any-tool fallback).
  *  Imports are lazy so `tmct --help` and chat startup never pay for the tool
  *  stack. */
@@ -266,15 +294,18 @@ async function runCliMode() {
       process.exit(2);
     }
     const config = await configFor(args.repo_path);
+    const memory = await openColdMemoryReader(config);
     try {
       // The recognizer seam a tool like tmct_ingest needs: injected here (bin
       // sits above the service layer) rather than imported by the tool layer.
       const { ingestText } = await import("../src/services/extract-facts.mjs");
-      const text = await dispatchTool(sub, args, { config, ingest: ingestText });
+      const text = await dispatchTool(sub, args, { config, ingest: ingestText, factLookup: memory.factLookup });
       process.stdout.write(text + "\n");
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);
       process.exit(1);
+    } finally {
+      await memory.close();
     }
     return;
   }
@@ -540,7 +571,12 @@ async function buildEngineBundleJs(builderFile) {
   }
   const dir = await mkdtemp(join(tmpdir(), "tmct-render-"));
   try {
-    const { outPath } = await build(dir);
+    // Quiet: this build is an implementation detail of writing one page. Its
+    // esbuild log is eleven "import.meta is not available with the iife output
+    // format" warnings about Node-only paths the browser entry never reaches,
+    // and they arrived ahead of the single line the user asked for. A build
+    // script still prints them — its reader is a developer.
+    const { outPath } = await build(dir, { quiet: true });
     return await readFile(outPath, "utf8");
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -603,8 +639,33 @@ async function writeStandaloneViewPage(archetype, rest) {
   process.stdout.write(`wrote ${outPath} (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(0)} KB, self-contained)\n`);
 }
 
+/** Refuse a `--repo` that names nothing on disk, before any verb gets to create
+ *  it. Eight verbs open a memory store under the path they are handed, and the
+ *  store's own mkdir is recursive, so a mistyped path used to be scaffolded in
+ *  silence — a fresh tmct.toml, a .tmct/ tree, 688 seeded facts — and the
+ *  answer came back as if the repo were the one meant. `init` is the one verb
+ *  whose whole job is to create a repo from nothing, so it never reaches here. */
+async function refuseMissingRepoPath(argv) {
+  const i = argv.indexOf("--repo");
+  const given = i !== -1 ? argv[i + 1] : null;
+  if (!given || given.startsWith("--")) return;
+  const { resolve } = await import("node:path");
+  const { stat } = await import("node:fs/promises");
+  const abs = resolve(process.cwd(), given);
+  let entry = null;
+  try { entry = await stat(abs); } catch { entry = null; }
+  if (entry?.isDirectory()) return;
+  const where = abs === given ? given : `${given} (${abs})`;
+  process.stderr.write(entry
+    ? `tmct: --repo ${where} is not a directory.\n`
+    : `tmct: --repo ${where} does not exist. Nothing was created. `
+      + `Check the path, or run \`tmct init --repo ${given}\` to make a repo there.\n`);
+  process.exit(2);
+}
+
 async function main() {
   const mode = process.argv[2];
+  if (mode !== "init") await refuseMissingRepoPath(process.argv.slice(3));
 
   if (mode === "chat") {
     const rest = process.argv.slice(3);

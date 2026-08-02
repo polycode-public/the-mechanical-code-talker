@@ -299,6 +299,54 @@ test("respondToMessages: no tools declared → a cited text block + end_turn + $
   assert.deepEqual(out.usage, { input_tokens: 0, output_tokens: 0 });
 });
 
+test("respondToMessages: a term the memory store holds answers here the way it answers in chat", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { appendFact, openConfiguredMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-http-mem-"));
+  const { dir: memoryDir, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    await appendFact(memoryDir, {
+      subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA",
+    });
+    const body = { model: "tmct", messages: [{ role: "user", content: "what is a gizmo" }] };
+
+    const graphOnly = await respondToMessages(body, { config: CONFIG, graph });
+    assert.doesNotMatch(graphOnly.content[0].text, /software/, "the code graph alone has no answer");
+
+    const withMemory = await respondToMessages(body, { config: CONFIG, graph, memoryDir });
+    assert.match(withMemory.content[0].text, /software/, "the store's fact is read");
+    assert.match(withMemory.content[0].text, /corpus:conceptnet/, "provenance is cited");
+  } finally {
+    await close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("respondToMessages: a teach sent to the endpoint says plainly that nothing was stored", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { loadMemory, readFactRows, openConfiguredMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-http-write-"));
+  const { dir: memoryDir, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    const before = readFactRows(await loadMemory(memoryDir)).length;
+    const out = await respondToMessages(
+      { model: "tmct", messages: [{ role: "user", content: "every raven is a bird" }] },
+      { config: CONFIG, graph, memoryDir },
+    );
+    assert.match(out.content[0].text, /nothing was stored/, "the turn does not leave a write it never made as the last word");
+    assert.equal(readFactRows(await loadMemory(memoryDir)).length, before, "the store is byte-for-byte untouched");
+  } finally {
+    await close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- the plan verb (POST /v1/plan) ----
 
 test("plan: a single-shot request grounds to one registry call with $0 usage", async () => {

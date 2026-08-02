@@ -5,7 +5,9 @@
 // unknown invocation ever suggested it).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,6 +69,32 @@ test("a left column past the prose column pushes its prose two spaces clear of i
     .find((f) => f.flag.startsWith("[--memory-backend"));
   const row = renderUsage().split("\n").find((l) => l.includes(long.flag) && l.includes(long.prose[0]));
   assert.equal(row.indexOf(long.prose[0]), 7 + long.flag.length + 2);
+});
+
+test("a --repo path that does not exist is refused, and nothing is created under it", () => {
+  const base = mkdtempSync(path.join(tmpdir(), "tmct-repo-gate-"));
+  const missing = path.join(base, "typo-repo");
+  try {
+    const r = spawnSync(process.execPath, [BIN, "chat", "--repo", missing, "--prompt", "what is a dog"], {
+      encoding: "utf8", timeout: 60_000,
+    });
+    assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+    assert.match(r.stderr, /does not exist/);
+    assert.match(r.stderr, /Nothing was created/);
+    assert.match(r.stderr, /tmct init --repo/, "the message names the command that would create it");
+    assert.equal(existsSync(missing), false, "the mistyped path was not scaffolded");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a --repo path whose parent is also missing declines by name, never a raw mkdir error", () => {
+  const r = spawnSync(process.execPath, [BIN, "chat", "--repo", "/nonexistent-tmct-parent/xyz", "--prompt", "hi"], {
+    encoding: "utf8", timeout: 60_000,
+  });
+  assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+  assert.match(r.stderr, /does not exist/);
+  assert.doesNotMatch(r.stderr, /ENOENT/, "no raw fs error reaches the user");
 });
 
 test("a verb's continuation prose lines all hang at the prose column", () => {

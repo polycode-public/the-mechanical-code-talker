@@ -130,6 +130,12 @@ const SPIDER_FLY_SEE_RE = /^what (?:does|can) the (spider|fly)(?:-(\d+))?\s+see[
 const WORLD_OPENING_FALLBACK =
   "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat.";
 
+/** The word that steps the board, said on the OPENING turn. It used to appear
+ *  only on re-entry, so a first-time player was told to watch a board that
+ *  never moved. Appended to whatever opening the worlds pack carries, so the
+ *  pack owns the scene and this owns the control. */
+const ADVANCE_HINT = 'Say "tick" to advance a turn.';
+
 // ---- the opening turn: load the shipped board through the worlds pack -------
 
 async function openSpiderFlyGame({ planHolder, memoryDir, env, cache, gameConfig = DEFAULT_GAME_CONFIG }) {
@@ -164,7 +170,7 @@ async function openSpiderFlyGame({ planHolder, memoryDir, env, cache, gameConfig
   const { started } = await startSpiderFlyGame(memoryDir, { flyCount: 1, config: gameConfig?.spiderFly });
   planHolder.state = { spiderFly: { turn: 0 } };
   const opener = started
-    ? (payload.meta?.opening || WORLD_OPENING_FALLBACK)
+    ? `${payload.meta?.opening || WORLD_OPENING_FALLBACK} ${ADVANCE_HINT}`
     : 'back to the spider-and-fly board — the spider and fly are already in play. Say "tick" to advance, or address one, e.g. "@spider the fly is east".';
   return {
     text: opener,
