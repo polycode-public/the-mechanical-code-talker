@@ -481,22 +481,25 @@ until it does. Then the grid-size item, because the deception rail and the map p
   local can tell you.
   **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
 
-- **Food items render as primitive spheres.** The KayKit cheese and apple models have no row in the
-  source repo's register, so their terms are unrecorded. `data/mudiii-assets.json`'s `_readme` says
-  they are "almost certainly CC0 at source, but no CREDITS.md row names a KayKit resource pack".
-  **Tier:** top for the sourcing half, Haiku for the wiring once the files are on disk.
-  **Do:** two halves, and the item is not done until both land. First, fetch the files from KayKit's
-  own pack, read the pack's actual licence text, add rows to `data/mudiii-assets.json`'s `assets`
-  array copying the `well` row's shape (`:56`-`:67`) with `bytes`/`sha256` from the `commands` block
-  the file already documents, and add a `CREDITS.md` row naming the pack. Second, swap
-  `applyItemTick`'s primitive geometry (`mudiii-scene.mjs:538`-`:555`, via `itemGeometryFor`/
-  `itemMaterialFor` at `:519`-`:522`) for the GLB-instance path `ensureAgent` uses (`:570`-`:597`),
-  keyed by `item.kind` against a manifest lookup.
-  **Feasibility:** the sourcing half needs live access to a third-party non-npm site and a judgment
-  call on the licence text. The `_readme`'s "almost certainly" is doing real work. See the questions
-  section.
-  **Risk:** `removeItem` (`:557`) scales `.scale` to zero and works on a loaded group the same as a
-  primitive mesh, so the flourish needs no special-casing.
+- **Food items still render as primitive spheres; the model is committed but nothing loads it.**
+  The sourcing half landed. `public/models/props/haybale.glb` is committed (14,004 bytes, KayKit
+  Dungeon Remastered, CC0), credited, and reachable through two manifest keys, `food-crumb` at
+  `targetHeight` 0.16 and `food-morsel` at 0.36 — the diameters the primitive spheres already used,
+  so the swap keeps the footprint that reads correctly next to a 1.0m fox. Both keys share one file,
+  so one fetch serves both.
+  The `resources/` piles and sacks were rejected: that directory carries no pack provenance in
+  `world-of-claudecraft`'s own `CREDITS.md`, the same unrecorded status as the KayKit cheese and
+  apple the manifest's `_readme` already excludes. A pile of seeds or a sack needs a file whose pack
+  can be named.
+  **Tier:** Haiku, once the loader rework lands.
+  **Do:** replace `itemGeometryFor`/`itemMaterialFor`/`itemHeightFor` (`mudiii-scene.mjs:536`-`:539`)
+  with a manifest-driven GLB load keyed on `item.kind`, `"crumb"` to `food-crumb` and `"morsel"` to
+  `food-morsel`. The rows carry `destPath`, `targetHeight` and `clips: null`, the same shape every
+  static prop uses, so `loadPropTemplate`/`normalizeToHeight` already handle them.
+  **Feasibility:** land it after the loader rework, which is what stops one GLB per item becoming
+  one network request per item.
+  **Risk:** `removeItem` scales to zero for the eat flourish and works on a loaded group the same as
+  a primitive mesh, so the flourish needs no special-casing.
   **Mitigation:** check whether `test/services/mudiii-scene.test.mjs` already covers
   `itemGeometryFor`/`itemMaterialFor` before writing new tests rather than updating them.
 
@@ -555,6 +558,33 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Risk:** a fix aimed at `nextCameraSelection`, which reads correctly already, would look
   plausible and pass a shallow check while leaving the real race.
   **Mitigation:** the reproduction test is the acceptance check. It must fail before the fix.
+
+- **The fox walks backwards some of the time.** Seen on the live page.
+  The engine side reads correct, so start at the render layer. `decide()` sets
+  `facing = plan[0] ?? state.facing…` (`predator-prey.mjs:828`), and `plan[0]` is always the step
+  actually taken: `stepPlan` derives it from `oneStepDirectionBetween`, and the multi-step branch's
+  `path.actions` come from `gridApplyActions`, which pushes `{ action: direction }` using
+  `DIRECTION_DELTA`'s own keys (`:255`-`:259`). `DIRECTION_DELTA` holds four cardinals and
+  `yawForFacing`'s `YAW` covers all four, so there is no missing-key fallback to `south` and no
+  diagonal to mis-round.
+  **Tier:** Sonnet. Needs browser reproduction; static reading does not settle it.
+  **Do:** reproduce first, then decide between two candidates.
+  The likelier one is already documented against itself: `yawForFacing` (`mudiii-scene.mjs:133`-`:144`)
+  says outright that it encodes the world's facing convention and is "not a guarantee about any one
+  GLB's neutral pose", and that "a rig's own forward axis may need a per-model offset once real
+  assets are in place". The assets are in place now. If the fox model's neutral pose points opposite
+  the convention, every move renders 180° out and reads as walking backwards. The fix is a per-model
+  yaw offset carried on the manifest row beside `targetHeight`, not a change to the shared
+  convention, since fox and goblin may differ.
+  The other candidate is the animation rather than the rotation: when an agent holds still, `plan` is
+  `[]` and the rung can still be `wander` or `forage`, which `clipForAction` maps to a walk. That
+  renders as walking on the spot, which a viewer may read as the same fault. Check whether the
+  reported cases are moving or stationary before fixing either.
+  **Risk:** correcting this inside `yawForFacing` would rotate every model together and trade one
+  wrong orientation for another. Whatever the offset is, it belongs per asset.
+  **Mitigation:** the reproduction is the acceptance check. Drive a known move — place food east of
+  the fox, tick once — and assert the mesh's yaw matches the direction it travelled, for each model
+  in the manifest rather than for the fox alone.
 
 - **Agents carry no label in the scene or on the map.** Nothing on the board says which goblin is
   which; the id only exists in the HUD card.
@@ -799,6 +829,29 @@ until it does. Then the grid-size item, because the deception rail and the map p
   the exact bug retraction replication just closed.
 
 ### Pipeline
+
+- **`main` is red: three tests broke on the predator-prey trio.** The full suite runs 5884 and fails
+  3. All three sit outside the files that track's brief named as its blast radius, which is the
+  brief's fault, not the track's — `predator-prey.mjs` reaches further than
+  `predator-prey.test.mjs` and `spider-fly.test.mjs`.
+  - `test/services/mudiii-turn.test.mjs:31` and `:47` both fail on the `predatorInitialMass` fact no
+    longer being where they look. The recast work stamped the roster's bootstrap facts through
+    `snapshotSubject(id, 0, epoch)` instead of writing them bare, so the subject shape those
+    assertions search for changed.
+  - `test/services/predator-prey-fixture.test.mjs:67` fails its frozen replay at turn 4: `goblin-2`
+    and `goblin-3` now decide `forage` where the tape recorded `wander`. That is a behaviour move
+    from either the evade tie-break or the food vision gating, and the fixture is exactly the
+    contract meant to catch it.
+  **Tier:** Sonnet. Two different questions, and the second is the real one.
+  **Do:** for the mass tests, decide whether they should read the stamped subject or whether the
+  bootstrap facts should stay bare, then make both sides agree. For the fixture, work out which of
+  the two behaviour changes moved the rung before touching the tape. `foodVisionGated` defaults to
+  `true`, which is meant to preserve the old gated behaviour, so a flip to `forage` suggests the
+  default is not reaching the path the fixture exercises.
+  **Risk:** re-recording the tape to match new output is the move that always passes and destroys
+  the contract. The tape is there to notice exactly this.
+  **Mitigation:** only re-record after naming which change moved it and why that move is wanted. If
+  the gating default is not reaching the fixture's path, that is a bug in the flag, not in the tape.
 
 - **`e2e-web-index` and `e2e:deployed:shell` both fail on pipeline 2725071231 (4866f26d).**
   `public/index.html` now carries 11 claim chips, 11 plates and numerals I through XI, with `mudiii`
