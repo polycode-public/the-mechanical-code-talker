@@ -44,7 +44,7 @@ import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { mulberry32 } from "../domain/seeded-random.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
-import { objectClassChain, parseSnapshotSubject, snapshotSubject, WORLD_EPOCH_PREDICATE } from "./adventure.mjs";
+import { objectClassChain, parseSnapshotSubject, snapshotSubject, worldEpochFact, WORLD_EPOCH_PREDICATE } from "./adventure.mjs";
 
 export { DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor };
 
@@ -268,26 +268,41 @@ export const pathStateKey = (searchState) => cellId(searchState.x, searchState.y
 const oneStepOptions = (fromCell, applyActions) =>
   [fromCell, ...findReachableSet(fromCell, applyActions, { maxDepth: 1, stateKey: pathStateKey }).map((r) => r.node)];
 
-function bestOneStepBy(fromCell, applyActions, scoreOf, isBetter) {
+function bestOneStepBy(fromCell, applyActions, scoreOf, isBetter, tieBreakScoreOf = null) {
   const options = oneStepOptions(fromCell, applyActions);
   let best = options[0];
   let bestScore = scoreOf(best);
+  let bestTieScore = tieBreakScoreOf ? tieBreakScoreOf(best) : null;
   for (let i = 1; i < options.length; i += 1) {
     const score = scoreOf(options[i]);
-    if (isBetter(score, bestScore)) { bestScore = score; best = options[i]; }
+    if (isBetter(score, bestScore)) {
+      bestScore = score; best = options[i];
+      bestTieScore = tieBreakScoreOf ? tieBreakScoreOf(options[i]) : null;
+    } else if (tieBreakScoreOf && score === bestScore) {
+      const tieScore = tieBreakScoreOf(options[i]);
+      if (tieScore < bestTieScore) { bestTieScore = tieScore; best = options[i]; }
+    }
   }
   return best;
 }
 
 /** One-ply greedy: the reachable cell (or staying put) furthest in Chebyshev
  *  terms from `awayFrom`. Both the prey's evade rung and the predator's avoid
- *  rung are this function. */
-export function greedyAway(fromCell, awayFrom, applyActions) {
+ *  rung are this function.
+ *
+ *  `opts.towardCell`, when given, breaks a tie among equally-safe cells in
+ *  favor of whichever is closest to it — a fleeing prey that knows where food
+ *  is should flee toward it, not toward whichever direction DIRECTION_DELTA's
+ *  key order happens to check first. Opt-in and null by default, so a caller
+ *  that never passes it (the predator's own avoid rung) sees no change at
+ *  all: same options, same scores, same first-wins tie order. */
+export function greedyAway(fromCell, awayFrom, applyActions, { towardCell = null } = {}) {
   if (!awayFrom) return fromCell;
   return bestOneStepBy(
     fromCell, applyActions,
     (cell) => chebyshevDistance(cell.x, cell.y, awayFrom.x, awayFrom.y),
     (score, bestScore) => score > bestScore,
+    towardCell ? (cell) => chebyshevDistance(cell.x, cell.y, towardCell.x, towardCell.y) : null,
   );
 }
 
@@ -485,8 +500,24 @@ export function roleOfId(id, roles = MUDIII_ROLES) {
 /**
  * Seed a fresh town square: one predator/prey roster placed on the board, each
  * with its role's starting mass, a `calm` mood and a facing. A no-op when the
- * first predator already exists, so it is safe to call from a caller unsure
- * whether the game has started.
+ * given `epoch` already has a roster minted — safe to call from a caller
+ * unsure whether the game has started, and safe to call again from
+ * recastTownSquare below without double-minting the epoch it just opened.
+ *
+ * The guard checks the EPOCH the existing roster's own placement is stamped
+ * to, not merely whether one exists: `state.placements.has(firstPredator)`
+ * alone would still be true on a store recastTownSquare just moved onto a new
+ * epoch, because it only ever looks at the base id, never at which run
+ * planted it. Every roster fact this function writes is stamped through
+ * `snapshotSubject(id, 0, epoch)` for exactly that reason — a bare "fox-1"
+ * placement fact from one epoch and another from the next would collide as
+ * the SAME (subject, predicate) at the memory layer and have to be resolved
+ * there (by observation time, falling back to trust and then to the object
+ * string) instead of by this file's own epoch-and-turn fold, which is a
+ * needless and less predictable path to the same answer. rdf:type stays
+ * bare on purpose: a roster id's class does not change on a recast, and
+ * foldTownSquareState's own fold only ever takes the first unstamped type row
+ * it sees for a subject.
  *
  * `opts.agents` places an explicit roster (`{ id: { role, cell, facing, mass } }`)
  * — how a recorded fixture pins a starting board. Without it the roster is
@@ -500,7 +531,7 @@ export async function startTownSquareGame(memoryDir, {
 } = {}) {
   const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
   const firstPredator = `${roles.predator.idPrefix}-1`;
-  if (state.placements.has(firstPredator)) return { started: false, facts: [] };
+  if (state.placements.get(firstPredator)?.epoch === epoch) return { started: false, facts: [] };
 
   const roster = agents ?? seededRoster(layout, {
     predators: predatorCount ?? layout.cast.predators,
@@ -508,6 +539,7 @@ export async function startTownSquareGame(memoryDir, {
     roles, epoch,
   });
 
+  const stamp = (base) => snapshotSubject(base, 0, epoch);
   const facts = [];
   for (const id of Object.keys(roster).sort()) {
     const spec = roster[id];
@@ -515,13 +547,51 @@ export async function startTownSquareGame(memoryDir, {
     const kind = role === "predator" ? roles.predator.kind : roles.prey.kind;
     const mass = spec.mass ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
     facts.push({ subject: id, predicate: "rdf:type", object: kind });
-    facts.push({ subject: id, predicate: PLACEMENT_PREDICATE, object: spec.cell });
-    facts.push({ subject: id, predicate: MASS_PREDICATE, object: String(mass) });
-    facts.push({ subject: id, predicate: MOOD_PREDICATE, object: "calm" });
-    facts.push({ subject: id, predicate: FACING_PREDICATE, object: spec.facing ?? DEFAULT_FACING });
+    facts.push({ subject: stamp(id), predicate: PLACEMENT_PREDICATE, object: spec.cell });
+    facts.push({ subject: stamp(id), predicate: MASS_PREDICATE, object: String(mass) });
+    facts.push({ subject: stamp(id), predicate: MOOD_PREDICATE, object: "calm" });
+    facts.push({ subject: stamp(id), predicate: FACING_PREDICATE, object: spec.facing ?? DEFAULT_FACING });
   }
   await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: worldProvenanceTag(layout.name) })));
   return { started: true, facts };
+}
+
+/**
+ * Move a LIVE town square onto a new epoch, in place, and re-mint its roster
+ * for that epoch — the recast an EDIT-mode change or an epoch bump needs
+ * without re-opening the whole session over a brand new store. Two steps:
+ * append the epoch marker (worldEpochFact, the same bare triple adventure.mjs
+ * writes for its own recast), then call startTownSquareGame for the new
+ * epoch.
+ *
+ * That second call is not redundant with a plain startTownSquareGame call:
+ * this only works because startTownSquareGame's own idempotency guard is
+ * epoch-aware (see its doc comment) and because its roster facts are
+ * epoch-stamped. Without both, the previous epoch's still-placed roster would
+ * read as "already minted" for the epoch being opened now, and this function
+ * would silently do nothing.
+ *
+ * `epoch` defaults to one past whatever the store is currently on, so a
+ * caller that just wants "recast, fresh epoch" carries no bookkeeping of its
+ * own. Throws if given an epoch that would not actually move the store
+ * forward — epochs are add-only by construction (the fold takes the max), so
+ * a non-increasing one could never become current no matter what it wrote.
+ */
+export async function recastTownSquare(memoryDir, {
+  layout, epoch = null, agents = null, predatorCount = null, preyCount = null,
+  config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+} = {}) {
+  const lay = typeof layout === "string" ? TOWN_SQUARE_LAYOUTS[layout] : layout;
+  if (!lay) throw new Error(`recastTownSquare: no such layout "${layout}"`);
+  const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
+  const nextEpoch = epoch ?? state.epoch + 1;
+  if (!Number.isInteger(nextEpoch) || nextEpoch <= state.epoch) {
+    throw new Error(`recastTownSquare: epoch must be an integer greater than the current epoch (${state.epoch}), got ${nextEpoch}`);
+  }
+  await appendFacts(memoryDir, [{ ...worldEpochFact(nextEpoch), provenance: worldProvenanceTag(lay.name) }]);
+  return startTownSquareGame(memoryDir, {
+    layout: lay, agents, predatorCount, preyCount, config, roles, epoch: nextEpoch,
+  });
 }
 
 function seededRoster(layout, { predators, prey, roles, epoch }) {
@@ -688,6 +758,12 @@ export async function runTownSquareTick(memoryDir, {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
     const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
     const beliefOpts = { visionRadius, toldFacts };
+    // Every food lookup goes through this instead of beliefOpts. Gated (the
+    // default) it is beliefOpts itself, unchanged; ungated it is the same
+    // opts widened to see the whole board — omniscient food is a
+    // visionRadius: Infinity call, not new belief machinery. The rival-threat
+    // lookup below stays on beliefOpts either way: this switch is about food.
+    const foodBeliefOpts = config.foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
     const rivals = role === "predator" ? predators.filter((id) => id !== agentId) : predators;
     const threat = nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
 
@@ -698,14 +774,21 @@ export async function runTownSquareTick(memoryDir, {
     let mood;
     if (threat) {
       rung = role === "predator" ? "avoid" : "evade";
-      nextCell = greedyAway(fromCell, threat.cell, applyActions);
+      // A fleeing prey that already knows where food is should flee toward
+      // it, not away from it — among cells that are equally safe, break the
+      // tie toward the nearest believed crumb. Prey-only: the predator's own
+      // avoid rung passes nothing, so its ties still resolve the old way.
+      const towardFood = role === "prey"
+        ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts)
+        : null;
+      nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
       plan = stepPlan(fromCell, nextCell);
       goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
       mood = "scared";
     } else {
       const quarry = role === "predator"
         ? nearestBelievedTarget(agentId, fromCell, prey, state, beliefOpts)
-        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, beliefOpts);
+        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
       if (quarry) {
         rung = role === "predator" ? "chase" : "forage";
         const path = findActionPath(fromCell, (s) => s.x === quarry.cell.x && s.y === quarry.cell.y, applyActions, { stateKey: pathStateKey });
@@ -732,6 +815,16 @@ export async function runTownSquareTick(memoryDir, {
     }
 
     const belief = beliefSnapshotFor(agentId, fromCell, beliefCandidates, state, beliefOpts);
+    // beliefSnapshotFor's one call covers every candidate, food included, so
+    // an ungated food call needs the food entries re-taken at the widened
+    // radius too — otherwise the panel would show a crumb null while the
+    // goal line right beside it names that same crumb as the target. Values
+    // only: every key already exists from the call above, so this can never
+    // reorder the panel.
+    if (!config.foodVisionGated) {
+      const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
+      Object.assign(belief, beliefSnapshotFor(agentId, fromCell, foodCandidates, state, foodBeliefOpts));
+    }
     const facing = plan[0] ?? state.facing.get(agentId)?.value ?? DEFAULT_FACING;
     postMovePlacements.set(agentId, nextCell);
     rungs[agentId] = rung;
