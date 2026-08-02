@@ -90,6 +90,16 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     // this is the one switch that turns that off (visionRadius: Infinity for
     // the food-only belief call) without any new belief machinery.
     foodVisionGated: true,
+    // Whether prey weigh the predator and the crumb in one score instead of
+    // running the evade rung ahead of the forage one. Off by default: strict
+    // priority is what ships, and the blend is the alternative a comparison
+    // run measures against it (scripts/compare-prey-decision.mjs).
+    blendPreyDecision: false,
+    // How much of that score belongs to keeping away from the predator, with
+    // the rest going to closing on food. 1 evades exactly as the priority
+    // chain does, 0 ignores the predator, and the middle takes a crumb that
+    // costs little distance. Read only when blendPreyDecision is on.
+    preyThreatWeight: 0.5,
     // Whether the town-square lane accepts teaching. Its own knob rather than
     // a share of the adventure one below: the board's sentence table is a
     // different vocabulary, and a page checkbox on the town square should not
@@ -166,6 +176,8 @@ const MUDIII_KEY_MAP = Object.freeze({
   max_prey_population: "maxPreyPopulation",
   max_food_items: "maxFoodItems",
   food_vision_gated: "foodVisionGated",
+  blend_prey_decision: "blendPreyDecision",
+  prey_threat_weight: "preyThreatWeight",
   teach: "teach",
 });
 

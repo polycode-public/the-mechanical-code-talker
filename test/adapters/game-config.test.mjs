@@ -146,8 +146,14 @@ test("resolveGameConfig: the mudiii table arrives fully populated with no toml a
     maxPreyPopulation: 6,
     maxFoodItems: 8,
     foodVisionGated: true,
+    blendPreyDecision: false,
+    preyThreatWeight: 0.5,
     teach: false,
   });
+  assert.equal(
+    resolved.mudiii.blendPreyDecision, false,
+    "strict evade-before-forage priority is what ships; the weighted score is the opt-in alternative",
+  );
   assert.ok(
     resolved.mudiii.predatorVisionRadius > resolved.mudiii.preyVisionRadius,
     "the predator out-sees its prey, which is what lets it stalk something that cannot see it back",
@@ -171,6 +177,8 @@ test("resolveGameConfig: every [games.mudiii] snake_case key maps onto its camel
         max_prey_population: 9,
         max_food_items: 11,
         food_vision_gated: false,
+        blend_prey_decision: true,
+        prey_threat_weight: 0.7,
         teach: true,
       },
     },
@@ -189,6 +197,8 @@ test("resolveGameConfig: every [games.mudiii] snake_case key maps onto its camel
     maxPreyPopulation: 9,
     maxFoodItems: 11,
     foodVisionGated: false,
+    blendPreyDecision: true,
+    preyThreatWeight: 0.7,
     teach: true,
   });
 });

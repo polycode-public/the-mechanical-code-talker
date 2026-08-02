@@ -14,7 +14,7 @@
 // which is board-size agnostic and models vision as plain Chebyshev distance
 // with no line of sight — a building blocks movement, never sight.
 //
-// Three mechanics are OPT-IN, off unless `config` asks for them by name, so a
+// Four mechanics are OPT-IN, off unless `config` asks for them by name, so a
 // cast that does not want them sees the same board it always did:
 //
 //   - `carryPreyToWeb` splits catching from eating. A predator that shares a
@@ -27,6 +27,11 @@
 //   - `layEggs` adds the reproduction stage: an egg (mgx:laid-at-turn) laid in
 //     a web once mass crosses a threshold, hatching (mgx:hatched-into) into
 //     hatchlings that split the egg's mass.
+//   - `blendPreyDecision` replaces the prey's strict evade-then-forage order
+//     with one weighted score over both distances (`preyThreatWeight`), so a
+//     prey can take a crumb that costs it nothing. Off, prey abandon food the
+//     moment anything is in view. scripts/compare-prey-decision.mjs measures
+//     the two against each other.
 
 import {
   DEFAULT_FACING, TOWN_SQUARE_LAYOUTS,
@@ -393,6 +398,29 @@ export function greedyToward(fromCell, towardCell, applyActions) {
     fromCell, applyActions,
     (cell) => chebyshevDistance(cell.x, cell.y, towardCell.x, towardCell.y),
     (score, bestScore) => score < bestScore,
+  );
+}
+
+/** One-ply greedy over BOTH distances at once, rather than one rung after the
+ *  other: the reachable cell (or staying put) that maximizes
+ *
+ *      weight * distance-from-`awayFrom` - (1 - weight) * distance-to-`towardCell`
+ *
+ *  At weight 1 this is greedyAway and at weight 0 it is greedyToward. In
+ *  between it lets an agent take a step toward food that costs it little or no
+ *  distance from the thing hunting it, which strict priority rungs cannot do.
+ *
+ *  Falls back to whichever single term it still has when the other cell is
+ *  null, so a caller never has to check first. */
+export function greedyBlend(fromCell, awayFrom, towardCell, applyActions, weight) {
+  if (!awayFrom) return greedyToward(fromCell, towardCell, applyActions);
+  if (!towardCell) return greedyAway(fromCell, awayFrom, applyActions);
+  const w = Number.isFinite(Number(weight)) ? Number(weight) : DEFAULT_GAME_CONFIG.mudiii.preyThreatWeight;
+  return bestOneStepBy(
+    fromCell, applyActions,
+    (cell) => w * chebyshevDistance(cell.x, cell.y, awayFrom.x, awayFrom.y)
+      - (1 - w) * chebyshevDistance(cell.x, cell.y, towardCell.x, towardCell.y),
+    (score, bestScore) => score > bestScore,
   );
 }
 
@@ -1053,6 +1081,10 @@ export async function runTownSquareTick(memoryDir, {
 
   const carriesPrey = config.carryPreyToWeb === true;
   const buildsWebs = config.buildWebs === true;
+  const blendsPreyDecision = config.blendPreyDecision === true;
+  const preyThreatWeight = Number.isFinite(Number(config.preyThreatWeight))
+    ? Number(config.preyThreatWeight)
+    : DEFAULT_GAME_CONFIG.mudiii.preyThreatWeight;
   const boardNoun = lay.boardNoun ?? "square";
   const webbedAt = (c) => hasActiveWebAt(lay, state, k, c.x, c.y, config.webDurationTurns);
   // Widened in place as predators spin webs this tick, for the renderer's own
@@ -1152,7 +1184,6 @@ export async function runTownSquareTick(memoryDir, {
       goal = goalLine("trapped");
       mood = "scared";
     } else if (threat) {
-      rung = role === "predator" ? "avoid" : "evade";
       // A fleeing prey that already knows where food is should flee toward
       // it, not away from it — among cells that are equally safe, break the
       // tie toward the nearest believed crumb. Prey-only: the predator's own
@@ -1160,10 +1191,32 @@ export async function runTownSquareTick(memoryDir, {
       const towardFood = role === "prey"
         ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts)
         : null;
-      nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
-      plan = stepPlan(fromCell, nextCell);
-      goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
-      mood = "scared";
+      if (blendsPreyDecision && role === "prey" && towardFood) {
+        nextCell = greedyBlend(fromCell, threat.cell, towardFood.cell, applyActions, preyThreatWeight);
+        const foodCell = cellId(towardFood.cell.x, towardFood.cell.y);
+        const closed = chebyshevDistance(fromCell.x, fromCell.y, towardFood.cell.x, towardFood.cell.y)
+          > chebyshevDistance(nextCell.x, nextCell.y, towardFood.cell.x, towardFood.cell.y);
+        // The score is one number, but the step it picks is still one of two
+        // legible things: this move closed on the crumb, or it did not. The
+        // rung and the goal line report which, so the page never has to say
+        // "mostly evading, somewhat hungry".
+        rung = closed ? "forage" : "evade";
+        plan = stepPlan(fromCell, nextCell);
+        goal = closed
+          ? goalLine("forage", {
+            subject: towardFood.subject,
+            cell: foodCell,
+            arrived: nextCell.x === towardFood.cell.x && nextCell.y === towardFood.cell.y,
+          })
+          : goalLine("evade", { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
+        mood = closed ? "calm" : "scared";
+      } else {
+        rung = role === "predator" ? "avoid" : "evade";
+        nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
+        plan = stepPlan(fromCell, nextCell);
+        goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
+        mood = "scared";
+      }
     } else {
       const quarry = role === "predator"
         ? nearestBelievedTarget(agentId, fromCell, prey, state, beliefOpts)
