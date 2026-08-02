@@ -31,6 +31,7 @@ import {
   statsSummaryLine,
   clearSiteAssetCaches,
   fetchWithProgress,
+  loadSeedPayload,
   renderStatsPanelInto,
   loadProgressLine,
   factTripleParts,
@@ -43,7 +44,7 @@ const DEFAULT_TITLE = "the-mechanical-code-talker — ingest";
 /** The self-contained ingest page. Pure — the same output for the same
  *  `title` every time; every piece of state (the session, each grounded fact)
  *  is computed live in the browser once the sibling ingest bundle loads. */
-export function renderIngestHtml({ title = DEFAULT_TITLE, seedStamp = "" } = {}) {
+export function renderIngestHtml({ title = DEFAULT_TITLE, seedStamp = "", seedBytes = 0 } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -84,6 +85,14 @@ ${THEME_TOKENS_CSS}
   .topbar-right { display: flex; align-items: center; gap: .7rem; }
   .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
   .fact-pill .fact-pill-value { font-size: .94rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+  /* While the starter memory streams in, the pill says so and breathes — the
+     same three-state pill chat.html carries, for the same reason: what this
+     page knows grows while you watch it. */
+  .fact-pill[data-state="loading"] { animation: pill-breathe 1.6s ease-in-out infinite; }
+  .fact-pill[data-state="loading"] .fact-pill-value { font-size: .66rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+  .fact-pill[data-state="failed"] { border-color: var(--miss-t1, var(--corpus-t1)); }
+  @keyframes pill-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .fact-pill[data-state="loading"] { animation: none; } }
 
   /* mode pills — Text | Document — the translate-tool idiom: two segments in
      one rounded track, the active one filled. */
@@ -186,9 +195,9 @@ ${THEME_TOKENS_CSS}
         <h1 class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</h1>
       </div>
       <div class="topbar-right">
-        <span class="fact-pill" id="factPill" aria-live="polite"
+        <span class="fact-pill" id="factPill" aria-live="polite" data-state="loading"
           title="every fact this page's memory holds right now — the starter memory it booted with plus everything it has grounded since">
-          <span class="fact-pill-value" id="factPillValue">&mdash;</span> facts in memory
+          <span class="fact-pill-value" id="factPillValue">loading</span><span id="factPillUnit"> starter memory&hellip;</span>
         </span>
         <div class="pills" role="group" aria-label="Input mode">
           <button type="button" id="modeText" aria-pressed="true">Text</button>
@@ -254,6 +263,7 @@ ${THEME_TOKENS_CSS}
   const statsSummaryLine = ${statsSummaryLine.toString()};
   const clearSiteAssetCaches = ${clearSiteAssetCaches.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
+  const loadSeedPayload = ${loadSeedPayload.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const el = (id) => document.getElementById(id);
 
@@ -275,7 +285,9 @@ ${THEME_TOKENS_CSS}
   const seedToggleEl = el("seedToggle");
   const fuzzyToggleEl = el("fuzzyToggle");
   const statsPanelEl = el("statsPanel");
+  const factPillEl = el("factPill");
   const factPillValueEl = el("factPillValue");
+  const factPillUnitEl = el("factPillUnit");
   const askFormEl = el("askForm");
   const askInputEl = el("askq");
   const askGoBtn = el("askGo");
@@ -470,7 +482,8 @@ ${THEME_TOKENS_CSS}
       try { stats = await window.tmct.page.memoryStats(session.memoryDir); }
       catch { return; }
     }
-    factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
+    lastStatsTotal = Number(stats.total || 0);
+    renderFactPill();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       taughtHint: "nothing yet. Ingest some text and its grounded facts land here, with their source.",
@@ -496,6 +509,12 @@ ${THEME_TOKENS_CSS}
   // ever return the copy this page asked for. Empty in a build with no seed.
   const SEED_STAMP = ${JSON.stringify(seedStamp)};
   const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+  // The builder's own measurement of chat-seed.json, in decompressed bytes.
+  // The response cannot supply this: over a compressed transfer Content-Length
+  // is the wire size while the stream yields decompressed bytes, so the two
+  // are not the same quantity. Both numbers in the percentage below are
+  // decompressed bytes, which is what makes it a real fraction.
+  const SEED_BYTES = ${Number(seedBytes) || 0};
 
   let seedPayload = null;
   let seedFacts = 0;
@@ -509,29 +528,86 @@ ${THEME_TOKENS_CSS}
   // The one branch this page's seed choice makes: checked, fetch and parse
   // the same chat-seed.json chat.html embeds; unchecked, skip the request
   // outright and stay on the previous empty-store fast path.
-  //
-  // One retry with a cache-busting query param: a CDN edge can serve a
-  // corrupted or truncated precompressed response (a transient bad cache
-  // entry, not a code defect — real bytes decompress fine, and the same URL
-  // fetched moments later is clean), and JSON.parse throwing is the only
-  // signal of that. The bust param forces a fresh fetch past that one entry.
-  async function fetchSeedIfWanted() {
-    if (!seedToggleEl.checked) { seedPayload = null; seedFacts = 0; return; }
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
-        const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, (loaded, total) => noteProgress("seed", loaded, total));
-        seedPayload = JSON.parse(await blob.text());
-        seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
-        return;
-      } catch (err) {
-        if (attempt === 2) {
-          seedPayload = null;
-          seedFacts = 0;
-          console.warn("tmct ingest: chat-seed.json unavailable — starting unseeded", err);
-        }
-      }
+  let seedLoadedBytes = 0;
+  let seedTotalBytes = SEED_BYTES;
+  let seedPercentShown = -1;
+  let lastStatsTotal = null;
+
+  /**
+   * What the starter memory is doing right now, published as tmct.seed —
+   * loading, indexing, ready, failed, or skipped when the seed toggle is off.
+   * The same five phases chat.html publishes, for the same reasons: the pill
+   * can say the memory is still growing, and a test that asserts on seeded
+   * content can wait for "ready" instead of guessing.
+   */
+  function setSeedPhase(phase, extra) {
+    window.tmct.seed = Object.assign({ state: phase, facts: seedFacts }, extra || {});
+    renderFactPill();
+  }
+  setSeedPhase("loading");
+
+  function noteSeedBytes(loaded, total) {
+    seedLoadedBytes = loaded;
+    seedTotalBytes = total;
+    const percent = seedProgressPercent();
+    if (percent === seedPercentShown) return;
+    seedPercentShown = percent;
+    renderFactPill();
+  }
+
+  /** Real progress, 0-100, or null when no true total is known — the pill then
+   *  shows that it is loading and no number, never a figure inferred from how
+   *  long it has been going. */
+  function seedProgressPercent() {
+    if (!(seedTotalBytes > 0)) return null;
+    return Math.min(100, Math.floor((seedLoadedBytes / seedTotalBytes) * 100));
+  }
+
+  function renderFactPill() {
+    const seedState = window.tmct.seed ? window.tmct.seed.state : "loading";
+    if (seedState === "loading") {
+      const percent = seedProgressPercent();
+      factPillEl.dataset.state = "loading";
+      factPillValueEl.textContent = percent === null ? "loading" : percent + "%";
+      factPillUnitEl.textContent = percent === null ? " starter memory\\u2026" : " of starter memory";
+      return;
     }
+    if (seedState === "indexing") {
+      factPillEl.dataset.state = "loading";
+      factPillValueEl.textContent = "indexing";
+      factPillUnitEl.textContent = " " + seedFacts.toLocaleString() + " facts\\u2026";
+      return;
+    }
+    if (seedState === "failed" && lastStatsTotal === null) {
+      factPillEl.dataset.state = "failed";
+      factPillValueEl.textContent = "no";
+      factPillUnitEl.textContent = " starter memory";
+      return;
+    }
+    factPillEl.dataset.state = seedState === "failed" ? "failed" : "ready";
+    factPillValueEl.textContent = Number(lastStatsTotal || 0).toLocaleString();
+    factPillUnitEl.textContent = " facts in memory";
+  }
+
+  async function fetchSeedIfWanted() {
+    if (!seedToggleEl.checked) {
+      seedPayload = null;
+      seedFacts = 0;
+      setSeedPhase("skipped");
+      return;
+    }
+    const outcome = await loadSeedPayload(fetchWithProgress, "./chat-seed.json", SEED_QUERY, (loaded, total) => {
+      noteProgress("seed", loaded, total || SEED_BYTES);
+      noteSeedBytes(loaded, total || SEED_BYTES);
+    });
+    seedPayload = outcome.payload;
+    seedFacts = outcome.status.facts;
+    if (outcome.status.state === "failed") {
+      console.error("tmct ingest: chat-seed.json unavailable — starting unseeded (" + outcome.status.error + ")");
+      setSeedPhase("failed", { error: outcome.status.error, attempts: outcome.status.attempts });
+      return;
+    }
+    setSeedPhase("indexing", { attempts: outcome.status.attempts });
   }
   const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
   async function newSession() {
@@ -610,6 +686,7 @@ ${THEME_TOKENS_CSS}
     session = await newSession();
     clearFactsPane();
     askLogEl.textContent = "";
+    if (window.tmct.seed.state === "indexing") setSeedPhase("ready");
     const stats = await window.tmct.page.memoryStats(session.memoryDir);
     statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + ". Ready.";
     await renderStatsPanel(stats);
@@ -640,6 +717,9 @@ ${THEME_TOKENS_CSS}
     setMode(false);
     updateIngestEnabled();
     updateAskEnabled();
+    // The session holds the seed now, so the phase settles here rather than
+    // when the bytes landed: "ready" means queryable.
+    if (window.tmct.seed.state === "indexing") setSeedPhase("ready");
     const stats = await window.tmct.page.memoryStats(session.memoryDir);
     const winkPart = winkStatus === "loaded"
       ? "wink-nlp: loaded"

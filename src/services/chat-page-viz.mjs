@@ -36,7 +36,7 @@ import {
 import { provBucketFor } from "./ledger-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
-import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, loadSeedPayload, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
@@ -446,7 +446,7 @@ export function transcriptMarkdown(turns, meta, headerMd, turnMd) {
  *  live digest-bank twin (see chat-browser-entry.mjs) rather than to a
  *  client-side digest panel of this page's own; an empty list degrades to the
  *  flat list exactly as before this page could digest at all. */
-export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "" } = {}) {
+export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [], seedStamp = "", seedBytes = 0 } = {}) {
   const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   const legendHtml = PROV_LEGEND.map(
     ([key, label]) => `<span class="legend-item"><i class="dot dot-${provKey(key)}"></i>${escapeHtml(label)}</span>`,
@@ -624,6 +624,15 @@ ${THEME_TOKENS_CSS}
      a pill like its neighbours, with the number itself at reading size. */
   .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
   .fact-pill .fact-pill-value { font-size: .96rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+  /* While the starter memory streams in, the pill says so and breathes. The
+     graph is a moving state: what it knows now is less than what it will know
+     in a moment, and a question asked mid-load gets answered against what has
+     actually arrived. */
+  .fact-pill[data-state="loading"] { animation: pill-breathe 1.6s ease-in-out infinite; }
+  .fact-pill[data-state="loading"] .fact-pill-value { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+  .fact-pill[data-state="failed"] { border-color: var(--miss-t1, var(--corpus-t1)); }
+  @keyframes pill-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .fact-pill[data-state="loading"] { animation: none; } }
 
   .chrome { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
   .chrome-btn { font-family: ${SERIF_STACK}; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .75rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; line-height: 1.35; }
@@ -699,9 +708,9 @@ ${shareOverlayHtml({ withTape: true })}
         <span class="eyebrow">${demoEyebrowHtml("chat", "chat")}</span>
       </div>
       <div class="chrome">
-        <span class="fact-pill" id="factPill" aria-live="polite"
+        <span class="fact-pill" id="factPill" aria-live="polite" data-state="loading"
           title="every fact this session's memory holds right now — the starter memory it shipped with plus anything you have taught, researched or ingested">
-          <span class="fact-pill-value" id="factPillValue">&mdash;</span> facts
+          <span class="fact-pill-value" id="factPillValue">loading</span><span id="factPillUnit"> starter memory&hellip;</span>
         </span>
         <button type="button" class="state-pill" id="statePill" data-tone="idle"
           title="the shared-world connection; click to open the network panel">
@@ -780,6 +789,7 @@ ${shareOverlayHtml({ withTape: true })}
   const statsSummaryLine = ${statsSummaryLine.toString()};
   const clearSiteAssetCaches = ${clearSiteAssetCaches.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
+  const loadSeedPayload = ${loadSeedPayload.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
@@ -811,7 +821,9 @@ ${shareOverlayHtml({ withTape: true })}
   const inputEl = el("composerInput");
   const sendBtn = el("composerSend");
   const statusEl = el("status");
+  const factPillEl = el("factPill");
   const factPillValueEl = el("factPillValue");
+  const factPillUnitEl = el("factPillUnit");
   const statsPanelEl = el("statsPanelStats");
   const researchedPanelEl = el("researchedPanel");
   const wikiModeFieldset = el("wikiMode");
@@ -1020,29 +1032,74 @@ ${shareOverlayHtml({ withTape: true })}
   // seed to hash (the desktop shell's own render).
   const SEED_STAMP = ${JSON.stringify(seedStamp)};
   const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
+  // The exact byte count of the chat-seed.json this build shipped, measured by
+  // the builder. It is the denominator the progress percentage needs and the
+  // response itself cannot supply: over a compressed transfer Content-Length
+  // names the wire size, while the stream a reader drains yields decompressed
+  // bytes, so dividing one by the other would read past 100% within a second.
+  // Both numbers here are decompressed bytes, so the ratio is a real fraction
+  // of a real file, never an estimate against elapsed time.
+  const SEED_BYTES = ${Number(seedBytes) || 0};
 
   let seedPayload = null;
   let seedFacts = 0;
-  // One retry with a cache-busting query param: a CDN edge can serve a
-  // corrupted or truncated precompressed response (a transient bad cache
-  // entry, not a code defect — real bytes decompress fine, and the same URL
-  // fetched moments later is clean), and JSON.parse throwing is the only
-  // signal of that. The bust param forces a fresh fetch past that one entry.
+  let seedLoadedBytes = 0;
+  let seedTotalBytes = SEED_BYTES;
+  let seedPercentShown = -1;
+
+  /**
+   * What the starter memory is doing right now, published as tmct.seed for the
+   * page's own pill and for anything driving this page:
+   *
+   *   loading   the seed is still coming down (percent, when a real total exists)
+   *   indexing  it arrived and parsed; the session is being opened from it
+   *   ready     the session holds it — a question now grounds against the whole seed
+   *   failed    it did not arrive; this session starts empty, and says so
+   *   skipped   nothing was asked for (ingest's seed toggle, off)
+   *
+   * There is no moment before "ready" that the page refuses to speak: a
+   * question asked mid-load is answered against what the store actually holds
+   * at that moment, which is the open-world assumption doing its job. The
+   * phases exist so the page can SAY the graph is still growing, and so a test
+   * that asserts on seeded content can wait for the seed to be in.
+   */
+  function setSeedPhase(phase, extra) {
+    window.tmct.seed = Object.assign({ state: phase, facts: seedFacts }, extra || {});
+    renderFactPill();
+  }
+  setSeedPhase("loading");
+
+  function noteSeedBytes(loaded, total) {
+    seedLoadedBytes = loaded;
+    seedTotalBytes = total;
+    const percent = seedProgressPercent();
+    // One DOM write per whole percentage point, not one per streamed chunk.
+    if (percent === seedPercentShown) return;
+    seedPercentShown = percent;
+    renderFactPill();
+  }
+
+  /** The seed's real progress, 0-100, or null when no true total is known —
+   *  the pill then shows that it is loading and no number at all, rather than
+   *  a figure inferred from how long it has been going. */
+  function seedProgressPercent() {
+    if (!(seedTotalBytes > 0)) return null;
+    return Math.min(100, Math.floor((seedLoadedBytes / seedTotalBytes) * 100));
+  }
+
   async function fetchSeed() {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
-        const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, (loaded, total) => noteProgress("seed", loaded, total));
-        seedPayload = JSON.parse(await blob.text());
-        seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
-        return;
-      } catch (err) {
-        if (attempt === 2) {
-          seedPayload = null;
-          console.warn("tmct chat: chat-seed.json unavailable — starting unseeded", err);
-        }
-      }
+    const outcome = await loadSeedPayload(fetchWithProgress, "./chat-seed.json", SEED_QUERY, (loaded, total) => {
+      noteProgress("seed", loaded, total || SEED_BYTES);
+      noteSeedBytes(loaded, total || SEED_BYTES);
+    });
+    seedPayload = outcome.payload;
+    seedFacts = outcome.status.facts;
+    if (outcome.status.state === "failed") {
+      console.error("tmct chat: chat-seed.json unavailable — starting unseeded (" + outcome.status.error + ")");
+      setSeedPhase("failed", { error: outcome.status.error, attempts: outcome.status.attempts });
+      return;
     }
+    setSeedPhase("indexing", { attempts: outcome.status.attempts });
   }
   const cloneSeed = () => {
     if (!seedPayload) return null;
@@ -1154,7 +1211,7 @@ ${shareOverlayHtml({ withTape: true })}
       catch { return; }
     }
     lastStatsTotal = Number(stats.total || 0);
-    factPillValueEl.textContent = lastStatsTotal.toLocaleString();
+    renderFactPill();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       onForget: persist ? forgetEverything : null,
@@ -1259,6 +1316,38 @@ ${shareOverlayHtml({ withTape: true })}
   // rather than the last radio the page itself set.
   function liveStatusWord(liveReference) {
     return liveReference === "always" ? "always" : liveReference === "supplement" ? "supplement" : liveReference ? "on" : "off";
+  }
+
+  /** The header pill, in whichever of its three states the page is in: the
+   *  starter memory still streaming in, the live fact count once there is one,
+   *  or a starter memory that never arrived. It is the same pill throughout —
+   *  the count it settles on replaces the loading words in place, so a visitor
+   *  watching it sees the memory arrive rather than a separate spinner
+   *  vanishing. */
+  function renderFactPill() {
+    const seedState = window.tmct.seed ? window.tmct.seed.state : "loading";
+    if (seedState === "loading") {
+      const percent = seedProgressPercent();
+      factPillEl.dataset.state = "loading";
+      factPillValueEl.textContent = percent === null ? "loading" : percent + "%";
+      factPillUnitEl.textContent = percent === null ? " starter memory\\u2026" : " of starter memory";
+      return;
+    }
+    if (seedState === "indexing") {
+      factPillEl.dataset.state = "loading";
+      factPillValueEl.textContent = "indexing";
+      factPillUnitEl.textContent = " " + seedFacts.toLocaleString() + " facts\\u2026";
+      return;
+    }
+    if (seedState === "failed" && lastStatsTotal === null) {
+      factPillEl.dataset.state = "failed";
+      factPillValueEl.textContent = "no";
+      factPillUnitEl.textContent = " starter memory";
+      return;
+    }
+    factPillEl.dataset.state = seedState === "failed" ? "failed" : "ready";
+    factPillValueEl.textContent = Number(lastStatsTotal || 0).toLocaleString();
+    factPillUnitEl.textContent = " facts";
   }
 
   function renderStatus() {
@@ -2323,6 +2412,9 @@ ${shareOverlayHtml({ withTape: true })}
     } else {
       await newSession();
     }
+    // The session now holds whatever the seed brought, so the phase settles
+    // here rather than when the bytes landed: "ready" means queryable.
+    if (window.tmct.seed.state !== "failed") setSeedPhase("ready");
     const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
     const restoredNote = savedRecord

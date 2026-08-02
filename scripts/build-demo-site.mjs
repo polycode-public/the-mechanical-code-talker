@@ -263,7 +263,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   // with a composed digest instead of always falling back to the flat list.
   const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const chatPagePath = join(SITE, "chat.html");
-  await writeF(chatPagePath, renderChatHtml({ digestStructures: readDigestStructures(), seedStamp }));
+  await writeF(chatPagePath, renderChatHtml({ digestStructures: readDigestStructures(), seedStamp, seedBytes: seed.bytes }));
   console.log(`wrote ${chatPagePath}`);
 }
 
@@ -277,7 +277,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   console.log(`wrote ${ingestBundlePath} (${(ingestBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderIngestHtml } = await import(join(ROOT, "src", "services", "ingest-viz.mjs"));
   const ingestPagePath = join(SITE, "ingest.html");
-  await writeF(ingestPagePath, renderIngestHtml({ seedStamp }));
+  await writeF(ingestPagePath, renderIngestHtml({ seedStamp, seedBytes: seed.bytes }));
   console.log(`wrote ${ingestPagePath}`);
 }
 
