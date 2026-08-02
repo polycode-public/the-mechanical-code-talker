@@ -42,9 +42,9 @@ declines to emit.
 
 ## Design notes
 
-- **The lexicon is load-bearing.** Patterns 7 and 8 are only deterministic
+- **Patterns 7 and 8 depend on the lexicon.** They stay deterministic only
   because every noun, verb, adjective (with its type), and proper name is
-  *declared* — tmct never guesses a word's category. Undeclared words route
+  *declared*: tmct never guesses a word's category. Undeclared words route
   the sentence out of the grammar strategy.
 - **ACE is much larger than this.** Full ACE covers anaphora, relative
   clauses, queries, commands, modality, and maps to full DRS. tmct takes only
