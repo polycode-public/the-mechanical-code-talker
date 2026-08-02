@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — The sprite library</title>
+<meta name="description" content="How tmct picks a shape for a word by walking the class hierarchy until it finds one it has.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./sprites.html" target="_blank" rel="noopener noreferrer">open sprites.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 8 of 11 &middot; sprites.html</p>
+      <h1>The sprite library</h1>
+      <p class="lede">Every shape the site can draw, next to the ontology class it belongs to. A word with no shape of its own borrows its nearest ancestor's, so a sheepdog draws as a dog.</p>
+    </header>
+
+      <section class="about-section" id="what">
+        <h2>What it demonstrates</h2>
+        <p>This page answers a question the other game pages raise: when the engine has to draw a word, how does it decide what to draw?</p>
+        <p>The answer is that it walks the class hierarchy. Not a lookup table with a default, and not a similarity score. It asks what the word is a kind of, and keeps asking, and takes the first answer it has a shape for.</p>
+        <p>The catalog groups every class the two sprite tiers cover. Each card shows the class, its shape, and the ancestor chain that resolved it.</p>
+        <p>Two boxes at the bottom make it interactive. Ask the catalog a question. Or describe a scene in words and watch it compose a row of sprites from the nouns you used.</p>
+        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="play">
+        <h2>Chat you can replay</h2>
+        <p>These are assertions from the resolver's own test file and from the inference corpus. Both work over the same taxonomy.</p>
+        <p>A poodle has its own sprite, so nothing is walked.</p>
+        <pre class="transcript"><span class="cite">resolveSpriteForClass("poodle") -&gt; the poodle sprite</span></pre>
+        <p class="source-note">Asserted in <code>test/adapters/sprite-map.test.mjs</code>. <code>data/sprites/poodle-icon.toml</code> carries its own pompom-cut shape.</p>
+        <p>A sheepdog has none, so it walks one hop and draws as a dog. This is the worked fallback example the codebase itself uses.</p>
+        <pre class="transcript"><span class="cite">sheepdog  rdfs:subClassOf  dog</span>
+<span class="cite">resolveSpriteForClass("sheepdog") -&gt; the dog sprite</span></pre>
+        <p class="source-note">Asserted in <code>test/adapters/sprite-map.test.mjs</code>, against the seed taxonomy in <code>src/domain/spider-fly-world.mjs</code>.</p>
+        <p>The walk passes straight through an ancestor that has no shape either.</p>
+        <pre class="transcript"><span class="cite">with the spider shape removed from the registry:</span>
+<span class="cite">spider -&gt; arachnid (no shape) -&gt; animal (shape)</span>
+<span class="cite">resolveSpriteForClass("spider") -&gt; the animal sprite</span></pre>
+        <p class="source-note">Asserted in <code>test/adapters/sprite-map.test.mjs</code>.</p>
+        <p>A word with no taxonomy at all still lands somewhere honest: the declared root.</p>
+        <pre class="transcript"><span class="cite">resolveSpriteForClass("wombat", no taxonomy) -&gt; the animal sprite</span></pre>
+        <p class="source-note">Asserted in <code>test/adapters/sprite-map.test.mjs</code>.</p>
+        <p>The same chain, asked as a question in chat. The answer cites each premise it used.</p>
+        <pre class="transcript"><span class="you">tmct&gt; every poodle is a dog</span>
+<span class="you">tmct&gt; is a poodle an animal</span>
+yes — poodle is a kind of dog; dog is a kind of animal (source: corpus:human /r/IsA); so poodle is an animal</pre>
+        <p class="source-note">Corpus row <code>inference-mixed-source-isa-chain-cites-both-premises</code> in <code>test/corpus/inference.jsonl</code>.</p>
+        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="shots">
+        <h2>What it looks like</h2>
+        <p>The catalog, grouped, with each class beside the shape it resolved to.</p>
+        <figure class="shot">
+          <img src="./screenshots/sprites.png" width="1024" height="600" alt="The tmct sprite library page showing sprite shapes mapped to the ontology classes they belong to" loading="lazy">
+          <figcaption>sprites.html. Every class either sprite tier covers, with the shape it resolves to.</figcaption>
+        </figure>
+        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="inference">
+        <h2>What it works out</h2>
+        <p><strong>The walk.</strong> <code>classAncestorChain</code> in <code>src/domain/sprite-map.mjs</code> is a breadth-first walk over <code>rdfs:subClassOf</code> rows. It starts with the class itself, collects every superclass transitively, nearest first, and guards against cycles.</p>
+        <p><strong>The pick.</strong> <code>resolveSpriteAsset</code> walks that chain and returns the first term the sprite set actually has an entry for. If it reaches the end without a hit, it falls back to a declared root, <code>animal</code> by default.</p>
+        <p>This is retrieval, not a heuristic. The chain is made of real facts, and you can read them:</p>
+        <ul class="factlist">
+          <li>poodle    rdfs:subClassOf   dog</li>
+          <li>sheepdog  rdfs:subClassOf   dog</li>
+          <li>dog       rdfs:subClassOf   animal</li>
+          <li>spider    rdfs:subClassOf   arachnid</li>
+          <li>arachnid  rdfs:subClassOf   animal</li>
+          <li>fly       rdfs:subClassOf   insect</li>
+          <li>insect    rdfs:subClassOf   animal</li>
+        </ul>
+        <p><strong>Why it matters elsewhere.</strong> Every scene on the site is drawn this way. The <a href="./adventure-about.html">manor</a>, the <a href="./mud-about.html">burrow</a> and the <a href="./spider-fly-about.html">web</a> all resolve their shapes through this same function, which is why a room can render a word the artist never drew.</p>
+        <p><strong>Two tiers.</strong> A small icon tier for lists and chips, and a large tier with facing, pose and emotion parameters for pages that draw a scene. The large tier is the only one that carries face geometry, which is why the emotional sprites live there.</p>
+        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="build">
+        <h2>How it is built</h2>
+        <p><code>data/sprites/*.toml</code> holds the icon tier. <code>data/sprites-large/*.toml</code> holds the large tier. Both are plain data, validated at load.</p>
+        <p><code>src/domain/sprite-map.mjs</code> holds the chain walk and the resolver. <code>src/domain/sprite-templates.mjs</code> turns a template into a drawable asset.</p>
+        <p><code>src/services/sprite-catalog-viz.mjs</code> builds the catalog. It resolves every card through the real resolver against real ontology rows rather than restating a mapping, so a card on this page cannot disagree with what a game page draws.</p>
+        <p>The taxonomy rows come from the spider-and-fly world's seed taxonomy plus the WordNet corpus bands.</p>
+        <p>The catalog is split across a landing page and one page per group, all sharing a single browser bundle, because the composer reads the whole catalog whichever page it sits on.</p>
+        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="papers">
+        <h2>Related work</h2>
+        <p>Class hierarchies and the fallback that comes with them.</p>
+        <ul class="refs">
+          <li>W3C, <em>OWL 2 Primer</em>, Recommendation, 11 December 2012.<span class="ref-note"><code>rdfs:subClassOf</code> and what transitivity over it licenses.</span></li>
+          <li>W3C, <em>RDF 1.1 Semantics</em>, Recommendation, 25 February 2014.<span class="ref-note">The formal meaning of the chain the resolver walks.</span></li>
+          <li>W3C, <em>SKOS Reference</em>, Recommendation, 18 August 2009.<span class="ref-note">Broader and narrower concepts, the same shape of relation in a looser vocabulary.</span></li>
+          <li>Aristotle, <em>Prior Analytics</em> I.1 (24b18&ndash;20); Bobzien, &ldquo;Ancient Logic&rdquo;, <em>Stanford Encyclopedia of Philosophy</em>.<span class="ref-note">The syllogism. All poodles are dogs, all dogs are animals, therefore all poodles are animals, which is exactly the walk.</span></li>
+          <li>ConceptNet 5.7.0 relations.<span class="ref-note">The <code>/r/IsA</code> relation behind many of the taxonomy rows in the corpus.</span></li>
+          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">A word with no chain falls to the declared root, which is a stated default rather than a guess.</span></li>
+        </ul>
+        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="credits">
+        <h2>Credits and further reading</h2>
+        <p>Assets and reading.</p>
+        <ul class="refs">
+          <li>WordNet, for much of the taxonomy behind the catalog's ancestor chains.</li>
+          <li>ConceptNet 5.7.0, for the <code>/r/IsA</code> rows.</li>
+          <li><code>public/models/CREDITS.md</code>, for the three-dimensional model credits used by the <a href="./mudiii-about.html">town square</a>.</li>
+          <li><a href="./adventure-about.html">Fact based world visualisation</a>, the page that puts this resolver to work in a scene.</li>
+          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+        </ul>
+        <a class="next-link" href="./research-about.html"><span class="next-label">Next demo</span> Search backed knowledge base <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>

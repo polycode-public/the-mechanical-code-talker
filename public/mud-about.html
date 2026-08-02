@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — Competitive multi-agent system with Fact based visualisation (MUD)</title>
+<meta name="description" content="How four burrowing animals share one dug-out world while each knows only what it has personally found out.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./mud.html" target="_blank" rel="noopener noreferrer">open mud.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 10 of 11 &middot; mud.html</p>
+      <h1>Competitive multi-agent system with Fact based visualisation (MUD)</h1>
+      <p class="lede">Four burrowing animals dig, eat, and explore one shared muddy world. Each only knows what it has personally found out, and what another animal has told it.</p>
+    </header>
+
+      <section class="about-section" id="what">
+        <h2>What it demonstrates</h2>
+        <p>This is the page where the fog of war stops being a graphics effect and becomes a fact about knowledge.</p>
+        <p>Four characters share one world. Dig somewhere new and a real room opens, and it is there for anyone who finds it later. Each character's window shows only what that character has found.</p>
+        <p>The one panel with no fog is the survey across the top. It shows every room anybody has found, all at once, so you can watch two characters be in the same world and disagree about it.</p>
+        <p>Sliders set how many characters play and how many others move around. A single play control drives every pane together, so the turn counter means the same thing in all of them.</p>
+        <p>Three burrows ship: a four room garden with a fox in it, a three room hollow with nothing hunting, and an eight room warren with a fox and an owl and thin food.</p>
+        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="play">
+        <h2>Chat you can replay</h2>
+        <p>The opening is the world's own text. The rest come from the turn engine's test file.</p>
+        <p>The opening line sets out the rules of digging, and warns you about the fox.</p>
+        <pre class="transcript">a vegetable garden on a wet morning, with a burrow already running under it. Say "look" to look around and "go down" to follow the burrow. Above ground the only dig is straight down; once you are under the soil you can dig north, south, east or west along the burrow, or up to break the surface. A fox keeps a den off the burrow, and it does not share.</pre>
+        <p class="source-note">The first line of <code>corpus/worlds/src/mud-garden.jsonl</code>.</p>
+        <p>A character that knows of no food says so, and does something else. It does not walk toward food it has not been told about.</p>
+        <pre class="transcript"><span class="cite">mole-1, no food knowledge</span>
+walk step fires with kind "none" — reason: knows of no food</pre>
+        <p class="source-note">Asserted in <code>test/services/mud-turn.test.mjs</code>.</p>
+        <p>Two characters meet. One asks the other about food, and hears nothing, because the other genuinely knows nothing.</p>
+        <pre class="transcript"><span class="cite">vole-1 meets mole-1</span>
+greets the mole-1, but hears nothing new about food</pre>
+        <p class="source-note">Asserted in <code>test/services/mud-turn.test.mjs</code>.</p>
+        <p>When something is told, it is written down with who said it and when.</p>
+        <pre class="transcript">written as mud:mole-1:epoch1:turn2</pre>
+        <p class="source-note">Asserted in <code>test/services/mud-turn.test.mjs</code>. That string is the provenance tag on the fact.</p>
+        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="shots">
+        <h2>What it looks like</h2>
+        <p>Four windows around a shared map, one room freshly dug.</p>
+        <figure class="shot">
+          <img src="./screenshots/mud.png" width="1024" height="600" alt="The tmct mud page showing four burrow windows mid-simulation around a shared central world map with one room freshly dug" loading="lazy">
+          <figcaption>mud.html. Four characters, four views, one world, and a survey that sees all of it.</figcaption>
+        </figure>
+        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="inference">
+        <h2>What it works out</h2>
+        <p><strong>Knowledge is a fact.</strong> What a character knows is stored as a row, <code>mgx:knows-about</code>, with a provenance tag naming who said it and on which turn. That is why knowledge survives a character walking away and coming back, and why two characters can hold different beliefs about the same room.</p>
+        <ul class="factlist">
+          <li>mole-1  mgx:knows-about  carrot   (source: mud:mole-1:epoch1:turn2)</li>
+          <li>vole-1  mgx:knows-about  carrot   (source: mud:mole-1:epoch1:turn5)</li>
+        </ul>
+        <p><strong>Firsthand beats hearsay.</strong> When two claims about the same thing compete, the engine ranks them: newest epoch first, then something the character saw for itself over something it was told, then the later turn, then whether the thing has since gone. So a stale rumour loses to a fresh look.</p>
+        <p><strong>What a turn does.</strong> Each character investigates the room, walks toward food it actually knows about, rolls for digging along the room's frontier, or sets off for a room it has not visited. Every roll is seeded from the character, the turn, the room and the decision, so a run replays identically.</p>
+        <p><strong>What it does not do.</strong> A character never walks toward food it has not been told about and has not seen. That is the honest miss expressed as behaviour rather than as a sentence.</p>
+        <p><strong>How it paths.</strong> A breadth-first walk toward the known room, over the exits that character has actually found.</p>
+        <p><strong>What is drawn.</strong> Each pane uses the same room renderer the <a href="./adventure-about.html">manor</a> uses, filtered to that character's own view, with sprites resolved through the ancestor walk the <a href="./sprites-about.html">sprite library</a> documents.</p>
+        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="build">
+        <h2>How it is built</h2>
+        <p>The three burrows are hand-authored world files under <code>corpus/worlds/src/</code>, compiled into the worlds pack and embedded by the site build. The castable roster is read from each world's own <code>rdf:type adventurer</code> rows rather than typed out in the build script, so a world that changes its cast needs no build change.</p>
+        <p><code>src/services/mud-turn.mjs</code> is the per-tick decision engine. <code>src/domain/adventure.mjs</code> supplies the world commands, the testimony recording, and the claim ranking.</p>
+        <p><code>src/services/mud-viz.mjs</code> renders the page. Every pane's writes go through one serial queue, so two panes can never interleave into the shared world and leave the turn counter meaning two things.</p>
+        <p>The pane markup is built client side at boot rather than fixed at build time, because the number of panes is a control you can move.</p>
+        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="papers">
+        <h2>Related work</h2>
+        <p>Distributed knowledge, testimony, and agents acting on incomplete information.</p>
+        <ul class="refs">
+          <li>Rao and Georgeff, &ldquo;BDI Agents: From Theory to Practice&rdquo;, 1995.<span class="ref-note">Each character holds its own beliefs and acts on them, including when they are wrong.</span></li>
+          <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">The plan-act-replan loop, once per character per turn.</span></li>
+          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">&ldquo;Knows of no food&rdquo; is not &ldquo;there is no food&rdquo;. The whole demo turns on that distinction.</span></li>
+          <li>W3C, <em>PROV-O</em>, Recommendation, 30 April 2013.<span class="ref-note">The provenance model behind the testimony tags. Who said it is part of the fact, not a note on it.</span></li>
+          <li>Green, Karvounarakis and Tannen, &ldquo;Provenance Semirings&rdquo;, PODS 2007.<span class="ref-note">How claims compose when one character's knowledge rests on another's.</span></li>
+          <li>Jensen et al., &ldquo;A Consensus Glossary of Temporal Database Concepts&rdquo;, <em>SIGMOD Record</em> 23(1), 1994.<span class="ref-note">The epoch and turn stamps the claim ranking sorts by.</span></li>
+          <li>Shapiro, Preguiça, Baquero and Zawirski, &ldquo;Conflict-free Replicated Data Types&rdquo;, INRIA RR-7687 and SSS 2011, LNCS 6976, pp. 386&ndash;400.<span class="ref-note">The convergence work behind the repository's rule that any read-time resolver must be a pure function of the fact set, which is why ranking competing claims never depends on arrival order. Worked through in <code>docs/references/papers/crdt.md</code>.</span></li>
+        </ul>
+        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="credits">
+        <h2>Credits and further reading</h2>
+        <p>Related pages and reading.</p>
+        <ul class="refs">
+          <li><a href="./adventure-about.html">Fact based world visualisation</a>, for the room renderer this page reuses.</li>
+          <li><a href="./spider-fly-about.html">Competitive multi-agent system</a>, where partial knowledge is about position rather than about facts.</li>
+          <li><a href="./mudiii-about.html">MMORPG</a>, the same idea in three dimensions.</li>
+          <li><code>docs/references/papers/crdt.md</code>, the repository's worked notes on convergence, with the four 2011 CRDT artefacts sorted out and dated.</li>
+          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+        </ul>
+        <a class="next-link" href="./mudiii-about.html"><span class="next-label">Next demo</span> MMORPG <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — Facts as RDF/OWL triples</title>
+<meta name="description" content="How tmct stores memory as RDF triples with OWL labels, and shows where every fact came from and how far to trust it.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./ledger.html" target="_blank" rel="noopener noreferrer">open ledger.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 5 of 11 &middot; ledger.html</p>
+      <h1>Facts as RDF/OWL triples</h1>
+      <p class="lede">The ledger is the memory itself, opened up. Every row is a triple. Every triple names its source and its trust tier, and every term in it is a link you can follow.</p>
+    </header>
+
+      <section class="about-section" id="what">
+        <h2>What it demonstrates</h2>
+        <p>A chatbot that cites its sources has to have something to cite. This page is that something: the whole fact store, browsable.</p>
+        <p>It opens on a dashboard. A total fact count, a bar splitting those facts three ways by who says so, an average degree for the graph, a contradiction count, and the most common predicates. Under that sits the ledger proper, one row per triple.</p>
+        <p>Three filters run down the left. Who says so, splitting taught from corpus from entailed. What kind of fact, splitting is-a from has from can from the rest. And when it was learned.</p>
+        <p>A chat dock sits in the page. Teach it something there and the whole dashboard redraws off the real post-teach graph, so you can watch a number move because you said a sentence.</p>
+        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="play">
+        <h2>Chat you can replay</h2>
+        <p>The dock takes the same sentences the chat page does, against the same engine. These exchanges come from the browser test that drives this page.</p>
+        <p>Teach a fact through the dock. The total fact count goes up by one and the focus card moves to the new term.</p>
+        <pre class="transcript"><span class="you">tmct&gt; blue is a peg</span>
+noted — remembered 1 fact: blue rdfs:subClassOf peg
+<span class="you">tmct&gt; what is a blue</span>
+blue is a kind of peg</pre>
+        <p class="source-note">Asserted in <code>test-e2e/pages-ledger-teach.test.mjs</code>: the reply is checked for <code>taught: true</code>, the fact-total tile is checked to have gone up by exactly one, and the focus term is checked to be <code>blue</code>. The read-back's exact phrasing comes from the predicate table in <code>src/services/ledger-viz.mjs</code>.</p>
+        <p>Ask about something nobody taught it. The ledger's own focus stays where it was, because nothing new grounded.</p>
+        <pre class="transcript"><span class="you">tmct&gt; what is a quokka</span>
+(an honest miss — no claim is made up)</pre>
+        <p class="source-note">Asserted in <code>test-e2e/pages-ledger-teach.test.mjs</code>, which checks the reply fabricates no claim and the focus term is untouched. The refusal's exact wording depends on the lane; the test asserts the absence of an answer rather than a fixed string, so we quote it that way rather than inventing one.</p>
+        <p>The dock ingests documents too. Paste text and it reports what grounded and what it skipped.</p>
+        <pre class="transcript"><span class="cite">ingest: 3 sentences read, 2 grounded, 1 skipped</span>
+<span class="cite">LEDGER.terms now carries "zorblex"</span></pre>
+        <p class="source-note">Asserted in <code>test-e2e/pages-ledger-teach.test.mjs</code>, which checks the ingest status line and the new term in the ledger's term list.</p>
+        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="shots">
+        <h2>What it looks like</h2>
+        <p>The dashboard strip, the predicate breakdown, and the taught rows for one term.</p>
+        <figure class="shot">
+          <img src="./screenshots/ledger.png" width="1024" height="600" alt="The tmct memory ledger page showing fact counts, a predicate breakdown, and the taught facts for the term peg" loading="lazy">
+          <figcaption>ledger.html. Fact counts across the top, a predicate breakdown, and every taught fact for the term <code>peg</code>.</figcaption>
+        </figure>
+        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="inference">
+        <h2>What it works out</h2>
+        <p><strong>The shape of a fact.</strong> Every row is subject, predicate, object. Predicates carry their vocabulary prefix, so you can see which standard a row belongs to: <code>rdfs:subClassOf</code> and <code>rdf:type</code> come from RDF Schema, and <code>mgx:</code> predicates are tmct's own.</p>
+        <ul class="factlist">
+          <li>peg-a     rdf:type          peg</li>
+          <li>disk-1    mgx:rest-on       disk-2</li>
+          <li>poodle    rdfs:subClassOf   dog</li>
+        </ul>
+        <p><strong>Who says so.</strong> Every fact carries a provenance tag as a string. <code>teach:chat:&lt;session&gt;@&lt;timestamp&gt;</code> means you typed it. <code>ace:chat:...</code> means you typed it and the controlled English parser read it. <code>corpus:conceptnet /r/IsA</code> names a corpus row and the relation it came from. <code>entailed:&lt;rule&gt;</code> means the engine derived it, and names the rule.</p>
+        <p><strong>How far to trust it.</strong> The tag is parsed into a source kind, and each kind has a prior. Operator 1.0, taught 0.95, provider 0.9, corpus 0.7, curated reference 0.6, live reference 0.5, extracted 0.45, optimistic extract 0.35, entailed 0.3. The page buckets a row into one of three tiers off that number.</p>
+        <p><strong>What it derives.</strong> Entailed facts are the ones the engine worked out rather than read. They are stored like any other fact and tagged with the rule that made them, so an entailed row is never mistaken for something you said. They also score lowest, because they rest on premises rather than on a source.</p>
+        <p><strong>What it retrieves.</strong> The focus card computes a digest for a term: a short paragraph composed from that term's own facts, with the sources listed underneath and the raw rows one click away. The minimap walks two hops out from the focus and draws what it finds.</p>
+        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="build">
+        <h2>How it is built</h2>
+        <p><code>src/services/ledger-viz.mjs</code> holds two halves. <code>computeLedgerData</code> is a pure function from a memory payload to rows, terms, edges, contradictions and statistics. <code>renderLedgerHtml</code> turns that into a self-contained page.</p>
+        <p>The payload comes from <code>scripts/build-demo-memory.mjs</code>, which builds it by actually running teach turns through the engine. The grandfather chain from the README, a set of animal facts with real ConceptNet provenance, and the Tower of Hanoi rules imported from <code>data/games/hanoi-3.txt</code>.</p>
+        <p>The same page shape is what <code>tmct viz</code> writes on the command line. The deployed copy adds one thing: a browser bundle, so the dock can teach as well as answer. The command line's own output stays the lighter query-only page.</p>
+        <p>Fact rows are read through <code>src/adapters/memory/core.mjs</code>. Digests are composed by <code>src/adapters/corpus/digest-bank.mjs</code> against a table of sentence structures, read once at build time so no parser ships to the browser.</p>
+        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="papers">
+        <h2>Related work</h2>
+        <p>The data model follows published standards rather than inventing one. These are the ones it follows.</p>
+        <ul class="refs">
+          <li>W3C, <em>OWL 2 Web Ontology Language Primer</em>, Recommendation, 11 December 2012, with the <em>Profiles</em> note.<span class="ref-note">The class and property vocabulary the labels come from.</span></li>
+          <li>W3C, <em>RDF 1.1 Semantics</em>, Recommendation, 25 February 2014.<span class="ref-note">The triple itself, and what it means to say one. RDF 1.2 reached Candidate Recommendation on 7 April 2026 and reclassifies reification.</span></li>
+          <li>W3C, <em>PROV-O: The PROV Ontology</em>, Recommendation, 30 April 2013.<span class="ref-note">The provenance vocabulary. Where a fact came from is modelled, not annotated.</span></li>
+          <li>W3C, <em>SKOS Reference</em>, Recommendation, 18 August 2009.<span class="ref-note">The concept scheme vocabulary.</span></li>
+          <li>Green, Karvounarakis and Tannen, &ldquo;Provenance Semirings&rdquo;, PODS 2007.<span class="ref-note">How provenance composes when one derived fact rests on several sources.</span></li>
+          <li>Jensen et al., &ldquo;A Consensus Glossary of Temporal Database Concepts&rdquo;, <em>SIGMOD Record</em> 23(1), 1994.<span class="ref-note">The vocabulary behind the when-learned axis.</span></li>
+          <li>Doyle, &ldquo;A Truth Maintenance System&rdquo;, <em>Artificial Intelligence</em> 12(3), 1979.<span class="ref-note">What has to happen to a derived fact when a premise is retracted.</span></li>
+          <li>Artz and Gil, &ldquo;A survey of trust in computer science and the Semantic Web&rdquo;, <em>Journal of Web Semantics</em> 5(2), 2007.<span class="ref-note">Candidate literature for the trust tiers. The repository names it as a survey it has read, not as a model it has adopted.</span></li>
+        </ul>
+        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="credits">
+        <h2>Credits and further reading</h2>
+        <p>The standards above are the credit list. A few more pointers.</p>
+        <ul class="refs">
+          <li><a href="https://www.w3.org/TR/owl2-primer/">OWL 2 Primer</a> and <a href="https://www.w3.org/TR/rdf11-mt/">RDF 1.1 Semantics</a>, the two documents that define what a row on this page means.</li>
+          <li><a href="https://www.w3.org/TR/prov-o/">PROV-O</a>, for the provenance model.</li>
+          <li><a href="http://se-on.org/">SEON</a> <code>code.owl</code>, 2012/02, the ontology behind the code-graph classes you will see on the <a href="./code-about.html">code index page</a>.</li>
+          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>, &ldquo;Standards and bibliography&rdquo;, for the full reference list.</li>
+        </ul>
+        <a class="next-link" href="./code-about.html"><span class="next-label">Next demo</span> Code Index for RAG <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>

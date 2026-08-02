@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — Fact based world visualisation</title>
+<meta name="description" content="How Ashcombe Hall draws a room from its own facts and nothing else, and how an auto-player works out its own goal.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./adventure.html" target="_blank" rel="noopener noreferrer">open adventure.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 4 of 11 &middot; adventure.html</p>
+      <h1>Fact based world visualisation</h1>
+      <p class="lede">Ashcombe Hall is a small manor built out of triples. The room view shows exactly what the facts say is there, and nothing else. An auto-player explores it, works out its own goal, and plays toward it.</p>
+    </header>
+
+      <section class="about-section" id="what">
+        <h2>What it demonstrates</h2>
+        <p>A text adventure is a good test of a fact store, because a room is a claim about what exists. If the picture and the prose disagree, one of them is made up.</p>
+        <p>Here they cannot disagree, because the picture is computed from the same rows the prose reads. Take the lamp and it leaves the picture. Open the portrait and what was behind it appears.</p>
+        <p>Three worlds ship: a six room hall with one lock, a three room cottage with none, and a nine room museum with three locks and a deeper chain to work through.</p>
+        <p>The auto-player is the part worth showing. It is not scripted. One generic marker fact says which object is the objective, and the player works out the rest by exploring, opening what it can, and pathing to what it has found.</p>
+        <p>Turn on the editor and you can change the facts and watch the room change with them.</p>
+        <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="play">
+        <h2>Chat you can replay</h2>
+        <p>The opening text below is the world's own. The commands are assertions from the adventure test file.</p>
+        <p>The opening, straight out of the world file.</p>
+        <pre class="transcript">the adventure begins. You are in the study of Ashcombe Hall. Somewhere in this house is a letter meant for you. Say "look" to look around, "go north" (or south, east, west, up, down) to move, and "stop playing" to end the game.</pre>
+        <p class="source-note">The first line of <code>corpus/worlds/src/ashcombe-hall.jsonl</code>, the world's hand-authored source file.</p>
+        <p>Two ordinary commands. Taking a thing and moving a room.</p>
+        <pre class="transcript"><span class="you">tmct&gt; take the lamp</span>
+you take the lamp.
+<span class="you">tmct&gt; go north</span>
+you go north. Now in the library.</pre>
+        <p class="source-note">Asserted in <code>test/services/adventure.test.mjs</code>.</p>
+        <p>The full run to the win condition, fourteen turns, asserted end to end.</p>
+        <pre class="transcript"><span class="you">tmct&gt; play ashcombe hall</span>
+<span class="you">tmct&gt; look</span>
+<span class="you">tmct&gt; go north</span>
+<span class="you">tmct&gt; go north</span>
+<span class="you">tmct&gt; look</span>
+<span class="you">tmct&gt; take the portrait</span>
+<span class="you">tmct&gt; open the portrait</span>
+<span class="you">tmct&gt; take the key</span>
+<span class="you">tmct&gt; go south</span>
+<span class="you">tmct&gt; look</span>
+<span class="you">tmct&gt; go south</span>
+<span class="you">tmct&gt; unlock the cabinet with the key</span>
+<span class="you">tmct&gt; open the cabinet</span>
+<span class="you">tmct&gt; take the letter</span>
+you take the letter</pre>
+        <p class="source-note">Asserted in <code>test/services/adventure.test.mjs</code>, which runs the whole sequence and checks the final turn lands the win.</p>
+        <p>The house has its own inhabitants. The housekeeper moves on a schedule, and her move is a real fact written into the world.</p>
+        <pre class="transcript"><span class="cite">at turn 3: housekeeper@turn3  mgx:currently-in  library</span>
+the housekeeper walks in.</pre>
+        <p class="source-note">Asserted in <code>test/services/adventure.test.mjs</code>. The narration and the fact are written by the same pass.</p>
+        <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="shots">
+        <h2>What it looks like</h2>
+        <p>A room drawn from its facts, with the map and what you are carrying alongside.</p>
+        <figure class="shot">
+          <img src="./screenshots/adventure.png" width="1024" height="600" alt="The tmct adventure page showing a room of Ashcombe Hall drawn from its facts with the map and satchel alongside" loading="lazy">
+          <figcaption>adventure.html. One room of Ashcombe Hall, drawn from the rows that describe it.</figcaption>
+        </figure>
+        <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="inference">
+        <h2>What it works out</h2>
+        <p><strong>Where the room comes from.</strong> The world is a list of triples. Every turn folds them into a current state, ranking each subject's newest placement, position and openness by epoch and turn. History is kept; the fold decides what is true now.</p>
+        <ul class="factlist">
+          <li>lamp        mgx:located-in     study</li>
+          <li>key         mgx:hidden-in      portrait</li>
+          <li>study       mgx:has-exit-north library</li>
+          <li>cabinet     mgx:unlocks-with   key</li>
+          <li>letter      mgx:is-objective   true</li>
+        </ul>
+        <p><strong>What gets drawn.</strong> Each object resolves to a visible room or to nothing. A room is itself. A placed object is in its room. An object one hop inside an <em>open</em> container is in that container's room. Anything hidden, carried, or inside a closed container resolves to nothing and is not drawn.</p>
+        <p>That rule is the whole demonstration. There is no separate render list to keep in step with the prose. Close the cabinet and the letter stops resolving, so it stops being drawn.</p>
+        <p><strong>Where it sits in the room.</strong> Stacking comes from the current on-top-of and on-plane rows if there are any. Failing that, the object's class default is found by walking up the class hierarchy. Failing that, the floor.</p>
+        <p><strong>What you can do.</strong> The available commands are computed from the facts too: one <code>go</code> per exit, and an unlock, open, examine, talk or take per visible object, based on the predicates that object actually has.</p>
+        <p><strong>How the auto-player decides.</strong> It reasons over exposed facts only: rooms it has actually visited, plus its own facts, plus the objective marker. Then it takes the first rung that applies. Win if it already carries the objective. Path to the objective's room if it knows where that is. Work an exposed container, unlocking it with something it carries or can fetch. Explore an exit it has not been through. Path toward the nearest room with one. Otherwise say plainly that it has stalled.</p>
+        <p><strong>How it paths.</strong> The same bounded search the <a href="./plan-about.html">Hanoi page</a> uses. The edge function is built from exposed exits only, so the planner cannot route through a door the player has never seen.</p>
+        <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="build">
+        <h2>How it is built</h2>
+        <p><code>corpus/worlds/src/ashcombe-hall.jsonl</code> is hand-authored: facts, rules and an opening line. <code>npm run gen:worlds-pack</code> compiles it into a gzipped shard.</p>
+        <p><code>src/adapters/corpus/worlds-pack.mjs</code> reads it in Node and materialises class-default contents. The site build embeds the resulting payload into the page.</p>
+        <p><code>src/domain/adventure.mjs</code> is the turn engine: the state fold, the command runner, the digest sentences, the affordance list and the NPC pass. <code>src/domain/adventure-autoplay.mjs</code> is the auto-player. <code>src/domain/planning.mjs</code> is the search.</p>
+        <p><code>src/services/adventure-viz.mjs</code> renders the page and computes the scene from the fold. Sprites resolve through <code>src/domain/sprite-map.mjs</code>, the same resolver the <a href="./sprites-about.html">sprite library</a> documents.</p>
+        <p>Commands are parsed by <code>src/domain/grammar/ace.mjs</code>, the controlled English parser, not by a keyword list.</p>
+        <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="papers">
+        <h2>Related work</h2>
+        <p>A world model that renders itself, and an agent that finds its own goal in it.</p>
+        <ul class="refs">
+          <li>W3C, <em>RDF 1.1 Semantics</em>, Recommendation, 25 February 2014.<span class="ref-note">The room is a set of triples. This is what saying one commits you to.</span></li>
+          <li>W3C, <em>OWL 2 Primer</em>, Recommendation, 11 December 2012.<span class="ref-note">The class hierarchy behind default placement and sprite resolution.</span></li>
+          <li>Fikes and Nilsson, &ldquo;STRIPS&rdquo;, <em>Artificial Intelligence</em> 2(3&ndash;4), 1971.<span class="ref-note">Actions as add and delete effects on a state. Taking the lamp is exactly that.</span></li>
+          <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">The plan-act-replan loop the auto-player runs each tick.</span></li>
+          <li>Molineaux, Klenk and Aha, on goal driven autonomy, 2010; Cox, &ldquo;Perpetual Self-Aware Cognitive Agents&rdquo;, <em>AI Magazine</em> 28(1), 2007.<span class="ref-note">Picking a goal rather than being given one, and noticing when the current one has stopped working.</span></li>
+          <li>Jensen et al., &ldquo;A Consensus Glossary of Temporal Database Concepts&rdquo;, <em>SIGMOD Record</em> 23(1), 1994.<span class="ref-note">The vocabulary for the epoch-and-turn stamps the state fold ranks by.</span></li>
+          <li>Attempto Controlled English, ACE 6.7, 2013.<span class="ref-note">The controlled English the commands are parsed as.</span></li>
+          <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">A room the player has not visited is unknown, not empty. That distinction is what the exposed-facts filter enforces.</span></li>
+        </ul>
+        <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+      <section class="about-section" id="credits">
+        <h2>Credits and further reading</h2>
+        <p>Where to look next.</p>
+        <ul class="refs">
+          <li><a href="./sprites-about.html">The sprite library</a>, for how a word becomes a shape.</li>
+          <li><a href="./plan-about.html">Classical AI planning</a>, for the search the auto-player calls.</li>
+          <li><a href="./mud-about.html">The burrow</a>, which takes this same renderer and gives four characters their own view of it.</li>
+          <li><a href="./ledger-about.html">Facts as RDF/OWL triples</a>, for what the rows above are and how they are stored.</li>
+          <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+        </ul>
+        <a class="next-link" href="./ledger-about.html"><span class="next-label">Next demo</span> Facts as RDF/OWL triples <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>
