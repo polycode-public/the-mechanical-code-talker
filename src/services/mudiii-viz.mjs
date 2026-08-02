@@ -49,7 +49,7 @@
 // was actually asking for.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
-  rowsForWorld, appendLogLine,
+  rowsForWorld, appendLogLine, wordBeforeCursor,
 } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue, prefersReducedMotion } from "./viz-ticker.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "./mud-editor.mjs";
@@ -892,6 +892,7 @@ function pageScript() {
   const rowsForWorld = ${rowsForWorld.toString()};
   const renderMudEditorText = ${renderMudEditorText.toString()};
   const gridWorldEditorState = ${gridWorldEditorState.toString()};
+  const wordBeforeCursor = ${wordBeforeCursor.toString()};
   const pillCandidates = ${pillCandidates.toString()};
   const matchPills = ${matchPills.toString()};
   const createPillComplete = ${createPillComplete.toString()};
@@ -1356,6 +1357,9 @@ function pageScript() {
   // graph.
   function worldOnlyRows(rows) { return rowsForWorld(rows, scenario().worldPayload.name); }
   let editRows = [];
+  // The FULL store, not the world's own rows: a term's synonyms and its is-a
+  // chain mostly live in the background corpus, not in the square's vocabulary.
+  let allStoreRows = [];
 
   function renderEditPlacements() {
     const placements = {};
@@ -1380,11 +1384,12 @@ function pageScript() {
     el("editModeBtn").textContent = "back to playing";
     el("editModeBtn").setAttribute("aria-pressed", "true");
     const snap = await session.snapshot();
+    allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
     el("editorText").value = renderMudEditorText(editRows, gridWorldEditorState(snap.state));
     el("editorStatus").className = "edit-status";
     el("editorStatus").textContent = "";
-    el("editorPills").innerHTML = "";
+    renderSuggestionPills();
     renderEditPlacements();
   }
 
@@ -1395,9 +1400,68 @@ function pageScript() {
     el("editModeBtn").setAttribute("aria-pressed", "false");
   }
 
+  // The lateral SKOS neighbourhood plus the vertical is-a chain for whatever
+  // word the cursor sits behind. Nothing found is nothing shown — an honest
+  // miss, never a guessed suggestion.
+  function renderSuggestionPills() {
+    const box = el("editorPills");
+    const term = wordBeforeCursor(el("editorText").value, el("editorText").selectionStart);
+    if (!term || !window.tmct) { box.innerHTML = ""; return; }
+    const related = window.tmct.page.relatedForTerm ? window.tmct.page.relatedForTerm(allStoreRows, term) : null;
+    const chain = window.tmct.page.classAncestorChain ? window.tmct.page.classAncestorChain(term, allStoreRows) : [];
+    const seen = {};
+    seen[term] = true;
+    const out = [];
+    const push = function (label) { if (label && !seen[label]) { seen[label] = true; out.push(label); } };
+    if (related) {
+      related.synonyms.forEach(push);
+      related.related.forEach(function (r) { push(r.prefLabel); });
+    }
+    chain.slice(1).forEach(push);
+    box.innerHTML = out.slice(0, 8).map(function (s) {
+      return '<button type="button" class="pill" data-insert="' + esc(s) + '">' + esc(s) + "</button>";
+    }).join("");
+  }
+
+  el("editorPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const area = el("editorText");
+    const pos = area.selectionStart;
+    const word = wordBeforeCursor(area.value, pos);
+    const insert = btn.getAttribute("data-insert");
+    area.value = area.value.slice(0, pos - word.length) + insert + area.value.slice(pos);
+    const next = pos - word.length + insert.length;
+    area.setSelectionRange(next, next);
+    area.focus();
+    onEditorChanged();
+  });
+
+  let suggestTimer = null;
   let syncTimer = null;
+  function scheduleSuggestions() { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderSuggestionPills, 180); }
   function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(applyEditorText, 450); }
-  el("editorText").addEventListener("input", scheduleSync);
+  function onEditorChanged() { scheduleSuggestions(); scheduleSync(); }
+  el("editorText").addEventListener("input", onEditorChanged);
+  el("editorText").addEventListener("click", scheduleSuggestions);
+  el("editorText").addEventListener("keyup", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].indexOf(e.key) !== -1) scheduleSuggestions();
+  });
+
+  // An edit changes the facts, so the meshes have to move with them —
+  // otherwise a deleted well stands in the square until the next Reset.
+  // boot() drops the camera back to overhead and empties the scene's own
+  // agent groups, so the visitor's camera is put back and the live cast is
+  // redrawn straight after: autoplay is paused in edit mode, so nothing else
+  // would repopulate them.
+  async function rebuildSceneFromEdit() {
+    props = propPlacementsFrom(editRows, DATA.assetManifest);
+    await callScene("boot", {
+      propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+    });
+    callScene("setCamera", camera);
+    callScene("applyTick", { agents: agentsById, items: itemsById, ecology: [] });
+  }
 
   async function applyEditorText() {
     if (!session) return;
@@ -1406,7 +1470,9 @@ function pageScript() {
     status.textContent = "reading the square\\u2026";
     const result = await serializeTick(function () { return session.applyEdit(el("editorText").value); });
     const snap = await session.snapshot();
+    allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
+    await rebuildSceneFromEdit();
     if (result && result.unrecognized && result.unrecognized.length) {
       status.className = "edit-status pending";
       status.textContent = result.unrecognized.length + " line" + (result.unrecognized.length === 1 ? "" : "s")

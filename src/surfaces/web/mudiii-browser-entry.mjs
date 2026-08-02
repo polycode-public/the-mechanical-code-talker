@@ -26,6 +26,8 @@ import {
 } from "../../domain/town-square-world.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
 import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
+import { relatedForTerm } from "../../domain/skos-view.mjs";
+import { classAncestorChain } from "../../domain/sprite-map.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
@@ -308,5 +310,8 @@ publishTmctSurface({
     // pillsForMudiii closes over two other modules' bindings, so the page
     // reaches it through this bag rather than a `.toString()` splice.
     pillsForMudiii,
+    // What the editor's own suggestion rail reads for the word under the
+    // cursor: the lateral SKOS neighbourhood and the vertical is-a chain.
+    relatedForTerm, classAncestorChain,
   },
 });

@@ -470,6 +470,29 @@ test("renderMudiiiHtml: a pill click appends to the input rather than replacing 
 
 // ---- edit mode reuses mud-editor.mjs -----------------------------------
 
+test("renderMudiiiHtml: the editor's suggestion rail is populated and wired, not dead markup", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const wordBeforeCursor = /);
+  assert.match(html, /function renderSuggestionPills\(\)/);
+  assert.match(html, /el\("editorPills"\)\.addEventListener\("click"/, "clicking a suggestion inserts it");
+  assert.match(html, /function onEditorChanged\(\) \{ scheduleSuggestions\(\); scheduleSync\(\); \}/);
+  assert.match(html, /el\("editorText"\)\.addEventListener\("input", onEditorChanged\);/);
+  assert.doesNotMatch(html, /addEventListener\("input", scheduleSync\)/, "the bare sync-only listener is gone");
+  assert.match(html, /renderSuggestionPills\(\);\s*renderEditPlacements\(\);/, "the rail is drawn once on entering edit mode");
+});
+
+test("renderMudiiiHtml: an edit reboots the 3D scene and puts back the camera and the cast", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /async function rebuildSceneFromEdit\(\)/);
+  assert.match(html, /props = propPlacementsFrom\(editRows, DATA\.assetManifest\);/, "the meshes are rebuilt from the edited facts");
+  assert.match(
+    html,
+    /await callScene\("boot",[\s\S]*?\);\s*callScene\("setCamera", camera\);\s*callScene\("applyTick", \{ agents: agentsById, items: itemsById, ecology: \[\] \}\);/,
+    "boot resets the camera and clears the agent groups, so both are restored right after it",
+  );
+  assert.match(html, /await rebuildSceneFromEdit\(\);/);
+});
+
 test("renderMudiiiHtml: edit mode reuses mud-editor.mjs's renderMudEditorText unchanged", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /const renderMudEditorText = /);
