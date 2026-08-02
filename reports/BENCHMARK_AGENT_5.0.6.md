@@ -161,6 +161,13 @@ below the goal driver is a decline.**
 
 ## The member-filter ceiling is a step budget, and the fold already clears it
 
+**Since corrected.** `drive.mjs` was changed after this run to do what the recommendation below
+names as its second option: cap the emitted per-member hops but keep folding over every member
+regardless. The router no longer refuses any of the cases measured in this section — all seven
+classes below now answer, the four over-budget ones with a single `graph-fold` proof step in
+place of the hop chain. `frontier-probe.mjs` section 3 carries the current numbers; the quoted
+code, the "REFUSES" column and the table below are what 5.0.6 measured before that change landed.
+
 This is the cycle's new evidence and it changes what the cheapest next build is.
 
 `src/domain/router/drive.mjs:91` refuses a member-filter request when the plan would need more
@@ -303,7 +310,8 @@ A wider ambiguity check needs more tied labels in the fixture.
 
 ## What the next rung needs, concretely
 
-**Recommended next build: raise the member-filter bound.** It is the cheapest of the three, the
+**Recommended next build: raise the member-filter bound.** Shipped since this run (see the update
+note above). It is the cheapest of the three, the
 capability behind it already works, and it is the only one that changes answers on a real repo
 today.
 
@@ -412,6 +420,7 @@ hallucination, nothing regressed against 3.0.3, and the two capabilities on the 
 up on held-out cases.
 
 **Recommended next build, in order:** the member-filter step budget (a bound with a working fold
-behind it, biting on a real repo fixture), then the command-register tie check (a one-guard fix),
-then TOOL-10's refusal text (useful on its own before any new rung machinery). TOOL-9 and TOOL-10
-as graded rungs need `RUNGS` and their expect-shapes in `grade.mjs` before cases can exist.
+behind it, biting on a real repo fixture — shipped since this run, see the update note above),
+then the command-register tie check (a one-guard fix), then TOOL-10's refusal text (useful on its
+own before any new rung machinery). TOOL-9 and TOOL-10 as graded rungs need `RUNGS` and their
+expect-shapes in `grade.mjs` before cases can exist.
