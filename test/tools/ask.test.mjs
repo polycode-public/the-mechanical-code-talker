@@ -124,6 +124,40 @@ test("parseQuery: plural/singular entity nouns and verb aliases both resolve to 
   assert.equal(parseQuery("which modules depends on logging")?.kind ?? parseQuery("which modules depend on logging").kind, "imports");
 });
 
+// "run"/"execute"/"invoke"/"trigger"/"fire"/"hit" all carry the calls kind (a
+// genuine "which functions run X" is a reverse-calls question), so each also
+// opens an imperative report request ("run the impact of X") that isn't a
+// code-graph question at all. A capability label right after one of those
+// verbs must decline the whole parse rather than glue itself onto the real
+// target as one unresolvable term.
+test("parseQuery: a capability label right after a calls-family imperative verb does not bind as a glued-object calls query", () => {
+  assert.equal(parseQuery("run the impact of app/lib/a.mjs"), null);
+  assert.equal(parseQuery("if I run impact on app/lib/c.mjs"), null);
+  assert.equal(parseQuery("run the untested scan"), null);
+});
+
+test("parseQuery: a bare single-word object after a calls-family imperative verb still binds — the collision guard leaves a genuine symbol question alone", () => {
+  // Structurally identical to "run the impact of X" with no further word
+  // after the label, so there is no local signal telling "a symbol literally
+  // named impact" apart from "the impact report" — this stays the ordinary
+  // reverse-calls reading, deliberately.
+  assert.deepEqual(parseQuery("what calls impact"), {
+    shape: "reverse", entityType: null, modifier: "direct", kind: "calls", object: "impact",
+  });
+  assert.deepEqual(parseQuery("run impact"), {
+    shape: "reverse", entityType: null, modifier: "direct", kind: "calls", object: "impact",
+  });
+});
+
+test("parseQuery: phrasings the calls-family collision guard must never claim keep declining exactly as before", () => {
+  // None of these carry a calls-kind verb at all, so ask.mjs's own grammar
+  // already left them for the router's imperative frames / narration guard —
+  // the guard above must not change that boundary.
+  assert.equal(parseQuery("I need the impact of app/lib/a.mjs"), null);
+  assert.equal(parseQuery("I want to see the untested modules"), null);
+  assert.equal(parseQuery("I ran the impact of app/lib/a.mjs"), null);
+});
+
 // ---- resolveObject (§4 tiered resolution) ----
 
 test("resolveObject: tier 1 exact label match", () => {
@@ -1291,6 +1325,35 @@ test("ask(): grain-aware resolution — a term that resolves to NOTHING at all (
   const { tmct_ask } = ask(graph, "which modules import Zorpotron");
   assert.equal(tmct_ask.miss, true);
   assert.equal(tmct_ask.matches.length, 0);
+});
+
+test("ask(): a capability label after a calls-family imperative verb does not survive relaxation into a real but wrong calls answer", () => {
+  // A real mgx:callsCoarse edge into app/lib/a.mjs, same shape the grain-aware
+  // fixtures above use — deliberately present so the failure mode this pins
+  // has somewhere to land: without the CONTENT_VOCAB protection, relaxParse's
+  // drop-unmatched layer reads "impact" as filler nobody meant, reduces "run
+  // the impact of app/lib/a.mjs" to "run app/lib/a.mjs", and that DOES answer
+  // for real here ("what calls app/lib/a.mjs" -> scripts/g.mjs) — a confident
+  // WRONG answer, not a miss. The direct parse already declines (see the
+  // parseQuery tests above); this is the layer that could still smuggle a
+  // wrong answer past that decline.
+  const individuals = [
+    { id: "mod:app/lib/a.mjs", label: "app/lib/a.mjs", class: "Module", attributes: [] },
+    { id: "mod:scripts/g.mjs", label: "scripts/g.mjs", class: "Module", attributes: [] },
+  ];
+  const graph = {
+    individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
+    relations: [
+      {
+        predicate: "mgx:callsCoarse", prop: "mgx:callscoarse", count: 1,
+        edges: [{ subject: "mod:scripts/g.mjs", object: "mod:app/lib/a.mjs", subjectLabel: "scripts/g.mjs", objectLabel: "app/lib/a.mjs" }],
+      },
+    ],
+  };
+  const { tmct_ask } = ask(graph, "run the impact of app/lib/a.mjs");
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.parsed, null);
+  assert.equal(tmct_ask.relaxed, null);
 });
 
 test("ask(): forward-shape grain check — \"what modules does app.mjs have\" declines honestly instead of answering with function names", () => {
