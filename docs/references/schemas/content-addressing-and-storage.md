@@ -1,7 +1,7 @@
 # Content addressing, temporal data, and the storage vocabulary
 
 **Consumer in repo:** `src/domain/hash.mjs` (`factIdFor`, `fnv1a32`), `src/adapters/memory/core.mjs`,
-`src/services/ledger-viz.mjs`, `ontology/tmct-core.ttl`, `PLAN_NORMATIVE.md` §9.
+`src/services/ledger-viz.mjs`, `ontology/tmct-core.ttl`, `archive/PLAN_NORMATIVE.md` §9.
 **Retrieval date:** 2026-07-17.
 **Licence:** link + brief factual excerpt. Nothing is committed here.
 

@@ -6,10 +6,12 @@
 `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
 `rulingTestimonyClaim`), `PLAN_MUD_WEBRTC.md`.
-**Retrieval date:** 2026-08-02 — VERIFIED. Every citation below was checked against a primary
-source: the report PDFs' own title pages and ISRN blocks, dblp, the ACM Digital Library, and the
-IETF datatracker. The two claims about tmct's own merge behaviour that are easy to get wrong were
-checked by running the code, not by reading it (see "What the probes showed").
+**Retrieval date:** 2026-08-02. The 2011 Shapiro et al. artefacts, RFC 677, the CALM line and the
+delta-state paper were checked against primary sources: the report PDFs' own title pages and ISRN
+blocks, dblp, the ACM Digital Library, and the IETF datatracker. Four citations were not, and each
+says so where it appears: the SSS 2011 chapter (auth redirect), Baquero/Almeida/Shoker's venue, and
+Wuu and Bernstein. The claims about tmct's own merge behaviour were checked by running the code,
+not by reading it (see "What the probes showed").
 **Licence:** link and short factual excerpt only. The INRIA reports are free to read on HAL and
 mirrors, but carry no redistribution grant, so no PDF is committed here. Quotes are brief factual
 excerpts with attribution.
@@ -206,22 +208,23 @@ Four properties of the store do the work.
    `rulingTestimonyClaim`, `latestFact`. There is no register to overwrite, so there is no
    register conflict to resolve at merge time.
 
-## Why not an OR-Set
+## Why the removal tmct has took the summary shape, not the OR-Set one
+
+Retraction ships. `retraction.mjs` writes one record per (triple, source) carrying the record ids it
+suppressed, the mesh replicates it like any other fact, and two enforcement points read it. This
+section is why that shape rather than an OR-Set, since the OR-Set is the obvious candidate.
 
 An OR-Set solves one problem: a remove that is concurrent with an add of the same element, where
 the add should win and a later re-add must survive. It does that by giving every add a unique tag
 and having a remove carry the tags it observed.
-
-The price is wrong for tmct, and the one removal it does have is narrow enough not to need it.
 
 **Almost nothing removes.** "Stopping being true" is expressed four ways, all of them appends: a
 newer `@turnN` snapshot for world state, a fresh testimony tag with a `:gone` suffix for what a
 character knows, a newer tag for a name, and a recency window for a wave. A wave is the clean case.
 Waving again re-asserts the same content-addressed triple, `appendFacts` unions a fresh tag onto
 it, and `isRecentWave` decides whether it is current. The animation needs no remove because
-"waving" was never stored. Retraction is the exception, and it takes the summary shape rather than
-the OR-Set one for the reasons below. What that costs is the re-add: a suppressed assertion comes
-back only under a later instant, never under its own identity.
+"waving" was never stored. Retraction is the exception. What the summary shape costs is the re-add:
+today a suppressed assertion comes back under a later instant rather than under its own identity.
 
 **tmct already has the unique tag, and it is a product feature.** `teach:peer:<name>#node:<id>@<ts>`
 is exactly the shape an OR-Set's add-tag takes: a node identity plus an instant, unique per add.
@@ -237,27 +240,27 @@ provenance record that quietly omits assertions it received.
 
 **The delivery guarantee is not there.** OR-Set is specified op-based (RR-7506 Spec 15), and
 Theorem 2.2 makes causal delivery a precondition. tmct's mesh gives no such guarantee: `op` and
-`sync-response` merge in whatever order they arrive, by design. Adopting OR-Set semantics would
-mean building causal delivery first, then a causal-stability rule before any tombstone could ever
-be dropped.
+`sync-response` merge in whatever order they arrive, by design. OR-Set semantics would mean
+building causal delivery first, and a stability rule for its tombstones after that.
 
-**Two tombstones exist, and both take the summary shape rather than the OR-Set one.**
-`assertionGroupsFor` filters out any source a pool-1 rollup has already absorbed, "without it the
-next sync resurrects everything compaction just folded, which is what makes deleting from a
-replicated set hard at all". `retraction.mjs` does the same job for a real change of belief: one
-record per (triple, source) carrying the record ids it suppressed, merging by union of those ids
-and max of the instant it carries. Neither hides a tag. The compaction summary keeps the sources it
-absorbed in the citation; the retraction record keeps the tags of what it suppressed, so the store's
-account of what it was told stays complete.
+**So both tombstones take the summary shape.** `assertionGroupsFor` filters out any source a pool-1
+rollup has already absorbed, through `isAbsorbedSource`, whose header states the reason: "without
+this the next sync resurrects everything compaction just folded away, which is the failure mode
+that makes deleting from a replicated set hard in the first place". `retraction.mjs` does the same
+job for a real change of belief: one record per (triple, source) carrying the record ids it
+suppressed, merging by union of those ids and max of the instant it carries. Neither hides a tag.
+The compaction summary keeps the sources it absorbed in the citation; the retraction record keeps
+the tags of what it suppressed, so the store's account of what it was told stays complete.
 
 ## Retiring a tombstone: what causal stability needs, and what this mesh has
 
 Two records here work by staying put. A retraction record carries the record ids it suppressed, and
 a peer that re-delivers one of those ids gets refused. A compaction rollup does the same for the
 sources it absorbed. That is what makes a delete survive a sync over a grow-only set, and it is why
-both accumulate. Nothing yet says when one has done its job.
+both accumulate. `causal-stability.mjs` holds the rule for when one has done its job, and it
+retires nothing today: the rest of this section is which half is built and which is missing.
 
-The literature calls the missing rule **causal stability**. A record is safe to drop once every
+The literature calls the rule **causal stability**. A record is safe to drop once every
 replica that could still send a conflicting copy has it. Baquero, Almeida and Shoker's *Pure
 Operation-Based Replicated Data Types* (CoRR arXiv:1710.04469, 2017) is the one to read first: its
 PO-Log discards per-operation metadata exactly when a stability check over a per-replica vector says
@@ -276,7 +279,7 @@ Three separate notions, and only one is durable and replicated.
 | notion | where it lives | durable | replicated | what it answers |
 |---|---|---|---|---|
 | the peer map | `peers` in `p2p-room.mjs`'s closure | no, per page session | no | who this node has a channel to right now |
-| the node id | `node-id.json` beside the store (a handle field in memory, a `meta` row in SQLite) | yes | never, by design | what this store calls itself |
+| the node id | `node-id.json` beside the store (a handle field in memory, a `meta` row in SQLite) | yes | no, by design | what this store calls itself |
 | the admission graph | `node:<joiner> mgx:invitedBy node:<inviter>` facts | yes | yes, like any fact | every node this world has ever admitted |
 
 **The peer map is session state.** `myPeerId` is a UUID minted per page load. The map fills from
@@ -354,24 +357,26 @@ every value a mark ever took, so an ack channel built from facts grows faster th
 retires. `node-id.json` is the precedent already in the tree: `loadNodeId` and `saveNodeId` carry
 per-store state that never replicates, across all three backends.
 
-What that leaves to build, in order:
+The min over the roster is `stableRecordIds`, and it is already written. What that leaves to build,
+in order:
 
 1. The sender's node id on the wire, on `hello` or on each message.
 2. A per-peer record of which tombstones that node has been seen to hold, in a sidecar beside the
    node id.
-3. The min over the roster, which is `stableRecordIds` and is already written.
 
-### What ships now
+### What is written, and why it retires nothing
 
 `causal-stability.mjs` holds the rule as a pure function of its inputs. `admittedNodes` folds the
 roster off the admission graph. `stableRecordIds` answers which records every rostered peer is known
 to hold. `core.mjs` exposes `retirableRetractions` as a report and `retireRetractions` as the sweep.
 
-The gate is the missing input. `acknowledgedBy` defaults to knowing nothing, so the answer defaults
-to the empty set, and nothing in the product supplies it. `retireRetractions` takes ids rather than
-choosing them, so a caller has to run the rule and hand over its answer. Every safety default points
-the same way: an empty roster retires nothing, a roster holding only this node retires nothing, and
-one member that has acknowledged nothing blocks every record.
+The gate is the missing input, and it is a defaulted parameter rather than a flag. `acknowledgedBy`
+defaults to `null`, so `stableRecordIds` returns the empty set before it looks at anything else, and
+nothing in the product supplies a function. `retireRetractions` takes ids rather than choosing them,
+so a caller has to run the rule and hand over its answer. Nothing in `src/`, `bin/` or `scripts/`
+calls either one; the tests are the only callers. Every safety default points the same way: an empty
+roster retires nothing, a roster holding only this node retires nothing, and one member that has
+acknowledged nothing blocks every record.
 
 ### Departure is the open sub-problem
 
@@ -459,17 +464,21 @@ and it holds only because `sortFactIndividualsById` makes the fold a function of
 that sort the view is neither monotone nor confluent, and the whole argument fails.
 
 So: monotone base, non-monotone but confluent view, coordination-free throughout. `removeFacts` is
-the operation that sits outside all of it, and what puts it back inside is the retraction record:
-the delete becomes an APPEND of a tombstone, the base relation keeps growing, and the suppression
-happens at the read. Same trade as the placement fold, one level down.
+the operation that sits outside all of it, and what puts it back inside is the retraction record.
+`removeFacts` really does drop the matched Fact individuals from the local store, so the storage
+is not grow-only. What is grow-only is what replicates: the retraction record is an APPEND, it
+merges by union like any other fact, and it is what stops a peer's next sync re-materialising the
+assertion. Suppression happens at the read. Same trade as the placement fold, one level down.
 
 ## The verdict for tmct
 
 **The G-Set is the right choice, and "state-based G-Set" is an incomplete description of what
-ships.** What ships is a grow-only set of `(triple, source)` records, each carrying a grow-only set
-of provenance tags, with a per-source revision chain that demotes rather than deletes, plus two
+ships.** What replicates is a grow-only set of `(triple, source)` records, each carrying a grow-only
+set of provenance tags, with a per-source revision chain that demotes rather than deletes, plus two
 replicated summaries that merge by union of the ids they carry: a compaction rollup and a
-retraction record. Union at every level. No causal delivery required anywhere.
+retraction record. Union at every level. No causal delivery required anywhere. Local storage is the
+one place that shrinks — `removeFacts` and `retireRetractions` both delete rows — and the tombstone
+is what keeps that shrinkage from undoing itself on the next sync.
 
 **The conflict resolution is a read-time query, and it must stay a pure function of the set.** That
 is the invariant to protect. `foldWorldState` broke it and was fixed outside itself, by
@@ -478,25 +487,21 @@ resolver has to be checked the same way: feed one peer's facts in two different 
 the same answer. A resolver that reads a wall clock, a local counter, or array position without
 that sort will look correct in a single-browser test and diverge on the mesh.
 
-**The OR-Set's price is the wrong one for tmct: its tombstone would put holes in the provenance
-record.** The provenance record is a product feature, and that is the reason the removal tmct does
-have takes the summary shape instead — a retraction record carries the tags of what it suppressed
-rather than hiding them.
+**Retraction over the mesh took the summary route, because an OR-Set tombstone would put holes in
+the provenance record and that record is a product feature.** `removeFacts` leaves a record behind,
+one per (triple, source), carrying the record ids it suppressed and the moment it did, so absorption
+merges by union and stays a join. It keeps the tags of what it suppressed rather than hiding them.
+Two enforcement points read it: the fold strips a record it covers, and `assertionGroupsFor` refuses
+to re-materialise one on ingest. Both compare the assertion's own embedded instant against the
+retraction's, so a source that says the thing again later still lands. The suppressed ids are
+re-keyed through the provenance tag on the way out and on the way in, because the broadcast relabel
+means two stores file one assertion under two Source keys.
 
-**Retraction over the mesh took the summary route, not the OR-Set one.** `removeFacts` now leaves
-a record behind, one per (triple, source), carrying the record ids it suppressed and the moment it
-did, so absorption merges by union and stays a join. Two enforcement points read it: the fold
-strips a record it covers, and `assertionGroupsFor` refuses to re-materialise one on ingest. Both
-compare the assertion's own embedded instant against the retraction's, so a source that says the
-thing again later still lands. The suppressed ids are re-keyed through the provenance tag on the
-way out and on the way in, because the broadcast relabel means two stores file one assertion under
-two Source keys.
-
-Two open problems sit next to it. The causal-stability rule is now written as a pure function, with
-the roster half derived from the admission graph and the acknowledgement half named as the one thing
+Two open problems sit next to it. The causal-stability rule is written as a pure function, with the
+roster half derived from the admission graph and the acknowledgement half named as the one thing
 still missing; "Retiring a tombstone" above has the design and the reason nothing retires yet. And an
-OR-Set proper, with causal delivery, remains the route that would let a suppressed assertion be
-re-added under its own identity rather than under a later instant.
+OR-Set proper, with causal delivery, is the route that would let a suppressed assertion be re-added
+under its own identity rather than under a later instant.
 
 ## Deepen-next
 

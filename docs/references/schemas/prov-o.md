@@ -10,14 +10,14 @@ committed here.
 **Retrieval date:** 2026-07-17 — VERIFIED against the live Recommendation. The status line, term
 IRIs, domains, ranges and quoted definitions below were read from the document itself.
 **Consumer in repo:** `ontology/tmct-core.ttl`, `src/adapters/memory/core.mjs` (the provenance
-predicate family), `PLAN_NORMATIVE.md` §4.
+predicate family), `archive/PLAN_NORMATIVE.md` §4.
 
 ## Why tmct reads this
 
 Every fact tmct stores records where it came from and when. PROV-O is the published vocabulary for
 that. `src/adapters/memory/core.mjs` has carried the note "ext ref prov:wasDerivedFrom
 (UNVERIFIED-pending-web-check)" on `mgx:derivedFrom` since it was written. This entry closes the
-check. The answer is in `PLAN_NORMATIVE.md` §4.1, and it is not the term the note guessed.
+check. The answer is in `archive/PLAN_NORMATIVE.md` §4.1, and it is not the term the note guessed.
 
 ## The three starting-point classes
 
@@ -56,7 +56,7 @@ All are sub-properties of `prov:wasInfluencedBy`, except the two datatype proper
 > development, or behavior of another by means of usage, start, end, generation, invalidation,
 > communication, derivation, attribution, association, or delegation."
 
-**That umbrella is the term tmct's `mgx:derivedFrom` actually means.** See `PLAN_NORMATIVE.md` §4.1.
+**That umbrella is the term tmct's `mgx:derivedFrom` actually means.** See `archive/PLAN_NORMATIVE.md` §4.1.
 
 ## Expanded terms tmct's model touches
 

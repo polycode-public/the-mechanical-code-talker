@@ -6,7 +6,7 @@ Networks*, IJCAI-77, pp. 888–893 (reprinted in *Readings in Planning*, Morgan-
 **Project pages:** https://www.aiai.ed.ac.uk/project/nonlin/ ·
 https://www.aiai.ed.ac.uk/project/early-planners/ · code archive:
 https://github.com/aiaustin/planners
-**Licence:** link-only. · **Consumer:** `PLAN_AGENTS.md` (Stage 5, the recipe/HTN shape; router
+**Licence:** link-only. · **Consumer:** `archive/PLAN_AGENTS.md` (Stage 5, the recipe/HTN shape; router
 status at §1.3).
 · **Status:** UNVERIFIED-pending-web-check.
 

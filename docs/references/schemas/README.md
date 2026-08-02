@@ -9,7 +9,7 @@ the W3C Document License, and paywalled standards are not quoted at all.
 **tmct's own fragments**, hand-authored here, which describe what tmct does rather than what anyone
 published.
 
-`PLAN_NORMATIVE.md` is the reconciliation between the two: one verdict per coined term.
+`archive/PLAN_NORMATIVE.md` is the reconciliation between the two: one verdict per coined term.
 
 ## Published standards
 

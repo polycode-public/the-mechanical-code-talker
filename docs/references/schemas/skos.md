@@ -8,7 +8,7 @@ https://www.w3.org/TR/2009/REC-skos-reference-20090818/ · editors Alistair Mile
 committed here.
 **Retrieval date:** 2026-07-17 — VERIFIED against the live Recommendation and the namespace RDF at
 https://www.w3.org/2009/08/skos-reference/skos.rdf.
-**Consumer in repo:** `PLAN_NORMATIVE.md` §4.4 (the corpus's concept vocabulary).
+**Consumer in repo:** `archive/PLAN_NORMATIVE.md` §4.4 (the corpus's concept vocabulary).
 The document header carries a live errata pointer, which may include normative corrections.
 
 ## Why tmct reads this
@@ -55,7 +55,7 @@ explanation of the meaning of a concept"), `skos:scopeNote`, `skos:example`, plu
 
 Domain and range of `skos:semanticRelation` are both `skos:Concept` (S19, S20), and that propagates
 to every sub-property. **This is the constraint that decides whether tmct can use them** — see §4.4
-of `PLAN_NORMATIVE.md`.
+of `archive/PLAN_NORMATIVE.md`.
 
 | term | definition (verbatim) |
 |---|---|
@@ -183,5 +183,5 @@ once terms have concept IRIs, "these two terms mean the same across schemes" can
 - SKOS-XL (a companion Recommendation of the same date) reifies labels as first-class resources.
   Read it if tmct ever needs to attach provenance to a *label* rather than to a fact.
 - ISO 25964 (thesauri and interoperability with other vocabularies) publishes a SKOS mapping. It is
-  the terminology-work standard `PLAN_OPEN_ITEMS.md` §10.2 names alongside ISO 704, and neither has
+  the terminology-work standard `archive/PLAN_OPEN_ITEMS.md` §10.2 names alongside ISO 704, and neither has
   been read yet.
