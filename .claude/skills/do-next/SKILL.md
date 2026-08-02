@@ -35,6 +35,13 @@ one's work the moment it's ready rather than waiting for the whole batch.
    **This is standing, not a one-off.** The moment a track lands and frees its files, refill them in
    the same turn rather than waiting for the batch to drain. A wave that decays to one running track
    because the others finished is the failure mode; check what is free every time something lands.
+   **Refill from `NEXT.md`, and from nowhere else.** This step is about how the operator's backlog
+   gets run, not a licence to invent work that keeps the wave full. When `NEXT.md` is empty or
+   fully claimed, say so and stop — an idle session is the correct state, and it is the operator's
+   call what happens next. Manufacturing a playtest, a hunt, a sweep, an audit of documents nobody
+   named, or a benchmark run nobody asked for is not saturation, it is unrequested work, and it has
+   cost a whole session before now. The one thing you DO add without being asked is a breakage found
+   on the way — a failing test, a red pipeline, a bug a track trips over. Those belong to this batch.
    When a hot file (`mudiii-viz.mjs` has been the usual one) carries a dozen items, that is one big
    sequential brief, not a dozen dispatches and not three agents fighting over the same lines —
    parallel edits to one file cost more in merge conflicts than the sequencing saves.
