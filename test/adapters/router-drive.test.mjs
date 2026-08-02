@@ -19,6 +19,9 @@ import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } fr
 import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
+// A real parsed repo (js-commander), where classes carry far more callable
+// members than a plan budget of 8 steps can hop one at a time.
+const LARGE_SCALE_GRAPH = fileURLToPath(new URL("../fixtures/large-scale/.tmct/graph.json", import.meta.url));
 
 // The known-good composed answers test-benchmarks/agentbench/cases.jsonl already pins for this
 // exact fixture + request (ab-c1-untested-in-impact / ab-c2-what-to-test) — the
@@ -81,6 +84,43 @@ test("runCapabilityPlan: a request over the budget is refused, not silently trun
   const nineSteps = Array.from({ length: 9 }, (_, i) => `describe app/lib/${String.fromCharCode(97 + (i % 6))}.mjs`).join(" and then ");
   const result = await runCapabilityPlan(nineSteps, tools, ctx);
   assert.equal(result.refused, true);
+});
+
+// ---- the member-filter fold, past the hop chain's plan budget --------------
+
+test("member-filter: a class with more callable members than the plan budget still folds, over every member", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: LARGE_SCALE_GRAPH } });
+  const tools = declaredCapabilityNames();
+
+  const result = await runCapabilityPlan("which methods of Command end up calling createCommand", tools, ctx);
+  assert.equal(result.refused, false, "the answer costs one graph pass, so the hop chain's length must not decide it");
+  assert.equal(result.composed.length, 23);
+  assert.ok(result.composed.includes("Command.parse") && result.composed.includes("Command.unknownOption"));
+
+  // The trace names exactly the calls that were made: the one grounded members
+  // read, and no per-member hop, because none was dispatched.
+  assert.deepEqual(result.calls, [{ name: "tmct_members", input: { class: "Command" } }]);
+  const fold = result.proof.find((s) => s.step === "graph-fold");
+  assert.deepEqual(
+    { members: fold.members, hops: fold.hops, condition: fold.condition },
+    { members: 99, hops: 0, condition: "createCommand" },
+  );
+  assert.ok(result.why.some((w) => /no per-member callees hop was dispatched/.test(w)));
+});
+
+test("member-filter: a class whose hop chain fits the budget still emits one callees hop per member", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: LARGE_SCALE_GRAPH } });
+  const tools = declaredCapabilityNames();
+
+  const result = await runCapabilityPlan("which methods of DualOptions end up calling camelcase", tools, ctx);
+  assert.equal(result.refused, false);
+  assert.deepEqual(result.calls, [
+    { name: "tmct_members", input: { class: "DualOptions" } },
+    { name: "tmct_callees", input: { symbol: "DualOptions.constructor" } },
+    { name: "tmct_callees", input: { symbol: "DualOptions.valueFromOption" } },
+  ]);
+  assert.deepEqual(result.composed, ["DualOptions.constructor", "DualOptions.valueFromOption"]);
+  assert.equal(result.proof.some((s) => s.step === "graph-fold"), false, "the hops are the trace here, so there is no fold step to stand in for them");
 });
 
 // ---- TOOL-7: the observe-and-replan branch --------------------------------

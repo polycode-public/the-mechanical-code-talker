@@ -56,11 +56,14 @@ const refuse = (why, driver) => ({ calls: [], refused: true, terminated: true, p
 
 /** Execute the MEMBER-FILTER HTN method ("which methods of X end up calling Y")
  *  — the per-member hop the single-shot resolver cannot emit on its own. Step 1
- *  grounds members(X) via resolveOne; then, per CALLABLE member (sorted, bounded
- *  by the planner's MAX_STEPS budget), one tmct_callees hop. The fold is
- *  membersReaching (the bounded transitive callsSymbol closure), computed over
- *  the graph, never parsed from text. Honest refuses: no tmct_callees in the
- *  declared toolset, an unbindable filter target, an over-budget member list. */
+ *  grounds members(X) via resolveOne; then, per CALLABLE member (sorted), one
+ *  tmct_callees hop, so long as the whole list fits the planner's MAX_STEPS
+ *  budget. The fold is membersReaching (the bounded transitive callsSymbol
+ *  closure), computed over the graph, never parsed from text — it covers every
+ *  member whether or not the hops were emitted, so a class with more members
+ *  than the plan budget allows gets the same answer with a fold step in the
+ *  proof in place of the hop chain. Honest refuses: no tmct_callees in the
+ *  declared toolset, an unbindable filter target, an ungrounded member list. */
 async function memberFilterDrive(request, tools, ctx, segments) {
   const [setSeg, filterSeg] = segments;
   if (!tools.includes("tmct_callees")) {
@@ -81,29 +84,45 @@ async function memberFilterDrive(request, tools, ctx, segments) {
   const proof = [{ step: "causal-link", producer: "graph", condition: classInd.label, consumer: `step-1:${r1.selected.name}`, role: "action", ok: true }];
   for (const s of r1.proof) proof.push({ ...s, ofStep: 1 });
   const why = [
-    `HTN method: member-filter — enumerate members(${classInd.label}), hop tmct_callees per callable member, fold by bounded transitive reach of ${target.label}`,
+    `HTN method: member-filter — enumerate members(${classInd.label}), fold by bounded transitive reach of ${target.label} over every callable member, and hop tmct_callees per member while that hop chain fits the plan budget`,
     ...(r1.why || []).map((w) => `[1] ${w}`),
   ];
 
   const members = memberIndividuals(ctx.graph, classInd)
     .filter((m) => CALLABLE_MEMBER_CLASSES.has(m.class))
     .sort((a, b) => String(a.label).localeCompare(String(b.label)));
-  if (1 + members.length > MAX_STEPS) {
-    return refuse(`member-filter needs ${1 + members.length} steps (> budget ${MAX_STEPS}) — escalate`, ROUTER_DRIVER);
-  }
-  for (let i = 0; i < members.length; i += 1) {
-    const m = members[i];
-    const res = await ctx.dispatch("tmct_callees", { symbol: m.label });
-    if (!res.ok) return refuse(`the callees hop for ${m.label} did not ground: ${res.error}`, ROUTER_DRIVER);
-    calls.push({ name: "tmct_callees", input: { symbol: m.label } });
-    proof.push({ step: "causal-link", producer: "step-1", condition: m.label, consumer: `step-${i + 2}:tmct_callees`, role: "member-filter", ok: true });
-    why.push(`[${i + 2}] callees hop over ${m.label} (a member step 1 produced)`);
+  // MAX_STEPS bounds the emitted PLAN, not the answer. The fold below reads the
+  // graph's own callsSymbol edges in one pass over every member at any member
+  // count, so a member list too long to walk hop by hop still gets folded — it
+  // just gets no per-member hops. All of them or none: emitting the first seven
+  // of ninety-nine would read as "these are the members I checked", which is a
+  // trace of work nobody did.
+  const hopsFitTheBudget = 1 + members.length <= MAX_STEPS;
+  if (hopsFitTheBudget) {
+    for (let i = 0; i < members.length; i += 1) {
+      const m = members[i];
+      const res = await ctx.dispatch("tmct_callees", { symbol: m.label });
+      if (!res.ok) return refuse(`the callees hop for ${m.label} did not ground: ${res.error}`, ROUTER_DRIVER);
+      calls.push({ name: "tmct_callees", input: { symbol: m.label } });
+      proof.push({ step: "causal-link", producer: "step-1", condition: m.label, consumer: `step-${i + 2}:tmct_callees`, role: "member-filter", ok: true });
+      why.push(`[${i + 2}] callees hop over ${m.label} (a member step 1 produced)`);
+    }
+  } else {
+    proof.push({
+      step: "graph-fold", producer: "step-1", condition: target.label,
+      consumer: `fold:membersReaching(${classInd.label})`, role: "member-filter",
+      members: members.length, hops: 0, ok: true,
+    });
+    why.push(`[2] ${members.length} callable members needs a ${1 + members.length}-step plan against a budget of ${MAX_STEPS}, so no per-member callees hop was dispatched — the fold reads the same callsSymbol edges those hops would have reported, over every one of the ${members.length}`);
   }
 
   const composed = membersReaching(ctx.graph, classInd, target.label);
+  const trace = hopsFitTheBudget
+    ? calls.map((c) => c.name).join(" -> ")
+    : `${calls.map((c) => c.name).join(" -> ")} + graph fold over ${members.length} members`;
   return {
     calls, refused: false, terminated: true, proof, driver: ROUTER_DRIVER, why, composed,
-    observed: `plan(member-filter): ${calls.map((c) => c.name).join(" -> ")} => {${composed.join(", ")}}`,
+    observed: `plan(member-filter): ${trace} => {${composed.join(", ")}}`,
   };
 }
 
