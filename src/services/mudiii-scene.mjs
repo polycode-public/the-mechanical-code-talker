@@ -130,16 +130,14 @@ export function chebyshevDistanceBetweenCells(a, b) {
   return Math.max(Math.abs(Number(ma[1]) - Number(mb[1])), Math.abs(Number(ma[2]) - Number(mb[2])));
 }
 
-/** A facing word to a Y rotation in radians, `south` (the world's own
- *  `defaultFacing`) at zero — matches `cameraRigFor`'s own FACING_VECTOR
- *  convention (`south: {x:0,z:1}`, `north: {x:0,z:-1}`, `east: {x:1,z:0}`,
- *  `west: {x:-1,z:0}`) so an agent mesh turns to face the same way its own
- *  follow/pov camera rig would sit behind it. A rig's own forward axis may
- *  need a per-model offset once real assets are in place; this is the
- *  world-facing convention, not a guarantee about any one GLB's neutral
- *  pose. Pure. */
+/** A facing word to a Y rotation in radians. Assumes a model's own local
+ *  forward is +Z (true for fox and goblin, the two rigs in the current
+ *  manifest, checked by walking each GLB's own bind-pose bone chain) so a
+ *  rotated mesh matches `cameraRigFor`'s own FACING_VECTOR table exactly for
+ *  all four cardinals — a model with a -Z neutral pose would need its own
+ *  offset. Pure. */
 export function yawForFacing(facing) {
-  const YAW = { south: 0, north: Math.PI, east: -Math.PI / 2, west: Math.PI / 2 };
+  const YAW = { south: 0, north: Math.PI, east: Math.PI / 2, west: -Math.PI / 2 };
   return YAW[facing] ?? YAW.south;
 }
 
@@ -776,6 +774,14 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       if (agentGroups[id]) return agentGroups[id].cell;
       if (itemMeshes[id]) return itemMeshes[id].cell;
       return null;
+    },
+    // The live agent group's own applied Y rotation, in radians -- an e2e
+    // assertion's read, so it can compare the yaw actually applied against
+    // the direction an agent travelled between two cells rather than trusting
+    // yawForFacing's own output in isolation.
+    yawOf: function (id) {
+      var entry = agentGroups[id];
+      return entry ? entry.group.rotation.y : null;
     },
     // The live agent mesh's world-space height and lowest point, plus the
     // manifest's own targetHeight to compare it against — an e2e assertion's

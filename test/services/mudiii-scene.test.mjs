@@ -95,9 +95,26 @@ test("chebyshevDistanceBetweenCells tells a one-cell hop apart from a multi-cell
 test("yawForFacing covers all four cardinal facings with south (defaultFacing) at zero", () => {
   assert.equal(yawForFacing("south"), 0);
   assert.equal(yawForFacing("north"), Math.PI);
-  assert.equal(yawForFacing("east"), -Math.PI / 2);
-  assert.equal(yawForFacing("west"), Math.PI / 2);
+  assert.equal(yawForFacing("east"), Math.PI / 2);
+  assert.equal(yawForFacing("west"), -Math.PI / 2);
   assert.equal(yawForFacing(undefined), 0, "an agent that has never moved falls back to the world's own default facing");
+});
+
+test("yawForFacing rotates a +Z-forward mesh to face the same world direction as cameraRigFor's own FACING_VECTOR, for every cardinal", () => {
+  // A local copy of cameraRigFor's own FACING_VECTOR table (mudiii-viz.mjs)
+  // — the world-direction convention yawForFacing's own header says it
+  // matches. Rotating a mesh whose local forward is +Z by rotation.y=theta
+  // puts that forward at world (sin theta, cos theta) in the (x, z) plane;
+  // that vector should point the same way FACING_VECTOR does for the same
+  // facing word, or an agent renders facing away from the way it travelled.
+  const FACING_VECTOR = { north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, east: { x: 1, z: 0 }, west: { x: -1, z: 0 } };
+  for (const facing of Object.keys(FACING_VECTOR)) {
+    const theta = yawForFacing(facing);
+    const modelForward = { x: Math.sin(theta), z: Math.cos(theta) };
+    const wanted = FACING_VECTOR[facing];
+    const dot = modelForward.x * wanted.x + modelForward.z * wanted.z;
+    assert.ok(dot > 0.99, `${facing}: yawForFacing's own rotation points a +Z-forward mesh the same way FACING_VECTOR does (dot ${dot})`);
+  }
 });
 
 test("threatEngagedFor is true only when the opposing role's cell is actually believed", () => {
