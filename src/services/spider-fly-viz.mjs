@@ -1,18 +1,17 @@
-// spider-fly-viz.mjs — the spider-and-fly full-screen page (PLAN_SPIDER_FLY.md
-// §8/§9/§11): a self-contained document shaped exactly like ledger-viz.mjs/
-// plan-viz.mjs — one inlined <style> (importing viz-theme.mjs's shared
-// tokens), behaviour as an inlined IIFE — but unlike those two, almost
-// nothing is embedded as build-time data: the whole game is LIVE client-side
-// state (spider-fly-browser-entry.mjs's createSpiderFlySession), so
-// renderSpiderFlyHtml only needs the page's own static grid geometry (which
-// never changes) plus a title. The engine, sprite resolver and chat turn
-// engine all arrive via ./spider-fly-browser.bundle.js, referenced with a
-// plain same-origin <script src> — the same sibling-file arrangement
-// index.html already uses for chat-browser.bundle.js (both are the FULL
-// turn engine, both generated fresh per build, neither meant to be
-// committed), not memory-ask-browser.bundle.js's inlined-text arrangement
-// (that bundle is small and inlined specifically so ledger.html stays
-// portable on its own — that reason doesn't apply here).
+// spider-fly-viz.mjs — the spider-and-fly full-screen page: a self-contained
+// document shaped exactly like ledger-viz.mjs/plan-viz.mjs — one inlined <style>
+// (importing viz-theme.mjs's shared tokens), behaviour as an inlined IIFE — but
+// unlike those two, almost nothing is embedded as build-time data: the whole
+// game is LIVE client-side state (spider-fly-browser-entry.mjs's
+// createSpiderFlySession), so renderSpiderFlyHtml only needs the page's own
+// static grid geometry (which never changes) plus a title. The engine, sprite
+// resolver and chat turn engine all arrive via ./spider-fly-browser.bundle.js,
+// referenced with a plain same-origin <script src> — the same sibling-file
+// arrangement index.html already uses for chat-browser.bundle.js (both are the
+// FULL turn engine, both generated fresh per build, neither meant to be
+// committed), not memory-ask-browser.bundle.js's inlined-text arrangement (that
+// bundle is small and inlined specifically so ledger.html stays portable on its
+// own — that reason doesn't apply here).
 //
 // renderSpiderFlyHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
@@ -125,19 +124,17 @@ export function facingDegreesFor(plan, previousDegrees) {
 }
 
 /**
- * The updated corpse set for one redraw (§A.2.5 — visual-only, entirely
- * client-side; the actual starve/eat removal already happened in the
- * engine). Every id present in `prevAgents` but absent from `agents` died
- * THIS tick — eaten or starved are the only two ways an agent ever leaves
- * the engine's own returned roster — and is added at its last-known cell
- * and class; every corpse already older than `lingerTurns` past its own
- * death turn is dropped first, so the set never grows without bound.
- * Returns a plain `{ [id]: { cls, cell, diedAtTurn } }` map. Pure.
- * `lingerTurns` defaults to a literal 4 (not the module-level
- * CORPSE_LINGER_TURNS constant) so this function stays fully
- * `.toString()`-splice safe — every real caller (both the inlined page and
- * CORPSE_LINGER_TURNS's own callers elsewhere in this module) passes it
- * explicitly anyway.
+ * The updated corpse set for one redraw — visual-only, entirely client-side;
+ * the actual starve/eat removal already happened in the engine. Every id
+ * present in `prevAgents` but absent from `agents` died THIS tick — eaten or
+ * starved are the only two ways an agent ever leaves the engine's own returned
+ * roster — and is added at its last-known cell and class; every corpse already
+ * older than `lingerTurns` past its own death turn is dropped first, so the set
+ * never grows without bound. Returns a plain `{ [id]: { cls, cell, diedAtTurn }
+ * }` map. Pure. `lingerTurns` defaults to a literal 4 (not the module-level
+ * CORPSE_LINGER_TURNS constant) so this function stays fully `.toString()`-splice
+ * safe — every real caller (both the inlined page and CORPSE_LINGER_TURNS's own
+ * callers elsewhere in this module) passes it explicitly anyway.
  */
 export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns = 4) {
   const out = {};
@@ -166,9 +163,9 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
  *  back to the flat SPRITE_REGISTRY, unchanged from before this module
  *  existed).
  *  `?preview=1` on the page's own URL switches it into the small, auto-
- *  playing, non-interactive mode the home page's hero iframe embeds (§11) —
- *  one file serves both the hero and the "open full-screen" link, matching
- *  how ledger.html/plan.html are each one file embedded two ways.
+ *  playing, non-interactive mode the home page's hero iframe embeds — one file
+ *  serves both the hero and the "open full-screen" link, matching how
+ *  ledger.html/plan.html are each one file embedded two ways.
  *  `engineBundleJs` (the built spider-fly-browser bundle's own text) inlines
  *  the engine into the page instead of the sibling `<script src>`, for the
  *  CLI's standalone export — one downloadable file that runs from file://
@@ -344,11 +341,11 @@ ${THEME_TOKENS_CSS}
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
   .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
-  /* the click-expand facts panel (§28): beside the clicked spider/fly's own
-     row, never a separate popover or a second panel elsewhere on the page —
-     the same believedCellOf/beliefSnapshotFor read path spider-fly-turn.mjs
-     already computes every tick for planning, rendered here as full
-     sentences instead of the compact believes:-line above. */
+  /* the click-expand facts panel: beside the clicked spider/fly's own row,
+     never a separate popover or a second panel elsewhere on the page — the same
+     believedCellOf/beliefSnapshotFor read path spider-fly-turn.mjs already
+     computes every tick for planning, rendered here as full sentences instead of
+     the compact believes:-line above. */
   .hud-detail { flex: 1 1 auto; min-width: 0; font-family: ${MONO_STACK}; font-size: .64rem; line-height: 1.5; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .35rem .5rem; }
   .hud-detail-title { text-transform: uppercase; letter-spacing: .06em; opacity: .75; margin-bottom: .2rem; }
   /* A stat-readout track: an inset "LCD" well, filled with a segmented pip
@@ -378,11 +375,11 @@ ${THEME_TOKENS_CSS}
   .pill:hover:not(:disabled) { border-color: var(--chrome-accent); }
   .pill:disabled { opacity: .45; cursor: default; }
   .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
-  /* The dynamic deception-pill rail (§A.2.4): a true/false tag shown ONLY
-     here, via border style/color and a small human-facing glyph — the
-     submitted sentence itself (data-sentence, filled into #chatq on click)
-     never carries the tag, so a clicked pill is indistinguishable from a
-     hand-typed claim once it's in the input. */
+  /* The dynamic deception-pill rail: a true/false tag shown ONLY here, via
+     border style/color and a small human-facing glyph — the submitted sentence
+     itself (data-sentence, filled into #chatq on click) never carries the tag,
+     so a clicked pill is indistinguishable from a hand-typed claim once it's in
+     the input. */
   .dynpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--chrome-edge-lo); }
   .dynpills:empty { display: none; padding-top: 0; border-top: none; }
   .pill[data-role="dyn-addr"][data-active="1"] { border-color: var(--taught); color: var(--taught); }
@@ -745,13 +742,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     lastAgents = agents;
   }
 
-  // ---- corpses (§A.2.5): visual-only — the actual starve/eat removal
-  // already happened in the engine before this redraw ever sees "agents".
-  // A corpse sinks to the bottom row of the SAME board column it died in
-  // ("drops to the bottom" — spider-fly-world.mjs's own x/y convention,
-  // y = GRID_SIZE is the bottom row) and fades out once CORPSE_LINGER_TURNS
-  // passes, drawn in the same sprite layer as every live sprite, just
-  // grayscaled and non-interactive (see the .sprite.corpse CSS rule).
+  // ---- corpses: visual-only — the actual starve/eat removal already happened
+  // in the engine before this redraw ever sees "agents". A corpse sinks to the
+  // bottom row of the SAME board column it died in ("drops to the bottom" —
+  // spider-fly-world.mjs's own x/y convention, y = GRID_SIZE is the bottom row)
+  // and fades out once CORPSE_LINGER_TURNS passes, drawn in the same sprite
+  // layer as every live sprite, just grayscaled and non-interactive (see the
+  // .sprite.corpse CSS rule).
   function renderCorpses() {
     for (const id of Object.keys(corpseEls)) {
       if (!corpses[id]) { corpseEls[id].remove(); delete corpseEls[id]; }
@@ -793,12 +790,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     return '<div class="hud-plan">plan: ' + text + ".</div>";
   }
 
-  // The agent's own current world-knowledge-graph snapshot (§A.2.7) — every
-  // OTHER live individual it believes it knows the position of, or
-  // "unseen" when it has no belief at all. Deliberately never ground truth:
-  // this is what the agent would actually ACT on, which a false pill or a
-  // told fact can make visibly wrong compared to where that individual
-  // really is — the gap IS the demonstration.
+  // The agent's own current world-knowledge-graph snapshot — every OTHER live
+  // individual it believes it knows the position of, or "unseen" when it has no
+  // belief at all. Deliberately never ground truth: this is what the agent
+  // would actually ACT on, which a false pill or a told fact can make visibly
+  // wrong compared to where that individual really is — the gap IS the
+  // demonstration.
   function beliefLineHtml(belief) {
     const entries = Object.entries(belief || {});
     if (!entries.length) return "";
@@ -1023,12 +1020,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   chatqEl.addEventListener("input", refreshPills);
   refreshPills();
 
-  // ---- deception pills (§A.2.4): a SEPARATE dynamic rail, alongside (never
-  // replacing) the static one above. tmct.page.pillsForSpiderFly is the
-  // exact same pure function spider-fly-turn.mjs exports — this page never
-  // reimplements the true/false claim logic, only renders its output and
-  // fills #chatq on click, same click-to-fill discipline as every other
-  // pill on this page (never auto-submits).
+  // ---- deception pills: a SEPARATE dynamic rail, alongside (never replacing)
+  // the static one above. tmct.page.pillsForSpiderFly is the exact same pure
+  // function spider-fly-turn.mjs exports — this page never reimplements the
+  // true/false claim logic, only renders its output and fills #chatq on click,
+  // same click-to-fill discipline as every other pill on this page (never
+  // auto-submits).
   function renderDynamicPills() {
     if (!session || !Object.keys(lastAgents).length) { dynamicPillsEl.innerHTML = ""; return; }
     const result = tmct.page.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});

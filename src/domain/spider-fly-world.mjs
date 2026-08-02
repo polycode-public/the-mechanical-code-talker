@@ -57,9 +57,9 @@ export const chebyshevDistance = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx),
 export const inBounds = (x, y) => x >= 1 && x <= GRID_SIZE && y >= 1 && y <= GRID_SIZE;
 
 /** Every cell within Chebyshev `radius` of (cx, cy), clipped to the board, in
- *  raster order — the one visibility primitive PLAN_SPIDER_FLY.md §4 names
- *  ("visibleCells(cx, cy, radius=4)"), shared by both agents' belief and this
- *  module's own web-block derivation below. */
+ *  raster order — the one visibility primitive ("visibleCells(cx, cy, radius=4)")
+ *  shared by both agents' belief and this module's own web-block derivation
+ *  below. */
 export function visibleCells(cx, cy, radius) {
   const out = [];
   for (let y = Math.max(1, cy - radius); y <= Math.min(GRID_SIZE, cy + radius); y += 1) {
@@ -72,8 +72,7 @@ export function visibleCells(cx, cy, radius) {
 
 export const isInWebBlock = (x, y) => chebyshevDistance(x, y, WEB_HOME.x, WEB_HOME.y) <= WEB_RADIUS;
 
-/** Every board-edge (perimeter) cell, raster order — where a spawned fly
- *  arrives (PLAN_SPIDER_FLY.md §10). */
+/** Every board-edge (perimeter) cell, raster order. */
 export function perimeterCells() {
   const out = [];
   for (let y = 1; y <= GRID_SIZE; y += 1) {
@@ -110,11 +109,10 @@ export function oneStepDirectionBetween(fromCell, toCell) {
   return null;
 }
 
-/** The world's seed taxonomy (PLAN_SPIDER_FLY.md §7): enough for the
- *  ontology-to-sprite worked example (a poodle sprite, a sheepdog falling
- *  back to the generic dog sprite) to run on the default persona, no
- *  --persona-size large flag required. [subject, superclass] pairs, written
- *  as rdfs:subClassOf facts. */
+/** The world's seed taxonomy — enough for the ontology-to-sprite worked example
+ *  (a poodle sprite, a sheepdog falling back to the generic dog sprite) to run
+ *  on the default persona without the --persona-size large flag. [subject,
+ *  superclass] pairs, written as rdfs:subClassOf facts. */
 export const SEED_TAXONOMY = Object.freeze([
   Object.freeze(["poodle", "dog"]),
   Object.freeze(["sheepdog", "dog"]),
@@ -293,9 +291,9 @@ export function isLiveRenderableAgent(id, state) {
 /** A minimal, inert rule-row family, so scripts/build-worlds-pack.mjs's
  *  shared validator ("every world needs at least one rule row") passes.
  *  src/services/spider-fly-turn.mjs never reads these back: grid movement is
- *  hand-written pathfinding over findActionPath/findReachableSet
- *  (PLAN_SPIDER_FLY.md §5), not the taught action-Rule DSL, so this rides in
- *  the shard unused, same as an unrelated fact would. */
+ *  hand-written pathfinding over findActionPath/findReachableSet, not the
+ *  taught action-Rule DSL, so this rides in the shard unused, same as an
+ *  unrelated fact would. */
 export function* worldRuleRows() {
   yield {
     world: WORLD_NAME, kind: "rule", name: "go", ruleKind: "action-signature",
