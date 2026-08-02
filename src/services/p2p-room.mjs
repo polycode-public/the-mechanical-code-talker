@@ -30,10 +30,12 @@ import {
   WAVED_PREDICATE,
 } from "../domain/p2p/facts.mjs";
 import { generateNodeId } from "../domain/p2p/peer-id.mjs";
-import { RETRACTION_PREDICATE } from "../domain/memory/retraction.mjs";
+import {
+  RETRACTION_PREDICATE, encodeRetractionValue, decodeRetractionValue,
+} from "../domain/memory/retraction.mjs";
 import {
   appendFacts, appendRetractions, loadMemory, loadNodeId, saveNodeId,
-  readFactRows, readRetractions, normFactTerm, FACT_CLASS,
+  readFactRows, readRetractions, normFactTerm, factGroupId, factRecordIdForTag, FACT_CLASS,
 } from "../adapters/memory/core.mjs";
 
 export const ROOM_IDLE = "idle";
@@ -160,6 +162,40 @@ const toWireFacts = (row, identity, fallbackTimestamp) => {
     }));
 };
 
+/** The record ids one provenance string keys once its tags have been relabelled
+ *  for the wire. Two stores file one assertion under two ids — here under the
+ *  chat session that taught it, at the peer under the node that sent it — so a
+ *  retraction that named only the ids it sees locally would bite on one store
+ *  and miss the other. Naming both is what makes it land either way. */
+function broadcastRecordIds(groupId, provenance, identity, fallbackTimestamp) {
+  const ids = [];
+  for (const { tag } of wireProvenanceTags(provenance, identity, fallbackTimestamp)) {
+    if (tag) ids.push(factRecordIdForTag(groupId, tag));
+  }
+  return ids;
+}
+
+/** A retraction goes out as ONE fact carrying every tag, not one per tag. The
+ *  per-tag split exists because appendFacts unions an incoming tag against the
+ *  ones it stores; a retraction merges through its own union instead, and the
+ *  tags it carries are already relabel fixpoints. */
+const toWireRetraction = (record, identity, fallbackTimestamp) => {
+  const groupId = factGroupId(record.subject);
+  const { retractedAt, ids } = decodeRetractionValue(record.object);
+  const tags = wireProvenanceTags(record.provenance, identity, fallbackTimestamp)
+    .map(({ tag }) => tag)
+    .filter(Boolean);
+  return {
+    subject: record.subject,
+    predicate: RETRACTION_PREDICATE,
+    object: encodeRetractionValue(retractedAt, [
+      ...ids,
+      ...broadcastRecordIds(groupId, record.provenance, identity, fallbackTimestamp),
+    ]),
+    provenance: tags.join(" | "),
+  };
+};
+
 /** A room: one shared world, one local fact store, and however many direct
  *  peer connections have been made into it.
  *
@@ -281,6 +317,47 @@ export function createP2pRoom({
     return cachedRows;
   }
 
+  const toWire = (row, identity, timestamp) => (row.predicate === RETRACTION_PREDICATE
+    ? [toWireRetraction(row, identity, timestamp)]
+    : toWireFacts(row, identity, timestamp));
+
+  /** Fold the broadcast form of this node's own retractions back into the store.
+   *  A retraction made here names the ids this store files the assertion under;
+   *  a peer relaying that same assertion back sends it under the id the RELABEL
+   *  produces. Merging the broadcast form in is what makes the local refusal
+   *  cover it, and it is a union, so it settles after one pass. */
+  async function alignOwnRetractions() {
+    if (!cachedRetractions.length) return;
+    const identity = wireIdentity();
+    const timestamp = now();
+    const expanded = cachedRetractions.map((record) => toWireRetraction(record, identity, timestamp));
+    if (expanded.every((wire, i) => wire.object === cachedRetractions[i].object)) return;
+    await appendRetractions(memoryDir, expanded);
+    await refreshRows();
+  }
+
+  /** The other side of the same re-keying: a retraction that names this node's
+   *  broadcast id for an assertion also names whatever id this store files that
+   *  same assertion under. Without it a peer could retract a fact it learned
+   *  from here and the origin would keep reading its own copy. */
+  function localiseRetraction(fact) {
+    const groupId = factGroupId(fact.subject);
+    const { retractedAt, ids } = decodeRetractionValue(fact.object);
+    const named = new Set(ids);
+    const row = cachedRows.find((r) => r.id === groupId);
+    if (!row) return fact;
+    const identity = wireIdentity();
+    const timestamp = now();
+    const alsoNamed = [];
+    for (const assertion of row.assertions || []) {
+      if (named.has(assertion.id)) continue;
+      const asBroadcast = broadcastRecordIds(groupId, assertion.provenance, identity, timestamp);
+      if (asBroadcast.some((id) => named.has(id))) alsoNamed.push(assertion.id);
+    }
+    if (!alsoNamed.length) return fact;
+    return { ...fact, object: encodeRetractionValue(retractedAt, [...ids, ...alsoNamed]) };
+  }
+
   /** readFactRows walks `individuals` in array order and the fold reads them in
    *  that order, so two peers holding an identical fact set can still fold it
    *  differently while their arrival orders differ. Sorting the Fact
@@ -337,6 +414,7 @@ export function createP2pRoom({
   async function flushLocalChange() {
     await ensureStarted();
     await refreshRows();
+    await alignOwnRetractions();
     const changed = [];
     for (const row of cachedRows) {
       if (seenProvenanceById.get(row.id) === row.provenance) continue;
@@ -353,7 +431,7 @@ export function createP2pRoom({
     const targets = connectedPeers();
     if (!targets.length) return { broadcast: 0 };
     const timestamp = now();
-    const facts = changed.flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
+    const facts = changed.flatMap((row) => toWire(row, wireIdentity(), timestamp));
     broadcast(opMessage({ from: myPeerId, facts }));
     return { broadcast: changed.length };
   }
@@ -370,7 +448,7 @@ export function createP2pRoom({
     // strips a record a retraction covers however late the retraction arrives —
     // but doing it this way keeps a suppressed record from being written at all.
     const retractions = accepted.filter((f) => f.predicate === RETRACTION_PREDICATE);
-    if (retractions.length) await appendRetractions(memoryDir, retractions);
+    if (retractions.length) await appendRetractions(memoryDir, retractions.map(localiseRetraction));
     const assertions = retractions.length
       ? accepted.filter((f) => f.predicate !== RETRACTION_PREDICATE)
       : accepted;
@@ -473,9 +551,10 @@ export function createP2pRoom({
       case "sync-request": {
         const facts = await withStore(async () => {
           await refreshRows();
+          await alignOwnRetractions();
           const timestamp = now();
           return syncableFacts([...cachedRows, ...cachedRetractions])
-            .flatMap((row) => toWireFacts(row, wireIdentity(), timestamp));
+            .flatMap((row) => toWire(row, wireIdentity(), timestamp));
         });
         send(transport, syncResponseMessage({ facts }));
         return;
@@ -701,7 +780,7 @@ export function createP2pRoom({
       if (targets.length) {
         const wireTimestamp = now();
         const facts = syncableFacts([...cachedRows, ...cachedRetractions])
-          .flatMap((row) => toWireFacts(row, wireIdentity(), wireTimestamp));
+          .flatMap((row) => toWire(row, wireIdentity(), wireTimestamp));
         pushed = facts.length;
         if (facts.length) broadcast(opMessage({ from: myPeerId, facts }));
         broadcast(syncRequestMessage());

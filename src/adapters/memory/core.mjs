@@ -329,6 +329,16 @@ export function factGroupId(recordId) {
   return at < 0 ? id : id.slice(0, at);
 }
 
+/** The record id one provenance tag keys for a triple. A store files an
+ *  assertion under the Source its OWN tag derives, and a broadcast relabel
+ *  changes that Source — locally a chat session, at the peer the node that
+ *  sent it. So two stores hold one assertion under two ids, and anything that
+ *  has to name a record ACROSS the wire (a retraction does) resolves the id
+ *  through the tag rather than assuming both ends agree. */
+export function factRecordIdForTag(groupId, tag) {
+  return `${groupId}@${assertionSourceFor(tag).id}`;
+}
+
 /** The assertion key one provenance tag derives — the SAME closed derivation
  *  Source individuals already use, with the `src:none` singleton standing in
  *  for a tag that parses to no Source at all. Under this model every record
@@ -3071,13 +3081,21 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
       removedSet.add(ind.id);
       const sourceId = recordSourceIdOf(ind);
       const key = `${groupId} ${sourceId}`;
+      // The record's own tags come along. They are the account of what was
+      // asserted and by whom, which a retraction keeps rather than erases, and
+      // they are also what lets a broadcast re-key this id onto the Source the
+      // receiving store files the same assertion under.
+      const tags = individualAttr(ind, "mgx:factProvenance");
       const retired = retiredByGroupAndSource.get(key);
-      if (retired) retired.ids.push(ind.id);
-      else {
+      if (retired) {
+        retired.ids.push(ind.id);
+        if (tags) retired.tags.push(tags);
+      } else {
         retiredByGroupAndSource.set(key, {
           groupId,
           sourceId,
           ids: [ind.id],
+          tags: tags ? [tags] : [],
           template: {
             label: ind.label || "",
             subject: individualAttr(ind, "rdf:subject"),
@@ -3103,7 +3121,7 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
         recordIds: retired.ids,
         retractedAt: retractedAtVal,
         template: retired.template,
-        provenance,
+        provenance: [...retired.tags, provenance].filter(Boolean).join(" | "),
       });
       if (record) upsertIndividual(payload, record);
     }
