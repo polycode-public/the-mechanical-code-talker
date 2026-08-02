@@ -748,6 +748,10 @@ const MUDIII_STYLE = `
   .map-dot-predator { background: var(--square-predator); }
   .map-dot-prey { background: var(--square-prey); }
   .map-dot-crumb, .map-dot-morsel, .map-dot-item { background: var(--square-accent); width: .34rem; height: .34rem; margin: -.17rem 0 0 -.17rem; }
+  .map-label {
+    position: absolute; margin: -.66rem 0 0 .26rem; font-size: .44rem; line-height: 1; letter-spacing: .02em;
+    color: var(--parchment); text-shadow: 0 1px 2px rgba(0,0,0,.85); white-space: nowrap; pointer-events: none;
+  }
   /* Plain inline-block swatches, never .map-dot: that class is absolutely
      positioned with a centring margin, so a legend reusing it would position
      against the board and disappear. */
@@ -1254,7 +1258,11 @@ function pageScript() {
       return '<span class="map-block" style="left:' + b.xPct + '%;top:' + b.yPct + '%;width:' + b.sizePct
         + '%;height:' + b.sizePct + '%" title="' + esc(b.id) + '"></span>';
     }).join("") + dots.map(function (d) {
-      return '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
+      const dot = '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
+      // Items are named by their colour in the key; only the cast, which the
+      // HUD and the follow control both name, carries its id on the board.
+      if (d.kind !== "predator" && d.kind !== "prey") return dot;
+      return dot + '<span class="map-label mono" style="left:' + d.xPct + '%;top:' + d.yPct + '%">' + esc(d.id) + "</span>";
     }).join("");
     el("mapPanelTurn").textContent = "turn " + globalTurn;
   }

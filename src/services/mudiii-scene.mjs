@@ -633,21 +633,56 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // correctly clone a SkinnedMesh, and at this roster size — a handful of
   // foxes and goblins — the extra memory of a separate load per agent is
   // trivial next to that whole class of bug). ---------------------------------
+  // The id, drawn to a canvas and hung above the agent as a sprite. Parenting
+  // it to the agent's own group means it rides the movement tween with no
+  // per-frame bookkeeping, and a sprite always faces the camera, so there is
+  // no facing maths either. sizeAttenuation off holds it at a constant size on
+  // screen — an id that shrinks to nothing as the camera pulls back is worse
+  // than no id at all — which is why the scale below is in screen fractions
+  // rather than world units.
+  var LABEL_SCREEN_WIDTH = 0.13;
+  function makeAgentLabel(id, height) {
+    var canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 64;
+    var ctx = canvas.getContext("2d");
+    ctx.font = "bold 38px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(20,16,10,.85)";
+    ctx.strokeText(id, 128, 34);
+    ctx.fillStyle = "#F3ECDD";
+    ctx.fillText(id, 128, 34);
+    var material = new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(canvas), transparent: true, sizeAttenuation: false, depthWrite: false,
+    });
+    var sprite = new THREE.Sprite(material);
+    sprite.scale.set(LABEL_SCREEN_WIDTH, LABEL_SCREEN_WIDTH / 4, 1);
+    sprite.position.y = height + 0.3;
+    sprite.name = "label-" + id;
+    return sprite;
+  }
+
   function ensureAgent(id, agent) {
     if (agentGroups[id]) return agentGroups[id];
     var kind = roleOfAgentId(id);
     var entry = {
       group: new THREE.Group(), tween: null, cell: null, facing: agent.facing, role: agent.role,
       kind: kind, mixer: null, actions: {}, currentClip: null, clipMap: null, oneShotAction: null,
+      model: null,
     };
     entry.group.visible = false;
     scene.add(entry.group);
     agentGroups[id] = entry;
     var asset = manifestByKind[kind];
+    entry.group.add(makeAgentLabel(id, asset ? asset.targetHeight : 1));
     if (asset) {
       loadGlbRaw(modelUrlFor(asset.destPath)).then(function (gltf) {
         normalizeToHeight(gltf.scene, asset.targetHeight);
         entry.group.add(gltf.scene);
+        entry.model = gltf.scene;
         entry.group.visible = true;
         entry.clipMap = asset.clips || {};
         entry.mixer = new THREE.AnimationMixer(gltf.scene);
@@ -884,10 +919,13 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     // manifest's own targetHeight to compare it against — an e2e assertion's
     // read, so it goes through the group actually in the scene rather than a
     // second, locally invented measurement.
+    // Measured through the loaded MODEL, never the whole group: the group
+    // also carries the id label, whose sprite geometry would widen the box
+    // and report a height nobody rendered.
     meshHeightOf: function (id) {
       var entry = agentGroups[id];
-      if (!entry || !entry.group || entry.group.children.length === 0) return null;
-      var box = new THREE.Box3().setFromObject(entry.group);
+      if (!entry || !entry.model) return null;
+      var box = new THREE.Box3().setFromObject(entry.model);
       var size = new THREE.Vector3();
       box.getSize(size);
       var asset = manifestByKind[entry.kind];

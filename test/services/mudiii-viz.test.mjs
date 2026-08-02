@@ -449,6 +449,13 @@ test("renderMudiiiHtml: the map panel draws its grid, its buildings and a key fo
   assert.doesNotMatch(html, /class="map-dot[^"]*"><\/i>/, "the legend uses plain swatches, never the absolutely-positioned dot class");
 });
 
+test("renderMudiiiHtml: the map names the cast beside each dot, and leaves items to the key", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /if \(d\.kind !== "predator" && d\.kind !== "prey"\) return dot;/);
+  assert.match(html, /<span class="map-label mono" style="left:/);
+  assert.match(html, /\.map-label \{[\s\S]*pointer-events: none;/, "a label never steals a click meant for the board");
+});
+
 test("renderMudiiiHtml: the map board stays square in landscape, capped rather than stretched", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/);
