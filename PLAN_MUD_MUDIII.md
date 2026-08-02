@@ -73,14 +73,22 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
   `mudiii-scene.mjs` owns the 3D, and the two talk through `window.mudiiiScene` one way and
   `window.mudiiiHandleSceneClick` the other. Every scene call from the page is guarded, so a
   failed three.js load costs the canvas and nothing else. Both files splice pure functions into
-  their generated scripts by `.toString()`, so a spliced function must close over nothing the
-  generated script does not itself declare.
+  their generated scripts by `.toString()`, so **a spliced function must close over nothing the
+  generated script does not itself declare** — every export of either module except its
+  page/script builder is spliced, and `mudiii-viz.test.mjs` fails the build on a leak. Node
+  cannot catch this by running the function: the module copy has the module's bindings in scope
+  and the browser copy does not.
 - **One ticker for the whole world.** `runPredatorPreyTick` advances every agent in one call, so
   there is nothing a second ticker could drive. Every turn — the deck, the step button, the drive
   ring, a chat frame — goes through the same serialized queue, and the engine owns the count.
 - **One write path per action.** A ground click with the food pill armed runs the same
   `put food at cell-x-y` the chat lane runs, so the provenance stamp is identical and
   "who put that there?" answers the same either way.
+- **The board is open, so the backdrop is a sky.** Twelve units across with nothing beyond it,
+  which means most cameras spend part of the frame looking off it. `skyGradientStops` paints an
+  equirectangular sky from the page's own sky/horizon/stone custom properties, so the canvas
+  continues the page rather than cutting a hole in it, and the horizon holds still as the visitor
+  turns.
 - **Movement is a snap with a cosmetic tween.** Per-agent meshes persist, a ~250ms lerp eases
   each one-cell hop, and the authoritative position is always the tick's cell. Spawns, despawns
   and any multi-cell jump use a scale flourish at the destination, no path animation. Reduced
@@ -104,42 +112,21 @@ Three things the original design called differently, kept because the page is be
 
 ## Open
 
-1. **The square has no sky.** `scene.background` is a flat slate colour, so every camera that
-   looks past the board edge fills the rest of the frame with it — the opening follow shot, an
-   overhead orbit, and a long look-drag in POV alike. The page already declares `--square-sky`
-   and `--square-horizon` and the scene never reads either.
-   *Do:* paint a two-stop horizon into `scene.background` from those tokens, built in the scene
-   script so it costs no second asset. *Risk:* a gradient that reads as fog rather than sky;
-   check it against the overhead rig, which sees the most of it.
+1. **Overhead frames the board small in a wide window.** The overhead rig sits at
+   `gridSize * 1.4` with a 55-degree camera, which fills the frame vertically and leaves most of
+   a wide canvas on the sky either side. The 14x14 chapel yard is the worst of the three.
+   *Do:* rig the height off the canvas aspect as well as the board, so a wide window pulls in
+   rather than backing off. *Risk:* a rig that fills a wide window crops a tall one; the height
+   has to fit the tighter of the two axes, not the looser.
 
-2. **A camera mode with nothing followed is a silent no-op.** After a fallback to overhead the
-   selection is cleared, but the agent dropdown still shows a live agent, so pressing `follow` or
-   `pov` lights the button, leaves the camera overhead, and says nothing. The drive ring stays
-   hidden for the same reason.
-   *Do:* have a follow/pov press with no selection adopt the dropdown's own current agent, and
-   say so in the status line when there is nobody left to adopt. *Risk:* adopting an agent the
-   visitor did not pick; the dropdown is what they are looking at, so adopt that one rather than
-   inventing a choice.
+2. **The belief line reads every unseen individual by name.** "What does the goblin see?" answers
+   with each unobserved crumb listed one by one, so the sentence is mostly a list of things that
+   are not there, and it grows with the food cap. *Do:* count the unobserved rather than naming
+   them, keeping the named ones for what is actually in view. *Risk:* the deception rail's whole
+   point is that a lie about a specific individual lands visibly, so a taught individual has to
+   keep its name even while unseen.
 
-3. **"Who and what stands where" lists the whole tape.** The edit panel keys placements by raw
-   subject, and the engine stamps every per-turn row as `<id>@turn<N>`, so the panel prints
-   several hundred historical rows instead of the current board, and prints agents that have
-   already been eaten.
-   *Do:* fold placements by base subject on `(epoch, turn)` and drop anything carrying a removal
-   row. *Risk:* props are authored with bare subjects and agents with stamped ones, so the fold
-   has to rank a bare row below any stamped row for the same base rather than dropping it.
-
-4. **`cameraRigFor` is not splice-safe.** It closes over `DEFAULT_GRID_SIZE` and `DEFAULT_FACING`,
-   two module constants neither generated script declares, so the browser copy throws a
-   `ReferenceError` on any facing outside the four cardinals. The drive ring's four diagonals set
-   exactly such a facing, so one press while following stops the scene updating for that tick.
-   *Do:* make the function self-contained, as its own header already claims, and guard the class
-   rather than the instance — every spliced export has the same exposure.
-   *Risk:* a Node unit test cannot see it, because the module copy has the constants in scope;
-   the check has to run the spliced text in a bare scope.
-
-5. **The vendored three build has no measured size.** `scripts/build-three-vendor.mjs`'s header
-   still reads `// Measured size: [fill in after first build]`, and the only figure anywhere is
-   prose in `build-demo-site.mjs`. *Do:* record the built size. *Risk:* it moves whenever three
-   bumps, so a number written by hand goes stale — `reports/PAGE_WEIGHTS.md` is where a measured
-   figure belongs.
+3. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
+   largest single asset and the only measurement of it anywhere is prose.
+   *Do:* fold `public/vendor/three.js` into the next page-weights pass. *Risk:* none beyond the
+   report going stale on the next three bump, which is what that report is for.
