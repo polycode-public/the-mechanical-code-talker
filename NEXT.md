@@ -37,17 +37,15 @@ Batch 2, running alongside the one batch-1 track still open. Each track owns fil
 touches. Every remaining mudiii item that edits `mudiii-viz.mjs` waits for T1, because that file is
 the whole collision point and the goblin item has to land first anyway.
 
-- **T1 goblin-render** — `mudiii-scene.mjs`, the `await` on `mudiii-viz.mjs:1219`, and the three
-  test files that pin them. Sonnet. Status: started, corrected mid-flight with the operator's
-  1%-scale observation.
 - **T8 teach mode UI, adventure and mud only** — those two viz files and their browser entries.
   mudiii's third stays open, since it needs engine content that does not exist. Sonnet.
   Status: started.
 - **T9 predator-prey trio** — the evade tie-break, food vision gating, and `recastTownSquare`, one
   owner because all three edit the same engine file. Sonnet. Status: started.
-- **T10 pages-home wait hardening** — `test-e2e/pages-home.test.mjs`. Haiku. Status: started.
 - **T11 p2p retraction replication** — new `memory/retraction.mjs`, the `p2p-room.mjs` merge hook,
   `sync-filter.mjs`'s covered set. Top tier. Status: started.
+- **T12 trust-score flake** — `test/adapters/memory-backend-memory.test.mjs`. Sonnet.
+  Status: started.
 
 Landed:
 
@@ -57,6 +55,11 @@ Landed:
 - **T6 adventure pill `data-command`** — merged.
 - **T7 resolver purity invariant** — merged into `CLAUDE.md`'s working-model section.
 - **T3 index/home PAGE_ORDER** — merged. Both e2e files pinned the stale ten-page count.
+- **T1 goblin-render** — merged. Blast radius 80/80. The e2e assertion it wrote has not run yet;
+  the machine could not finish a `demo:build` under seven concurrent tracks.
+- **T10 pages-home wait hardening** — merged, then corrected: the track set a 10s timeout, which is
+  shorter than Playwright's own 30s default and so made the flake likelier. Both waits now share a
+  named 60s constant.
 
 ## Open items
 
@@ -822,6 +825,24 @@ until it does. Then the grid-size item, because the deception rail and the map p
   leave it failing and looking like a second, unrelated bug.
   **Mitigation:** run `node --test test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs`
   against a fresh `npm run demo:build` before re-running the jobs.
+
+- **A memory-backend parity test pins a wall-clock-derived trust score and flakes.**
+  `test/adapters/memory-backend-memory.test.mjs:48`, asserting at `:91`, deep-equals a whole
+  individual's property list including `mgx:trustScore`. It failed a full-suite run on `main` with
+  actual `0.953926` against expected `0.953925`, one unit in the sixth decimal. `createdAt` is fixed
+  at `2026-07-10T09:00:00.000Z` and `mgx:trustInputs` reports the same `recency: 0.95849` on both
+  sides, so the drift is in the score's own rounding as real time moves away from that fixed date.
+  Nothing in the batch touches this path, and the same suite passed twice earlier the same day.
+  **Tier:** Haiku for the test-side fix; report rather than edit if the scorer itself needs changing,
+  since a concurrent track owns the memory modules.
+  **Do:** stop pinning the exact rendered score in a parity assertion. The test's subject is that
+  backend B behaves like backend A, so compare the two backends' scores to each other, or assert the
+  score within a tolerance, rather than against a literal frozen last year. The `<ts>` placeholder
+  already used for `mgx:updatedAt` in the same list is the idiom to follow.
+  **Risk:** loosening the whole deep-equal would drop real parity coverage. Narrow the treatment to
+  the one time-derived field and leave every other property compared exactly.
+  **Mitigation:** the fix must hold under a clock far from the fixture date. Prove it by running the
+  file with the score's own inputs shifted, not by re-running until it passes.
 
 - **Two `pages-home.test.mjs` tests time out waiting for a page element.** "the adventure claim leads
   to a real room scene" waits on `#roomFrame` becoming visible (`:291`-`:298`) and "the ledger claim
