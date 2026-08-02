@@ -303,16 +303,21 @@ real deploy.
 
 ### mudiii.html — further work
 
-- **The map panel is still not square, and in landscape it swallows the fold.** Measured on the
-  layout as it stood before the map moved into the control panel, so re-check it against the current
-  one first. The finding: `.map-panel-board` fills the panel's width, so a 12x12 board renders into a
-  3:1 rectangle and the dots spread horizontally — the geometry the panel claims to show is not the
-  geometry it draws. In landscape the deck plus map overflowed a 375px viewport and pushed the 3D
-  board below the fold entirely.
-  **Tier:** Haiku if the current layout already fixed it, Sonnet if not.
-  **Do:** look first. The board now carries `aspect-ratio: 1` at base with a landscape override to
-  `auto`, which is what the earlier fix used to stop a square box blowing out to 283px tall. Decide
-  whether a square board or a visible 3D view matters more in landscape; they are in tension.
+- **The map is far too large on a desktop window.** Seen live. `.map-panel`'s base rule is
+  `flex: 0 0 50%; max-width: 50%` (`mudiii-viz.mjs:693`-`:698`), and a percentage has no ceiling, so
+  on a wide browser the panel takes about 950px and the square board takes 950px of height with it.
+  The controls sit in a thin column beside a vast empty gap, and the 3D scene is pushed far down.
+  **The operator's decision: about a third of that**, and **mobile portrait and landscape are both
+  approved as they stand** — do not touch the `max-width: 900px` rules.
+  **Tier:** Haiku. One wide-viewport cap.
+  **Do:** add a `min-width: 901px` query capping `.map-panel` near 320px wide, which gives roughly a
+  300px square minimap. The base sets `flex: 0 0 50%`, so a `max-width` alone will not shrink it —
+  the basis has to change too.
+  **This also settles the square question:** keep `aspect-ratio: 1` on desktop, where there is room.
+  The square-versus-fold tension is a landscape-phone problem only, and the existing
+  `aspect-ratio: auto` override already handles it.
+  **Mitigation:** screenshot all three sizes and open them. The two phone layouts must come back
+  unchanged.
 
 - **The eat flourish barely reads at a 220ms tick.** The flourish now plays on both sides, but the
   predator's clip fades in over 150ms and an attack animation runs several hundred ms, so the next
