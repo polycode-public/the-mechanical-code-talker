@@ -28,6 +28,7 @@
 //   node scripts/compare-prey-decision.mjs
 //   node scripts/compare-prey-decision.mjs --seeds=12 --turns=200
 //   node scripts/compare-prey-decision.mjs --weights=0.3,0.5,0.7 --json
+//   node scripts/compare-prey-decision.mjs --set=preyMassDecrementPerTurn=0.25
 
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -60,16 +61,27 @@ const threatBandsFor = (config) => {
 };
 
 function parseArgs(argv) {
-  const opts = { ...DEFAULTS, json: false };
+  const opts = { ...DEFAULTS, json: false, overrides: {} };
   for (const arg of argv) {
-    const [key, raw] = arg.replace(/^--/, "").split("=");
+    const [key, ...rest] = arg.replace(/^--/, "").split("=");
+    const raw = rest.length ? rest.join("=") : undefined;
     if (key === "json") { opts.json = true; continue; }
     if (raw === undefined) throw new Error(`compare-prey-decision: "${arg}" needs a value, as --${key}=<value>`);
     if (key === "layout") opts.layout = raw;
     else if (key === "seeds") opts.seeds = Number(raw);
     else if (key === "turns") opts.turns = Number(raw);
     else if (key === "weights") opts.weights = raw.split(",").map(Number);
-    else throw new Error(`compare-prey-decision: no such option "--${key}"`);
+    else if (key === "set") {
+      // Both modes get the same override, so it changes the regime under test
+      // rather than either side of the comparison. The one it was built for:
+      // on the shipped drain nothing ever starves inside a run, so food has no
+      // survival value to trade against and the measure cannot see the
+      // question. A drain that starves an unfed prey inside a normal lifetime
+      // makes the trade real.
+      const [name, value] = raw.split("=");
+      if (!(name in DEFAULT_GAME_CONFIG.mudiii)) throw new Error(`compare-prey-decision: no mudiii key named "${name}"`);
+      opts.overrides[name] = Number.isNaN(Number(value)) ? value : Number(value);
+    } else throw new Error(`compare-prey-decision: no such option "--${key}"`);
   }
   if (!Number.isInteger(opts.seeds) || opts.seeds < 1) throw new Error("--seeds must be a positive integer");
   if (!Number.isInteger(opts.turns) || opts.turns < 1) throw new Error("--turns must be a positive integer");
@@ -236,8 +248,10 @@ const fixed = (n, places = 1) => n.toFixed(places);
 const percent = (rate) => `${fixed(rate * 100, 1)}%`;
 
 function printReport(report) {
-  const { layout, turns, seeds, modes } = report;
+  const { layout, turns, seeds, modes, overrides } = report;
   console.log(`prey decision comparison — layout ${layout}, ${seeds.length} seeds x ${turns} turns, ${modes.length} modes`);
+  const overridden = Object.entries(overrides);
+  if (overridden.length) console.log(`config overrides (applied to every mode): ${overridden.map(([k, v]) => `${k}=${v}`).join(", ")}`);
   console.log(`seeds: ${seeds.join(", ")} (each seed is an epoch, and the engine's seed keys carry it)`);
   console.log("");
 
@@ -303,7 +317,7 @@ async function main() {
   const layout = TOWN_SQUARE_LAYOUTS[opts.layout];
   if (!layout) throw new Error(`compare-prey-decision: no such layout "${opts.layout}" (have ${Object.keys(TOWN_SQUARE_LAYOUTS).join(", ")})`);
 
-  const base = DEFAULT_GAME_CONFIG.mudiii;
+  const base = { ...DEFAULT_GAME_CONFIG.mudiii, ...opts.overrides };
   const modeSpecs = [
     { label: "priority chain", config: { ...base, blendPreyDecision: false } },
     ...opts.weights.map((w) => ({ label: `blend w=${w}`, config: { ...base, blendPreyDecision: true, preyThreatWeight: w } })),
@@ -329,6 +343,7 @@ async function main() {
   const report = {
     layout: layout.name,
     turns: opts.turns,
+    overrides: opts.overrides,
     seeds,
     modes: modes.map((m) => ({ label: m.label, config: m.config, runs: m.runs, summary: m.summary })),
   };
