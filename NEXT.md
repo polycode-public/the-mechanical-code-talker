@@ -807,18 +807,20 @@ until it does. Then the grid-size item, because the deception rail and the map p
   run of that file against a fresh `npm run demo:build`, while the same file's page-count assertions
   passed. Reported as unrelated to the page-order change that surfaced them, which is a claim to
   check rather than accept.
-  **Tier:** Sonnet. The work is diagnosis, and the two legs may not share a cause.
-  **Do:** reproduce on `main` first with `npm run demo:build` then
-  `node --test test-e2e/pages-home.test.mjs`, and separate the three readings before fixing
-  anything. Either the pages genuinely fail to render those elements, or `openPage`'s navigation
-  settles later than the locator's default timeout under a loaded machine, or the two tests are
-  paying for browser contention from siblings in the same file. `#roomFrame` is adventure.html's own
-  scene element and `#chatform` is ledger.html's, so a shared cause means the harness, and separate
-  causes mean two page bugs.
-  **Risk:** raising a timeout is the fix that always appears to work and hides a real render failure.
-  Take it only after the page is shown to render the element at all, headed or by screenshot.
-  **Mitigation:** whichever way it lands, the test must fail before the fix and pass after. If it is
-  contention, harden the wait rather than re-running until green.
+  **They do not reproduce.** On merged `main`, after `npm run demo:build`,
+  `node --test test-e2e/pages-home.test.mjs` passes 18/18. Both pages render their element. What
+  differed is load: the worktree run happened while six sibling agents were saturating the machine,
+  and both failures are waits on a default locator timeout. So the pages are fine and the tests are
+  timing-fragile under contention, which CI will hit too.
+  **Tier:** Haiku. Two waits.
+  **Do:** give the `#roomFrame` and `#chatform` waits an explicit timeout generous enough to survive
+  a loaded runner, rather than leaning on the locator default. Check whether this file's other page
+  waits already pass one, and match that number instead of inventing a second convention.
+  **Risk:** a longer timeout on a wait that is genuinely broken turns a fast red into a slow red.
+  That is the trade being made deliberately here, because the element does render when the machine
+  is not thrashing.
+  **Mitigation:** re-run the file under real load (start the full suite alongside it) and confirm
+  both tests survive.
 
 - **Stale header comments in `mudiii-browser-entry.mjs`, `mudiii-viz.mjs` and `mudiii-scene.mjs`.**
   They say sibling modules "do not exist in every worktree yet"; all are on `main`.
