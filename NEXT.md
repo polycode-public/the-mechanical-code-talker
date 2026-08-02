@@ -33,20 +33,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Two tracks running. Fourteen have merged; `main` carries 19 unpushed commits and is **red** on three
-tests, which is what T15 exists to clear. Nothing gets pushed until it is green.
+Three tracks running. Fifteen have merged and `main` is pushed green at 5886/5886, so the pipeline
+this batch is waiting on is the one running against `2b64f3e2`.
 
-- **T15 red `main`** — `predator-prey.mjs`, `game-config.mjs`, `mudiii-turn.test.mjs` and the
-  fixture tape. Sonnet. Status: started.
 - **T16 fox walks backwards** — `mudiii-scene.mjs`, `mudiii-viz.mjs`, `data/mudiii-assets.json`.
   Sonnet. Status: started.
+- **T17 spider-fly migration** — `spider-fly*.mjs`, `predator-prey.mjs`, spider-fly's viz layer and
+  corpus rows. Top tier. Status: started.
+- **T18 `/retract` granularity** — `syllogise.mjs`, `adventure-editor.mjs`. Sonnet.
+  Status: started.
 
 Landed, in merge order: the `smoke:deploy` mudiii probe; the `QUESTION_LEAD_RE` dedup; the
 import-cycle estate guard; adventure's pill `data-command`; the resolver purity invariant in
 `CLAUDE.md`; both e2e files' page-order pins; the goblin sizing fix and its byte-caching loader
 rework; the `pages-home` wait hardening; teach mode's UI for adventure and mud; p2p retraction
-replication; the 3sf trust-score comparison; the predator-prey trio; and the committed hay bale with
-its manifest rows.
+replication; the 3sf trust-score comparison; the predator-prey trio; the committed hay bale with its
+manifest rows; the `foodVisionGated` default fix and its restamped tape; and the seed-perf bar.
 
 ## Open items
 
