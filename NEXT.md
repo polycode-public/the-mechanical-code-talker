@@ -33,15 +33,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Seven tracks. The playtest and both benchmarks have landed, and each one spawned a fix track —
-running them when the backlog's own files were claimed is what turned up the seventeen-minute freeze
-and the router's phantom budget.
+Six tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
+router's phantom budget.
 
 **The bottleneck is the browser, not the file graph.** At most two tracks may hold
 `npm run demo:build` at once; three concurrent builds cost two tracks their work. T55 and T56 hold
-those two slots. T58 gave its slot back: the `*-about.html` pages are committed source, so a full
-build on `main` leaves them untouched and it can measure straight off `file://`. T57 works against
-the deployed site and T59 is docs-only, so neither needs a build.
+those two slots. Two things that look like they need a build and do not: the `*-about.html` pages are
+committed source, so a full build on `main` leaves them untouched, and a track can measure the
+deployed site directly rather than serving its own.
 
 - **T56 four page-behaviour playtest faults, plus mud's STEP button** — the `/help` banner the home
   page refuses, the animal-root fallback drawn for a lamp and a cabinet, the empty mud food pill
@@ -60,28 +60,39 @@ the deployed site and T59 is docs-only, so neither needs a build.
   FOLLOW, two agents opening on one cell, and a STEP button that advances one whole turn.
   `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier. Holds a build slot.
   Status: started.
-- **T59 the doc drift and the README examples** — act on `reports/DOC_DRIFT_AUDIT.md`, verifying each
-  finding against today's code first, and run `npm run check:readme`, which CI deliberately skips and
-  nobody has run for a while. `README.md`, `docs/`, the audit report. Sonnet. No build. Status:
-  started.
-- **T57 the untested pages and the stale probe** — the p2p handshake past the invite, file upload,
-  the four sprite group pages, ingest's Document mode, reduced motion; plus the agentbench frontier
-  probe's section 3, which still prints "router REFUSES" for a case the router now answers.
-  `test-benchmarks/agentbench/frontier-probe.mjs`, a new report. Sonnet. No build. Status: started.
-- **T58 the five about pages that still overflow** — T54's `minmax(0, 1fr)` cleared six of eleven;
-  the other five are 376px to 711px wide at a 375px viewport. Dispatched with the measurement
-  already made, so it starts by naming the widest element rather than re-deriving the symptom.
-  `site.css`, `scripts/site-pages.mjs`, a new overflow guard. Sonnet. No build slot needed.
-  Status: running, with the cause found for it — `main.about-main` is the box that overflows, at
-  561px to 691px inside a 375px viewport. The phone-width track is already `minmax(0, 1fr)`, but a
-  grid item defaults to `min-width: auto`, so the item grows past its own clamped track. Whatever
-  inside it has that min-content width still needs naming and its own `overflow-x: auto`.
+- **T60 INF-4's chain bound and its pins** — raise `maxHops` at both chat call sites and flip the 30
+  pinned ceiling rows in the same commit, then re-run the bench. `chat.mjs`, `syllogise.mjs`, the
+  INFBENCH generator. Top tier. Status: started.
+- **T61 `run the impact of <file>`** — the tool name binds as a noun in an `of`-phrase. `ask.mjs`.
+  Sonnet. Status: started.
+- **T62 the deployed seed readiness race** — three `pages-timing` failures where the page reports
+  ready with an empty store. `pages-ingest.test.mjs`, `pages-chat-export.test.mjs`,
+  `pages-service-worker.test.mjs`, `ingest-viz.mjs`. Top tier. Status: started.
 - **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
 
 ## Open items
 
 ### Found by playtest and benchmark, not yet fixed
+
+- **The deployed pages report ready before their seed is in.** Job `e2e:deployed:pages-timing` on
+  pipeline 2725564857: 34 tests, 31 pass, 3 fail. `pages-ingest` reads a starter-memory total of 0,
+  `pages-chat-export` finds no `dog is a kind of animal` turn, and `pages-service-worker` gets
+  `I don't know "dog" yet` from a page whose seed holds it.
+  **These are not timeout failures.** The job already runs at `--test-concurrency=1`. The three files
+  carry a 30s ready budget and 20s answer budgets, and all three failures landed in **under 2.4
+  seconds** — 627ms for ingest. Nothing came near a budget, so raising one changes nothing.
+  The tests do await the readiness promise (`pages-ingest.test.mjs:74`-`:77` does `goto`, then
+  `waitForFunction` on `window.tmctIngestReady`, then `await page.evaluate` of it). The diagnostic
+  already in the test reports **no console errors and no failed requests**. So the page said ready,
+  every asset loaded, and the store was empty.
+  **Tier:** top. **In flight** as T62.
+  **Do:** find what the readiness promise actually waits for, and measure whether a real visitor hits
+  the same window on a cold CloudFront hit. If chat.html refuses a fact it holds for a second after
+  load, that is a user-facing honesty failure rather than a test flake. `.gitlab-ci.yml:647`-`:651`
+  says the seed is ~93MB, which if true is the centre of this.
+  **Risk:** the cheap move is a longer budget or a retry, and it would turn a red test green while
+  leaving a page that lies about what it knows.
 
 - **Five tests fail on merged `main` after the chat-freeze track landed.** Four in
   `test/adapters/code-explorer-browser-entry.test.mjs` (`:81`, `:98`, `:105`, `:121`) — the engine
@@ -120,12 +131,13 @@ the deployed site and T59 is docs-only, so neither needs a build.
 - **23 further playtest findings.** In `reports/PLAYTEST_DEMO_PAGES.md`, grouped by page.
   **Fixed so far:** the ingest-about page claiming a preloaded sample it does not ship, the share
   sheet's hard-coded post count, and the ledger focus crumb printing the whole typed question.
-  **The about-page overflow is only half fixed.** Changing the phone-width `.about-shell` track to
-  `minmax(0, 1fr)` cleared six of the eleven about pages. Measured after that fix, at a 375px
-  viewport: `chat-about` is 581px wide, `research-about` 711, `mud-about` 557, `plan-about` 507 and
-  `code-about` 376. On the research page the heading reads "Search backed knowledge b" and every
-  paragraph runs off the right edge, while the left nav renders correctly inside 375, so the content
-  column is what forces the width. **In flight** as T58.
+  **The about-page overflow is fixed**, all eleven pages at 375px, 320px and 1440px, with a guard at
+  `test-e2e/pages-about-overflow.test.mjs` (22 tests). The cause was `site.css`'s bare `main {
+  margin: 0 auto }` rule, meant to centre a lone `<main>` on the other demo pages. Auto margins on a
+  grid item turn off Grid's default stretch and fall back to shrink-to-fit, so the column grew to its
+  own min-content width — set by an unbreakable file path inside a `<code>` tag, up to 448px on
+  `plan-about`. Clamping the track to `minmax(0, 1fr)` was necessary and not sufficient: it
+  constrains the track, and the bug lived in the item.
   **Still open, all page behaviour:** the home page advertises `/help` in its own banner and refuses
   it; sprites draws the animal-root fallback for a lamp and a cabinet whose templates both exist;
   the mud food pill is empty until you press PLAY; spider-fly direction pills append rather than
