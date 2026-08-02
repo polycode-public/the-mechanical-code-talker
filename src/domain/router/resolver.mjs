@@ -345,6 +345,40 @@ function testModuleTie(graph, matchInd, candidateInd) {
     || (e.subject === candidateInd.id && e.object === matchInd.id));
 }
 
+/** The tied-read check EVERY binding path runs, so one term cannot mean two
+ *  things down one route and one thing down another. A tie is either
+ *  resolveObject's own score tie (r.ambiguous) or a same-tier candidate the
+ *  graph's `tests` edge ties to the match. Returns the enumerate-or-refuse
+ *  answer — a refusal carrying one dispatched read per tied reading — or null
+ *  when the term names exactly one entity. `siblingTie` is off for a memory-graph
+ *  resolution, which has no code-graph tests-edge notion to check. */
+async function tiedReadRefusal(r, { term, capName, arg, ctx, execute, siblingTie = true }) {
+  const sibling = (siblingTie && !r.ambiguous)
+    ? (r.candidates || []).find((c) => testModuleTie(ctx.graph, r.match, c))
+    : null;
+  if (!r.ambiguous && !sibling) return null;
+  const pool = r.ambiguous ? [r.match, ...(r.candidates || [])].slice(0, 4) : [r.match, sibling];
+  const candidateResults = await dispatchEachCandidate(pool, capName, arg, ctx, execute);
+  const extra = candidateResults
+    ? { candidateResults, candidateCalls: pool.map((c) => ({ name: capName, input: { [arg]: c.label } })) }
+    : undefined;
+  return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, extra);
+}
+
+/** The arg key of a bound call's code-graph ENTITY slot, read off the registry's
+ *  own `resolves` precondition rather than a list kept here. A free-text slot
+ *  (tmct_search's query — declared with no resolves precondition) and a
+ *  memory-graph slot both return null, so neither is checked against the code
+ *  graph. Null when the call names no code-graph entity at all. */
+function codeGraphEntityArg(capName, input) {
+  for (const pre of preconditionsOf(capName)) {
+    if (pre.pred !== PRECOND.resolves || MEMORY_KINDS.includes(pre.as)) continue;
+    const arg = parametersOf(capName).find((p) => p.name === pre.param)?.arg ?? pre.param;
+    if (input[arg] != null) return arg;
+  }
+  return null;
+}
+
 /** Select a capability for a request and BIND its arguments — the full resolver.
  *  Order: command register -> NL parse -> imperative frame. Delegates entity binding to
  *  ctx.resolve and, unless `execute:false`, grounds it via ctx.dispatch. Returns
@@ -388,7 +422,18 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   // the two binding oracles never mix on one pick.
   let input = pick.input ? { ...pick.input } : {};
   let resolved = null;
-  if (!pick.input && !pick.noArg) {
+  if (pick.input) {
+    // A command pick arrives already bound, so it skips the binding step below.
+    // The tie check is not part of binding: a term naming two graph entities has
+    // to refuse on this route too, or the terse command form answers what the NL
+    // and frame routes both decline.
+    const entityArg = ctx.resolve ? codeGraphEntityArg(pick.name, input) : null;
+    if (entityArg) {
+      const term = String(input[entityArg]);
+      const tied = await tiedReadRefusal(ctx.resolve(term), { term, capName: pick.name, arg: entityArg, ctx, execute });
+      if (tied) return tied;
+    }
+  } else if (!pick.noArg) {
     const term = String(pick.term || "").trim();
     if (!term) return REFUSE(`the ${pick.topic} intent named no entity to bind`);
     const memoryBound = isMemoryTermSlot(pick.name, pick.arg);
@@ -400,22 +445,8 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
         ? `the memory graph holds no facts mentioning "${term}" (honest miss)`
         : `"${term}" does not resolve to any graph entity (honest miss)`);
     }
-    // A tied read: either resolveObject's own score-tie (r.ambiguous), or a same-tier
-    // candidate the graph's own `tests` edge ties to the match (a source module and
-    // its test module — a grain neither side's raw score alone reveals as tied).
-    // resolveMemoryTerm's exact-match tiers have no code-graph tests-edge notion, so
-    // the sibling tie-check only applies on the code-graph resolution path.
-    const sibling = (!memoryBound && !r.ambiguous)
-      ? (r.candidates || []).find((c) => testModuleTie(ctx.graph, r.match, c))
-      : null;
-    if (r.ambiguous || sibling) {
-      const pool = r.ambiguous ? [r.match, ...(r.candidates || [])].slice(0, 4) : [r.match, sibling];
-      const candidateResults = await dispatchEachCandidate(pool, pick.name, pick.arg, ctx, execute);
-      const extra = candidateResults
-        ? { candidateResults, candidateCalls: pool.map((c) => ({ name: pick.name, input: { [pick.arg]: c.label } })) }
-        : undefined;
-      return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, extra);
-    }
+    const tied = await tiedReadRefusal(r, { term, capName: pick.name, arg: pick.arg, ctx, execute, siblingTie: !memoryBound });
+    if (tied) return tied;
     resolved = r.match;
     // The frame's own optional slots ride alongside the bound entity — declared
     // params of the same capability, so hallucinationsIn still validates them.

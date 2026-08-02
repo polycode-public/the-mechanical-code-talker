@@ -270,6 +270,42 @@ test("resolver: an ambiguous term stays refused:true but ADDITIONALLY carries ca
   assert.equal(noExec.candidateResults, undefined);
 });
 
+test("resolver: a terse command over a tied term refuses and enumerates, the same as the NL and frame routes", async () => {
+  const ctx = UNIT_CTX;
+  // "b" names both app/lib/b.mjs and its own test module, tied by the graph's
+  // `tests` edge. The command register binds the arg itself, so this route used
+  // to answer a term the other two decline.
+  const cmd = await resolveOne("describe b", ["tmct_describe"], ctx);
+  assert.equal(cmd.refused, true);
+  assert.equal(cmd.selected, null);
+  assert.match(cmd.reason, /"b" is ambiguous/);
+  assert.deepEqual(cmd.candidateCalls, [
+    { name: "tmct_describe", input: { symbol: "app/lib/b.mjs" } },
+    { name: "tmct_describe", input: { symbol: "app/unit-tests/b.test.mjs" } },
+  ]);
+
+  // the frame route over the same term, for comparison — same refusal, same pair
+  const frame = await resolveOne("explain b", ["tmct_describe"], ctx);
+  assert.equal(frame.refused, true);
+  assert.deepEqual(frame.candidateCalls, cmd.candidateCalls);
+});
+
+test("resolver: the command tie check leaves an unambiguous term, a no-arg command and a free-text search alone", async () => {
+  const ctx = UNIT_CTX;
+  // c has no test-module sibling, so the command binds and grounds as before
+  const clear = await resolveOne("describe c", ["tmct_describe"], ctx);
+  assert.equal(clear.refused, undefined);
+  assert.deepEqual(clear.selected, { name: "tmct_describe", input: { symbol: "c" } });
+
+  const noArg = await resolveOne("untested", ["tmct_untested"], ctx);
+  assert.deepEqual(noArg.selected, { name: "tmct_untested", input: {} });
+
+  // tmct_search's query slot carries no `resolves` precondition, so it is never
+  // read as an entity term and never tie-checked against the code graph
+  const search = await resolveOne("search b", ["tmct_search"], ctx);
+  assert.deepEqual(search.selected, { name: "tmct_search", input: { query: "b" } });
+});
+
 test("resolver: a bound call always self-passes the zero-hallucination gate (never emits an undeclared/unknown call)", async () => {
   const ctx = UNIT_CTX;
   // ask for a tool NOT in the declared set -> refuse, never reach outside it
