@@ -43,6 +43,19 @@ function leadsWithCallsReportNoun(objectText) {
   return words.length > 1 && CALLS_VERB_REPORT_NOUNS.has(words[0].toLowerCase());
 }
 
+/** "run the calls of X": CALLS_VERB_REPORT_NOUNS includes "calls" itself (the
+ *  tmct_calls edge-dump label), and findPhrase (above) matches phrases in
+ *  table-order rather than leftmost-in-sentence — for kind "calls" that order
+ *  puts the literal word "calls" ahead of "run", so verbHit lands on "calls"
+ *  (mid-sentence) instead of "run" (sentence-initial), and "run" survives as
+ *  the ask-shape's SUBJECT instead of being read as the imperative lead. A
+ *  subject that is itself nothing but one of the calls kind's own verb words
+ *  is that same misread, one hop further along — decline it here rather than
+ *  reordering findPhrase's table, which every other kind's lookup shares. */
+function isBareCallsVerbWord(text) {
+  return VERB_TO_KIND[text.trim().toLowerCase()] === "calls";
+}
+
 /** Find the longest phrase from `table`'s keys that appears as a contiguous
  *  run of `words` (case already lowercased by the caller). Longest-match-first
  *  (multi-word phrases before single words) so "co-changes with" isn't
@@ -303,7 +316,7 @@ export function parseKeywordSpot(text, nlp = null) {
     // the entityType-driven forward/reverse branches below, which keep their
     // own tested grain-check decline.
     if (kind === "defines" && HAS_FAMILY_VERBS.has(verbPhrase)) return null;
-    if (kind === "calls" && leadsWithCallsReportNoun(afterText)) return null;
+    if (kind === "calls" && (leadsWithCallsReportNoun(afterText) || isBareCallsVerbWord(beforeText))) return null;
     // A semantically-reverse verb ("superclass of") swaps subject/object, same as
     // grammar.mjs's T1.
     let subject = beforeText;
