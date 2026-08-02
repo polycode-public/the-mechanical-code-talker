@@ -88,19 +88,6 @@ deployed site directly rather than serving its own.
   **Risk:** the cheap move is a longer budget or a retry, and it would turn a red test green while
   leaving a page that lies about what it knows.
 
-- **A plain English question locks the tab for seventeen minutes.**
-  `who is the president of France` on chat.html froze the page for a measured **1054 seconds** before
-  printing the correct refusal. A CPU profile puts 99% of self time in `findIsaChain`
-  (`syllogise.mjs:1715`), reached from `relationFactsFor` (`chat.mjs:9141`-`:9156`), which walks all
-  63,470 seed rows and runs a BFS per row. The trigger is the shape `<wh> is the <relation> of
-  <thing>` — `what is the capital of Peru` and `who is the queen of England` freeze; `the capital of
-  Peru` and `who is the president` answer in under 5s. The same lane freezes ingest, research and
-  code. Transcript and profile in `reports/PLAYTEST_DEMO_PAGES.md`.
-  **In flight** as the CLI track's new first item.
-  **The refusal is correct; the cost of reaching it is not.** Do not make it answer.
-  **Related:** a benchmark measured the same cycle at ~25 minutes against ~4.5 for an earlier
-  version, with the case pool only 5% larger. This may be the same cause.
-
 - **Two agents are minted on one cell.** `goblin-1` and `goblin-2` both open on `cell-14-14` in the
   chapel yard, while `blockedCellReason` treats a single agent as enough to block a cell. Found while
   diagnosing an unrelated e2e failure, and not on its path.
@@ -154,6 +141,31 @@ deployed site directly rather than serving its own.
   spider-fly buttons against that reading and fixes either if it steps a fraction of a turn.
   **Risk:** stepping during autoplay is meaningless, so the button disables while playing, the same
   way FOLLOW does.
+
+- **Reset should leave every page paused.** Operator request. Opening a page keeps its autoplay; only
+  reset changes. The shared `createTicker.reset()` (`viz-ticker.mjs:98`) already clears `playing`
+  before calling `onReset`, so adventure (`adventure-viz.mjs:1885`) and spider-fly
+  (`spider-fly-viz.mjs:1135`) inherit it. Two pages bypass the ticker: `mud-viz.mjs:2924` calls
+  `boot()`, which re-runs the whole opening path, and `mudiii-viz.mjs:1510` calls `resetBoard()`.
+  `plan-viz.mjs:449` has its own reset outside the ticker too.
+  **Tier:** Sonnet. **In flight**, folded into T56 (mud, plan, and verifying the two ticker pages)
+  and T55 (mudiii).
+  **Do:** the check is the same on each page — play, run a few turns, reset, and confirm the board is
+  seeded and not advancing. A PLAY button still reading "pause" over a stopped board is the same bug.
+
+- **mudiii should open following a goblin, and cut to overhead when it is eaten.** Operator request,
+  and the reasoning is the spec: "I like that we get a crazy run through then it gets eaten and we
+  see a more sedate overhead view to what it play out." So autoplay-on-open sets FOLLOW and picks a
+  goblin, and when the followed agent leaves the board the camera drops to OVERHEAD and keeps
+  playing — no stop, no second goblin, no camera stranded on a dead agent.
+  **Tier:** top. **In flight** as T55.
+  **Do:** decide and record what happens when the followed agent leaves for a reason other than being
+  eaten, whether the cut lands on the death tick or one after (one after, so the visitor sees the
+  moment rather than cutting away from it), and whether the same fallback applies when a visitor has
+  chosen FOLLOW themselves mid-session.
+  **Risk:** FOLLOW disables while playing, with a "pause to swap" hint. Opening in FOLLOW while
+  autoplaying shows a disabled follow control on a page that is following something, so check the
+  hint explains that rather than confusing it.
 
 ### Inference
 
@@ -211,26 +223,6 @@ deployed site directly rather than serving its own.
   **Mitigation:** this is a feel change, so watch it rather than asserting it. A unit test can pin
   that the offset survives a tick; only using it tells you whether it moves nicely.
 
-
-### The CLI answers where it should refuse
-
-`reports/CLI_EDGE_HUNT.md` holds the transcripts. These break the product's central promise, so they
-outrank every cosmetic item below.
-
-- **Fifteen further CLI faults, from the edge-hunt report.** The worst four are fixed: the empty
-  code index that claimed full test coverage, the forget that taught, the three-word question that
-  sold instead of refusing, and the plural teach that stored what it could not then find.
-  What remains, all in `reports/CLI_EDGE_HUNT.md` with transcripts: one high and eight medium — the
-  retract-twice parse wall, `/help` never saying how to retract, "how do you know" dead-ending,
-  `define dog` routing to the code lane, `cli`/`serve` not reading the memory store, `--repo <typo>`
-  silently scaffolding a new repo, spider-and-fly never telling a first-time player the advance word
-  is `tick`, and non-code questions getting an index-this-repo nudge — plus six cosmetics.
-  **Tier:** Sonnet for the medium set; Haiku for the cosmetics.
-  **Do:** three of them need routing work in `ask.mjs` and `server.mjs`, which the fix track did not
-  own. Every one of the rest is a correct refusal rather than a wrong answer, so they are comfort
-  items, not honesty ones. Work them as one batch.
-  **Risk:** each is a closed-set addition, and widening a lane can capture sentences another lane
-  owns. The corpus tests are where that shows.
 
 ### mudiii.html — further work
 
