@@ -37,6 +37,7 @@ Loop batch 2. Three tracks, and **only one of them touches a browser** — batch
 three concurrent `npm run demo:build` runs, so that is now the cap. The other two write e2e
 assertions but never run them; the coordinator runs the e2e tier after merge.
 
+- **T29 deck layout** — `mudiii-viz.mjs`. Sonnet. Status: started.
 - **T27 food size** — `data/mudiii-assets.json` and the screenshot it must open. The batch's one
   browser track. Sonnet. Status: started.
 
@@ -93,6 +94,28 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
 
 
 ### mudiii.html — behaviour the plan specifies that is missing or half built
+
+- **The map belongs inside the control panel, at both orientations.** Today `.deck-row` is a
+  `1fr 1fr` grid holding the deck and `#mapPanel` as siblings, and it collapses to a single column
+  under 900px (`mudiii-viz.mjs:772`). A phone is under that in both portrait and landscape, so the
+  map always lands as a wide, short band below the controls and pushes the 3D view off the screen.
+  **The operator's layout, from two live screenshots:** the map moves **inside** the control panel,
+  sitting to the right in the space under the `turns:` badge, and it shrinks.
+  - **Portrait:** the sliders stay stacked one per row, as they already are. The map takes about
+    **half** the panel's width, beside them.
+  - **Landscape:** the sliders go two high — FOXES and GOBLINS on one row, DELAY and MAX TURNS on
+    the next — and the map sits beside them at about **a third** of the width.
+  **Tier:** Sonnet. Markup and CSS against a stated design, and it has to be looked at.
+  **Do:** move `#mapPanel` (`:545`) inside the deck rather than beside it, and drive the two
+  arrangements off orientation as well as width — a landscape phone and a narrow desktop window are
+  both under 900px but want different things. `renderMapPanel` addresses the board by id, so the JS
+  needs no change if the ids survive.
+  **Risk:** `body.editing` hides `.deck-row .map-panel` and forces one column (`:718`-`:719`), so
+  the edit-mode rules have to follow the element to its new home. `.map-panel-board` carries
+  `aspect-ratio: 1`, so halving its width halves its height too.
+  **Mitigation:** screenshot both orientations at a real phone size and **open the images**. This is
+  a layout item; a DOM assertion cannot tell you it looks right.
+
 
 `PLAN_MUD_MUDIII.md` is the design of record and is marked BUILT AND DEPLOYED. These are the
 gaps between it and the shipped page.
