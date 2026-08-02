@@ -977,6 +977,33 @@ test("a run replays byte-identically into a second store", async () => {
   }
 });
 
+test("every one-cell step a live run takes is written with the facing that step travelled", async () => {
+  const dir = await boardWith([], "facing-follows-step");
+  try {
+    await startTownSquareGame(dir, { layout: LAYOUT, predatorCount: 2, preyCount: 2 });
+    const cardinalOf = { "1,0": "east", "-1,0": "west", "0,1": "south", "0,-1": "north" };
+    const xy = (cell) => (/^cell-(\d+)-(\d+)$/.exec(cell) ?? ["", "0", "0"]).slice(1).map(Number);
+    const travelled = new Set();
+    let before = {};
+    for (let i = 0; i < 12; i += 1) {
+      const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+      for (const [id, agent] of Object.entries(tick.agents)) {
+        if (!before[id]) continue;
+        const [fromX, fromY] = xy(before[id]);
+        const [toX, toY] = xy(agent.cell);
+        const direction = cardinalOf[`${toX - fromX},${toY - fromY}`];
+        if (!direction) continue;
+        travelled.add(direction);
+        assert.equal(agent.facing, direction, `${id} moved ${before[id]} -> ${agent.cell} on turn ${tick.turn}`);
+      }
+      before = Object.fromEntries(Object.entries(tick.agents).map(([id, agent]) => [id, agent.cell]));
+    }
+    assert.deepEqual([...travelled].sort(), ["east", "north", "south", "west"], "the run covers all four cardinals");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a tick names the layout it runs, and refuses a name no pack holds", async () => {
   const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20)], "byname");
   try {

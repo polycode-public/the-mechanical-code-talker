@@ -279,17 +279,20 @@ test("the 3D scene canvas boots without a console error, when the model catalogu
 // own header says a rotated mesh has to match.
 const FACING_VECTOR = { north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, east: { x: 1, z: 0 }, west: { x: -1, z: 0 } };
 
-/** Every HUD-drawn agent's own stored cell and applied Y rotation this
- *  instant, id -> { cell, yaw } — the same two live reads a screenshot-based
- *  eyeball check would otherwise stand in for. */
-const agentCellsAndYawOf = (page) => page.evaluate(() => {
-  const out = {};
+/** One whole board reading: the turn the page is on, and every HUD-drawn
+ *  agent's own stored cell and applied Y rotation at that same instant, as
+ *  `{ turn, agents: { id: { cell, yaw } } }`. All three come out of a single
+ *  page.evaluate so the turn number can never describe a different moment
+ *  from the cells and yaws beside it. */
+const boardReadingOf = (page) => page.evaluate(() => {
+  const agents = {};
   for (const card of document.querySelectorAll("#hudRow .hud-card[data-agent]")) {
     const id = card.getAttribute("data-agent");
     if (!id || !window.mudiiiScene) continue;
-    out[id] = { cell: window.mudiiiScene.cellOf(id), yaw: window.mudiiiScene.yawOf(id) };
+    agents[id] = { cell: window.mudiiiScene.cellOf(id), yaw: window.mudiiiScene.yawOf(id) };
   }
-  return out;
+  const turn = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+  return { turn: turn ? Number(turn[0]) : null, agents };
 });
 
 function cellToXY(cell) {
@@ -311,6 +314,40 @@ function directionOfHop(a, b) {
   return null;
 }
 
+/** The one-cell steps two board readings witnessed, as `{ id, direction,
+ *  yaw }` — one per agent that ended `after` exactly one orthogonal cell from
+ *  where `before` left it. */
+function facingSamplesBetween(before, after) {
+  const out = [];
+  for (const id of Object.keys(after.agents)) {
+    const from = before.agents[id];
+    const to = after.agents[id];
+    if (!from || !to || !from.cell || !to.cell) continue;
+    const direction = directionOfHop(from.cell, to.cell);
+    if (!direction) continue;
+    out.push({ id, direction, yaw: to.yaw });
+  }
+  return out;
+}
+
+const NORTH_YAW = Math.PI;
+
+test("a board reading pair several turns apart witnesses no single step, however close the two cells sit", () => {
+  // Three cardinal steps can end one cell east of where they started (east,
+  // south, north), and the walker faces north at the end of them. Only a pair
+  // of readings one turn apart can say which way one step went: a wider pair
+  // reads that net displacement as a step it never took.
+  const before = { turn: 8, agents: { "fox-2": { cell: "cell-5-5", yaw: NORTH_YAW } } };
+  const after = { turn: 11, agents: { "fox-2": { cell: "cell-6-5", yaw: NORTH_YAW } } };
+  assert.deepEqual(facingSamplesBetween(before, after), []);
+});
+
+test("a board reading pair one turn apart witnesses the step it saw taken", () => {
+  const before = { turn: 8, agents: { "fox-2": { cell: "cell-5-5", yaw: 0 } } };
+  const after = { turn: 9, agents: { "fox-2": { cell: "cell-6-5", yaw: Math.PI / 2 } } };
+  assert.deepEqual(facingSamplesBetween(before, after), [{ id: "fox-2", direction: "east", yaw: Math.PI / 2 }]);
+});
+
 test("every agent that takes a one-cell step renders facing the way it actually travelled, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
@@ -320,8 +357,7 @@ test("every agent that takes a one-cell step renders facing the way it actually 
       { timeout: READY_TIMEOUT_MS },
     );
     await pauseBoard(page);
-    const startedAt = await turnCountOf(page);
-    let prev = await agentCellsAndYawOf(page);
+    let reading = await boardReadingOf(page);
     const samples = [];
     await page.locator("#autoToggle").click();
     // A generous tick budget: the samples this test cares about are whatever
@@ -332,18 +368,11 @@ test("every agent that takes a one-cell step renders facing the way it actually 
     for (let tick = 1; tick <= 16; tick += 1) {
       await page.waitForFunction((n) => {
         const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
-        return m && Number(m[0]) >= n;
-      }, startedAt + tick, { timeout: TICK_TIMEOUT_MS });
-      const cur = await agentCellsAndYawOf(page);
-      for (const id of Object.keys(cur)) {
-        const before = prev[id];
-        const after = cur[id];
-        if (!before || !after || !before.cell || !after.cell) continue;
-        const direction = directionOfHop(before.cell, after.cell);
-        if (!direction) continue;
-        samples.push({ id, direction, yaw: after.yaw });
-      }
-      prev = cur;
+        return m && Number(m[0]) > n;
+      }, reading.turn, { timeout: TICK_TIMEOUT_MS });
+      const next = await boardReadingOf(page);
+      samples.push(...facingSamplesBetween(reading, next));
+      reading = next;
     }
     await pauseBoard(page);
 
