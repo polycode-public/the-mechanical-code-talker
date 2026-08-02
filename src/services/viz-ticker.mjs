@@ -55,6 +55,10 @@ export function createTicker({
 } = {}) {
   const state = { playing: false, animating: false };
   const render = () => onRender({ ...state });
+  // The promise of whatever onTick() call is currently in flight, or null
+  // between ticks — reset() awaits this (see below) rather than bailing out
+  // when a click lands mid-tick, so a reset can never be silently dropped.
+  let inFlight = null;
 
   /** Advance exactly one step, honoring `hasNext`/`animating` guards. Returns
    *  whether it actually advanced. */
@@ -62,7 +66,9 @@ export function createTicker({
     if (state.animating || !hasNext()) return false;
     state.animating = true;
     render();
-    await onTick();
+    inFlight = Promise.resolve(onTick());
+    await inFlight;
+    inFlight = null;
     state.animating = false;
     render();
     return true;
@@ -95,9 +101,16 @@ export function createTicker({
     render();
   }
 
+  /** Stop and rewind. `state.playing` drops immediately, even mid-tick, so
+   *  `play()`'s own loop can never start one more tick once this has been
+   *  called — a reset clicked while a tick is animating used to return here
+   *  before touching `playing` at all, which left the loop running right
+   *  past it. If a tick IS in flight, this waits for it to actually settle
+   *  (never calling `onReset` while `onTick` might still be touching the
+   *  same state/DOM) before rewinding, rather than dropping the reset. */
   async function reset() {
-    if (state.animating) return;
     state.playing = false;
+    if (inFlight) await inFlight;
     if (onReset) await onReset();
     render();
   }

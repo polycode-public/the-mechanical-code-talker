@@ -80,7 +80,7 @@ test("pause() during play() stops the loop without finishing every step", async 
   assert.equal(ticker.getState().playing, false);
 });
 
-test("reset() is a no-op while a step is still animating, and runs the caller's onReset once it finishes", async () => {
+test("reset() stops the ticker immediately even mid-tick, and runs the caller's onReset once the in-flight tick settles", async () => {
   let resumeTick;
   const gate = new Promise((resolve) => { resumeTick = resolve; });
   let resets = 0;
@@ -90,12 +90,39 @@ test("reset() is a no-op while a step is still animating, and runs the caller's 
     wait: instantWait,
   });
   const stepPromise = ticker.stepOnce();
-  await ticker.reset();
-  assert.equal(resets, 0, "reset() declined while animating");
+  const resetPromise = ticker.reset();
+  assert.equal(
+    ticker.getState().playing, false,
+    "playing drops the instant reset() is called, even mid-tick — a caller stuck waiting for the in-flight tick must never see play() start another one",
+  );
+  assert.equal(resets, 0, "onReset has not run yet — the in-flight tick has not settled");
   resumeTick();
   await stepPromise;
-  await ticker.reset();
-  assert.equal(resets, 1, "reset() runs once the tick has finished");
+  await resetPromise;
+  assert.equal(resets, 1, "onReset runs once the in-flight tick actually settles, never silently dropped");
+});
+
+test("reset() called mid-tick during play() stops the loop before it starts another tick", async () => {
+  let ticks = 0;
+  let resumeFirstTick;
+  const gate = new Promise((resolve) => { resumeFirstTick = resolve; });
+  let resets = 0;
+  const ticker = createTicker({
+    onTick: async () => {
+      ticks += 1;
+      if (ticks === 1) await gate;
+    },
+    onReset: async () => { resets += 1; },
+    wait: instantWait,
+  });
+  const playPromise = ticker.play();
+  // The first tick is in flight (animating) — reset before it settles, the
+  // same race a fast double-click on reset produces in a real page.
+  const resetPromise = ticker.reset();
+  resumeFirstTick();
+  await Promise.all([playPromise, resetPromise]);
+  assert.equal(ticks, 1, "play()'s own loop never queued a second tick once reset had already stopped it");
+  assert.equal(resets, 1);
 });
 
 test("getState returns a fresh snapshot each call, never a live reference a caller could mutate", () => {

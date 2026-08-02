@@ -117,6 +117,39 @@ test("step forward marks the movelist, step back unmarks it, and reset returns t
   }
 });
 
+test("reset clicked mid-move while playing still lands paused at step 0, not mid-animation", async () => {
+  const { context, page } = await openPlanPage();
+  try {
+    // Click play, then reset again and again in quick succession — some of
+    // these clicks are certain to land while a move is still animating
+    // (each move's own CSS transitions run for several hundred ms). Reset
+    // used to decline outright while animating, which left play()'s own
+    // loop free to keep running past it.
+    for (let i = 0; i < 6; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await page.locator("#play").click();
+      // eslint-disable-next-line no-await-in-loop
+      await page.waitForTimeout(20 + i * 15);
+      // eslint-disable-next-line no-await-in-loop
+      await page.locator("#reset").click();
+      // eslint-disable-next-line no-await-in-loop
+      await page.waitForTimeout(30);
+    }
+    // Give any move genuinely still in flight time to settle, then confirm
+    // the board is paused at the seeded step and stays there.
+    await page.waitForTimeout(1500);
+    assert.match(await page.locator("#stepLabel").innerText(), /^step 0 \/ 7/, "reset actually rewound the board");
+    assert.match(await page.locator("#play").innerText(), /play/, "the play button reads play, not pause — the board is not still running");
+    await page.waitForTimeout(1500);
+    assert.match(
+      await page.locator("#stepLabel").innerText(), /^step 0 \/ 7/,
+      "the board stayed at step 0 rather than resuming on its own after the reset",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("a live re-solve at 4 disks grows the plan to 15 moves, adds the fourth piece, and re-derives the PDDL panel", async () => {
   const { context, page, consoleErrors } = await openPlanPage();
   try {

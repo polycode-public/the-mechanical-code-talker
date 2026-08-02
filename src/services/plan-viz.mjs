@@ -530,6 +530,11 @@ const PLAN = ${embedded};
   // server-rendered embed, for a plain renderPlanHtml() caller with no live
   // bundle nearby).
   let plan = null, N = 0, blockEls = {}, step = 0, playing = false, animating = false;
+  // The promise of whatever animateMove() call is currently in flight, or
+  // null between moves — reset() awaits this instead of declining outright
+  // when it is clicked mid-move, so a reset can never be silently dropped
+  // (see the reset handler below for why that mattered).
+  let animatingPromise = null;
 
   const posIn = (snap, id) => snap.items.find((i) => i.id === id && i.kind === "block");
   function drawState(i) {
@@ -609,7 +614,11 @@ const PLAN = ${embedded};
   }
   async function forward() {
     if (animating || step >= N) return;
-    render(); await animateMove(step); step += 1; render();
+    render();
+    animatingPromise = animateMove(step);
+    await animatingPromise;
+    animatingPromise = null;
+    step += 1; render();
   }
   async function playRange(from, to) {
     if (animating) return;
@@ -675,7 +684,19 @@ const PLAN = ${embedded};
 
   btn.next.addEventListener("click", () => { playing = false; forward(); });
   btn.back.addEventListener("click", () => { if (animating) return; playing = false; step = Math.max(0, step - 1); drawState(step); render(); });
-  btn.reset.addEventListener("click", () => { if (animating) return; playing = false; step = 0; drawState(0); render(); });
+  // playing drops the instant reset is clicked, even mid-move — a click
+  // that landed while animating used to bail out before touching playing
+  // at all, which left playRange's own loop free to run one more step the
+  // moment the in-flight move settled, so a fast play-then-reset click could
+  // reset the board and have it immediately start moving again. Waiting on
+  // animatingPromise (rather than declining) means the reset itself still
+  // never fires while a move might be touching the same block elements, but
+  // it is never dropped either.
+  btn.reset.addEventListener("click", async () => {
+    playing = false;
+    if (animatingPromise) await animatingPromise;
+    step = 0; drawState(0); render();
+  });
   btn.play.addEventListener("click", async () => {
     if (animating) return;
     if (playing) { playing = false; render(); return; }
