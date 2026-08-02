@@ -491,6 +491,11 @@ const countClass = (graph, cls) => (cls === "Package"
   ? packageCounts(modulesOf(graph)).size
   : graph.individuals.filter((i) => (i.class || "") === cls).length);
 
+/** Every kind the counter answers to, as a human list — what it can count once a
+ *  graph is loaded, as opposed to countableKinds, which is what THIS graph holds. */
+const COUNTABLE_KIND_WORDS = [...new Set(Object.values(COUNT_NOUNS))]
+  .map((cls) => CLASS_LABELS[cls]?.[1] ?? `${cls}s`);
+
 /** The classes this graph can actually count, as a human list ("classes, functions, …"). */
 function countableKinds(graph) {
   const present = new Set(graph.individuals.map((i) => i.class).filter(Boolean));
@@ -623,8 +628,11 @@ export function answerCount(graph, query, { uiContext = "cli" } = {}) {
       if (uiContext === "browser") {
         return `I can't count "${noun}" — this page holds taught facts only, so there's no code structure to count.`;
       }
-      return `I can't count "${noun}" — no code graph is loaded yet, so there's nothing to count ` +
-        `(index this repo with "tmct index", point me at another with --repo, or run "npm run example:mini").`;
+      // No remedy here: the noun is one the count vocabulary doesn't hold at
+      // all (a known kind takes the counted branch above, empty graph or not).
+      // "how many moons does Pluto have" used to come back with "index this
+      // repo", which reads as a promise that indexing would let it count moons.
+      return `I can't count "${noun}" — I count the kinds a code graph holds: ${COUNTABLE_KIND_WORDS.join(", ")}.`;
     }
     return `I can't count "${noun}". I count: ${kinds.join(", ")}. ` +
       `Try "how many classes are there".`;
@@ -13966,9 +13974,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     } else if (browser) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
-    } else {
+    } else if (looksCodeish(String(query), String(query).toLowerCase())) {
       answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
+    } else {
+      // Nothing in the question is code-shaped, so indexing a repo would not
+      // help. "who won the 2031 world cup" used to carry the pointer anyway,
+      // which reads as a remedy for a question the remedy cannot touch.
+      note(trace, "intermediate: HONEST-EMPTY POLISH — held back: nothing in the question is code-shaped, so the index/--repo remedy would not apply");
     }
   }
   if (teachOffer) {

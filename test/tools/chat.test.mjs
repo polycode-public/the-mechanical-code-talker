@@ -487,17 +487,26 @@ test("runTurn: the superlative lane ('which module has the most tests') is unaff
   assert.match(answer, /app\/lib\/b\.mjs|app\/functions\/d\/handler\.mjs/);
 });
 
-// Bug C (operator manual-chat find, this session): "count soup" with NO code
-// graph loaded rendered the grammatically-broken "I count: ." (a dangling
-// empty list) and then pointlessly suggested "how many classes are there",
-// which would ALSO fail — countableKinds(graph) is genuinely empty when no
-// class individual is present at all.
-test("answerCount Bug C: an unknown kind with a graph carrying NO countable individuals gets an honest 'no code graph loaded' message, never the broken dangling-list one", () => {
+// "count soup" against a graph carrying no countable individuals once rendered
+// the grammatically-broken "I count: ." (a dangling empty list) and suggested
+// "how many classes are there", which would ALSO fail. The decline names the
+// kinds the counter answers to instead, and offers no index/--repo remedy: the
+// noun is one no graph would make countable, so pointing at indexing would read
+// as a promise the remedy cannot keep.
+test("answerCount: an unknown kind over a graph with no countable individuals names what it counts, with no dangling list and no index remedy", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
   const r = answerCount(empty, "count soup");
-  assert.match(r, /^I can't count "soup" — no code graph is loaded yet, so there's nothing to count/);
+  assert.match(r, /^I can't count "soup" — I count the kinds a code graph holds: classes, functions, modules/);
   assert.doesNotMatch(r, /I count: \./, "never the dangling-empty-list phrasing");
   assert.doesNotMatch(r, /how many classes are there/, "never a suggested example that would ALSO fail on this graph");
+  assert.doesNotMatch(r, /tmct index|--repo|example:mini/, "no remedy for a noun no graph makes countable");
+});
+
+test("answerCount: a non-code noun gets no index/--repo remedy attached to its decline", () => {
+  const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
+  const r = answerCount(empty, "how many moons does Pluto have?");
+  assert.match(r, /I can't count "moons"/);
+  assert.doesNotMatch(r, /tmct index|--repo|example:mini/, "indexing a repo would not let it count moons");
 });
 
 test("runTurn: a count question is answered before ask, recorded as a non-miss turn, focus untouched", async () => {
