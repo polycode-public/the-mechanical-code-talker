@@ -807,6 +807,11 @@ test("renderAdventureHtml: the pill row reads the room's affordances through the
   assert.match(html, /renderPills\(/);
 });
 
+test("renderAdventureHtml: a rendered pill's data-command attribute equals its visible label", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /<button type="button" class="pill" data-command="'\s*\+\s*esc\(a\)\s*\+\s*'"[^>]*>\s*'\s*\+\s*esc\(a\)\s*\+\s*"<\/button>/);
+});
+
 test("renderAdventureHtml: the play/pause/step/reset controls are all present", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /id="playBtn"/);

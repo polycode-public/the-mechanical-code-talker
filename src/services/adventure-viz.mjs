@@ -1525,7 +1525,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   }
   function renderPills(rows, state, here) {
     const actions = pillsFor(rows, state, here).filter((a) => a.indexOf("go ") !== 0);
-    pillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
+    pillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill" data-command="' + esc(a) + '">' + esc(a) + "</button>").join("");
     // The empty input teaches the grounded noun form off the same affordance
     // list the pills read — real props from THIS room, so a first-time player
     // types "examine lamp", not a pronoun with nothing to bind to yet.
