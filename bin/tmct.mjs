@@ -603,8 +603,33 @@ async function writeStandaloneViewPage(archetype, rest) {
   process.stdout.write(`wrote ${outPath} (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(0)} KB, self-contained)\n`);
 }
 
+/** Refuse a `--repo` that names nothing on disk, before any verb gets to create
+ *  it. Eight verbs open a memory store under the path they are handed, and the
+ *  store's own mkdir is recursive, so a mistyped path used to be scaffolded in
+ *  silence — a fresh tmct.toml, a .tmct/ tree, 688 seeded facts — and the
+ *  answer came back as if the repo were the one meant. `init` is the one verb
+ *  whose whole job is to create a repo from nothing, so it never reaches here. */
+async function refuseMissingRepoPath(argv) {
+  const i = argv.indexOf("--repo");
+  const given = i !== -1 ? argv[i + 1] : null;
+  if (!given || given.startsWith("--")) return;
+  const { resolve } = await import("node:path");
+  const { stat } = await import("node:fs/promises");
+  const abs = resolve(process.cwd(), given);
+  let entry = null;
+  try { entry = await stat(abs); } catch { entry = null; }
+  if (entry?.isDirectory()) return;
+  const where = abs === given ? given : `${given} (${abs})`;
+  process.stderr.write(entry
+    ? `tmct: --repo ${where} is not a directory.\n`
+    : `tmct: --repo ${where} does not exist. Nothing was created. `
+      + `Check the path, or run \`tmct init --repo ${given}\` to make a repo there.\n`);
+  process.exit(2);
+}
+
 async function main() {
   const mode = process.argv[2];
+  if (mode !== "init") await refuseMissingRepoPath(process.argv.slice(3));
 
   if (mode === "chat") {
     const rest = process.argv.slice(3);
