@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Three.
+Four.
 
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
@@ -65,6 +65,18 @@ Three.
   asserting. Whichever, prove the assertion still fails on a genuinely broken fixture.
   **Risk:** an assertion that stops looking is worse than the red one. Also worth knowing why this
   started now, since the fixtures themselves did not change.
+
+- **A permission test passes locally and fails in CI.**
+  `test/adapters/session-banner.test.mjs:14` — "an unwritable session-log directory fails with a
+  message and a remedy, never a stack trace" reports `Missing expected rejection`. The suite reads
+  5824 tests, 5823 pass, 1 fail. The test is new and has had one CI run.
+  **The likely cause:** CI containers run as root, and root ignores permission bits, so a directory
+  made unwritable with `chmod` still accepts the write and nothing rejects.
+  **Owner:** a track is on it. **Tier:** Sonnet.
+  **Do:** trigger the failure a way root cannot bypass, or inject it at the seam with a filesystem
+  stub. Skipping under root is the last resort, because CI is exactly where this path matters.
+  **Risk:** a test that passes for the wrong reason is worse than the red one. Whatever lands has to
+  be seen failing against the reverted `chat-session.mjs` guard.
 
 ### Questions blocking work
 
