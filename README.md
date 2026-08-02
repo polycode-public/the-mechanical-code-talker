@@ -85,11 +85,13 @@ tmct> ahab is the father of john
 noted — remembered: ahab fathers john
 
 Goal (inferred): Teach/remember a new fact.
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> john is the father of ishmael
 noted — remembered: john fathers ishmael
 
 Goal (inferred): Teach/remember a new fact.
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> a father is a kind of parent
 noted — remembered 1 fact: father rdfs:subClassOf parent (father is a type of parent)
@@ -97,21 +99,25 @@ noted — remembered 1 fact: father rdfs:subClassOf parent (father is a type of 
 Goal (inferred): Teach/remember a new fact.
 
 Canonical: does "father" inherits "parent"? — ask(inherits, subject="father", "parent")
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> remember that ahab is male
 noted — remembered: ahab is male
 
 Goal (inferred): Teach/remember a new fact.
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> a grandparent is a parent of a parent
 noted — remembered: a grandparent is a parent of a parent
 
 Goal (inferred): Teach/remember a new fact.
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> a grandfather is a grandparent who is male
 noted — remembered: a grandfather is a grandparent who is male
 
 Goal (inferred): Teach/remember a new fact.
+(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, or on a stored backend, to keep it.)
 
 tmct> is ahab the grandfather of ishmael
 yes — you told me: ahab fathers john (source: teach:chat:<session-id>@<timestamp>); father is a kind of parent (source: ace:chat:<session-id>@<timestamp>); you told me: john fathers ishmael (source: teach:chat:<session-id>@<timestamp>); you told me: ahab is male (source: teach:chat:<session-id>@<timestamp>)
