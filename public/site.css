@@ -84,6 +84,7 @@ code {
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 0.05em 0.32em;
+  overflow-wrap: break-word;
 }
 pre code { background: none; border: none; padding: 0; }
 .eyebrow {
@@ -450,6 +451,12 @@ table.matrix td.focus { color: var(--taught); }
   display: grid; grid-template-columns: 15rem minmax(0, 1fr);
   gap: 0 3rem; max-width: 66rem; margin: 0 auto;
 }
+/* The page-wide `main { margin: 0 auto }` rule expects a lone <main> to
+   centre. .about-main is a grid item instead, and auto margins turn off its
+   stretch, shrinking it to its own content width — wide enough to blow past
+   the track when a long <code> path can't wrap. Zero it so the item stretches
+   to fill its track like any other grid item. */
+.about-main { margin: 0; }
 .about-nav { position: sticky; top: 2rem; align-self: start; padding-bottom: 2rem; }
 .about-nav .eyebrow { margin-bottom: 0.5rem; }
 .about-crumbs { list-style: none; margin: 0 0 1.4rem; padding: 0; border-left: 1px solid var(--line); }
