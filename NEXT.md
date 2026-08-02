@@ -47,6 +47,24 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
 
 ### The home page as a presentation deck
 
+- **Every demo page's header should be navigable.** Each page carries its own `.eyebrow` reading
+  "tmct · <demo>", hand-written per file with no shared helper: `adventure-viz.mjs:997`,
+  `ledger-viz.mjs:792`, `mud-viz.mjs:395`, `mudiii-viz.mjs:484`, `plan-viz.mjs:435`,
+  `spider-fly-viz.mjs:446`, `sprite-catalog-viz.mjs:985`, plus whatever chat, code, ingest and
+  research use. The operator wants **tmct** to link home, the **demo's own name** to link to that
+  demo's page, and a third **about** link to that demo's about page.
+  **Tier:** Sonnet. Seven-plus files, one idea.
+  **Do:** write one shared eyebrow helper and have every page call it, rather than editing seven
+  headers into near-agreement. That is the shared layer every caller already goes through, and it is
+  what stops the eighth page being written without links.
+  **Feasibility:** it needs the about pages to exist, so land it after they do.
+  **Risk:** the pages do not share a header component today, so several use a `<div>` and one uses an
+  `<h1>` and one an inline `<span>` beside a counts element. The helper has to take the wrapping
+  element rather than assume one, or a page loses its heading semantics.
+  **Mitigation:** check each page still has exactly one `<h1>` afterwards, and that the ledger's
+  `#counts` span survives beside its eyebrow.
+
+
 - **Rename every demo claim, and give each one an about page.** The operator's brief: turn
   `index.html` into a ready set of presentations. Two halves, and the item is not done until both
   land.
@@ -89,6 +107,10 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
   real feature list from the demos. Only tick what the code backs — a tick that cannot be
   substantiated is a claim this engine would refuse to make about itself. Wide tables need their own
   `overflow-x` container so a phone still reads.
+  **The header strip becomes links too:** each phrase in "Polycode projects · pure JS · no LLM ·
+  offline · $0" jumps to the section of `index.html` that explains it, and "Polycode projects"
+  links out to the GitLab repository. Any phrase with no section that genuinely explains it stays
+  plain text rather than pointing somewhere loose.
 
   **Mitigation:** grep every place a page list is enumerated before adding files —
   `scripts/build-demo-site.mjs` holds more than one such list, and the e2e page-order arrays are
