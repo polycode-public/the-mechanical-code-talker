@@ -5,7 +5,7 @@
 // structural self-description facts below quote the same shipped defaults
 // the engine actually runs. Both
 // scripts/gen-spider-fly-world.mjs (writes corpus/worlds/src/spider-fly.jsonl)
-// and src/services/spider-fly.mjs (the runtime) read the SAME grid/web
+// and src/services/spider-fly-turn.mjs (the runtime) read the SAME grid/web
 // constants from here, so the shipped world and the engine that plays it can
 // never drift apart.
 
@@ -14,27 +14,33 @@ import { DEFAULT_GAME_CONFIG } from "./game-config.mjs";
 export const WORLD_NAME = "spider-fly";
 export const GRID_SIZE = 10;
 
-// The spider's home cell, and the web's Chebyshev radius around it (radius 1
-// = a 3x3 block, PLAN_SPIDER_FLY.md §3). Corner-ish on purpose (§4): a spider
-// that starts here sees close to half the board just from edge-clipping.
+// The spider's home cell, and the web's Chebyshev radius around it (radius 1 =
+// a 3x3 block). Corner-ish on purpose: a spider that starts here sees close to
+// half the board just from edge-clipping.
 export const WEB_HOME = Object.freeze({ x: 2, y: 2 });
 export const WEB_RADIUS = 1;
 
-// A spider-built dynamic web (src/services/spider-fly.mjs's hasActiveWebAt)
-// stays active for this many turns past the turn it was built, mirroring the
-// static home zone's own always-on web without needing separate code paths.
+// A spider-built web stays active for this many turns past the turn it was
+// spun, mirroring the home zone's own always-on web without a second code path.
 export const WEB_DURATION_TURNS = 10;
 
-// Spider mass mirrors a fly's own (src/services/spider-fly.mjs's
-// FLY_INITIAL_MASS/FLY_MASS_DECREMENT_PER_TURN): a spider starves like a fly
-// does, and gains exactly a fly's remaining mass on an eat. Heavier starting
-// mass than a single fly's worth on purpose — a spider that eats nothing for
-// a while has some runway before starving. The decrement is half a fly's own
-// (spiders live longer between meals than flies do), and — like every other
-// tunable here — overridable per session via tmct.toml's [games.spider-fly]
-// (src/domain/game-config.mjs).
+// A spider starves like a fly does, and gains exactly a fly's remaining mass on
+// an eat. Heavier starting mass than a single fly's worth on purpose — a spider
+// that eats nothing for a while has some runway before starving. The decrement
+// is half a fly's own (spiders live longer between meals than flies do), and —
+// like every other tunable here — overridable per session via tmct.toml's
+// [games.spider-fly] (src/domain/game-config.mjs).
 export const SPIDER_INITIAL_MASS = 15;
 export const SPIDER_MASS_DECREMENT_PER_TURN = 0.5;
+
+/** The cast the shared predator/prey engine runs this board with. Same shape as
+ *  the town square's own roles object, minus the food entry: nothing inert
+ *  lies on a spider-and-fly board, and a null food role is what says so. */
+export const SPIDER_FLY_ROLES = Object.freeze({
+  predator: Object.freeze({ role: "predator", kind: "spider", idPrefix: "spider" }),
+  prey: Object.freeze({ role: "prey", kind: "fly", idPrefix: "fly" }),
+  food: null,
+});
 
 export const cellId = (x, y) => `cell-${x}-${y}`;
 
@@ -94,11 +100,9 @@ export const DIRECTION_DELTA = Object.freeze({
  *  sits EXACTLY one cardinal step away (DIRECTION_DELTA) — null for the same
  *  cell, a diagonal, or any multi-step gap, so a caller never overstates
  *  "adjacent". The one shared primitive both the engine's own plan-driven
- *  facing (spider-fly.mjs) and the chat dock's deception pills
- *  (spider-fly-turn.mjs's pillsForSpiderFly) need — defined once here so
- *  neither has to re-derive it, and so the engine layer never has to import
- *  the chat-turn layer to get it (spider-fly-turn.mjs already imports
- *  spider-fly.mjs; the reverse would cycle). */
+ *  facing and the chat dock's deception pills (spider-fly-turn.mjs's
+ *  pillsForSpiderFly) need — defined once here so neither has to re-derive
+ *  it. */
 export function oneStepDirectionBetween(fromCell, toCell) {
   for (const [direction, { dx, dy }] of Object.entries(DIRECTION_DELTA)) {
     if (fromCell.x + dx === toCell.x && fromCell.y + dy === toCell.y) return direction;
@@ -124,13 +128,56 @@ export const SEED_TAXONOMY = Object.freeze([
 export const WORLD_OPENING =
   "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat.";
 
+/** This board as the shared predator/prey engine's own layout: a bare 10x10
+ *  grid, the always-on web block, and the cast a fresh session mints. `props`
+ *  is empty and stays empty — nothing here blocks movement, so every cell is
+ *  open and the whole perimeter takes an arrival. */
+export const SPIDER_FLY_LAYOUT = Object.freeze({
+  name: WORLD_NAME,
+  gridSize: GRID_SIZE,
+  opening: WORLD_OPENING,
+  boardNoun: "board",
+  boardSubject: "board",
+  cast: Object.freeze({ predators: 1, prey: 1 }),
+  props: Object.freeze([]),
+  staticWebAt: isInWebBlock,
+  webHomeCell: cellId(WEB_HOME.x, WEB_HOME.y),
+});
+
+/** The spider-and-fly knobs restated in the engine's role-keyed shape, with the
+ *  three mechanics this cast wants switched on. The public [games.spider-fly]
+ *  table stays species-keyed on purpose: a tmct.toml key and a page slider keep
+ *  the names a player of THIS game would use, and the translation lives here.
+ *  Unset keys fall back to the shipped defaults, so a partial slider payload is
+ *  always a complete engine config. Pure. */
+export function spiderFlyEngineConfig(knobs) {
+  const k = { ...DEFAULT_GAME_CONFIG.spiderFly, ...(knobs || {}) };
+  return {
+    predatorInitialMass: k.spiderInitialMass,
+    predatorMassDecrementPerTurn: k.spiderMassDecrementPerTurn,
+    predatorVisionRadius: k.spiderVisionRadius,
+    preyInitialMass: k.flyInitialMass,
+    preyMassDecrementPerTurn: k.flyMassDecrementPerTurn,
+    preyVisionRadius: k.flyVisionRadius,
+    preySpawnIntervalTurns: k.flySpawnIntervalTurns,
+    webDurationTurns: k.webDurationTurns,
+    eggLayMassThreshold: k.eggLayMassThreshold,
+    eggHatchDelayTurns: k.eggHatchDelayTurns,
+    eggHatchCount: k.eggHatchCount,
+    minHatchlingMass: k.minHatchlingMass,
+    carryPreyToWeb: true,
+    buildWebs: true,
+    layEggs: true,
+  };
+}
+
 /** Every fact row the shipped world source carries: cell typing, grid
  *  adjacency (mgx:has-exit-<direction>), the web block (mgx:in-web) and the
  *  seed taxonomy — plain { world, kind:"fact", subject, predicate, object }
  *  objects, the exact shape src/domain/worlds-pack.mjs's isWorldFactRow
  *  reads. Deliberately NOT spider-1/fly-1: the board is reusable static
  *  content, minted game entities are a fresh session's own state
- *  (src/services/spider-fly.mjs's startSpiderFlyGame). */
+ *  (src/services/spider-fly-turn.mjs's startSpiderFlyGame). */
 export function* worldFactRows() {
   for (let y = 1; y <= GRID_SIZE; y += 1) {
     for (let x = 1; x <= GRID_SIZE; x += 1) {
@@ -245,7 +292,7 @@ export function isLiveRenderableAgent(id, state) {
 
 /** A minimal, inert rule-row family, so scripts/build-worlds-pack.mjs's
  *  shared validator ("every world needs at least one rule row") passes.
- *  src/services/spider-fly.mjs never reads these back: grid movement is
+ *  src/services/spider-fly-turn.mjs never reads these back: grid movement is
  *  hand-written pathfinding over findActionPath/findReachableSet
  *  (PLAN_SPIDER_FLY.md §5), not the taught action-Rule DSL, so this rides in
  *  the shard unused, same as an unrelated fact would. */

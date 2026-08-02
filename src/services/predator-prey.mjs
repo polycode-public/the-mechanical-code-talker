@@ -941,7 +941,11 @@ export async function placeFood(memoryDir, {
 function readLiveBoard(rows, state, { config, roles }) {
   const predators = liveOfKind(state, roles.predator.kind);
   const prey = liveOfKind(state, roles.prey.kind);
-  const liveItemIds = [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort();
+  // `roles.food` is null for a cast with nothing inert on its board. Every
+  // reader downstream walks the item roster, so an empty one is all it takes.
+  const liveItemIds = roles.food
+    ? [...liveOfKind(state, roles.food.spawnedKind), ...liveOfKind(state, roles.food.placedKind)].sort()
+    : [];
   return {
     predators,
     prey,

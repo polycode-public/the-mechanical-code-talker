@@ -9,10 +9,11 @@
 // this game's rendering needs:
 //
 //   - `session.tick()` runs ONE real engine turn directly
-//     (spider-fly.mjs's runSpiderFlyTick), unmediated by chat text, so the
-//     page's own ticker gets back the structured `{ turn, agents, ecology }`
-//     shape it needs to redraw the board and the HUD's goal lines. This is
-//     the "page's ticker calls a turn" half of the brief.
+//     (spider-fly-turn.mjs's runSpiderFlyTick, which is the shared
+//     predator/prey engine bound to this board's cast), unmediated by chat
+//     text, so the page's own ticker gets back the structured
+//     `{ turn, agents, ecology }` shape it needs to redraw the board and the
+//     HUD's goal lines. This is the "page's ticker calls a turn" half.
 //   - `session.turn(line)` runs the FULL chat turn engine (chat.mjs's
 //     runTurn — the exact dispatch the CLI and the home page's own chat run,
 //     with the spider-fly lane already wired in), so the in-page chat dock
@@ -20,8 +21,8 @@
 //     bare "tick" command, and any ordinary fallthrough question ("where is
 //     the spider") exactly as the CLI does. This is the "chat dock runs
 //     runTurn" half.
-//   - `session.snapshot()` is a READ-ONLY fold (spider-fly.mjs's own
-//     foldSpiderFlyState, no engine advance) so the page can resync agent
+//   - `session.snapshot()` is a READ-ONLY fold (foldSpiderFlyState, no engine
+//     advance) so the page can resync agent
 //     positions after a CHAT-driven tick/address turn (whose reply is text,
 //     not the structured tick() shape) without double-advancing the turn.
 //     It carries no `.goal` — the chat reply text itself already narrates
@@ -39,10 +40,10 @@
 // read or a registered fetch provider, neither of which this bundle carries):
 // spider-fly-world.mjs's worldFactRows()/startSpiderFlyGame are already pure/
 // in-memory, so the browser bootstraps the identical board directly from
-// them. The world's rule rows (worldRuleRows) are skipped on purpose —
-// spider-fly.mjs's own header comment confirms grid movement never reads
-// them back (hand-written pathfinding over has-exit-* facts, not the taught
-// action-rule DSL), so nothing here depends on them being loaded.
+// them. The world's rule rows (worldRuleRows) are skipped on purpose — grid
+// movement never reads them back (hand-written pathfinding over has-exit-*
+// facts, not the taught action-rule DSL), so nothing here depends on them
+// being loaded.
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { graphAsk, enginePlan } from "./engine-surface.mjs";
@@ -57,8 +58,11 @@ import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
   isLiveRenderableAgent, agentKindOf,
 } from "../../domain/spider-fly-world.mjs";
-import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
-import { pillsForSpiderFly, oneStepDirectionBetween } from "../../services/spider-fly-turn.mjs";
+import { DEFAULT_VISION_RADIUS } from "../../domain/agent-belief.mjs";
+import {
+  foldSpiderFlyState, runSpiderFlyTick, spiderFlyBoard, startSpiderFlyGame, liveWebs,
+  pillsForSpiderFly, oneStepDirectionBetween,
+} from "../../services/spider-fly-turn.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
@@ -82,12 +86,8 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     .filter((f) => f.predicate === "rdfs:subClassOf")
     .map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object }));
 
-  const { facts: startFacts } = await startSpiderFlyGame(memoryDir, { flyCount });
-  const initialAgents = {};
-  for (const f of startFacts) {
-    if (f.predicate === "mgx:currently-in") initialAgents[f.subject] = { ...initialAgents[f.subject], cell: f.object };
-    else if (f.predicate === "mgx:mass") initialAgents[f.subject] = { ...initialAgents[f.subject], mass: Number(f.object) };
-  }
+  await startSpiderFlyGame(memoryDir, { flyCount });
+  const initialBoard = await spiderFlyBoard(memoryDir);
 
   // The graph the chat dock's own ask() traverses. There is no code graph
   // here, so it holds the LIVE BOARD instead: one individual per agent, classed
@@ -136,7 +136,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     memoryDir,
     sessionId,
     opening: WORLD_OPENING,
-    initial: { turn: 0, agents: initialAgents, activeWebs: [] },
+    initial: { turn: initialBoard.turn, agents: initialBoard.agents, activeWebs: initialBoard.activeWebs },
     taxonomyRows,
 
     /** The board as a graph, as of the last refresh. Every tick moves the
@@ -149,8 +149,8 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
      *  positions and not last turn's, the same way a typed one does. */
     refreshGraph: refreshWorldGraph,
 
-    /** Run one real engine turn directly. Returns spider-fly.mjs's own
-     *  { turn, agents, ecology } shape unmodified. */
+    /** Run one real engine turn directly. Returns the engine's own
+     *  { turn, agents, ecology, activeWebs } shape unmodified. */
     async tick() {
       const result = await runSpiderFlyTick(memoryDir, { config });
       turnSession.setPlanState({ spiderFly: { turn: result.turn } });
@@ -179,7 +179,11 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
         if (!isLiveRenderableAgent(id, state)) continue;
         agents[id] = { cell: place.cell, mass: state.mass.get(id)?.value ?? null };
       }
-      return { turn: state.turnCount, agents, activeWebs: liveWebs(state.webs, state.turnCount) };
+      return {
+        turn: state.tickCount,
+        agents,
+        activeWebs: liveWebs(state.webs, state.tickCount, config.webDurationTurns),
+      };
     },
 
     /** The live spiderFly config this session's future tick()/turn() calls

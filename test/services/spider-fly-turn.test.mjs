@@ -27,7 +27,7 @@ test("spiderFlyTurn's opening move threads a custom gameConfig into startSpiderF
 
     const rows = readFactRows(await loadMemory(memoryDir));
     assert.ok(
-      rows.some((r) => r.subject === "spider-1" && r.predicate === "mgx:mass" && r.object === "42"),
+      rows.some((r) => r.subject === "spider-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "42"),
       "the custom spiderInitialMass reaches the freshly-started game's own written facts, not the shipped default of 15",
     );
   } finally {
@@ -44,7 +44,7 @@ test("spiderFlyTurn defaults to DEFAULT_GAME_CONFIG when no gameConfig is passed
 
     const rows = readFactRows(await loadMemory(memoryDir));
     assert.ok(
-      rows.some((r) => r.subject === "spider-1" && r.predicate === "mgx:mass" && r.object === String(DEFAULT_GAME_CONFIG.spiderFly.spiderInitialMass)),
+      rows.some((r) => r.subject === "spider-1@turn0" && r.predicate === "mgx:hasMass" && r.object === String(DEFAULT_GAME_CONFIG.spiderFly.spiderInitialMass)),
       "with no gameConfig override, the shipped default spiderInitialMass is what lands in the store",
     );
   } finally {

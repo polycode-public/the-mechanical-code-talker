@@ -18,7 +18,7 @@ import { WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePrep
 import { memoryFactGraphPayload } from "../../src/domain/memory-facts.mjs";
 import { createInMemoryStore, loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
 import { worldFactRows, agentKindOf, isLiveRenderableAgent, WORLD_NAME } from "../../src/domain/spider-fly-world.mjs";
-import { startSpiderFlyGame, runSpiderFlyTick, foldSpiderFlyState } from "../../src/services/spider-fly.mjs";
+import { startSpiderFlyGame, runSpiderFlyTick, foldSpiderFlyState } from "../../src/services/spider-fly-turn.mjs";
 
 const BOARD_ROWS = [
   { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },

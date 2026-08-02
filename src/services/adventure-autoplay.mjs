@@ -11,7 +11,7 @@
 // actually seen. `exposedRoomIds` is the set of rooms this auto-play run has
 // itself moved into (the opening room included from turn 0) — it is the sole
 // caller making every move, so it always knows this, and threads the set
-// forward turn to turn exactly like spider-fly.mjs threads its own agents
+// forward turn to turn exactly like predator-prey.mjs threads its own agents
 // shape. `exposedFacts` turns that set into the actual filtered view: a fact
 // is exposed when its subject's CURRENT placement resolves into an exposed
 // room, when the subject is the player, or when the fact IS the world's
@@ -130,7 +130,7 @@ async function stepTowardThenAct({
  * and execute exactly the one move that goal implies through `adventureTurn`
  * — the same public entry point a real chat turn calls. Returns
  * `{ turn, goal, plan, done, stalled, exposedRoomIds }`, mirroring
- * spider-fly.mjs's own tick shape: `plan` is the remaining multi-step route a
+ * predator-prey.mjs's own tick shape: `plan` is the remaining multi-step route a
  * `findActionPath` search found this tick (or null when the move was a
  * single, immediate step — an adjacent unexposed exit, or a take), `goal` is
  * a short line describing what this tick did, `done` means the objective is
