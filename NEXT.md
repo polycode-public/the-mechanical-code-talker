@@ -56,7 +56,7 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
   for all ten claims; the bodies mostly stay, with one edit ("one shared world" becomes "one shared
   muddy world"). The new titles name the capability rather than pitching it: Natural Language
   Understanding, Competitive multi-agent system, Classical AI Planning, Fact based world
-  visualisation, Facts as RDF/OWL tripples, Code Index for RAG, Synthesise Facts from free text,
+  visualisation, Facts as RDF/OWL triples, Code Index for RAG, Synthesise Facts from free text,
   Search backed knowledge base, Competitive multi-agent system with Fact based visualisation (MUD),
   MMORPG.
   **Half two, the about pages.** An info link at the bottom right of each demo card goes to that
@@ -74,6 +74,22 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
   **Risk:** `test-e2e/pages-index.test.mjs` and `test-e2e/pages-home.test.mjs` both pin the claim
   count and the plate numerals, and one asserts claim text. New pages need adding to the service
   worker's precache list and to whatever the deploy tracks, or they ship uncached or not at all.
+  **Two more halves, added after the item was written.**
+  **A share control on every demo card**, using the current standard: `navigator.share()` where
+  available, with a clipboard-and-links fallback elsewhere. Each demo carries **five or more
+  pre-written posts**, each taking a different angle on the capability and each linking somewhere
+  different — the demo page, the about page, or a named section inside it. The about pages' section
+  ids double as those deep-link targets. Posts should carry the demo's screenshot where the platform
+  takes files. Only use a query parameter if the target page actually reads it; a parameter the page
+  ignores looks deliberate and does nothing.
+  The operator's purpose: open a demo card, post about it, and do that repeatedly with fresh framing,
+  so the home page becomes a deck to present from over time.
+  **A capability table on `index.html`**, demo pages down the left and features across the top, a
+  tick where a demo demonstrates a feature and an eye where that feature is its focus. Derive the
+  real feature list from the demos. Only tick what the code backs — a tick that cannot be
+  substantiated is a claim this engine would refuse to make about itself. Wide tables need their own
+  `overflow-x` container so a phone still reads.
+
   **Mitigation:** grep every place a page list is enumerated before adding files —
   `scripts/build-demo-site.mjs` holds more than one such list, and the e2e page-order arrays are
   separate again.
