@@ -513,39 +513,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Risk:** a press spends a turn and the whole board moves with it. The control has to read that
   way rather than as a free nudge.
 
-- **There is no way to drive an agent by hand.** Every movement comes from the planner; a visitor
-  watching a chase cannot step in.
-  **Tier:** top. The engine has no per-agent entry point, only a whole-world tick.
-  **Do:** add a ring of directional controls around the view. Up moves the followed agent one cell
-  along its facing, down steps back, left and right turn ninety degrees, the diagonals turn
-  forty-five. `runTownSquareTick` (`predator-prey.mjs:668`-`:845`) is the only function that
-  advances the world, and its `decide(agentId, role)` closure (`:687`-`:739`) has no override hook.
-  Add a `manualMoves = {}` option, checked at the top of `decide` before the belief chain. Validate
-  the cell against `gridApplyActions(rows)(fromCell)` (`:250`-`:263`), the same legality table
-  `oneStepOptions`/`greedyAway`/`greedyToward` use, so walls and props are rejected as missing exits.
-  On a legal move set `nextCell`/`plan`/`goal` from the hand-picked cell and a new `driven` rung; on
-  an illegal one refuse it and fall back to that agent's own `decide()` for the turn, so a rejected
-  press never freezes it. Wrap it as `session.driveAgent(agentId, direction)` in
-  `mudiii-browser-entry.mjs`.
-  **The operator's decision on facing:** a hand-driven turn writes a facing that persists while the
-  agent holds still, and is replaced the moment the agent takes a step of its own. The planner still
-  wins when it decides to move. That needs one new predicate the fold reads when `plan[0]` is
-  absent; `decide()` currently overwrites facing from `plan[0] ?? state.facing` at `:735`, and
-  `foldTownSquareState`'s facing map (`:148`, `:184`-`:186`) is where the new predicate is read.
-  **Feasibility:** a move press goes through the same `runTownSquareTick` call as any tick, so it
-  spends a turn, runs the ecology pass for the whole board, and every other agent decides and moves
-  too. Driving a fox by hand means the goblins keep living their own lives on every press. Any
-  cheaper path duplicates the ecology, belief and mass logic client-side.
-  **Risk:** an implementation that treats a hand move as free, spending no turn and skipping the
-  ecology pass, would violate "the same fact path", produce a store a replay or a peer disagrees
-  about, and miss the item's own acceptance bar. `clipForAction` has no `driven` case and falls
-  through to `wander`'s `walk`, which is fine as a first cut.
-  **Mitigation:** in `test/services/predator-prey.test.mjs` (dozens of
-  `runTownSquareTick(dir, { layout })` calls to copy, e.g. `:253`, `:407`) assert: a legal
-  `manualMoves` entry writes the same `PLACEMENT_PREDICATE`/facing fact shape a normal move does; an
-  illegal one is refused and that agent still gets a normal AI move; every other agent still decided
-  and moved in the same call.
-
 - **Clicking a camera-mode button does nothing on the board.** There is no feedback tying the button
   to a place.
   **Settled:** this belongs to ground clicks, not to the camera buttons. FOLLOW / POV / OVERHEAD
