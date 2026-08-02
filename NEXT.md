@@ -36,8 +36,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Three tracks running. Fifteen have merged and `main` is pushed green at 5886/5886, so the pipeline
 this batch is waiting on is the one running against `2b64f3e2`.
 
-- **T16 fox walks backwards** — `mudiii-scene.mjs`, `mudiii-viz.mjs`, `data/mudiii-assets.json`.
-  Sonnet. Status: started.
 - **T17 spider-fly migration** — `spider-fly*.mjs`, `predator-prey.mjs`, spider-fly's viz layer and
   corpus rows. Top tier. Status: started.
 - **T18 `/retract` granularity** — `syllogise.mjs`, `adventure-editor.mjs`. Sonnet.
@@ -48,7 +46,8 @@ import-cycle estate guard; adventure's pill `data-command`; the resolver purity 
 `CLAUDE.md`; both e2e files' page-order pins; the goblin sizing fix and its byte-caching loader
 rework; the `pages-home` wait hardening; teach mode's UI for adventure and mud; p2p retraction
 replication; the 3sf trust-score comparison; the predator-prey trio; the committed hay bale with its
-manifest rows; the `foodVisionGated` default fix and its restamped tape; and the seed-perf bar.
+manifest rows; the `foodVisionGated` default fix and its restamped tape; the seed-perf bar; and
+`yawForFacing`'s swapped east/west.
 
 ## Open items
 
@@ -490,33 +489,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Risk:** a fix aimed at `nextCameraSelection`, which reads correctly already, would look
   plausible and pass a shallow check while leaving the real race.
   **Mitigation:** the reproduction test is the acceptance check. It must fail before the fix.
-
-- **The fox walks backwards some of the time.** Seen on the live page.
-  The engine side reads correct, so start at the render layer. `decide()` sets
-  `facing = plan[0] ?? state.facing…` (`predator-prey.mjs:828`), and `plan[0]` is always the step
-  actually taken: `stepPlan` derives it from `oneStepDirectionBetween`, and the multi-step branch's
-  `path.actions` come from `gridApplyActions`, which pushes `{ action: direction }` using
-  `DIRECTION_DELTA`'s own keys (`:255`-`:259`). `DIRECTION_DELTA` holds four cardinals and
-  `yawForFacing`'s `YAW` covers all four, so there is no missing-key fallback to `south` and no
-  diagonal to mis-round.
-  **Tier:** Sonnet. Needs browser reproduction; static reading does not settle it.
-  **Do:** reproduce first, then decide between two candidates.
-  The likelier one is already documented against itself: `yawForFacing` (`mudiii-scene.mjs:133`-`:144`)
-  says outright that it encodes the world's facing convention and is "not a guarantee about any one
-  GLB's neutral pose", and that "a rig's own forward axis may need a per-model offset once real
-  assets are in place". The assets are in place now. If the fox model's neutral pose points opposite
-  the convention, every move renders 180° out and reads as walking backwards. The fix is a per-model
-  yaw offset carried on the manifest row beside `targetHeight`, not a change to the shared
-  convention, since fox and goblin may differ.
-  The other candidate is the animation rather than the rotation: when an agent holds still, `plan` is
-  `[]` and the rung can still be `wander` or `forage`, which `clipForAction` maps to a walk. That
-  renders as walking on the spot, which a viewer may read as the same fault. Check whether the
-  reported cases are moving or stationary before fixing either.
-  **Risk:** correcting this inside `yawForFacing` would rotate every model together and trade one
-  wrong orientation for another. Whatever the offset is, it belongs per asset.
-  **Mitigation:** the reproduction is the acceptance check. Drive a known move — place food east of
-  the fox, tick once — and assert the mesh's yaw matches the direction it travelled, for each model
-  in the manifest rather than for the fox alone.
 
 - **Agents carry no label in the scene or on the map.** Nothing on the board says which goblin is
   which; the id only exists in the HUD card.
