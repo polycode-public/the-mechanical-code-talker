@@ -50,23 +50,9 @@ deployed site directly rather than serving its own.
   `sprites-viz.mjs`, `mud-viz.mjs`, `spider-fly-viz.mjs`, `adventure-viz.mjs`, `index.html`. Sonnet.
   Holds a build slot. Status: started.
 
-- **T55 mudiii's camera look, the double-minted cell and its STEP button** — drag to look in POV and
-  FOLLOW, two agents opening on one cell, and a STEP button that advances one whole turn.
-  `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier. Holds a build slot.
-  Status: started.
-- **T60 INF-4's chain bound and its pins** — raise `maxHops` at both chat call sites and flip the 30
-  pinned ceiling rows in the same commit, then re-run the bench. `chat.mjs`, `syllogise.mjs`, the
-  INFBENCH generator. Top tier. Status: started.
 - **T62 the deployed seed readiness race** — three `pages-timing` failures where the page reports
   ready with an empty store. `pages-ingest.test.mjs`, `pages-chat-export.test.mjs`,
   `pages-service-worker.test.mjs`, `ingest-viz.mjs`. Top tier. Status: started.
-- **T63 a second CLI edge hunt** — the first found fifteen and all fifteen are fixed, so this is the
-  next wave rather than a re-file. `bin/tmct.mjs`, the tool handlers, the HTTP surface, `cli-verbs`,
-  `toml-config`, a new report. Top tier. Status: started.
-- **T64 sweep the ask grammar for real-but-wrong answers** — the impact-of fix uncovered a class: a
-  relaxation layer drops a word it does not recognise, re-parses, and answers a different question
-  against a real edge. Enumerates the capability labels and relation verbs from their own sources and
-  crosses them. `ask.mjs`, `ask-vocab.mjs`, `interpret/`, a new report. Top tier. Status: started.
 - **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
 
@@ -187,20 +173,6 @@ deployed site directly rather than serving its own.
   **Feasibility:** INF-7 needs Stage EL saturation and INF-8 a Stage DL tableau plus phase-0
   `unionOf`/`complementOf`/negative-assertion representation. Those are the path above, not this.
   **Risk:** deeper chains cost more per turn, and the per-turn cost has already grown (below).
-
-- **A chat turn got much heavier since 3.0.3, and the likely cause is now fixed but unconfirmed.**
-  The inference bench took roughly 25 minutes wall-clock for its double replay against about 4.5
-  minutes for the whole 3.0.3 cycle, while the case pool grew only 5%.
-  **The candidate:** `findIsaChain` rebuilt its adjacency index over the whole subClassOf edge set on
-  every call, and `shortestChainTo` in `src/domain/memory/capability.mjs` is called once per
-  candidate row from `chat.mjs`, so the pair was nested quadratic. Threading a prebuilt successor
-  index through took a 63,470-row store from a 1054-second freeze to 577ms, and the corpus tier from
-  145s to 54s.
-  **What is still open:** nobody has re-run the inference bench since. The 25-minute figure stands
-  until a fresh cycle replaces it.
-  **Tier:** Sonnet. **In flight** as T60, which re-runs the bench for its own reason and will
-  produce the number as a side effect.
-
 
 ### mudiii.html — camera
 
