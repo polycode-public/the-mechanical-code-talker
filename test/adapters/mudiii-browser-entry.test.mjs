@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
+import { createMudiiiSession, townSquareRosterArgs, pickMudiiiRoster, driveRequest } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
 import { roleOfId, foldTownSquareState } from "../../src/services/predator-prey.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "../../src/services/mud-editor.mjs";
 import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
@@ -131,6 +131,66 @@ test("syncing the editor's own unchanged text back writes nothing and retracts n
   const result = await session.applyEdit(text);
   assert.deepEqual(result.unrecognized, [], "every sentence the renderer wrote reads back");
   assert.equal(result.added, 0, "a placement already true is not re-appended on every sync");
+});
+
+test("a ring press reads as a step ahead, a step back, or a turn on the spot", () => {
+  const at = { cell: "cell-5-5", facing: "north" };
+  assert.deepEqual(driveRequest("up", at), { cell: "cell-5-4", facing: "north" });
+  assert.deepEqual(driveRequest("forward", at), { cell: "cell-5-4", facing: "north" });
+  assert.deepEqual(driveRequest("down", at), { cell: "cell-5-6", facing: "north" }, "a step back leaves the facing alone");
+  assert.deepEqual(driveRequest("left", at), { facing: "west" }, "a turn names no cell, so the agent holds");
+  assert.deepEqual(driveRequest("right", at), { facing: "east" });
+  assert.deepEqual(driveRequest("up-right", at), { facing: "northeast" }, "the diagonals turn forty-five");
+  assert.deepEqual(driveRequest("up-left", at), { facing: "northwest" });
+  assert.deepEqual(driveRequest("down-right", at), { facing: "southeast" });
+  assert.deepEqual(driveRequest("down-left", at), { facing: "southwest" });
+  assert.equal(driveRequest("sideways", at), null, "a press this ring does not carry asks for nothing");
+  assert.equal(driveRequest("", at), null);
+});
+
+test("a press forward while facing a diagonal holds, because the grid carries no diagonal exit", () => {
+  assert.deepEqual(driveRequest("up", { cell: "cell-5-5", facing: "northeast" }), { facing: "northeast" });
+  assert.deepEqual(driveRequest("right", { cell: "cell-5-5", facing: "northeast" }), { facing: "southeast" });
+});
+
+test("driveRequest also takes a compass point straight, so a caller can ask in absolutes", () => {
+  const at = { cell: "cell-5-5", facing: "north" };
+  assert.deepEqual(driveRequest("west", at), { cell: "cell-4-5", facing: "west" });
+  assert.deepEqual(driveRequest("southeast", at), { facing: "southeast" }, "no exit runs diagonally, so this is a turn");
+});
+
+test("session.driveAgent walks the followed agent one cell and hands back a whole tick", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  const before = await session.board();
+  const facing = before.agents["fox-1"].facing;
+  const result = await session.driveAgent("fox-1", "up");
+  assert.equal(result.turn, 1, "a press spends a turn like any other");
+  assert.deepEqual(Object.keys(result.driven).sort(), ["accepted", "agent", "cell", "direction", "facing", "from"]);
+  assert.equal(result.driven.accepted, true);
+  assert.equal(result.rungs["fox-1"], "driven");
+  assert.equal(result.driven.from, before.agents["fox-1"].cell);
+  assert.equal(result.agents["fox-1"].cell, result.driven.cell);
+  assert.notEqual(result.driven.cell, result.driven.from, "up is a step, so the fox stands somewhere new");
+  assert.equal(result.driven.facing, facing, "a step straight ahead keeps the facing it started with");
+  assert.ok(result.rungs["goblin-1"], "and the rest of the board took the same turn");
+});
+
+test("a press on an agent that is not on the board still advances the world", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1"], epoch: 0 });
+  const result = await session.driveAgent("fox-99", "up");
+  assert.equal(result.driven.accepted, false);
+  assert.equal(result.driven.from, null);
+  assert.equal(result.turn, 1);
+  assert.ok(result.agents["fox-1"], "the world moved on without the press");
+});
+
+test("a hand-driven turn on the spot survives into the board the page draws next", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1"], epoch: 0 });
+  const result = await session.driveAgent("fox-1", "right");
+  assert.equal(result.driven.accepted, true, "a turn needs no exit, so it is always a legal move");
+  assert.equal(result.driven.cell, result.driven.from, "and it spends the turn where it stands");
+  const board = await session.board();
+  assert.equal(board.agents["fox-1"].facing, result.driven.facing);
 });
 
 test("pickMudiiiRoster draws without repeats and never more than the pool holds", () => {
