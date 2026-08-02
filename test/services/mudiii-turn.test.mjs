@@ -39,7 +39,7 @@ test("mudiiiTurn's opening move threads a custom gameConfig into startTownSquare
 
   const rows = readFactRows(await loadMemory(memoryDir));
   assert.ok(
-    rows.some((r) => r.subject === "fox-1" && r.predicate === "mgx:hasMass" && r.object === "99"),
+    rows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "99"),
     "the custom predatorInitialMass reaches the freshly-started game's own written facts",
   );
 }));
@@ -50,7 +50,7 @@ test("mudiiiTurn defaults to DEFAULT_GAME_CONFIG when no gameConfig is passed", 
   assert.ok(result);
   const rows = readFactRows(await loadMemory(memoryDir));
   assert.ok(
-    rows.some((r) => r.subject === "fox-1" && r.predicate === "mgx:hasMass" && r.object === String(DEFAULT_GAME_CONFIG.mudiii.predatorInitialMass)),
+    rows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === String(DEFAULT_GAME_CONFIG.mudiii.predatorInitialMass)),
     "with no gameConfig override, the shipped default predatorInitialMass is what lands in the store",
   );
 }));
