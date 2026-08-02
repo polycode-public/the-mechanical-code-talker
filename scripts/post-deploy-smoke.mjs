@@ -64,6 +64,21 @@ async function vendorEncoding() {
   return encoding;
 }
 
+/** Whether the mudiii page actually reached the edge and is precompressed.
+ *  Worth a probe of its own because it is a critical page asset. Returns the
+ *  content-encoding served, or throws. */
+async function mudiiiPage() {
+  const url = new URL("mudiii.html", PAGES_URL.endsWith("/") ? PAGES_URL : `${PAGES_URL}/`).href;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "accept-encoding": "br, gzip", "cache-control": "no-cache", "user-agent": `${name} post-deploy-smoke` },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const encoding = res.headers.get("content-encoding");
+  if (!encoding) throw new Error("served with no content-encoding");
+  return encoding;
+}
+
 /** Whether the town square's own 3D models actually reached the edge.
  *
  *  Worth a probe of its own because they are the site's ONE committed binary
@@ -94,6 +109,7 @@ async function checkOnce() {
     ["npm", publishedVersion],
     ["pages", pagesVersion],
     ["vendor", vendorEncoding],
+    ["mudiii", mudiiiPage],
     ["models", modelBytes],
   ]) {
     try {
@@ -103,7 +119,7 @@ async function checkOnce() {
     }
   }
   const ok = results.npm.value === version && results.pages.value === version
-    && Boolean(results.vendor.value) && Boolean(results.models.value);
+    && Boolean(results.vendor.value) && Boolean(results.mudiii.value) && Boolean(results.models.value);
   return { results, ok };
 }
 
