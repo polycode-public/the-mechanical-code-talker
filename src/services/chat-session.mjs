@@ -40,6 +40,12 @@ export const SESSION_LOG_DIR = ".tmct";
 /** The base (no-focus) prompt. With a focus set the shell shows `tmct(label)>`. */
 export const PROMPT = "tmct> ";
 
+/** What a teach or a retract carries in a session that keeps nothing (--ephemeral,
+ *  tmct.toml's [graph] read_only, or the "memory" backend). */
+export const DISCARDED_WRITE_NOTE =
+  "(this session keeps nothing — the fact is gone when it ends. Run without --ephemeral, "
+  + "or on a stored backend, to keep it.)";
+
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is unavailable).
@@ -250,6 +256,8 @@ export async function createSession({
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
   // target is never touched; the demo's memory simply doesn't persist across runs.
+  // The banner still names the repo the user asked about, not the scratch dir.
+  const readRepo = repo;
   if (ephemeral) repo = await mkdtemp(join(tmpdir(), "tmct-ephemeral-"));
 
   // Load the graph once up front — the banner needs the module count, and focus/`it`
@@ -357,12 +365,20 @@ export async function createSession({
   // entities (the degenerate trap). Both get orienting, non-over-promising banner
   // + greeting messaging rather than a silent dead-end.
   const noCodeGraph = moduleCount === 0;
+  // A discarding session must not say the conversation is kept. Ephemeral
+  // diverts every write to a temp dir and suppresses the graph upsert; the
+  // "memory" backend keeps the store in-process. Both end when the process does.
+  const discardsWrites = ephemeral || backendChoice === "memory";
+  const whereItGoes = discardsWrites
+    ? "nothing is written back — this session's facts and log are dropped when it ends"
+    : `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`;
   const bannerLines = [
     noCodeGraph
       // No code graph: honest, orienting messaging — never an error before the prompt.
-      ? `tmct chat — ${repo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
-        `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
-      : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
+      ? `tmct chat — ${readRepo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
+        `${whereItGoes}`
+      : `tmct chat — ${readRepo} — ${moduleCount} module(s) — `
+        + (discardsWrites ? `${whereItGoes}` : `log ${logFile}`),
     // the honest seed line appears ONLY on the run that actually seeded — the count
     // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band
     // (+ any other active extension bundle, e.g. an activated tier-2 corpus).
@@ -429,7 +445,13 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { answer, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      // "noted — remembered" reports a durable write. In a session that keeps
+      // nothing it is the last word on a fact that dies with the process, so
+      // say where the fact actually went.
+      const answer = discardsWrites && (record.via === "assert" || record.via === "retract")
+        ? `${result.answer}\n${DISCARDED_WRITE_NOTE}`
+        : result.answer;
       focus = nextFocus;
       last = nextLast;
       if ("planState" in result) planState = result.planState;
