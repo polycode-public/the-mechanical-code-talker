@@ -33,17 +33,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Three tracks running. Sixteen have merged. `2b64f3e2` was pushed with the suite green at 5886/5886;
-the fox fix has merged since and is not pushed yet.
+Loop batch 1. Five tracks. `mudiii-viz.mjs` is the collision point again, so every item that edits it
+goes to one owner in the order the section states: grid size first, because two later items need its
+`gridSizeOf()`.
 
-
-Landed, in merge order: the `smoke:deploy` mudiii probe; the `QUESTION_LEAD_RE` dedup; the
-import-cycle estate guard; adventure's pill `data-command`; the resolver purity invariant in
-`CLAUDE.md`; both e2e files' page-order pins; the goblin sizing fix and its byte-caching loader
-rework; the `pages-home` wait hardening; teach mode's UI for adventure and mud; p2p retraction
-replication; the 3sf trust-score comparison; the predator-prey trio; the committed hay bale with its
-manifest rows; the `foodVisionGated` default fix and its restamped tape; the seed-perf bar; and
-`yawForFacing`'s swapped east/west.
+- **T20 mudiii-viz cluster** — scenario grid size, the turn counter, and the chat teach-frame tick.
+  `build-demo-site.mjs`, `mudiii-viz.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
+- **T21 "who put that there?"** — `mudiii-turn.mjs`. Sonnet. Status: started.
+- **T22 screenshot ready-check** — `scripts/gen-screenshots.mjs`. Sonnet. Status: started.
+- **T23 food size look** — `data/mudiii-assets.json`, and a screenshot it must open. Haiku.
+  Status: started.
+- **T24 plan-doc citations** — `spider-fly-world.mjs`, `spider-fly-viz.mjs`. Haiku. Status: started.
 
 ## Open items
 
