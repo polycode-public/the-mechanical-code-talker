@@ -92,8 +92,9 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
 - **The overhead rig fits the tighter of the two axes.** Its height comes from the board size,
   the camera's field of view and the canvas aspect together, so a wide window pulls the camera
   in and a narrow one backs it off, and the whole board stays in frame either way. It leaves
-  enough room past the ground plane for a goblin standing in an outermost cell, which looking
-  straight down pushes outward from the centre of frame. Taller props overhang.
+  enough room past the ground plane for a goblin standing in an outermost cell and the id label
+  above its head, both of which looking straight down pushes outward from the centre of frame.
+  Taller props overhang.
 - **Movement is a snap with a cosmetic tween.** Per-agent meshes persist, a ~250ms lerp eases
   each one-cell hop, and the authoritative position is always the tick's cell. Spawns, despawns
   and any multi-cell jump use a scale flourish at the destination, no path animation. Reduced
