@@ -6,11 +6,12 @@ import { join } from "node:path";
 import { createP2pRoom, PRESENCE_SCOPE, resolveStoreNodeId } from "../../src/services/p2p-room.mjs";
 import { chatSyncableFacts } from "../../src/domain/p2p/sync-filter.mjs";
 import { decodeInviteBlob, encodeInviteBlob } from "../../src/domain/p2p/wire.mjs";
-import { WAVED_PREDICATE, INVITED_BY_PREDICATE, nodeTerm } from "../../src/domain/p2p/facts.mjs";
+import { WAVED_PREDICATE, INVITED_BY_PREDICATE, nodeTerm, invitedByFact } from "../../src/domain/p2p/facts.mjs";
 import { RETRACTION_PREDICATE } from "../../src/domain/memory/retraction.mjs";
 import {
   createInMemoryStore, appendFacts, removeFacts, loadMemory, readFactRows,
   readRetractions, normFactTerm, FACT_CLASS,
+  admittedNodes, retirableRetractions, retireRetractions,
 } from "../../src/adapters/memory/core.mjs";
 
 // A pair of in-memory transports wired straight to each other, matching the
@@ -892,4 +893,91 @@ test("one peer's retraction leaves a fact another peer taught for itself standin
   assert.ok(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"));
   assert.match(onAlice.provenance, /mossy-acorn/, "it stands on the peer that still asserts it");
   assert.equal(onAlice.provenance.includes("sess-a"), false, "and the retracted assertion did not come back");
+});
+
+// ---- retiring a tombstone ---------------------------------------------------
+
+const tombstoneIdsOf = async (memoryDir) => (await retractionsOf(memoryDir)).map((r) => r.id);
+
+test("two peers that retracted together agree on the roster and on retiring nothing, whichever of them invited", async () => {
+  const meshAfterRetraction = async (inviterFirst) => {
+    const network = createFakeNetwork();
+    const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+    const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+    if (inviterFirst) await connect(alice.room, bob.room);
+    else await connect(bob.room, alice.room);
+    await alice.room.afterLocalChange();
+    await bob.room.afterLocalChange();
+    await settle();
+
+    const { ids } = await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+    await alice.room.afterLocalChange();
+    await settle();
+    await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+    await alice.room.afterLocalChange();
+    await settle();
+    return { alice, bob };
+  };
+
+  for (const inviterFirst of [true, false]) {
+    const { alice, bob } = await meshAfterRetraction(inviterFirst);
+    const bothNodes = [ALICE_NODE, BOB_NODE].sort();
+    assert.deepEqual(admittedNodes(await rowsOf(alice.memoryDir)), bothNodes, "the admission graph crossed the wire");
+    assert.deepEqual(admittedNodes(await rowsOf(bob.memoryDir)), bothNodes, "and both peers read the same roster");
+
+    assert.equal((await tombstoneIdsOf(alice.memoryDir)).length, 1);
+    assert.deepEqual(await tombstoneIdsOf(alice.memoryDir), await tombstoneIdsOf(bob.memoryDir),
+      "the tombstone converged");
+    for (const [store, self] of [[alice.memoryDir, ALICE_NODE], [bob.memoryDir, BOB_NODE]]) {
+      assert.deepEqual(retirableRetractions(await loadMemory(store), { self }).retirable, [],
+        "and nothing tells either of them a peer has it, so neither retires anything");
+    }
+  }
+});
+
+test("a peer admitted long ago and away since keeps a tombstone standing, and retiring it anyway lets its copy back in", async () => {
+  // Alice's own broadcast tag for the fact — what a peer who took it from her
+  // still holds, and what it re-sends when it comes back.
+  const aliceTag = `teach:peer:amber-fox#node:${ALICE_NODE}@2026-05-01T10:00:00.000Z`;
+  const staleCopy = { subject: "rover", predicate: "mgx:isA", object: "dog", provenance: aliceTag };
+
+  const afterCarolRejoins = async ({ retireFirst }) => {
+    const network = createFakeNetwork();
+    const aliceTransports = [];
+    const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE, capture: aliceTransports });
+    const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+    await connect(alice.room, bob.room);
+    await bob.room.afterLocalChange();
+    await settle();
+    // Carol joined once, took a copy, and has not been seen since. Her
+    // admission is on record; her acknowledgement of anything later is not.
+    await appendFacts(alice.memoryDir, [invitedByFact(CAROL_NODE, ALICE_NODE, "2026-04-01T10:00:00.000Z")]);
+
+    const { ids } = await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+    await alice.room.afterLocalChange();
+    await settle();
+    await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+    await alice.room.afterLocalChange();
+    await settle();
+
+    const tombstones = await tombstoneIdsOf(alice.memoryDir);
+    assert.equal(tombstones.length, 1);
+    const report = retirableRetractions(await loadMemory(alice.memoryDir), {
+      self: ALICE_NODE,
+      acknowledgedBy: (node) => (node === BOB_NODE ? tombstones : []),
+    });
+    assert.deepEqual(report.roster, [ALICE_NODE, BOB_NODE, CAROL_NODE].sort(), "carol is still a member");
+    assert.deepEqual(report.retirable, [],
+      "and a peer who has acknowledged nothing blocks the retirement, however long it has been away");
+
+    if (retireFirst) await retireRetractions(alice.memoryDir, tombstones);
+    network.injectTo(aliceTransports[0], { type: "op", from: "peer-c", facts: [staleCopy] });
+    await settle();
+    return findRow(await rowsOf(alice.memoryDir), "rover", "mgx:isA");
+  };
+
+  assert.equal(await afterCarolRejoins({ retireFirst: false }), undefined,
+    "the tombstone that stayed put refuses the copy carol never stopped holding");
+  assert.ok(await afterCarolRejoins({ retireFirst: true }),
+    "and the same rejoin resurrects the retracted fact once the tombstone is gone");
 });

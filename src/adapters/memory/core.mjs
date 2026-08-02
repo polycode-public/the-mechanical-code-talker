@@ -50,6 +50,7 @@ import {
   planRetraction, mergeRetractions, retractionFromWire, retractionWireFact,
   isRetractedRecord, RETRACTION_CLASS,
 } from "../../domain/memory/retraction.mjs";
+import { admittedNodes, stableRecordIds } from "../../domain/memory/causal-stability.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
@@ -69,6 +70,8 @@ export {
   retractionIdFor, isRetractionId, retractionScopeOf,
   retractedRecordIds, retractedAtOf, retractionWireFact, retractionFromWire,
 } from "../../domain/memory/retraction.mjs";
+
+export { admittedNodes, peersToConvince, stableRecordIds } from "../../domain/memory/causal-stability.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -3187,6 +3190,56 @@ export async function appendRetractions(dir, wireFacts) {
     recountClasses(payload);
   });
   return { merged: incoming.length, removed };
+}
+
+/** What this store could retire, and the roster it has to convince first.
+ *
+ *  `roster` is the world's admission graph, folded to a set of node ids —
+ *  replicated, grow-only, and the same on every peer holding the same facts.
+ *  `retirable` is the tombstones every peer on that roster is known to hold.
+ *  `acknowledgedBy(nodeId)` is what supplies that evidence; nothing produces it
+ *  yet, so `retirable` reads empty and this is a report rather than a sweep.
+ *  Retiring nothing is the current behaviour, and it is the safe one: a
+ *  tombstone dropped one peer early lets that peer's copy resurrect a retracted
+ *  fact. See docs/references/papers/crdt.md. */
+export function retirableRetractions(memory, { self = "", acknowledgedBy = null } = {}) {
+  const roster = admittedNodes(readFactRows(memory));
+  const recordIds = [];
+  for (const ind of memory?.individuals || []) {
+    if (ind?.class === RETRACTION_CLASS && ind.id) recordIds.push(ind.id);
+  }
+  return { roster, retirable: stableRecordIds({ recordIds, roster, self, acknowledgedBy }) };
+}
+
+/** Drop named retraction records. Takes the ids rather than choosing them, so a
+ *  caller has to have run the stability rule and passed its answer; ids that are
+ *  not retraction records are skipped. Returns the ids that went. */
+export async function retireRetractions(dir, ids) {
+  const asked = new Set((ids || []).filter(Boolean));
+  const retired = [];
+  if (!asked.size) return { retired };
+  await mutateMemory(dir, (payload) => {
+    const drop = new Set();
+    payload.individuals = (payload.individuals || []).filter((ind) => {
+      if (ind?.class !== RETRACTION_CLASS || !asked.has(ind.id)) return true;
+      drop.add(ind.id);
+      return false;
+    });
+    if (!drop.size) return;
+    for (const id of drop) retired.push(id);
+    const idx = memoryIndexOf(payload);
+    if (idx) {
+      for (const id of drop) {
+        idx.individualsById.delete(id);
+        const groupId = factGroupId(id);
+        const held = (idx.retractionsByGroup.get(groupId) || []).filter((r) => !drop.has(r.id));
+        if (held.length) idx.retractionsByGroup.set(groupId, held);
+        else idx.retractionsByGroup.delete(groupId);
+      }
+    }
+    recountClasses(payload);
+  });
+  return { retired };
 }
 
 /** The trust floor a fact must clear before a differing object counts as a real
