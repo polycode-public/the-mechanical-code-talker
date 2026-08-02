@@ -44,7 +44,7 @@ Wave 1, in flight:
 |---|---|---|---|
 | W1-ENGINE — `town-square-world.mjs`, `predator-prey.mjs`, three world sources, the fixture's ticks | top | `.claude/worktrees/agent-abfd808e944937be1` | started |
 | W1-VIZ — `mudiii-viz.mjs`, `mudiii-browser-entry.mjs` | Sonnet | `.claude/worktrees/agent-ac9f33b91b04d1731` | started |
-| W1-VENDOR — `build-three-vendor.mjs`, `build-mudiii-bundle.mjs` | Haiku | `.claude/worktrees/agent-a67e08c2555b8ffe7` | started |
+| W1-VENDOR — `build-three-vendor.mjs`, `build-mudiii-bundle.mjs` | Haiku | merged, worktree removed | **landed** — three.js vendors at 801 KB raw / 169 KB brotli, all four exports verified from a scratch rebuild |
 
 `mudiii-viz.mjs` and `mudiii-scene.mjs` are split up front so the page shell and the 3D scene are
 disjoint files rather than one contended one; the contract between them is a single exported
