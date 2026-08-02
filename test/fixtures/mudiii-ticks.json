@@ -101,15 +101,957 @@
   "initial": {
     "turn": 0,
     "agents": {
-      "fox-1": { "role": "predator", "cell": "cell-2-9", "facing": "north", "mass": 20 },
-      "goblin-1": { "role": "prey", "cell": "cell-7-4", "facing": "west", "mass": 8 },
-      "goblin-2": { "role": "prey", "cell": "cell-11-6", "facing": "north", "mass": 8 },
-      "goblin-3": { "role": "prey", "cell": "cell-11-12", "facing": "west", "mass": 0.59 }
+      "fox-1": { "role": "predator", "cell": "cell-11-8", "facing": "north", "mass": 20 },
+      "goblin-1": { "role": "prey", "cell": "cell-10-1", "facing": "west", "mass": 8 },
+      "goblin-2": { "role": "prey", "cell": "cell-4-6", "facing": "north", "mass": 8 },
+      "goblin-3": { "role": "prey", "cell": "cell-2-11", "facing": "west", "mass": 0.59 }
     },
     "items": {}
   },
 
-  "ticks": [],
+  "ticks": [
+    {
+      "turn": 1,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-7",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 19.92,
+          "belief": {
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-10-1",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 7.94,
+          "belief": {
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-3-6",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "west"
+          ],
+          "mass": 7.94,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-2-11",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 0.53,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null
+          }
+        }
+      },
+      "items": {},
+      "ecology": []
+    },
+    {
+      "turn": 2,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-6",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 19.84,
+          "belief": {
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-9-1",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "west"
+          ],
+          "mass": 7.88,
+          "belief": {
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-2-6",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "west"
+          ],
+          "mass": 7.88,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-1-11",
+          "facing": "west",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "west"
+          ],
+          "mass": 0.47,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null
+          }
+        }
+      },
+      "items": {},
+      "ecology": []
+    },
+    {
+      "turn": 3,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-6",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 19.76,
+          "belief": {
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-10-1",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 7.82,
+          "belief": {
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-2-5",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 7.82,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-1-10",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 0.41,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null
+          }
+        }
+      },
+      "items": {
+        "crumb-1": {
+          "kind": "crumb",
+          "cell": "cell-12-1"
+        }
+      },
+      "ecology": [
+        {
+          "type": "spawn-food",
+          "item": "crumb-1",
+          "kind": "crumb",
+          "cell": "cell-12-1",
+          "mass": 1
+        }
+      ]
+    },
+    {
+      "turn": 4,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-5",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 19.68,
+          "belief": {
+            "crumb-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-11-1",
+          "facing": "east",
+          "goal": "foraging — heading for crumb-1 at cell-12-1.",
+          "mood": "calm",
+          "plan": [
+            "east",
+            "east"
+          ],
+          "mass": 7.76,
+          "belief": {
+            "crumb-1": "cell-12-1",
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-2-4",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 7.76,
+          "belief": {
+            "crumb-1": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-2-10",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 0.35,
+          "belief": {
+            "crumb-1": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null
+          }
+        }
+      },
+      "items": {
+        "crumb-1": {
+          "kind": "crumb",
+          "cell": "cell-12-1"
+        }
+      },
+      "ecology": []
+    },
+    {
+      "turn": 5,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-4",
+          "facing": "north",
+          "goal": "chasing goblin-1, last seen at cell-11-1.",
+          "mood": "angry",
+          "plan": [
+            "north",
+            "north",
+            "north",
+            "north"
+          ],
+          "mass": 19.6,
+          "belief": {
+            "crumb-1": "cell-12-1",
+            "goblin-1": "cell-11-1",
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-12-1",
+          "facing": "east",
+          "goal": "just ate crumb-1.",
+          "mood": "happy",
+          "plan": [
+            "east"
+          ],
+          "mass": 8.7,
+          "belief": {
+            "crumb-1": "cell-12-1",
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-2-3",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 7.7,
+          "belief": {
+            "crumb-1": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-2-10",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 0.29,
+          "belief": {
+            "crumb-1": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-1-9",
+          "facing": "south",
+          "goal": "just arrived — no goal yet.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 8,
+          "belief": {}
+        }
+      },
+      "items": {},
+      "ecology": [
+        {
+          "type": "eat-item",
+          "agent": "goblin-1",
+          "item": "crumb-1",
+          "cell": "cell-12-1",
+          "massGained": 1
+        },
+        {
+          "type": "spawn-prey",
+          "agent": "goblin-4",
+          "cell": "cell-1-9",
+          "mass": 8
+        }
+      ]
+    },
+    {
+      "turn": 6,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-3",
+          "facing": "north",
+          "goal": "chasing goblin-1, last seen at cell-12-1.",
+          "mood": "angry",
+          "plan": [
+            "north",
+            "north",
+            "north",
+            "east"
+          ],
+          "mass": 19.52,
+          "belief": {
+            "goblin-1": "cell-12-1",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-12-1",
+          "facing": "east",
+          "goal": "evading — last saw fox-1 at cell-11-4.",
+          "mood": "scared",
+          "plan": [],
+          "mass": 8.64,
+          "belief": {
+            "fox-1": "cell-11-4",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-2-4",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 7.64,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-2-11",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 0.23,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-4": "cell-1-9"
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-1-10",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 7.94,
+          "belief": {
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": "cell-2-10"
+          }
+        }
+      },
+      "items": {
+        "crumb-2": {
+          "kind": "crumb",
+          "cell": "cell-12-3"
+        }
+      },
+      "ecology": [
+        {
+          "type": "spawn-food",
+          "item": "crumb-2",
+          "kind": "crumb",
+          "cell": "cell-12-3",
+          "mass": 1
+        }
+      ]
+    },
+    {
+      "turn": 7,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-2",
+          "facing": "north",
+          "goal": "chasing goblin-1, last seen at cell-12-1.",
+          "mood": "angry",
+          "plan": [
+            "north",
+            "north",
+            "east"
+          ],
+          "mass": 19.44,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "goblin-1": "cell-12-1",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-12-1",
+          "facing": "east",
+          "goal": "evading — last saw fox-1 at cell-11-3.",
+          "mood": "scared",
+          "plan": [],
+          "mass": 8.58,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "fox-1": "cell-11-3",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-3-4",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 7.58,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null,
+            "goblin-4": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-3-11",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 0.17,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-4": "cell-1-10"
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-1-11",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 7.88,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": "cell-2-11"
+          }
+        }
+      },
+      "items": {
+        "crumb-2": {
+          "kind": "crumb",
+          "cell": "cell-12-3"
+        }
+      },
+      "ecology": []
+    },
+    {
+      "turn": 8,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-11-1",
+          "facing": "north",
+          "goal": "chasing goblin-1, last seen at cell-12-1.",
+          "mood": "angry",
+          "plan": [
+            "north",
+            "east"
+          ],
+          "mass": 19.36,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "goblin-1": "cell-12-1",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": "cell-11-1"
+          }
+        },
+        "goblin-1": {
+          "role": "prey",
+          "cell": "cell-12-1",
+          "facing": "east",
+          "goal": "evading — last saw fox-1 at cell-11-2.",
+          "mood": "scared",
+          "plan": [],
+          "mass": 8.52,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "fox-1": "cell-11-2",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": "cell-11-1"
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-3-3",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 7.52,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-3-10",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 0.11,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-4": "cell-1-11",
+            "morsel-1": null
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-1-12",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 7.82,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": "cell-3-11",
+            "morsel-1": null
+          }
+        }
+      },
+      "items": {
+        "crumb-2": {
+          "kind": "crumb",
+          "cell": "cell-12-3"
+        },
+        "morsel-1": {
+          "kind": "morsel",
+          "cell": "cell-11-1"
+        }
+      },
+      "ecology": [
+        {
+          "type": "place-food",
+          "item": "morsel-1",
+          "kind": "morsel",
+          "cell": "cell-11-1",
+          "mass": 2,
+          "placedBy": "player"
+        }
+      ]
+    },
+    {
+      "turn": 9,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-12-1",
+          "facing": "east",
+          "goal": "just ate goblin-1.",
+          "mood": "happy",
+          "plan": [
+            "east"
+          ],
+          "mass": 27.74,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "goblin-1": "cell-12-1",
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": "cell-11-1"
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-4-3",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 7.46,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": null
+          }
+        },
+        "goblin-3": {
+          "role": "prey",
+          "cell": "cell-3-11",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 0.05,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-4": "cell-1-12",
+            "morsel-1": null
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-1-11",
+          "facing": "north",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "north"
+          ],
+          "mass": 7.76,
+          "belief": {
+            "crumb-2": null,
+            "fox-1": null,
+            "goblin-1": null,
+            "goblin-2": null,
+            "goblin-3": "cell-3-10",
+            "morsel-1": null
+          }
+        }
+      },
+      "items": {
+        "crumb-2": {
+          "kind": "crumb",
+          "cell": "cell-12-3"
+        },
+        "crumb-3": {
+          "kind": "crumb",
+          "cell": "cell-4-2"
+        },
+        "morsel-1": {
+          "kind": "morsel",
+          "cell": "cell-11-1"
+        }
+      },
+      "ecology": [
+        {
+          "type": "eat-agent",
+          "predator": "fox-1",
+          "prey": "goblin-1",
+          "cell": "cell-12-1",
+          "massGained": 8.46
+        },
+        {
+          "type": "spawn-food",
+          "item": "crumb-3",
+          "kind": "crumb",
+          "cell": "cell-4-2",
+          "mass": 1
+        }
+      ]
+    },
+    {
+      "turn": 10,
+      "agents": {
+        "fox-1": {
+          "role": "predator",
+          "cell": "cell-12-2",
+          "facing": "south",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "south"
+          ],
+          "mass": 27.66,
+          "belief": {
+            "crumb-2": "cell-12-3",
+            "crumb-3": null,
+            "goblin-2": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": "cell-11-1"
+          }
+        },
+        "goblin-2": {
+          "role": "prey",
+          "cell": "cell-4-2",
+          "facing": "north",
+          "goal": "just ate crumb-3.",
+          "mood": "happy",
+          "plan": [
+            "north"
+          ],
+          "mass": 8.4,
+          "belief": {
+            "crumb-2": null,
+            "crumb-3": "cell-4-2",
+            "fox-1": null,
+            "goblin-3": null,
+            "goblin-4": null,
+            "morsel-1": null
+          }
+        },
+        "goblin-4": {
+          "role": "prey",
+          "cell": "cell-2-11",
+          "facing": "east",
+          "goal": "nothing in sight — wandering the square.",
+          "mood": "calm",
+          "plan": [
+            "east"
+          ],
+          "mass": 7.7,
+          "belief": {
+            "crumb-2": null,
+            "crumb-3": null,
+            "fox-1": null,
+            "goblin-2": null,
+            "goblin-3": "cell-3-11",
+            "morsel-1": null
+          }
+        },
+        "goblin-5": {
+          "role": "prey",
+          "cell": "cell-5-1",
+          "facing": "south",
+          "goal": "just arrived — no goal yet.",
+          "mood": "calm",
+          "plan": [],
+          "mass": 8,
+          "belief": {}
+        }
+      },
+      "items": {
+        "crumb-2": {
+          "kind": "crumb",
+          "cell": "cell-12-3"
+        },
+        "morsel-1": {
+          "kind": "morsel",
+          "cell": "cell-11-1"
+        }
+      },
+      "ecology": [
+        {
+          "type": "eat-item",
+          "agent": "goblin-2",
+          "item": "crumb-3",
+          "cell": "cell-4-2",
+          "massGained": 1
+        },
+        {
+          "type": "starve",
+          "agent": "goblin-3",
+          "cell": "cell-2-11"
+        },
+        {
+          "type": "spawn-prey",
+          "agent": "goblin-5",
+          "cell": "cell-5-1",
+          "mass": 8
+        }
+      ]
+    }
+  ],
 
   "expectedTape": [
     {

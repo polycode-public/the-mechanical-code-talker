@@ -1,0 +1,640 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  MUDIII_ROLES, MUDIII_STATE_PREDICATES,
+  foldTownSquareState, gridApplyActions, greedyAway, greedyToward, isMudiiiStatePredicate,
+  pathStateKey, placeFood, roleOfId, runTownSquareTick, seededWander, startTownSquareGame,
+  townSquareTickPayload,
+} from "../../src/services/predator-prey.mjs";
+import { TOWN_SQUARE_LAYOUTS, cellId, openCells, worldFactRows } from "../../src/domain/town-square-world.mjs";
+import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
+import { EXPRESSION_PALETTE } from "../../src/domain/sprite-expressions.mjs";
+
+const LAYOUT = TOWN_SQUARE_LAYOUTS["town-square"];
+const CONFIG = DEFAULT_GAME_CONFIG.mudiii;
+
+const worldRows = () => [...worldFactRows(LAYOUT)]
+  .map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:town-square" }));
+
+async function boardWith(facts, label) {
+  const dir = await mkdtemp(join(tmpdir(), `tmct-mudiii-${label}-`));
+  await appendFacts(dir, worldRows());
+  if (facts.length) await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "world:town-square" })));
+  return dir;
+}
+
+const place = (id, cell) => ({ subject: id, predicate: "mgx:currently-in", object: cell });
+const weigh = (id, mass) => ({ subject: id, predicate: "mgx:hasMass", object: String(mass) });
+const classify = (id, kind) => ({ subject: id, predicate: "rdf:type", object: kind });
+
+// ---- the roles object -----------------------------------------------------------
+
+test("the cast is data, keyed by role rather than by species", () => {
+  assert.deepEqual(MUDIII_ROLES, {
+    predator: { role: "predator", kind: "fox", idPrefix: "fox" },
+    prey: { role: "prey", kind: "goblin", idPrefix: "goblin" },
+    food: { spawnedKind: "crumb", placedKind: "morsel" },
+  });
+  assert.equal(roleOfId("fox-2"), "predator");
+  assert.equal(roleOfId("goblin-10"), "prey");
+  assert.equal(roleOfId("crumb-1"), null, "food has no role");
+  assert.equal(roleOfId("well-1"), null, "nor does a prop");
+});
+
+test("the state-predicate filter names the families a turn writes, and nothing else", () => {
+  for (const predicate of ["mgx:currently-in", "mgx:hasMass", "mgx:feels", "mgx:facing", "mgx:eaten-by", "mgx:starved", "mgx:placed-by", "rdf:type", "mgx:has-exit-north"]) {
+    assert.ok(isMudiiiStatePredicate(predicate), predicate);
+  }
+  assert.equal(isMudiiiStatePredicate("mgx:mass"), false, "spider-fly's own predicate is not this engine's");
+  assert.equal(isMudiiiStatePredicate("rdfs:label"), false);
+  assert.ok(MUDIII_STATE_PREDICATES.includes("mgx:hasMass"));
+  assert.deepEqual([...MUDIII_STATE_PREDICATES].sort(), MUDIII_STATE_PREDICATES, "sorted, so a diff of the list reads");
+});
+
+// ---- the (epoch, turn) fold ------------------------------------------------------
+
+test("the fold takes the newest snapshot per subject and separates every terminal marker into removed", () => {
+  const state = foldTownSquareState([
+    place("fox-1", "cell-2-2"),
+    { subject: "fox-1@turn3", predicate: "mgx:currently-in", object: "cell-3-2" },
+    place("goblin-1", "cell-8-2"),
+    weigh("goblin-1", 8),
+    { subject: "goblin-1@turn1", predicate: "mgx:hasMass", object: "7.94" },
+    { subject: "goblin-1@turn2", predicate: "mgx:hasMass", object: "7.88" },
+    { subject: "goblin-2@turn2", predicate: "mgx:currently-in", object: "cell-4-2" },
+    { subject: "goblin-2@turn2", predicate: "mgx:starved", object: "true" },
+    { subject: "goblin-3@turn1", predicate: "mgx:eaten-by", object: "fox-1" },
+    { subject: "goblin-1@turn3", predicate: "mgx:feels", object: "scared" },
+    { subject: "square@turn3", predicate: "mgx:turn-played", object: "3" },
+  ]);
+  assert.equal(state.epoch, 0);
+  assert.equal(state.turnCount, 3);
+  assert.equal(state.tickCount, 3, "read off the one marker row a tick always writes");
+  assert.deepEqual(state.placements.get("fox-1"), { cell: "cell-3-2", turn: 3, epoch: 0 });
+  assert.deepEqual(state.mass.get("goblin-1"), { value: 7.88, turn: 2, epoch: 0 });
+  assert.deepEqual([...state.removed].sort(), ["goblin-2", "goblin-3"]);
+});
+
+test("rows rank by (epoch, turn), so a recast's turn-1 snapshot beats the previous run's turn-9 one", () => {
+  const state = foldTownSquareState([
+    { subject: "world", predicate: "mgx:world-epoch", object: "2" },
+    place("fox-1", "cell-1-1"),
+    { subject: "fox-1@turn9", predicate: "mgx:currently-in", object: "cell-9-9" },
+    { subject: "fox-1@epoch2@turn1", predicate: "mgx:currently-in", object: "cell-4-4" },
+    { subject: "square@turn9", predicate: "mgx:turn-played", object: "9" },
+    { subject: "square@epoch2@turn1", predicate: "mgx:turn-played", object: "1" },
+  ]);
+  assert.equal(state.epoch, 2);
+  assert.deepEqual(state.placements.get("fox-1"), { cell: "cell-4-4", turn: 1, epoch: 2 });
+  assert.equal(state.tickCount, 1, "the new run's turn counter, not the old run's");
+});
+
+test("an epoch-stamped subject's base is the bare id — a greedy snapshot regex would read it as \"goblin-1@epoch2\" and drop the row", () => {
+  const state = foldTownSquareState([
+    { subject: "world", predicate: "mgx:world-epoch", object: "2" },
+    { subject: "goblin-1@epoch2@turn3", predicate: "mgx:currently-in", object: "cell-5-5" },
+    { subject: "goblin-1@epoch2@turn3", predicate: "mgx:feels", object: "calm" },
+  ]);
+  assert.ok(state.placements.has("goblin-1"), "the roster id, not a stamped one");
+  assert.equal(state.placements.has("goblin-1@epoch2"), false);
+});
+
+test("an unstamped row ranks as turn 0 of the CURRENT epoch, so a recast re-seeds from the shard's own rows", () => {
+  const state = foldTownSquareState([
+    { subject: "world", predicate: "mgx:world-epoch", object: "1" },
+    place("goblin-1", "cell-2-2"),
+    { subject: "goblin-1@turn9", predicate: "mgx:currently-in", object: "cell-9-9" },
+  ]);
+  assert.deepEqual(state.placements.get("goblin-1"), { cell: "cell-2-2", turn: 0, epoch: 1 });
+});
+
+test("a terminal marker from a previous epoch does not arrive at the new run already dead", () => {
+  const state = foldTownSquareState([
+    { subject: "world", predicate: "mgx:world-epoch", object: "2" },
+    { subject: "goblin-1@turn4", predicate: "mgx:eaten-by", object: "fox-1" },
+    { subject: "goblin-1@epoch2@turn1", predicate: "mgx:currently-in", object: "cell-3-3" },
+  ]);
+  assert.equal(state.removed.has("goblin-1"), false);
+});
+
+// ---- movement over the world's own exit facts ------------------------------------
+
+test("gridApplyActions offers one hop per exit fact, in the fixed direction order", () => {
+  const applyActions = gridApplyActions([
+    { subject: "cell-5-5", predicate: "mgx:has-exit-west", object: "cell-4-5" },
+    { subject: "cell-5-5", predicate: "mgx:has-exit-north", object: "cell-5-4" },
+  ]);
+  assert.deepEqual(applyActions({ x: 5, y: 5 }).map((a) => a.action), ["north", "west"]);
+  assert.deepEqual(applyActions({ x: 9, y: 9 }), [], "a cell with no exit rows is a dead end");
+});
+
+test("a building is a missing edge and nothing else — no exit into the terrace exists to be taken", () => {
+  const applyActions = gridApplyActions([...worldFactRows(LAYOUT)]);
+  const fromWest = applyActions({ x: 7, y: 1 }).map((a) => a.nextState).map((s) => cellId(s.x, s.y));
+  assert.equal(fromWest.includes("cell-8-1"), false, "house-1 stands there");
+  assert.deepEqual(applyActions({ x: 8, y: 2 }), [], "house-2's own cell offers no move at all");
+});
+
+test("greedyAway maximizes Chebyshev distance and greedyToward minimizes it", () => {
+  const applyActions = gridApplyActions([...worldFactRows(LAYOUT)]);
+  const away = greedyAway({ x: 5, y: 5 }, { x: 5, y: 4 }, applyActions);
+  assert.deepEqual(away, { x: 5, y: 6 });
+  const toward = greedyToward({ x: 5, y: 5 }, { x: 5, y: 1 }, applyActions);
+  assert.deepEqual(toward, { x: 5, y: 4 });
+  assert.deepEqual(greedyAway({ x: 5, y: 5 }, null, applyActions), { x: 5, y: 5 }, "nothing believed, nothing to run from");
+});
+
+test("seededWander replays byte-identically and carries the epoch, so a Reset does not repeat the previous run", () => {
+  const applyActions = gridApplyActions([...worldFactRows(LAYOUT)]);
+  const at = { x: 5, y: 5 };
+  const first = seededWander(at, applyActions, { layoutName: "town-square", epoch: 0, turn: 3, id: "goblin-1" });
+  const again = seededWander(at, applyActions, { layoutName: "town-square", epoch: 0, turn: 3, id: "goblin-1" });
+  assert.deepEqual(first, again);
+  const afterReset = seededWander(at, applyActions, { layoutName: "town-square", epoch: 1, turn: 3, id: "goblin-1" });
+  assert.notDeepEqual(first, afterReset, "the epoch is in the seed string, or a Reset replays the run it replaced");
+});
+
+// ---- bootstrap --------------------------------------------------------------------
+
+test("startTownSquareGame seeds the layout's own cast once, and is a no-op the second time", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-start-"));
+  try {
+    await appendFacts(dir, worldRows());
+    const first = await startTownSquareGame(dir, { layout: LAYOUT });
+    assert.equal(first.started, true);
+    const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
+    assert.deepEqual([...state.placements.keys()].filter((id) => /^fox-\d+$/.test(id)), ["fox-1"]);
+    assert.deepEqual([...state.placements.keys()].filter((id) => /^goblin-\d+$/.test(id)).sort(), ["goblin-1", "goblin-2", "goblin-3"]);
+    assert.equal(state.mass.get("fox-1").value, CONFIG.predatorInitialMass);
+    assert.equal(state.mass.get("goblin-1").value, CONFIG.preyInitialMass);
+    assert.equal(state.facing.get("fox-1").value, "south");
+    assert.equal(state.mood.get("goblin-1").value, "calm", "a mood fact exists from the moment the individual does");
+    for (const id of ["fox-1", "goblin-1", "goblin-2", "goblin-3"]) {
+      assert.equal(state.placements.get(id).cell.startsWith("cell-"), true);
+    }
+    assert.equal((await startTownSquareGame(dir, { layout: LAYOUT })).started, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a seeded roster never places anything on a prop's cell", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-start-open-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await startTownSquareGame(dir, { layout: LAYOUT });
+    const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
+    const open = new Set(openCells(LAYOUT));
+    for (const id of ["fox-1", "goblin-1", "goblin-2", "goblin-3"]) {
+      assert.ok(open.has(state.placements.get(id).cell), `${id} was seeded onto a prop`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the two decision chains --------------------------------------------------------
+
+test("a predator with nothing in view wanders rather than holding still — a motionless predator reads as a broken page", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20)], "wander");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["fox-1"], "wander");
+    assert.match(tick.agents["fox-1"].goal, /wandering/);
+    assert.equal(tick.agents["fox-1"].mood, "calm");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a predator that believes prey chases it with a real multi-step path, and the plan's first step is the move", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-8-5"), weigh("goblin-1", 8),
+  ], "chase");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["fox-1"], "chase");
+    assert.deepEqual(tick.agents["fox-1"].plan, ["east", "east", "east"]);
+    assert.equal(tick.agents["fox-1"].cell, "cell-6-5", "one cell a turn, whatever the plan's length");
+    assert.equal(tick.agents["fox-1"].facing, "east", "plan[0] drives facing");
+    assert.equal(tick.agents["fox-1"].mood, "angry");
+    assert.match(tick.agents["fox-1"].goal, /chasing goblin-1, last seen at cell-8-5/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a second live predator in view beats the chase — avoid is rung one", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("fox-2", "fox"), place("fox-2", "cell-6-5"), weigh("fox-2", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-4-5"), weigh("goblin-1", 8),
+  ], "avoid");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["fox-1"], "avoid");
+    assert.equal(tick.agents["fox-1"].mood, "scared");
+    assert.match(tick.agents["fox-1"].goal, /avoiding fox-2, last seen at cell-6-5/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a prey's chain is evade over forage over wander, and the ordering alone resolves the conflict", async () => {
+  const withFood = [
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-7-5"), weigh("crumb-1", 1),
+  ];
+  const foraging = await boardWith(withFood, "forage");
+  try {
+    const tick = await runTownSquareTick(foraging, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "forage");
+    assert.deepEqual(tick.agents["goblin-1"].plan, ["east", "east"]);
+    assert.equal(tick.agents["goblin-1"].mood, "calm");
+    assert.match(tick.agents["goblin-1"].goal, /foraging — heading for crumb-1 at cell-7-5/);
+  } finally {
+    await rm(foraging, { recursive: true, force: true });
+  }
+
+  const threatened = await boardWith([...withFood, classify("fox-1", "fox"), place("fox-1", "cell-4-5"), weigh("fox-1", 20)], "evade");
+  try {
+    const tick = await runTownSquareTick(threatened, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "evade", "the forage branch is simply never reached — there is no arbitration code");
+    assert.equal(tick.agents["goblin-1"].cell, "cell-6-5", "one ply, away from the fox");
+    assert.equal(tick.agents["goblin-1"].mood, "scared");
+    assert.match(tick.agents["goblin-1"].goal, /evading — last saw fox-1 at cell-4-5/);
+  } finally {
+    await rm(threatened, { recursive: true, force: true });
+  }
+});
+
+test("the vision asymmetry opens a band where a predator has acquired something that cannot see it back", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-1-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  ], "band");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["fox-1"], "chase", "4 cells away, inside a predator's radius of 4");
+    assert.equal(tick.rungs["goblin-1"], "wander", "and outside a prey's radius of 3");
+    assert.equal(tick.agents["goblin-1"].belief["fox-1"], null, "belief says so too");
+    assert.equal(tick.agents["fox-1"].belief["goblin-1"], "cell-5-5");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a told fact reaches belief, so a lie moves an animal that never looked", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-2-2"), weigh("goblin-1", 8),
+    classify("fox-1", "fox"), place("fox-1", "cell-11-11"), weigh("fox-1", 20),
+  ], "told");
+  try {
+    const toldFacts = [{ subject: "fox-1", toAgent: "goblin-1", cell: "cell-1-1", turn: 1 }];
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, toldFacts });
+    assert.equal(tick.rungs["goblin-1"], "evade");
+    assert.equal(tick.agents["goblin-1"].belief["fox-1"], "cell-1-1", "the believed cell is the told one, not the true one");
+    assert.equal(tick.agents["goblin-1"].cell, "cell-2-3", "and it runs from where it was told the fox is");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a belief snapshot names every other live agent and item, sorted, and never the observer itself", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-9-9"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-2-3"), weigh("goblin-2", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-12-12"), weigh("crumb-1", 1),
+  ], "belief-keys");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(Object.keys(tick.agents["fox-1"].belief), ["crumb-1", "goblin-1", "goblin-2"]);
+    assert.deepEqual(Object.keys(tick.agents["goblin-1"].belief), ["crumb-1", "fox-1", "goblin-2"]);
+    assert.equal(tick.agents["fox-1"].belief["crumb-1"], null, "out of sight is nothing believed, never a guess");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the ecology pass -----------------------------------------------------------------
+
+// A prey in the open never gets caught: both move one cell a turn, and the
+// prey moves second, so evade keeps the gap. A chase closes only where the
+// board runs out — a corner, or a wall of buildings — which is why every catch
+// test below backs the prey into one.
+test("catch and eat are one step: a predator on a prey's cell takes it and gains its remaining mass", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-1-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-1-1"), weigh("goblin-1", 8),
+  ], "eat-agent");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "evade");
+    assert.deepEqual(tick.agents["fox-1"].plan, ["north"]);
+    const eaten = tick.ecology.find((e) => e.type === "eat-agent");
+    assert.deepEqual(eaten, { type: "eat-agent", predator: "fox-1", prey: "goblin-1", cell: "cell-1-1", massGained: 7.94 });
+    assert.equal(tick.agents["goblin-1"], undefined, "off the board, with no stale goal left standing");
+    assert.equal(tick.agents["fox-1"].mass, 27.86);
+    assert.equal(tick.agents["fox-1"].mood, "happy");
+    assert.match(tick.agents["fox-1"].goal, /just ate goblin-1/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a prey standing on two crumbs eats both", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-5-5"), weigh("crumb-1", 1),
+    classify("crumb-2", "crumb"), place("crumb-2", "cell-5-5"), weigh("crumb-2", 1),
+  ], "eat-two");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(tick.ecology.filter((e) => e.type === "eat-item").map((e) => e.item), ["crumb-1", "crumb-2"]);
+    assert.equal(tick.agents["goblin-1"].mass, 9.94);
+    assert.deepEqual(tick.items, {});
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("eat-agent runs before eat-item, so a prey taken this turn is never also credited with a crumb", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-1-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-1-1"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-1-1"), weigh("crumb-1", 1),
+  ], "order");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(tick.ecology.map((e) => e.type), ["eat-agent"]);
+    assert.deepEqual(Object.keys(tick.items), ["crumb-1"], "the crumb is still there");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("whatever ate this turn survives it, because eating resolves before starving", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 0.05),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-5-5"), weigh("crumb-1", 1),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-12-12"), weigh("goblin-2", 0.05),
+  ], "starve");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(tick.ecology.map((e) => e.type), ["eat-item", "starve"]);
+    assert.equal(tick.ecology.find((e) => e.type === "starve").agent, "goblin-2");
+    assert.ok(tick.agents["goblin-1"], "the one that ate is alive");
+    assert.equal(tick.agents["goblin-2"], undefined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prey arrive on the perimeter minus prop cells, and food lands anywhere open", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    { subject: "square@turn14", predicate: "mgx:turn-played", object: "14" },
+    { subject: "fox-1@turn14", predicate: "mgx:currently-in", object: "cell-5-5" },
+  ], "spawn");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.turn, 15, "turn 15 is a multiple of both intervals");
+    assert.deepEqual(tick.ecology.map((e) => e.type), ["spawn-prey", "spawn-food"]);
+    const arrival = tick.ecology.find((e) => e.type === "spawn-prey");
+    const { x, y } = { x: Number(arrival.cell.split("-")[1]), y: Number(arrival.cell.split("-")[2]) };
+    assert.ok(x === 1 || x === 12 || y === 1 || y === 12, `${arrival.cell} is not on the perimeter`);
+    assert.equal(LAYOUT.props.some((p) => p.cell === arrival.cell), false);
+    assert.equal(tick.agents[arrival.agent].goal, "just arrived — no goal yet.");
+    assert.equal(tick.rungs[arrival.agent], undefined, "a prey that arrives during the pass makes no decision until the next turn");
+    const food = tick.ecology.find((e) => e.type === "spawn-food");
+    assert.ok(openCells(LAYOUT).includes(food.cell));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("both spawn caps are checked before a spawn, so a full board simply skips that turn's arrival", async () => {
+  const prey = [];
+  for (let i = 1; i <= 6; i += 1) {
+    prey.push(classify(`goblin-${i}`, "goblin"), place(`goblin-${i}`, `cell-${i}-12`), weigh(`goblin-${i}`, 8));
+  }
+  const dir = await boardWith([
+    ...prey,
+    { subject: "square@turn4", predicate: "mgx:turn-played", object: "4" },
+  ], "caps");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.turn, 5);
+    assert.deepEqual(tick.ecology, [], "maxPreyPopulation is already met");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the player's verb ----------------------------------------------------------------
+
+test("placing food mints a morsel with player provenance, so \"who put that there?\" grounds", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20)], "place");
+  try {
+    const result = await placeFood(dir, { layout: LAYOUT, cell: "cell-3-4" });
+    assert.equal(result.placed, true);
+    assert.equal(result.item, "morsel-1");
+    assert.equal(result.mass, CONFIG.placedFoodMass);
+    const rows = readFactRows(await loadMemory(dir));
+    const placedBy = rows.find((r) => r.subject === "morsel-1" && r.predicate === "mgx:placed-by");
+    assert.equal(placedBy.object, "player");
+    assert.match(placedBy.provenance, /^world:town-square:taught:turn1$/);
+    const typed = rows.find((r) => r.subject === "morsel-1" && r.predicate === "rdf:type");
+    assert.equal(typed.object, "morsel", "the class row keeps its bare subject — a stamped one names a subject nothing resolves");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a placement and the tick that resolves it share one turn, and the pass reports the placement first", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-9-9"), weigh("goblin-1", 8),
+  ], "place-tick");
+  try {
+    await placeFood(dir, { layout: LAYOUT, cell: "cell-2-2" });
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.turn, 1, "the placement did not quietly consume a turn of its own");
+    assert.deepEqual(tick.ecology[0], {
+      type: "place-food", item: "morsel-1", kind: "morsel", cell: "cell-2-2", mass: 2, placedBy: "player",
+    });
+    assert.deepEqual(tick.items["morsel-1"], { kind: "morsel", cell: "cell-2-2" });
+    const later = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(later.ecology.some((e) => e.type === "place-food"), false, "reported once, on its own turn");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("dropping a morsel at a predator's feet is allowed — refusing it would delete the trap the design hangs on", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20)], "trap");
+  try {
+    const onTheFox = await placeFood(dir, { layout: LAYOUT, cell: "cell-5-5" });
+    assert.equal(onTheFox.placed, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("placing food refuses with a reason, never silently", async () => {
+  const dir = await boardWith([], "refuse");
+  try {
+    assert.match((await placeFood(dir, { layout: LAYOUT, cell: "over there" })).reason, /doesn't name a cell/);
+    assert.match((await placeFood(dir, { layout: LAYOUT, cell: "cell-99-1" })).reason, /off the board/);
+    assert.equal((await placeFood(dir, { layout: LAYOUT, cell: "cell-8-1" })).reason, "cell-8-1 is blocked.");
+    assert.equal((await placeFood(dir, { layout: LAYOUT, cell: "cell-4-4" })).placed, true);
+    assert.match((await placeFood(dir, { layout: LAYOUT, cell: "cell-4-4" })).reason, /already holds morsel-1/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prey read player food and world food through the same class chain, so only distance separates them", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  ], "same-food");
+  try {
+    await placeFood(dir, { layout: LAYOUT, cell: "cell-6-5" });
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "forage");
+    assert.equal(tick.ecology.some((e) => e.type === "eat-item" && e.item === "morsel-1"), true);
+    assert.equal(tick.agents["goblin-1"].mass, 9.94, "placedFoodMass, not the crumb's own");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the payload and the facts it comes from ------------------------------------------
+
+test("the tick payload is the frozen shape, and the engine's own extras stay out of it", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-1-1"), weigh("crumb-1", 1),
+  ], "payload");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(Object.keys(townSquareTickPayload(tick)), ["turn", "agents", "items", "ecology"]);
+    assert.deepEqual(Object.keys(tick.agents["fox-1"]).sort(), ["belief", "cell", "facing", "goal", "mass", "mood", "plan", "role"]);
+    assert.deepEqual(Object.keys(tick.items["crumb-1"]).sort(), ["cell", "kind"]);
+    assert.equal(tick.agents["fox-1"].role, "predator");
+    assert.ok(Object.keys(EXPRESSION_PALETTE).includes(tick.agents["fox-1"].mood));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mass rounds at the payload boundary only, so the simulation never drifts on a rounded number", async () => {
+  const dir = await boardWith([classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8)], "round");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.agents["goblin-1"].mass, 7.94);
+    const massRow = tick.writes.find((w) => w.predicate === "mgx:hasMass" && w.subject.startsWith("goblin-1@"));
+    assert.equal(massRow.object, String(8 - CONFIG.preyMassDecrementPerTurn));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a turn writes mgx:hasMass, never spider-fly's unlisted mgx:mass", async () => {
+  const dir = await boardWith([classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8)], "predicate");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.writes.some((w) => w.predicate === "mgx:mass"), false);
+    assert.ok(tick.writes.some((w) => w.predicate === "mgx:hasMass"));
+    for (const write of tick.writes) assert.ok(isMudiiiStatePredicate(write.predicate), write.predicate);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an agent that held still keeps the facing it had, and one that never moved keeps the default", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    { subject: "fox-1", predicate: "mgx:facing", object: "north" },
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  ], "facing");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(tick.agents["fox-1"].plan, [], "co-located already, so it holds");
+    assert.equal(tick.agents["fox-1"].facing, "north");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a goal that names something this turn killed is scrubbed, including a third agent's", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-1-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-1-1"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-9-9"), weigh("goblin-2", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-9-9"), weigh("crumb-1", 1),
+  ], "scrub");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.match(tick.agents["fox-1"].goal, /just ate goblin-1/, "the eater's own line wins over the scrub");
+    assert.match(tick.agents["goblin-2"].goal, /just ate crumb-1/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a run replays byte-identically into a second store", async () => {
+  const facts = [
+    classify("fox-1", "fox"), place("fox-1", "cell-2-9"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-7-4"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-11-6"), weigh("goblin-2", 8),
+  ];
+  const a = await boardWith(facts, "replay-a");
+  const b = await boardWith(facts, "replay-b");
+  try {
+    const runA = [];
+    const runB = [];
+    for (let i = 0; i < 6; i += 1) runA.push(townSquareTickPayload(await runTownSquareTick(a, { layout: LAYOUT })));
+    for (let i = 0; i < 6; i += 1) runB.push(townSquareTickPayload(await runTownSquareTick(b, { layout: LAYOUT })));
+    assert.deepEqual(runA, runB);
+  } finally {
+    await rm(a, { recursive: true, force: true });
+    await rm(b, { recursive: true, force: true });
+  }
+});
+
+test("a tick names the layout it runs, and refuses a name no pack holds", async () => {
+  const dir = await boardWith([classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20)], "byname");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: "town-square" });
+    assert.equal(tick.turn, 1);
+    await assert.rejects(() => runTownSquareTick(dir, { layout: "no-such-square" }), /no such layout/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("pathStateKey collapses a search state onto its cell alone", () => {
+  assert.equal(pathStateKey({ x: 3, y: 9 }), "cell-3-9");
+});
+
+test("the turn counter keeps advancing on a board with nothing alive left on it", async () => {
+  const dir = await boardWith([classify("goblin-1", "goblin"), place("goblin-1", "cell-9-9"), weigh("goblin-1", 0.01)], "empty-board");
+  try {
+    const first = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.deepEqual(first.ecology.map((e) => e.type), ["starve"]);
+    assert.deepEqual(first.agents, {}, "nothing left to write a mood for");
+    const second = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(second.turn, 2, "the turn marker is a row of its own, so an empty board still counts turns");
+    const third = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(third.turn, 3);
+    assert.deepEqual(third.ecology.map((e) => e.type), ["spawn-food"], "and a spawn interval still comes round");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
