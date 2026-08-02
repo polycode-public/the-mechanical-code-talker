@@ -268,7 +268,7 @@ draw, just the grid with a tiny dot per live agent at its current cell. It reads
 payload the 3D scene does, so it's a second, cheap rendering of the same truth rather than a
 second state to keep in sync. With a single square, it covers exactly the same ground the
 overhead camera already shows — the two read as duplicates of each other for now. They stay
-structurally different views, though: the overhead camera is inherently local, orbiting one
+structurally different views, though: the overhead camera is local, orbiting one
 square's own centre, while the map panel draws whatever the world pack actually contains. That
 distinction earns its keep the moment a world has more than one square to show at once, and
 costs nothing to carry now.
@@ -454,8 +454,8 @@ per row `{ key, sourcePath, destPath, licence, bytes, targetHeight, clips }`, wh
 names the file in `../world-of-claudecraft` and `destPath` lands under a committed
 `public/models/` (the `public/screenshots/` precedent: a committed exception inside otherwise
 generated `public/`). The import task becomes: copy exactly the listed files, nothing else.
-That makes the Tier-C trap structurally impossible — the `eastbrook_*` kit is the most findable
-wrong answer in that repo, and an agent that only copies manifest rows can't reach it, while the
+That closes the Tier-C trap — the `eastbrook_*` kit is the most findable
+wrong answer in that repo, and an agent that only copies manifest rows never opens it, while the
 coordinator checks the work by diffing the directory against the table. The credit register
 (`public/models/CREDITS.md`) is generated from the same table, and the meshopt transcode/vendor
 commands are written literally in the manifest's own header.

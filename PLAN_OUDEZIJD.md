@@ -398,7 +398,7 @@ today — every piece named above is proposed, not shipped.
 |---|---|
 | Adventure engine, world-as-fact-rows, discourse binding | **already shipped**, reused as-is |
 | Wikipedia ingestion for text (`ingestText`, Simple English origin) | **already shipped**, reused as-is |
-| `PLAN_MUD.md` shared persistence | **designed, not yet built** — this plan depends on it |
+| `PLAN_MUD.md` shared persistence | the P2P/CRDT half **shipped** 2026-07-29; the durable Backend D tier below is what this plan still waits on |
 | Temporal-validity ontology extension (OWL-Time-based) | new capability, design horizon |
 | Temporal persistence/interpolation reasoning | new capability, and **the plan's central research horizon** |
 | Attested-vs-constructed provenance tagging | new capability, design horizon |

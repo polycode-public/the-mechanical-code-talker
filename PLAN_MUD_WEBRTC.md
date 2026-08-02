@@ -1,8 +1,8 @@
 # PLAN_MUD_WEBRTC.md — multi-browser worlds over WebRTC
 
-Status: SHIPPED 2026-07-29 on both mud.html and chat.html; the scenarios needing three or more
-peers are still design. Split out of `PLAN_MUD.md` (2026-08-01); that document keeps the shared
-origin and baseline.
+Status: SHIPPED 2026-07-29 on both mud.html and chat.html. Mesh introduction carries three or
+more peers, and retraction now replicates across the mesh with a causal-stability rule behind a
+gate. Split out of `PLAN_MUD.md` (2026-08-01); that document keeps the shared origin and baseline.
 
 ## Multi-browser worlds over WebRTC — shipped 2026-07-29
 
@@ -44,9 +44,10 @@ set union. Union is commutative, associative, and idempotent, so peers converge 
 regardless of what order facts arrive in or how many times the same fact shows up. Each accepted
 triple broadcasts as an op to the room. On peer join, exchange full state (or just a hash of it
 first, skipping the transfer entirely when it already matches). Plain union has no way to remove a
-fact, so retraction needs one more piece: an OR-Set, tagging each assertion with a UUID and
-retracting by tag, or last-writer-wins on a (subject, predicate) pair for functional predicates like
-a character's location, with timestamp and peer id as the tiebreak.
+fact, so retraction needs one more piece. It took the summary route rather than the OR-Set one: a
+retraction record per (triple, source) carrying the record ids it suppressed, merging by union of
+those ids. `docs/references/papers/crdt.md` has the settled account, including why the OR-Set's
+tombstone was the wrong price for a store whose provenance is a product feature.
 
 **Efficient world sync for a new joiner: deterministic sharding.** Partition the converged triple
 set by `hash(canonicalTriple) % K` for a fixed K (say 64). Every peer computes the same shard
@@ -133,7 +134,9 @@ Built so far: the pure modules, the WebRTC transport, room orchestration, the sh
 `public/vendor/p2p.js` asset, chat.html's whole integration (share, join, paste-reply, connection
 state, the node list, live wire traffic and waving), and mud.html's own — share and join, character
 claiming, the origin-node label, the wave button and its typed twin, and the sync filter wired to
-`adventure.mjs`'s `isMudStatePredicate`. The scenarios needing three or more peers are still design.
+`adventure.mjs`'s `isMudStatePredicate`. Mesh introduction carries the three-or-more-peer
+scenarios: `p2p-room.mjs` sends the peer list and the intro-offer, and
+`p2p-mesh-three-peers.test.mjs` and `pages-mud-p2p-mesh.test.mjs` cover them end to end.
 
 Two things the mud integration settled that the design above left open. Claiming covers every animal
 a page drives, npcs included, not only the ones with panes: two peers each running scripted turns for
@@ -330,8 +333,11 @@ triple, `appendFacts` unions the new provenance tag onto the existing fact id, a
 read takes the newest tag — so waving again after the window has passed animates again, through
 the merge rule that already exists.
 
-**Conflict handling stays a pure add-only set for v1.** None of the scenarios this version needs to
-support ever retract a fact, so there's no OR-Set or last-writer-wins predicate to build yet. The one
+**Conflict handling was a pure add-only set for v1, and retraction has since landed on top of it.**
+`retraction.mjs` writes one record per (triple, source), the mesh replicates it like any other fact,
+and both enforcement points compare the assertion's own instant against the retraction's.
+`causal-stability.mjs` holds the rule for retiring a tombstone as a pure function; nothing in the
+product supplies its acknowledgement input yet, so it retires nothing. The one
 real, narrow risk worth naming: two peers both acting on the same object at nearly the same moment
 could transiently fold to different results if their local fact arrays happen to be ordered
 differently when each one reads them. The fix lives entirely in the new networking layer — sort

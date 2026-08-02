@@ -1,5 +1,10 @@
 # PLAN_BARTLE.md — MUD lineage and naming research for MUDIII
 
+Status: RESEARCH. `mudiii.html` has since shipped under the name, which settles the sequencing
+below. One thing the sequencing asks for is not on the page yet: `mudiii-about.html`'s credits
+cover the model assets, not the MUD lineage, so no visible line names MUD1/MUD2 or
+Trubshaw/Bartle.
+
 Split out of the MUDIII design, which now lives in `PLAN_MUD_MUDIII.md`. This document is the
 lineage/history background and the naming research behind the name "MUDIII", kept separate from
 the game design itself so `PLAN_MUD_MUDIII.md` stays about what gets built.
@@ -113,8 +118,8 @@ One move dominates all of this: ask Bartle. He is publicly reachable (mud.co.uk 
 contact details), famously responsive on MUD history, and the operator is an Essex alumnus
 building a deterministic, text-first world engine — squarely the tradition he founded and
 still gives his time to. His blessing converts the largest risk into the strongest possible
-asset (a lineage claim with the founder's nod); his objection, arriving before anything ships,
-costs a rename of one unshipped page. Either answer is worth more than any further desk
+asset (a lineage claim with the founder's nod); his objection costs a rename of one page, which
+is why the operator's sequencing below shipped it first. Either answer is worth more than any further desk
 research. If the name must proceed unblessed, the fallback keeps the homage explicit and the
 succession implicit: brand the page inside tmct's own namespace and let the MUD lineage live
 in the credit line rather than the product name. The design in `PLAN_MUD_MUDIII.md` does not change

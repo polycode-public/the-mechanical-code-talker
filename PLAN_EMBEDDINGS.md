@@ -76,10 +76,10 @@ Every similarity mechanism in `src/` is a closed table:
 | sense hold-off | **1 word** (`used`) | `fuzzy.mjs:15` |
 
 And the fuzzy tier is **orthographic** — a bounded Damerau-Levenshtein. It repairs `imprt` → `import`
-beautifully. It has no path at all from `talks to` → `uses`, because those two are 0%
+beautifully. It does not carry `talks to` → `uses`, because those two are 0%
 orthographically similar and 100% semantically similar.
 
-**That axis has no instrument in the tree.** It is the one place a vector would add a signal that
+**That axis has no instrument in the tree today.** It is the one place a vector would add a signal that
 does not exist today rather than duplicating one. The ontology synonym lane
 (`chat.mjs:9744`, ConceptNet Synonym/SimilarTo) is the nearest thing, and it is a corpus lookup
 routed last-resort behind a weak prior precisely because it is low-precision.

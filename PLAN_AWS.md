@@ -6,7 +6,7 @@ Plan to move tmct's public site from GitLab Pages to a new AWS-hosted main site 
 `.gitlab-ci.yml` of the same date. Phases 1–8 are live — see `AWS_ACCOUNTS.md`'s "Provisioning status (2026-07-26)" for current state.
 
 **Lift and shift, no content changes.** The artifact stays exactly what `npm run build:ask-bundle`
-+ `npm run demo:build` produce into `public/` today — same 10 pages, same bundles, same
++ `npm run demo:build` produce into `public/` today — same pages, same bundles, same
 service worker, same precompressed siblings. Only the host, the pipeline's deploy job, and the
 URL references change. The npm package, the GitLab repo, and `publish:npm` are untouched except
 for the `homepage` field.

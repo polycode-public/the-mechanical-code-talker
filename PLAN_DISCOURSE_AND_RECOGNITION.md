@@ -36,7 +36,7 @@ matches nothing gets a refusal. Both halves carry the same promise into a second
 that binds to two things equally well is a refusal. A trace that fits no declared goal is a
 refusal. Neither is a fallback path; both are the correct answer.
 
-Two prior plans carried these as one-line entries in a research tier (`PLAN_AGENTS.md`, R1: the
+Two prior plans carried these as one-line entries in a research tier (`archive/PLAN_AGENTS.md`, R1: the
 DRT-lite typed discourse record, and bounded (N+1) goal recognition). This document is the design
 those lines pointed at, and it is self-contained: you do not need that doc to read this one.
 

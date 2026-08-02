@@ -228,5 +228,5 @@ chain with nothing anywhere lands on a plain tied bundle.
 Done: `adventure.mjs` threads a real acting-subject parameter through its command path instead of
 a hardcoded `"player"`, and this demo casts as many simultaneous characters as it needs from that
 — no shared "agent loop" abstraction across spider-fly/adventure/plan/mud was needed to get there,
-consistent with `PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
+consistent with `archive/PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
 

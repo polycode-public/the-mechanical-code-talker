@@ -270,8 +270,8 @@ second, structurally different consumer without a redesign.
 
 ## Non-goals
 
-- No Lambda-as-SSH-server, no raw TCP listener anywhere in this design — explicitly ruled out this
-  session (Lambda has no mechanism to accept an inbound SSH/TCP connection directly).
+- No Lambda-as-SSH-server, no raw TCP listener anywhere in this design. Lambda's invocation model
+  takes an event, not an inbound SSH/TCP connection, so this design routes through the SDK instead.
 - No SSH at all. The pivot from round 1→3 (PLAN_MUD.md's Origin) is complete: nobody logs into a shared host;
   every user runs tmct on their own machine against a remote backend.
 - No Cognito social-login federation, no per-server Cognito Groups, no custom local-browser OAuth

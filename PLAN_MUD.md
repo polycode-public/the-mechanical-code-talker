@@ -13,10 +13,11 @@ documents link back here rather than restating them.
   multi-character world shape with no server anywhere. SHIPPED.
 - **`PLAN_MUD_WEBRTC.md`** — multi-browser worlds over WebRTC: serverless share/join by
   copy-paste signaling, CRDT replication over the fact store. SHIPPED 2026-07-29 on mud.html
-  and chat.html; the 3+-peer scenarios are still design.
+  and chat.html, mesh introduction included; retraction replicates too, with a causal-stability
+  rule behind a gate.
 - **`PLAN_MUD_MUDIII.md`** — MUDIII: a Three.js town square (wolf and goblins) over the
-  spider-fly planning engine, with its coordinator/sub-agent delivery packaging. DESIGN; its
-  scope completes with `mudiii.html` deployed alongside https://tmct.polycode.co.uk/mud.html.
+  spider-fly planning engine, with its coordinator/sub-agent delivery packaging. BUILT AND
+  DEPLOYED: `mudiii.html` is live alongside https://tmct.polycode.co.uk/mud.html.
 - **`PLAN_MUD_MUDIII_SHARED.md`** — mud.html's share/join layer arriving on mudiii.html, a
   phase of its own after that page ships. DESIGN.
 - **`PLAN_MUD_MUDMMORPG.md`** — MUDIII's published shared world: HLS-style snapshot/delta
@@ -68,7 +69,7 @@ order, since each round revised the design and the reasoning for the revision ma
    design.**
 
 Still named `PLAN_MUD.md`: a persistent, shared world-state multiple users mutate together is still
-the governing shape (`PLAN_ADVENTURE.md`'s single-player groundwork is a different axis — grammar,
+the governing shape (`archive/PLAN_ADVENTURE.md`'s single-player groundwork is a different axis — grammar,
 not multi-user persistence). What changed across the six rounds is entirely *how a client reaches
 that shared state, and who it says it is once there* — SSH-into-a-shared-host, then
 Lambda-as-SSH-server (rejected, Lambda has no raw TCP listener), then a remote storage backend
