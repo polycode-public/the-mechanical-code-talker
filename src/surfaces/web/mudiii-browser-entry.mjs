@@ -185,7 +185,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
 
   const turnSession = createTurnSession({
     memoryDir, graph: codeGraph, lexicon, sessionId: "town-square",
-    vocabHint: 'Try "@fox-1 look", or "what does fox-1 believe".',
+    vocabHint: 'Try "@fox the goblin is east", or "what does the fox see".',
     buildExtraOptions: () => ({ planState: planHolder.state }),
     captureExtraState: async (result, state) => {
       if ("planState" in result) planHolder.state = state.planState;

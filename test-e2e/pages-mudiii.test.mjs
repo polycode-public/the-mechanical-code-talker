@@ -259,6 +259,86 @@ test("pausing and pressing play again moves at least one agent and advances the 
   }
 });
 
+test("every pill on the chat rail submits a line the town square can actually read", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+
+    const commands = await page.$$eval(
+      "#chatPills .pill",
+      (pills) => pills.map((p) => p.getAttribute("data-command")).filter(Boolean),
+    );
+    assert.ok(commands.length >= 4, "the rail offers the square's own verbs alongside its claim pills");
+    assert.ok(commands.includes("tick"), "the one verb that advances the world is on the rail");
+
+    // Address pills carry no command — they move the rail's own addressee —
+    // so they are clicked for their own sake rather than for an answer.
+    const addressCount = await page.locator('#chatPills [data-role="dyn-addr"]').count();
+    assert.ok(addressCount > 0, "the rail says who a claim is addressed to");
+    for (let i = 0; i < addressCount; i += 1) {
+      await page.locator('#chatPills [data-role="dyn-addr"]').nth(i).click();
+      assert.equal(
+        await page.locator("#chatInput").inputValue(),
+        "",
+        "an address pill switches the addressee and types nothing",
+      );
+    }
+
+    for (const command of commands) {
+      await page.fill("#chatInput", "");
+      const answered = await page.locator("#chatLog .a").count();
+      const pill = page.locator(`#chatPills [data-command="${command}"]`);
+      // The rail redraws after every submitted line, so a claim about a cell
+      // an agent has since left is gone by the time its turn comes round —
+      // typed instead, because the point is whether the LINE reads, not
+      // whether that one button survived.
+      if (await pill.count()) await pill.first().dblclick();
+      else {
+        await page.fill("#chatInput", command);
+        await page.locator("#chatInput").press("Enter");
+      }
+      await page.waitForFunction(
+        (n) => document.querySelectorAll("#chatLog .a").length > n,
+        answered,
+        { timeout: TICK_TIMEOUT_MS },
+      );
+      const answer = await page.locator("#chatLog .a").last().textContent();
+      assert.doesNotMatch(answer, /couldn't read a position/i, `the rail offers "${command}", which the lane cannot read`);
+      assert.doesNotMatch(answer, /^I'm tmct\b/, `the rail offers "${command}", which falls through to the generic decline`);
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error working the whole pill rail");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a single pill click appends to what is already typed, so two clicks compose one line", async () => {
+  const { context, page, consoleErrors } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    await page.fill("#chatInput", "");
+    const first = page.locator("#chatPills [data-command]").first();
+    const firstText = await first.getAttribute("data-command");
+    await first.click();
+    assert.equal(await page.locator("#chatInput").inputValue(), firstText, "the first click fills an empty field");
+
+    const second = page.locator("#chatPills [data-command]").nth(1);
+    const secondText = await second.getAttribute("data-command");
+    await second.click();
+    assert.equal(
+      await page.locator("#chatInput").inputValue(),
+      `${firstText} ${secondText}`,
+      "the second click appends after a separating space rather than replacing",
+    );
+
+    assert.deepEqual(consoleErrors, [], "no console error composing a line from two pills");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the 3D scene canvas boots without a console error, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

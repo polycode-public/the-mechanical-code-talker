@@ -587,7 +587,7 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
         <span class="prompt mono">tmct&gt;</span>
         ${pillCompleteMarkup({
           inputId: "chatInput",
-          inputHtml: '<input id="chatInput" type="text" placeholder="@fox-1 look" aria-label="type a command" disabled>',
+          inputHtml: '<input id="chatInput" type="text" placeholder="@fox the goblin is east" aria-label="type a command" disabled>',
         })}
       </form>
     </div>
@@ -846,6 +846,7 @@ function pageScript() {
   const agentCardMarkup = ${agentCardMarkup.toString()};
 
   const el = (id) => document.getElementById(id);
+  const SEED_COMMANDS = ["tick", "what does the fox see", "where is the goblin", "what can I do"];
   let scenarioIndex = 0;
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
   const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
@@ -1014,7 +1015,15 @@ function pageScript() {
   // accidentally true. Which one a pill carries is shown by a glyph in CSS
   // ::before, never in the submitted text — a clicked lie reads exactly like a
   // typed one once it is in the input.
+  //
+  // The fixed seeds ahead of it are the town square's OWN verbs, checked
+  // against the lane's regexes rather than borrowed from another page: this
+  // world has no "look".
   function renderChatPills() {
+    const seeds = SEED_COMMANDS.map(function (c) { return { command: c, label: c }; });
+    const seedHtml = seeds.map(function (p) {
+      return '<button type="button" class="pill" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
+    }).join("");
     const rail = window.tmct.page.pillsForMudiii(agentsById, itemsById, selectedAddresseeId, { gridSize: gridSizeOf() });
     selectedAddresseeId = rail.addresseeId;
     const addrHtml = rail.addressPills.map(function (p) {
@@ -1028,8 +1037,8 @@ function pageScript() {
       return '<button type="button" class="pill" data-role="dyn-claim" data-truth="' + (p.truth ? "true" : "false")
         + '" data-command="' + esc(p.command) + '">' + esc(p.label) + "</button>";
     }).join("");
-    livePills = claims;
-    el("chatPills").innerHTML = addrHtml + claimHtml;
+    livePills = seeds.concat(claims);
+    el("chatPills").innerHTML = seedHtml + addrHtml + claimHtml;
     if (pillComplete) pillComplete.refresh();
   }
 

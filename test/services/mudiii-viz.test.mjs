@@ -429,6 +429,18 @@ test("renderMudiiiHtml: a true and a false claim pill are told apart by a CSS gl
   assert.match(html, /\[data-truth="false"\] \{ border-style: dashed; border-color: var\(--alert\); \}/);
 });
 
+test("renderMudiiiHtml: the rail seeds only verbs mudiii-turn.mjs actually parses, and never 'look'", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const SEED_COMMANDS = \["tick", "what does the fox see", "where is the goblin", "what can I do"\]/);
+  assert.doesNotMatch(html, /command: "look"/, "the town square has no look verb");
+  assert.doesNotMatch(html, /"@" \+ id \+ " look"/, "and no per-agent look either");
+});
+
+test("renderMudiiiHtml: the chat placeholder is a line the town square can read", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /placeholder="@fox the goblin is east"/);
+});
+
 test("renderMudiiiHtml: a pill click appends to the input rather than replacing what is typed", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /function appendToChatInput/);
