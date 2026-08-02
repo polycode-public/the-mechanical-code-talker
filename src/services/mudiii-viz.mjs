@@ -530,6 +530,8 @@ ${PILL_COMPLETE_CSS}
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
+        <button type="button" id="stepBtn">step</button>
+        <span class="deck-hint" id="stepHint" hidden>pause to step</span>
         <button type="button" id="resetBtn">reset</button>
 ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which town square to play">
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
@@ -1049,6 +1051,14 @@ function pageScript() {
   // another agent. Without it, choosing someone new after a fox ate your
   // goblin leaves the camera overhead and the follow button unlit.
   let cameraModeBeforeFallback = null;
+  // The cut to overhead the scene has been told to make NEXT tick. The page's
+  // own camera state moves the moment the followed agent leaves the board,
+  // because the deck must never offer an agent that is gone; the 3D camera
+  // holds one more turn so the visitor watches the kill from the animal they
+  // were riding instead of cutting away from it. A rig with nobody to aim at
+  // freezes rather than drifting, which is what makes the held turn read as a
+  // held shot.
+  let deferredSceneCamera = null;
   let foodArmed = false;
   let livePills = [];
   let selectedAddresseeId = null;
@@ -1089,6 +1099,13 @@ function pageScript() {
     }
   }
 
+  // Every camera change the visitor asks for goes through here, so a pending
+  // one-turn-late cut can never land on top of a mode they picked in between.
+  function sendCameraToScene(state) {
+    deferredSceneCamera = null;
+    callScene("setCamera", state);
+  }
+
   function applyTickResult(result) {
     if (!result) return;
     // The engine owns the count. Anything that advances a turn — the deck, a
@@ -1102,7 +1119,16 @@ function pageScript() {
     const nextCamera = nextCameraSelection(camera, agentsList(), result.ecology || []);
     if (nextCamera.status && camera.mode !== "overhead") cameraModeBeforeFallback = camera.mode;
     camera = nextCamera;
-    callScene("setCamera", camera);
+    if (deferredSceneCamera) {
+      const cut = deferredSceneCamera;
+      deferredSceneCamera = null;
+      callScene("setCamera", cut);
+    } else if (nextCamera.status) {
+      // The status line names the kill NOW; the wide shot lands next turn.
+      deferredSceneCamera = { mode: camera.mode, selectedId: camera.selectedId };
+    } else {
+      callScene("setCamera", camera);
+    }
     if (camera.status) setSceneStatus(camera.status);
   }
 
@@ -1130,6 +1156,10 @@ function pageScript() {
         // on top of the open dropdown and loses the pick.
         el("agentSelect").disabled = state.playing;
         el("agentSelectHint").hidden = !state.playing;
+        // Step reads the same ticker state for the same reason: a hand-driven
+        // turn while the board plays itself lands in the middle of one.
+        el("stepBtn").disabled = state.playing || state.animating;
+        el("stepHint").hidden = !state.playing;
       },
       hasNext: hasNext,
       wait: liveWait,
@@ -1459,7 +1489,7 @@ function pageScript() {
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
     renderDriveRing();
-    callScene("setCamera", camera);
+    sendCameraToScene(camera);
   });
 
   function renderCameraButtons() {
@@ -1474,7 +1504,7 @@ function pageScript() {
     cameraModeBeforeFallback = null;
     camera = { mode: btn.getAttribute("data-mode"), selectedId: camera.selectedId, status: null };
     renderCameraButtons();
-    callScene("setCamera", camera);
+    sendCameraToScene(camera);
   });
 
   // ---- the control deck ----------------------------------------------------
@@ -1507,6 +1537,13 @@ function pageScript() {
     el("playerCountSlider").addEventListener("change", function () { boot(); });
     el("npcCountSlider").addEventListener("input", function () { showGoblinCount(chosenGoblinCount()); });
     el("npcCountSlider").addEventListener("change", function () { boot(); });
+    // One whole turn: every agent decides and moves, the ecology pass runs,
+    // and the turn counter reads exactly one higher. It goes through the same
+    // ticker play() uses, so the two can never run a turn on top of each other.
+    el("stepBtn").addEventListener("click", function () {
+      if (!session || autoOn) return;
+      ensureTicker().stepOnce();
+    });
     el("resetBtn").addEventListener("click", function () { resetBoard(); });
     const scenarioSelect = el("scenarioSelect");
     if (scenarioSelect) {
@@ -1650,7 +1687,7 @@ function pageScript() {
     await callScene("boot", {
       propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
     });
-    callScene("setCamera", camera);
+    sendCameraToScene(camera);
     callScene("applyTick", { agents: agentsById, items: itemsById, ecology: [] });
   }
 
@@ -1683,6 +1720,32 @@ function pageScript() {
   // reduced motion gets the opening board drawn and left still — the play
   // control is right there — because an autoplaying board is exactly the
   // unasked-for movement that setting is about.
+
+  // The camera opens riding a goblin. The goblins are the prey, so the first
+  // thing a visitor sees is a chase from inside the animal being chased; when
+  // it is caught the camera cuts wide and the rest of the round plays out
+  // overhead. Falls back to whoever is first by id on a square with no prey.
+  function openingFollowId(agents) {
+    const ids = Object.keys(agents || {}).sort();
+    for (let i = 0; i < ids.length; i += 1) {
+      if (agents[ids[i]] && agents[ids[i]].role === "prey") return ids[i];
+    }
+    return ids[0] || null;
+  }
+
+  // The play control put back to a stopped board. The ticker draws this
+  // itself while it lives, but a Reset throws the ticker away, so the button
+  // would keep reading "pause" over a board that is standing still.
+  function showStopped() {
+    const playBtn = el("autoToggle");
+    playBtn.setAttribute("aria-pressed", "false");
+    playBtn.textContent = "\\u25B6 play";
+    el("agentSelect").disabled = false;
+    el("agentSelectHint").hidden = true;
+    el("stepBtn").disabled = false;
+    el("stepHint").hidden = true;
+  }
+
   let bootSeq = 0;
   async function boot() {
     const seq = bootSeq += 1;
@@ -1692,6 +1755,7 @@ function pageScript() {
     tickQueue = createSerialQueue();
     camera = { mode: "follow", selectedId: null, status: null };
     cameraModeBeforeFallback = null;
+    deferredSceneCamera = null;
     expandedAgents.clear();
     const s = scenario();
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
@@ -1719,7 +1783,7 @@ function pageScript() {
     // the cells both come back from it rather than being guessed here.
     const opening = await session.board();
     if (seq !== bootSeq) return;
-    camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
+    camera.selectedId = openingFollowId(opening.agents);
     applyTickResult(opening);
     renderAll();
     if (!prefersReducedMotion()) {
@@ -1732,9 +1796,11 @@ function pageScript() {
   // the world's facts, everything taught into it and every editor change all
   // stand, and only the animals are minted again. Re-opening would throw the
   // taught facts away with the cast, which is not what "reset the board" says.
-  // The engine owns the turn count, so a re-cast does not rewind it — the
-  // status line says as much, because a counter that keeps climbing after a
-  // Reset otherwise reads as a bug.
+  //
+  // A Reset leaves the board STOPPED, whatever it was doing before. Opening
+  // the page is the one time the square starts itself; after that the visitor
+  // says when it runs. The shared ticker in viz-ticker.mjs already resets this
+  // way, and this page keeps its own play flag, so it says so here too.
   async function resetBoard() {
     if (!session) return boot();
     autoOn = false;
@@ -1747,15 +1813,13 @@ function pageScript() {
     showFoxCount(foxes.length);
     showGoblinCount(goblins.length);
     const board = await serializeTick(function () { return session.recast({ agents: cast }); });
-    camera = { mode: "follow", selectedId: Object.keys(board.agents || {}).sort()[0] || null, status: null };
+    camera = { mode: "follow", selectedId: openingFollowId(board.agents), status: null };
     cameraModeBeforeFallback = null;
+    deferredSceneCamera = null;
     applyTickResult(board);
     renderAll();
-    setSceneStatus("re-cast \\u2014 the square's own facts stand, and its clock keeps running.");
-    if (!prefersReducedMotion()) {
-      autoOn = true;
-      ensureTicker().play();
-    }
+    showStopped();
+    setSceneStatus("re-cast and stopped \\u2014 the square's own facts stand, and everything taught into it. Press play.");
   }
 
   function renderAll() {

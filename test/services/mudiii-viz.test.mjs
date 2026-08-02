@@ -194,8 +194,12 @@ test("renderMudiiiHtml: window.mudiiiScene.setCamera is reached on boot, every t
   const boot = bodyOf("async function boot\\(\\) \\{");
   assert.match(boot, /applyTickResult\(opening\)/, "boot draws the opening board through the tick path");
   assert.match(bodyOf("function applyTickResult\\(result\\) \\{"), /callScene\("setCamera", camera\)/);
-  assert.match(bodyOf('el\\("cameraMode"\\)\\.addEventListener'), /callScene\("setCamera", camera\)/);
-  assert.match(bodyOf('el\\("agentSelect"\\)\\.addEventListener'), /callScene\("setCamera", camera\)/);
+  // Both visitor-driven paths go through sendCameraToScene, which clears any
+  // held-back cut first — otherwise a wide shot owed from an earlier kill
+  // would land on top of the mode they just picked.
+  assert.match(bodyOf('el\\("cameraMode"\\)\\.addEventListener'), /sendCameraToScene\(camera\)/);
+  assert.match(bodyOf('el\\("agentSelect"\\)\\.addEventListener'), /sendCameraToScene\(camera\)/);
+  assert.match(bodyOf("function sendCameraToScene\\(state\\) \\{"), /deferredSceneCamera = null;\s*callScene\("setCamera", state\);/);
 });
 
 test("renderMudiiiHtml: boot draws the opening board from session.board(), never a fabricated cast with null cells", () => {
@@ -204,7 +208,28 @@ test("renderMudiiiHtml: boot draws the opening board from session.board(), never
   assert.ok(boot, "boot() is in the page script");
   assert.match(boot[0], /await session\.board\(\)/, "boot asks the engine where everything stands");
   assert.doesNotMatch(boot[0], /cell: null/, "no agent is seeded at a null cell for the scene to fail to place");
-  assert.match(boot[0], /camera\.selectedId = Object\.keys\(opening\.agents/, "the follow target comes from the board the engine minted");
+  assert.match(boot[0], /camera\.selectedId = openingFollowId\(opening\.agents\)/, "the follow target comes from the board the engine minted");
+});
+
+test("renderMudiiiHtml: the page opens riding a goblin, so the first thing seen is a chase from the hunted side", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const pick = /function openingFollowId\(agents\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(pick, "openingFollowId is in the page script");
+  assert.match(pick[1], /role === "prey"/, "the prey is what the camera opens on");
+  assert.match(pick[1], /return ids\[0\] \|\| null;/, "a square that casts no prey still gets a followed agent");
+  const boot = /async function boot\(\) \{[\s\S]*?\n  \}/.exec(html);
+  assert.match(boot[0], /camera = \{ mode: "follow"/, "and it opens in follow, not overhead");
+});
+
+test("renderMudiiiHtml: the wide shot after a kill lands one turn late, so the kill is watched rather than cut away from", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const applyTick = /function applyTickResult\(result\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(applyTick, "applyTickResult is in the page script");
+  assert.match(applyTick[1], /if \(deferredSceneCamera\) \{/, "a cut owed from last turn is paid first");
+  assert.match(applyTick[1], /\} else if \(nextCamera\.status\) \{[\s\S]*?deferredSceneCamera = \{ mode: camera\.mode, selectedId: camera\.selectedId \};/,
+    "the turn the followed agent leaves the board only owes the cut, it does not make it");
+  assert.match(applyTick[1], /if \(camera\.status\) setSceneStatus\(camera\.status\);/,
+    "the status line still names the kill on the turn it happened");
 });
 
 test("renderMudiiiHtml: every window.mudiiiScene call is guarded — a missing or throwing scene never takes the page down", () => {
@@ -324,7 +349,7 @@ test("renderMudiiiHtml: the board opens playing, and a reduced-motion visitor ge
   assert.match(html, /wireDeck\(\);\s*wirePillComplete\(\);\s*boot\(\);\s*\}\)\(\);/, "boot still runs once at the very end");
 });
 
-test("renderMudiiiHtml: a reset draws its own cast and starts it, so the deck's play state never lies", () => {
+test("renderMudiiiHtml: a reset draws its own cast and leaves it stopped, so the deck's play state never lies", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   const bootBlock = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.match(bootBlock[1], /autoOn = false;\s*if \(ticker\) \{ ticker\.pause\(\); ticker = null; \}/,
@@ -336,9 +361,30 @@ test("renderMudiiiHtml: a reset draws its own cast and starts it, so the deck's 
     "a re-cast stops whatever was running before it draws anything");
   assert.match(resetBlock[1], /session\.recast\(\{ agents: cast \}\)/,
     "the live store is re-cast rather than thrown away with everything taught into it");
-  assert.match(resetBlock[1], /if \(!prefersReducedMotion\(\)\) \{\s*autoOn = true;\s*ensureTicker\(\)\.play\(\);/,
-    "and it lands on the same play state a fresh boot does");
+  assert.doesNotMatch(resetBlock[1], /ensureTicker\(\)\.play\(\)/,
+    "a reset hands the board back stopped — opening the page is the one time the square starts itself");
+  assert.match(resetBlock[1], /showStopped\(\);/, "and the play control is put back, or it reads pause over a still board");
   assert.match(resetBlock[1], /if \(!session\) return boot\(\);/, "with nothing open there is nothing to re-cast");
+  const stopped = /function showStopped\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(stopped, "showStopped is in the page script");
+  assert.match(stopped[1], /playBtn\.setAttribute\("aria-pressed", "false"\)/);
+  assert.match(stopped[1], /el\("stepBtn"\)\.disabled = false;/, "step comes back with the board at rest");
+  assert.match(stopped[1], /el\("agentSelect"\)\.disabled = false;/);
+});
+
+test("renderMudiiiHtml: step advances exactly one whole turn, through the same ticker play uses", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<button type="button" id="stepBtn">step<\/button>/, "the deck carries a step control beside play");
+  assert.match(html, /<span class="deck-hint" id="stepHint" hidden>pause to step<\/span>/);
+  const wired = /el\("stepBtn"\)\.addEventListener\("click", function \(\) \{([\s\S]*?)\n    \}\)/.exec(html);
+  assert.ok(wired, "the step button is wired");
+  assert.match(wired[1], /ensureTicker\(\)\.stepOnce\(\)/,
+    "one whole turn goes through the ticker, so a step and a played turn can never overlap");
+  assert.match(wired[1], /if \(!session \|\| autoOn\) return;/, "a step while the board plays itself lands in the middle of a turn");
+  const render = /onRender: function \(state\) \{([\s\S]*?)\n      \}/.exec(html);
+  assert.ok(render, "the ticker's own render callback is in the page script");
+  assert.match(render[1], /el\("stepBtn"\)\.disabled = state\.playing \|\| state\.animating;/);
+  assert.match(render[1], /el\("stepHint"\)\.hidden = !state\.playing;/);
 });
 
 test("renderMudiiiHtml: the page script has no Math.random — two loads of a square cast identically", () => {
@@ -392,7 +438,7 @@ test("renderMudiiiHtml: picking a new agent after a despawn fallback resumes the
   assert.ok(onChange, "the follow select's change handler is in the page script");
   assert.match(onChange[1], /const mode = cameraModeBeforeFallback \|\| camera\.mode;/);
   assert.match(onChange[1], /cameraModeBeforeFallback = null;/);
-  assert.match(onChange[1], /callScene\("setCamera", camera\);\s*$/, "the scene is told last, once the new state is settled");
+  assert.match(onChange[1], /sendCameraToScene\(camera\);\s*$/, "the scene is told last, once the new state is settled");
 
   const onCameraMode = /el\("cameraMode"\)\.addEventListener\("click", function \(e\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(onCameraMode, "the camera-mode click handler is in the page script");
@@ -580,7 +626,7 @@ test("renderMudiiiHtml: an edit reboots the 3D scene and puts back the camera an
   );
   assert.match(
     html,
-    /await callScene\("boot",[\s\S]*?\);\s*callScene\("setCamera", camera\);\s*callScene\("applyTick", \{ agents: agentsById, items: itemsById, ecology: \[\] \}\);/,
+    /await callScene\("boot",[\s\S]*?\);\s*sendCameraToScene\(camera\);\s*callScene\("applyTick", \{ agents: agentsById, items: itemsById, ecology: \[\] \}\);/,
     "boot resets the camera and clears the agent groups, so both are restored right after it",
   );
   assert.match(html, /await rebuildSceneFromEdit\(result\);/);

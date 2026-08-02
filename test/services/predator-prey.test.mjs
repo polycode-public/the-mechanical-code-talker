@@ -197,6 +197,50 @@ test("a seeded roster never places anything on a prop's cell", async () => {
   }
 });
 
+test("a seeded roster hands no cell out twice, and leaves an agent unminted rather than stacking it", async () => {
+  // Three free cells on a nine-cell board: cell-1-1 and cell-3-3 on the
+  // perimeter, cell-2-2 inside it. Asking for five animals is asking for two
+  // more than the board can hold, so the mint has to refuse two of them.
+  const cramped = {
+    name: "town-square",
+    gridSize: 3,
+    opening: "a yard with barely room to stand.",
+    cast: { predators: 2, prey: 3 },
+    props: ["cell-2-1", "cell-3-1", "cell-1-2", "cell-3-2", "cell-1-3", "cell-2-3"]
+      .map((cell, i) => ({ id: `well-${i + 1}`, model: "well", cell, rotation: "0" })),
+  };
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-start-crowded-"));
+  try {
+    await startTownSquareGame(dir, { layout: cramped, predatorCount: 2, preyCount: 3 });
+    const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
+    const cells = [...state.placements.values()].map((p) => p.cell);
+    assert.equal(cells.length, 3, "the board holds three, so three is what gets minted");
+    assert.equal(new Set(cells).size, cells.length, "two animals opened on one cell");
+    const open = new Set(openCells(cramped));
+    for (const cell of cells) assert.ok(open.has(cell), `${cell} holds a prop`);
+    assert.deepEqual([...state.placements.keys()].sort(), ["fox-1", "fox-2", "goblin-1"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("every shipped square opens with each animal on a cell of its own", async () => {
+  for (const layout of Object.values(TOWN_SQUARE_LAYOUTS)) {
+    for (const preyCount of [1, 4, 10]) {
+      const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-start-distinct-"));
+      try {
+        await startTownSquareGame(dir, { layout, predatorCount: 4, preyCount });
+        const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
+        const cells = [...state.placements.values()].map((p) => p.cell);
+        assert.equal(cells.length, 4 + preyCount);
+        assert.equal(new Set(cells).size, cells.length, `${layout.name} stacked two animals with ${preyCount} prey`);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
 // ---- recast: an in-place epoch bump on a live store -------------------------------
 
 test("recastTownSquare re-mints the roster on a store that has already played real ticks, matching a store opened straight onto that epoch", async () => {
