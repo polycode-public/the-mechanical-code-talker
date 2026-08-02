@@ -612,6 +612,51 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
   }
 });
 
+// The two window shapes the overhead rig has to serve at once: a desktop
+// canvas several times wider than it is tall, and a phone one that is barely
+// wider than it is tall. Whichever axis runs out first is the one the board has
+// to fit inside.
+const FRAMING_WINDOWS = [
+  { label: "wide", width: 1440, height: 780 },
+  { label: "narrow", width: 380, height: 900 },
+];
+
+test("overhead frames the whole board and fills the axis that runs out first, in a wide window and a narrow one", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors } = await openMudiiiPage();
+  try {
+    await page.waitForFunction(
+      () => window.mudiiiScene && typeof window.mudiiiScene.ready === "function" && window.mudiiiScene.ready(),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+    await page.locator('#cameraMode button[data-mode="overhead"]').click();
+
+    // The largest board is the hardest to frame, so it is the one worth
+    // measuring alongside the square the page opens on.
+    for (const scenario of [null, /chapel/]) {
+      if (scenario) await switchScenario(page, scenario);
+      await page.locator('#cameraMode button[data-mode="overhead"]').click();
+      for (const shape of FRAMING_WINDOWS) {
+        await page.setViewportSize({ width: shape.width, height: shape.height });
+        await page.waitForTimeout(600);
+        const frame = await page.evaluate(() => window.mudiiiScene.boardFrameFraction());
+        const where = `${scenario ? "the chapel yard" : "the opening square"} in a ${shape.label} window`;
+        assert.ok(frame.width <= 1, `${where} runs off the canvas sideways, at ${frame.width} of its width`);
+        assert.ok(frame.height <= 1, `${where} runs off the canvas vertically, at ${frame.height} of its height`);
+        assert.ok(
+          Math.max(frame.width, frame.height) > 0.8,
+          `${where} sits small in frame, filling only ${Math.max(frame.width, frame.height)} of its tighter axis`,
+        );
+      }
+    }
+
+    assert.deepEqual(consoleErrors, [], "no console error re-rigging the camera for a new window shape");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the 3D scene canvas boots without a console error, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

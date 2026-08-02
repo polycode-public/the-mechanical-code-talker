@@ -787,6 +787,54 @@ test("cameraRigFor: null for follow/pov with no agent, or an agent standing on n
   assert.equal(cameraRigFor("pov", { cell: null, facing: "north" }, GRID_SIZE), null);
 });
 
+// What share of the canvas a `gridSize` board covers from an overhead rig, one
+// number per axis. Over 1 on an axis means the board runs off that edge.
+function overheadBoardShare(gridSize, view) {
+  const rig = cameraRigFor("overhead", null, gridSize, view);
+  const visibleHeight = 2 * rig.position.y * Math.tan((view.fovDegrees * Math.PI) / 360);
+  return { height: gridSize / visibleHeight, width: gridSize / (visibleHeight * view.aspect) };
+}
+
+// The three shipped boards against the two window shapes that pull the rig in
+// opposite directions.
+const SHIPPED_BOARDS = [10, 12, 14];
+const WIDE_VIEW = { aspect: 1239 / 360, fovDegrees: 55 };
+const TALL_VIEW = { aspect: 390 / 844, fovDegrees: 55 };
+
+test("cameraRigFor: every shipped board sits fully inside a wide window and a tall one alike", () => {
+  for (const gridSize of SHIPPED_BOARDS) {
+    for (const [label, view] of [["wide", WIDE_VIEW], ["tall", TALL_VIEW], ["square", { aspect: 1, fovDegrees: 55 }]]) {
+      const share = overheadBoardShare(gridSize, view);
+      assert.ok(share.width <= 1, `${gridSize}x${gridSize} runs off a ${label} window sideways at ${share.width}`);
+      assert.ok(share.height <= 1, `${gridSize}x${gridSize} runs off a ${label} window vertically at ${share.height}`);
+    }
+  }
+});
+
+test("cameraRigFor: the tighter axis is filled, whichever axis that turns out to be", () => {
+  for (const gridSize of SHIPPED_BOARDS) {
+    const wide = overheadBoardShare(gridSize, WIDE_VIEW);
+    assert.ok(wide.height > 0.85, `a wide window is bound by height, and ${gridSize} fills only ${wide.height} of it`);
+    const tall = overheadBoardShare(gridSize, TALL_VIEW);
+    assert.ok(tall.width > 0.85, `a tall window is bound by width, and ${gridSize} fills only ${tall.width} of it`);
+  }
+});
+
+test("cameraRigFor: a wide window pulls the overhead rig in, a tall one backs it off", () => {
+  const square = cameraRigFor("overhead", null, GRID_SIZE, { aspect: 1, fovDegrees: 55 }).position.y;
+  const wide = cameraRigFor("overhead", null, GRID_SIZE, WIDE_VIEW).position.y;
+  const tall = cameraRigFor("overhead", null, GRID_SIZE, TALL_VIEW).position.y;
+  assert.equal(wide, square, "past square, height is what runs out first, so widening changes nothing more");
+  assert.ok(tall > square, "a window taller than it is wide has to back off to keep the board's sides in frame");
+});
+
+test("cameraRigFor: overhead scales with the board, and a missing view still fits the whole board", () => {
+  const bare = cameraRigFor("overhead", null, 14).position.y;
+  assert.ok(bare > cameraRigFor("overhead", null, 10).position.y, "a bigger board is rigged higher");
+  const share = overheadBoardShare(14, { aspect: 1, fovDegrees: 55 });
+  assert.ok(share.height <= 1 && share.width <= 1, "the written-out fallbacks fit the board on their own");
+});
+
 // ---- nextCameraSelection: all five cases --------------------------------
 
 test("nextCameraSelection: nothing followed stays nothing followed, no status", () => {

@@ -89,6 +89,11 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
   equirectangular sky from the page's own sky/horizon/stone custom properties, so the canvas
   continues the page rather than cutting a hole in it, and the horizon holds still as the visitor
   turns.
+- **The overhead rig fits the tighter of the two axes.** Its height comes from the board size,
+  the camera's field of view and the canvas aspect together, so a wide window pulls the camera
+  in and a narrow one backs it off, and the whole board stays in frame either way. It leaves
+  enough room past the ground plane for a goblin standing in an outermost cell, which looking
+  straight down pushes outward from the centre of frame. Taller props overhang.
 - **Movement is a snap with a cosmetic tween.** Per-agent meshes persist, a ~250ms lerp eases
   each one-cell hop, and the authoritative position is always the tick's cell. Spawns, despawns
   and any multi-cell jump use a scale flourish at the destination, no path animation. Reduced
@@ -112,21 +117,14 @@ Three things the original design called differently, kept because the page is be
 
 ## Open
 
-1. **Overhead frames the board small in a wide window.** The overhead rig sits at
-   `gridSize * 1.4` with a 55-degree camera, which fills the frame vertically and leaves most of
-   a wide canvas on the sky either side. The 14x14 chapel yard is the worst of the three.
-   *Do:* rig the height off the canvas aspect as well as the board, so a wide window pulls in
-   rather than backing off. *Risk:* a rig that fills a wide window crops a tall one; the height
-   has to fit the tighter of the two axes, not the looser.
-
-2. **The belief line reads every unseen individual by name.** "What does the goblin see?" answers
+1. **The belief line reads every unseen individual by name.** "What does the goblin see?" answers
    with each unobserved crumb listed one by one, so the sentence is mostly a list of things that
    are not there, and it grows with the food cap. *Do:* count the unobserved rather than naming
    them, keeping the named ones for what is actually in view. *Risk:* the deception rail's whole
    point is that a lie about a specific individual lands visibly, so a taught individual has to
    keep its name even while unseen.
 
-3. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
+2. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
    largest single asset and the only measurement of it anywhere is prose.
    *Do:* fold `public/vendor/three.js` into the next page-weights pass. *Risk:* none beyond the
    report going stale on the next three bump, which is what that report is for.
