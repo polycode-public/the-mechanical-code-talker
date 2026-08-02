@@ -439,11 +439,13 @@ const MUD_SCENARIO_LABELS = {
 
 // Each label names the difference that made the layout worth shipping, not
 // just its size: what the board does to the chase is the reason to switch to
-// it.
+// it. None state a cast count — the page's own sliders pick that at play
+// time, so a fixed number in the label would just be a stale default the
+// page immediately overrides.
 const MUDIII_SCENARIO_LABELS = {
-  "town-square": "town square (12x12, 1 fox, 3 goblins)",
+  "town-square": "town square (12x12)",
   "town-square-market": "market row (10x10, stall lanes to corner a goblin in)",
-  "town-square-chapel": "chapel yard (14x14, open ground, two foxes)",
+  "town-square-chapel": "chapel yard (14x14, open ground)",
 };
 
 // The world payload every game page embeds: one shipped world's real

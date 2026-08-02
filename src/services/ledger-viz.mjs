@@ -644,6 +644,7 @@ ${DASH_DARK_CHROME_CSS}
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${DASH_SANS_STACK}; font-size: 15px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1200px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin-bottom: .9rem; }
   ${EYEBROW_LINKS_CSS}
   button { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
@@ -790,6 +791,7 @@ ${DASH_DARK_CHROME_CSS}
 </head>
 <body>
 <main>
+  <h1 class="visually-hidden">memory ledger</h1>
   <div class="eyebrow"><span>${demoEyebrowHtml("ledger", "memory ledger")}</span><span id="counts"></span></div>
   ${dashboardHtml(stats)}
   <div class="topbar">

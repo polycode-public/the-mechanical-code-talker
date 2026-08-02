@@ -76,7 +76,7 @@ ${THEME_TOKENS_CSS}
   .brand { display: flex; flex-direction: column; gap: .1rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
   ${EYEBROW_LINKS_CSS}
-  .subtitle { font-size: .82rem; color: var(--muted); }
+  .subtitle { margin: 0; font-size: .82rem; font-weight: 400; color: var(--muted); }
 
   /* the live memory count, in the topbar rather than the status line: it is
      the one number that says what this page's memory actually holds, and the
@@ -183,7 +183,7 @@ ${THEME_TOKENS_CSS}
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">${demoEyebrowHtml("ingest", "ingest")}</span>
-        <span class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</span>
+        <h1 class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</h1>
       </div>
       <div class="topbar-right">
         <span class="fact-pill" id="factPill" aria-live="polite"

@@ -61,6 +61,13 @@ test("renderIngestHtml: the two-pane layout (source textarea, canonical facts) i
   assert.match(html, /class="pills"/);
 });
 
+test("renderIngestHtml: carries exactly one h1, promoted from the page's own subtitle rather than a second heading beside it", () => {
+  const html = renderIngestHtml();
+  const h1s = [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)];
+  assert.equal(h1s.length, 1, "exactly one h1 on the page");
+  assert.equal(h1s[0][1], "ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.");
+});
+
 test("renderIngestHtml: deterministic — byte-identical output for identical input", () => {
   assert.equal(renderIngestHtml(), renderIngestHtml());
 });

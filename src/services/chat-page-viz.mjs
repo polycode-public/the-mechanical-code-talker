@@ -498,6 +498,7 @@ ${THEME_TOKENS_CSS}
      get folded onto a second line by a wide one. */
   .topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
   ${EYEBROW_LINKS_CSS}
   .legend { display: flex; gap: .8rem; margin-left: auto; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
@@ -692,6 +693,7 @@ ${SHARE_OVERLAY_CSS}
 <body>
 ${shareOverlayHtml({ withTape: true })}
   <div class="chatCol">
+    <h1 class="visually-hidden">talk to it</h1>
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">${demoEyebrowHtml("chat", "chat")}</span>
