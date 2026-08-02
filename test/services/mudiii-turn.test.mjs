@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   mudiiiTurn, pillsForMudiii, oneStepDirectionBetween, believedFactSentence,
+  beliefLineFor, taughtPlacementSubjects,
   parseTownSquareTeachLine, planTaughtTownSquareTriple, townSquareTeachConfirmation,
 } from "../../src/services/mudiii-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
@@ -279,12 +280,99 @@ test("what does the fox see?: a goblin within vision radius reads as observed, a
   assert.match(result.text, /goblin-1 is at cell-6-5\./);
 }));
 
-test("what does the goblin see?: a fox beyond vision radius reads as not observed — belief, never ground truth", () => withMemoryDir("tmct-mudiii-turn-see-far-", async (memoryDir) => {
+test("what does the goblin see?: a fox beyond vision radius is counted, not placed — belief, never ground truth", () => withMemoryDir("tmct-mudiii-turn-see-far-", async (memoryDir) => {
   const planHolder = await openGameAt(memoryDir, { foxCell: "cell-1-1", goblinCell: "cell-12-12" });
   const result = await mudiiiTurn("what does the goblin see?", { planHolder, memoryDir, env: {} });
-  assert.match(result.text, /goblin-1 sees:/);
-  assert.match(result.text, /fox-1 has not been observed\./);
+  assert.match(result.text, /goblin-1 sees nothing yet\./);
+  assert.match(result.text, /\d+ others? ha[sv]e? not been observed\./);
+  assert.doesNotMatch(result.text, /fox-1/, "an unseen fox is part of the count, never a sentence of its own");
+  assert.doesNotMatch(result.text, /cell-1-1/, "and its real cell never leaks into the answer");
 }));
+
+test("what does the goblin see?: a crumb nobody moved is counted, and one a visitor taught keeps its name", () => withMemoryDir("tmct-mudiii-turn-see-taught-", async (memoryDir) => {
+  const teaching = { ...DEFAULT_GAME_CONFIG, mudiii: { ...DEFAULT_GAME_CONFIG.mudiii, teach: true } };
+  const planHolder = await openGameAt(memoryDir, { foxCell: "cell-1-1", goblinCell: "cell-1-2" });
+  await appendFacts(memoryDir, [
+    { subject: "crumb-1", predicate: "rdf:type", object: "crumb", provenance: "test:mudiii-turn" },
+    { subject: "crumb-1@turn1", predicate: "mgx:currently-in", object: "cell-11-11", provenance: "test:mudiii-turn" },
+    { subject: "crumb-2", predicate: "rdf:type", object: "crumb", provenance: "test:mudiii-turn" },
+    { subject: "crumb-2@turn1", predicate: "mgx:currently-in", object: "cell-12-12", provenance: "test:mudiii-turn" },
+  ]);
+
+  const unobservedCount = (text) => Number((text.match(/(\d+) others? ha[sv]e? not been observed\./) ?? [0, 0])[1]);
+
+  const counted = await mudiiiTurn("what does the goblin see?", { planHolder, memoryDir, env: {}, gameConfig: teaching });
+  assert.doesNotMatch(counted.text, /crumb-[12]/, "two unseen crumbs are part of the count, not two sentences");
+  const before = unobservedCount(counted.text);
+  assert.ok(before >= 2, "both crumbs are in the count to start with");
+
+  const taught = await mudiiiTurn("crumb-1 is at cell-9-9.", { planHolder, memoryDir, env: {}, gameConfig: teaching });
+  assert.match(taught.text, /noted — crumb-1 is at cell-9-9 now\./);
+
+  const after = await mudiiiTurn("what does the goblin see?", { planHolder, memoryDir, env: {}, gameConfig: teaching });
+  assert.match(after.text, /crumb-1 has not been observed\./, "the individual a visitor placed a claim on stays visible");
+  assert.doesNotMatch(after.text, /crumb-2/, "the one nobody touched is still just a count");
+  assert.equal(unobservedCount(after.text), before - 1, "and naming it takes it out of that count");
+}));
+
+test("what does the goblin see?: a morsel the visitor dropped keeps its name while unseen", () => withMemoryDir("tmct-mudiii-turn-see-morsel-", async (memoryDir) => {
+  const planHolder = await openGameAt(memoryDir, { foxCell: "cell-1-1", goblinCell: "cell-1-2" });
+  await mudiiiTurn("put food at cell-12-12", { planHolder, memoryDir, env: {} });
+  const result = await mudiiiTurn("what does the goblin see?", { planHolder, memoryDir, env: {} });
+  assert.match(result.text, /morsel-1 has not been observed\./);
+}));
+
+// ---- beliefLineFor / taughtPlacementSubjects -------------------------------
+
+test("beliefLineFor: what is in view is named and what is not is counted", () => {
+  assert.equal(
+    beliefLineFor("goblin-1", [["fox-1", "cell-6-5"], ["crumb-1", null], ["crumb-2", null]], new Set()),
+    "goblin-1 sees: fox-1 is at cell-6-5. 2 others have not been observed.",
+  );
+});
+
+test("beliefLineFor: a taught individual is named while unseen, and drops out of the count", () => {
+  assert.equal(
+    beliefLineFor("goblin-1", [["crumb-1", null], ["crumb-2", null]], new Set(["crumb-1"])),
+    "goblin-1 sees: crumb-1 has not been observed. 1 other has not been observed.",
+  );
+});
+
+test("beliefLineFor: nothing in view at all still says how much is out there, and an empty board says so plainly", () => {
+  assert.equal(
+    beliefLineFor("goblin-1", [["fox-1", null]], new Set()),
+    "goblin-1 sees nothing yet. 1 other has not been observed.",
+  );
+  assert.equal(
+    beliefLineFor("goblin-1", [], new Set()),
+    "goblin-1 is alone on the board — nothing else to see.",
+  );
+});
+
+test("taughtPlacementSubjects: the winning placement row decides, so a board that moved on drops the mark", () => {
+  const taughtRow = (subject, cell, turn) => ({
+    subject: `${subject}@turn${turn}`, predicate: "mgx:currently-in", object: cell,
+    provenance: "world:town-square:taught:turn" + turn,
+  });
+  const tickRow = (subject, cell, turn) => ({
+    subject: `${subject}@turn${turn}`, predicate: "mgx:currently-in", object: cell,
+    provenance: "world:town-square:turn" + turn,
+  });
+  assert.deepEqual(
+    [...taughtPlacementSubjects([tickRow("crumb-1", "cell-1-1", 1), taughtRow("crumb-1", "cell-9-9", 2)])],
+    ["crumb-1"],
+  );
+  assert.deepEqual(
+    [...taughtPlacementSubjects([taughtRow("crumb-1", "cell-9-9", 2), tickRow("crumb-1", "cell-1-1", 3)])],
+    [],
+    "a later tick moved it, so nobody is looking at the visitor's claim any more",
+  );
+  assert.deepEqual(
+    [...taughtPlacementSubjects([taughtRow("crumb-1", "cell-9-9", 2)], 0)].length,
+    1,
+    "row order never decides it",
+  );
+});
 
 test("what does the goblin see?: read-only — no tick runs, the turn counter is untouched", () => withMemoryDir("tmct-mudiii-turn-see-readonly-", async (memoryDir) => {
   const planHolder = await openGameAt(memoryDir, { foxCell: "cell-5-5", goblinCell: "cell-5-6" });

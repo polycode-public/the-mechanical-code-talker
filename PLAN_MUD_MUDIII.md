@@ -100,6 +100,11 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
   motion collapses the duration to zero and leaves the opening board standing still.
 - **Chat answers are board reads.** No provenance chips — this page follows spider-fly, not
   chat.html. A line the lane cannot read gets the standing decline.
+- **The belief line names what a visitor can act on and counts the rest.** "What does the goblin
+  see?" names anything the observer can place, and anything a visitor put where it stands: a
+  taught position or a hand-dropped morsel, both stamped `:taught:turnK` on the winning placement
+  row. Everything else unobserved is one count. Naming every unseen crumb instead made the answer
+  grow with the food cap and buried the one individual a visitor had just planted a claim on.
 
 ## Where the page went past the plan
 
@@ -117,14 +122,7 @@ Three things the original design called differently, kept because the page is be
 
 ## Open
 
-1. **The belief line reads every unseen individual by name.** "What does the goblin see?" answers
-   with each unobserved crumb listed one by one, so the sentence is mostly a list of things that
-   are not there, and it grows with the food cap. *Do:* count the unobserved rather than naming
-   them, keeping the named ones for what is actually in view. *Risk:* the deception rail's whole
-   point is that a lie about a specific individual lands visibly, so a taught individual has to
-   keep its name even while unseen.
-
-2. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
+1. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
    largest single asset and the only measurement of it anywhere is prose.
    *Do:* fold `public/vendor/three.js` into the next page-weights pass. *Risk:* none beyond the
    report going stale on the next three bump, which is what that report is for.
