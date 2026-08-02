@@ -28,12 +28,26 @@ one's work the moment it's ready rather than waiting for the whole batch.
    resolver-behavior reminder, a naming convention learned the hard way) documents something
    already correct — it stays in `NEXT.md` as reference, it doesn't get a track. Only dispatch
    items that describe a real, boundable change.
-3. **Decompose into tracks with clear file-ownership boundaries.** Two tracks that both need to
+3. **Saturate. Concurrency is bounded by file ownership, not by batch cadence.** The default is a
+   wave: every file with open work against it gets a track, and every track carries as many items as
+   its files hold. One agent taking one item is the wrong shape — group all of a file's open items
+   into one brief and let that agent work them in order.
+   **This is standing, not a one-off.** The moment a track lands and frees its files, refill them in
+   the same turn rather than waiting for the batch to drain. A wave that decays to one running track
+   because the others finished is the failure mode; check what is free every time something lands.
+   When a hot file (`mudiii-viz.mjs` has been the usual one) carries a dozen items, that is one big
+   sequential brief, not a dozen dispatches and not three agents fighting over the same lines —
+   parallel edits to one file cost more in merge conflicts than the sequencing saves.
+   Say plainly in the in-flight block which files are the bottleneck and what is queued behind them,
+   so the next session does not have to re-derive it.
+   **The one real cap is the machine**: at most one or two tracks needing `npm run demo:build` or a
+   browser at a time. That is a measured limit — three concurrent builds cost two tracks' work.
+4. **Decompose into tracks with clear file-ownership boundaries.** Two tracks that both need to
    touch the same file are a merge-collision risk, not two independent tracks — either sequence
    them (land the smaller one first, dispatch the second against updated `main`) or scope each to
    non-overlapping regions of the shared file and say so explicitly in both briefs, the way you'd
    flag it for the coordinator to watch at merge time.
-4. **Pick each track's model tier deliberately**, per `CLAUDE.md`'s coordinator ladder — group
+5. **Pick each track's model tier deliberately**, per `CLAUDE.md`'s coordinator ladder — group
    tracks needing similar depth so one hard track doesn't price a whole batch at the top tier:
    - **Opus** — novel design work: a projector/algorithm that doesn't exist yet, a decision with
      real architectural weight, anything in a large/subtle engine file.
@@ -41,10 +55,10 @@ one's work the moment it's ready rather than waiting for the whole batch.
      (porting a feature from one page to another, extending a contract that already has worked
      examples to follow).
    - **Haiku** — pure mechanical sweeps: renames, manifest updates, format-only edits.
-5. **Write `NEXT.md`'s in-flight tracking block before dispatching**, one line per track naming
+6. **Write `NEXT.md`'s in-flight tracking block before dispatching**, one line per track naming
    what it covers and its status (`started`). Commit this alone, docs-only — it's the record that
    a batch is running even if the session dispatching it ends before any track lands.
-6. **Dispatch each track as an isolated-worktree agent**, self-contained (fresh agents carry no
+7. **Dispatch each track as an isolated-worktree agent**, self-contained (fresh agents carry no
    conversation context — the brief must stand alone). Every brief needs:
    - Enough project background to work without asking (tmct is pure-JS, deterministic, no LLM in
      the product path — state this explicitly if the task is anywhere near the query/answer path,
@@ -70,7 +84,7 @@ one's work the moment it's ready rather than waiting for the whole batch.
    - **A report-back contract**: what it implemented and why, any bugs found along the way even if
      unrelated to the task (name file/line), exact test commands run with pass/fail counts, the
      screenshot paths and what they show, and anything deliberately left out of scope and why.
-7. **As each track's completion notification arrives**, land it immediately — don't wait for
+8. **As each track's completion notification arrives**, land it immediately — don't wait for
    siblings:
    - `git status --short` inside the agent's worktree first. Uncommitted work is a real loss if
      skipped, not just an oversight to note.
@@ -84,7 +98,7 @@ one's work the moment it's ready rather than waiting for the whole batch.
      it is how `.claude/worktrees/` and stale branches silently accumulate.
    - Red: don't push through it. Diagnose before merging the next track, since a broken `main`
      blocks every subsequent push in the batch.
-8. **Update `NEXT.md` in the same breath as each landing**, not batched at the end. Move the
+9. **Update `NEXT.md` in the same breath as each landing**, not batched at the end. Move the
    track's in-flight line to a landed note (commit SHA, test counts), and remove the item it
    resolved from Open items — but only once nothing that item's own track surfaced is still
    outstanding (see next point). Narrow the item's text instead of removing it, if the track only
@@ -107,14 +121,14 @@ one's work the moment it's ready rather than waiting for the whole batch.
    the test, which is still work this batch does. A red test nobody owns is how a suite rots into
    background noise that stops meaning anything, and the moment a track hands you one is the only
    moment you have its full context.
-9. **Track the build honestly, without editorializing.** State what CI actually shows — which
+10. **Track the build honestly, without editorializing.** State what CI actually shows — which
    stage passed, which didn't, why if known — and leave it there unless asked for more. A known,
    already-documented infra blocker doesn't need re-explaining every time it's mentioned.
-10. **Roll the patch version once the build is green** (per whatever this project's actual roll
+11. **Roll the patch version once the build is green** (per whatever this project's actual roll
     command is at the time — check `package.json`'s scripts, don't assume a name), running the
     full suite before that push per `CLAUDE.md`'s own rule (the one moment the full suite is
     mandatory, regardless of how narrow every track's own testing was).
-11. **Loop.** Anything still open — an item no track picked up, a bug logged during landing, a
+12. **Loop.** Anything still open — an item no track picked up, a bug logged during landing, a
     track that failed and needs a retry — becomes the next batch. Dispatch it the same way, don't
     stop to ask permission if the operator's own instruction already covers "keep going" for this
     kind of batch.
