@@ -61,11 +61,14 @@ Order matters in a few places. Land the goblin-render item first, because every 
 until it does. Then the grid-size item, because the deception rail and the map panel both need its
 `gridSizeOf()` helper. Then the rail trio together, then the tick-result pair together.
 
-- **Goblins do not render.** The board shows the fox, the props and the food markers; no goblin
-  mesh appears, whatever the cast size. The simulation is fine: `cellOf("goblin-3")` returns
-  `cell-11-4`, the HUD cards are right, no request fails. There is also one huge shape in the scene,
-  many times house height, its foot floating above the ground. Three causes, all measured on the
-  live page.
+- **Goblins render at about 1% of the fox's scale.** Small enough to read as missing against the
+  board, but present — the operator found one by looking. The simulation is fine: `cellOf("goblin-3")`
+  returns `cell-11-4`, the HUD cards are right, no request fails. There is also one huge shape in the
+  scene, many times house height, its foot floating above the ground. The shrink and the giant are
+  the same fault at its two ends: each renormalization pass divides `targetHeight` by an
+  already-scaled measured height, so scale compounds downward across a cast sharing one object, while
+  a pass that lands on a scale-0 frame measures `size.y` at zero, takes the `|| 1` substitute, and
+  applies `targetHeight` to the raw model instead. Three causes, all measured on the live page.
   `createCachedLoader` (`src/services/mudiii-scene.mjs:240`) caches the promise, so every agent of a
   kind receives the same `gltf.scene`. `entry.group.add(gltf.scene)` (`:584`) reparents it and
   empties the previous goblin's group, so only the last goblin ends up holding a mesh.
