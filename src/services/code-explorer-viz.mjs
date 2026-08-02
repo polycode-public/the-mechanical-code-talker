@@ -19,7 +19,7 @@
 // sidebar/centre grid, so a later panel is one more <section class="panel">,
 // not a re-architecture.
 
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { generateCodeHints } from "../domain/code-explorer-hints.mjs";
 import { phraseForRelation } from "../domain/ask-vocab.mjs";
 import { fetchWithProgress } from "./memory-panel-viz.mjs";
@@ -483,6 +483,7 @@ body { margin: 0; overflow: hidden; background: var(--bg); color: var(--ink); fo
 .titlebar { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.5rem 0.9rem; background: var(--card); border-bottom: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--entail-soft); }
 .titlebar .mark { width: 15px; height: 15px; color: var(--entail); flex: none; }
 .titlebar h1 { font-size: 0.95rem; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+${EYEBROW_LINKS_CSS}
 .titlebar .sub { color: var(--muted); font-size: 0.76rem; font-family: ${MONO_STACK}; }
 .titlebar .sub a { color: var(--corpus); }
 /* the fact count sits in the titlebar, not the footer status bar: it is what
@@ -544,7 +545,7 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
 <div class="shell">
   <header class="titlebar">
     <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1 2.3a5.8 5.8 0 0 1 1.9.8L13.3 2l.7.7-1.1 2.4c.4.6.6 1.2.8 1.9L16 8l-2.3 1a5.8 5.8 0 0 1-.8 1.9l1.1 2.4-.7.7-2.4-1.1a5.8 5.8 0 0 1-1.9.8L8 16l-1-2.3a5.8 5.8 0 0 1-1.9-.8L2.7 14l-.7-.7 1.1-2.4a5.8 5.8 0 0 1-.8-1.9L0 8l2.3-1c.2-.7.4-1.3.8-1.9L2 2.7l.7-.7 2.4 1.1A5.8 5.8 0 0 1 7 2.3L8 0zm0 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z"/></svg>
-    <h1>tmct code explorer</h1>
+    <h1>${demoEyebrowHtml("code", "code explorer")}</h1>
     <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
     <span class="factpill" id="fact-total" aria-live="polite" title="every fact this page's chat can draw on — the code graph's own edges plus the general-knowledge seed once it lands">
       <span class="factpill-value" id="fact-total-value">&mdash;</span> facts loaded

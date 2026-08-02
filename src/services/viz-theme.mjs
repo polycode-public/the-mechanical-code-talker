@@ -32,6 +32,26 @@ export function embedScriptText(js) {
   return String(js ?? "").replaceAll("</script", "<\\/script");
 }
 
+/** The three-link nav every demo page's header opens with: the site's own
+ *  name (home), the demo's own name (its own page) and "about" (its about
+ *  page). `page` is the demo's key in scripts/site-pages.mjs's DEMO_PAGES,
+ *  which is also its filename stem (e.g. "mud" -> mud.html); the about-page
+ *  suffix below mirrors that same file's `aboutPageOf`, restated rather than
+ *  imported since scripts/ sits outside src/ and never ships with the
+ *  published package. Returns the inner markup only — the caller supplies
+ *  the wrapping element (div/h1/span) and keeps whatever class and
+ *  neighbouring markup its own header already carries. Style hook:
+ *  EYEBROW_LINKS_CSS. */
+export function demoEyebrowHtml(page, label) {
+  return `<span class="eyebrow-links"><a href="./index.html">tmct</a> &middot; <a href="./${page}.html">${escapeHtml(label)}</a> &middot; <a href="./${page}-about.html">about</a></span>`;
+}
+
+/** Styling every page that calls demoEyebrowHtml splices into its own inline
+ *  <style>: the links read in the eyebrow's own colour (each page sets that
+ *  colour itself), underlining only on hover/focus. */
+export const EYEBROW_LINKS_CSS = `.eyebrow-links a { color: inherit; text-decoration: none; }
+.eyebrow-links a:hover, .eyebrow-links a:focus-visible { text-decoration: underline; }`;
+
 /** A world name read as a name in a scenario dropdown: "mud-garden" ->
  *  "mud garden". The world's own hyphenated id is the only thing every caller
  *  is guaranteed to have, so a scenario that wants a hand-written label passes

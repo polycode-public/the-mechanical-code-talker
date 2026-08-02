@@ -355,9 +355,10 @@ test("renderChatHtml: the forget-everything control clears the device store and 
   assert.match(html, /forgot everything taught on this device/);
 });
 
-test("renderChatHtml: the brand line renders as typed — lowercase, single element, no heading beside it", () => {
+test("renderChatHtml: the brand line is one eyebrow element carrying tmct/chat/about links, lowercase, no heading beside it", () => {
   const html = renderChatHtml();
-  assert.ok(html.includes('<span class="eyebrow">the-mechanical-code-talker</span>'));
+  assert.ok(html.includes('<span class="eyebrow"><span class="eyebrow-links">'));
+  assert.match(html, /<a href="\.\/index\.html">tmct<\/a>[\s\S]{0,20}<a href="\.\/chat\.html">chat<\/a>[\s\S]{0,20}<a href="\.\/chat-about\.html">about<\/a>/);
   assert.ok(!html.includes("<h1>"));
   const eyebrowRule = html.match(/\.eyebrow \{[^}]*\}/)?.[0] ?? "";
   assert.ok(!eyebrowRule.includes("text-transform"), "eyebrow must not transform the brand's case");

@@ -92,7 +92,7 @@
 // an edit implies run through the browser bundle's own `session.applyEdit`
 // (adventure-browser-entry.mjs), never here — this module only renders and
 // reads.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel, rowsForWorld, wordBeforeCursor } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel, rowsForWorld, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
 import { directedGridLayout } from "./viz-room-graph.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
@@ -629,6 +629,7 @@ ${THEME_TOKENS_CSS}
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gilt); }
+  ${EYEBROW_LINKS_CSS}
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: .3rem 0 1rem; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -994,7 +995,7 @@ ${THEME_TOKENS_CSS}
 <body>
 <main>
   <div class="titlebar">
-    <div class="eyebrow">tmct &middot; the adventure</div>
+    <div class="eyebrow">${demoEyebrowHtml("adventure", "the adventure")}</div>
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
   </div>
   <p class="page-note" id="pageNote">${escapeHtml(scenarioList[0].worldPayload.opening || "")}</p>
