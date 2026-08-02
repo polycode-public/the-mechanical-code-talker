@@ -33,22 +33,31 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Six tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
-them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
-router's phantom budget.
+Seven tracks. The playtest and both benchmarks have landed, and each one spawned a fix track —
+running them when the backlog's own files were claimed is what turned up the seventeen-minute freeze
+and the router's phantom budget.
 
 **The bottleneck is the browser, not the file graph.** At most two tracks may hold
-`npm run demo:build` at once; three concurrent builds cost two tracks their work. T55 and T58 hold
-those two slots, so T56 (the page-behaviour playtest fixes on sprites, mud and spider-fly) is
-**queued behind T58**, not unowned. T57 works against the deployed site and needs no build.
+`npm run demo:build` at once; three concurrent builds cost two tracks their work. T55 and T56 hold
+those two slots. T58 gave its slot back: the `*-about.html` pages are committed source, so a full
+build on `main` leaves them untouched and it can measure straight off `file://`. T57 works against
+the deployed site and T59 is docs-only, so neither needs a build.
+
+- **T56 four page-behaviour playtest faults, plus mud's STEP button** — the `/help` banner the home
+  page refuses, the animal-root fallback drawn for a lamp and a cabinet, the empty mud food pill
+  before PLAY, spider-fly direction pills that append when they should replace, and a STEP button
+  for `mud-viz.mjs`. Also checks the adventure and spider-fly step buttons advance a whole turn.
+  `sprites-viz.mjs`, `mud-viz.mjs`, `spider-fly-viz.mjs`, `adventure-viz.mjs`, `index.html`. Sonnet.
+  Holds a build slot. Status: started.
 
 - **T49 the chat freeze, then the CLI comfort items** — redirected: a plain English question locks
   the tab for 1054s before refusing correctly, and that outranks everything else it was sent for.
   `chat.mjs`, `syllogise.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier.
   Status: started.
-- **T55 mudiii's camera look and the double-minted cell** — drag to look in POV and FOLLOW, and two
-  agents opening on one cell. `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier.
-  Holds a build slot. Status: started.
+- **T55 mudiii's camera look, the double-minted cell and its STEP button** — drag to look in POV and
+  FOLLOW, two agents opening on one cell, and a STEP button that advances one whole turn.
+  `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier. Holds a build slot.
+  Status: started.
 - **T59 the doc drift and the README examples** — act on `reports/DOC_DRIFT_AUDIT.md`, verifying each
   finding against today's code first, and run `npm run check:readme`, which CI deliberately skips and
   nobody has run for a while. `README.md`, `docs/`, the audit report. Sonnet. No build. Status:
@@ -60,8 +69,11 @@ those two slots, so T56 (the page-behaviour playtest fixes on sprites, mud and s
 - **T58 the five about pages that still overflow** — T54's `minmax(0, 1fr)` cleared six of eleven;
   the other five are 376px to 711px wide at a 375px viewport. Dispatched with the measurement
   already made, so it starts by naming the widest element rather than re-deriving the symptom.
-  `site.css`, `scripts/site-pages.mjs`, a new overflow guard. Sonnet. Holds the second build slot.
-  Status: started.
+  `site.css`, `scripts/site-pages.mjs`, a new overflow guard. Sonnet. No build slot needed.
+  Status: running, with the cause found for it — `main.about-main` is the box that overflows, at
+  561px to 691px inside a 375px viewport. The phone-width track is already `minmax(0, 1fr)`, but a
+  grid item defaults to `min-width: auto`, so the item grows past its own clamped track. Whatever
+  inside it has that min-content width still needs naming and its own `overflow-x: auto`.
 - **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
 
@@ -121,6 +133,19 @@ those two slots, so T56 (the page-behaviour playtest fixes on sprites, mud and s
   **Risk:** widening a lane can capture sentences another lane owns. The corpus tests are where that
   shows.
 
+
+- **Every demo page with PLAY needs a STEP button that advances one whole turn.** Operator request.
+  Three pages already have one and are the pattern: `plan-viz.mjs:452` (`step ▶`),
+  `adventure-viz.mjs:1012` (`stepBtn`, wired to `ticker.stepOnce()` at `:1884`, disabled while
+  playing at `:1868`) and `spider-fly-viz.mjs:458`. The two missing it are `mud-viz.mjs`, whose play
+  control is `autoToggle`, and `mudiii-viz.mjs`.
+  **Tier:** Sonnet for mud, top tier for mudiii. **In flight**, folded into T56 and T55 respectively
+  since they already own those two files.
+  **Do:** one whole turn means every agent acts once, not one agent's single move. The check is that
+  the turn counter reads exactly one higher after a click. T56 also checks the adventure and
+  spider-fly buttons against that reading and fixes either if it steps a fraction of a turn.
+  **Risk:** stepping during autoplay is meaningless, so the button disables while playing, the same
+  way FOLLOW does.
 
 ### Inference
 
