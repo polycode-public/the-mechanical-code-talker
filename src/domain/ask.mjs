@@ -15,7 +15,7 @@
 // ask.mjs's own `touches`/`cochange` verbs answer one-hop structural edges
 // (mgx:touchedByCommit / mgx:changeCoupledWith).
 
-import { relationKind, impactClosure, moduleCountOf, normPath, packageCounts, modulesOf, HISTORY_CAP } from "./codegraph.mjs";
+import { relationKind, impactClosure, moduleCountOf, normPath, packageCounts, modulesOf, HISTORY_CAP, NO_CODE_INDEX_NOTE } from "./codegraph.mjs";
 import { isTestPath } from "./module-paths.mjs";
 import {
   RELATIONS,
@@ -2491,9 +2491,7 @@ export function rephraseHint() {
  *  graph is UNKNOWN, not empty (see chat.mjs's noCodeGraph), so it keeps the
  *  index-shaped advice. */
 function touchesRephraseHint(graph = null) {
-  if (graph && moduleCountOf(graph) === 0) {
-    return "This store holds no code index, so it records no modules or commits to look through.";
-  }
+  if (graph && moduleCountOf(graph) === 0) return NO_CODE_INDEX_NOTE;
   return 'Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.';
 }
 

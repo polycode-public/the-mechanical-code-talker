@@ -455,6 +455,33 @@ test("renderTestsFor / renderUntested read the test-coverage relation", () => {
   assert.doesNotMatch(untested, /b\.test\.mjs/); // test modules are excluded
 });
 
+test("renderUntested declines when the graph carries no source modules to survey", () => {
+  const noModules = renderUntested(parseEntities({ individuals: [] }));
+  assert.doesNotMatch(noModules, /every source module/, "an empty index must never claim full coverage");
+  assert.match(noModules, /no modules to check for test coverage in this index/);
+  assert.match(noModules, /holds no code index/);
+  // a vocabulary-only store (a chat session's own graph) is the same nothing-to-survey case
+  const vocabOnly = renderUntested(parseEntities({
+    individuals: [{ id: "cls:Animal", class: "SchemaClass", label: "Animal" }],
+  }));
+  assert.doesNotMatch(vocabOnly, /every source module/);
+  // only test modules recorded: there is no source module to be covered or uncovered
+  const testsOnly = renderUntested(parseEntities({
+    individuals: [{ id: "mod:test/a.test.mjs", class: "Module", label: "test/a.test.mjs" }],
+  }));
+  assert.doesNotMatch(testsOnly, /every source module/);
+  assert.match(testsOnly, /no source modules/);
+  // a real index with everything covered still reports full coverage
+  const covered = renderUntested(parseEntities({
+    individuals: [
+      { id: "mod:a.mjs", class: "Module", label: "a.mjs" },
+      { id: "mod:a.test.mjs", class: "Module", label: "a.test.mjs" },
+    ],
+    objectProperties: [{ predicate: "tests", examples: [{ subject: "mod:a.test.mjs", object: "mod:a.mjs" }] }],
+  }));
+  assert.match(covered, /every source module has at least one covering test module/);
+});
+
 test("renderTestsFor asked about a symbol names the symbol, the module it hopped to, and the grain", () => {
   // the symbol's site-derived module id resolves to the module individual,
   // whose label is what the answer names
