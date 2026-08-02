@@ -899,6 +899,168 @@ test("the turn counter keeps advancing on a board with nothing alive left on it"
   }
 });
 
+// ---- the visitor's own hand ---------------------------------------------------------
+// A press reaches the world through the same tick as everything else, so a
+// driven agent is one more decision inside a turn the whole board still takes.
+
+async function boardOnLayout(lay, facts, label) {
+  const dir = await mkdtemp(join(tmpdir(), `tmct-mudiii-${label}-`));
+  const provenance = `world:${lay.name}`;
+  await appendFacts(dir, [...worldFactRows(lay)].map((f) => ({
+    subject: f.subject, predicate: f.predicate, object: f.object, provenance,
+  })));
+  if (facts.length) await appendFacts(dir, facts.map((f) => ({ ...f, provenance })));
+  return dir;
+}
+
+const wall = (id, cell) => ({ id, model: "house-1", cell, rotation: "0" });
+
+// Two three-by-three boards built to pin one thing each: an agent that cannot
+// step at all, and one with exactly one way out.
+const WALLED_IN = {
+  name: "town-square-walled-in", gridSize: 3, opening: "walled in on all four sides",
+  cast: { predators: 1, prey: 0 },
+  props: [wall("house-1", "cell-2-1"), wall("house-2", "cell-1-2"), wall("house-3", "cell-3-2"), wall("house-4", "cell-2-3")],
+};
+const ONE_WAY_OUT = {
+  ...WALLED_IN, name: "town-square-one-way-out", opening: "one way out, east",
+  props: [wall("house-1", "cell-2-1"), wall("house-2", "cell-1-2"), wall("house-3", "cell-2-3")],
+};
+// No arrivals on the small boards: a spawn would put a second agent on a
+// three-by-three square and change what the one under test can see.
+const NO_ARRIVALS = { ...CONFIG, preySpawnIntervalTurns: 0, foodSpawnIntervalTurns: 0 };
+
+test("a hand-driven step leaves the same rows behind as a move the planner chose", async () => {
+  const facts = [classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20)];
+  const driven = await boardWith(facts, "driven-step");
+  const planned = await boardWith(facts, "driven-step-control");
+  try {
+    const tick = await runTownSquareTick(driven, { layout: LAYOUT, manualMoves: { "fox-1": "cell-4-5" } });
+    assert.equal(tick.rungs["fox-1"], "driven");
+    assert.equal(tick.agents["fox-1"].cell, "cell-4-5");
+    assert.deepEqual(tick.agents["fox-1"].plan, ["west"]);
+    assert.equal(tick.agents["fox-1"].facing, "west");
+    assert.equal(tick.agents["fox-1"].mood, "calm");
+    assert.match(tick.agents["fox-1"].goal, /driven by hand — stepping to cell-4-5/);
+
+    const ownRow = (t, predicate) => t.writes.filter((w) => w.subject === "fox-1@turn1" && w.predicate === predicate).map((w) => w.object);
+    assert.deepEqual(ownRow(tick, "mgx:currently-in"), ["cell-4-5"]);
+    assert.deepEqual(ownRow(tick, "mgx:facing"), ["west"]);
+    assert.deepEqual(ownRow(tick, "mgx:driven-facing"), ["west"], "and the record that a hand chose it");
+
+    const control = await runTownSquareTick(planned, { layout: LAYOUT });
+    const rowShape = (t) => t.writes.filter((w) => w.subject.startsWith("fox-1@")).map((w) => w.predicate).sort();
+    assert.deepEqual(
+      rowShape(tick).filter((p) => p !== "mgx:driven-facing"),
+      rowShape(control),
+      "one fact path: a driven turn writes the predicates a planned turn writes, plus the hand's own record",
+    );
+  } finally {
+    await rm(driven, { recursive: true, force: true });
+    await rm(planned, { recursive: true, force: true });
+  }
+});
+
+test("a hand-driven move into a building is refused, and that agent still takes its own turn", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-7-1"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-1"), weigh("goblin-1", 8),
+  ], "driven-refused");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, manualMoves: { "fox-1": "cell-8-1" } });
+    assert.equal(tick.rungs["fox-1"], "chase", "house-1 stands on cell-8-1, so the press is no move at all");
+    assert.equal(tick.agents["fox-1"].cell, "cell-6-1", "and the fox spends the turn on its own chase");
+    assert.equal(tick.agents["fox-1"].facing, "west");
+    assert.equal(tick.writes.some((w) => w.predicate === "mgx:driven-facing"), false, "a refused press records no hand turn");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a hand-driven agent spends one shared turn — every other agent still decides and moves in the same call", async () => {
+  const facts = [
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-10-10"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-10-8"), weigh("crumb-1", 1),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-11-4"), weigh("goblin-2", 8),
+    classify("crumb-2", "crumb"), place("crumb-2", "cell-9-4"), weigh("crumb-2", 1),
+  ];
+  const driven = await boardWith(facts, "driven-others");
+  const untouched = await boardWith(facts, "driven-others-control");
+  try {
+    const tick = await runTownSquareTick(driven, { layout: LAYOUT, manualMoves: { "fox-1": "cell-3-2" } });
+    assert.equal(tick.rungs["fox-1"], "driven");
+    assert.equal(tick.rungs["goblin-1"], "forage");
+    assert.equal(tick.rungs["goblin-2"], "forage");
+    assert.equal(tick.agents["goblin-1"].cell, "cell-10-9", "one step toward its crumb, in the very call that drove the fox");
+    assert.equal(tick.agents["goblin-2"].cell, "cell-10-4");
+    assert.ok(tick.agents["goblin-1"].mass < 8, "the ecology pass ran for the whole board, not for the driven agent alone");
+    assert.ok(tick.agents["goblin-2"].mass < 8);
+
+    const control = await runTownSquareTick(untouched, { layout: LAYOUT });
+    assert.deepEqual(tick.agents["goblin-1"], control.agents["goblin-1"], "a hand on the fox changes nothing about a goblin's own turn");
+    assert.deepEqual(tick.agents["goblin-2"], control.agents["goblin-2"]);
+  } finally {
+    await rm(driven, { recursive: true, force: true });
+    await rm(untouched, { recursive: true, force: true });
+  }
+});
+
+test("a hand-driven turn holds its facing while the agent stands still, and loses it to the agent's own next step", async () => {
+  const still = await boardOnLayout(WALLED_IN, [
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20),
+  ], "driven-facing-held");
+  try {
+    const turned = await runTownSquareTick(still, { layout: WALLED_IN, config: NO_ARRIVALS, manualMoves: { "fox-1": { facing: "east" } } });
+    assert.equal(turned.rungs["fox-1"], "driven");
+    assert.equal(turned.agents["fox-1"].cell, "cell-2-2", "a turn on the spot is a hold");
+    assert.equal(turned.agents["fox-1"].facing, "east");
+    assert.match(turned.agents["fox-1"].goal, /driven by hand — holding at cell-2-2, facing east/);
+    assert.ok(turned.writes.some((w) => w.subject === "fox-1@turn1" && w.predicate === "mgx:driven-facing" && w.object === "east"));
+
+    const later = await runTownSquareTick(still, { layout: WALLED_IN, config: NO_ARRIVALS });
+    assert.deepEqual(later.agents["fox-1"].plan, [], "walled in on all four sides, it takes no step of its own");
+    assert.equal(later.agents["fox-1"].facing, "east", "so the facing the hand chose still stands");
+  } finally {
+    await rm(still, { recursive: true, force: true });
+  }
+
+  const walking = await boardOnLayout(ONE_WAY_OUT, [
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-3-2"), weigh("goblin-1", 8),
+  ], "driven-facing-replaced");
+  try {
+    const turned = await runTownSquareTick(walking, { layout: ONE_WAY_OUT, config: NO_ARRIVALS, manualMoves: { "fox-1": { facing: "north" } } });
+    assert.equal(turned.agents["fox-1"].facing, "north");
+    const stepped = await runTownSquareTick(walking, { layout: ONE_WAY_OUT, config: NO_ARRIVALS });
+    assert.equal(stepped.agents["fox-1"].plan[0], "east", "the one way out");
+    assert.equal(stepped.agents["fox-1"].facing, "east", "the planner's own step replaces the hand's facing");
+    const state = foldTownSquareState(readFactRows(await loadMemory(walking)));
+    assert.deepEqual(state.facing.get("fox-1"), { value: "east", turn: 2, epoch: 0 }, "and the store agrees — the hand's row is outranked, not merely ignored");
+  } finally {
+    await rm(walking, { recursive: true, force: true });
+  }
+});
+
+test("a tick nobody touched is byte-identical to one that never heard of manualMoves", async () => {
+  const facts = [
+    classify("fox-1", "fox"), place("fox-1", "cell-2-9"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-7-4"), weigh("goblin-1", 8),
+  ];
+  const withOption = await boardWith(facts, "driven-empty");
+  const without = await boardWith(facts, "driven-none");
+  try {
+    const runA = [];
+    const runB = [];
+    for (let i = 0; i < 4; i += 1) runA.push(townSquareTickPayload(await runTownSquareTick(withOption, { layout: LAYOUT, manualMoves: {} })));
+    for (let i = 0; i < 4; i += 1) runB.push(townSquareTickPayload(await runTownSquareTick(without, { layout: LAYOUT })));
+    assert.deepEqual(runA, runB);
+  } finally {
+    await rm(withOption, { recursive: true, force: true });
+    await rm(without, { recursive: true, force: true });
+  }
+});
+
 // ---- the opt-in mechanics --------------------------------------------------------
 // Carrying, webs and eggs are off unless a config names them, so every test
 // above this line runs the board the town square has always run. These use a
