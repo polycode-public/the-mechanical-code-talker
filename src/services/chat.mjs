@@ -1413,6 +1413,35 @@ export function isConversational(query) {
   return expandContractions(q).split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
+/** The words that, in the slot of a short "what is X" / "who is X", name the
+ *  SESSION rather than a term to look up ("what is this", "what is up").
+ *  Closed and hand-curated, the same discipline every small-talk set in this
+ *  file uses: a word listed here keeps today's orientation card, and anything
+ *  else is a question about a term. */
+const SESSION_REFERENT_TERMS = new Set([
+  "this", "that", "it", "they", "them", "you", "u", "yours", "tmct",
+  "up", "new", "next", "now", "here", "there", "left", "wrong", "more", "else",
+  "all", "everything", "anything", "something", "nothing",
+  "going", "happening", "possible", "available", "supported", "included",
+]);
+
+/** The term a short "what is X" / "who is X" asks about, or null when the line
+ *  isn't that shape or names the session itself.
+ *
+ *  isConversational's catch-all counts words, so "what is grelb" (three) took
+ *  the orientation card while "what is a grelb" (four, one article apart)
+ *  refused — the same question answered two different ways, and the shorter
+ *  one answered with a paragraph about tmct that reads as if the term had been
+ *  looked up. A term question that resolves to nothing belongs on the miss
+ *  wall; only the closed set above is really about the product. */
+function shortTermQuestionTerm(query) {
+  const m = String(query).trim().replace(/[?.!]+\s*$/, "")
+    .match(/^(?:what|who)\s+(?:is|are|was|were)\s+([a-z][\w'-]*)$/i);
+  if (!m) return null;
+  const term = m[1].toLowerCase();
+  return SESSION_REFERENT_TERMS.has(term) ? null : term;
+}
+
 /** The tmct tools dispatchTool can back (the set a tool-emitting caller may use).
  *  A declared tool outside this set is never emitted — the request falls through
  *  to a text answer. The COMMANDS map names the richer graph tools; TOOLS names
@@ -13341,9 +13370,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     dialogueLaneOverride = "game-inform";
     note(trace, "lane: (2) MID-GAME NUDGE — an unparsed short turn stayed inside the live game frame instead of the identity card");
     note(trace, "goal: keep the running guess-the-number game on track");
-  } else if (isConversationalCandidate) {
+  } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
+    // A short question naming a TERM is excluded: nothing above resolved it, so
+    // it belongs on the miss wall its four-word twin already reaches.
     // This branch carries via:"template" and never reaches the composed-only
     // wall-shortening gate below, so it needs its own repeat collapse,
     // mirroring WALL_REPEAT_ONELINER.
@@ -13799,7 +13830,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // does. Both shapes below anchor on the written-out copula.
     const offerSrc = expandContractions(String(query).trim());
     const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
-    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
+    // "who is grelb" asks about a term the same way "what is grelb" does, and
+    // a name is exactly what a person teaches next — without this the who-form
+    // dead-ends on the bare grammar wall while its what-form twin offers the
+    // teach phrasing.
+    const whoTerm = shortTermQuestionTerm(offerSrc) ? offerSrc.match(WHO_IS_BARE_RE)?.[1]?.trim() : null;
+    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope) || whoTerm;
     // A term that LEADS with a bindable anaphor ("it used for", from an
     // unresolved "what is it used for") is a pronoun that failed to bind,
     // not a teachable subject — offering to learn facts about it would echo
