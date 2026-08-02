@@ -69,7 +69,10 @@ share/join P2P layer follows as its own phase, in PLAN_MUD_MUDIII_SHARED.md.
 ### The world: a town square as a grid with buildings on it
 
 `src/domain/town-square-world.mjs`, mirroring `spider-fly-world.mjs`. A 12x12 grid (spider-fly is
-10x10; a square with buildings needs the extra room, and the size is one constant in one module).
+10x10; a square with buildings needs the extra room). Grid size ended up a property of each
+layout, not a module constant — the three shipped boards run 12, 10 and 14, and a module-level
+constant would silently clip the 14x14 one. `DEFAULT_GRID_SIZE` is the fallback for a layout that
+names none.
 The town-square dressing — buildings around the edge, a well, market stalls — is authored as prop
 facts in the same world pack:
 
@@ -152,7 +155,7 @@ foraging feel; it stays a config experiment, never the default.
 believes a goblin is visible paths toward the believed cell (multi-step BFS when one exists,
 one-ply greedy approach otherwise) and eats on co-location, gaining the goblin's remaining
 mass. spider-fly separates catch from eat because eating needs a web; a fox needs no
-apparatus, so catch and eat merge into one ecology step. Two wolves avoid each other
+apparatus, so catch and eat merge into one ecology step. Two foxes avoid each other
 (`greedySpiderAvoid`'s mirror), and a fox with nothing in view wanders (seeded) rather than
 holding still — there is no web to build, and a motionless predator reads as a broken page in
 3D. Eggs and hatching stay out of v1; the goblin spawn interval keeps the population up, and
@@ -174,9 +177,9 @@ by construction, and its goal line flips with it ("evading — last saw fox-1 at
 alternative — one blended one-ply score weighing fox distance against crumb distance — was
 considered and parked: it needs new scoring machinery, its weights need tuning against a real
 board, and it turns the goal line into mush ("mostly evading, somewhat hungry") that neither the
-HUD nor chat can narrate cleanly. A cheap middle ground exists later without restructuring:
-when evading, break ties among equally-safe cells toward the nearest believed food. That is one
-comparator in the evade scorer, flagged as a tuning knob, not v1.
+HUD nor chat can narrate cleanly. The cheap middle ground has since landed: when evading, ties
+among equally-safe cells break toward the nearest believed food. `greedyAway` takes a
+`towardCell`, and the prey rung passes the food it can see.
 
 **The player places food.** A chat verb (closed regex, in the lane: "put food at cell-3-4" /
 "drop a morsel at cell-3-4") and a click affordance in the 3D view (click an empty cell while
@@ -202,7 +205,7 @@ belief panel shows the lie landing.
 
 **Vendoring.** `three` is not currently a dependency and no page loads anything from a CDN — the
 repo's standing rule, with the recipe already proven: `build-wink-vendor.mjs` bundles wink-nlp
-into `public/vendor/wink.js` (3.6 MB raw / 790 KB brotli), precached by the service worker so
+into `public/vendor/wink.js` (3.6 MB raw / 975 KB brotli, per `reports/PAGE_WEIGHTS.md`), precached by the service worker so
 LAN demos work offline. Three.js follows the identical recipe: `npm i three`, a
 `scripts/build-three-vendor.mjs` copied from the wink one (esbuild, ESM, minified,
 write-to-tmp-and-rename), called from `build-demo-site.mjs`, added to the service-worker
@@ -213,7 +216,7 @@ subsection for why).
 
 **Page anatomy** mirrors every other game page: `renderMudiiiHtml()` in
 `src/services/mudiii-viz.mjs` (markup + CSS + inline IIFE), an engine bundle from
-`src/surfaces/web/mudiii-browser-entry.mjs` stashing exports on `globalThis.tmctMudiii`, a
+`src/surfaces/web/mudiii-browser-entry.mjs` publishing its exports on the one `globalThis.tmct` every page uses, a
 `scripts/build-mudiii-bundle.mjs` through the shared `browser-bundle.mjs`, and a
 `build-demo-site.mjs` block writing `public/mudiii.html`.
 
@@ -224,7 +227,7 @@ plates verbatim. The screenshot comes from `scripts/gen-screenshots.mjs`: add `"
 `PAGE_ORDER` and give it a ready check in the mud.html style — mud is already the precedent for
 a plate that must look busy rather than freshly loaded, so the check drives the simulation
 several turns and waits for agent meshes to have moved before the shot fires. The PNG and the
-updated `public/screenshots/manifest.json` are committed like the other nine.
+updated `public/screenshots/manifest.json` are committed like the other ten.
 
 **Scene graph from facts.** One ground plane with the grid drawn on it; prop meshes at their
 authored cells (resolved from `mgx:model` keys); one mesh per live agent at its cell center; a
@@ -276,10 +279,12 @@ costs nothing to carry now.
 ### The dashboard: a 1-player mud deck
 
 The deck adopts mud.html's own control set unchanged, same ranges and defaults: Play (starts
-every animal's ticker at once, wolves and goblins alike), the shared turn counter, Reset (starts
-a fresh world and redraws the whole cast), a Players slider (1/2/4, redrawn on release) sizing
-the fox roster, an Npcs slider (1..10, default 2) sizing the goblin roster, a Delay slider
-(80-2000ms, default 650ms) and a Max-turns slider (20-2000, default 400). The agent-select
+every animal's ticker at once, foxes and goblins alike), the shared turn counter, Reset (starts
+a fresh world and redraws the whole cast), a foxes slider (1/2/4, redrawn on release) sizing
+the fox roster, a goblins slider (1..10, default 2) sizing the goblin roster, a Delay slider
+(80-2000ms, default 220ms) and a Max-turns slider (20-2000, default 400). The sliders keep mud's
+ranges but not its 650ms delay: neither role is a player on a one-player page, so the labels name
+the animals. The agent-select
 dropdown (which cast member the POV camera follows) sits alongside them. Turn flow reuses
 `serializeTick` plus one ticker per animal. Below or beside the 3D view: the chat
 log and input with the pill rail, and per-agent HUD cards (mass bar, goal line, expandable belief
@@ -355,12 +360,13 @@ all. Per-asset provenance therefore decides everything:
 - **"Permission required"** (weapons, UI icon sets) and CC BY-NC audio: out entirely.
 
 **What we take (all CC0, sizes as shipped).** The Quaternius Medieval Village and Fantasy Props
-sets rebuild the square cleanly: `well.glb` (27K), `house_1/2/3.glb` (~83K each), `inn.glb`
-(91K), `blacksmith.glb` (95K), `market_stand_1/2.glb` (25K), `cart.glb`, `fence.glb`, barrels
-and crates, lanterns, plus foliage (`oak_*`, `bush`, ~180K each) and, for stall dressing and
-scavenger bait, the `resources/` food props (`food_apple_*`, `food_cheese`, `food_crate_large_apples`
-— a CC0 cheese model is a gift for baiting scavengers). A dozen props plus two character rigs
-lands around 1.5 MB, inside the wink vendor precedent. tmct keeps its own per-asset credit
+sets rebuild the square cleanly. `data/mudiii-assets.json` is the shipped list, sixteen rows:
+`well.glb` (27K), `house_1/2/3.glb` (82K / 101K / 43K), `inn.glb` (91K), `blacksmith.glb` (95K),
+`market_stand_1/2.glb` (25K and 18K), `cart.glb` (30K), `fence.glb` (5K), foliage (`oak_1.glb`
+180K, `bush.glb` 48K), and `haybale.glb` (14K) standing in for both food kinds — crumb and morsel
+are the same hay bale, worth the same, and the two knobs stay separate only so a later world can
+tell them apart. No apples, cheese or crates in the end. Fourteen props plus two character rigs
+lands at 1.16 MB, inside the wink vendor precedent. tmct keeps its own per-asset credit
 register listing each copied file's source and licence — the same discipline CREDITS.md itself
 models — even though CC0 requires none.
 
@@ -439,7 +445,7 @@ execute against and the coordinator can check mechanically.
 `test/fixtures/mudiii-ticks.json`: ten recorded ticks in the frozen payload shape
 
     { turn,
-      agents: { "<id>": { role, cell, facing, goal, plan, mass, belief } },
+      agents: { "<id>": { role, cell, facing, goal, mood, plan, mass, belief } },
       items:  { "<id>": { kind, cell } },
       ecology: [ ...this turn's spawn/eat/starve events... ] }
 
