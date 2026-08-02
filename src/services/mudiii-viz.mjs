@@ -336,6 +336,30 @@ export function mapDotsFor(agents, items, gridSize) {
   return dots;
 }
 
+/** Every static prop's own filled cell for the 2D map panel, as percentage
+ *  coordinates within the same square board `mapDotsFor` draws into
+ *  (`{ id, xPct, yPct, sizePct }[]`). `props` is `propPlacementsFrom`'s own
+ *  output. A block is drawn from the cell's own top-left corner and fills it,
+ *  so the offset is `- 1` where `mapDotsFor`'s dot, centred on the cell, takes
+ *  `- 0.5`. A placement with no parseable cell is dropped rather than drawn at
+ *  a guessed position. Pure, self-contained. */
+export function mapBlocksFor(props, gridSize) {
+  const size = Number(gridSize);
+  if (!Number.isFinite(size) || size <= 0) return [];
+  const blocks = [];
+  for (const prop of props || []) {
+    const match = /^cell-(\d+)-(\d+)$/.exec(String(prop && prop.cell != null ? prop.cell : ""));
+    if (!match) continue;
+    blocks.push({
+      id: prop.id,
+      xPct: ((Number(match[1]) - 1) / size) * 100,
+      yPct: ((Number(match[2]) - 1) / size) * 100,
+      sizePct: 100 / size,
+    });
+  }
+  return blocks;
+}
+
 /** One HUD card's own field set, read off `agent` (`{ id, role, goal, mood,
  *  plan, mass, belief }`, this turn's slice of the tick payload) and a
  *  resolved `mudiiiConfig` (DEFAULT_GAME_CONFIG.mudiii's own shape). `massPct`
@@ -531,6 +555,12 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
             <span class="mono map-panel-turn" id="mapPanelTurn">turn 0</span>
           </div>
           <div class="map-panel-board" id="mapPanelBoard"></div>
+          <div class="map-legend">
+            <span class="map-key"><i class="map-swatch map-swatch-predator"></i>predator</span>
+            <span class="map-key"><i class="map-swatch map-swatch-prey"></i>prey</span>
+            <span class="map-key"><i class="map-swatch map-swatch-food"></i>food</span>
+            <span class="map-key"><i class="map-swatch map-swatch-prop"></i>building</span>
+          </div>
         </section>
       </div>
       <div class="deck-camera">
@@ -699,11 +729,30 @@ const MUDIII_STYLE = `
   .map-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: .4rem; }
   .map-panel-title { font-family: ${MONO_STACK}; font-size: .54rem; text-transform: uppercase; letter-spacing: .1em; opacity: .85; }
   .map-panel-turn { font-size: .58rem; opacity: .7; }
-  .map-panel-board { position: relative; flex: 1; min-height: 110px; aspect-ratio: 1; background: rgba(124,154,91,.25); border: 1px solid rgba(233,217,182,.35); border-radius: 3px; }
+  .map-panel-board {
+    position: relative; flex: 1; min-height: 110px; aspect-ratio: 1;
+    --map-cell-pct: 8.3333%;
+    background-color: rgba(124,154,91,.25);
+    background-image:
+      repeating-linear-gradient(90deg, rgba(233,217,182,.22) 0 1px, transparent 1px var(--map-cell-pct)),
+      repeating-linear-gradient(180deg, rgba(233,217,182,.22) 0 1px, transparent 1px var(--map-cell-pct));
+    border: 1px solid rgba(233,217,182,.35); border-radius: 3px;
+  }
+  .map-block { position: absolute; box-sizing: border-box; background: rgba(89,80,63,.9); border: 1px solid rgba(0,0,0,.35); border-radius: 1px; }
   .map-dot { position: absolute; width: .55rem; height: .55rem; margin: -.28rem 0 0 -.28rem; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
   .map-dot-predator { background: var(--square-predator); }
   .map-dot-prey { background: var(--square-prey); }
   .map-dot-crumb, .map-dot-morsel, .map-dot-item { background: var(--square-accent); width: .34rem; height: .34rem; margin: -.17rem 0 0 -.17rem; }
+  /* Plain inline-block swatches, never .map-dot: that class is absolutely
+     positioned with a centring margin, so a legend reusing it would position
+     against the board and disappear. */
+  .map-legend { display: flex; flex-wrap: wrap; gap: .12rem .5rem; font-family: ${MONO_STACK}; font-size: .5rem; text-transform: uppercase; letter-spacing: .08em; opacity: .85; }
+  .map-key { display: inline-flex; align-items: center; gap: .24rem; }
+  .map-swatch { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
+  .map-swatch-predator { background: var(--square-predator); }
+  .map-swatch-prey { background: var(--square-prey); }
+  .map-swatch-food { background: var(--square-accent); }
+  .map-swatch-prop { background: rgba(89,80,63,.9); border-radius: 1px; }
 
   .scene-stage { position: relative; margin-bottom: 1rem; border: 1px solid var(--square-stone-dark); border-radius: 4px; overflow: hidden; background: #10161B; min-height: 360px; }
   .scene-stage canvas { display: block; width: 100%; height: 360px; }
@@ -802,10 +851,11 @@ const MUDIII_STYLE = `
     .deck-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem 1rem; }
     .deck-body { align-items: stretch; }
     .map-panel { flex-basis: 33%; max-width: 33%; }
-    /* The square aspect-ratio that suits a tall portrait column would blow
-       the map back up to full column width in a short landscape viewport —
-       here it follows the two-row slider stack's own height instead. */
-    .map-panel-board { aspect-ratio: auto; min-height: 90px; }
+    /* The board stays square here too. A stretched board moves every dot away
+       from where its cell really is, and the panel's whole job is to be read
+       against the 3D view — so the height problem gets a height fix (cap the
+       square and centre it) rather than a distortion. */
+    .map-panel-board { flex: 0 0 auto; width: min(100%, 108px); min-height: 0; margin: 0 auto; }
   }
 `;
 
@@ -841,6 +891,7 @@ function pageScript() {
   const cameraRigFor = ${cameraRigFor.toString()};
   const nextCameraSelection = ${nextCameraSelection.toString()};
   const mapDotsFor = ${mapDotsFor.toString()};
+  const mapBlocksFor = ${mapBlocksFor.toString()};
   const hudCardFieldsFor = ${hudCardFieldsFor.toString()};
   const clipForAction = ${clipForAction.toString()};
   const agentCardMarkup = ${agentCardMarkup.toString()};
@@ -1142,8 +1193,19 @@ function pageScript() {
 
   // ---- the top-down map panel ---------------------------------------------
   function renderMapPanel() {
-    const dots = mapDotsFor(agentsList(), itemsList(), gridSizeOf());
-    el("mapPanelBoard").innerHTML = dots.map(function (d) {
+    const board = el("mapPanelBoard");
+    const size = gridSizeOf();
+    // The cell divisions are two gradients stepped by this, so the drawn grid
+    // and the dots' own percentages read off the same board size.
+    board.style.setProperty("--map-cell-pct", (100 / size) + "%");
+    const blocks = mapBlocksFor(props, size);
+    const dots = mapDotsFor(agentsList(), itemsList(), size);
+    // Blocks first, dots second: a live agent standing beside a building has
+    // to sit on top of it, not under it.
+    board.innerHTML = blocks.map(function (b) {
+      return '<span class="map-block" style="left:' + b.xPct + '%;top:' + b.yPct + '%;width:' + b.sizePct
+        + '%;height:' + b.sizePct + '%" title="' + esc(b.id) + '"></span>';
+    }).join("") + dots.map(function (d) {
       return '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
     }).join("");
     el("mapPanelTurn").textContent = "turn " + globalTurn;

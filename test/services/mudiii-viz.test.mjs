@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
   propPlacementsFrom, occupiedCells, blockedCellReason, cameraRigFor, nextCameraSelection,
-  mapDotsFor, hudCardFieldsFor, clipForAction,
+  mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 import FIXTURE from "../fixtures/mudiii-ticks.json" with { type: "json" };
@@ -110,7 +110,7 @@ test("renderMudiiiHtml: each scenario carries its own board size, and the page r
   assert.deepEqual(data.scenarios.map((s) => s.gridSize), [10, 14]);
   assert.equal(data.gridSize, 10, "the page-level default is the opening square's own size");
   assert.match(html, /gridSizeOf = function \(\) \{ return scenario\(\)\.gridSize \|\| DATA\.gridSize; \}/);
-  assert.match(html, /mapDotsFor\(agentsList\(\), itemsList\(\), gridSizeOf\(\)\)/, "the map panel scales to the picked square");
+  assert.match(html, /const size = gridSizeOf\(\);[\s\S]*mapDotsFor\(agentsList\(\), itemsList\(\), size\)/, "the map panel scales to the picked square");
 });
 
 test("renderMudiiiHtml: a scenario naming no board size falls back to the page default", () => {
@@ -436,6 +436,26 @@ test("renderMudiiiHtml: the rail seeds only verbs mudiii-turn.mjs actually parse
   assert.doesNotMatch(html, /"@" \+ id \+ " look"/, "and no per-agent look either");
 });
 
+test("renderMudiiiHtml: the map panel draws its grid, its buildings and a key for the colours", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const mapBlocksFor = /, "the block geometry is spliced beside the dot geometry");
+  assert.match(html, /blocks\.map[\s\S]*class="map-block"[\s\S]*\+ dots\.map/, "blocks are drawn before dots, so a dot sits on top of a building");
+  assert.match(html, /setProperty\("--map-cell-pct", \(100 \/ size\) \+ "%"\)/, "the drawn grid is stepped by the live board size");
+  assert.match(html, /repeating-linear-gradient\(90deg, rgba\(233,217,182,\.22\) 0 1px, transparent 1px var\(--map-cell-pct\)\)/);
+  assert.match(html, /class="map-legend"/);
+  assert.match(html, /map-swatch map-swatch-predator/);
+  assert.match(html, /map-swatch map-swatch-prey/);
+  assert.match(html, /map-swatch map-swatch-food/);
+  assert.doesNotMatch(html, /class="map-dot[^"]*"><\/i>/, "the legend uses plain swatches, never the absolutely-positioned dot class");
+});
+
+test("renderMudiiiHtml: the map board stays square in landscape, capped rather than stretched", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/);
+  assert.doesNotMatch(html, /aspect-ratio: auto/, "no breakpoint gives up the square the dot percentages assume");
+  assert.match(html, /\.map-panel-board \{ flex: 0 0 auto; width: min\(100%, 108px\); min-height: 0; margin: 0 auto; \}/);
+});
+
 test("renderMudiiiHtml: the chat placeholder is a line the town square can read", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /placeholder="@fox the goblin is east"/);
@@ -657,6 +677,30 @@ test("mapDotsFor: one dot per agent and per item, as percentage coordinates", ()
 test("mapDotsFor: an entry with no parseable cell is dropped, never drawn at a guessed position", () => {
   const dots = mapDotsFor([{ id: "fox-1", cell: null }], [], GRID_SIZE);
   assert.deepEqual(dots, []);
+});
+
+// ---- mapBlocksFor ----------------------------------------------------------
+
+test("mapBlocksFor: one block per prop, filling its cell from the cell's own corner", () => {
+  const blocks = mapBlocksFor([{ id: "well-1", cell: "cell-2-9" }], GRID_SIZE);
+  assert.deepEqual(blocks, [{
+    id: "well-1",
+    xPct: (1 / GRID_SIZE) * 100,
+    yPct: (8 / GRID_SIZE) * 100,
+    sizePct: 100 / GRID_SIZE,
+  }]);
+});
+
+test("mapBlocksFor: a block's corner sits half a cell before the dot that shares its cell", () => {
+  const [block] = mapBlocksFor([{ id: "well-1", cell: "cell-4-4" }], GRID_SIZE);
+  const [dot] = mapDotsFor([{ id: "fox-1", role: "predator", cell: "cell-4-4" }], [], GRID_SIZE);
+  assert.ok(Math.abs((dot.xPct - block.xPct) - block.sizePct / 2) < 1e-9, "the dot is centred on the cell the block fills");
+  assert.ok(Math.abs((dot.yPct - block.yPct) - block.sizePct / 2) < 1e-9);
+});
+
+test("mapBlocksFor: a placement with no parseable cell is dropped, never drawn at a guessed position", () => {
+  assert.deepEqual(mapBlocksFor([{ id: "well-1", cell: null }, { id: "cart-1" }], GRID_SIZE), []);
+  assert.deepEqual(mapBlocksFor([{ id: "well-1", cell: "cell-1-1" }], 0), []);
 });
 
 // ---- hudCardFieldsFor ------------------------------------------------------
