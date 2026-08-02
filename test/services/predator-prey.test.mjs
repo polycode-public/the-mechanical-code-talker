@@ -417,6 +417,50 @@ test("a fleeing predator's own tie-break is unchanged: the avoid rung never sees
   }
 });
 
+test("foodVisionGated true (the default) hides a distant crumb from both the decision and the belief panel", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-1-1"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-10-10"), weigh("crumb-1", 1),
+  ], "food-gated");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, foodVisionGated: true } });
+    assert.equal(tick.rungs["goblin-1"], "wander", "the crumb sits well outside a prey's vision radius");
+    assert.equal(tick.agents["goblin-1"].belief["crumb-1"], null, "the panel agrees: nothing believed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("foodVisionGated false makes a distant crumb known to both the decision and the belief panel, in agreement", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-1-1"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-10-10"), weigh("crumb-1", 1),
+  ], "food-omniscient");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, foodVisionGated: false } });
+    assert.equal(tick.rungs["goblin-1"], "forage", "with the flag off, food is known however far away");
+    assert.match(tick.agents["goblin-1"].goal, /foraging — heading for crumb-1 at cell-10-10/);
+    assert.equal(tick.agents["goblin-1"].belief["crumb-1"], "cell-10-10", "the panel names the same cell the decision foraged toward");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("foodVisionGated false widens only the food entries in the belief panel, not a rival agent's", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-1-1"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-12-12"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-12-1"), weigh("crumb-1", 1),
+  ], "food-omniscient-selective");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, foodVisionGated: false } });
+    assert.equal(tick.agents["fox-1"].belief["crumb-1"], "cell-12-1", "food is omniscient with the flag off");
+    assert.equal(tick.agents["fox-1"].belief["goblin-1"], null, "a rival agent is still vision-gated — the flag is about food only");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("the vision asymmetry opens a band where a predator has acquired something that cannot see it back", async () => {
   const dir = await boardWith([
     classify("fox-1", "fox"), place("fox-1", "cell-1-5"), weigh("fox-1", 20),

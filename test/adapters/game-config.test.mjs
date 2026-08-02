@@ -145,6 +145,7 @@ test("resolveGameConfig: the mudiii table arrives fully populated with no toml a
     placedFoodMass: 2,
     maxPreyPopulation: 6,
     maxFoodItems: 8,
+    foodVisionGated: true,
   });
   assert.ok(
     resolved.mudiii.predatorVisionRadius > resolved.mudiii.preyVisionRadius,
@@ -168,6 +169,7 @@ test("resolveGameConfig: every [games.mudiii] snake_case key maps onto its camel
         placed_food_mass: 5,
         max_prey_population: 9,
         max_food_items: 11,
+        food_vision_gated: false,
       },
     },
   };
@@ -184,6 +186,7 @@ test("resolveGameConfig: every [games.mudiii] snake_case key maps onto its camel
     placedFoodMass: 5,
     maxPreyPopulation: 9,
     maxFoodItems: 11,
+    foodVisionGated: false,
   });
 });
 

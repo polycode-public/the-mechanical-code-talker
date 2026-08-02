@@ -703,6 +703,12 @@ export async function runTownSquareTick(memoryDir, {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
     const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
     const beliefOpts = { visionRadius, toldFacts };
+    // Every food lookup goes through this instead of beliefOpts. Gated (the
+    // default) it is beliefOpts itself, unchanged; ungated it is the same
+    // opts widened to see the whole board — omniscient food is a
+    // visionRadius: Infinity call, not new belief machinery. The rival-threat
+    // lookup below stays on beliefOpts either way: this switch is about food.
+    const foodBeliefOpts = config.foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
     const rivals = role === "predator" ? predators.filter((id) => id !== agentId) : predators;
     const threat = nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
 
@@ -718,7 +724,7 @@ export async function runTownSquareTick(memoryDir, {
       // tie toward the nearest believed crumb. Prey-only: the predator's own
       // avoid rung passes nothing, so its ties still resolve the old way.
       const towardFood = role === "prey"
-        ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, beliefOpts)
+        ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts)
         : null;
       nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
       plan = stepPlan(fromCell, nextCell);
@@ -727,7 +733,7 @@ export async function runTownSquareTick(memoryDir, {
     } else {
       const quarry = role === "predator"
         ? nearestBelievedTarget(agentId, fromCell, prey, state, beliefOpts)
-        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, beliefOpts);
+        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
       if (quarry) {
         rung = role === "predator" ? "chase" : "forage";
         const path = findActionPath(fromCell, (s) => s.x === quarry.cell.x && s.y === quarry.cell.y, applyActions, { stateKey: pathStateKey });
@@ -754,6 +760,16 @@ export async function runTownSquareTick(memoryDir, {
     }
 
     const belief = beliefSnapshotFor(agentId, fromCell, beliefCandidates, state, beliefOpts);
+    // beliefSnapshotFor's one call covers every candidate, food included, so
+    // an ungated food call needs the food entries re-taken at the widened
+    // radius too — otherwise the panel would show a crumb null while the
+    // goal line right beside it names that same crumb as the target. Values
+    // only: every key already exists from the call above, so this can never
+    // reorder the panel.
+    if (!config.foodVisionGated) {
+      const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
+      Object.assign(belief, beliefSnapshotFor(agentId, fromCell, foodCandidates, state, foodBeliefOpts));
+    }
     const facing = plan[0] ?? state.facing.get(agentId)?.value ?? DEFAULT_FACING;
     postMovePlacements.set(agentId, nextCell);
     rungs[agentId] = rung;

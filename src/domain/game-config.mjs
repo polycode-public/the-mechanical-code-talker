@@ -82,6 +82,12 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     placedFoodMass: 2,
     maxPreyPopulation: 6,
     maxFoodItems: 8,
+    // Whether food only enters an agent's belief once it is within vision
+    // radius, the same as every other candidate. True by default — a crumb
+    // known to everyone the instant it spawns changes the foraging feel, and
+    // this is the one switch that turns that off (visionRadius: Infinity for
+    // the food-only belief call) without any new belief machinery.
+    foodVisionGated: true,
   }),
   guessNumber: Object.freeze({
     defaultLo: 1,
@@ -152,6 +158,7 @@ const MUDIII_KEY_MAP = Object.freeze({
   placed_food_mass: "placedFoodMass",
   max_prey_population: "maxPreyPopulation",
   max_food_items: "maxFoodItems",
+  food_vision_gated: "foodVisionGated",
 });
 
 const ADVENTURE_KEY_MAP = Object.freeze({
