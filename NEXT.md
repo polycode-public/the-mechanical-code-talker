@@ -37,11 +37,6 @@ Batch 2, running alongside the one batch-1 track still open. Each track owns fil
 touches. Every remaining mudiii item that edits `mudiii-viz.mjs` waits for T1, because that file is
 the whole collision point and the goblin item has to land first anyway.
 
-- **T8 teach mode UI, adventure and mud only** — those two viz files and their browser entries.
-  mudiii's third stays open, since it needs engine content that does not exist. Sonnet.
-  Status: started.
-- **T9 predator-prey trio** — the evade tie-break, food vision gating, and `recastTownSquare`, one
-  owner because all three edit the same engine file. Sonnet. Status: started.
 - **T11 p2p retraction replication** — new `memory/retraction.mjs`, the `p2p-room.mjs` merge hook,
   `sync-filter.mjs`'s covered set. Top tier. Status: started.
 - **T12 trust-score flake** — `test/adapters/memory-backend-memory.test.mjs`. Sonnet.
@@ -60,6 +55,10 @@ Landed:
 - **T10 pages-home wait hardening** — merged, then corrected: the track set a 10s timeout, which is
   shorter than Playwright's own 30s default and so made the flake likelier. Both waits now share a
   named 60s constant.
+- **T8 teach mode UI for adventure and mud** — merged. mudiii's third stays open below.
+- **T9 predator-prey trio** — merged. Blast radius 311/311 with T8. `recastTownSquare` also fixed
+  `startTownSquareGame`'s guard to compare the placement's epoch rather than its existence, and
+  stamped the roster's bootstrap facts so an epoch-aware guard has something to read.
 
 ## Open items
 
@@ -644,23 +643,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** run `predator-prey.mjs`'s own test file unchanged and green as the proof the engine
   needed no edit, then screenshot the new cast.
 
-- **Food is vision-gated, with no way to try it otherwise.** A crumb known to everyone the moment it
-  appears changes the foraging feel, and there is no switch to see it.
-  **Tier:** Sonnet.
-  **Do:** `believedCellOf`/`nearestBelievedTarget` in `src/domain/agent-belief.mjs` already take
-  `visionRadius` as a plain option, so omniscient food is a `visionRadius: Infinity` call, not new
-  belief machinery. Add `foodVisionGated: true` to `DEFAULT_GAME_CONFIG.mudiii` in
-  `src/domain/game-config.mjs` with a `food_vision_gated` entry in `MUDIII_KEY_MAP`, mirroring
-  `food_spawn_interval_turns`. In `decide()` (around `predator-prey.mjs:706`) build a second opts
-  object for the food call only, leaving the rival-threat call on the shared `beliefOpts`.
-  **Feasibility:** `beliefSnapshotFor` runs one call over every candidate including food, so it
-  needs the same widened radius for food entries. That is a second small edit in the same function,
-  not a separate item.
-  **Risk:** skipping the belief-panel half leaves the HUD and the decision disagreeing, with the goal
-  line reading "foraging toward crumb-3" while the panel shows `crumb-3: null`. No test catches it.
-  **Mitigation:** a test asserting `beliefSnapshotFor`'s food entries and `decide()`'s food target
-  agree under the flag over one fixed tick.
-
 - **Prey decide by strict priority: evade beats forage beats wander.** A single score weighing
   predator distance against food distance would let a goblin take a crumb that costs it nothing,
   instead of abandoning food the moment anything is in view.
@@ -682,20 +664,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** measure a behavioural metric alongside survival, such as how often a prey forages
   while a predator is within N cells. Keep the priority chain as the shipped default and land the
   blend behind the flag, with the comparison script committed so a later session can re-run it.
-
-- **A fleeing goblin makes no progress toward food.** Several cells are usually equally safe and it
-  picks between them by seeded order.
-  **Tier:** Sonnet. Small and self-contained, as the item says.
-  **Do:** `bestOneStepBy` (`predator-prey.mjs`, around `:271`) picks the first cell achieving the
-  best score under strict `>`/`<`, so among ties the winner is whichever `oneStepOptions` enumerates
-  first, an artifact of `DIRECTION_DELTA`'s key order. Give `greedyAway` an optional
-  `{ towardCell = null }` that breaks ties toward the given cell and keeps today's first-wins order
-  when null. Pass the nearest believed food cell from `decide()`'s prey evade branch, using the
-  existing vision-gated call.
-  **Risk:** `greedyAway` is shared. The predator's `avoid` rung calls it too, so the tie-break has to
-  be strictly opt-in or the predator's behaviour changes silently.
-  **Mitigation:** a test running the predator's avoid branch before and after with an identical seed,
-  asserting the chosen cell is unchanged, alongside a new test for the prey tie-break.
 
 - **There is no compass ring.** mud.html's `DIR_GLYPH` ring is the working version to copy.
   **Tier:** Sonnet.
@@ -744,33 +712,32 @@ until it does. Then the grid-size item, because the deception rail and the map p
 
 ### Teach mode
 
-- **The UI half is unbuilt.** The engine half has landed: a declarative sentence is read as a fact
-  against the live world, general semantics, world-scoped provenance, minting or moving depending on
-  whether the world already answers to the subject. What is missing is the checkbox on
-  adventure.html, mud.html and mudiii.html, its hint text (`Candle is in the study.`), and the route
-  from the DOM to the turn call. `mudiii-viz.mjs` has no `teachToggle` at all. Relates to the mudiii
-  item "Who put that there?": both write player provenance nobody reads back.
-  **Tier:** Sonnet for adventure and mud; top for mudiii's share, which needs engine content the
-  other two already have.
-  **Do:** for adventure and mud, `adventure.mjs`'s `liveWorldAnswer` (around `:2445`) already calls
-  `worldTeachTurn`, gated on `gameConfig?.adventure?.teach`, and already picks the manor or burrow
-  parser via `originRoomOf(teachRows)`, so one function serves both pages.
-  `DEFAULT_GAME_CONFIG.adventure.teach` (`game-config.mjs:94`) is the flag, and the corpus rows and
-  CLI flag exist. Neither `adventure-browser-entry.mjs` nor `mud-browser-entry.mjs` references
-  `gameConfig` at all, so in the browser the flag is always undefined and teach is always off. Add
-  the checkbox and hint to `adventure-viz.mjs`/`mud-viz.mjs`, hold its state in a page-script
-  closure, and extend `buildExtraOptions` in each browser entry (the documented extension point;
-  `turn-session.mjs`'s header names `gameConfig` as an example) to pass the flag fresh each turn.
-  For mudiii there is nothing to wire yet. `mudiiiTurn` is a closed-regex lane, never calls
-  `liveWorldAnswer`, and there is no `mudiii-editor.mjs`, so no `parseLine`/`planTriple` pair exists
-  for town-square vocabulary. That third needs a sentence table, a `planTaughtTownSquareTriple`, and
-  a teach-gate branch inside `mudiiiTurn`, which already accepts `gameConfig`.
-  **Risk:** adventure and mud share the single `gameConfig.adventure.teach` key because mud reuses
-  adventure's engine. Each page has its own `memoryDir`/session, so the real risk is the closure
-  variable being page-scoped correctly.
-  **Mitigation:** a browser test per page: checkbox off, "Candle is in the study" takes the ordinary
-  miss/verb-parse path; checkbox on, the same sentence writes a fact and the confirmation matches
-  `confirmation()`'s shape in `world-teach.mjs`.
+- **mudiii.html has no teach mode, and there is no engine content to wire one to.** adventure.html
+  and mud.html now carry a `#teachToggle`, its `Candle is in the study.` hint, and a
+  `getTeachEnabled` option their browser entries read fresh on every turn into
+  `gameConfig.adventure.teach`. mudiii has none of that, and cannot simply copy it: `mudiiiTurn` is a
+  closed-regex lane that never calls `liveWorldAnswer`, and there is no `mudiii-editor.mjs`, so no
+  `parseLine`/`planTriple` pair exists for town-square vocabulary. Relates to the mudiii item "Who
+  put that there?": both write player provenance nobody reads back.
+  **Tier:** top. This is engine content, not page wiring.
+  **Do:** write a sentence table for town-square vocabulary, a `planTaughtTownSquareTriple`, and a
+  teach-gate branch inside `mudiiiTurn`, which already accepts `gameConfig`. Only then add the
+  checkbox, copying what adventure and mud now do.
+  **Risk:** a teach lane that mints cells or agents the fold does not recognize writes facts the
+  board cannot show, which reads as the teach silently failing.
+  **Mitigation:** the same two legs the other pages got: toggle off, the sentence takes the ordinary
+  path; toggle on, it writes a fact and the confirmation matches `confirmation()`'s shape in
+  `world-teach.mjs`. Add a third leg asserting the taught fact actually moves the board.
+
+- **The teach checkbox is asserted at the session layer, never in a browser.** T8's tests call
+  `createAdventureSession`/`createMudSession` directly, which is the layer the existing tests for
+  those files use and which does prove the flag reaches `liveWorldAnswer` through the real turn
+  pipeline. Nothing clicks the actual checkbox.
+  **Tier:** Haiku.
+  **Do:** add a leg to each page's e2e that ticks `#teachToggle`, submits `Candle is in the study.`,
+  and asserts the reply matches `confirmation()`'s shape rather than the miss text.
+  **Risk:** low. The failure mode it covers is a checkbox that renders but is never read, which is
+  exactly the state both pages were in before.
 
 ### p2p
 
@@ -883,30 +850,19 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** grep both directions for a static cycle across the three files before converting.
   After, `node --check` each and load `mudiii.html` to confirm boot completes.
 
-- **The engine ships no recast, so Reset re-opens a whole session.** That works for an in-memory
-  store owned by one visitor, but `PLAN_MUD_MUDIII_SHARED.md` needs a recast for epoch bumps, and an
-  EDIT-mode change that must re-boot the scene would be cheaper with one.
-  **Tier:** Sonnet to write, but the fold interaction below is a real correctness risk. Do not treat
-  it as mechanical.
-  **Do:** add `recastTownSquare(memoryDir, { layout, epoch, … })` to `predator-prey.mjs`, appending
-  `worldEpochFact(epoch)` (`adventure.mjs:198` already returns the bare triple) and re-minting the
-  roster through `startTownSquareGame`.
-  **Feasibility:** `startTownSquareGame`'s idempotency guard likely no-ops on an already-played
-  store. `foldTownSquareState`'s outrank rule reads an unstamped row as turn 0 of the current epoch,
-  deliberately, so the world pack's static prop facts carry forward across a recast. But
-  `startTownSquareGame`'s own roster-bootstrap facts are unstamped by the same convention. So on a
-  store that already has a live fox-1, the fold's `state.placements.has(firstPredator)` guard reads
-  fox-1's original bare bootstrap placement as valid at the new epoch, the function returns without
-  minting, and the roster appears to carry over from its first-ever spawn cell.
-  `mud-browser-entry.mjs`'s `createMudSession` (`:85`) sidesteps this by always building a fresh
-  `createInMemoryStore()` (`:75`), so its working pattern does not prove the in-place case.
-  **Risk:** the same shape as the `foldWorldState` purity bug and the goblin-render fault. It looks
-  right, passes an "it appended a fact" check, and does the wrong thing only after a real game has
-  been played. A test against a never-played store, the common quick check, would not catch it.
-  **Mitigation:** write the test against a store that has already run several real ticks and assert
-  the roster's cells reset to fresh seeded positions. If the guard problem is real, either
-  snapshot-stamp the bootstrap roster facts or bypass the guard explicitly inside
-  `recastTownSquare`. Pick deliberately at implementation time.
+- **Nothing calls `recastTownSquare` yet.** The engine half landed: `recastTownSquare(memoryDir,
+  { layout, epoch, … })` appends `worldEpochFact(epoch)` and re-mints the roster, and
+  `startTownSquareGame`'s guard now compares the existing placement's epoch rather than its bare
+  existence, with the roster's bootstrap facts snapshot-stamped so that guard has something to read.
+  A test recasts a store that has already run five real ticks and asserts the roster matches a store
+  opened straight onto that epoch. What is missing is the callers the recast was built for: Reset on
+  mudiii.html still re-opens a whole session, and EDIT mode still cannot re-boot the scene cheaply.
+  **Tier:** Sonnet. The engine side is done; this is page wiring.
+  **Do:** call it from `boot()`'s Reset path in `mudiii-viz.mjs` instead of re-opening the session,
+  and from `applyEditorText()` once the EDIT-mode item lands. Both sit in a file another item already
+  rewrites, so land it with one of those rather than alone.
+  **Risk:** an epoch bump the page does not track leaves `globalTurn` and the engine's own count
+  disagreeing, which is the turn-counter item's territory.
 
 ### Questions blocking work
 
