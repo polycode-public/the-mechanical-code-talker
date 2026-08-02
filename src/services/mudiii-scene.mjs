@@ -128,6 +128,46 @@ export function chebyshevDistanceBetweenCells(a, b) {
   return Math.max(Math.abs(Number(ma[1]) - Number(mb[1])), Math.abs(Number(ma[2]) - Number(mb[2])));
 }
 
+/** Where the camera should aim once the visitor's own drag is applied on top
+ *  of the rig's aim. `position` is where the rig put the camera, `lookAt` is
+ *  where the rig wants it pointed, and `offset` is `{ yaw, pitch }` in radians
+ *  — the drag's accumulated turn, held apart from the rig so a tick that
+ *  recomputes the rig leaves the visitor's view alone.
+ *
+ *  The offset turns the rig's own aim rather than replacing it, so the view
+ *  swings with the agent when it turns: in POV that reads as the animal
+ *  turning its head, which is the whole point of riding one.
+ *
+ *  Pitch is clamped to 1.2 radians (about 69 degrees) either side of level, so
+ *  a long upward drag can never carry the view past vertical and roll the
+ *  board upside down. The returned `pitchOffset` is what survived that clamp,
+ *  which the caller writes back over its own accumulator — otherwise a drag
+ *  held past the clamp banks up an offset the view never shows, and the next
+ *  drag back the other way does nothing until it has spent it.
+ *
+ *  Returns `{ x, y, z, pitchOffset }`. Pure, self-contained. */
+export function lookTargetWithOffset(position, lookAt, offset) {
+  const MAX_PITCH_RADIANS = 1.2;
+  const yaw = Number(offset && offset.yaw) || 0;
+  const pitch = Number(offset && offset.pitch) || 0;
+  if (!yaw && !pitch) return { x: lookAt.x, y: lookAt.y, z: lookAt.z, pitchOffset: 0 };
+  const dx = lookAt.x - position.x;
+  const dy = lookAt.y - position.y;
+  const dz = lookAt.z - position.z;
+  const radius = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (!radius) return { x: lookAt.x, y: lookAt.y, z: lookAt.z, pitchOffset: 0 };
+  const basePitch = Math.asin(Math.max(-1, Math.min(1, dy / radius)));
+  const aimedPitch = Math.max(-MAX_PITCH_RADIANS, Math.min(MAX_PITCH_RADIANS, basePitch + pitch));
+  const aimedYaw = Math.atan2(dx, dz) + yaw;
+  const flat = Math.cos(aimedPitch) * radius;
+  return {
+    x: position.x + flat * Math.sin(aimedYaw),
+    y: position.y + radius * Math.sin(aimedPitch),
+    z: position.z + flat * Math.cos(aimedYaw),
+    pitchOffset: aimedPitch - basePitch,
+  };
+}
+
 /** A facing word to a Y rotation in radians. Assumes a model's own local
  *  forward is +Z (true for fox and goblin, the two rigs in the current
  *  manifest, checked by walking each GLB's own bind-pose bone chain) so a
@@ -317,6 +357,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var startTween = ${startTween.toString()};
   var reseedTween = ${reseedTween.toString()};
   var chebyshevDistanceBetweenCells = ${chebyshevDistanceBetweenCells.toString()};
+  var lookTargetWithOffset = ${lookTargetWithOffset.toString()};
   var yawForFacing = ${yawForFacing.toString()};
   var threatEngagedFor = ${threatEngagedFor.toString()};
   var movementRungFor = ${movementRungFor.toString()};
@@ -373,6 +414,25 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var tickRungs = {};
   var cameraState = { mode: "overhead", selectedId: null };
   var cameraTween = null, lookAtTween = null;
+  // Where the rig last wanted the camera pointed. Held past the end of its own
+  // tween because the visitor's look is re-applied every frame, not only while
+  // the tween runs.
+  var lookTarget = null;
+  // Whether setCamera has rigged the camera at least once. Without it the very
+  // first call — boot's own overhead call, which changes nothing — would read
+  // as "no change" and leave the camera at its construction position.
+  var cameraRigged = false;
+  // The visitor's own look, turned by dragging the canvas and applied on top
+  // of whatever rig the camera mode computes. It survives every tick: a tick
+  // re-issues setCamera with the same mode and the same agent, so clearing it
+  // there would snap the view back a fifth of a second after every drag.
+  var lookOffset = { yaw: 0, pitch: 0 };
+  var LOOK_RADIANS_PER_PIXEL = 0.005;
+  // How far a pointer may travel and still count as a click on a cell rather
+  // than a drag. Without it every look-around also walked the followed agent
+  // to whatever cell the drag started over.
+  var CLICK_SLOP_PX = 6;
+  var drag = null;
   var lastFrameTs = null;
   var booted = false;
 
@@ -428,6 +488,12 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     orbitControls.target.set(0, 0, 0);
 
     canvas.addEventListener("pointerdown", onPointerDown);
+    // On the window, not the canvas: a look-around that runs off the edge of
+    // the 3D stage must keep turning, and must still end when the button comes
+    // up over the deck.
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
     window.addEventListener("resize", onResize);
     watchFoodPill();
     onResize();
@@ -466,11 +532,46 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     };
   }
 
+  // A press starts a drag rather than resolving a cell. Which of the two it
+  // turns out to be is only known when the button comes up, and until then
+  // pointermove turns the camera.
+  function onPointerDown(evt) {
+    if (!scene || !camera3 || !groundMesh) return;
+    drag = { pointerId: evt.pointerId, startX: evt.clientX, startY: evt.clientY, lastX: evt.clientX, lastY: evt.clientY, travelled: 0 };
+  }
+
+  function onPointerMove(evt) {
+    if (!drag || (drag.pointerId != null && evt.pointerId !== drag.pointerId)) return;
+    var dx = evt.clientX - drag.lastX;
+    var dy = evt.clientY - drag.lastY;
+    drag.lastX = evt.clientX;
+    drag.lastY = evt.clientY;
+    drag.travelled += Math.abs(dx) + Math.abs(dy);
+    // Overhead is OrbitControls' own drag, and two things turning one camera
+    // fight each other.
+    if (cameraState.mode === "overhead") return;
+    lookOffset.yaw -= dx * LOOK_RADIANS_PER_PIXEL;
+    lookOffset.pitch -= dy * LOOK_RADIANS_PER_PIXEL;
+  }
+
+  function onPointerUp(evt) {
+    if (!drag || (drag.pointerId != null && evt.pointerId !== drag.pointerId)) return;
+    var straightLine = Math.abs(evt.clientX - drag.startX) + Math.abs(evt.clientY - drag.startY);
+    var wasDrag = drag.travelled > CLICK_SLOP_PX || straightLine > CLICK_SLOP_PX;
+    drag = null;
+    if (wasDrag) return;
+    resolveCellClick(evt);
+  }
+
+  function onPointerCancel() { drag = null; }
+
   // The raycast target is the ground mesh ALONE — never scene.children — so
   // a click a hair off a prop or an agent still resolves to the cell under
   // the cursor rather than hitting whatever mesh happens to sit in front.
-  function onPointerDown(evt) {
+  function resolveCellClick(evt) {
     if (!scene || !camera3 || !groundMesh) return;
+    var rect = canvas.getBoundingClientRect();
+    if (evt.clientX < rect.left || evt.clientX > rect.right || evt.clientY < rect.top || evt.clientY > rect.bottom) return;
     var ndc = pointFromEvent(evt);
     raycaster.setFromCamera(ndc, camera3);
     var hits = raycaster.intersectObject(groundMesh, false);
@@ -877,15 +978,38 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     return entry ? { cell: entry.cell, facing: entry.facing } : null;
   }
 
+  // Both tweens start from where the camera ACTUALLY is, never from the old
+  // tween's own endpoint: the visitor may have dragged or orbited it somewhere
+  // else since, and a tween seeded off the rig alone teleports past that.
+  function tweenCameraToRig(rig, now) {
+    var from = camera3
+      ? { x: camera3.position.x, y: camera3.position.y, z: camera3.position.z }
+      : rig.position;
+    cameraTween = startTween(from, rig.position, now, tweenDurationMs);
+    lookAtTween = startTween(lookTarget || rig.lookAt, rig.lookAt, now, tweenDurationMs);
+  }
+
+  // Re-rigs the camera ONLY when the mode or the followed agent actually
+  // changed. Every tick calls this with the state it already had, and re-rigging
+  // on those calls is what snapped a dragged view back a fifth of a second
+  // after every drag, and what undid an overhead orbit a frame after it was
+  // made. Tracking the agent as it moves is refreshCameraTween's job below,
+  // which leaves the visitor's own look alone.
   function setCamera(state) {
-    cameraState = { mode: (state && state.mode) || "overhead", selectedId: (state && state.selectedId) || null };
+    var next = { mode: (state && state.mode) || "overhead", selectedId: (state && state.selectedId) || null };
+    var changed = !cameraRigged || next.mode !== cameraState.mode || next.selectedId !== cameraState.selectedId;
+    cameraState = next;
+    if (orbitControls) orbitControls.enabled = cameraState.mode === "overhead";
+    if (!changed) return;
+    // A new mode or a new agent is a request for a fresh view, so the drag's
+    // own turn goes with the old one.
+    lookOffset.yaw = 0;
+    lookOffset.pitch = 0;
     var agent = cameraState.selectedId ? agentSnapshotFor(cameraState.selectedId) : null;
     var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE) || cameraRigFor("overhead", null, GRID_SIZE);
     if (!rig) return;
-    var now = performance.now();
-    cameraTween = reseedTween(cameraTween, rig.position, now, tweenDurationMs);
-    lookAtTween = reseedTween(lookAtTween, rig.lookAt, now, tweenDurationMs);
-    if (orbitControls) orbitControls.enabled = cameraState.mode === "overhead";
+    cameraRigged = true;
+    tweenCameraToRig(rig, performance.now());
   }
 
   // Re-tween the camera toward its own rig after a tick lands, in case the
@@ -897,8 +1021,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var agent = agentSnapshotFor(cameraState.selectedId);
     var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE);
     if (!rig) return;
-    cameraTween = reseedTween(cameraTween, rig.position, now, tweenDurationMs);
-    lookAtTween = reseedTween(lookAtTween, rig.lookAt, now, tweenDurationMs);
+    tweenCameraToRig(rig, now);
   }
 
   // ---- boot / tick / render loop --------------------------------------------
@@ -928,6 +1051,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     removalLog = [];
     manifestByKind = buildManifestByKind(input && input.assetManifest);
     await placeProps((input && input.propPlacements) || []);
+    cameraRigged = false;
+    lookTarget = null;
+    drag = null;
     setCamera({ mode: "overhead", selectedId: null });
     booted = true;
   }
@@ -973,8 +1099,29 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       if (flashLeft <= 0) clearFlash();
       else flashMesh.material.opacity = 0.75 * (flashLeft / FLASH_MS);
     }
-    if (cameraTween) { var cp = tweenStep(cameraTween, ts); camera3.position.set(cp.x, cp.y, cp.z); }
-    if (lookAtTween) { var lp = tweenStep(lookAtTween, ts); camera3.lookAt(lp.x, lp.y, lp.z); }
+    // A finished tween is dropped rather than re-applied every frame. Left in
+    // place it pinned the camera to its rig point on every single frame, which
+    // is what stopped an overhead orbit from surviving the frame it was made in.
+    if (cameraTween) {
+      var cp = tweenStep(cameraTween, ts);
+      camera3.position.set(cp.x, cp.y, cp.z);
+      if (cp.done) cameraTween = null;
+    }
+    if (lookAtTween) {
+      var lp = tweenStep(lookAtTween, ts);
+      lookTarget = { x: lp.x, y: lp.y, z: lp.z };
+      if (lp.done) lookAtTween = null;
+    }
+    // Follow and pov aim every frame, tween or no tween, because the visitor's
+    // own drag has to keep showing between ticks. Overhead hands the camera to
+    // OrbitControls once its own tween is spent.
+    if (lookTarget && cameraState.mode !== "overhead") {
+      var aimed = lookTargetWithOffset(camera3.position, lookTarget, lookOffset);
+      lookOffset.pitch = aimed.pitchOffset;
+      camera3.lookAt(aimed.x, aimed.y, aimed.z);
+    } else if (lookTarget && lookAtTween) {
+      camera3.lookAt(lookTarget.x, lookTarget.y, lookTarget.z);
+    }
     if (orbitControls && orbitControls.enabled) orbitControls.update();
     renderer.render(scene, camera3);
   }

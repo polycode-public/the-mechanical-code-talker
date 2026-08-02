@@ -17,7 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   TWEEN_DURATION_MS, lerp, tweenStep, startTween, reseedTween,
-  chebyshevDistanceBetweenCells, yawForFacing, threatEngagedFor, movementRungFor,
+  chebyshevDistanceBetweenCells, lookTargetWithOffset, yawForFacing, threatEngagedFor, movementRungFor,
   currentActionFor, flourishForEcologyEvent, createConcurrencyQueue, createCachedLoader,
   createThreeVendorLoader,
 } from "../../src/services/mudiii-scene.mjs";
@@ -115,6 +115,72 @@ test("yawForFacing rotates a +Z-forward mesh to face the same world direction as
     const dot = modelForward.x * wanted.x + modelForward.z * wanted.z;
     assert.ok(dot > 0.99, `${facing}: yawForFacing's own rotation points a +Z-forward mesh the same way FACING_VECTOR does (dot ${dot})`);
   }
+});
+
+// ---- the visitor's own look, applied on top of the rig ---------------------
+
+// The direction the camera ends up pointing, as a unit vector, so a test can
+// talk about where the view is aimed rather than about a target point whose
+// distance is an implementation detail.
+function aimOf(position, target) {
+  const dx = target.x - position.x;
+  const dy = target.y - position.y;
+  const dz = target.z - position.z;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return { x: dx / len, y: dy / len, z: dz / len };
+}
+
+test("lookTargetWithOffset leaves the rig's own aim untouched when the visitor has not dragged", () => {
+  const position = { x: 0, y: 1.6, z: 0 };
+  const lookAt = { x: 0, y: 1.4, z: 4 };
+  const aimed = lookTargetWithOffset(position, lookAt, { yaw: 0, pitch: 0 });
+  assert.deepEqual({ x: aimed.x, y: aimed.y, z: aimed.z }, lookAt);
+  assert.equal(aimed.pitchOffset, 0);
+});
+
+test("lookTargetWithOffset turns the view by the yaw the drag asked for, keeping the camera where the rig put it", () => {
+  const position = { x: 0, y: 1.6, z: 0 };
+  const lookAt = { x: 0, y: 1.6, z: 4 };
+  const quarterTurn = lookTargetWithOffset(position, lookAt, { yaw: Math.PI / 2, pitch: 0 });
+  const aim = aimOf(position, quarterTurn);
+  assert.ok(Math.abs(aim.x - 1) < 1e-9, "a quarter turn of yaw swings a +z aim onto +x");
+  assert.ok(Math.abs(aim.z) < 1e-9);
+  const distance = Math.hypot(quarterTurn.x - position.x, quarterTurn.y - position.y, quarterTurn.z - position.z);
+  assert.ok(Math.abs(distance - 4) < 1e-9, "the aim turns, the distance to the point it looks at does not");
+});
+
+test("lookTargetWithOffset turns relative to the rig, so a POV view swings with the agent it rides", () => {
+  // The same drag, against a rig facing +z and then against a rig facing -z:
+  // both end up looking a quarter turn clockwise of whatever the agent faces,
+  // which is the head-turn a rider expects rather than a fixed world bearing.
+  const position = { x: 0, y: 1.6, z: 0 };
+  const facingSouth = lookTargetWithOffset(position, { x: 0, y: 1.6, z: 4 }, { yaw: Math.PI / 2, pitch: 0 });
+  const facingNorth = lookTargetWithOffset(position, { x: 0, y: 1.6, z: -4 }, { yaw: Math.PI / 2, pitch: 0 });
+  assert.ok(Math.abs(aimOf(position, facingSouth).x - 1) < 1e-9);
+  assert.ok(Math.abs(aimOf(position, facingNorth).x + 1) < 1e-9);
+});
+
+test("lookTargetWithOffset clamps pitch short of vertical and reports the offset that survived", () => {
+  const position = { x: 0, y: 3.2, z: 0 };
+  const lookAt = { x: 0, y: 3.2, z: 4 };
+  for (const asked of [10, -10]) {
+    const aimed = lookTargetWithOffset(position, lookAt, { yaw: 0, pitch: asked });
+    const rise = aimOf(position, aimed).y;
+    assert.ok(Math.abs(rise) < Math.sin(1.21), `a ${asked} radian drag still leaves the board the right way up (rise ${rise})`);
+    assert.ok(Math.abs(aimed.pitchOffset) <= 1.2 + 1e-9, "the reported offset is the clamped one, so the caller never banks up a turn the view refuses");
+    assert.equal(Math.sign(aimed.pitchOffset), Math.sign(asked));
+  }
+});
+
+test("lookTargetWithOffset's clamp measures from the rig's own pitch, not from level", () => {
+  // The follow rig already looks 31 degrees down. Dragging up from there must
+  // reach the same 1.2 radians above level a POV rig can reach, not 1.2
+  // radians above the rig's own downward aim.
+  const position = { x: 0, y: 3.2, z: -4 };
+  const lookAt = { x: 0, y: 0.8, z: 0 };
+  const aimed = lookTargetWithOffset(position, lookAt, { yaw: 0, pitch: 3 });
+  const rise = aimOf(position, aimed).y;
+  assert.ok(Math.abs(rise - Math.sin(1.2)) < 1e-9, "a long upward drag lands exactly on the clamp");
 });
 
 test("threatEngagedFor is true only when the opposing role's cell is actually believed", () => {
@@ -286,6 +352,38 @@ test("mudiiiSceneScript returns a self-contained IIFE string that embeds every s
   assert.equal(typeof script, "string");
   // Identical input produces identical output — pure, no timestamp/random baked in.
   assert.equal(script, mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 }));
+});
+
+test("mudiiiSceneScript resolves a cell on the button coming UP, and only when the pointer barely moved", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  const down = script.slice(script.indexOf("function onPointerDown("), script.indexOf("function onPointerMove("));
+  assert.equal(down.indexOf("mudiiiHandleSceneClick"), -1, "a press alone never walks an agent, or every look-around doubles as a move order");
+  const up = script.slice(script.indexOf("function onPointerUp("), script.indexOf("function onPointerCancel("));
+  assert.match(up, /CLICK_SLOP_PX/, "the click is gated on how far the pointer travelled");
+  assert.match(up, /if \(wasDrag\) return;/);
+  assert.match(up, /resolveCellClick\(evt\)/);
+});
+
+test("mudiiiSceneScript re-rigs the camera only when the mode or the followed agent changed", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  const setCamera = script.slice(script.indexOf("function setCamera("), script.indexOf("// Re-tween the camera"));
+  assert.match(setCamera, /next\.mode !== cameraState\.mode \|\| next\.selectedId !== cameraState\.selectedId/);
+  assert.match(setCamera, /if \(!changed\) return;/, "a tick re-issuing the same camera state must not re-aim, or every drag snaps back");
+  const clearAt = setCamera.indexOf("lookOffset.yaw = 0");
+  const guardAt = setCamera.indexOf("if (!changed) return;");
+  assert.ok(guardAt >= 0 && clearAt > guardAt, "the visitor's own look is cleared by a mode change, never by a tick");
+});
+
+test("mudiiiSceneScript drops a spent camera tween instead of re-applying it every frame", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  const loop = script.slice(script.indexOf("function renderLoop("), script.indexOf("window.mudiiiScene = {"));
+  assert.match(loop, /if \(cp\.done\) cameraTween = null;/, "a finished tween that keeps writing the rig point pins the camera against every other control");
+  assert.match(loop, /if \(lp\.done\) lookAtTween = null;/);
+  assert.match(loop, /lookTargetWithOffset\(camera3\.position, lookTarget, lookOffset\)/);
+  assert.match(loop, /lookOffset\.pitch = aimed\.pitchOffset;/, "the clamped pitch is written back, so a drag past the clamp does not bank up");
 });
 
 test("mudiiiSceneScript's own applyTick runs applyEcology before either diff-removal loop", async () => {

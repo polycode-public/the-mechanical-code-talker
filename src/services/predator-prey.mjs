@@ -902,22 +902,41 @@ export async function recastTownSquare(memoryDir, {
   });
 }
 
+/** The opening cast, seeded: predators on open cells, prey on the perimeter
+ *  they wander in from, and NO cell handed out twice.
+ *
+ *  Every other placement path in this engine already refuses a cell something
+ *  stands on — spawn-prey and spawn-food both filter the occupied set and
+ *  simply don't spawn when nothing is left, and placeFood refuses a prop or
+ *  another item. The page's own blocked-cell rule counts a single agent as
+ *  enough to block a cell too, so a mint that stacked two would put the board
+ *  in breach of the rule it opens under.
+ *
+ *  Prey prefer the perimeter, but a perimeter with no room left puts one a
+ *  cell inside rather than inside another animal. An agent goes unminted only
+ *  when the whole board is full, which is the same answer spawn-prey gives. */
 function seededRoster(layout, { predators, prey, roles, epoch }) {
   const roster = {};
   const taken = new Set();
   const open = openCells(layout);
   const edge = perimeterCells(layout);
+  const pickFreeCell = (preferred, id) => {
+    const free = preferred.filter((c) => !taken.has(c));
+    const options = free.length ? free : open.filter((c) => !taken.has(c));
+    if (!options.length) return null;
+    return seededPick(options, seedKey(layout.name, epoch, 0, id, "spawn"));
+  };
   for (let i = 1; i <= predators; i += 1) {
     const id = `${roles.predator.idPrefix}-${i}`;
-    const free = open.filter((c) => !taken.has(c));
-    const cell = seededPick(free.length ? free : open, seedKey(layout.name, epoch, 0, id, "spawn"));
+    const cell = pickFreeCell(open, id);
+    if (!cell) break;
     taken.add(cell);
     roster[id] = { role: "predator", cell, facing: DEFAULT_FACING };
   }
   for (let i = 1; i <= prey; i += 1) {
     const id = `${roles.prey.idPrefix}-${i}`;
-    const free = edge.filter((c) => !taken.has(c));
-    const cell = seededPick(free.length ? free : edge, seedKey(layout.name, epoch, 0, id, "spawn"));
+    const cell = pickFreeCell(edge, id);
+    if (!cell) break;
     taken.add(cell);
     roster[id] = { role: "prey", cell, facing: DEFAULT_FACING };
   }

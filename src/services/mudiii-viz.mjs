@@ -530,6 +530,8 @@ ${PILL_COMPLETE_CSS}
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
+        <button type="button" id="stepBtn">step</button>
+        <span class="deck-hint" id="stepHint" hidden>pause to step</span>
         <button type="button" id="resetBtn">reset</button>
 ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which town square to play">
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
@@ -1130,6 +1132,10 @@ function pageScript() {
         // on top of the open dropdown and loses the pick.
         el("agentSelect").disabled = state.playing;
         el("agentSelectHint").hidden = !state.playing;
+        // Step reads the same ticker state for the same reason: a hand-driven
+        // turn while the board plays itself lands in the middle of one.
+        el("stepBtn").disabled = state.playing || state.animating;
+        el("stepHint").hidden = !state.playing;
       },
       hasNext: hasNext,
       wait: liveWait,
@@ -1507,6 +1513,13 @@ function pageScript() {
     el("playerCountSlider").addEventListener("change", function () { boot(); });
     el("npcCountSlider").addEventListener("input", function () { showGoblinCount(chosenGoblinCount()); });
     el("npcCountSlider").addEventListener("change", function () { boot(); });
+    // One whole turn: every agent decides and moves, the ecology pass runs,
+    // and the turn counter reads exactly one higher. It goes through the same
+    // ticker play() uses, so the two can never run a turn on top of each other.
+    el("stepBtn").addEventListener("click", function () {
+      if (!session || autoOn) return;
+      ensureTicker().stepOnce();
+    });
     el("resetBtn").addEventListener("click", function () { resetBoard(); });
     const scenarioSelect = el("scenarioSelect");
     if (scenarioSelect) {
