@@ -2508,16 +2508,41 @@ function buildAliasSubClassTrees(rows, predicate = SUBCLASS_PREDICATE) {
     broadEdges.push([f.subject, f.object]);
     if (isOperatorTaught(f)) strictEdges.push([f.subject, f.object]);
   }
-  return { strictEdges, broadEdges };
+  // The chase runs once per candidate row over these same edges, so the
+  // adjacency the search walks is built HERE, once, and handed to findIsaChain
+  // ready-made — rebuilt per call it costs the whole edge set for a search that
+  // usually touches a handful of nodes. `reachableHeads` is every node an edge
+  // points at: the only nodes a chain can finish on.
+  const strictSucc = new Map();
+  const broadSucc = new Map();
+  const reachableHeads = new Set();
+  const link = (succ, a, b) => {
+    if (!a || !b || a === b) return;
+    if (!succ.has(a)) succ.set(a, new Set());
+    succ.get(a).add(b);
+  };
+  for (const [a, b] of broadEdges) { link(broadSucc, a, b); if (b) reachableHeads.add(b); }
+  for (const [a, b] of strictEdges) link(strictSucc, a, b);
+  return { strictEdges, broadEdges, strictSucc, broadSucc, reachableHeads };
 }
 
 /** Chase `role` toward `targetSet` over the strict (taught-only) tree first,
  *  falling back to the broad tree only when the strict chase comes up empty
  *  — the strict attempt is tried first specifically so a hop resolvable
- *  either way still cites via the (fuller-provenance) taught path. */
+ *  either way still cites via the (fuller-provenance) taught path.
+ *
+ *  A chain has to END on one of `targetSet`, so a target no subClassOf edge
+ *  points at can never be reached and the two searches are skipped outright.
+ *  That is the whole cost of a question about an unknown relation name: this
+ *  chase runs once per stored fact, and over a seeded store that is tens of
+ *  thousands of searches whose answer was fixed before the first one started. */
 function chaseAliasEitherTree(chaseFn, role, targetSet, trees, opts) {
-  return chaseFn(role, targetSet, [], trees.strictEdges, opts)
-    || chaseFn(role, targetSet, [], trees.broadEdges, opts);
+  const heads = trees.reachableHeads;
+  let anyReachable = false;
+  for (const t of targetSet) if (heads.has(t)) { anyReachable = true; break; }
+  if (!anyReachable) return null;
+  return chaseFn(role, targetSet, [], trees.strictSucc, opts)
+    || chaseFn(role, targetSet, [], trees.broadSucc, opts);
 }
 
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
@@ -8434,18 +8459,24 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)))
       .filter((f) => resolveCapabilityPolarity(new Set([f.subject]), verbVariants, facts).verdict === "yes");
     if (capable.length) {
-      const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("../domain/syllogise.mjs");
+      const {
+        findIsaChain, buildSubClassSuccessors: buildKindSuccessors,
+        SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED,
+      } = await import("../domain/syllogise.mjs");
       const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
       const typeRows = facts.filter((f) => f.predicate === TYPE_PRED);
       const subClassEdges = subClassRows.map((f) => [f.subject, f.object]);
       const typeEdges = typeRows.map((f) => [f.subject, f.object]);
+      // One chase per capable subject over the same edges, so the adjacency is
+      // built here instead of inside every search.
+      const subClassSucc = buildKindSuccessors(subClassEdges);
       const rowForStep = (step) => (step.predicate === SC_PRED ? subClassRows : typeRows)
         .find((g) => g.subject === step.subject && g.object === step.object);
       const chainBySubject = new Map();
       const inKind = capable.filter((f) => {
         if (kindVariants.has(f.subject)) return true;
         if (!chainBySubject.has(f.subject)) {
-          chainBySubject.set(f.subject, findIsaChain(f.subject, kindVariants, typeEdges, subClassEdges, { maxHops: 3 }));
+          chainBySubject.set(f.subject, findIsaChain(f.subject, kindVariants, typeEdges, subClassSucc, { maxHops: 3 }));
         }
         return !!chainBySubject.get(f.subject);
       });
@@ -9554,7 +9585,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const noun = await entityClassNoun(graph, isaSubject);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
     const {
-      findIsaChain, deriveDisjointViolations,
+      findIsaChain, buildSubClassSuccessors: buildChaseSuccessors, deriveDisjointViolations,
       SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE, DISJOINT_PREDICATE,
     } = await import("../domain/syllogise.mjs");
     const isTaught = isOperatorTaught;
@@ -9566,6 +9597,10 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
     const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
     const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
+    // Both chases below run once per candidate subject over these same edges,
+    // so the adjacency is built here rather than inside each search.
+    const chainSubClassSucc = buildChaseSuccessors(chainSubClassEdges);
+    const mixedSubClassSucc = buildChaseSuccessors(mixedSubClassEdges);
     const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
     const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
     // CAX-DW GATE, COMPUTED BEFORE ANY "YES" MAY RETURN: every taught
@@ -9727,7 +9762,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
     for (const subj of subjCandidates) {
-      const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: 2 });
+      const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
       if (chainRefusal) return chainRefusal;
@@ -9748,7 +9783,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
     for (const subj of subjCandidates) {
-      const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassEdges, { maxHops: 2 });
+      const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
       if (chainRefusal) return chainRefusal;
@@ -9878,7 +9913,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         ? deriveSomeValuesFromSubsumption(restrictionEdges, chainSubClassEdges, { budget: 10 })
         : [];
       if (svfSubsumption.length) {
-        const enlargedSubClassEdges = chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object]));
+        const enlargedSubClassSucc = buildChaseSuccessors(
+          chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object])),
+        );
         // The SAME `min(premiseTrusts) x
         // ruleConfidence` discipline syllogise()'s own batch pass now applies
         // to scm-svf1 (src/domain/syllogise.mjs), computed here for this LIVE,
@@ -9926,7 +9963,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
             : undefined;
         };
         for (const subj of subjCandidates) {
-          const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassEdges, { maxHops: 3 });
+          const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassSucc, { maxHops: 3 });
           if (!chain) continue;
           const premises = chain.map(factForStepOrSvf);
           if (premises.every(Boolean)) {
@@ -9968,7 +10005,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // edge lists the chases use, and /syllogise closes over a superset of
     // them, so a chain found here is one it can really materialize.
     const deeperChainExists = [...subjCandidates].some(
-      (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
+      (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
     );
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");

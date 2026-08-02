@@ -1700,6 +1700,21 @@ export async function retractSubClassOf(repoDir, subject, object, {
   };
 }
 
+/** subject -> Set(objects) over a subClassOf edge list, the adjacency
+ *  `findIsaChain` walks. Building it is O(edges); a search from one subject is
+ *  O(that subject's own reachable set). A caller chasing MANY subjects over the
+ *  same edges should build this once and hand it to `findIsaChain` in place of
+ *  the edge list, or every small search pays for the whole graph again. */
+export function buildSubClassSuccessors(subClassEdges) {
+  const subSucc = new Map();
+  for (const [a, b] of subClassEdges || []) {
+    if (!a || !b || a === b) continue;
+    if (!subSucc.has(a)) subSucc.set(a, new Set());
+    subSucc.get(a).add(b);
+  }
+  return subSucc;
+}
+
 /**
  * PROOF SEARCH (not a third rule — a bounded rooted chase for a single "does
  * `subj` reach one of `targets`?" query). Walks OUTWARD from `subj` only,
@@ -1714,12 +1729,7 @@ export async function retractSubClassOf(repoDir, subject, object, {
  */
 export function findIsaChain(subj, targets, typeEdges, subClassEdges, { maxHops = 6 } = {}) {
   const targetSet = targets instanceof Set ? targets : new Set(targets || []);
-  const subSucc = new Map();
-  for (const [a, b] of subClassEdges || []) {
-    if (!a || !b || a === b) continue;
-    if (!subSucc.has(a)) subSucc.set(a, new Set());
-    subSucc.get(a).add(b);
-  }
+  const subSucc = subClassEdges instanceof Map ? subClassEdges : buildSubClassSuccessors(subClassEdges);
 
   let frontier = [];
   for (const [x, c] of typeEdges || []) {
