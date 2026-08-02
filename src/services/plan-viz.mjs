@@ -18,7 +18,7 @@
 // inline script degrades honestly when that sibling script is absent or
 // fails to load — the live controls disable themselves rather than pretend
 // to work.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, countLabel } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, countLabel, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { planToPddl } from "./plan-pddl.mjs";
 
 const BOARD_W = 640;
@@ -334,6 +334,7 @@ button { font: inherit; }
 /* ---- head strip: the nameplate ---- */
 .headStrip { display: flex; justify-content: space-between; align-items: flex-end; gap: .6rem; flex-wrap: wrap; padding: .9rem 1.1rem .75rem; background: linear-gradient(180deg, var(--strip2), var(--strip)); border-bottom: 1px solid var(--line); border-radius: 9px 9px 0 0; }
 .eyebrow { font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 .35rem; }
+${EYEBROW_LINKS_CSS}
 h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0; color: var(--ink); }
 .chip { font-family: ${MONO_STACK}; font-size: .64rem; letter-spacing: .02em; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: .22rem .6rem; background: var(--well); text-align: right; }
 
@@ -432,7 +433,7 @@ h1 { font-family: ${SERIF_STACK}; font-size: 1.2rem; font-weight: 600; margin: 0
 <div class="rack">
   <div class="headStrip">
     <div>
-      <div class="eyebrow">tmct &middot; plan</div>
+      <div class="eyebrow">${demoEyebrowHtml("plan", "plan")}</div>
       <h1 id="pageTitle">${escapeHtml(pageTitle)}</h1>
     </div>
     <span class="chip">blocks archetype · ${pageData.layouts.length} snapshots · plan: findActionPath</span>

@@ -15,7 +15,7 @@
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
-import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, countLabel, TOKENS } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, countLabel, TOKENS, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { bfsLevels } from "../domain/planning.mjs";
 import { pluralOf } from "../domain/inflect.mjs";
@@ -645,6 +645,7 @@ ${DASH_DARK_CHROME_CSS}
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1200px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin-bottom: .9rem; }
+  ${EYEBROW_LINKS_CSS}
   button { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; border-radius: 4px; }
   .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; margin-bottom: 1.1rem; }
@@ -789,7 +790,7 @@ ${DASH_DARK_CHROME_CSS}
 </head>
 <body>
 <main>
-  <div class="eyebrow"><span>tmct &middot; memory ledger</span><span id="counts"></span></div>
+  <div class="eyebrow"><span>${demoEyebrowHtml("ledger", "memory ledger")}</span><span id="counts"></span></div>
   ${dashboardHtml(stats)}
   <div class="topbar">
     <nav class="crumbs" id="crumbs" aria-label="Focus trail"></nav>

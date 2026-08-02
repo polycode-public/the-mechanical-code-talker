@@ -28,7 +28,7 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/chat.html, after chat-browser.bundle.js/chat-seed.json already
 // exist (both built earlier in that same script, for the embedded widget).
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import {
   SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
   shareMessageFor, replyMessageFor, whatsAppShareUrl, isProbablyMobile, copyTextToClipboard, flashCopyTip,
@@ -499,6 +499,7 @@ ${THEME_TOKENS_CSS}
   .topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
+  ${EYEBROW_LINKS_CSS}
   .legend { display: flex; gap: .8rem; margin-left: auto; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
   .legend-item { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
@@ -693,7 +694,7 @@ ${shareOverlayHtml({ withTape: true })}
   <div class="chatCol">
     <header class="topbar">
       <div class="brand">
-        <span class="eyebrow">the-mechanical-code-talker</span>
+        <span class="eyebrow">${demoEyebrowHtml("chat", "chat")}</span>
       </div>
       <div class="chrome">
         <span class="fact-pill" id="factPill" aria-live="polite"

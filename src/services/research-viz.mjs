@@ -19,7 +19,7 @@
 // renderResearchHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result to
 // public/research.html, after research-browser.bundle.js already exists.
-import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { fetchWithProgress, loadProgressLine, factTripleParts } from "./memory-panel-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { loadWinkVendor } from "./viz-boot.mjs";
@@ -108,6 +108,7 @@ ${DASH_DARK_CHROME_CSS}
   header.topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.4rem; flex-wrap: wrap; padding: .6rem 0 1rem; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; }
   .brand { display: flex; flex-direction: column; gap: .3rem; max-width: 640px; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  ${EYEBROW_LINKS_CSS}
   .subtitle { font-size: .92rem; color: var(--ink); opacity: .82; max-width: 58ch; }
   .statuspanel { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
   .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
@@ -240,7 +241,7 @@ ${DASH_DARK_CHROME_CSS}
   <div class="wrap">
     <header class="topbar">
       <div class="brand">
-        <span class="eyebrow">the-mechanical-code-talker &middot; research</span>
+        <span class="eyebrow">${demoEyebrowHtml("research", "research")}</span>
         <span class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</span>
       </div>
       <div class="statuspanel" id="statusPanel" aria-live="polite">

@@ -51,7 +51,7 @@ import { spriteFactRows } from "../domain/sprite-facts.mjs";
 import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../adapters/corpus/conceptnet.mjs";
 import { join } from "node:path";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
@@ -905,6 +905,7 @@ ${THEME_TOKENS_CSS}
   .appbar { display: flex; align-items: flex-end; gap: 1rem; margin: 0 -1.2rem; padding: .6rem 1.2rem 0; background: var(--ai-bar); }
   .appbar h1 { font-family: ${MONO_STACK}; font-size: .84rem; font-weight: 600; letter-spacing: .02em; margin: 0; padding: .32rem .8rem .38rem; background: var(--ai-panel); color: var(--ink); border-radius: 4px 4px 0 0; }
   .appbar .doc-sub { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: color-mix(in srgb, var(--ai-bar-ink) 65%, transparent); padding-bottom: .5rem; }
+  ${EYEBROW_LINKS_CSS}
   .topbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; background: var(--ai-panel); border-bottom: 1px solid var(--ai-edge); margin: 0 -1.2rem 1.4rem; padding: .5rem 1.2rem; }
   .jump { font-family: ${MONO_STACK}; font-size: .7rem; padding: .2rem .6rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: transparent; color: var(--ink); text-decoration: none; }
   .jump:hover { border-color: var(--corpus); color: var(--corpus); }
@@ -982,7 +983,7 @@ ${dockCss}</style>
 <main>
   <header class="appbar">
     <h1>Sprites</h1>
-    <span class="doc-sub">tmct &middot; the sprite library</span>
+    <span class="doc-sub">${demoEyebrowHtml("sprites", "the sprite library")}</span>
   </header>
   ${composerHtml}
   ${dockHtml}

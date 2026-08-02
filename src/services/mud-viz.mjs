@@ -76,7 +76,7 @@
 // actually executed, never a race between panes.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
-  wordBeforeCursor, rowsForWorld, appendLogLine,
+  wordBeforeCursor, rowsForWorld, appendLogLine, demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
 import { directedGridLayout, roomGraphSvg, levelsOf, EXIT_DELTA } from "./viz-room-graph.mjs";
@@ -392,7 +392,7 @@ ${MUD_SHARE_SKIN}
 <body>
 <main>
   <header class="mud-topbar">
-    <h1 class="eyebrow">tmct &middot; mud</h1>
+    <h1 class="eyebrow">${demoEyebrowHtml("mud", "mud")}</h1>
     <div class="mud-topbar-actions">
       <button type="button" class="state-pill" id="statePill" aria-expanded="false" aria-controls="netPanel"
               title="whether this burrow is shared with anyone"><i class="state-dot"></i><span id="statePillWord">not shared</span></button>
@@ -411,7 +411,7 @@ ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-sel
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
-        <label class="deck-teach" title="With this on, a sentence like &quot;Candle is in the study.&quot; writes a fact into the world instead of running as a command.">
+        <label class="deck-teach" title="With this on, a sentence like &quot;Pebble lies in the garden.&quot; writes a fact into the world instead of running as a command.">
           <input type="checkbox" id="teachToggle">
           teach
         </label>
@@ -590,6 +590,7 @@ const MUD_STYLE = `
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1280px; margin: 0 auto; padding: 1.1rem 1.2rem 2.4rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--parchment); opacity: .9; margin: 0 0 .8rem; }
+  ${EYEBROW_LINKS_CSS}
 
   /* ---- the header: brand on the left, the sharing chrome on the right ----
      The same arrangement chat.html's topbar holds — sharing is page chrome,

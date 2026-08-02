@@ -32,7 +32,7 @@
 // bundle's own real ES exports instead, since (unlike ledger-viz, which
 // reuses a FIXED shared bundle it can't extend for one page's own needs) this
 // page ships its own dedicated bundle and can just export what it needs.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, meterBarHtml } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, meterBarHtml, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { loadWinkVendor } from "./viz-boot.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId, agentKindOf } from "../domain/spider-fly-world.mjs";
@@ -250,6 +250,7 @@ ${THEME_TOKENS_CSS}
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1120px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-accent); }
+  ${EYEBROW_LINKS_CSS}
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -443,7 +444,7 @@ ${THEME_TOKENS_CSS}
 <main>
   <div class="stage page-head">
     <div class="head-inner">
-      <div class="eyebrow">tmct &middot; spider and fly</div>
+      <div class="eyebrow">${demoEyebrowHtml("spider-fly", "spider and fly")}</div>
       <h1>Multiple competing planning agents</h1>
     </div>
     <div></div>

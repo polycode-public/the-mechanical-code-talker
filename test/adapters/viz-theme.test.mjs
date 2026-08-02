@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   countLabel, rowsForWorld, meterBarHtml, wordBeforeCursor, TOKENS, escapeHtml,
+  demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "../../src/services/viz-theme.mjs";
 
 test("countLabel: a regular plural noun, singular vs plural count", () => {
@@ -85,4 +86,28 @@ test("meterBarHtml escapes its class name the same way every other HTML builder 
   const html = meterBarHtml("<script>", 1, 2);
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, new RegExp(escapeHtml("<script>").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("demoEyebrowHtml links home, the demo's own page and its about page, in that order", () => {
+  const html = demoEyebrowHtml("mud", "mud");
+  assert.equal(
+    html,
+    '<span class="eyebrow-links"><a href="./index.html">tmct</a> &middot; <a href="./mud.html">mud</a> &middot; <a href="./mud-about.html">about</a></span>',
+  );
+});
+
+test("demoEyebrowHtml derives the about page from the same page key it links to, not a hand-typed suffix", () => {
+  const html = demoEyebrowHtml("spider-fly", "spider and fly");
+  assert.match(html, /href="\.\/spider-fly\.html"/);
+  assert.match(html, /href="\.\/spider-fly-about\.html"/);
+});
+
+test("demoEyebrowHtml escapes an untrusted label the same way every other HTML builder here does", () => {
+  const html = demoEyebrowHtml("mud", "<script>");
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, new RegExp(escapeHtml("<script>").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("EYEBROW_LINKS_CSS scopes its rule to the links demoEyebrowHtml renders", () => {
+  assert.match(EYEBROW_LINKS_CSS, /\.eyebrow-links a \{/);
 });

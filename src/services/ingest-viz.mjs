@@ -25,7 +25,7 @@
 // renderIngestHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/ingest.html, after ingest-browser.bundle.js already exists.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import {
   bandLabelFor,
   statsSummaryLine,
@@ -75,6 +75,7 @@ ${THEME_TOKENS_CSS}
   header.topbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; flex-direction: column; gap: .1rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
+  ${EYEBROW_LINKS_CSS}
   .subtitle { font-size: .82rem; color: var(--muted); }
 
   /* the live memory count, in the topbar rather than the status line: it is
@@ -181,7 +182,7 @@ ${THEME_TOKENS_CSS}
   <div class="ingestCol">
     <header class="topbar">
       <div class="brand">
-        <span class="eyebrow">the-mechanical-code-talker</span>
+        <span class="eyebrow">${demoEyebrowHtml("ingest", "ingest")}</span>
         <span class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</span>
       </div>
       <div class="topbar-right">
