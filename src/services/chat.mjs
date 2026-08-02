@@ -6368,6 +6368,8 @@ export async function helpText() {
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
+    ["remember <X> is a <Y>", "teach a fact in plain English (\"every X is a Y\" and a bare \"X is a Y\" work too)"],
+    ["forget that <X> is a <Y>", "withdraw a fact you taught, and anything derived from it — the phrasing the retract lane reads"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
     ["research <topic> [limit N] [depth D]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],

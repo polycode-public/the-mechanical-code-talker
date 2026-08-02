@@ -261,6 +261,12 @@ test("runTurn: /help lists the commands (from COMMANDS) and the ask question sha
   assert.match(answer, /which <functions\|classes\|modules>/, "shapes come from the engine's rephraseHint");
 });
 
+test("runTurn: /help gives a route to teaching a fact and to taking it back", async () => {
+  const { answer } = await runTurn("/help", { config: CONFIG, graph: await graph() });
+  assert.match(answer, /remember <X> is a <Y>/, "help names the teach phrasing");
+  assert.match(answer, /forget that <X> is a <Y>/, "help names the retract phrasing");
+});
+
 // ---- /export and /ingest: the store leaves/enters as plain files ----
 
 test("runTurn: /export writes the memory store as JSONL, the same shape tmct memory --export writes", async () => {
