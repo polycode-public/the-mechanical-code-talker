@@ -31,24 +31,9 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In-flight right now
-
-Four tracks.
-
-- **The CloudFront double-brotli fix** — `compress: false` on the seed behaviour and an
-  unconditional `Content-Encoding: br` metadata pass, plus whatever proves it in CI.
-  `infra/website-stack.ts`, `scripts/wait-for-site.mjs`, a deployed e2e assertion. Top tier.
-- **The mudiii ground-click e2e failure** — one test times out at 27s after the click moved from
-  pointerdown to pointerup with a 6px drag threshold. Deciding whether the test drives it wrongly or
-  the threshold has a real bug. `test-e2e/pages-mudiii.test.mjs`, `mudiii-scene.mjs`. Top tier.
-- **The `PLAN_MUD_MUDIII.md` audit** — every item in that 515-line doc into shipped-as-planned,
-  shipped-differently, not-shipped, or no-longer-wanted, then the doc cut to what is open. Top tier.
-- **The prey sweep and `STATUS.md`** — one regime at a time after the sandbox killed its concurrent
-  sweeps. Sonnet.
-
 ## Open items
 
-### Found by playtest and benchmark, not yet fixed
+Four, all with a track on them right now.
 
 - **The deployed site serves the starter memory brotli-compressed twice.** Decompressing one layer
   gives 4,534,836 bytes of more brotli; twice gives the real 93,496,025-byte JSON. Every browser
@@ -64,14 +49,27 @@ Four tracks.
   `BucketDeployment` (`:201`-`:249`) only re-runs when the sibling's content hash changes, so a
   deploy where the seed did not move re-uploads it with the CLI's guessed metadata and no
   `Content-Encoding`.
-  **In flight.**
+  **Owner:** a track is on it. Top tier.
   **Do:** `compress: false` on a behaviour matching `/chat-seed.json*` and an unconditional
   `Content-Encoding: br` metadata pass. Both, or the object is undecodable either way.
   **Risk:** `scripts/wait-for-site.mjs` used to ask for `identity` encoding, the one variant no
   browser requests, so it passed on an exact byte count while every visitor got something unreadable.
   Whatever proves this in CI has to fetch the way a browser does.
 
-### mudiii.html — further work
+- **A mudiii e2e test times out on a ground click.**
+  `test-e2e/pages-mudiii.test.mjs:560` — "clicking the ground with nothing armed heads the followed
+  agent that way" waits 27s and fails. The tier is 21 tests, 20 pass. The click moved from
+  pointerdown to pointerup with a 6px drag threshold, so a drag no longer walks the agent; that
+  commit edited this test file without running the tier.
+  **Owner:** a track is on it. Top tier.
+  **Do:** decide whether the test drives the click wrongly for the new model, or the threshold has a
+  real bug a visitor would hit too. Not by lengthening a timeout.
+
+- **`PLAN_MUD_MUDIII.md` claims a status nobody has checked.** 515 lines, opening with "BUILT AND
+  DEPLOYED", never audited against the shipped page.
+  **Owner:** a track is on it. Top tier.
+  **Do:** every item into shipped-as-planned, shipped-differently, not-shipped, or no-longer-wanted,
+  then cut the doc to what is open and fix from the remainder.
 
 - **The prey blend is measured and shipped off; one regime is unmeasured.** The weighted
   evade/forage score exists behind `blendPreyDecision`, default false, and the comparison harness is
