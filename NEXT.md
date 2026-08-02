@@ -33,12 +33,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Three tracks running. Fifteen have merged and `main` is pushed green at 5886/5886, so the pipeline
-this batch is waiting on is the one running against `2b64f3e2`.
+Three tracks running. Sixteen have merged. `2b64f3e2` was pushed with the suite green at 5886/5886;
+the fox fix has merged since and is not pushed yet.
 
 - **T17 spider-fly migration** — `spider-fly*.mjs`, `predator-prey.mjs`, spider-fly's viz layer and
   corpus rows. Top tier. Status: started.
 - **T18 `/retract` granularity** — `syllogise.mjs`, `adventure-editor.mjs`. Sonnet.
+  Status: started.
+- **T19 hay-bale food render** — `mudiii-scene.mjs` and its two test files. Sonnet.
   Status: started.
 
 Landed, in merge order: the `smoke:deploy` mudiii probe; the `QUESTION_LEAD_RE` dedup; the
