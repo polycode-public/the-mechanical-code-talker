@@ -33,9 +33,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Four tracks. The mudiii page files came free when the seven-item batch landed, so they were refilled
-the same turn rather than left idle — concurrency here is bounded by file ownership, not by batch
-cadence.
+Two tracks, and that is saturation rather than idling: every other open item is either inside one of
+these two briefs, waiting on a CI pipeline to run, or waiting on a real deploy. There is no free file
+to dispatch against. Concurrency here is bounded by file ownership, not by batch cadence.
 
 - **T35 prey scoring** — the weighted evade/forage blend plus the comparison harness that can tell it
   from the priority chain. `predator-prey.mjs`, `agent-belief.mjs`, a new `scripts/` sweep. Top tier.
