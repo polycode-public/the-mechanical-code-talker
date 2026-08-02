@@ -396,6 +396,25 @@ export const VERB_TO_KIND = Object.freeze(
  *  builds never collide on the same top-level identifier. */
 export const HAS_FAMILY_VERBS = Object.freeze(new Set(["has", "have", "holds", "hold"]));
 
+/** Every action-flavored word in RELATIONS.calls.verbs ("run(s)", "execute(s)",
+ *  "invoke(s)", "trigger(s)", "fire(s)", "hit(s)", "kick(s) off") also opens an
+ *  imperative request for a NAMED REPORT ("run the impact of X", "trigger the
+ *  untested scan") — the router's own capability labels (registry.mjs), not a
+ *  code-graph relation. "run"/"execute" earn the calls kind because "which
+ *  functions run X" is a genuine reverse-calls question, so the collision can't
+ *  be fixed by dropping them from RELATIONS.calls; instead grammar.mjs and
+ *  keywords.mjs check this set before reading the calls kind's object, so
+ *  "impact"/"untested"/… stay the report the sentence names rather than
+ *  becoming the leading word of a term nothing will ever resolve. Curated
+ *  against registry.mjs's own capability labels — a new capability's label
+ *  needs adding here too, the same discipline CASCADE_FUZZY_REAL_WORDS
+ *  (ask.mjs) already uses for "impact" on the fuzzy-correction side. */
+export const CALLS_VERB_REPORT_NOUNS = Object.freeze(new Set([
+  "search", "describe", "signature", "impact", "members", "subclasses",
+  "exports", "callers", "callees", "calls", "tests", "untested", "history",
+  "cochanges", "architecture", "arch", "related", "sprite",
+]));
+
 /** "what is a kind of X" / "what is a subclass of X" collision fix: some
  *  inherits verbs are themselves phrased "is a <continuation>", which would
  *  otherwise collide with grammar.mjs's literal meta-whatis reading and

@@ -27,7 +27,7 @@ import {
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
   WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition,
-  stripTrailingScopeFiller, stripTrailingTemporalAdverb,
+  stripTrailingScopeFiller, stripTrailingTemporalAdverb, CALLS_VERB_REPORT_NOUNS,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -4125,6 +4125,13 @@ const CONTENT_VOCAB = new Set([
   ...wordsOf(PLACEHOLDER_NOUNS), ...wordsOf(ANAPHORA_TRIGGERS), ...wordsOf(META_MEANING_VERBS),
   ...wordsOf(WHERE_MARKERS), ...wordsOf(MENTION_MARKERS), ...wordsOf(RELATIVE_PRONOUNS),
   ...wordsOf(Object.keys(CASCADE_SYNONYMS)),
+  // "impact"/"untested"/… (CALLS_VERB_REPORT_NOUNS) name the report an imperative
+  // "run"/"execute"/"trigger" sentence is asking for. Without this, the drop-
+  // unmatched pass below reads a report noun as packaging around a "calls"
+  // reverse-question object it never was, drops it, and turns "run the impact
+  // of X" into the confidently WRONG answer "what calls X" instead of the
+  // honest miss keywords.mjs's own guard already declines the direct parse to.
+  ...wordsOf([...CALLS_VERB_REPORT_NOUNS]),
 ]);
 
 /** Structural scaffolding words — question words, frame verbs, context

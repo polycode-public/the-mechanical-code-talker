@@ -8,7 +8,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   WHERE_MARKERS, MENTION_MARKERS, PLACEHOLDER_NOUNS, PASSIVE_PARTICIPLE_TO_KIND,
-  INHERITS_REVERSE_VERBS, HAS_FAMILY_VERBS,
+  INHERITS_REVERSE_VERBS, HAS_FAMILY_VERBS, CALLS_VERB_REPORT_NOUNS,
 } from "../../ask-vocab.mjs";
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
@@ -28,6 +28,20 @@ const TEMPORAL_TRAILING_ADVERBS = new Set(["recently", "lately", "yet", "already
 // never resolves to `defines` in this strategy's two-named-role "ask" shape
 // below (the forward/reverse branches keep their own tested grain-check
 // decline, per that constant's own docblock).
+
+/** "run the impact of X" / "if I run impact on X": a calls-kind object phrase
+ *  led by one of ask-vocab.mjs's CALLS_VERB_REPORT_NOUNS, with a further word
+ *  after it, is the report the sentence is naming, not the start of a code-graph
+ *  term — reading "impact app/lib/a.mjs" as one term answers a question nobody
+ *  asked and can never resolve. A BARE single-word object ("what calls impact")
+ *  is left alone: that's the genuine, structurally identical question about a
+ *  symbol that happens to be named "impact", and there's no local signal to
+ *  tell the two apart, so this only declines the shape a real report request
+ *  actually takes. */
+function leadsWithCallsReportNoun(objectText) {
+  const words = objectText.trim().split(/\s+/);
+  return words.length > 1 && CALLS_VERB_REPORT_NOUNS.has(words[0].toLowerCase());
+}
 
 /** Find the longest phrase from `table`'s keys that appears as a contiguous
  *  run of `words` (case already lowercased by the caller). Longest-match-first
@@ -289,6 +303,7 @@ export function parseKeywordSpot(text, nlp = null) {
     // the entityType-driven forward/reverse branches below, which keep their
     // own tested grain-check decline.
     if (kind === "defines" && HAS_FAMILY_VERBS.has(verbPhrase)) return null;
+    if (kind === "calls" && leadsWithCallsReportNoun(afterText)) return null;
     // A semantically-reverse verb ("superclass of") swaps subject/object, same as
     // grammar.mjs's T1.
     let subject = beforeText;
@@ -297,6 +312,7 @@ export function parseKeywordSpot(text, nlp = null) {
     return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
   }
   if (afterText) {
+    if (kind === "calls" && leadsWithCallsReportNoun(afterText)) return null;
     // A type word riding beside the named object ("what uses the Store
     // CLASS") describes the OBJECT's grain — it says which "Store" is meant,
     // not what class of thing may answer. Reading it as the result filter
