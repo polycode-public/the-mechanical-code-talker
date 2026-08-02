@@ -270,6 +270,35 @@ test("resolver: an ambiguous term stays refused:true but ADDITIONALLY carries ca
   assert.equal(noExec.candidateResults, undefined);
 });
 
+test("resolver: an imperative frame declines a past-tense narration and claims the present-tense request", () => {
+  // a report of work already done — claiming these dispatches the same work
+  // again and hands the data back as if it answered "what am I trying to do"
+  for (const narrated of [
+    "I ran the impact of app/lib/a.mjs",
+    "I just ran the untested scan. what goal am I part way through",
+    "I looked at the cochanges of app/lib/a.mjs",
+    "someone called tmct_impact on app/lib/f.mjs then tmct_untested. what goal does that serve",
+    "I described Widget and then listed its subclasses. what am I trying to do",
+    "we already checked the callers of fnAlpha",
+  ]) {
+    assert.equal(mapFrame(narrated), null, `narrated trace claimed by a frame: ${narrated}`);
+  }
+
+  // the other direction, which matters more: a present-tense request keeps
+  // binding, including the first-person phrasings that sit closest to a report
+  for (const [request, topic] of [
+    ["run the impact of app/lib/a.mjs", "impact"],
+    ["show the impact of app/lib/a.mjs", "impact"],
+    ["I need the impact of app/lib/a.mjs", "impact"],
+    ["I want to see the untested modules", "untested"],
+    ["if I run impact on app/lib/c.mjs", "impact"],
+    ["list the untested modules", "untested"],
+    ["describe Widget", "description"],
+  ]) {
+    assert.equal(mapFrame(request)?.topic, topic, `present-tense request declined: ${request}`);
+  }
+});
+
 test("resolver: a terse command over a tied term refuses and enumerates, the same as the NL and frame routes", async () => {
   const ctx = UNIT_CTX;
   // "b" names both app/lib/b.mjs and its own test module, tied by the graph's

@@ -36,6 +36,17 @@ const SUPERLATIVE_RE = new RegExp(
   "i",
 );
 
+// A PAST-TENSE report of an action already taken ("I ran the impact of X",
+// "someone called tmct_impact then tmct_untested"). The frames below key on topic
+// words with no tense test, so `\bimpacts?\b` fires on a narration exactly as it
+// does on an instruction and the router re-runs what the speaker said they had
+// already done. Closed and past-tense only, in both the subject and the verb: a
+// present-tense request ("run the impact of X", "I need the impact of X", "if I
+// run impact then the untested scan") must keep binding, so no bare
+// run/check/list here and no subjectless verb.
+const NARRATED_ACTION_RE =
+  /\b(?:i|we|you|they|someone|somebody)\s+(?:just\s+|already\s+|first\s+|then\s+|earlier\s+|previously\s+)?(?:ran|looked|listed|checked|called|did|used|inspected|described|viewed|examined|dumped|traced|printed|queried|opened|walked|pulled)\b/i;
+
 // ---- the ask-kind -> epistemic-topic MAPPING (the Stage-1 core) --------------
 // Keyed `${shape}:${kind}` off parseQuery's output. Every topic must be achievable by
 // exactly one registered capability (the bidirectional conformance test proves it).
@@ -218,6 +229,10 @@ export function mapParse(parse) {
 /** Match an imperative FRAME. Returns { name, arg|noArg, term, topic, source:"frame", why }
  *  or null. Backward-chains the frame's topic to a capability. */
 export function mapFrame(request) {
+  // A narrated trace is a report of work already done. Claiming it here dispatches
+  // that work a second time and calls the data an answer to "what am I trying to
+  // do", so the frames decline and the request goes on to the goal-reasoner.
+  if (NARRATED_ACTION_RE.test(request)) return null;
   for (const f of FRAMES) {
     if (!f.re.test(request)) continue;
     if (f.skipIfSuperlative && SUPERLATIVE_RE.test(request)) continue;
