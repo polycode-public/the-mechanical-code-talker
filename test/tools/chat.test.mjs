@@ -490,23 +490,26 @@ test("runTurn: the superlative lane ('which module has the most tests') is unaff
 // "count soup" against a graph carrying no countable individuals once rendered
 // the grammatically-broken "I count: ." (a dangling empty list) and suggested
 // "how many classes are there", which would ALSO fail. The decline names the
-// kinds the counter answers to instead, and offers no index/--repo remedy: the
-// noun is one no graph would make countable, so pointing at indexing would read
-// as a promise the remedy cannot keep.
-test("answerCount: an unknown kind over a graph with no countable individuals names what it counts, with no dangling list and no index remedy", () => {
+// kinds the counter answers to instead.
+test("answerCount: an unknown kind over a graph with no countable individuals names what it counts, with no dangling list", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
   const r = answerCount(empty, "count soup");
   assert.match(r, /^I can't count "soup" — I count the kinds a code graph holds: classes, functions, modules/);
   assert.doesNotMatch(r, /I count: \./, "never the dangling-empty-list phrasing");
   assert.doesNotMatch(r, /how many classes are there/, "never a suggested example that would ALSO fail on this graph");
-  assert.doesNotMatch(r, /tmct index|--repo|example:mini/, "no remedy for a noun no graph makes countable");
 });
 
-test("answerCount: a non-code noun gets no index/--repo remedy attached to its decline", () => {
+// The decline says two true things and keeps them apart. The reason is the
+// noun — nothing counts moons, and indexing would not change that — so the
+// empty graph is no longer offered as the cause. The remedy is about the
+// session, and a terminal can act on it, so it survives as its own clause.
+test("answerCount: the empty-graph remedy is a separate clause, never the reason the noun can't be counted", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
   const r = answerCount(empty, "how many moons does Pluto have?");
-  assert.match(r, /I can't count "moons"/);
-  assert.doesNotMatch(r, /tmct index|--repo|example:mini/, "indexing a repo would not let it count moons");
+  assert.match(r, /^I can't count "moons" — I count the kinds a code graph holds:/);
+  assert.doesNotMatch(r, /no code graph is loaded yet, so there's nothing to count/,
+    "the missing graph is not why moons can't be counted");
+  assert.match(r, /This session has no code graph loaded either — index this repo/);
 });
 
 test("runTurn: a count question is answered before ask, recorded as a non-miss turn, focus untouched", async () => {
