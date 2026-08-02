@@ -3,9 +3,9 @@
 // command, the addressed teach-frame (extended to the food channel spider-fly
 // has no equivalent of), the bare "tick" command, the player's own food-
 // placement verb, and the belief and orientation asides. The fifth lane on
-// the shared plan slot, shaped exactly like spider-fly-turn.mjs (PLAN_MUD_
-// MUDIII.md, "The chat lane") with vocabulary from predator-prey.mjs's own
-// MUDIII_ROLES: fox hunts goblin, goblins forage crumbs and morsels.
+// the shared plan slot, shaped exactly like spider-fly-turn.mjs, with
+// vocabulary from predator-prey.mjs's own MUDIII_ROLES: fox hunts goblin,
+// goblins forage crumbs and morsels.
 //
 // This module never plans a move or runs the ecology pass itself — every bit
 // of game logic (fold, pathfinding, belief, ecology, food placement) lives in

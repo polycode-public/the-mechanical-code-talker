@@ -1,5 +1,5 @@
-// mudiii-viz.mjs — mudiii.html: the one-player town-square demo PLAN_MUD_MUDIII.md
-// describes, over a real three.js scene rather than mud.html's canvas-drawn
+// mudiii-viz.mjs — mudiii.html: the one-player town-square demo, over a real
+// three.js scene rather than mud.html's canvas-drawn
 // room boxes. mud.html's whole control deck carries over unchanged (same
 // ids, same ranges, same defaults — see MUDIII_STYLE and renderMudiiiHtml's
 // own header below for the two sliders' new labels); what mudiii adds is a
@@ -23,27 +23,23 @@
 // the map panel, the HUD, the deck or the chat down with it.
 //
 // Deliberately absent, all P2P (mud.html's #statePill, share/join buttons,
-// the share overlay, the wave button, the compass ring): this is the
-// 1-player page. A later document adds sharing back from the same bundle.
+// the share overlay, the wave button): this is the 1-player page. A later
+// document adds sharing back from the same bundle.
 //
-// Two corrections applied against PLAN_MUD_MUDIII.md's own text (see
-// AGENTS.md/the dispatch brief this track was built from): the page
-// publishes through the ONE `globalThis.tmct` surface (tmct-surface.mjs),
-// never a page-scoped `tmctMudiii` bag; and `createTicker`/`createSerialQueue`
-// are spliced into the page script from viz-ticker.mjs, not carried by the
-// browser entry.
+// The page publishes through the ONE `globalThis.tmct` surface
+// (tmct-surface.mjs), never a page-scoped bag of its own, and
+// `createTicker`/`createSerialQueue` are spliced into the page script from
+// viz-ticker.mjs rather than carried by the browser entry.
 //
-// A THIRD correction, found while wiring the deck's own play control: the
-// brief's "one createTicker per agent" does not fit the engine contract it
-// was written against. `runPredatorPreyTick(memoryDir, opts)` returns
+// One ticker drives the whole world, not one per agent:
+// `runPredatorPreyTick(memoryDir, opts)` returns
 // `{ turn, agents, items, ecology }` for the WHOLE WORLD in one call — it has
 // no per-character entry point the way mud-turn.mjs's `runMudTurn(character,
 // ...)` does, so there is nothing for a second or third ticker to drive that
 // the first one has not already advanced. This page runs ONE shared ticker
 // for the whole simulation, serialized through the same createSerialQueue
-// mud.html uses for its own multi-pane writes; every HUD card still reads
-// its own agent's slice of the one tick result, which is what "per agent"
-// was actually asking for.
+// mud.html uses for its own multi-pane writes; every HUD card reads its own
+// agent's slice of the one tick result.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
   rowsForWorld, appendLogLine, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS,
