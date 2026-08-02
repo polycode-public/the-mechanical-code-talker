@@ -23,6 +23,7 @@ const PAGE_ORDER = [
   "sprites",
   "research",
   "mud",
+  "mudiii",
 ];
 
 test("the claim grid lists exactly one claim link per demo page, in the page order", async () => {
@@ -58,13 +59,13 @@ test("each demo page gets a feature section whose plate shows that page's screen
   }
 });
 
-test("the feature sections repeat the claims in claim-grid order, plates numbered I to X", async () => {
+test("the feature sections repeat the claims in claim-grid order, plates numbered I to XI", async () => {
   const html = await readFile(INDEX, "utf8");
   const positions = PAGE_ORDER.map((page) => html.indexOf(`id="feature-${page}"`));
   assert.ok(positions.every((i) => i !== -1));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches claim order");
   const numerals = [...html.matchAll(/<span class="plate-no">Plate ([IVX]+)<\/span>/g)].map((m) => m[1]);
-  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]);
+  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"]);
 });
 
 test("the page carries one live demo box and no live page embeds", async () => {
