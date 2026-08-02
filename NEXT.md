@@ -33,32 +33,23 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks. The pipeline is green on all 24 jobs including every deployed one, so nothing is
-blocked. `chat.mjs` came free when the four honesty faults landed, so the fifteen remaining CLI
-findings were dispatched the same turn. The thirteen-item
-mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
-exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
-the slots. Their output is the next wave's items.
+Five tracks. Two benchmarks landed this round and each produced a finding that became a fix track of
+its own, which is what running them was for.
 
-- **T48 the deck's four stacks** — the operator's own layout, from three screenshots: foxes/goblins
-  over the follow select, delay/max-turns over the camera buttons, place-food over teach, then the
-  map. This is also what fills the empty band. `mudiii-viz.mjs`. Sonnet. Status: started.
 - **T49 the fifteen remaining CLI findings** — the retract-twice wall, `/help` never mentioning
-  retraction, "how do you know" dead-ending, `define dog` routing to the code lane, `cli`/`serve` not
-  reading the memory store, `--repo <typo>` silently scaffolding a repo, spider-and-fly never naming
-  its advance word, and the index-this-repo nudge, plus six cosmetics. None is a wrong answer, so the
-  bar is comfort without ever making the engine guess. `chat.mjs`, `ask.mjs`, `server.mjs`,
-  `codegraph.mjs`, `bin/tmct.mjs`. Top tier. Status: started.
-- **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
-  three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
-  Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
-- **T41 prey sweep and status refresh** — the regimes the first comparison could not cover (market
-  and chapel boards, other vision radii, a starvation regime), then resynthesizes `STATUS.md`.
-  Sonnet. Status: started.
-
-Waiting on one job: `e2e:deployed:pages` on pipeline 2725436237, the last of its 25. The other 24 are
-green. A docs-only push gets a 4-job pipeline that runs no tests, so those greens prove nothing —
-only a code push exercises the deployed tier.
+  retraction, `define dog` routing to the code lane, `--repo <typo>` silently scaffolding a repo, and
+  the rest. None is a wrong answer, so the bar is comfort without ever making the engine guess.
+  `chat.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier. Status: started.
+- **T50 the two deployed e2e failures** — reduced-motion's opening cast, and the chapel timeout. Both
+  predate the facing fix. `pages-mudiii.test.mjs`, `mudiii-scene.mjs`. Top tier. Status: started.
+- **T53 the router's bound and its tie guard** — a member-filter budget that counts steps it never
+  takes, a command-register pick that answers a tie every other path declines, and a frame that
+  re-executes a past-tense narration. `router/drive.mjs`, `router/resolver.mjs`. Top tier.
+  Status: started.
+- **T41 prey sweep and status refresh** — down to one regime at a time after the sandbox killed its
+  concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
+- **T40 browser playtest** — all twenty-two pages as a visitor, at three viewport sizes. Top tier.
+  Status: started.
 
 ## Open items
 
