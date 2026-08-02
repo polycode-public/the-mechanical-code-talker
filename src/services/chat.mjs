@@ -4799,9 +4799,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // the SHAPE of a retraction sentence — it says nothing about whether
     // subject⊑object was ever actually taught, or taught by THIS session.
     // retractSubClassOf is asked for real and is the only thing that decides:
-    //   - found:false  → subject⊑object was never a stored fact, and this
-    //     falls through to the rest of teachLane's ordinary cascade below
-    //     rather than claiming a specific, possibly-wrong reason.
+    //   - found:false  → subject⊑object was never a stored fact, so there is
+    //     nothing to withdraw and the turn says exactly that. It must NOT
+    //     fall through to the rest of the cascade: the teach frames below
+    //     read the unconsumed sentence from the top, take "forget bertha" as
+    //     a two-word subject, and confirm a fact the user asked to destroy.
     //   - found:true, ownRecord:false → some OTHER source taught it; this
     //     session has nothing of its own to withdraw.
     //   - found:true, stillStands:true → this session's own record is gone,
@@ -4849,7 +4851,10 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "retract", miss: false,
         };
       }
-      // found:false — fall through to the rest of the cascade (see docblock above).
+      return {
+        text: `"${retractSubject} is a kind of ${retractObject}" isn't stored, so there's nothing to forget.`,
+        via: "retract", miss: true,
+      };
     }
   }
 
@@ -13530,7 +13535,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // all, so it would otherwise be confidently WRONG or silently absent.
       // Every successfully-recognized teach attempt gets this consistent goal
       // line instead.
-      deduced = "teach/remember a new fact";
+      // A retraction reaches this lane too, and its goal is the opposite one:
+      // saying "teach/remember a new fact" under a sentence asking for a fact
+      // to go describes the turn backwards.
+      deduced = taught.via === "retract" ? "withdraw a remembered fact" : "teach/remember a new fact";
       note(trace, `goal: ${deduced} (revised — the teach lane recognized this shape where the raw structural parse never should have)`);
       // A canonical whose verb only matched through the fuzzy edit-distance
       // tier ("disk-1 rests on peg-a." read as an ask about "tests") restates
