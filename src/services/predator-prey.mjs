@@ -758,12 +758,17 @@ export async function runTownSquareTick(memoryDir, {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
     const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
     const beliefOpts = { visionRadius, toldFacts };
+    // True unless a caller explicitly turns it off. A config object built by
+    // hand (a fixture, a test, an older tmct.toml read before this key
+    // existed) can omit the key entirely, and `undefined` must still mean
+    // "gated" — the shipped default — never silently flip to omniscient food.
+    const foodVisionGated = config.foodVisionGated !== false;
     // Every food lookup goes through this instead of beliefOpts. Gated (the
     // default) it is beliefOpts itself, unchanged; ungated it is the same
     // opts widened to see the whole board — omniscient food is a
     // visionRadius: Infinity call, not new belief machinery. The rival-threat
     // lookup below stays on beliefOpts either way: this switch is about food.
-    const foodBeliefOpts = config.foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
+    const foodBeliefOpts = foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
     const rivals = role === "predator" ? predators.filter((id) => id !== agentId) : predators;
     const threat = nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
 
@@ -821,7 +826,7 @@ export async function runTownSquareTick(memoryDir, {
     // goal line right beside it names that same crumb as the target. Values
     // only: every key already exists from the call above, so this can never
     // reorder the panel.
-    if (!config.foodVisionGated) {
+    if (!foodVisionGated) {
       const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
       Object.assign(belief, beliefSnapshotFor(agentId, fromCell, foodCandidates, state, foodBeliefOpts));
     }
