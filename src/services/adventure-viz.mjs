@@ -944,6 +944,8 @@ ${THEME_TOKENS_CSS}
      onto further lines, staying right-anchored rather than dropping the
      whole pill row under the heading. */
   .command-head .pills { flex: 1 1 auto; min-width: 0; justify-content: flex-end; margin-bottom: 0; }
+  .teach-toggle { display: flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin: 0 0 .4rem; cursor: pointer; }
+  .teach-toggle input { accent-color: var(--gilt); }
   .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
@@ -1042,6 +1044,10 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
           <h2>What would you like to do</h2>
           <div class="pills" id="pills"></div>
         </div>
+        <label class="teach-toggle" title="With this on, a sentence like &quot;Candle is in the study.&quot; writes a fact into the world instead of running as a command.">
+          <input type="checkbox" id="teachToggle">
+          teach mode
+        </label>
         <form class="chatask" id="chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
@@ -1151,6 +1157,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const pillsEl = el("pills");
   const chatformEl = el("chatform");
   const chatqEl = el("chatq");
+  const teachToggleEl = el("teachToggle");
   const carryListEl = el("carryList");
   const mapWrapEl = el("mapWrap");
   const mapViewportEl = el("mapViewport");
@@ -1822,12 +1829,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   async function boot({ fresh = false } = {}) {
     const saved = !fresh && persist ? await persist.load() : null;
-    session = await tmct.open(
-      world(),
-      saved && saved.payload && saved.payload.memoryPayload
-        ? { restoredPayload: saved.payload.memoryPayload, restoredVisitedRoomIds: saved.payload.visitedRoomIds }
-        : {},
-    );
+    const restoreOptions = saved && saved.payload && saved.payload.memoryPayload
+      ? { restoredPayload: saved.payload.memoryPayload, restoredVisitedRoomIds: saved.payload.visitedRoomIds }
+      : {};
+    session = await tmct.open(world(), { ...restoreOptions, getTeachEnabled: () => teachToggleEl.checked });
     lastTicks = 0;
     const snap = await session.snapshot();
     redraw(snap);

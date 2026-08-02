@@ -43,6 +43,7 @@ import {
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { foldWorldState, worldDigestRows, roomAffordances, worldActionRows, snapshotSubject } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
 import { parseWorldEditorText, planWorldEditorSync } from "../../services/adventure-editor.mjs";
@@ -66,8 +67,13 @@ import { openPersistedStore } from "./idb-persist.mjs";
  *  already carries them, plus every @turnN state row played since, so the
  *  world resumes exactly where the fold left it. `restoredVisitedRoomIds`
  *  carries the matching exposure set forward; without it, only the player's
- *  current room counts as visited. */
-export async function createAdventureSession(worldPayload, { restoredPayload = null, restoredVisitedRoomIds = null } = {}) {
+ *  current room counts as visited.
+ *
+ *  `getTeachEnabled` (optional) is read fresh on every turn, never once at
+ *  boot — the page's own teach checkbox, so flipping it mid-game changes the
+ *  very next line's reading without a reset. Defaults to always-off, which is
+ *  DEFAULT_GAME_CONFIG.adventure.teach's own default. */
+export async function createAdventureSession(worldPayload, { restoredPayload = null, restoredVisitedRoomIds = null, getTeachEnabled = () => false } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = `world:${worldPayload.name}`;
   if (restoredPayload) {
@@ -134,7 +140,10 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   const turnSession = createTurnSession({
     memoryDir, graph: codeGraph, lexicon, sessionId,
     vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
-    buildExtraOptions: () => ({ planState: planHolder.state }),
+    buildExtraOptions: () => ({
+      planState: planHolder.state,
+      gameConfig: { ...DEFAULT_GAME_CONFIG, adventure: { ...DEFAULT_GAME_CONFIG.adventure, teach: getTeachEnabled() } },
+    }),
     captureExtraState: async (result) => {
       if ("planState" in result) planHolder.state = result.planState;
       const here = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir)))).placements.get("player")?.object ?? null;

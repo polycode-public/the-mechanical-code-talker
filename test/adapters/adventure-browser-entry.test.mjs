@@ -66,3 +66,35 @@ test("restoring without a visited-room list still exposes the player's current r
   const snap = await restored.snapshot();
   assert.deepEqual(snap.visitedRoomIds, ["garden"], "the room the player stands in is always visible");
 });
+
+// A page's teach checkbox reaches the live turn as `gameConfig.adventure.teach`,
+// read fresh through `getTeachEnabled` on every call rather than fixed at open.
+// worldPayload carries no origin fact, so this exercises the manor's own
+// sentence table (parseEditorLine/planTaughtTriple), the one the demo page
+// itself ships against Ashcombe Hall.
+const teachWorldPayload = {
+  ...worldPayload,
+  facts: [...worldPayload.facts, { subject: "study", predicate: "rdf:type", object: "room" }],
+};
+
+test("teach off: a declarative sentence takes the ordinary miss path, never writes a world fact", async () => {
+  const session = await createAdventureSession(teachWorldPayload, { getTeachEnabled: () => false });
+  const result = await session.turn("Candle is in the study.");
+  assert.ok(!/candle/i.test(result.answer), "no world-teach confirmation names the candle");
+  const snap = await session.snapshot();
+  assert.equal(snap.state.placements.has("candle"), false, "nothing was minted");
+});
+
+test("teach on: the same sentence mints the thing and confirms in world-teach's own shape", async () => {
+  let teachEnabled = false;
+  const session = await createAdventureSession(teachWorldPayload, { getTeachEnabled: () => teachEnabled });
+
+  const before = await session.turn("Candle is in the study.");
+  assert.ok(!/candle/i.test(before.answer), "the checkbox starts off, so this first turn writes nothing");
+
+  teachEnabled = true;
+  const after = await session.turn("Candle is in the study.");
+  assert.match(after.answer, /^noted — there's a candle in the study now\./, "matches confirmation()'s own minted-placement shape");
+  const snap = await session.snapshot();
+  assert.equal(snap.state.placements.get("candle")?.object, "study", "the candle is written into the live world");
+});
