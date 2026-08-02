@@ -1893,7 +1893,14 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
       );
     }
     const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph, actingSubject });
-    const body = digest ?? `nothing more about the ${object} is written down yet.`;
+    // A thing that IS here with nothing written about it, and a word that only
+    // turns up in the room's own prose, are different answers. Sharing one line
+    // let "look at the door" reply "nothing more about the door is written down
+    // yet" in a house whose world model has no door at all, which reads as
+    // confirmation that a door is standing there.
+    const body = digest ?? (notHere
+      ? `there's no ${object} here — the word turns up in what's written about this place, but nothing by that name is in the scene.`
+      : `nothing more about the ${object} is written down yet.`);
     const containerNote = !person && isContainer(rows, object) ? ` ${containerStatusPhrase(object, { state })}` : "";
     // Framing follows the VERB the player typed, not the object's type: talking
     // to a lamp still reads as an attempted conversation (nothing replies, but
