@@ -229,15 +229,12 @@ test("every shipped square opens with each animal on a cell of its own", async (
     for (const preyCount of [1, 4, 10]) {
       const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-start-distinct-"));
       try {
-        // eslint-disable-next-line no-await-in-loop
         await startTownSquareGame(dir, { layout, predatorCount: 4, preyCount });
-        // eslint-disable-next-line no-await-in-loop
         const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
         const cells = [...state.placements.values()].map((p) => p.cell);
         assert.equal(cells.length, 4 + preyCount);
         assert.equal(new Set(cells).size, cells.length, `${layout.name} stacked two animals with ${preyCount} prey`);
       } finally {
-        // eslint-disable-next-line no-await-in-loop
         await rm(dir, { recursive: true, force: true });
       }
     }

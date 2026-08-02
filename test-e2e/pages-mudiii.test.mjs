@@ -139,6 +139,17 @@ const waitForReboot = (page) => page.waitForFunction(
   { timeout: READY_TIMEOUT_MS },
 );
 
+/** Wait for a Reset to finish. Reset hands the board back STOPPED, so it
+ *  cannot use waitForReboot's own signal: it names itself in the scene status
+ *  instead, and the play control going quiet is the second half of the same
+ *  answer. */
+const waitForRecast = (page) => page.waitForFunction(
+  () => /re-cast and stopped/.test(document.querySelector("#sceneStatus")?.textContent ?? "")
+    && document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "false",
+  null,
+  { timeout: READY_TIMEOUT_MS },
+);
+
 /** Every agent the HUD row currently draws, id -> its authoritative stored
  *  cell, read through `window.mudiiiScene.cellOf` — a JS handle rather than
  *  a pixel position, so this survives a software renderer and even a
@@ -229,6 +240,92 @@ test("the follow control closes while the board plays, opens when it is paused, 
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error swapping who the camera follows");
+  } finally {
+    await context.close();
+  }
+});
+
+test("step advances the shared counter by exactly one, and closes while the board plays itself", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    assert.equal(await page.locator("#stepBtn").isDisabled(), true, "a playing board closes the step control");
+    assert.ok(await page.locator("#stepHint").isVisible(), "and the hint says what to do about it");
+    assert.match(await page.locator("#stepHint").textContent(), /pause/i);
+
+    await pauseBoard(page);
+    assert.equal(await page.locator("#stepBtn").isDisabled(), false, "a still board opens it again");
+    assert.equal(await page.locator("#stepHint").isVisible(), false, "and the hint has nothing left to say");
+
+    for (let press = 1; press <= 3; press += 1) {
+      const before = await turnCountOf(page);
+      await page.locator("#stepBtn").click();
+      await page.waitForFunction((n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) !== n;
+      }, before, { timeout: TICK_TIMEOUT_MS });
+      await page.waitForTimeout(500);
+      const after = await turnCountOf(page);
+      assert.equal(after, before + 1, `press ${press} advanced the counter by exactly one whole turn`);
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error stepping three turns by hand");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a reset hands the board back stopped, following a goblin again", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    assert.match(await page.locator("#agentSelect").inputValue(), /^goblin-/,
+      "the page opens riding the prey, so the opening run is a chase seen from the hunted side");
+    assert.equal(await page.locator('#cameraMode button[data-mode="follow"]').getAttribute("aria-pressed"), "true");
+
+    await page.locator("#resetBtn").click();
+    await waitForRecast(page);
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false",
+      "a reset leaves the square standing still — opening the page is the one time it starts itself");
+    assert.equal(await page.locator("#stepBtn").isDisabled(), false, "and the step control comes back with it");
+    assert.equal(await page.locator("#agentSelect").isDisabled(), false);
+    assert.match(await page.locator("#agentSelect").inputValue(), /^goblin-/, "and the fresh cast is ridden from the prey side too");
+
+    const settled = await turnCountOf(page);
+    await page.waitForTimeout(2500);
+    assert.equal(await turnCountOf(page), settled, "nothing takes a turn until the visitor presses play");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error resetting the square");
+  } finally {
+    await context.close();
+  }
+});
+
+test("dragging the canvas turns the view without walking whoever the camera follows", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await pauseBoard(page);
+    const cellsBefore = await agentCellsOf(page);
+    const turnBefore = await turnCountOf(page);
+    const box = await page.locator("#sceneCanvas").boundingBox();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i += 1) {
+      await page.mouse.move(cx + i * 15, cy - i * 3);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(700);
+
+    assert.deepEqual(await agentCellsOf(page), cellsBefore,
+      "a look-around is not a move order — before this the press alone walked the followed agent");
+    assert.equal(await turnCountOf(page), turnBefore, "and no turn is spent turning the camera");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error dragging to look around");
   } finally {
     await context.close();
   }
@@ -413,8 +510,14 @@ test("a ring press walks the followed agent and spends a whole-world turn", asyn
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
     await pauseBoard(page);
+    // Picked deliberately rather than taken from the default. The page opens
+    // riding a goblin, and a goblin the fox caught while the board was still
+    // playing leaves nobody followed and the ring hidden.
+    const [firstAgent] = await page.$$eval("#agentSelect option", (options) => options.map((o) => o.value));
+    assert.ok(firstAgent, "the cast has someone to follow");
+    await page.selectOption("#agentSelect", firstAgent);
     const followed = await page.locator("#agentSelect").inputValue();
-    assert.ok(followed, "someone is followed by default");
+    assert.equal(followed, firstAgent, "and the camera is on them");
 
     const before = await turnCountOf(page);
     const cellsBefore = await agentCellsOf(page);
@@ -464,6 +567,16 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
     );
     await pauseBoard(page);
     assert.equal(await page.locator("#foodPill").getAttribute("aria-pressed"), "false", "nothing is armed");
+
+    // Both picked deliberately. The page opens riding a goblin, so a goblin
+    // caught while the board was still playing would leave nobody to head
+    // anywhere; and only from overhead is the whole board under the cursor,
+    // where a follow camera aims a ray past its own edge as often as not.
+    const [firstAgent] = await page.$$eval("#agentSelect option", (options) => options.map((o) => o.value));
+    assert.ok(firstAgent, "the cast has someone to head somewhere");
+    await page.selectOption("#agentSelect", firstAgent);
+    await page.locator('#cameraMode button[data-mode="overhead"]').click();
+    await page.waitForTimeout(600);
 
     const before = await turnCountOf(page);
     const box = await page.locator("#sceneCanvas").boundingBox();
@@ -757,12 +870,9 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
 
     // The Reset path is where the warm loader cache bites hardest: every
     // agent re-requests the very same URL a second time, this time into an
-    // already-warm cache. boot() turns the play control back on as its last
-    // act, so that is the signal the new cast is drawn — the turn counter
-    // passes through zero too fast to catch on a board that opens playing.
+    // already-warm cache.
     await page.locator("#resetBtn").click();
-    await waitForReboot(page);
-    await pauseBoard(page);
+    await waitForRecast(page);
     await page.waitForFunction(
       () => document.querySelectorAll("#hudRow .hud-card[data-agent]").length > 0,
       null,
