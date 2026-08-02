@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
   foldTownSquareState, gridApplyActions, greedyAway, greedyToward, isMudiiiStatePredicate,
-  pathStateKey, placeFood, roleOfId, runTownSquareTick, seededWander, startTownSquareGame,
+  pathStateKey, placeFood, recastTownSquare, roleOfId, runTownSquareTick, seededWander, startTownSquareGame,
   townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
 import { TOWN_SQUARE_LAYOUTS, cellId, openCells, worldFactRows } from "../../src/domain/town-square-world.mjs";
@@ -192,6 +192,78 @@ test("a seeded roster never places anything on a prop's cell", async () => {
     for (const id of ["fox-1", "goblin-1", "goblin-2", "goblin-3"]) {
       assert.ok(open.has(state.placements.get(id).cell), `${id} was seeded onto a prop`);
     }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- recast: an in-place epoch bump on a live store -------------------------------
+
+test("recastTownSquare re-mints the roster on a store that has already played real ticks, matching a store opened straight onto that epoch", async () => {
+  const played = await mkdtemp(join(tmpdir(), "tmct-mudiii-recast-played-"));
+  const fresh = await mkdtemp(join(tmpdir(), "tmct-mudiii-recast-fresh-"));
+  try {
+    await appendFacts(played, worldRows());
+    await startTownSquareGame(played, { layout: LAYOUT });
+    // Several real ticks, not a never-played store — the trap only shows up
+    // once fox-1 and the goblins have actually moved off their epoch-0 spawn.
+    for (let i = 0; i < 5; i += 1) await runTownSquareTick(played, { layout: LAYOUT });
+
+    const recast = await recastTownSquare(played, { layout: LAYOUT, epoch: 1 });
+    assert.equal(recast.started, true, "the guard must not read the epoch-0 roster as already minted for epoch 1");
+
+    await appendFacts(fresh, worldRows());
+    await startTownSquareGame(fresh, { layout: LAYOUT, epoch: 1 });
+
+    const playedState = foldTownSquareState(readFactRows(await loadMemory(played)));
+    const freshState = foldTownSquareState(readFactRows(await loadMemory(fresh)));
+    assert.equal(playedState.epoch, 1);
+    for (const id of ["fox-1", "goblin-1", "goblin-2", "goblin-3"]) {
+      assert.deepEqual(
+        playedState.placements.get(id), freshState.placements.get(id),
+        `${id}'s post-recast placement must match a store that opened straight onto epoch 1, not carry over its epoch-0 spawn`,
+      );
+    }
+  } finally {
+    await rm(played, { recursive: true, force: true });
+    await rm(fresh, { recursive: true, force: true });
+  }
+});
+
+test("recastTownSquare defaults epoch to one past the store's current epoch", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-recast-default-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await startTownSquareGame(dir, { layout: LAYOUT });
+    const recast = await recastTownSquare(dir, { layout: LAYOUT });
+    assert.equal(recast.started, true);
+    const state = foldTownSquareState(readFactRows(await loadMemory(dir)));
+    assert.equal(state.epoch, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("recastTownSquare refuses an epoch that would not move the store forward", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-recast-refuse-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await startTownSquareGame(dir, { layout: LAYOUT });
+    await recastTownSquare(dir, { layout: LAYOUT, epoch: 3 });
+    await assert.rejects(() => recastTownSquare(dir, { layout: LAYOUT, epoch: 3 }), /epoch must be an integer greater than the current epoch/);
+    await assert.rejects(() => recastTownSquare(dir, { layout: LAYOUT, epoch: 1 }), /epoch must be an integer greater than the current epoch/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("startTownSquareGame stays a no-op on a second call for the SAME epoch, recast or not", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mudiii-recast-idempotent-"));
+  try {
+    await appendFacts(dir, worldRows());
+    await recastTownSquare(dir, { layout: LAYOUT, epoch: 1 });
+    const again = await startTownSquareGame(dir, { layout: LAYOUT, epoch: 1 });
+    assert.equal(again.started, false, "epoch 1 already has a minted roster");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

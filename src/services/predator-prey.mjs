@@ -44,7 +44,7 @@ import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { mulberry32 } from "../domain/seeded-random.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
-import { objectClassChain, parseSnapshotSubject, snapshotSubject, WORLD_EPOCH_PREDICATE } from "./adventure.mjs";
+import { objectClassChain, parseSnapshotSubject, snapshotSubject, worldEpochFact, WORLD_EPOCH_PREDICATE } from "./adventure.mjs";
 
 export { DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor };
 
@@ -500,8 +500,24 @@ export function roleOfId(id, roles = MUDIII_ROLES) {
 /**
  * Seed a fresh town square: one predator/prey roster placed on the board, each
  * with its role's starting mass, a `calm` mood and a facing. A no-op when the
- * first predator already exists, so it is safe to call from a caller unsure
- * whether the game has started.
+ * given `epoch` already has a roster minted — safe to call from a caller
+ * unsure whether the game has started, and safe to call again from
+ * recastTownSquare below without double-minting the epoch it just opened.
+ *
+ * The guard checks the EPOCH the existing roster's own placement is stamped
+ * to, not merely whether one exists: `state.placements.has(firstPredator)`
+ * alone would still be true on a store recastTownSquare just moved onto a new
+ * epoch, because it only ever looks at the base id, never at which run
+ * planted it. Every roster fact this function writes is stamped through
+ * `snapshotSubject(id, 0, epoch)` for exactly that reason — a bare "fox-1"
+ * placement fact from one epoch and another from the next would collide as
+ * the SAME (subject, predicate) at the memory layer and have to be resolved
+ * there (by observation time, falling back to trust and then to the object
+ * string) instead of by this file's own epoch-and-turn fold, which is a
+ * needless and less predictable path to the same answer. rdf:type stays
+ * bare on purpose: a roster id's class does not change on a recast, and
+ * foldTownSquareState's own fold only ever takes the first unstamped type row
+ * it sees for a subject.
  *
  * `opts.agents` places an explicit roster (`{ id: { role, cell, facing, mass } }`)
  * — how a recorded fixture pins a starting board. Without it the roster is
@@ -515,7 +531,7 @@ export async function startTownSquareGame(memoryDir, {
 } = {}) {
   const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
   const firstPredator = `${roles.predator.idPrefix}-1`;
-  if (state.placements.has(firstPredator)) return { started: false, facts: [] };
+  if (state.placements.get(firstPredator)?.epoch === epoch) return { started: false, facts: [] };
 
   const roster = agents ?? seededRoster(layout, {
     predators: predatorCount ?? layout.cast.predators,
@@ -523,6 +539,7 @@ export async function startTownSquareGame(memoryDir, {
     roles, epoch,
   });
 
+  const stamp = (base) => snapshotSubject(base, 0, epoch);
   const facts = [];
   for (const id of Object.keys(roster).sort()) {
     const spec = roster[id];
@@ -530,13 +547,51 @@ export async function startTownSquareGame(memoryDir, {
     const kind = role === "predator" ? roles.predator.kind : roles.prey.kind;
     const mass = spec.mass ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
     facts.push({ subject: id, predicate: "rdf:type", object: kind });
-    facts.push({ subject: id, predicate: PLACEMENT_PREDICATE, object: spec.cell });
-    facts.push({ subject: id, predicate: MASS_PREDICATE, object: String(mass) });
-    facts.push({ subject: id, predicate: MOOD_PREDICATE, object: "calm" });
-    facts.push({ subject: id, predicate: FACING_PREDICATE, object: spec.facing ?? DEFAULT_FACING });
+    facts.push({ subject: stamp(id), predicate: PLACEMENT_PREDICATE, object: spec.cell });
+    facts.push({ subject: stamp(id), predicate: MASS_PREDICATE, object: String(mass) });
+    facts.push({ subject: stamp(id), predicate: MOOD_PREDICATE, object: "calm" });
+    facts.push({ subject: stamp(id), predicate: FACING_PREDICATE, object: spec.facing ?? DEFAULT_FACING });
   }
   await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: worldProvenanceTag(layout.name) })));
   return { started: true, facts };
+}
+
+/**
+ * Move a LIVE town square onto a new epoch, in place, and re-mint its roster
+ * for that epoch — the recast an EDIT-mode change or an epoch bump needs
+ * without re-opening the whole session over a brand new store. Two steps:
+ * append the epoch marker (worldEpochFact, the same bare triple adventure.mjs
+ * writes for its own recast), then call startTownSquareGame for the new
+ * epoch.
+ *
+ * That second call is not redundant with a plain startTownSquareGame call:
+ * this only works because startTownSquareGame's own idempotency guard is
+ * epoch-aware (see its doc comment) and because its roster facts are
+ * epoch-stamped. Without both, the previous epoch's still-placed roster would
+ * read as "already minted" for the epoch being opened now, and this function
+ * would silently do nothing.
+ *
+ * `epoch` defaults to one past whatever the store is currently on, so a
+ * caller that just wants "recast, fresh epoch" carries no bookkeeping of its
+ * own. Throws if given an epoch that would not actually move the store
+ * forward — epochs are add-only by construction (the fold takes the max), so
+ * a non-increasing one could never become current no matter what it wrote.
+ */
+export async function recastTownSquare(memoryDir, {
+  layout, epoch = null, agents = null, predatorCount = null, preyCount = null,
+  config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+} = {}) {
+  const lay = typeof layout === "string" ? TOWN_SQUARE_LAYOUTS[layout] : layout;
+  if (!lay) throw new Error(`recastTownSquare: no such layout "${layout}"`);
+  const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
+  const nextEpoch = epoch ?? state.epoch + 1;
+  if (!Number.isInteger(nextEpoch) || nextEpoch <= state.epoch) {
+    throw new Error(`recastTownSquare: epoch must be an integer greater than the current epoch (${state.epoch}), got ${nextEpoch}`);
+  }
+  await appendFacts(memoryDir, [{ ...worldEpochFact(nextEpoch), provenance: worldProvenanceTag(lay.name) }]);
+  return startTownSquareGame(memoryDir, {
+    layout: lay, agents, predatorCount, preyCount, config, roles, epoch: nextEpoch,
+  });
 }
 
 function seededRoster(layout, { predators, prey, roles, epoch }) {
