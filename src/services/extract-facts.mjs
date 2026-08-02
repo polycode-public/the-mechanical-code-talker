@@ -662,9 +662,23 @@ export async function main(argv = process.argv.slice(2)) {
   const filePath = resolve(process.cwd(), file);
   const text = await readFile(filePath, "utf8");
   const sourceTag = basename(filePath);
-  const memoryDir = repo ? resolve(process.cwd(), repo) : null;
+  // A repo path is not a store handle. Resolve the SAME backend every other verb
+  // reads back through, or the facts land in the retired flat file and the
+  // "facts written into …" line below reports a write chat can never see.
+  const repoRoot = repo ? resolve(process.cwd(), repo) : null;
+  const { openConfiguredMemoryBackend } = await import("../adapters/memory/core.mjs");
+  const store = repoRoot ? await openConfiguredMemoryBackend(repoRoot) : null;
 
-  const result = await ingestText(text, { memoryDir, sourceTag, optimistic, canonical });
+  let result;
+  try {
+    result = await ingestText(text, {
+      memoryDir: store ? store.dir : null,
+      config: repoRoot ? loadConfig(process.env, repoRoot) : null,
+      sourceTag, optimistic, canonical,
+    });
+  } finally {
+    if (store) await store.close();
+  }
   const emitted = optimistic ? [...result.extracted, ...result.optimistic] : result.extracted;
 
   if (out) {
@@ -691,7 +705,7 @@ export async function main(argv = process.argv.slice(2)) {
         + `Ground one side first (e.g. "every ${result.ungroundedTerms[0]} is a thing") and re-run.`
       : ""),
   );
-  if (repo) console.error(`facts written into ${memoryDir}'s tmct memory, tagged ${sourceTag}`);
+  if (repo) console.error(`facts written into ${repoRoot}'s tmct memory, tagged ${sourceTag}`);
   if (out) console.error(`facts written to ${out}`);
   return { sentences, recognized, extracted: result.extracted, optimistic: result.optimistic, skipped: result.skipped };
 }
