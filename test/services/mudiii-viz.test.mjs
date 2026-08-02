@@ -16,7 +16,7 @@ import { DEFAULT_GRID_SIZE } from "../../src/domain/town-square-world.mjs";
 import { TWEEN_DURATION_MS, startTween, reseedTween } from "../../src/services/mudiii-scene.mjs";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
-  propPlacementsFrom, occupiedCells, blockedCellReason, cameraRigFor, nextCameraSelection,
+  propPlacementsFrom, occupiedCells, currentPlacementsFrom, blockedCellReason, cameraRigFor, nextCameraSelection,
   mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
@@ -954,6 +954,70 @@ test("renderMudiiiHtml: the belief summary is capped, and the full list comes fr
   assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
   assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
   assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
+});
+
+const PLACE = (subject, object) => ({ subject, predicate: "mgx:currently-in", object });
+
+test("currentPlacementsFrom: one row per subject, the latest turn, not the whole tape", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([
+      PLACE("fox-1@turn0", "cell-7-7"),
+      PLACE("fox-1@turn1", "cell-7-6"),
+      PLACE("fox-1@turn2", "cell-8-6"),
+      PLACE("goblin-1@turn2", "cell-2-2"),
+    ]),
+    [{ subject: "fox-1", cell: "cell-8-6" }, { subject: "goblin-1", cell: "cell-2-2" }],
+  );
+});
+
+test("currentPlacementsFrom: rows out of order still fold to the latest turn", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("fox-1@turn9", "cell-1-1"), PLACE("fox-1@turn3", "cell-5-5")]),
+    [{ subject: "fox-1", cell: "cell-1-1" }],
+  );
+});
+
+test("currentPlacementsFrom: a later epoch outranks a higher turn in an earlier one", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([
+      PLACE("fox-1@turn40", "cell-1-1"),
+      PLACE("fox-1@epoch1@turn2", "cell-9-9"),
+    ]),
+    [{ subject: "fox-1", cell: "cell-9-9" }],
+  );
+});
+
+test("currentPlacementsFrom: a prop's bare row stands, and any stamped row for it wins", () => {
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("well-1", "cell-6-7"), PLACE("stall-1", "cell-4-3")]),
+    [{ subject: "stall-1", cell: "cell-4-3" }, { subject: "well-1", cell: "cell-6-7" }],
+  );
+  assert.deepEqual(
+    currentPlacementsFrom([PLACE("stall-1", "cell-4-3"), PLACE("stall-1@turn0", "cell-5-3")]),
+    [{ subject: "stall-1", cell: "cell-5-3" }],
+  );
+});
+
+test("currentPlacementsFrom: what has been eaten or has starved no longer stands anywhere", () => {
+  const rows = [
+    PLACE("goblin-1@turn4", "cell-2-2"),
+    PLACE("crumb-1@turn1", "cell-3-3"),
+    PLACE("fox-2@turn4", "cell-8-8"),
+    { subject: "goblin-1@turn5", predicate: "mgx:eaten-by", object: "fox-1" },
+    { subject: "fox-2@turn6", predicate: "mgx:starved", object: "true" },
+  ];
+  assert.deepEqual(currentPlacementsFrom(rows), [{ subject: "crumb-1", cell: "cell-3-3" }]);
+});
+
+test("currentPlacementsFrom: no rows, no placements", () => {
+  assert.deepEqual(currentPlacementsFrom([]), []);
+  assert.deepEqual(currentPlacementsFrom(null), []);
+});
+
+test("renderMudiiiHtml: the edit panel folds the tape rather than printing it", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const currentPlacementsFrom = /, "the fold is spliced into the page script");
+  assert.match(html, /const placements = currentPlacementsFrom\(editRows\);/);
 });
 
 // Every export of these two modules except the page/script builder is spliced

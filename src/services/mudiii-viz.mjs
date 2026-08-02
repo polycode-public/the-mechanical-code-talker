@@ -221,6 +221,48 @@ export function occupiedCells(agents, items) {
   return cells;
 }
 
+/** Who and what stands where right now, as `{ subject, cell }[]` sorted by
+ *  subject — the edit panel's own read of a fact list that carries the whole
+ *  tape rather than a board.
+ *
+ *  The engine stamps each turn's placement row `<id>@turn<N>`, or
+ *  `<id>@epoch<E>@turn<N>` once a reset has moved the epoch on, so a raw
+ *  `mgx:currently-in` sweep returns one row per agent per turn played. This
+ *  folds them to the latest row per base subject by `(epoch, turn)`, the same
+ *  order the engine's own fold ranks by. A bare subject is the world's
+ *  authored placement — every prop is one — and ranks below any stamped row
+ *  for the same base rather than competing with it.
+ *
+ *  Anything carrying `mgx:eaten-by` or `mgx:starved` is dropped: it stood
+ *  somewhere once, and the panel is asked where things stand now. Pure,
+ *  self-contained. */
+export function currentPlacementsFrom(rows) {
+  const STAMP = /^(.*?)(?:@epoch(\d+))?@turn(\d+)$/;
+  const latest = new Map();
+  const gone = new Set();
+  for (const row of rows || []) {
+    if (!row || !row.subject) continue;
+    const match = STAMP.exec(String(row.subject));
+    const base = match ? match[1] : String(row.subject);
+    if (row.predicate === "mgx:eaten-by" || row.predicate === "mgx:starved") {
+      gone.add(base);
+      continue;
+    }
+    if (row.predicate !== "mgx:currently-in") continue;
+    const epoch = match ? Number(match[2] || 0) : -1;
+    const turn = match ? Number(match[3]) : -1;
+    const prior = latest.get(base);
+    if (prior && (prior.epoch > epoch || (prior.epoch === epoch && prior.turn > turn))) continue;
+    latest.set(base, { epoch, turn, cell: row.object });
+  }
+  const placements = [];
+  for (const [subject, entry] of latest) {
+    if (!gone.has(subject)) placements.push({ subject, cell: entry.cell });
+  }
+  placements.sort((a, b) => a.subject.localeCompare(b.subject));
+  return placements;
+}
+
 /** Why a click-to-move or a food placement on `cell` would be refused, or
  *  null when it is clear — `"cell-4-3 is blocked"`, worded once so both the
  *  3D raycast click and a typed "go there" chat verb read the same refusal.
@@ -1006,6 +1048,7 @@ function pageScript() {
   const cellFromGroundPoint = ${cellFromGroundPoint.toString()};
   const propPlacementsFrom = ${propPlacementsFrom.toString()};
   const occupiedCells = ${occupiedCells.toString()};
+  const currentPlacementsFrom = ${currentPlacementsFrom.toString()};
   const blockedCellReason = ${blockedCellReason.toString()};
   const cameraRigFor = ${cameraRigFor.toString()};
   const nextCameraSelection = ${nextCameraSelection.toString()};
@@ -1589,15 +1632,10 @@ function pageScript() {
   let allStoreRows = [];
 
   function renderEditPlacements() {
-    const placements = {};
-    for (const row of editRows) {
-      if (row.predicate !== "mgx:currently-in") continue;
-      placements[row.subject] = row.object;
-    }
-    const subjects = Object.keys(placements).sort();
-    el("editPlacements").innerHTML = subjects.length
-      ? subjects.map(function (s) {
-        return '<div class="edit-placement-row"><span class="mono">' + esc(s) + '</span><span>' + esc(placements[s]) + "</span></div>";
+    const placements = currentPlacementsFrom(editRows);
+    el("editPlacements").innerHTML = placements.length
+      ? placements.map(function (p) {
+        return '<div class="edit-placement-row"><span class="mono">' + esc(p.subject) + '</span><span>' + esc(p.cell) + "</span></div>";
       }).join("")
       : '<span class="edit-empty">nothing placed yet</span>';
   }
