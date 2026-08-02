@@ -353,12 +353,16 @@ test("every HUD agent's mesh is correctly sized and seated at the largest cast, 
     // The Reset path is where the warm loader cache bites hardest: every
     // agent re-requests the very same URL a second time, this time into an
     // already-warm cache.
-    const castSizeBeforeReset = await page.locator("#hudRow .hud-card[data-agent]").count();
+    //
+    // Wait on the turn counter and a non-empty cast, never on the cast size
+    // held before the Reset. Prey arrive from the perimeter while the board
+    // plays, so the cast is usually larger by then than the seeded roster a
+    // Reset returns to.
     await page.locator("#resetBtn").click();
     await page.waitForFunction(
-      (n) => document.querySelectorAll("#hudRow .hud-card[data-agent]").length === n
+      () => document.querySelectorAll("#hudRow .hud-card[data-agent]").length > 0
         && (document.querySelector("#globalTurnCount")?.textContent ?? "").includes("turns: 0"),
-      castSizeBeforeReset,
+      null,
       { timeout: READY_TIMEOUT_MS },
     );
     await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);

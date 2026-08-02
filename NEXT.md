@@ -36,8 +36,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Three tracks running. Sixteen have merged. `2b64f3e2` was pushed with the suite green at 5886/5886;
 the fox fix has merged since and is not pushed yet.
 
-- **T19 hay-bale food render** — `mudiii-scene.mjs` and its two test files. Sonnet.
-  Status: started.
 
 Landed, in merge order: the `smoke:deploy` mudiii probe; the `QUESTION_LEAD_RE` dedup; the
 import-cycle estate guard; adventure's pill `data-command`; the resolver purity invariant in
@@ -410,27 +408,17 @@ until it does. Then the grid-size item, because the deception rail and the map p
   local can tell you.
   **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
 
-- **Food items still render as primitive spheres; the model is committed but nothing loads it.**
-  The sourcing half landed. `public/models/props/haybale.glb` is committed (14,004 bytes, KayKit
-  Dungeon Remastered, CC0), credited, and reachable through two manifest keys, `food-crumb` at
-  `targetHeight` 0.16 and `food-morsel` at 0.36 — the diameters the primitive spheres already used,
-  so the swap keeps the footprint that reads correctly next to a 1.0m fox. Both keys share one file,
-  so one fetch serves both.
-  The `resources/` piles and sacks were rejected: that directory carries no pack provenance in
-  `world-of-claudecraft`'s own `CREDITS.md`, the same unrecorded status as the KayKit cheese and
-  apple the manifest's `_readme` already excludes. A pile of seeds or a sack needs a file whose pack
-  can be named.
-  **Tier:** Haiku, once the loader rework lands.
-  **Do:** replace `itemGeometryFor`/`itemMaterialFor`/`itemHeightFor` (`mudiii-scene.mjs:536`-`:539`)
-  with a manifest-driven GLB load keyed on `item.kind`, `"crumb"` to `food-crumb` and `"morsel"` to
-  `food-morsel`. The rows carry `destPath`, `targetHeight` and `clips: null`, the same shape every
-  static prop uses, so `loadPropTemplate`/`normalizeToHeight` already handle them.
-  **Feasibility:** land it after the loader rework, which is what stops one GLB per item becoming
-  one network request per item.
-  **Risk:** `removeItem` scales to zero for the eat flourish and works on a loaded group the same as
-  a primitive mesh, so the flourish needs no special-casing.
-  **Mitigation:** check whether `test/services/mudiii-scene.test.mjs` already covers
-  `itemGeometryFor`/`itemMaterialFor` before writing new tests rather than updating them.
+- **Food reads small on the board even after the swap.** The hay bale renders: `food-crumb` and
+  `food-morsel` resolve through the manifest, the page fetches `haybale.glb` exactly once, and the
+  e2e is green. But at `targetHeight` 0.16 a crumb is 16% of the fox's height and reads as a speck
+  at normal camera distance. The heights were chosen to preserve the primitive spheres' footprint,
+  which had itself just been doubled, so this is the old size in a new shape.
+  **Tier:** Haiku. Two numbers in `data/mudiii-assets.json`.
+  **Do:** raise `food-crumb` and `food-morsel`'s `targetHeight` until a crumb reads as an object
+  rather than a dot, and screenshot to confirm rather than reasoning about the number. Keep the
+  morsel clearly larger than the crumb.
+  **Risk:** a bale taller than a goblin turns food into scenery and hides the agents behind it.
+  **Mitigation:** capture the board at the follow camera and look at it, at both sizes together.
 
 - **The screenshot ready-check has a dead branch.** `scripts/gen-screenshots.mjs:170`-`:175` waits on
   `window.mudiiiScene?.cells?.()` or `cellOf("fox-1")`. The scene surface (`mudiii-scene.mjs:754`)
