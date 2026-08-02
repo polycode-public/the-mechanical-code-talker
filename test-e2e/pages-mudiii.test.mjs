@@ -316,9 +316,16 @@ function directionOfHop(a, b) {
 
 /** The one-cell steps two board readings witnessed, as `{ id, direction,
  *  yaw }` — one per agent that ended `after` exactly one orthogonal cell from
- *  where `before` left it. */
+ *  where `before` left it.
+ *
+ *  Empty unless the two readings sit exactly one turn apart. Only then is the
+ *  gap between two cells a single step. The board keeps playing while the
+ *  driver round-trips, so a slow read can land several turns on, and three
+ *  steps (east, south, north) end one cell east of where they started with the
+ *  walker facing north. A wider pair calls that a step east and blames the yaw. */
 function facingSamplesBetween(before, after) {
   const out = [];
+  if (before.turn == null || after.turn == null || after.turn !== before.turn + 1) return out;
   for (const id of Object.keys(after.agents)) {
     const from = before.agents[id];
     const to = after.agents[id];
@@ -357,6 +364,11 @@ test("every agent that takes a one-cell step renders facing the way it actually 
       { timeout: READY_TIMEOUT_MS },
     );
     await pauseBoard(page);
+    // Slower than the deck's own default, so a read almost always lands on the
+    // very next turn and counts. facingSamplesBetween drops a pair that
+    // straddles more than one turn, and at the default 220ms a loaded runner
+    // straddles often enough to leave this run with nothing to assert on.
+    await page.locator("#delaySlider").fill("600");
     let reading = await boardReadingOf(page);
     const samples = [];
     await page.locator("#autoToggle").click();
