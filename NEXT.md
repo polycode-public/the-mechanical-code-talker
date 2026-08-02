@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Three.
+Five.
 
 - **The deployed site serves the starter memory brotli-compressed twice.** Decompressing one layer
   gives 4,534,836 bytes of more brotli; twice gives the real 93,496,025-byte JSON. Every browser
@@ -65,10 +65,28 @@ Three.
   **Do:** decide whether the test drives the click wrongly for the new model, or the threshold has a
   real bug a visitor would hit too. Not by lengthening a timeout.
 
-- **Three things the mudiii audit left open.** `PLAN_MUD_MUDIII.md` holds them: overhead frames the
-  board small in a wide window, the belief line names every unobserved crumb individually, and
-  `PAGE_WEIGHTS.md` has no figure for the three bundle.
-  **Owner:** nobody.
+- **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
+  with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
+  sky either side. The 14x14 chapel yard is the worst of the three.
+  **Owner:** nobody. **Tier:** Sonnet.
+  **Do:** rig the height off the canvas aspect as well as the board, so a wide window pulls in rather
+  than backing off.
+  **Risk:** a rig that fills a wide window crops a tall one. The height has to fit the tighter of the
+  two axes, not the looser.
+
+- **The belief line reads every unseen individual by name.** "What does the goblin see?" answers with
+  each unobserved crumb listed one by one, so the sentence is mostly a list of things that are not
+  there, and it grows with the food cap.
+  **Owner:** nobody. **Tier:** Sonnet.
+  **Do:** count the unobserved rather than naming them, keeping the named ones for what is in view.
+  **Risk:** the deception rail's whole point is that a lie about a specific individual lands visibly,
+  so a taught individual has to keep its name even while unseen.
+
+- **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's largest
+  single asset and the only measurement of it anywhere is prose.
+  **Owner:** nobody. **Tier:** Haiku.
+  **Do:** fold `public/vendor/three.js` into the next page-weights pass.
+  **Risk:** none beyond the report going stale on the next three bump, which is what it is for.
 
 ### Questions blocking work
 
