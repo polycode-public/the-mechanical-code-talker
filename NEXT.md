@@ -33,7 +33,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Nothing in flight.
+Batch 1. Seven worktree tracks, each owning files no sibling touches. Every mudiii item that edits
+`mudiii-viz.mjs` beyond the goblin item's single `await` waits for batch 2, because that file is the
+batch's only real collision point and the goblin item has to land first anyway.
+
+- **T1 goblin-render** — `mudiii-scene.mjs`, the `await` on `mudiii-viz.mjs:1219`, and the three
+  test files that pin them. Sonnet. Status: started.
+- **T2 smoke:deploy mudiii probe** — `scripts/post-deploy-smoke.mjs`. Haiku. Status: started.
+- **T3 index/home PAGE_ORDER** — `test-e2e/pages-index.test.mjs`, `test-e2e/pages-home.test.mjs`.
+  Haiku. Status: started.
+- **T4 `QUESTION_LEAD_RE` dedup** — `interpret/normalize.mjs`, `world-teach.mjs`, `chat.mjs`. Haiku.
+  Status: started.
+- **T5 import-cycle estate guard** — one new file under `test/estate/`. Haiku. Status: started.
+- **T6 adventure pill `data-command`** — `adventure-viz.mjs` and its pill tests. Haiku.
+  Status: started.
+- **T7 resolver purity invariant** — `CLAUDE.md`. Sonnet. Status: started.
 
 ## Open items
 
