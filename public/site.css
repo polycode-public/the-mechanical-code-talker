@@ -328,7 +328,11 @@ footer {
    and positions the actions over the card's bottom-right corner, where .claim-page's
    own pill leaves the row free. */
 .claim-cell { position: relative; display: flex; }
-.claim-cell > .claim { flex: 1 1 auto; padding-right: 4.6rem; }
+.claim-cell > .claim { flex: 1 1 auto; }
+/* The actions share the card's last line with .claim-page's filename pill. The
+   pill is left-aligned and the actions are pinned right, so the pill only has
+   to stay on one line to keep its new-tab glyph out of their way. */
+.claim-cell > .claim .claim-page { white-space: nowrap; }
 .claim-actions {
   position: absolute; right: 0.85rem; bottom: 0.95rem;
   display: flex; gap: 0.4rem;
@@ -347,12 +351,20 @@ footer {
 
 /* ---- the share sheet ------------------------------------------------------------
    One dialog, reused by every card. share.mjs fills it with that demo's own posts. */
+/* The page reset clears the UA's own `margin: auto` on a dialog, so the sheet
+   needs it back to sit in the middle. It also has to be a column flex box, or
+   .share-list has no height to scroll its overflow against and the last posts
+   are clipped instead. */
 .share-sheet {
   width: min(38rem, calc(100vw - 2rem));
   max-height: min(40rem, calc(100vh - 4rem));
+  margin: auto;
   padding: 0; border: 1px solid var(--line); border-radius: 16px;
   background: var(--bg); color: var(--ink);
 }
+.share-sheet[open] { display: flex; flex-direction: column; }
+.share-head, .share-note { flex: 0 0 auto; }
+.share-list { flex: 1 1 auto; min-height: 0; }
 .share-sheet::backdrop { background: rgba(0, 0, 0, 0.45); }
 .share-head {
   display: flex; align-items: flex-start; gap: 1rem;
@@ -391,17 +403,22 @@ footer {
 .share-note { padding: 0 1.2rem 1rem; margin: 0; font-size: 0.8rem; color: var(--muted); }
 
 /* ---- the capability matrix ------------------------------------------------------ */
+/* Twelve capability columns fit inside main's own width on a laptop; on
+   anything narrower the box scrolls sideways so the page itself never does. */
 .matrix-wrap { overflow-x: auto; margin: 1.2rem 0 0.6rem; -webkit-overflow-scrolling: touch; }
-table.matrix { border-collapse: collapse; font-size: 0.85rem; min-width: 46rem; }
-table.matrix th, table.matrix td { border-bottom: 1px solid var(--line); padding: 0.55rem 0.5rem; }
+table.matrix { border-collapse: collapse; font-size: 0.85rem; min-width: 55rem; width: 100%; }
+table.matrix th, table.matrix td { border-bottom: 1px solid var(--line); padding: 0.55rem 0.3rem; }
 table.matrix thead th {
-  font: 600 0.68rem/1.35 var(--font-mono);
-  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
-  text-align: center; vertical-align: bottom; width: 4.6rem;
+  font: 600 0.62rem/1.35 var(--font-mono);
+  letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted);
+  text-align: center; vertical-align: bottom; width: 3.7rem;
   border-bottom: 1px solid var(--entail);
 }
-table.matrix thead th:first-child { text-align: left; width: auto; min-width: 13rem; }
-table.matrix tbody th { text-align: left; font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+table.matrix thead th:first-child { text-align: left; width: auto; min-width: 10.5rem; padding-left: 0; }
+table.matrix tbody th {
+  text-align: left; font-weight: 600; font-size: 0.88rem;
+  white-space: nowrap; padding-left: 0;
+}
 table.matrix tbody th a { color: var(--ink); }
 table.matrix tbody th a:hover { color: var(--taught); }
 table.matrix tbody tr:hover { background: var(--card); }
@@ -496,7 +513,6 @@ table.matrix td.focus { color: var(--taught); }
   .about-crumbs a[aria-current="true"] { border-left: none; }
 }
 @media (max-width: 520px) {
-  .claim-cell > .claim { padding-right: 1.2rem; padding-bottom: 3rem; }
   .about-crumbs { columns: 1; }
 }
 
