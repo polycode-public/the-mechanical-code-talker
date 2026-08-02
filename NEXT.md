@@ -33,15 +33,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Loop batch 2. Three tracks, and **only one of them touches a browser** — batch 1 lost two tracks to
-three concurrent `npm run demo:build` runs, so that is now the cap. The other two write e2e
-assertions but never run them; the coordinator runs the e2e tier after merge.
+Three tracks, all live. Two of them want a browser, which is one more than the cap batch 1's losses
+set — the deck track was already holding that slot when the layout work came in, so the layout track
+is capped at a single `demo:build` and told to report rather than retry if it fails.
 
-- **T29 deck layout** — `mudiii-viz.mjs`. Sonnet. Status: started.
-- **T30 hand-driving, engine half** — `predator-prey.mjs`, `mudiii-browser-entry.mjs`. Top tier.
-  Status: started. The directional ring itself waits for T29 to release `mudiii-viz.mjs`.
-- **T27 food size** — `data/mudiii-assets.json` and the screenshot it must open. The batch's one
-  browser track. Sonnet. Status: started.
+- **T28 presentation deck** — the ten claim renames, an about page per demo with left-nav sections
+  and a Next button, five-plus share posts per demo, the capability table, and the header strip's
+  links. `public/index.html`, the new `public/*-about.html` pages, `build-demo-site.mjs`, and the two
+  e2e page-order files. Top tier. Status: started.
+- **T29 deck layout** — the map moves inside the control panel at both orientations.
+  `mudiii-viz.mjs`. Sonnet. Status: started, uncommitted work in its worktree.
+- **T30 hand-driving, engine half** — `manualMoves` on `runTownSquareTick` and
+  `session.driveAgent`. `predator-prey.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
+
+Queued behind those two files coming free: the chat-above-belief-cards markup move, the directional
+ring, the click-to-turn item, and the demo-page header helper (which also needs the about pages to
+exist before its third link has a target).
 
 ## Open items
 
