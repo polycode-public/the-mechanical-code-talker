@@ -4448,14 +4448,43 @@ const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)
  *  remember/note/keep in mind/…), so this is matched against the RAW
  *  (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which is tried against
  *  the remember-wrapped surface too. */
-const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+/** The verbs that lead a retraction. "forget" is the one /help names; the other
+ *  three are what people type meaning the same thing, and each landed on the
+ *  parse wall. None is a TEACH_RE lead verb, so widening the set here cannot
+ *  make a teach sentence read as a retraction. */
+const RETRACT_LEAD_VERBS = "forget|unlearn|delete|remove";
+const RETRACT_FORGET_RE = new RegExp(
+  `^(?:${RETRACT_LEAD_VERBS})\\s+(?:that\\s+)?(?:a\\s+|an\\s+)?([\\w-]+(?:\\s+[\\w-]+)?)`
+  + "\\s+(?:is|are)\\s+(?:an?\\s+)?(?:(?:kind|type)\\s+of\\s+)?([\\w-]+)$",
+  "i",
+);
+/** "forget mira" / "forget about mira" — a retraction that names the subject and
+ *  no fact. There is nothing to remove without knowing WHICH fact, so this never
+ *  deletes; it answers with what is stored about the subject and the phrasing
+ *  that removes one. Two tokens wide, matching the retraction subject above.
+ *  Narrower than the full-sentence lead set: "delete the readme" is a plausible
+ *  request about a file, and reading it as a memory retraction would answer a
+ *  question nobody asked. */
+const RETRACT_BARE_SUBJECT_RE = /^(?:forget|unlearn)\s+(?:about\s+)?(?:the\s+)?([\w-]+(?:\s+[\w-]+)?)$/i;
+
+/** The subject a bare retraction names, or null when the line isn't that shape
+ *  or names no subject at all — "forget it"/"nevermind" is someone dropping the
+ *  thread, and a pronoun names nothing the store can look up. */
+function bareRetractSubject(query) {
+  const q = String(query).trim().replace(/[?.!]+\s*$/, "");
+  if (DISMISSAL.has(q.toLowerCase())) return null;
+  const m = q.match(RETRACT_BARE_SUBJECT_RE);
+  if (!m) return null;
+  const subject = m[1].trim();
+  return (isTeachPronoun(subject) || SESSION_REFERENT_TERMS.has(subject.toLowerCase())) ? null : subject;
+}
 /** The locative teach shape ("disk-1 rests on peg-b") — the board-fact
  *  surface, shared by the mid-plan write guard and the locative forget. */
 const BOARD_TEACH_LOCATIVE_RE = new RegExp(`^([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 /** "forget that disk-1 rests on peg-b" — the locative twin of
  *  RETRACT_FORGET_RE: a plain minted mgx:<verb>-<prep> fact has no entailment
  *  cascade, so removing the one row IS the retraction. */
-const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^forget\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
+const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^(?:${RETRACT_LEAD_VERBS})\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 
 /** The closed related-to pair — "X relates to Y" / "X is related to Y" —
  *  minted onto mgx:relatedTo (the SKOS view's skos:related source), so the
@@ -4582,7 +4611,8 @@ async function teachExclusionReason(sentence) {
   if (TEACH_EXCLUDE_REQUEST_LEAD_RE.test(s) || (await hasMidSentenceInterrogative(s))) return "interrogative";
   const unpunctuated = s.replace(/[.!?]+\s*$/, "");
   if (TEACH_EXCLUDE_IMPERATIVE_LEAD_RE.test(s)
-    && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)) return "imperative";
+    && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)
+    && !bareRetractSubject(unpunctuated)) return "imperative";
   if (TEACH_EXCLUDE_META_TOKEN_RE.test(s) && !TEACH_PRONOUN_BARE_RE.test(s)) return "self-referential";
   return null;
 }
@@ -4976,6 +5006,34 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         text: `"${retractSubject} is a kind of ${retractObject}" isn't stored, so there's nothing to forget.`,
         via: "retract", miss: true,
       };
+    }
+  }
+
+  // BARE RETRACTION — "forget mira", with no fact named. Nothing is removed:
+  // which fact to drop is exactly what the sentence leaves out. Answering with
+  // what IS stored about the subject, plus the phrasing that removes one, beats
+  // the orientation card the short form used to get.
+  {
+    const subject = memoryDir && !QUESTION_LEAD_RE.test(forgetSrc) ? bareRetractSubject(forgetSrc) : null;
+    if (subject) {
+      try {
+        const { loadMemory: loadMemForBare, normFactTerm: normTermForBare, readFactRows: readRowsForBare } = await import("../adapters/memory/core.mjs");
+        const variants = factTermVariants(normTermForBare, subject);
+        const held = readRowsForBare(await loadMemForBare(memoryDir)).filter((r) => variants.has(r.subject));
+        if (held.length) {
+          const shown = held.slice(0, 3).map((r) => `"${r.subject} ${predicatePhrase(r.predicate)} ${r.object}"`).join(", ");
+          const more = held.length > 3 ? `, and ${held.length - 3} more` : "";
+          return {
+            text: `I need to know which fact to drop. About ${subject} I hold ${shown}${more}. `
+              + `Say "forget that ${subject} is a <kind>" to remove one.`,
+            via: "retract", miss: true,
+          };
+        }
+        return {
+          text: `I hold nothing about "${subject}", so there's nothing to forget.`,
+          via: "retract", miss: true,
+        };
+      } catch { /* store unavailable — fall through to the ordinary cascade */ }
     }
   }
 
@@ -13491,7 +13549,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     dialogueLaneOverride = "game-inform";
     note(trace, "lane: (2) MID-GAME NUDGE — an unparsed short turn stayed inside the live game frame instead of the identity card");
     note(trace, "goal: keep the running guess-the-number game on track");
-  } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)) {
+  } else if (isConversationalCandidate && !shortTermQuestionTerm(gateQuery) && !shortTermQuestionTerm(query)
+      && !bareRetractSubject(gateQuery) && !bareRetractSubject(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // A short question naming a TERM is excluded: nothing above resolved it, so
