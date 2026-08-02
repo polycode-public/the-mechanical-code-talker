@@ -534,6 +534,53 @@ test("the npcs slider adds animals to the world without adding a pane, and they 
   }
 });
 
+/** The newest tmct reply in a pane's own chat log, as plain text. */
+const lastPaneAnswer = async (page, slot) =>
+  (await page.locator(`#window-${slot}-chatlog > div.a`).last().textContent()).trim();
+
+test("the deck's teach checkbox is read on every turn, not merely rendered: ticked it writes a world fact, unticked the same sentence writes nothing", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    // The burrow's own sentence table says placement as "lies in", never the
+    // manor's "is in" — a world teach speaks the vocabulary of the world it
+    // is about.
+    await page.locator("#teachToggle").check();
+    await sendMudCommand(page, "a", "Pebble lies in the garden.");
+    assert.match(
+      await lastPaneAnswer(page, "a"),
+      /^noted — there's a pebble in the garden now\./,
+      "a ticked box reads the sentence as a fact and answers in world-teach's own confirmation shape",
+    );
+
+    // Chat's own generic teach lane answers "noted — remembered: ...", so the
+    // check is against world-teach's confirmation in particular, not the word.
+    await page.locator("#teachToggle").uncheck();
+    await sendMudCommand(page, "a", "Twig lies in the garden.");
+    assert.doesNotMatch(
+      await lastPaneAnswer(page, "a"),
+      /^noted — (?:there's a|the) twig.* in the garden now\./,
+      "unticked, the same kind of sentence takes the ordinary path instead",
+    );
+
+    // The proof that the unticked turn wrote nothing: ticking the box back on
+    // and saying it again still has a fact left to write. Had the checkbox
+    // been ignored, the world would already hold it and this would answer
+    // "the world already said that."
+    await page.locator("#teachToggle").check();
+    await sendMudCommand(page, "a", "Twig lies in the garden.");
+    assert.match(
+      await lastPaneAnswer(page, "a"),
+      /^noted — (?:there's a twig|the twig is) in the garden now\./,
+      "the unticked turn left the world untouched, so this one is still a real write",
+    );
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error running a turn either side of the teach checkbox");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the deck's explanatory note frames the demo against MUDII and Colossal Cave Adventure", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {
