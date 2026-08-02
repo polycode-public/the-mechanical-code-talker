@@ -51,7 +51,7 @@ import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
   rowsForWorld, appendLogLine,
 } from "./viz-theme.mjs";
-import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
+import { createTicker, createSerialQueue, prefersReducedMotion } from "./viz-ticker.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "./mud-editor.mjs";
 import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
@@ -535,10 +535,12 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
       </div>
       <div class="deck-camera">
         <label class="deck-slider">follow
-          <select id="agentSelect" class="deck-select" aria-label="which agent to follow">
+          <select id="agentSelect" class="deck-select" aria-label="which agent to follow"
+                  aria-describedby="agentSelectHint">
 ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${escapeHtml(a.id)}</option>`).join("\n")}
           </select>
         </label>
+        <span class="deck-hint" id="agentSelectHint" hidden>pause to swap</span>
         <div class="camera-mode" id="cameraMode" role="group" aria-label="camera mode">
           <button type="button" data-mode="follow" aria-pressed="true">follow</button>
           <button type="button" data-mode="pov" aria-pressed="false">pov</button>
@@ -556,7 +558,6 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
     <canvas id="sceneCanvas"></canvas>
     <p class="scene-status" id="sceneStatus" role="status"></p>
   </section>
-  <div class="hud-row" id="hudRow" aria-label="every agent's own status"></div>
   <div class="edit-stage" id="mudiiiEditStage" aria-label="the square's own facts, in plain sentences">
     <section class="edit-text" aria-label="the world's facts as editable sentences">
       <h2>the square, in plain sentences</h2>
@@ -591,6 +592,7 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
       </form>
     </div>
   </section>
+  <div class="hud-row" id="hudRow" aria-label="every agent's own status"></div>
 </main>
 <script>
 const MUDIII_PAGE_DATA = ${pageData};
@@ -653,8 +655,17 @@ const MUDIII_STYLE = `
     font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
     padding: .32rem .7rem; border: 1px solid var(--square-stone-dark); border-radius: 3px;
     background: rgba(255,255,255,.5); color: var(--square-ink);
+    /* A select is as wide as its longest option, and a square's label runs to
+       "town square (12x12, 1 fox, 3 goblins)" — on a phone that alone made the
+       whole page scroll sideways. */
+    min-width: 0; max-width: 100%;
   }
+  #scenarioSelect { flex: 1 1 9rem; }
   .deck-select:hover { border-color: var(--square-accent); }
+  .deck-select:disabled { opacity: .45; cursor: default; }
+  .deck-select:disabled:hover { border-color: var(--square-stone-dark); }
+  .deck-hint { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--square-stone-dark); }
+  .deck-hint[hidden] { display: none; }
   .deck-play { background: var(--square-ink) !important; color: var(--parchment); border-color: var(--square-ink) !important; padding: .38rem 1.1rem !important; }
   .deck-play[aria-pressed="true"] { background: var(--square-accent) !important; border-color: var(--square-accent) !important; color: var(--square-ink); }
   .deck-turns { margin-left: auto; font-size: .74rem; color: var(--square-stone-dark); background: var(--square-stone-dark); background: rgba(43,35,24,.9); color: var(--square-accent); border-radius: 2px; padding: .1rem .5rem; }
@@ -703,7 +714,7 @@ const MUDIII_STYLE = `
   }
   .scene-status:empty { display: none; }
 
-  .hud-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 1rem; }
+  .hud-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
   .hud-card {
     flex: 1 1 220px; min-width: 200px; max-width: 320px;
     background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
@@ -803,6 +814,7 @@ function pageScript() {
   const DATA = MUDIII_PAGE_DATA;
   const createTicker = ${createTicker.toString()};
   const createSerialQueue = ${createSerialQueue.toString()};
+  const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const escapeHtml = ${escapeHtml.toString()};
   const esc = escapeHtml;
   const appendLogLine = ${appendLogLine.toString()};
@@ -829,21 +841,24 @@ function pageScript() {
   let scenarioIndex = 0;
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
   const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
-  const rosterOf = function (s, role) {
-    return (s.agents || []).filter(function (a) { return !role || a.role === role; }).map(function (a) { return a.id; });
-  };
 
-  // ---- roster picking: the same shuffle-and-slice mud-browser-entry.mjs's
-  // own pickMudRoster performs, kept here rather than in the bundle because
-  // it needs no engine at all and this page's own tests exercise it through
-  // the rendered controls, never directly.
-  function pickRoster(roster, count) {
-    const pool = [...(roster || [])];
-    for (let i = pool.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-    }
-    return pool.slice(0, Math.min(count, pool.length));
+  // ---- roster minting -----------------------------------------------------
+  // The page asks for a COUNT and names the ids it is about to get back: the
+  // engine mints <prefix>-1..N at seeded cells, so a slider can call for more
+  // animals than the scenario's own opening cast carries and still be met. The
+  // prefix is read off the scenario's own first agent of that role, so a square
+  // that casts something other than foxes and goblins still names its cast
+  // correctly. Drawing from the scenario's list instead capped every square at
+  // whatever its layout happened to build, and a shuffled draw would leave two
+  // loads of the same square with different casts.
+  function rosterPrefixFor(s, role) {
+    const first = (s.agents || []).find(function (a) { return a && a.role === role; });
+    return first ? roleOfAgentId(first.id) : role;
+  }
+  function mintRoster(prefix, count) {
+    const ids = [];
+    for (let i = 1; i <= count; i += 1) ids.push(prefix + "-" + i);
+    return ids;
   }
 
   let cast = [];
@@ -857,6 +872,10 @@ function pageScript() {
   let tickQueue = createSerialQueue();
   function serializeTick(fn) { return tickQueue.run(fn); }
   let camera = { mode: "follow", selectedId: null, status: null };
+  // The mode a despawn fallback took away, held until the visitor picks
+  // another agent. Without it, choosing someone new after a fox ate your
+  // goblin leaves the camera overhead and the follow button unlit.
+  let cameraModeBeforeFallback = null;
   let foodArmed = false;
   let livePills = [];
   let pillComplete = null;
@@ -903,7 +922,9 @@ function pageScript() {
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
     callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
-    camera = nextCameraSelection(camera, agentsList(), result.ecology || []);
+    const nextCamera = nextCameraSelection(camera, agentsList(), result.ecology || []);
+    if (nextCamera.status && camera.mode !== "overhead") cameraModeBeforeFallback = camera.mode;
+    camera = nextCamera;
     callScene("setCamera", camera);
     if (camera.status) setSceneStatus(camera.status);
   }
@@ -926,6 +947,12 @@ function pageScript() {
         const playBtn = el("autoToggle");
         playBtn.setAttribute("aria-pressed", state.playing ? "true" : "false");
         playBtn.textContent = state.playing ? "\\u23F8 pause" : "\\u25B6 play";
+        // The follow control reads the ticker's own state, never a second
+        // "am I playing" the page keeps for itself, so the two can never
+        // disagree. It closes while the board plays because a redraw lands
+        // on top of the open dropdown and loses the pick.
+        el("agentSelect").disabled = state.playing;
+        el("agentSelectHint").hidden = !state.playing;
       },
       hasNext: hasNext,
       wait: liveWait,
@@ -1071,7 +1098,10 @@ function pageScript() {
   }
   el("agentSelect").addEventListener("change", function () {
     const id = el("agentSelect").value || null;
-    camera = { mode: camera.mode, selectedId: id, status: null };
+    const mode = cameraModeBeforeFallback || camera.mode;
+    cameraModeBeforeFallback = null;
+    camera = { mode: mode, selectedId: id, status: null };
+    renderCameraButtons();
     callScene("setCamera", camera);
   });
 
@@ -1084,6 +1114,7 @@ function pageScript() {
   el("cameraMode").addEventListener("click", function (e) {
     const btn = e.target.closest("button[data-mode]");
     if (!btn) return;
+    cameraModeBeforeFallback = null;
     camera = { mode: btn.getAttribute("data-mode"), selectedId: camera.selectedId, status: null };
     renderCameraButtons();
     callScene("setCamera", camera);
@@ -1219,8 +1250,11 @@ function pageScript() {
   }
 
   // ---- booting ---------------------------------------------------------
-  // Nothing plays on load: booting draws the opening state and stops there.
-  // Ticking waits for the deck's own play control, exactly like mud.html.
+  // The board opens playing: a square standing still reads as broken, and the
+  // first thing anyone does is press play anyway. A visitor who asked for
+  // reduced motion gets the opening board drawn and left still — the play
+  // control is right there — because an autoplaying board is exactly the
+  // unasked-for movement that setting is about.
   let bootSeq = 0;
   async function boot() {
     const seq = bootSeq += 1;
@@ -1229,9 +1263,10 @@ function pageScript() {
     globalTurn = 0;
     tickQueue = createSerialQueue();
     camera = { mode: "follow", selectedId: null, status: null };
+    cameraModeBeforeFallback = null;
     const s = scenario();
-    const foxes = pickRoster(rosterOf(s, "predator"), chosenFoxCount());
-    const goblins = pickRoster(rosterOf(s, "prey"), chosenGoblinCount());
+    const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
+    const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
     cast = foxes.concat(goblins);
     showFoxCount(foxes.length);
     showGoblinCount(goblins.length);
@@ -1254,6 +1289,10 @@ function pageScript() {
     camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
     applyTickResult(opening);
     renderAll();
+    if (!prefersReducedMotion()) {
+      autoOn = true;
+      ensureTicker().play();
+    }
   }
 
   function renderAll() {
