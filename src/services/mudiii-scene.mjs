@@ -369,6 +369,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var routeLine = null, routeCells = [];
   var flashMesh = null, flashUntil = 0;
   var FLASH_MS = 600;
+  // The floor a one-shot flourish is held for when its own clip is shorter,
+  // long enough that a bite reads as a bite at the deck's fastest tick.
+  var ONE_SHOT_HOLD_MIN_MS = 450;
   var tickRungs = {};
   var cameraState = { mode: "overhead", selectedId: null };
   var cameraTween = null, lookAtTween = null;
@@ -675,7 +678,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var entry = {
       group: new THREE.Group(), tween: null, cell: null, facing: agent.facing, role: agent.role,
       kind: kind, mixer: null, actions: {}, currentClip: null, clipMap: null, oneShotAction: null,
-      model: null,
+      oneShotUntil: 0, model: null,
     };
     entry.group.visible = false;
     scene.add(entry.group);
@@ -708,6 +711,12 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     // keep blending into every clip after it, forever). Fade it out before
     // any of the guards below can skip the rest of this call.
     if (entry.oneShotAction) {
+      // A flourish holds for its own clip length, floored, before anything may
+      // fade it out. At the deck's 220ms default the next tick otherwise
+      // landed during the wind-up and a bite read as a twitch. This holds the
+      // ANIMATION only: the tick that arrived has already moved the agent, so
+      // the simulation never waits on a flourish.
+      if (performance.now() < entry.oneShotUntil) return;
       entry.oneShotAction.fadeOut(0.15);
       entry.oneShotAction = null;
     }
@@ -739,6 +748,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     action.fadeIn(0.15).play();
     if (prev) prev.fadeOut(0.15);
     entry.oneShotAction = action;
+    var clip = typeof action.getClip === "function" ? action.getClip() : null;
+    entry.oneShotUntil = performance.now()
+      + Math.max(ONE_SHOT_HOLD_MIN_MS, clip && clip.duration ? clip.duration * 1000 : 0);
     entry.currentClip = null;
   }
 

@@ -333,6 +333,21 @@ test("mudiiiSceneScript measures a mesh through the loaded model, never the grou
   assert.match(script, /entry\.model = gltf\.scene;/);
 });
 
+test("mudiiiSceneScript holds a one-shot flourish long enough to read, without holding the turn", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /var ONE_SHOT_HOLD_MIN_MS = 450;/, "a floor, for a clip shorter than one tick");
+  assert.match(
+    script,
+    /entry\.oneShotUntil = performance\.now\(\)\s*\+ Math\.max\(ONE_SHOT_HOLD_MIN_MS, clip && clip\.duration \? clip\.duration \* 1000 : 0\)/,
+    "a longer clip gets its own length rather than being cut to the floor",
+  );
+  assert.match(script, /if \(performance\.now\(\) < entry\.oneShotUntil\) return;/, "nothing may fade the flourish out inside the hold");
+  const applyAgentTick = /function applyAgentTick\([\s\S]*?\n  \}/.exec(script)[0];
+  assert.match(applyAgentTick, /entry\.tween = reseedTween/, "the agent still moves on a tick that lands inside a hold");
+  assert.doesNotMatch(applyAgentTick, /oneShotUntil/, "the hold lives in the clip player, never in the movement path");
+});
+
 test("mudiiiSceneScript draws a clicked cell's route along the board's own cells, never a straight segment", async () => {
   const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
   const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
