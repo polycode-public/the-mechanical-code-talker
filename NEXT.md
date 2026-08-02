@@ -61,6 +61,31 @@ only a code push exercises the deployed tier.
 
 ## Open items
 
+### mudiii.html — camera
+
+- **In POV and FOLLOW the mouse cannot look around.** The operator wants to drag to look while
+  following or riding an agent. Today `orbitControls.enabled = cameraState.mode === "overhead"`
+  (`mudiii-scene.mjs:888`), so orbiting works only in overhead; in the other two modes the camera is
+  pinned to whatever `cameraRigFor` computes and re-aimed on every tick.
+  **Tier:** Sonnet. The hard part is what happens when the agent moves under a camera the visitor has
+  turned.
+  **Do:** let the visitor's drag own the *direction* while the rig keeps owning the *position*. In
+  POV the rig sits the camera at the agent's eye (`world.x, 1.6, world.z`) and looks four cells along
+  its facing; in follow it sits behind and above. Keep those positions tweened as they are, and apply
+  a visitor-controlled yaw and pitch offset on top of the rig's own aim rather than replacing it.
+  Orbit controls as they stand will fight the per-tick re-aim, because both want to set the camera.
+  Either drive the offset directly from pointer events, or keep OrbitControls and re-seed its target
+  from the rig each tick instead of letting it own the position.
+  **Decisions worth making explicitly:** whether the look resets when the agent turns (it should not,
+  or every tick would yank the view back), whether pitch is clamped so a visitor cannot roll under
+  the ground plane, and whether switching camera mode clears the offset.
+  **Risk:** `applyTickResult` re-issues `setCamera` on every tick, and `reseedTween` re-aims from
+  wherever the camera currently is. A naive fix produces a camera that snaps back 220ms after every
+  drag, which reads as broken rather than as locked.
+  **Mitigation:** this is a feel change, so watch it rather than asserting it. A unit test can pin
+  that the offset survives a tick; only using it tells you whether it moves nicely.
+
+
 ### The CLI answers where it should refuse
 
 `reports/CLI_EDGE_HUNT.md` holds the transcripts. These break the product's central promise, so they
