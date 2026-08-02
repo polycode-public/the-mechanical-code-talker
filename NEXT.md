@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Six tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+Five tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
 them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
 router's phantom budget.
 
@@ -57,9 +57,6 @@ deployed site directly rather than serving its own.
 - **T60 INF-4's chain bound and its pins** — raise `maxHops` at both chat call sites and flip the 30
   pinned ceiling rows in the same commit, then re-run the bench. `chat.mjs`, `syllogise.mjs`, the
   INFBENCH generator. Top tier. Status: started.
-- **T61 `run the impact of <file>`** — merged. `src/domain/ask.mjs`, `ask-vocab.mjs`,
-  `interpret/strategies/keywords.mjs`. Sonnet. Status: resumed to add the pins its fix landed
-  without.
 - **T62 the deployed seed readiness race** — three `pages-timing` failures where the page reports
   ready with an empty store. `pages-ingest.test.mjs`, `pages-chat-export.test.mjs`,
   `pages-service-worker.test.mjs`, `ingest-viz.mjs`. Top tier. Status: started.
@@ -127,19 +124,6 @@ deployed site directly rather than serving its own.
   **Not covered by that playtest:** the p2p handshake past minting an invite, file-upload paths, the
   four sprite group pages, ingest's Document mode, and reduced-motion behaviour. **In flight** as
   T57, against the deployed site so it needs no build slot.
-
-- **`run the impact of <file>` — fixed, and the fix has no pin yet.** The grammar lives in
-  `src/domain/ask.mjs`, not `src/tools/ask.mjs`. Two stacked bugs, one root: `RELATIONS.calls.verbs`
-  legitimately holds "run", so `parseKeywordSpot` read the whole tail as one object string; then the
-  relaxation cascade dropped "impact" as filler and **answered `what calls app/lib/a.mjs` for real**,
-  which is worse than the reported miss. A curated set built from the router registry's own 17
-  capability labels now declines both, and a bare `what calls impact` still parses as a question
-  about a symbol named `impact`, deliberately.
-  **Still open:** the commit changed three source files and no test file, so nothing pins the
-  behaviour. The track is adding the pins now, including one for the confidently-wrong answer, which
-  is the least obvious of the two to a future reader. Also checking whether `run the calls of X` can
-  decline at the same seam without touching `findPhrase`'s iteration order.
-
 
 - **Every demo page with PLAY needs a STEP button that advances one whole turn.** Operator request.
   Three pages already have one and are the pattern: `plan-viz.mjs:452` (`step ▶`),
