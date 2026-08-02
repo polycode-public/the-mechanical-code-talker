@@ -1679,6 +1679,21 @@ const BYE = new Set([
 const WHY = new Set([
   "why", "how", "how so", "how come", "explain", "say more", "go on",
   "elaborate", "tell me more", "more detail", "expand",
+  // Provenance follow-ups. Grounding is the pitch, so "how do you know" is a
+  // likely next line after any answer, and the answer it follows already
+  // carries its own source citation and traversal receipt — the same two
+  // things a verbose re-render prints. Without these the same ask landed on
+  // the orientation card ("prove it"), the grammar wall ("how do you know"),
+  // or a vocabulary lookup of the words themselves ("what is your source").
+  "how do you know", "how do you know that", "how do you know this",
+  "how do you know it", "how do u know", "how did you know that",
+  "prove it", "prove that", "are you sure", "are you sure about that",
+  "you sure", "show your working", "show your work", "show me your working",
+  "what is your source", "what's your source", "whats your source",
+  "what are your sources", "what's your evidence", "whats your evidence",
+  "what is your evidence", "says who", "based on what", "on what basis",
+  "where did you get that", "where did you learn that", "where did that come from",
+  "how did you get that", "who told you that", "who told you",
 ]);
 /** Bare acknowledgements — routed identically to THANKS (an "ok"/"cool" after an
  *  answer reads the same as a thanks, not a new question). Kept separate from
