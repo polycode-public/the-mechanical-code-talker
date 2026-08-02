@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Five.
+Four.
 
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
@@ -60,15 +60,6 @@ Five.
   **Owner:** a track is on it. **Tier:** Haiku.
   **Do:** fold `public/vendor/three.js` into the next page-weights pass.
   **Risk:** none beyond the report going stale on the next three bump, which is what it is for.
-
-- **A click that misses the board says nothing.** `resolveCellClick` returns silently when the ray
-  hits no ground, so a visitor clicking the sky beside the square gets no feedback. On a stage where
-  the board is a fifth of the width that is most of the canvas, and it is what made the e2e failure
-  above so opaque.
-  **Owner:** nobody. **Tier:** Sonnet.
-  **Do:** decide whether a miss deserves a word. It is a design call, not a bug fix.
-  **Risk:** a message on every stray sky click would be noise in follow and POV, where clicking past
-  the board is normal. Any answer has to be mode-aware.
 
 - **Four plan-doc audits are running.** `PLAN_MUD*` (six docs) and the language and reasoning set
   (six docs), each against the code rather than against itself. The mudiii audit that set the
