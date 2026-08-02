@@ -1333,7 +1333,10 @@ ${shareOverlayHtml({ withTape: true })}
       factPillUnitEl.textContent = percent === null ? " starter memory\\u2026" : " of starter memory";
       return;
     }
-    if (seedState === "indexing") {
+    // "ready" lands a moment before the first memoryStats read returns, and
+    // there is no count to show until it does. Holding the indexing words over
+    // that gap keeps the pill from flashing a zero it does not mean.
+    if (seedState === "indexing" || (seedState === "ready" && lastStatsTotal === null)) {
       factPillEl.dataset.state = "loading";
       factPillValueEl.textContent = "indexing";
       factPillUnitEl.textContent = " " + seedFacts.toLocaleString() + " facts\\u2026";
