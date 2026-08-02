@@ -80,13 +80,21 @@ deployed site directly rather than serving its own.
   `waitForFunction` on `window.tmctIngestReady`, then `await page.evaluate` of it). The diagnostic
   already in the test reports **no console errors and no failed requests**. So the page said ready,
   every asset loaded, and the store was empty.
+  **The refusal itself is correct, and this is not an honesty fault.** Operator's ruling: "the answer
+  is not wrong. If the graph does not know what a dog is at the time that it is asked then it doesn't
+  know. We are loading more data so we can be helpful and inform the user but there is no single
+  state, the graph is a moving state." A miss is honest at the moment it is given, and the graph
+  growing afterwards does not make it retrospectively a lie. So there is no "ready" boundary to build
+  and nothing to gate the input on.
   **Tier:** top. **In flight** as T62.
-  **Do:** find what the readiness promise actually waits for, and measure whether a real visitor hits
-  the same window on a cold CloudFront hit. If chat.html refuses a fact it holds for a second after
-  load, that is a user-facing honesty failure rather than a test flake. `.gitlab-ci.yml:647`-`:651`
-  says the seed is ~93MB, which if true is the centre of this.
-  **Risk:** the cheap move is a longer budget or a retry, and it would turn a red test green while
-  leaving a page that lies about what it knows.
+  **Do:** two separate things. On the product side, one visible indicator that the graph is still
+  loading, following the page's existing status pattern, gone when loading finishes. On the test
+  side, wait for the seed load to finish before asserting on seeded content — a test-correctness fix,
+  not a product contract, and not a bigger budget.
+  **Also measure**, to size the indicator's job: the real window in milliseconds from a cold context
+  against the deployed site, and the real seed size (`.gitlab-ci.yml:647`-`:651` says ~93MB).
+  **Risk:** the cheap move is a longer budget or a retry, which turns a red test green while leaving
+  it asserting against a store that has not finished arriving.
 
 - **Two agents are minted on one cell.** `goblin-1` and `goblin-2` both open on `cell-14-14` in the
   chapel yard, while `blockedCellReason` treats a single agent as enough to block a cell. Found while
