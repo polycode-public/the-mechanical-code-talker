@@ -50,10 +50,12 @@ the deployed site and T59 is docs-only, so neither needs a build.
   `sprites-viz.mjs`, `mud-viz.mjs`, `spider-fly-viz.mjs`, `adventure-viz.mjs`, `index.html`. Sonnet.
   Holds a build slot. Status: started.
 
-- **T49 the chat freeze, then the CLI comfort items** — redirected: a plain English question locks
-  the tab for 1054s before refusing correctly, and that outranks everything else it was sent for.
-  `chat.mjs`, `syllogise.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier.
-  Status: started.
+- **T49 the chat freeze and the CLI comfort items** — landed and merged, then broke five tests on
+  `main`. Four in `code-explorer-browser-entry.test.mjs`: real questions over a real code graph stop
+  parsing, so a lane change moved where a code-shaped question lands. One in `ui-context-miss.
+  test.mjs`: the count decline dropped its CLI remedy for every surface, where the test pins keeping
+  it for the CLI and dropping it only for a page. `main` is red and unpushed until both are fixed.
+  Status: resumed on the regressions.
 - **T55 mudiii's camera look, the double-minted cell and its STEP button** — drag to look in POV and
   FOLLOW, two agents opening on one cell, and a STEP button that advances one whole turn.
   `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier. Holds a build slot.
@@ -80,6 +82,19 @@ the deployed site and T59 is docs-only, so neither needs a build.
 ## Open items
 
 ### Found by playtest and benchmark, not yet fixed
+
+- **Five tests fail on merged `main` after the chat-freeze track landed.** Four in
+  `test/adapters/code-explorer-browser-entry.test.mjs` (`:81`, `:98`, `:105`, `:121`) — the engine
+  stops parsing questions it used to parse, and one asks for `['Task.title']` and gets `[]`. One in
+  `test/services/ui-context-miss.test.mjs:49` — `answerCount`'s empty-graph miss now drops the
+  `tmct index` remedy on every surface, where the test pins keeping it for the CLI and dropping it
+  only for a page. The suite reads 6031 tests, 6026 pass, 5 fail.
+  **Tier:** top. Same track that caused it, resumed with its own context.
+  **Do:** find the real cause of the four rather than assuming a lane; the likely movers are the
+  `define dog` vocabulary read after the code lane misses, and the held-back index-this-repo nudge.
+  For the fifth, decide whether the remedy belongs on the CLI and restore it there.
+  **Risk:** `main` cannot be pushed while these are red, so every other track's merge queues behind
+  this one.
 
 - **A plain English question locks the tab for seventeen minutes.**
   `who is the president of France` on chat.html froze the page for a measured **1054 seconds** before
