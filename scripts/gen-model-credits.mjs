@@ -18,8 +18,22 @@ function loadAllowlist() {
   return data.assets;
 }
 
-function generateCredits() {
-  const assets = loadAllowlist();
+function dedupeByDestPath(assets) {
+  // Two manifest keys can share one destPath (a single GLB reused at two
+  // target heights, e.g. the food-crumb/food-morsel pair both pointing at
+  // haybale.glb). CREDITS.md lists each file once, not once per key.
+  const seen = new Set();
+  const unique = [];
+  for (const asset of assets) {
+    if (seen.has(asset.destPath)) continue;
+    seen.add(asset.destPath);
+    unique.push(asset);
+  }
+  return unique;
+}
+
+export function generateCredits() {
+  const assets = dedupeByDestPath(loadAllowlist());
 
   // Sort by key for readability.
   assets.sort((a, b) => a.key.localeCompare(b.key));

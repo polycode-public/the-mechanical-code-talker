@@ -5,7 +5,8 @@
     "Every GLB listed here uses EXT_meshopt_compression and KHR_mesh_quantization (verified by parsing each file's JSON chunk directly, not by trusting docs). Three additionally use EXT_texture_webp: creatures/goblin.glb, foliage/oak_1.glb, foliage/bush.glb. three.js's GLTFLoader decodes KHR_mesh_quantization and EXT_texture_webp natively, so nobody needs to hunt for a decoder for either of those. EXT_meshopt_compression is the one exception and needs exactly one line: loader.setMeshoptDecoder(MeshoptDecoder). See commands.vendorMeshoptDecoderLine below, and commands.fallbackTranscodeToPlainGlb if vendoring the decoder turns out to be undesirable.",
     "Food markers (cheese, apples, apple crate) are primitive geometry in v1, not models. The KayKit food props (food_cheese, food_apple_*, food_crate_large_apples) are almost certainly CC0 at source, but no CREDITS.md row names a KayKit resource pack, so they're unrecorded rather than free to take and are excluded here. Fetching the genuine KayKit Resource Bits pack from source (https://kaykit.itch.io) and adding a CREDITS.md row for it is a clean later upgrade, not a wall.",
     "The predator is creatures/fox.glb, not creatures/wolf_basic.glb. wolf_basic.glb looks like the obvious predator model and is close in name to the CREDITS 'Animated creatures' row, but wolf_basic.glb itself is an unrecorded custom Tripo-generated project asset, not the CC0 Quaternius wolf. fox.glb is covered by the CC0 Quaternius creatures row by name, shares the same quadruped rig (Idle/Walk/Gallop/Attack/hit-react/Death via manifest.ts's animal() clip map), and additionally ships an 'Eating' clip verified in the GLB itself -- useful for an eaten-flourish. goblin.glb is the prey/scavenger, matching world-of-claudecraft's own mob_kobold casting (Idle/Walk/Run/Attack/HitRecieve/Death) -- note HitRecieve is misspelled in the asset itself and is reproduced verbatim below, not corrected.",
-    "targetHeight is the model's own measured bounding-box height in metres (computed from each GLB's POSITION accessor bounds through its node transform chain, dequantizing normalized SHORT/BYTE components first), not an arbitrary guess -- these packs already ship in a consistent real-world scale, so no further per-item normalization judgment call was needed for the static props. The two character rigs (fox, goblin) use world-of-claudecraft's own manifest.ts height values instead, since their POSITION accessors are in skinned bind-pose space and a plain node-transform bbox walk (as used for the static props) does not account for joint transforms."
+    "targetHeight is the model's own measured bounding-box height in metres (computed from each GLB's POSITION accessor bounds through its node transform chain, dequantizing normalized SHORT/BYTE components first), not an arbitrary guess -- these packs already ship in a consistent real-world scale, so no further per-item normalization judgment call was needed for the static props. The two character rigs (fox, goblin) use world-of-claudecraft's own manifest.ts height values instead, since their POSITION accessors are in skinned bind-pose space and a plain node-transform bbox walk (as used for the static props) does not account for joint transforms.",
+    "food-crumb and food-morsel both reuse haybale.glb (measured bbox height 1.09m, a full-size bale) rather than the raw bbox height, because the render layer always rescales a loaded GLB to targetHeight (mudiii-scene.mjs's normalizeToHeight) regardless of the model's authored size. Their targetHeight values instead match the primitive spheres they replace (CRUMB_RADIUS 0.08, MORSEL_RADIUS 0.18 in mudiii-scene.mjs, doubled to a diameter) so the swap keeps the same on-ground footprint a fox already reads correctly against."
   ],
   "commands": {
     "verifyBytes": "stat -f '%z' <file>   # BSD/macOS; use `stat -c '%s' <file>` on GNU/Linux",
@@ -195,6 +196,30 @@
       "bytes": 49064,
       "sha256": "614172ada35fc6048487a6af6d77059a5c031e0a93eff9d58036649ea0d16c12",
       "targetHeight": 1.57,
+      "clips": null
+    },
+    {
+      "key": "food-crumb",
+      "sourcePath": "public/models/dungeon/haybale.glb",
+      "destPath": "public/models/props/haybale.glb",
+      "licence": "CC0-1.0",
+      "author": "Kay Lousberg (KayKit)",
+      "source": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+      "bytes": 14004,
+      "sha256": "8b340af18ea1325d5a9bd4a967d3ef37bb90838ca2d90927b123e23877f7ddad",
+      "targetHeight": 0.16,
+      "clips": null
+    },
+    {
+      "key": "food-morsel",
+      "sourcePath": "public/models/dungeon/haybale.glb",
+      "destPath": "public/models/props/haybale.glb",
+      "licence": "CC0-1.0",
+      "author": "Kay Lousberg (KayKit)",
+      "source": "https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0",
+      "bytes": 14004,
+      "sha256": "8b340af18ea1325d5a9bd4a967d3ef37bb90838ca2d90927b123e23877f7ddad",
+      "targetHeight": 0.36,
       "clips": null
     }
   ]
