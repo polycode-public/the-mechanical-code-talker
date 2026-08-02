@@ -505,10 +505,20 @@ test("renderMudiiiHtml: the map is a square minimap on a wide window, not half t
   assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/, "the square the dot percentages assume");
   assert.match(
     html,
-    /@media \(min-width: 901px\) \{\s*\.deck \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 240px;/,
+    /@media \(min-width: 901px\) \{\s*\.deck \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) 240px;/,
     "a percentage has no ceiling, so a wide viewport gets an absolute size",
   );
-  assert.match(html, /\.map-panel \{ grid-column: 2; grid-row: 2 \/ 4;/, "and the map stands beside the sliders and the camera row at once");
+  assert.match(html, /\.map-panel \{ grid-column: 4; grid-row: 2;/, "and the map stands beside the three control stacks");
+});
+
+test("renderMudiiiHtml: on a wide window the controls are three vertical stacks beside the map, not one row above a bare camera row", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const wideDeck = /@media \(min-width: 901px\), \(max-width: 900px\) and \(orientation: landscape\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(wideDeck, "the shared wide-viewport rule block is in the page");
+  assert.match(wideDeck[1], /\.deck-stack-1 \{ grid-column: 1; \}/);
+  assert.match(wideDeck[1], /\.deck-stack-2 \{ grid-column: 2; \}/);
+  assert.match(wideDeck[1], /\.deck-stack-3 \{ grid-column: 3; \}/);
+  assert.doesNotMatch(html, /\.deck-camera/, "the camera row no longer exists as its own box");
 });
 
 test("renderMudiiiHtml: a map label near the right edge hangs to the left of its dot", () => {
