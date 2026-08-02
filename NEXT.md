@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Six tracks. **T45 is the priority**: `e2e:deployed:pages` is red on a facing disagreement, and a red
+Five tracks. **T45 is the priority**: `e2e:deployed:pages` is red on a facing disagreement, and a red
 deployed job blocks the loop's own stop condition. Four of the others are generating work rather than
 closing items. The thirteen-item
 mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
@@ -54,13 +54,6 @@ the slots. Their output is the next wave's items.
 - **T41 prey sweep and status refresh** — the regimes the first comparison could not cover (market
   and chapel boards, other vision radii, a starvation regime), then resynthesizes `STATUS.md`.
   Sonnet. Status: started.
-- **T42 docs against code** — every README capability claim traced to the code that does it, every
-  `PLAN_*.md` status line checked against what has landed, and `crdt.md` read as one account rather
-  than three layers. Top tier. Status: started.
-- **T43 page weights** — `reports/PAGE_WEIGHTS.md` is stale by eleven about pages, a shared
-  stylesheet and a 3D page carrying model binaries. Sonnet. Status: started.
-- **T44 CLI edge-hunt** — hunts the command-line surface for dead-ends and, above all, for any answer
-  it guessed where a refusal was due. Writes a report. Top tier. Status: started.
 
 Waiting on one job: `e2e:deployed:pages` on pipeline 2725436237, the last of its 25. The other 24 are
 green. A docs-only push gets a 4-job pipeline that runs no tests, so those greens prove nothing —
