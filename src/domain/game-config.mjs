@@ -90,6 +90,11 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     // this is the one switch that turns that off (visionRadius: Infinity for
     // the food-only belief call) without any new belief machinery.
     foodVisionGated: true,
+    // Whether the town-square lane accepts teaching. Its own knob rather than
+    // a share of the adventure one below: the board's sentence table is a
+    // different vocabulary, and a page checkbox on the town square should not
+    // have to set a key named after another surface.
+    teach: false,
   }),
   guessNumber: Object.freeze({
     defaultLo: 1,
@@ -161,6 +166,7 @@ const MUDIII_KEY_MAP = Object.freeze({
   max_prey_population: "maxPreyPopulation",
   max_food_items: "maxFoodItems",
   food_vision_gated: "foodVisionGated",
+  teach: "teach",
 });
 
 const ADVENTURE_KEY_MAP = Object.freeze({

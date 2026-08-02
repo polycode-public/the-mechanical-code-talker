@@ -14,13 +14,15 @@
 
 import {
   TOWN_SQUARE_LAYOUTS, DEFAULT_GRID_SIZE, DIRECTION_DELTA,
-  cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
+  cellId, parseCellId, inBounds, isSolid, chebyshevDistance, oneStepDirectionBetween,
   agentKindOf, liveIdsOfKind, layoutNamed, isFoodId,
 } from "../domain/town-square-world.mjs";
 import {
   MUDIII_ROLES, foldTownSquareState, startTownSquareGame, runTownSquareTick,
   placeFood, roleOfId, beliefSnapshotFor,
 } from "./predator-prey.mjs";
+import { snapshotSubject } from "./adventure.mjs";
+import { correctMisspellings, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
@@ -553,6 +555,242 @@ async function runToldFactTurn(match, { planHolder, memoryDir, cache, gameConfig
   });
 }
 
+// ---- the teach lane: a declarative sentence read as a board fact -------------
+//
+// The town square's own half of the world-teach act world-teach.mjs performs
+// for a manor and a burrow, and shaped the same way: a small closed sentence
+// table, one additive planner over the live fold, and a "noted — … now."
+// confirmation carrying the same `world:<name>:taught:turnK` provenance.
+//
+// It stays here rather than routing through world-teach.mjs because that
+// module's gates are written for a ROOM world. It declines by naming rooms,
+// mints a fresh portable when the subject is one the world has never heard
+// of, and plans against foldWorldState. A board has cells instead of rooms
+// and one fold of its own, and nothing here ever mints: every subject must
+// already resolve to a live individual foldTownSquareState folds, or the
+// write would put a fact on the board that the board cannot draw.
+
+const PLACEMENT_PREDICATE = "mgx:currently-in";
+const MASS_PREDICATE = "mgx:hasMass";
+const MOOD_PREDICATE = "mgx:feels";
+const FACING_PREDICATE = "mgx:facing";
+const PLACED_BY_PREDICATE = "mgx:placed-by";
+
+// The families foldTownSquareState ranks by (epoch, turn). A row in one of
+// them needs a snapshot subject or it ranks as turn 0 and loses to anything
+// already played about the same thing. mgx:placed-by is read raw and keeps
+// its bare subject, exactly as placeFood writes it.
+const TAUGHT_SNAPSHOT_PREDICATES = new Set([
+  PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE,
+]);
+
+// The closed cast vocabulary a taught sentence may name, matching the lane's
+// own recognizers above. Mood and facing take an agent alone — a crumb has
+// neither — while a cell and a weight are true of an inert item too.
+const CAST_SUBJECT = "(fox|goblin|crumb|morsel)(?:-(\\d+))?";
+const AGENT_SUBJECT = "(fox|goblin)(?:-(\\d+))?";
+const ITEM_SUBJECT = "(crumb|morsel)(?:-(\\d+))?";
+
+/**
+ * The town square's sentence table: every fact about this board a person can
+ * state, one row per predicate the fold reads. Checked in order, first match
+ * wins.
+ *
+ *   Fox-1 is at cell-3-4.            mgx:currently-in
+ *   The goblin weighs 4.             mgx:hasMass
+ *   The fox feels angry.             mgx:feels
+ *   Goblin-2 faces north.            mgx:facing
+ *   The baker put morsel-1 there.    mgx:placed-by
+ *
+ * A bare kind ("the fox") names whichever individual of that kind is live and
+ * lowest-numbered; a numbered id names exactly one. Closed on both sides: a
+ * mood or a direction outside the engine's own words does not parse at all,
+ * so nothing here can write a value a renderer has no drawing for.
+ */
+const TOWN_SQUARE_TEACH_PATTERNS = [
+  { kind: "placement", predicate: PLACEMENT_PREDICATE,
+    re: new RegExp(`^(?:the\\s+)?${CAST_SUBJECT}\\s+is\\s+at\\s+(cell-\\d+-\\d+)[.!\\s]*$`, "i") },
+  { kind: "mass", predicate: MASS_PREDICATE,
+    re: new RegExp(`^(?:the\\s+)?${CAST_SUBJECT}\\s+weighs\\s+(\\d+(?:\\.\\d+)?)[.!\\s]*$`, "i") },
+  { kind: "mood", predicate: MOOD_PREDICATE,
+    re: new RegExp(`^(?:the\\s+)?${AGENT_SUBJECT}\\s+feels\\s+(calm|angry|scared|happy)[.!\\s]*$`, "i") },
+  { kind: "facing", predicate: FACING_PREDICATE,
+    re: new RegExp(`^(?:the\\s+)?${AGENT_SUBJECT}\\s+faces\\s+(north|south|east|west)[.!\\s]*$`, "i") },
+];
+
+// The one sentence whose subject is not its leading noun: the item is the
+// subject and the placer is the object, which is the direction "who put that
+// there?" reads the row back in.
+const TOWN_SQUARE_PLACED_BY_RE = new RegExp(
+  `^(?:the\\s+)?([a-z][a-z-]*)\\s+(?:put|placed|dropped)\\s+(?:the\\s+)?${ITEM_SUBJECT}\\s+there[.!\\s]*$`,
+  "i",
+);
+
+/** One line -> `{ kind, predicate, kindWord, num, object }`, or null when the
+ *  table recognizes nothing — an honest miss, never a guessed shape.
+ *  `kindWord`/`num` name the individual the sentence is about; the caller
+ *  resolves that pair against the live board. Pure. */
+export function parseTownSquareTeachLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return null;
+  for (const { kind, predicate, re } of TOWN_SQUARE_TEACH_PATTERNS) {
+    const m = trimmed.match(re);
+    if (!m) continue;
+    return { kind, predicate, kindWord: m[1].toLowerCase(), num: m[2] ?? null, object: m[3].toLowerCase() };
+  }
+  const placed = trimmed.match(TOWN_SQUARE_PLACED_BY_RE);
+  if (!placed) return null;
+  return {
+    kind: "placed-by", predicate: PLACED_BY_PREDICATE,
+    kindWord: placed[2].toLowerCase(), num: placed[3] ?? null, object: placed[1].toLowerCase(),
+  };
+}
+
+/**
+ * The rows one already-resolved taught triple implies against the board's
+ * current fold — the town square's counterpart to mud-editor.mjs's
+ * planTaughtMudTriple, and additive for the same reason: one sentence only
+ * ever says what it says, so nothing it leaves out is evidence of anything.
+ * Re-asserting a fact the board already holds appends nothing, and `reason`
+ * says which of the two happened.
+ *
+ * Takes the fold alone rather than the raw rows its burrow counterpart also
+ * needs: every family this table can say is one foldTownSquareState folds, so
+ * there is no raw-row family left to diff against. Pure.
+ */
+export function planTaughtTownSquareTriple(state, triple) {
+  if (!triple?.subject || !triple?.object) return { toAppend: [], reason: "nothing parsed" };
+  const { subject, object } = triple;
+  switch (triple.kind) {
+    case "placement": {
+      const current = state?.placements?.get(subject);
+      if (current?.cell === object) return { toAppend: [], reason: `${subject} already stands at ${object}` };
+      return {
+        toAppend: [triple],
+        reason: current ? `${subject} moves from ${current.cell} to ${object}` : `${subject} is placed at ${object}`,
+      };
+    }
+    case "mass": {
+      const current = state?.mass?.get(subject);
+      if (current && Number(current.value) === Number(object)) return { toAppend: [], reason: `${subject} already weighs ${object}` };
+      return { toAppend: [triple], reason: `${subject} weighs ${object}` };
+    }
+    case "mood": {
+      const current = state?.mood?.get(subject);
+      if (current?.value === object) return { toAppend: [], reason: `${subject} already feels ${object}` };
+      return { toAppend: [triple], reason: `${subject} feels ${object}` };
+    }
+    case "facing": {
+      const current = state?.facing?.get(subject);
+      if (current?.value === object) return { toAppend: [], reason: `${subject} already faces ${object}` };
+      return { toAppend: [triple], reason: `${subject} faces ${object}` };
+    }
+    case "placed-by": {
+      const current = state?.placedBy?.get(subject);
+      if (current?.by === object) return { toAppend: [], reason: `${object} already put ${subject} there` };
+      return { toAppend: [triple], reason: `${object} put ${subject} there` };
+    }
+    default:
+      return { toAppend: [], reason: `the board folds nothing for ${triple.predicate}` };
+  }
+}
+
+/** One taught triple as the sentence the board says back, in world-teach.mjs's
+ *  own `noted — … now.` shape. Pure. */
+export function townSquareTeachConfirmation(triple) {
+  switch (triple.kind) {
+    case "placement": return `noted — ${triple.subject} is at ${triple.object} now.`;
+    case "mass": return `noted — ${triple.subject} weighs ${triple.object} now.`;
+    case "mood": return `noted — ${triple.subject} feels ${triple.object} now.`;
+    case "facing": return `noted — ${triple.subject} faces ${triple.object} now.`;
+    case "placed-by": return `noted — the ${triple.object} put ${triple.subject} there now.`;
+    default: return "noted — the board says that now.";
+  }
+}
+
+const teachDecline = (text, note) => ({ text, lane: "game-answer", note: `MUDIII — world-teach: ${note}`, miss: true });
+
+/**
+ * One line read as a fact about the LIVE board, or null when it is not a
+ * teach sentence at all and the ordinary lane should have it. Writes the
+ * fold-versioned families under a snapshot subject stamped at the next tick's
+ * own turn number, the same convention placeFood uses so a teach and the tick
+ * that resolves it share one turn rather than the teach quietly spending one.
+ *
+ * Nobody moves in response: a taught fact never runs the ecology pass, which
+ * is the same trade world-teach.mjs makes for a manor.
+ */
+async function mudiiiTeachTurn(line, { memoryDir, cache, world, layout }) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || !memoryDir) return null;
+  // A trailing "?" is an unambiguous question, and a leading interrogative is
+  // the same signal one word earlier — a question must never reach a write
+  // boundary. Both mirror world-teach.mjs, which stands down on either.
+  if (/\?\s*$/.test(trimmed)) return null;
+  if (QUESTION_LEAD_RE.test(correctMisspellings(trimmed))) return null;
+
+  const parsed = parseTownSquareTeachLine(trimmed);
+  if (!parsed) return null;
+
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldTownSquareState(rows);
+  const subject = resolveAgentId(parsed.kindWord, parsed.num, state);
+  if (!subject) {
+    return teachDecline(
+      `there's no live ${parsed.kindWord} on the board for that to be about.`,
+      `"${trimmed}" is about a ${parsed.kindWord} nothing live answers to; declined rather than minting one the board cannot draw`,
+    );
+  }
+
+  if (parsed.kind === "placement") {
+    const cell = parseCellId(parsed.object);
+    if (!cell || !inBounds(layout.gridSize, cell.x, cell.y)) {
+      return teachDecline(
+        `${parsed.object} is off the board — this square runs cell-1-1 to cell-${layout.gridSize}-${layout.gridSize}.`,
+        `"${trimmed}" names a cell outside the ${layout.gridSize}x${layout.gridSize} board`,
+      );
+    }
+    if (isSolid(layout, parsed.object)) {
+      return teachDecline(
+        `${parsed.object} is blocked — nothing stands inside a building.`,
+        `"${trimmed}" would stand ${subject} on a prop cell, which no path ever reaches`,
+      );
+    }
+  }
+
+  const triple = { subject, predicate: parsed.predicate, object: parsed.object, kind: parsed.kind };
+  const { toAppend, reason } = planTaughtTownSquareTriple(state, triple);
+  if (!toAppend.length) {
+    return {
+      text: "the board already says that.",
+      lane: "game-answer",
+      miss: false,
+      note: `MUDIII — world-teach: "${trimmed}" asserts a fact the board already holds (${reason}); nothing written`,
+      taught: [],
+    };
+  }
+
+  const k = state.tickCount + 1;
+  const epoch = state.epoch;
+  const facts = toAppend.map((t) => ({
+    subject: TAUGHT_SNAPSHOT_PREDICATES.has(t.predicate) ? snapshotSubject(t.subject, k, epoch) : t.subject,
+    predicate: t.predicate,
+    object: t.object,
+  }));
+  const provenance = `${worldProvenanceTag(world)}:taught:turn${k}`;
+  await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance })));
+  if (cache) cache.rows = null;
+
+  return {
+    text: townSquareTeachConfirmation(triple),
+    lane: "game-answer",
+    miss: false,
+    goal: `change what the board says about ${subject}`,
+    note: `MUDIII — world-teach: ${reason}; wrote ${facts.length} row(s) at turn ${k} with provenance ${provenance}; no tick rides a taught fact`,
+    taught: facts,
+  };
+}
+
 // ---- in-game orientation asides ---------------------------------------------
 //
 // "where is the fox", "where am I", "what can I do", "what is the fox's
@@ -706,6 +944,17 @@ export async function mudiiiTurn(line, { planHolder, memoryDir, env, cache = nul
   const putMatch = trimmed.match(MUDIII_PUT_FOOD_RE) || trimmed.match(MUDIII_DROP_FOOD_RE);
   if (putMatch) {
     return runPlaceFoodTurn(putMatch[1], { memoryDir, gameConfig, world: mudiii.world, layout });
+  }
+
+  // The teach switch runs before the plan-frame guard for the same reason the
+  // food verb does: "the fox is at cell-3-4" reads as a planning frame on its
+  // leading noun, and answering a sentence this lane's own table accepts with
+  // "stop watching, then set your goal" refuses the one thing the switch is
+  // for. With the switch off nothing here runs and the lane behaves exactly
+  // as it always has.
+  if (gameConfig?.mudiii?.teach) {
+    const taught = await mudiiiTeachTurn(trimmed, { memoryDir, cache, world: mudiii.world, layout });
+    if (taught) return taught;
   }
 
   if (isPlanFrameLine(line)) {
