@@ -139,34 +139,32 @@ exist before its third link has a target).
 
 ### mudiii.html — behaviour the plan specifies that is missing or half built
 
-- **The map belongs inside the control panel, at both orientations.** Today `.deck-row` is a
-  `1fr 1fr` grid holding the deck and `#mapPanel` as siblings, and it collapses to a single column
-  under 900px (`mudiii-viz.mjs:772`). A phone is under that in both portrait and landscape, so the
-  map always lands as a wide, short band below the controls and pushes the 3D view off the screen.
-  **The operator's layout, from two live screenshots:** the map moves **inside** the control panel,
-  sitting to the right in the space under the `turns:` badge, and it shrinks.
-  - **Portrait:** the sliders stay stacked one per row, as they already are. The map takes about
-    **half** the panel's width, beside them.
-  - **Landscape:** the sliders go two high — FOXES and GOBLINS on one row, DELAY and MAX TURNS on
-    the next — and the map sits beside them at about **a third** of the width.
-  **Tier:** Sonnet. Markup and CSS against a stated design, and it has to be looked at.
-  **Do:** move `#mapPanel` (`:545`) inside the deck rather than beside it, and drive the two
-  arrangements off orientation as well as width — a landscape phone and a narrow desktop window are
-  both under 900px but want different things. `renderMapPanel` addresses the board by id, so the JS
-  needs no change if the ids survive.
-  **Risk:** `body.editing` hides `.deck-row .map-panel` and forces one column (`:718`-`:719`), so
-  the edit-mode rules have to follow the element to its new home. `.map-panel-board` carries
-  `aspect-ratio: 1`, so halving its width halves its height too.
-  **Mitigation:** screenshot both orientations at a real phone size and **open the images**. This is
-  a layout item; a DOM assertion cannot tell you it looks right.
+- **The page should open already playing.** The operator likes the play mode enough to want it on by
+  default. Today `autoOn` starts false (`mudiii-viz.mjs:848`) and the deck's control reads
+  `aria-pressed="false"`, and two reset paths (`:1160`, `:1212`) set it false again.
+  **Tier:** Haiku for the change, and it needs judgment about what it breaks.
+  **Do:** start playing on boot, and keep the reset paths honest about whatever the new default is.
+  **Risk:** two e2e tests encode the opposite on purpose. `test-e2e/pages-mudiii.test.mjs:110`, "the
+  page boots with nothing playing", asserts `aria-pressed="false"` and a turn count of zero, and the
+  file's own header states the intent. Another test at `:558` drives a teach-frame "with nothing
+  playing" and would race an autoplaying ticker. Both need rewriting deliberately rather than
+  deleting: the first becomes "opens playing", the second needs to pause before it types.
+  **Feasibility:** the scene respects reduced-motion elsewhere. Decide whether a visitor who asked
+  for reduced motion should still get an autoplaying board, rather than letting the default decide
+  it for them.
 
 
-`PLAN_MUD_MUDIII.md` is the design of record and is marked BUILT AND DEPLOYED. These are the
-gaps between it and the shipped page.
-
-Order matters in a few places. Land the goblin-render item first, because every screenshot lies
-until it does. Then the grid-size item, because the deception rail and the map panel both need its
-`gridSizeOf()` helper. Then the rail trio together, then the tick-result pair together.
+- **The map is inside the control panel and nobody has looked at it.** The layout landed: `#mapPanel`
+  now sits in the deck beside the sliders rather than in a two-column grid that collapsed under
+  900px, at roughly half the width in portrait and a third in landscape, where the sliders also go
+  two to a row via `@media (max-width: 900px) and (orientation: landscape)`. `.map-panel-board` keeps
+  `aspect-ratio: 1` with a lower `min-height`. 88/88 on the unit tests.
+  **What is missing is the look.** The track that built it died before it could screenshot anything.
+  **Tier:** Haiku, and it is a look rather than an edit.
+  **Do:** screenshot 375x667 and 812x375, **open both PNGs with the Read tool**, and check the map
+  actually sits beside the sliders, reads at that size, and leaves the 3D view visible without
+  scrolling past a band of map. Check edit mode too — `body.editing` used to hide the map by
+  selecting `.deck-row .map-panel`, and the element has moved.
 
 - **The goblin sizing fix is green locally and unproven on CI.** Goblins used to render at a
   different wrong scale on every load, with one coming out many times house height, its foot above
