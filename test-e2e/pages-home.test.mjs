@@ -290,7 +290,7 @@ test("the plan page's PDDL panel names only the puzzle's own objects and taught 
 test("the adventure claim leads to a real room scene", async () => {
   const { context, page } = await openPage("adventure.html");
   try {
-    await page.locator("#roomFrame").waitFor({ state: "visible" });
+    await page.locator("#roomFrame").waitFor({ state: "visible", timeout: 10000 });
   } finally {
     await context.close();
   }
@@ -299,7 +299,7 @@ test("the adventure claim leads to a real room scene", async () => {
 test("the ledger claim leads to a real taught fact store", async () => {
   const { context, page } = await openPage("ledger.html");
   try {
-    await page.locator("#chatform").waitFor({ state: "visible" });
+    await page.locator("#chatform").waitFor({ state: "visible", timeout: 10000 });
     const facts = await page.locator(".ledger .row").count();
     assert.ok(facts > 0, "the ledger page renders real fact rows");
   } finally {
