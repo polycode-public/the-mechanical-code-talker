@@ -628,11 +628,15 @@ export function answerCount(graph, query, { uiContext = "cli" } = {}) {
       if (uiContext === "browser") {
         return `I can't count "${noun}" — this page holds taught facts only, so there's no code structure to count.`;
       }
-      // No remedy here: the noun is one the count vocabulary doesn't hold at
-      // all (a known kind takes the counted branch above, empty graph or not).
-      // "how many moons does Pluto have" used to come back with "index this
-      // repo", which reads as a promise that indexing would let it count moons.
-      return `I can't count "${noun}" — I count the kinds a code graph holds: ${COUNTABLE_KIND_WORDS.join(", ")}.`;
+      // Two true things, said as two. The REASON is the noun: nothing here
+      // counts it, and no amount of indexing would, so "no code graph is
+      // loaded, so there's nothing to count" was the wrong cause and read as a
+      // promise that indexing would let it count moons. The REMEDY is about the
+      // session, and a terminal can act on it, so it stays — worded as its own
+      // fact rather than as the answer to what was asked.
+      return `I can't count "${noun}" — I count the kinds a code graph holds: ${COUNTABLE_KIND_WORDS.join(", ")}. `
+        + `This session has no code graph loaded either — index this repo with "tmct index", `
+        + `point me at another with --repo, or run "npm run example:mini".`;
     }
     return `I can't count "${noun}". I count: ${kinds.join(", ")}. ` +
       `Try "how many classes are there".`;

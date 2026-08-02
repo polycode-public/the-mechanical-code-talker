@@ -285,6 +285,18 @@ test("bridge: /subclasses on a code-map miss falls through to memory facts (with
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("the tmct_ask handler answers synchronously, the way its direct callers read it", async () => {
+  // The browser's code explorer imports this handler and reads the envelope off
+  // the return, twice per relation kind. An async handler hands it a promise
+  // whose `.data` is undefined and its sidebar silently draws nothing, so the
+  // memory fallback composes at dispatch instead of inside the handler.
+  const { tmct_ask } = await import("../../src/tools/handlers/tmct-ask.mjs");
+  const { parseEntities } = await import("../../src/domain/codegraph.mjs");
+  const out = tmct_ask({ query: "what does app/lib/a.mjs import" }, { graph: parseEntities(fixture) });
+  assert.equal(out instanceof Promise, false, "the handler returns its result, not a promise");
+  assert.equal(typeof out.data?.miss, "boolean", "the envelope is readable straight off the return");
+});
+
 test("tmct_ask: a code-graph miss is offered to the injected memory reader before it stands", async () => {
   const { dir, config: memConfig } = await repoWithMemoryFacts();
   const { openExistingMemoryBackend, readOnlyMemorySnapshot } = await import("../../src/adapters/memory/core.mjs");
