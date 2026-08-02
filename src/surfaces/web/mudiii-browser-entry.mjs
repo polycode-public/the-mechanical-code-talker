@@ -21,7 +21,9 @@ import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
-import { layoutNamed } from "../../domain/town-square-world.mjs";
+import {
+  COMPASS_POINTS, DEFAULT_FACING, layoutNamed, reverseFacing, stepCellFrom, turnedFacing,
+} from "../../domain/town-square-world.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
@@ -78,6 +80,53 @@ export function townSquareRosterArgs(agents, roleOf) {
   return { predatorCount, preyCount };
 }
 
+// Where each press on the page's ring of controls sits relative to the agent's
+// own facing. Up and down are steps — straight ahead and straight back — and
+// the other six turn on the spot to the angle they sit at, which is what makes
+// the ring one rule rather than eight cases.
+const RING_ANGLES = Object.freeze({
+  up: 0, forward: 0,
+  "up-right": 45, right: 90, "down-right": 135,
+  down: 180, back: 180,
+  "down-left": -135, left: -90, "up-left": -45,
+});
+const RING_STEPS = new Set(["up", "forward", "down", "back"]);
+
+/** The `manualMoves` entry one press asks of an agent standing at `cell` and
+ *  facing `facing`: `{ cell, facing }` for a step, `{ facing }` alone for a
+ *  turn on the spot. Null when `direction` names neither a ring press nor a
+ *  compass point.
+ *
+ *  `direction` is either a ring press — "up"/"forward" and "down"/"back" step
+ *  straight ahead and straight back with the facing left alone, "left" and
+ *  "right" turn ninety degrees, and the four diagonals turn to the angle they
+ *  sit at (forty-five for the top pair, a hundred and thirty-five for the
+ *  bottom) — or an absolute compass point, where a cardinal steps that way and
+ *  faces that way and an intercardinal turns on the spot to face it.
+ *
+ *  Whether the cell it names can be entered is the engine's answer rather than
+ *  this function's: there is one legality table, and it is the world's own
+ *  exit facts. Pure. */
+export function driveRequest(direction, { cell, facing = DEFAULT_FACING } = {}) {
+  const press = String(direction ?? "").trim().toLowerCase();
+  if (!press) return null;
+  if (press in RING_ANGLES) {
+    const angle = RING_ANGLES[press];
+    if (!RING_STEPS.has(press)) {
+      const turned = turnedFacing(facing, angle);
+      return turned ? { facing: turned } : null;
+    }
+    const along = angle === 0 ? facing : reverseFacing(facing);
+    // An agent facing an intercardinal has no cell straight ahead of it — the
+    // grid carries no diagonal exit — so the press holds it where it stands.
+    const target = stepCellFrom(cell, along);
+    return target ? { cell: target, facing } : { facing };
+  }
+  const target = stepCellFrom(cell, press);
+  if (target) return { cell: target, facing: press };
+  return COMPASS_POINTS.includes(press) ? { facing: press } : null;
+}
+
 /** A live, shared town-square world one visitor watches and talks over.
  *  `worldPayload` is `{ name, facts, rules, opening }`, read once at build
  *  time the same way every other viz page's world payload is. `agents` is
@@ -88,7 +137,7 @@ export function townSquareRosterArgs(agents, roleOf) {
  *  (`runTownSquareTick`) and its conversation is a single shared dock.
  *
  *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick, board,
- *  snapshot, applyEdit, placeFood }`. A reset is not a method here: the
+ *  snapshot, applyEdit, placeFood, driveAgent }`. A reset is not a method here: the
  *  page re-opens a whole session for it, which is what a reset means when the
  *  store is in memory and belongs to one visitor. */
 export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0 } = {}) {
@@ -150,6 +199,40 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     return runTownSquareTick(memoryDir, { layout });
   }
 
+  /** Drive one agent by hand for a turn — `driveAgent("fox-1", "up")`, where
+   *  `direction` is a ring press or a compass point and `driveRequest` above
+   *  says what each one means.
+   *
+   *  A press goes through the SAME whole-world tick every other turn goes
+   *  through: it spends a turn, the ecology pass runs, and every other agent
+   *  decides and moves. So the return IS a tick payload, with one field added:
+   *  `driven` says whether the world took the press and where the agent ended
+   *  up. A press the board refuses — a wall, a prop, an agent that is not on
+   *  the board — still advances the world, and that agent decides for itself
+   *  this turn rather than freezing. */
+  async function driveAgent(agentId, direction) {
+    const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
+    const standing = state.removed.has(agentId) ? null : state.placements.get(agentId);
+    const facing = state.facing.get(agentId)?.value ?? DEFAULT_FACING;
+    const request = standing ? driveRequest(direction, { cell: standing.cell, facing }) : null;
+    const result = await runTownSquareTick(memoryDir, {
+      layout, manualMoves: request ? { [agentId]: request } : {},
+    });
+    const accepted = result.rungs[agentId] === "driven";
+    const after = result.agents[agentId] ?? null;
+    return {
+      ...result,
+      driven: {
+        agent: agentId,
+        direction: String(direction ?? ""),
+        accepted,
+        from: standing?.cell ?? null,
+        cell: accepted && after ? after.cell : null,
+        facing: accepted && after ? after.facing : null,
+      },
+    };
+  }
+
   /** The board as it stands, in the same payload shape `tick` returns, with no
    *  turn spent. A page opens a session and then draws THIS — otherwise its
    *  first sight of where anything stands is the first tick, and every mesh
@@ -201,6 +284,7 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
     refreshGraph,
     turn: turnSession.turn,
     tick,
+    driveAgent,
     board,
     snapshot,
     applyEdit,
