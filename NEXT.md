@@ -69,14 +69,19 @@ Order matters in a few places. Land the goblin-render item first, because every 
 until it does. Then the grid-size item, because the deception rail and the map panel both need its
 `gridSizeOf()` helper. Then the rail trio together, then the tick-result pair together.
 
-- **Goblins render at about 1% of the fox's scale.** Small enough to read as missing against the
-  board, but present — the operator found one by looking. The simulation is fine: `cellOf("goblin-3")`
-  returns `cell-11-4`, the HUD cards are right, no request fails. There is also one huge shape in the
-  scene, many times house height, its foot floating above the ground. The shrink and the giant are
-  the same fault at its two ends: each renormalization pass divides `targetHeight` by an
-  already-scaled measured height, so scale compounds downward across a cast sharing one object, while
-  a pass that lands on a scale-0 frame measures `size.y` at zero, takes the `|| 1` substitute, and
-  applies `targetHeight` to the raw model instead. Three causes, all measured on the live page.
+- **Goblins render at a different wrong scale each time, and the giant is one of them.** Three live
+  screenshots of the same scenario show a goblin many times house height with its foot above the
+  ground, a goblin at roughly fox knee-height standing correctly, and a goblin clipping through the
+  ground plane at a third scale. The simulation is fine: `cellOf("goblin-3")` returns `cell-11-4`,
+  the HUD cards are right, the map dots are right, no request fails.
+  The variation is a race with the spawn tween. `playSpawnFlourish` tweens `entry.group.scale` from
+  0 to 1, and `normalizeToHeight` measures its object's bounding box **through that group's world
+  matrix**, so it reads `rawHeight * groupScaleAtThatFrame` and applies
+  `targetHeight / (rawHeight * groupScaleAtThatFrame)`. Where the tween happened to be when the GLTF
+  parse resolved decides the scale, which differs per agent and per load. At or near scale 0,
+  `size.y` reads zero, `var height = size.y || 1` substitutes 1, and the applied scale becomes
+  `targetHeight` against the raw model — the giant. The seat comes off the same polluted box, which
+  is the floating and the clipping. Three causes, all measured on the live page.
   `createCachedLoader` (`src/services/mudiii-scene.mjs:240`) caches the promise, so every agent of a
   kind receives the same `gltf.scene`. `entry.group.add(gltf.scene)` (`:584`) reparents it and
   empties the previous goblin's group, so only the last goblin ends up holding a mesh.
@@ -89,11 +94,18 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `applyTickResult(opening)` at `:1230` runs while `scene` is still null and `boot` then clears
   `agentGroups`. Nothing agent-shaped renders until the first tick.
   **Tier:** Sonnet. The diagnosis is settled and the edit is small and precise.
-  **Do:** call `loadGlbRaw(modelUrlFor(asset.destPath))` in `ensureAgent` (`:582`) so each agent
-  gets its own parse, which is what the block comment at `:565` already claims happens. Leave
-  `loadPropTemplate` (`:487`) on the cached loader; props are cloned and unskinned. Add two guards
-  to `normalizeToHeight` (`:476`): refuse an object that already has a parent, refuse a second call
-  on the same object. Await the boot at `mudiii-viz.mjs:1219`.
+  **Do:** normalize before parenting and before the flourish. Measure the raw parsed model in
+  isolation, apply the scale and seat to the object itself, then add it to `entry.group`, then start
+  `playSpawnFlourish`. A box taken on an unparented object cannot be polluted by a parent's in-flight
+  tween, which removes the race rather than narrowing it. Call
+  `loadGlbRaw(modelUrlFor(asset.destPath))` in `ensureAgent` (`:582`) so each agent owns an object it
+  is safe to mutate, which is what the block comment at `:565` already claims happens — with the
+  shared cached scene, agent N's normalization silently rescales agents 1 to N-1 as well. Leave
+  `loadPropTemplate` (`:487`) on the cached loader; props are cloned and unskinned. Add two guards to
+  `normalizeToHeight` (`:476`): refuse an object that already has a parent, refuse a second call on
+  the same object. Drop the `|| 1` fallback at `:480` — it invents a scale from an unmeasurable
+  height, and once normalization runs pre-parent on a raw model, a zero height means something is
+  wrong and should fail loudly. Await the boot at `mudiii-viz.mjs:1219`.
   **Feasibility:** one extra GLTF parse per agent, 47 KB for `goblin.glb` and 333 KB for `fox.glb`,
   at most 4 foxes and 10 goblins. `SkeletonUtils` is not in the vendor bundle
   (`scripts/build-three-vendor.mjs:31`), so a clone-based fix needs a vendor change. Don't take it.
@@ -102,9 +114,11 @@ until it does. Then the grid-size item, because the deception rail and the map p
   `test/services/mudiii-scene.test.mjs:250` pins the splice list.
   **Mitigation:** land the two guards first and watch them fire on current code, which proves the
   diagnosis before the fix. Then add `meshHeightOf(id)` to the scene surface (`:754`) and assert in
-  `test-e2e/pages-mudiii.test.mjs` that every HUD-drawn id has a mesh within ±20% of its
-  `targetHeight` and a `minY` within 0.05 of zero, on load, after four ticks, and after Reset. The
-  warm cache bites hardest on the Reset path.
+  `test-e2e/pages-mudiii.test.mjs` that **every** HUD-drawn id has a mesh within ±20% of its
+  `targetHeight` and a `minY` within 0.05 of zero, on load, after four ticks, and after Reset, at the
+  largest cast the sliders can drive. The test has to catch variance, not a wrong average: a
+  single-agent check passes on whichever goblin happened to get a good frame. The warm cache bites
+  hardest on the Reset path.
 
 - **The deception rail is not on the page.** `pillsForMudiii` is fully implemented and unit-tested
   in `src/services/mudiii-turn.mjs`: address pills, true/false claim pairs, a point-reflected false
