@@ -46,6 +46,21 @@ is capped at a single `demo:build` and told to report rather than retry if it fa
 - **T30 hand-driving, engine half** — `manualMoves` on `runTownSquareTick` and
   `session.driveAgent`. `predator-prey.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
 
+- **T31 teach mode** — mudiii's own teach lane (sentence table, `planTaughtTownSquareTriple`, the
+  gate inside `mudiiiTurn`), then browser legs for adventure's and mud's existing checkbox.
+  `mudiii-turn.mjs` and two e2e page files. Top tier. Status: started.
+- **T32 tombstone retirement** — causal stability for retraction and rollup records: read the
+  literature note, establish what the room knows about its own membership, write the design into
+  `crdt.md`, implement only what is defensible behind a gate. `memory/`, `p2p-room.mjs`. Top tier.
+  Status: started.
+
+**On batch size.** The operator asked for wider concurrency, with each agent taking several items.
+The limit is file ownership, not agent count: `mudiii-viz.mjs` alone carries a dozen open items and
+one agent can hold it at a time. So batches are grouped by file, and the next wave — the map panel's
+grid, key and labels, the pill rails, EDIT mode, the camera and follow items, the sliders and the
+`Math.random` roster — fires as one multi-item batch the moment T29 releases that file. Likewise the
+prey-scoring blend behind T30's hold on `predator-prey.mjs`.
+
 Queued behind those two files coming free: the chat-above-belief-cards markup move, the directional
 ring, the click-to-turn item, and the demo-page header helper (which also needs the about pages to
 exist before its third link has a target).
