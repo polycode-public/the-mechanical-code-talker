@@ -798,6 +798,25 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** run `node --test test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs`
   against a fresh `npm run demo:build` before re-running the jobs.
 
+- **Two `pages-home.test.mjs` tests time out waiting for a page element.** "the adventure claim leads
+  to a real room scene" waits on `#roomFrame` becoming visible (`:291`-`:298`) and "the ledger claim
+  leads to a real taught fact store" waits on `#chatform` (`:300`-`:310`). Both failed in a worktree
+  run of that file against a fresh `npm run demo:build`, while the same file's page-count assertions
+  passed. Reported as unrelated to the page-order change that surfaced them, which is a claim to
+  check rather than accept.
+  **Tier:** Sonnet. The work is diagnosis, and the two legs may not share a cause.
+  **Do:** reproduce on `main` first with `npm run demo:build` then
+  `node --test test-e2e/pages-home.test.mjs`, and separate the three readings before fixing
+  anything. Either the pages genuinely fail to render those elements, or `openPage`'s navigation
+  settles later than the locator's default timeout under a loaded machine, or the two tests are
+  paying for browser contention from siblings in the same file. `#roomFrame` is adventure.html's own
+  scene element and `#chatform` is ledger.html's, so a shared cause means the harness, and separate
+  causes mean two page bugs.
+  **Risk:** raising a timeout is the fix that always appears to work and hides a real render failure.
+  Take it only after the page is shown to render the element at all, headed or by screenshot.
+  **Mitigation:** whichever way it lands, the test must fail before the fix and pass after. If it is
+  contention, harden the wait rather than re-running until green.
+
 - **Stale header comments in `mudiii-browser-entry.mjs`, `mudiii-viz.mjs` and `mudiii-scene.mjs`.**
   They say sibling modules "do not exist in every worktree yet"; all are on `main`.
   `mudiii-scene.mjs:46` additionally claims the three scene calls "are not yet wired into

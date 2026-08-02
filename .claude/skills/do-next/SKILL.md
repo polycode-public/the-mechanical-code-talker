@@ -90,6 +90,14 @@ one's work the moment it's ready rather than waiting for the whole batch.
    freshly-labeled one for the same discovery is stalling dressed as progress — the open-item count
    looks flat or improved, but the record now hides that the original item was never actually
    finished.
+   **A failing test a track reports is an open item and a job for this batch, whether or not the
+   track caused it.** "Unrelated", "pre-existing", "a flake", "an environment timeout" — none of
+   those downgrade it. Write it into Open items with what you actually know (the file, the line, the
+   failure text, whether it reproduces on merged `main`), and dispatch a track to resolve it in the
+   current batch rather than carrying it forward. If it turns out to be a flake, the fix is to harden
+   the test, which is still work this batch does. A red test nobody owns is how a suite rots into
+   background noise that stops meaning anything, and the moment a track hands you one is the only
+   moment you have its full context.
 9. **Track the build honestly, without editorializing.** State what CI actually shows — which
    stage passed, which didn't, why if known — and leave it there unless asked for more. A known,
    already-documented infra blocker doesn't need re-explaining every time it's mentioned.
