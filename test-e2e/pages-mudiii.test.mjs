@@ -164,6 +164,122 @@ test("the 3D scene canvas boots without a console error, when the model catalogu
   }
 });
 
+/** Every HUD-drawn agent id's own mesh reading, id -> { height, minY,
+ *  targetHeight } | null, read through window.mudiiiScene.meshHeightOf —
+ *  the live group's own measured world-space box, not a second, locally
+ *  invented number. */
+const meshHeightsOf = (page) => page.evaluate(() => {
+  const out = {};
+  for (const card of document.querySelectorAll("#hudRow .hud-card[data-agent]")) {
+    const id = card.getAttribute("data-agent");
+    if (!id) continue;
+    out[id] = window.mudiiiScene && typeof window.mudiiiScene.meshHeightOf === "function"
+      ? window.mudiiiScene.meshHeightOf(id)
+      : null;
+  }
+  return out;
+});
+
+/** Waits until every HUD-drawn agent has a real, positive mesh height —
+ *  each agent's own model load is asynchronous, so a bare read right after
+ *  a slider reboot, a tick or a Reset can still catch one mid-load. */
+async function waitForEveryMeshHeight(page, timeout) {
+  await page.waitForFunction(() => {
+    const cards = document.querySelectorAll("#hudRow .hud-card[data-agent]");
+    if (!cards.length) return false;
+    for (const card of cards) {
+      const id = card.getAttribute("data-agent");
+      const reading = window.mudiiiScene && typeof window.mudiiiScene.meshHeightOf === "function"
+        ? window.mudiiiScene.meshHeightOf(id)
+        : null;
+      if (!reading || !reading.height) return false;
+    }
+    return true;
+  }, null, { timeout });
+}
+
+/** Every HUD-drawn agent's mesh sits within +-20% of its own manifest
+ *  targetHeight and within 0.05 of the ground. This is the direct
+ *  regression check for the shared-loader-cache bug: every agent past the
+ *  first of its kind reused the same parsed GLTF scene, so normalizeToHeight
+ *  ran again on an object that was already parented and already scaled,
+ *  shrinking it further each time, and the same reused object caught
+ *  mid-flourish at scale zero measured as height zero and blew up to the
+ *  raw model's own unscaled size instead. */
+function assertEveryMeshWithinTolerance(heights, label) {
+  const ids = Object.keys(heights);
+  assert.ok(ids.length > 0, `${label}: at least one HUD-drawn agent to check`);
+  for (const id of ids) {
+    const reading = heights[id];
+    assert.ok(reading, `${label}: ${id} has a mesh height reading`);
+    assert.ok(reading.targetHeight, `${label}: ${id} has a manifest targetHeight to compare against`);
+    const ratio = reading.height / reading.targetHeight;
+    assert.ok(
+      ratio > 0.8 && ratio < 1.2,
+      `${label}: ${id} mesh height ${reading.height} is within +-20% of target ${reading.targetHeight} (ratio ${ratio.toFixed(3)})`,
+    );
+    assert.ok(
+      Math.abs(reading.minY) < 0.05,
+      `${label}: ${id} mesh's lowest point sits within 0.05 of the ground (minY ${reading.minY})`,
+    );
+  }
+}
+
+test("every HUD agent's mesh is correctly sized and seated at the largest cast, on load, after ticks and after Reset", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    // Drive both sliders to their own max before rebooting — the largest
+    // cast is where the shared-cache bug compounds the hardest, and a
+    // clamped roster still reports its own real count through aria-valuetext
+    // rather than the slider's own requested value.
+    await page.evaluate(() => {
+      const fox = document.getElementById("playerCountSlider");
+      const npc = document.getElementById("npcCountSlider");
+      fox.value = fox.max;
+      npc.value = npc.max;
+      npc.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForFunction(() => {
+      const fox = document.getElementById("playerCountSlider");
+      const npc = document.getElementById("npcCountSlider");
+      const foxCount = Number((fox.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
+      const npcCount = Number((npc.getAttribute("aria-valuetext") || "").match(/\d+/)?.[0] || 0);
+      const cards = document.querySelectorAll("#hudRow .hud-card[data-agent]").length;
+      return foxCount + npcCount > 0 && cards === foxCount + npcCount;
+    }, null, { timeout: READY_TIMEOUT_MS });
+    await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
+    assertEveryMeshWithinTolerance(await meshHeightsOf(page), "on load, largest cast");
+
+    await page.locator("#autoToggle").click();
+    await page.waitForFunction((n) => {
+      const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+      return m && Number(m[0]) >= n;
+    }, 4, { timeout: TICK_TIMEOUT_MS });
+    await page.locator("#autoToggle").click();
+    await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
+    assertEveryMeshWithinTolerance(await meshHeightsOf(page), "after four ticks");
+
+    // The Reset path is where the warm loader cache bites hardest: every
+    // agent re-requests the very same URL a second time, this time into an
+    // already-warm cache.
+    const castSizeBeforeReset = await page.locator("#hudRow .hud-card[data-agent]").count();
+    await page.locator("#resetBtn").click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("#hudRow .hud-card[data-agent]").length === n
+        && (document.querySelector("#globalTurnCount")?.textContent ?? "").includes("turns: 0"),
+      castSizeBeforeReset,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    await waitForEveryMeshHeight(page, READY_TIMEOUT_MS);
+    assertEveryMeshWithinTolerance(await meshHeightsOf(page), "after Reset");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error sizing and seating the largest cast across load, ticks and Reset");
+  } finally {
+    await context.close();
+  }
+});
+
 test("a click on a blocked cell writes nothing and leaves the food pill armed", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

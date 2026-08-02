@@ -1216,7 +1216,7 @@ function pageScript() {
     agentsById = {};
     itemsById = {};
     el("chatInput").disabled = false;
-    callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: DATA.gridSize, cellSize: 1 });
+    await callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: DATA.gridSize, cellSize: 1 });
 
     // The opening board, drawn through the very path a tick takes. Without
     // this the page's first sight of where anything stands is the first tick,

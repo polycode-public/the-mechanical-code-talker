@@ -473,15 +473,49 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   }
 
   // ---- props ---------------------------------------------------------------
+  // normalizeToHeight measures a Box3 off the object's own local geometry
+  // correctly only while the object is still detached and untouched. Once it
+  // has a parent, Box3.setFromObject reads through the parent's world matrix
+  // instead of the object's own, so calling this twice on a shared object
+  // (a cached loader handing the same parsed scene to several agents) makes
+  // the second call measure through whatever the first agent's own group
+  // happens to be doing at that instant, including a spawn flourish tween
+  // mid-flight. That is a different, effectively random wrong scale every
+  // time, not one fixed bug: the flourish just starting reads a shrunk
+  // height and produces an oversized mesh, the flourish nearly finished
+  // reads close to the true height and produces something near-correct
+  // instead, and a frame square in the middle of the tween falls somewhere
+  // between. The two guards below turn both misuses into a hard failure
+  // instead of a silently wrong render, which is what actually removes the
+  // race rather than narrowing it: every caller now owns a freshly parsed,
+  // never-touched object (see ensureAgent's own loadGlbRaw call), so a
+  // parent or a repeat call here means something upstream broke that
+  // guarantee. No backtick characters in this comment block: this
+  // function's source sits inside the module's own outer template literal,
+  // so a backtick here would close that literal early.
   function normalizeToHeight(object3D, targetHeight) {
+    if (object3D.parent) {
+      throw new Error("normalizeToHeight refused an object that already has a parent: " + (object3D.name || object3D.uuid));
+    }
+    if (object3D.userData.tmctNormalized) {
+      throw new Error("normalizeToHeight refused a second call on the same object: " + (object3D.name || object3D.uuid));
+    }
     var box = new THREE.Box3().setFromObject(object3D);
     var size = new THREE.Vector3();
     box.getSize(size);
-    var height = size.y || 1;
-    var scale = targetHeight && height ? targetHeight / height : 1;
+    if (!size.y) {
+      // A zero measured height used to fall back to inventing height 1, so
+      // the scale became targetHeight against a raw model that never
+      // actually measured that way — the exact formula behind the
+      // giant, many-times-house-height mesh. Failing loudly beats shipping
+      // a made-up size.
+      throw new Error("normalizeToHeight found no measurable height on: " + (object3D.name || object3D.uuid));
+    }
+    var scale = targetHeight ? targetHeight / size.y : 1;
     object3D.scale.setScalar(scale);
     var seated = new THREE.Box3().setFromObject(object3D);
     object3D.position.y -= seated.min.y;
+    object3D.userData.tmctNormalized = true;
   }
 
   async function loadPropTemplate(asset) {
@@ -579,7 +613,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     agentGroups[id] = entry;
     var asset = manifestByKind[kind];
     if (asset) {
-      loadGlb(modelUrlFor(asset.destPath)).then(function (gltf) {
+      loadGlbRaw(modelUrlFor(asset.destPath)).then(function (gltf) {
         normalizeToHeight(gltf.scene, asset.targetHeight);
         entry.group.add(gltf.scene);
         entry.group.visible = true;
@@ -759,6 +793,19 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       if (agentGroups[id]) return agentGroups[id].cell;
       if (itemMeshes[id]) return itemMeshes[id].cell;
       return null;
+    },
+    // The live agent mesh's world-space height and lowest point, plus the
+    // manifest's own targetHeight to compare it against — an e2e assertion's
+    // read, so it goes through the group actually in the scene rather than a
+    // second, locally invented measurement.
+    meshHeightOf: function (id) {
+      var entry = agentGroups[id];
+      if (!entry || !entry.group || entry.group.children.length === 0) return null;
+      var box = new THREE.Box3().setFromObject(entry.group);
+      var size = new THREE.Vector3();
+      box.getSize(size);
+      var asset = manifestByKind[entry.kind];
+      return { height: size.y, minY: box.min.y, targetHeight: asset ? asset.targetHeight : null };
     },
     ready: function () { return booted; },
   };
