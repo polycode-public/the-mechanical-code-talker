@@ -126,8 +126,8 @@ coined ad hoc:
 
 The honest-miss row is the interesting one, and the vocabulary settles it as `autoNegative`.
 tmct's miss is a claim about tmct's **own processing** ("I could not resolve that term"), which is
-what `/autoFeedback/` is for — not a `/task/` answer at all. That distinction is load-bearing in
-the product, the standard already had a name for it, and the tests hold the pairing.
+what `/autoFeedback/` is for — not a `/task/` answer at all. The product depends on that
+distinction, the standard already had a name for it, and the tests hold the pairing.
 
 ## Implemented subset
 

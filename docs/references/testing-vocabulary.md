@@ -154,7 +154,7 @@ is wrong; it resolves to a different paper in the same issue.* Verbatim:
 > should be thorough enough that **if the build passes, you can assume that it is stable enough to be
 > tested more thoroughly.**"
 
-That last clause is load-bearing: **a smoke test decides whether deeper testing is worth starting.**
+That last clause is the point to keep: **a smoke test decides whether deeper testing is worth starting.**
 Also McConnell, *Rapid Development*, Microsoft Press, 1996, ISBN 9781556159008, Ch. 18; and *Code
 Complete*, 2nd ed., Microsoft Press, 2004, §29.4, p. 702.
 
