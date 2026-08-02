@@ -45,7 +45,7 @@ Wave 1, in flight:
 | W1-ENGINE — `town-square-world.mjs`, `predator-prey.mjs`, three world sources, the fixture's ticks | top | `.claude/worktrees/agent-abfd808e944937be1` | started |
 | W1-VIZ — `mudiii-viz.mjs`, `mudiii-browser-entry.mjs` | Sonnet | branch `worktree-agent-ac9f33b91b04d1731`, **held unmerged** | done, 51 tests — waits for the scene and engine files, because it imports both and merging early would leave `main` with a failing import-layer guard |
 | W2-SCENE — `mudiii-scene.mjs`, the e2e smoke | Sonnet | `.claude/worktrees/agent-a14424990d27876f6` | started |
-| W2-ASSETS — `public/models/`, the manifest checker and credits generator | Haiku | `.claude/worktrees/agent-a8a9c83ee303fded1` | started |
+| W2-ASSETS — `public/models/`, the manifest checker and credits generator | Haiku | merged, worktree removed | **landed** — 14 models, 1.09 MB, every size and hash re-verified; the licence guard tested by planting an `eastbrook_*` file and confirming rejection. **This also fixes the red pipeline**: the wave-0 `TRACKED_SITE_FILES` entry needed a `public/models/` that did not exist yet, and `cpSync` threw `ENOENT` in every browser job |
 | W1-VENDOR — `build-three-vendor.mjs`, `build-mudiii-bundle.mjs` | Haiku | merged, worktree removed | **landed** — three.js vendors at 801 KB raw / 169 KB brotli, all four exports verified from a scratch rebuild |
 
 `mudiii-viz.mjs` and `mudiii-scene.mjs` are split up front so the page shell and the 3D scene are
