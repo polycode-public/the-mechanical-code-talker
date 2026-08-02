@@ -20,7 +20,7 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result to
 // public/research.html, after research-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
-import { fetchWithProgress, loadProgressLine, factTripleParts } from "./memory-panel-viz.mjs";
+import { fetchWithProgress, loadSeedPayload, loadProgressLine, factTripleParts } from "./memory-panel-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { loadWinkVendor } from "./viz-boot.mjs";
 import { cloneMemoryPayload } from "../adapters/memory/core.mjs";
@@ -354,6 +354,7 @@ ${DASH_DARK_CHROME_CSS}
   const sourceLabelFor = ${sourceLabelFor.toString()};
   const factTripleParts = ${factTripleParts.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
+  const loadSeedPayload = ${loadSeedPayload.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const loadWinkVendor = ${loadWinkVendor.toString()};
@@ -397,25 +398,17 @@ ${DASH_DARK_CHROME_CSS}
 
   let seedPayload = null;
   let seedFacts = 0;
-  // One retry with a cache-busting query param: a CDN edge can serve a
-  // corrupted or truncated precompressed response (a transient bad cache
-  // entry, not a code defect — real bytes decompress fine, and the same URL
-  // fetched moments later is clean), and JSON.parse throwing is the only
-  // signal of that. The bust param forces a fresh fetch past that one entry.
+  // The same starter memory chat.html and ingest.html load, reported the same
+  // way: tmct.seed carries whether it arrived, so a page with an empty store
+  // can say which kind of empty it is.
+  window.tmct.seed = { state: "loading", facts: 0 };
   async function fetchSeed() {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const bust = attempt === 1 ? "" : (SEED_QUERY ? "&" : "?") + "retry=1";
-        const blob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY + bust, (loaded, total) => noteProgress("seed", loaded, total));
-        seedPayload = JSON.parse(await blob.text());
-        seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
-        return;
-      } catch (err) {
-        if (attempt === 2) {
-          seedPayload = null;
-          console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
-        }
-      }
+    const outcome = await loadSeedPayload(fetchWithProgress, "./chat-seed.json", SEED_QUERY, (loaded, total) => noteProgress("seed", loaded, total));
+    seedPayload = outcome.payload;
+    seedFacts = outcome.status.facts;
+    window.tmct.seed = outcome.status;
+    if (outcome.status.state === "failed") {
+      console.error("tmct research: chat-seed.json unavailable — starting unseeded (" + outcome.status.error + ")");
     }
   }
   async function newSession() {

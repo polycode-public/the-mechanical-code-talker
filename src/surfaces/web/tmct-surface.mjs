@@ -25,13 +25,25 @@
 // them apart at a glance, which is exactly what eleven flat bags made
 // impossible.
 //
-// Two more members show up on some pages, by convention rather than by
+// Three more members show up on some pages, by convention rather than by
 // anything this function returns: `tmct.ready` is the page's own boot
-// promise (chat, ingest), and `tmct.lastSave` is its last background-save
-// record, `{at, ms}` (chat, adventure). Neither can be threaded through
-// `publishTmctSurface(...)` itself — boot is still running when this
-// function returns, so the page's own script sets each once it reaches
-// that point (see chat-page-viz.mjs, ingest-viz.mjs, adventure-viz.mjs).
+// promise (chat, ingest), `tmct.lastSave` is its last background-save
+// record, `{at, ms}` (chat, adventure), and `tmct.seed` is what the starter
+// memory is doing — `{state, facts}` through "loading", "indexing", "ready",
+// "failed" (with `error`) and "skipped" (chat, ingest, research).
+//
+// `tmct.seed` is deliberately not the same question as `tmct.ready`. Boot
+// finishing and the memory arriving are separate events, and a page whose
+// seed failed still boots, still opens, and still answers — from a smaller
+// store, which is the open-world assumption behaving correctly rather than a
+// degraded mode. What the seed record adds is the ability to SAY so: a pill
+// that reports real load progress, and a test that can tell a failed download
+// apart from a store that is empty on purpose. Both look like zero facts.
+//
+// None can be threaded through `publishTmctSurface(...)` itself — boot is
+// still running when this function returns, so the page's own script sets
+// each once it reaches that point (see chat-page-viz.mjs, ingest-viz.mjs,
+// adventure-viz.mjs).
 // Each page's older bare global — window.tmctChatReady, tmctIngestReady,
 // tmctChatLastSave, tmctAdventureLastSave — keeps working unchanged;
 // `tmct.ready` / `tmct.lastSave` just reach the same value under the one
