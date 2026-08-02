@@ -33,9 +33,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks. **T45 is the priority**: `e2e:deployed:pages` is red on a facing disagreement, and a red
-deployed job blocks the loop's own stop condition. Four of the others are generating work rather than
-closing items. The thirteen-item
+Four tracks. The pipeline is green on all 24 jobs including every deployed one, so nothing is
+blocked. Two of these are generating work rather than closing items. The thirteen-item
 mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
 exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
 the slots. Their output is the next wave's items.
@@ -46,8 +45,6 @@ the slots. Their output is the next wave's items.
 - **T46 inference benchmark** — grades the classical-logic engine on the INF ladder and reports the
   rung, separating honest misses from wrong answers. Measure-only: an engine change would collide
   with the tracks working the tree. Top tier. Status: started.
-- **T47 the four worst CLI faults** — the answers where a refusal was due. `chat.mjs`,
-  `codegraph.mjs`. Top tier. Status: started.
 - **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
   three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
   Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
