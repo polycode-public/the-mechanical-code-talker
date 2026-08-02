@@ -114,13 +114,31 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Risk:** `test/services/mudiii-viz.test.mjs:138` pins the exact `callScene("boot", …)` string.
   Adding `await` still matches; the grid-size item's edit to the same line does not.
   `test/services/mudiii-scene.test.mjs:250` pins the splice list.
-  **Mitigation:** land the two guards first and watch them fire on current code, which proves the
-  diagnosis before the fix. Then add `meshHeightOf(id)` to the scene surface (`:754`) and assert in
-  `test-e2e/pages-mudiii.test.mjs` that **every** HUD-drawn id has a mesh within ±20% of its
-  `targetHeight` and a `minY` within 0.05 of zero, on load, after four ticks, and after Reset, at the
-  largest cast the sliders can drive. The test has to catch variance, not a wrong average: a
-  single-agent check passes on whichever goblin happened to get a good frame. The warm cache bites
-  hardest on the Reset path.
+  **The sizing fix has landed and its own e2e does not pass yet.** `normalizeToHeight` now refuses a
+  parented object and a repeat call, the `|| 1` fallback is gone, each agent parses its own model,
+  `meshHeightOf(id)` is on the scene surface, and `boot` is awaited. Unit tests are green, 80/80.
+  `node --test test-e2e/pages-mudiii.test.mjs` on `main` runs 6 and fails 2, both caused by the fix:
+  - **Per-agent `loadGlbRaw` fires one network request per agent for the same URL, and a reboot
+    cancels the in-flight duplicates.** The pre-existing test "a typed 'put food at cell-3-4' and a
+    click on the same cell both place a morsel there" now fails with
+    `models/creatures/fox.glb` in `failedRequests`. This file's `requestfailed` handler
+    (`test-e2e/pages-mudiii.test.mjs:78`-`:80`) pushes every same-origin failure with no
+    `net::ERR_ABORTED` exemption, unlike `pages-home.test.mjs`, so a cancelled duplicate reads as a
+    broken asset. The old cached loader fetched once, which is why this is new.
+    **Do:** cache the fetched bytes, not the parsed scene. One request per URL, then a
+    `GLTFLoader.parse` per agent off the shared ArrayBuffer, so every agent still owns its own object
+    graph and the guards still hold. Do not exempt `ERR_ABORTED` in the test to make this go away;
+    the duplicate requests are real and worth removing.
+  - **The new sizing test times out on its Reset wait** (`:263`), which wants the card count back at
+    its pre-Reset value and `#globalTurnCount` reading `turns: 0`. It also drives the sliders by
+    assigning `.value` and dispatching only `change`, so `showFoxCount`/`showGoblinCount` never run
+    from `input` and the `aria-valuetext` the earlier wait reads can disagree with the clamped
+    roster. That clamp is the sliders item below.
+    **Do:** drive the sliders through the events the page actually listens to, and settle what Reset
+    is expected to restore before asserting it.
+  **Mitigation:** the e2e must pass before this item closes. It has to catch variance rather than a
+  wrong average, at the largest cast the sliders can really deliver: a single-agent check passes on
+  whichever goblin happened to get a good frame.
 
 - **The deception rail is not on the page.** `pillsForMudiii` is fully implemented and unit-tested
   in `src/services/mudiii-turn.mjs`: address pills, true/false claim pairs, a point-reflected false
