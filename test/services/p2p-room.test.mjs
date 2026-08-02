@@ -7,7 +7,11 @@ import { createP2pRoom, PRESENCE_SCOPE, resolveStoreNodeId } from "../../src/ser
 import { chatSyncableFacts } from "../../src/domain/p2p/sync-filter.mjs";
 import { decodeInviteBlob, encodeInviteBlob } from "../../src/domain/p2p/wire.mjs";
 import { WAVED_PREDICATE, INVITED_BY_PREDICATE, nodeTerm } from "../../src/domain/p2p/facts.mjs";
-import { createInMemoryStore, appendFacts, loadMemory, readFactRows, normFactTerm, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
+import { RETRACTION_PREDICATE } from "../../src/domain/memory/retraction.mjs";
+import {
+  createInMemoryStore, appendFacts, removeFacts, loadMemory, readFactRows,
+  readRetractions, normFactTerm, FACT_CLASS,
+} from "../../src/adapters/memory/core.mjs";
 
 // A pair of in-memory transports wired straight to each other, matching the
 // shape src/adapters/p2p/webrtc-transport.mjs supplies. SDP is a bare label:
@@ -751,4 +755,141 @@ test("an invite carrying no node id still joins, and records no edge it cannot n
   const reply = await bob.room.acceptInvite(nodelessBlob);
   assert.equal(reply.error, undefined, "the join itself still works");
   assert.deepEqual(inviteEdges(await rowsOf(bob.memoryDir)), []);
+});
+
+// ---- retraction over the mesh ----------------------------------------------
+
+const retractionsOf = async (memoryDir) => readRetractions(await loadMemory(memoryDir));
+
+test("a retraction reaches the peer holding the copy, and the fact stops reading on both sides", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  const { ids } = await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await alice.room.afterLocalChange();
+  await settle();
+  assert.ok(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"), "the peer took the fact first");
+
+  await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+  await alice.room.afterLocalChange();
+  await settle();
+
+  assert.equal(findRow(await rowsOf(alice.memoryDir), "rover", "mgx:isA"), undefined);
+  assert.equal(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"), undefined, "the retraction crossed the wire");
+  assert.equal((await retractionsOf(bob.memoryDir)).length, 1, "and it is on record there, not just applied");
+});
+
+test("a retraction and the copy it suppresses converge whichever one arrives first", async () => {
+  const fact = teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z");
+
+  // The two messages one peer actually broadcasts, captured once, so the orders
+  // below replay the same pair rather than two look-alikes.
+  const sent = createFakeNetwork();
+  const origin = makeRoom(sent, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const witness = makeRoom(sent, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+  await connect(origin.room, witness.room);
+  const { ids } = await appendFacts(origin.memoryDir, [fact]);
+  await origin.room.afterLocalChange();
+  await settle();
+  await removeFacts(origin.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+  await origin.room.afterLocalChange();
+  await settle();
+  const broadcastFacts = sent.log
+    .filter((m) => m.type === "op" && m.from === "peer-a")
+    .flatMap((m) => m.facts);
+  const assertion = broadcastFacts.filter((f) => f.predicate === "mgx:isA");
+  const retraction = broadcastFacts.filter((f) => f.predicate === RETRACTION_PREDICATE);
+  assert.equal(assertion.length, 1);
+  assert.equal(retraction.length, 1);
+
+  const bobAfter = async (order) => {
+    const network = createFakeNetwork();
+    const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+    const bobTransports = [];
+    const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", capture: bobTransports });
+    await connect(alice.room, bob.room);
+    for (const facts of order) {
+      network.injectTo(bobTransports[0], { type: "op", from: "peer-a", facts });
+      await settle();
+    }
+    return bob.memoryDir;
+  };
+
+  const factFirst = await bobAfter([assertion, retraction]);
+  const retractionFirst = await bobAfter([retraction, assertion]);
+
+  assert.equal(findRow(await rowsOf(factFirst), "rover", "mgx:isA"), undefined,
+    "a retraction landing after the copy still takes it out of the read");
+  assert.equal(findRow(await rowsOf(retractionFirst), "rover", "mgx:isA"), undefined,
+    "and one landing first refuses to let the copy in");
+  assert.deepEqual(
+    (await retractionsOf(factFirst)).map((r) => r.object),
+    (await retractionsOf(retractionFirst)).map((r) => r.object),
+    "both orders leave the same record behind",
+  );
+});
+
+test("a peer that never saw the retraction re-sends the fact, and it does not come back", async () => {
+  const network = createFakeNetwork();
+  const aliceTransports = [];
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", capture: aliceTransports });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  const fact = teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z");
+  const { ids } = await appendFacts(alice.memoryDir, [fact]);
+  await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+  await alice.room.refresh();
+
+  network.injectTo(aliceTransports[0], { type: "op", from: "peer-b", facts: [fact] });
+  await settle();
+
+  assert.equal(findRow(await rowsOf(alice.memoryDir), "rover", "mgx:isA"), undefined);
+});
+
+test("a joiner still holding the copy learns the retraction through sync, and its own sync does not put the fact back", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox", nodeId: ALICE_NODE });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn", nodeId: BOB_NODE });
+  await alice.room.start();
+
+  const { ids } = await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+  // What bob would be left holding from an earlier session: alice's assertion
+  // under the tag her broadcast relabels it to, which is a different Source key
+  // from the one her own store files it under.
+  await appendFacts(bob.memoryDir, [{
+    subject: "rover", predicate: "mgx:isA", object: "dog",
+    provenance: `teach:peer:amber-fox#node:${ALICE_NODE}@2026-05-01T10:00:00.000Z`,
+  }]);
+  assert.ok(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"), "bob starts out still holding it");
+
+  await connect(alice.room, bob.room);
+  await settle();
+
+  assert.equal((await retractionsOf(bob.memoryDir)).length, 1, "the sync response carried the retraction");
+  assert.equal(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"), undefined);
+  assert.equal(findRow(await rowsOf(alice.memoryDir), "rover", "mgx:isA"), undefined,
+    "and the copy did not ride back in on the joiner's own sync");
+});
+
+test("one peer's retraction leaves a fact another peer taught for itself standing, cited to that peer", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+
+  const { ids } = await appendFacts(alice.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-a", "2026-05-01T10:00:00.000Z")]);
+  await removeFacts(alice.memoryDir, [ids[0]], { retractedAt: "2026-05-02T10:00:00.000Z" });
+  await appendFacts(bob.memoryDir, [teachFact("rover", "mgx:isA", "dog", "sess-b", "2026-05-01T10:00:00.000Z")]);
+
+  await connect(alice.room, bob.room);
+  await settle();
+
+  const onAlice = findRow(await rowsOf(alice.memoryDir), "rover", "mgx:isA");
+  assert.ok(onAlice, "one source retracting is not the group agreeing");
+  assert.ok(findRow(await rowsOf(bob.memoryDir), "rover", "mgx:isA"));
+  assert.match(onAlice.provenance, /mossy-acorn/, "it stands on the peer that still asserts it");
+  assert.equal(onAlice.provenance.includes("sess-a"), false, "and the retracted assertion did not come back");
 });

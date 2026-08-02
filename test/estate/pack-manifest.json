@@ -387,6 +387,7 @@
   "src/domain/memory/compaction.mjs",
   "src/domain/memory/fold.mjs",
   "src/domain/memory/resolution.mjs",
+  "src/domain/memory/retraction.mjs",
   "src/domain/memory/session-turns.mjs",
   "src/domain/memory/touched-facts.mjs",
   "src/domain/memory/trust.mjs",

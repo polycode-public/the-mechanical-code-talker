@@ -5,6 +5,13 @@
 // What actually needs syncing is the delta: whatever a person or a peer
 // actually added since boot.
 import { provenanceTagToSource } from "../memory/trust.mjs";
+import { RETRACTION_PREDICATE } from "../memory/retraction.mjs";
+
+// A retraction crosses on both surfaces, whatever else they disagree about.
+// It carries no teach tag of its own to key on and no world predicate, so
+// leaving it to either filter's own rule would strand it and the deleted fact
+// would come straight back from the next peer that still holds it.
+const alwaysSyncable = (row) => row?.predicate === RETRACTION_PREDICATE;
 
 // "teachNode" is the same human teaching, seen from one hop further out: a
 // peer's own relabeled tag, keyed on the node id it carries. It syncs for
@@ -16,6 +23,7 @@ const CHAT_SYNCABLE_KINDS = new Set(["teach", "operator", "teachNode"]);
  *  asserted — never a row from the shipped corpus. */
 export function chatSyncableFacts(rows) {
   return rows.filter((row) => {
+    if (alwaysSyncable(row)) return true;
     const source = provenanceTagToSource(row.provenance);
     return source ? CHAT_SYNCABLE_KINDS.has(source.kind) : false;
   });
@@ -31,5 +39,5 @@ export function chatSyncableFacts(rows) {
  *  this module's own P2P predicates via `extraPredicates`. */
 export function mudSyncableFacts(rows, isMudStatePredicate, extraPredicates = []) {
   const extra = new Set(extraPredicates);
-  return rows.filter((row) => extra.has(row.predicate) || isMudStatePredicate(row.predicate));
+  return rows.filter((row) => alwaysSyncable(row) || extra.has(row.predicate) || isMudStatePredicate(row.predicate));
 }

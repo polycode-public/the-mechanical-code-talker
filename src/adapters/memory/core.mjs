@@ -46,6 +46,10 @@ import {
   ROLLUP_PRIOR_PROP, ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_COUNT_PROP,
   CHAIN_ROLLUP_THRESHOLD,
 } from "../../domain/memory/compaction.mjs";
+import {
+  planRetraction, mergeRetractions, retractionFromWire, retractionWireFact,
+  isRetractedRecord, RETRACTION_CLASS,
+} from "../../domain/memory/retraction.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
@@ -56,6 +60,15 @@ export {
   ROLLUP_EARLIEST_PROP, ROLLUP_LATEST_PROP, ROLLUP_PRIOR_PROP,
   headRollupIdFor, chainRollupIdFor, isHeadRollupId, isChainRollupId, isRollupId,
 } from "../../domain/memory/compaction.mjs";
+
+// Same reasoning for the retraction vocabulary: the tombstone shape is the
+// domain layer's, and store consumers reach it through this one import site.
+export {
+  RETRACTION_CLASS, RETRACTION_PREDICATE,
+  RETRACTED_RECORD_IDS_PROP, RETRACTED_AT_PROP, RETRACTED_COUNT_PROP,
+  retractionIdFor, isRetractionId, retractionScopeOf,
+  retractedRecordIds, retractedAtOf, retractionWireFact, retractionFromWire,
+} from "../../domain/memory/retraction.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -314,6 +327,16 @@ export function factGroupId(recordId) {
   const id = String(recordId || "");
   const at = id.indexOf("@");
   return at < 0 ? id : id.slice(0, at);
+}
+
+/** The record id one provenance tag keys for a triple. A store files an
+ *  assertion under the Source its OWN tag derives, and a broadcast relabel
+ *  changes that Source — locally a chat session, at the peer the node that
+ *  sent it. So two stores hold one assertion under two ids, and anything that
+ *  has to name a record ACROSS the wire (a retraction does) resolves the id
+ *  through the tag rather than assuming both ends agree. */
+export function factRecordIdForTag(groupId, tag) {
+  return `${groupId}@${assertionSourceFor(tag).id}`;
 }
 
 /** The assertion key one provenance tag derives — the SAME closed derivation
@@ -1354,10 +1377,15 @@ function buildMemoryIndex(payload) {
   // anyone asserting this yet" and an edge can resolve a group id to the real
   // nodes behind it, both without a scan.
   const factRecordsByGroup = new Map();
+  // groupId -> the retraction records standing over that triple, so the write
+  // path can ask "was this source's assertion retracted" without a scan. Almost
+  // always empty, which is why it is read before anything more expensive.
+  const retractionsByGroup = new Map();
   for (const ind of payload.individuals || []) {
     if (!ind?.id) continue;
     individualsById.set(ind.id, ind);
     if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
+    if (ind.class === RETRACTION_CLASS) indexRetraction(retractionsByGroup, ind);
     if (ind.class === FACT_CLASS) {
       const groupId = factGroupId(ind.id);
       const held = factRecordsByGroup.get(groupId);
@@ -1372,8 +1400,27 @@ function buildMemoryIndex(payload) {
     if (list) list.push(e.object);
     else statedByBySubject.set(e.subject, [e.object]);
   }
-  payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject, factRecordsByGroup };
+  payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject, factRecordsByGroup, retractionsByGroup };
   return payload[MEMORY_INDEX];
+}
+
+/** File one retraction record under the triple it stands over, replacing any
+ *  earlier reference to the same id — upsertIndividual merges in place, so the
+ *  index must hold the record the payload holds, not a stale copy of it. */
+function indexRetraction(retractionsByGroup, record) {
+  const groupId = factGroupId(record.id);
+  const held = (retractionsByGroup.get(groupId) || []).filter((r) => r.id !== record.id);
+  held.push(record);
+  retractionsByGroup.set(groupId, held);
+}
+
+/** Every retraction record standing over one triple. Reads the index when there
+ *  is one and falls back to a scan for a hand-built fixture, exactly as the
+ *  rollup lookup beside it does. */
+function retractionsFor(payload, groupId) {
+  const idx = memoryIndexOf(payload);
+  if (idx) return idx.retractionsByGroup.get(groupId) || [];
+  return (payload?.individuals || []).filter((i) => i?.class === RETRACTION_CLASS && factGroupId(i.id) === groupId);
 }
 
 /** The active lookup index for this payload, or null when this payload wasn't
@@ -1673,16 +1720,26 @@ function joinIfRollup(payload, prior, incoming) {
   return mergeRollups(prior, incoming, { priorFor: (sid) => assertionPrior(sourceType, sources[sid]) });
 }
 
+/** A retraction record joins the same way a summary does, by union of the ids
+ *  it carries — the difference is only which ids they are and what the reader
+ *  does with them. Everything that is neither keeps plain last-write-wins. */
+function joinIfReplicatedRecord(payload, prior, incoming) {
+  if (incoming?.class === RETRACTION_CLASS) return mergeRetractions(prior, incoming);
+  return joinIfRollup(payload, prior, incoming);
+}
+
 function upsertIndividual(payload, ind) {
   const idx = memoryIndexOf(payload);
   if (idx) {
     const prior = idx.individualsById.get(ind.id);
     if (prior) {
-      Object.assign(prior, joinIfRollup(payload, prior, ind));
+      Object.assign(prior, joinIfReplicatedRecord(payload, prior, ind));
+      if (prior.class === RETRACTION_CLASS) indexRetraction(idx.retractionsByGroup, prior);
       return prior;
     }
     payload.individuals.push(ind);
     idx.individualsById.set(ind.id, ind);
+    if (ind.class === RETRACTION_CLASS) indexRetraction(idx.retractionsByGroup, ind);
     if (ind.class === FACT_CLASS) {
       const groupId = factGroupId(ind.id);
       const held = idx.factRecordsByGroup.get(groupId);
@@ -1693,7 +1750,7 @@ function upsertIndividual(payload, ind) {
   }
   const i = payload.individuals.findIndex((x) => x?.id === ind.id);
   if (i >= 0) {
-    payload.individuals[i] = joinIfRollup(payload, payload.individuals[i], ind);
+    payload.individuals[i] = joinIfReplicatedRecord(payload, payload.individuals[i], ind);
     return payload.individuals[i];
   }
   payload.individuals.push(ind);
@@ -1884,16 +1941,28 @@ export function factRecordIdsFor(payload, groupId) {
  *  provenance-less write onto an already-asserted triple names no new source,
  *  so it files no second, unattributable sibling beside the real ones — its
  *  triple-level payload lands through restateFactGroup instead. */
-function assertionGroupsFor(payload, groupId, provenance) {
-  const groups = groupTagsBySource(provenance);
+function assertionGroupsFor(payload, groupId, provenance, createdAt = "") {
+  let groups = groupTagsBySource(provenance);
   if (groups.length === 1 && groups[0].sourceId === NO_SOURCE_ID) {
     if (factRecordIdsFor(payload, groupId).length) return [];
   }
-  // A source this group has already compacted away stays compacted. Every
-  // delivery path for a fact lands here, so this is where a late or re-synced
-  // copy of an absorbed assertion is recognized and dropped rather than
-  // inserted — without it the next sync resurrects everything compaction just
-  // folded, which is what makes deleting from a replicated set hard at all.
+  // A source whose assertion was retracted here does not come back on the next
+  // sync. This is the ingest half of the enforcement: every delivery path for a
+  // fact lands in this function, so a re-sent copy of a retracted assertion is
+  // recognized and dropped rather than re-materialized. The comparison is
+  // against the assertion's OWN embedded instant, so the same source saying the
+  // thing again — a fresh tag, a later moment — still lands.
+  const retractions = retractionsFor(payload, groupId);
+  if (retractions.length) {
+    groups = groups.filter((group) => !isRetractedRecord(
+      retractions,
+      `${groupId}@${group.sourceId}`,
+      assertionTimestampFor(group.tags, createdAt),
+    ));
+    if (!groups.length) return groups;
+  }
+  // A source this group has already compacted away stays compacted, for the
+  // same reason and at the same point.
   const rollups = headRollupsFor(payload, groupId);
   if (!rollups.length) return groups;
   return groups.filter((group) => !isAbsorbedSource(rollups, group.sourceId));
@@ -2226,7 +2295,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);
   await mutateMemory(dir, async (payload) => {
-    const groups = assertionGroupsFor(payload, groupId, normText(provenance));
+    const groups = assertionGroupsFor(payload, groupId, normText(provenance), createdAt);
     for (const id of groups.length ? [] : restateFactGroup(payload, groupId, { quantifier: q })) {
       syncFactSources(payload, storedIndividual(payload, id), undefined, { premiseTrusts, ruleConfidence });
     }
@@ -2311,7 +2380,7 @@ export async function appendFacts(dir, facts) {
     const seen = new Set();
     const trustOptsById = new Map();
     for (const f of prepared) {
-      const groups = assertionGroupsFor(payload, f.id, f.provenance);
+      const groups = assertionGroupsFor(payload, f.id, f.provenance, f.createdAt);
       // Naming no source, this write asserts nothing new — but its premise
       // environments and quantifier still belong on the records already there.
       for (const id of groups.length ? [] : restateFactGroup(payload, f.id, { quantifier: f.quantifier, environments: f.environments })) {
@@ -2799,7 +2868,15 @@ function factFoldContext(memory) {
   }
 
   const groups = new Map();
+  const retractionsByGroup = new Map();
   for (const ind of individuals) {
+    if (ind?.class === RETRACTION_CLASS) {
+      const groupId = factGroupId(ind.id);
+      const held = retractionsByGroup.get(groupId);
+      if (held) held.push(ind);
+      else retractionsByGroup.set(groupId, [ind]);
+      continue;
+    }
     if (ind?.class !== FACT_CLASS) continue;
     if ((ind.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP)) continue; // a demoted leaf, not a head
     if (isChainRollupId(ind.id)) continue; // a summary of one source's demoted history, which was never a vote
@@ -2807,6 +2884,24 @@ function factFoldContext(memory) {
     const group = groups.get(groupId);
     if (group) group.push(ind);
     else groups.set(groupId, [ind]);
+  }
+
+  // The read half of retraction enforcement. A record a peer re-delivered before
+  // its retraction arrived is still sitting in the payload, and this is what
+  // keeps it out of the answer: the fold is a pure function of the fact set, so
+  // both peers read the same row whichever order the two arrived in. Only a
+  // group that actually carries a retraction pays anything for the check.
+  for (const [groupId, retractions] of retractionsByGroup) {
+    const members = groups.get(groupId);
+    if (!members) continue;
+    const standing = members.filter((ind) => !isRetractedRecord(
+      retractions,
+      ind.id,
+      assertionTimestampFor(individualAttr(ind, "mgx:factProvenance").split(" | ").filter(Boolean), individualAttr(ind, CREATED_AT_PROP)),
+    ));
+    if (standing.length === members.length) continue;
+    if (standing.length) groups.set(groupId, standing);
+    else groups.delete(groupId);
   }
 
   const groupsByPair = new Map();
@@ -2935,21 +3030,48 @@ function foldFactGroup(id, heads, ctx) {
   };
 }
 
+/** The source key one record id belongs to: what sits between the `@` and any
+ *  chain or summary suffix. A record's own stored key wins when it has one; the
+ *  parse covers a demoted leaf and a summary, which carry the same key in their
+ *  id but do not all store it. */
+function recordSourceIdOf(record) {
+  const stored = individualAttr(record, SOURCE_ID_PROP);
+  if (stored) return stored;
+  const id = String(record?.id || "");
+  const at = id.indexOf("@");
+  if (at < 0) return "";
+  const rest = id.slice(at + 1);
+  const hash = rest.indexOf("#");
+  return hash < 0 ? rest : rest.slice(0, hash);
+}
+
 /** Retract facts by id — a real DELETE (syllogise.mjs's retractability
  *  mechanism). A GROUP id retracts the triple: every source's record for it,
  *  demoted leaves included, since retracting "dogs bark" cannot leave half its
  *  assertions standing. A single record id retracts just that record. Scrubs
  *  any edge referencing a removed id as subject or object; an orphaned Source
- *  is left in place (not a GC pass). Unknown ids are silently skipped. Returns
- *  { removed } — the ids asked for that matched, so it may be smaller than the
- *  input and is never longer than it. */
-export async function removeFacts(dir, ids) {
+ *  is left in place (not a GC pass). Unknown ids are silently skipped.
+ *
+ *  The delete leaves a RETRACTION RECORD behind, one per (triple, source),
+ *  carrying the record ids it suppressed and the moment it did. That record is
+ *  what makes the retraction survive a sync: a plain delete against a grow-only
+ *  set comes straight back from any peer that still holds the fact. It also
+ *  keeps the retraction on record rather than erasing the fact that something
+ *  was asserted at all. A retraction record is never itself removed here.
+ *
+ *  Returns { removed, records } — `removed` the ids asked for that matched, so
+ *  it may be smaller than the input and is never longer than it; `records` the
+ *  concrete record ids that went, which is what the retraction absorbed. */
+export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" } = {}) {
   const idSet = new Set((ids || []).filter(Boolean));
   const removed = [];
-  if (!idSet.size) return { removed };
+  const records = [];
+  if (!idSet.size) return { removed, records };
+  const retractedAtVal = retractedAt || nowIso();
   await mutateMemory(dir, (payload) => {
     const removedSet = new Set();
     const matched = new Set();
+    const retiredByGroupAndSource = new Map(); // `${groupId} ${sourceId}` -> { groupId, sourceId, ids, template }
     payload.individuals = (payload.individuals || []).filter((ind) => {
       if (ind?.class !== FACT_CLASS) return true;
       const groupId = factGroupId(ind.id);
@@ -2957,18 +3079,114 @@ export async function removeFacts(dir, ids) {
       if (!asked) return true;
       matched.add(asked);
       removedSet.add(ind.id);
+      const sourceId = recordSourceIdOf(ind);
+      const key = `${groupId} ${sourceId}`;
+      // The record's own tags come along. They are the account of what was
+      // asserted and by whom, which a retraction keeps rather than erases, and
+      // they are also what lets a broadcast re-key this id onto the Source the
+      // receiving store files the same assertion under.
+      const tags = individualAttr(ind, "mgx:factProvenance");
+      const retired = retiredByGroupAndSource.get(key);
+      if (retired) {
+        retired.ids.push(ind.id);
+        if (tags) retired.tags.push(tags);
+      } else {
+        retiredByGroupAndSource.set(key, {
+          groupId,
+          sourceId,
+          ids: [ind.id],
+          tags: tags ? [tags] : [],
+          template: {
+            label: ind.label || "",
+            subject: individualAttr(ind, "rdf:subject"),
+            predicate: individualAttr(ind, "rdf:predicate"),
+            object: individualAttr(ind, "rdf:object"),
+          },
+        });
+      }
       return false;
     });
     for (const id of matched) removed.push(id);
     if (!removed.length) return; // honest no-op — nothing matched, no write needed beyond this
+    for (const id of removedSet) records.push(id);
     for (const group of payload.objectProperties || []) {
       const before = group.examples || [];
       group.examples = before.filter((e) => !removedSet.has(e?.subject) && !removedSet.has(e?.object));
       group.count = group.examples.length;
     }
+    for (const retired of retiredByGroupAndSource.values()) {
+      const record = planRetraction({
+        groupId: retired.groupId,
+        sourceId: retired.sourceId,
+        recordIds: retired.ids,
+        retractedAt: retractedAtVal,
+        template: retired.template,
+        provenance: [...retired.tags, provenance].filter(Boolean).join(" | "),
+      });
+      if (record) upsertIndividual(payload, record);
+    }
     recountClasses(payload);
   });
-  return { removed };
+  return { removed, records };
+}
+
+/** Every retraction record the store holds, as the wire facts that carry them.
+ *  The P2P layer's own diff and sync response read this: a retraction is not a
+ *  fact row, so nothing that walks readFactRows would ever find one. */
+export function readRetractions(memory) {
+  const out = [];
+  for (const ind of memory?.individuals || []) {
+    if (ind?.class !== RETRACTION_CLASS) continue;
+    const fact = retractionWireFact(ind);
+    if (fact) out.push(fact);
+  }
+  return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** Merge received retractions and enforce them. Two steps, and both are
+ *  needed: the record joins by union with whatever this store already held for
+ *  that (triple, source), then any assertion it now suppresses is dropped. The
+ *  second step is what makes a retraction that arrives AFTER the fact converge
+ *  with one that arrives before it.
+ *
+ *  Returns { merged, removed } — how many records landed, and the record ids the
+ *  enforcement took out. */
+export async function appendRetractions(dir, wireFacts) {
+  const incoming = [];
+  for (const fact of wireFacts || []) {
+    const record = retractionFromWire(fact);
+    if (record) incoming.push(record);
+  }
+  const removed = [];
+  if (!incoming.length) return { merged: 0, removed };
+  await mutateMemory(dir, (payload) => {
+    const suppress = new Map(); // groupId -> the merged retraction records over it
+    for (const record of incoming) {
+      const stored = upsertIndividual(payload, record);
+      const groupId = factGroupId(stored.id);
+      const held = suppress.get(groupId);
+      if (held) held.push(stored);
+      else suppress.set(groupId, [stored]);
+    }
+    // A retraction that names a triple this store never held is still stored —
+    // it has to be, or the fact arriving later would land unopposed.
+    const drop = new Set();
+    for (const [groupId, retractions] of suppress) {
+      for (const recordId of factRecordIdsFor(payload, groupId)) {
+        const stored = storedIndividual(payload, recordId);
+        if (!stored) continue;
+        const tags = individualAttr(stored, "mgx:factProvenance").split(" | ").filter(Boolean);
+        if (!isRetractedRecord(retractions, recordId, assertionTimestampFor(tags, individualAttr(stored, CREATED_AT_PROP)))) continue;
+        drop.add(recordId);
+      }
+    }
+    if (drop.size) {
+      dropAbsorbedRecords(payload, drop);
+      for (const id of drop) removed.push(id);
+    }
+    recountClasses(payload);
+  });
+  return { merged: incoming.length, removed };
 }
 
 /** The trust floor a fact must clear before a differing object counts as a real
