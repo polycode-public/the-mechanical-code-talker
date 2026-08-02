@@ -14,6 +14,8 @@ import { fileURLToPath } from "node:url";
 
 const INDEX = fileURLToPath(new URL("../../public/index.html", import.meta.url));
 
+// mud and mudiii are excluded on purpose: they are full-screen game pages,
+// not counted in this guard's anchor set.
 const DEMO_PAGES = ["chat", "research", "ledger", "code", "ingest", "sprites", "plan", "adventure", "spider-fly"];
 const EXPECTED_ANCHOR_COUNT = 27;
 
