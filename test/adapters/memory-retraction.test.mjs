@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   planRetraction, mergeRetractions, retractionIdFor, isRetractionId, retractionScopeOf,
   retractedRecordIds, retractedAtOf, retractionWireFact, retractionFromWire,
@@ -9,6 +12,7 @@ import {
 import {
   createInMemoryStore, appendFacts, removeFacts, loadMemory, readFactRows,
   readRetractions, appendRetractions,
+  createSqliteMemoryStore, closeSqliteMemoryStore,
 } from "../../src/adapters/memory/core.mjs";
 
 const GROUP = "fact:00112233aabbccdd";
@@ -206,6 +210,28 @@ test("one source's retraction leaves another source's assertion of the same trip
   const row = findRow(await rowsOf(dir), "rover", "mgx:isA");
   assert.ok(row, "the fact stands, because one source retracting is not the group agreeing");
   assert.deepEqual(row.sourceIds, [SOURCE_B]);
+});
+
+test("a retraction survives closing and reopening a sqlite store, and still refuses the copy", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-retraction-"));
+  const dbPath = join(dir, "graph.sqlite");
+  const fact = teachFact("rover", "mgx:isA", "dog", "sess-a", T1);
+  let handle = await createSqliteMemoryStore(dbPath);
+  try {
+    const { ids } = await appendFacts(handle, [fact]);
+    await removeFacts(handle, [ids[0]], { retractedAt: T2 });
+    closeSqliteMemoryStore(handle);
+
+    handle = await createSqliteMemoryStore(dbPath);
+    assert.equal(readRetractions(await loadMemory(handle)).length, 1);
+    await appendFacts(handle, [fact]);
+    assert.equal(findRow(await rowsOf(handle), "rover", "mgx:isA"), undefined);
+    assert.deepEqual(handle.db.prepare("SELECT count(*) AS n FROM facts").get().n, 0,
+      "and the tombstone is not a fact, so the projection stays clean");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("retracting one source twice keeps one record, advancing rather than chaining", async () => {
