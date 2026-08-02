@@ -27,11 +27,12 @@ const LAYOUT = TOWN_SQUARE_LAYOUTS[FIXTURE.world];
 // as turn -> agent -> the rung it actually reaches. They are all one fact: the
 // tape's turn 6 asks the predator to sit at exactly Chebyshev 4 from goblin-1
 // while goblin-1 stands on the crumb that turn 3 minted, and the crumb's cell is
-// a seeded pick that barely moves. A sweep of 285,000 starting boards found none
-// that reaches it, so a starting board cannot be retuned onto the tape here.
-// Recorded rather than edited out of expectedTape, so whoever owns the fixture
-// decides which of the two moves. Anything NOT in this table is still asserted
-// exactly, so a fourth divergence fails.
+// a seeded pick that barely moves. Two sweeps — 285,000 boards over 15 bystander
+// placements, and 400,000 random boards — both reach turn 6 (831 and 1,049
+// boards) and reach turn 7 zero times, so a starting board cannot be retuned
+// onto the tape here. Recorded rather than edited out of expectedTape, so
+// whoever owns the fixture decides which of the two moves. Anything NOT in this
+// table is still asserted exactly, so a fourth divergence fails.
 const RUNGS_THE_ENGINE_REACHES_INSTEAD = {
   5: { "fox-1": "chase" },
   6: { "goblin-1": "evade" },
