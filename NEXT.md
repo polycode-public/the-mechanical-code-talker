@@ -39,15 +39,16 @@ batch's only real collision point and the goblin item has to land first anyway.
 
 - **T1 goblin-render** — `mudiii-scene.mjs`, the `await` on `mudiii-viz.mjs:1219`, and the three
   test files that pin them. Sonnet. Status: started.
-- **T2 smoke:deploy mudiii probe** — `scripts/post-deploy-smoke.mjs`. Haiku. Status: started.
 - **T3 index/home PAGE_ORDER** — `test-e2e/pages-index.test.mjs`, `test-e2e/pages-home.test.mjs`.
   Haiku. Status: started.
-- **T4 `QUESTION_LEAD_RE` dedup** — `interpret/normalize.mjs`, `world-teach.mjs`, `chat.mjs`. Haiku.
-  Status: started.
-- **T5 import-cycle estate guard** — one new file under `test/estate/`. Haiku. Status: started.
-- **T6 adventure pill `data-command`** — `adventure-viz.mjs` and its pill tests. Haiku.
-  Status: started.
-- **T7 resolver purity invariant** — `CLAUDE.md`. Sonnet. Status: started.
+
+Landed:
+
+- **T2 smoke:deploy mudiii probe** — merged as `f768dd8e`, pushed. Full suite 5845/5845.
+- **T4 `QUESTION_LEAD_RE` dedup** — merged. Blast radius 205/205 with T5/T6/T7.
+- **T5 import-cycle estate guard** — merged, `test/estate/no-deadlock-import-cycle.test.mjs`.
+- **T6 adventure pill `data-command`** — merged.
+- **T7 resolver purity invariant** — merged into `CLAUDE.md`'s working-model section.
 
 ## Open items
 
@@ -419,17 +420,15 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** unit-test both legs in `test/services/mudiii-turn.test.mjs`: a player-placed item
   hits, a spawned item declines.
 
-- **`smoke:deploy` never fetches `mudiii.html`.** `scripts/post-deploy-smoke.mjs` probes
-  `version.txt`, `vendor/wink.js` and one model's byte length. A deploy that dropped the page
-  entirely would still pass, and `smoke:deploy` is the plan's own done-check for its final step.
-  **Tier:** Haiku. A fourth probe in an existing loop.
-  **Do:** copy `vendorEncoding()` (`:51`-`:65`) into a `mudiiiPage()` sibling fetching `mudiii.html`
-  relative to `PAGES_URL`, asserting `res.ok` and a present `content-encoding`. Add
-  `["mudiii", mudiiiPage]` to the list in `checkOnce()` (`:93`-`:98`) and extend the `ok` boolean
-  (`:105`-`:106`).
-  **Risk:** none beyond a wrong path. The page sits at the site root next to `version.txt`.
-  **Mitigation:** run the script once against a real deployed URL. No sibling probe is unit-tested;
-  don't invent a test where the others have none.
+- **`smoke:deploy`'s new `mudiii.html` probe has not run against a real deployed URL.** The probe
+  itself has landed: `mudiiiPage()` in `scripts/post-deploy-smoke.mjs` fetches `mudiii.html`
+  relative to `PAGES_URL` and asserts both `res.ok` and a present `content-encoding`, registered in
+  `checkOnce()` and folded into the `ok` boolean.
+  **Tier:** Haiku, and it is a run rather than an edit.
+  **Do:** run `npm run smoke:deploy` once after the next real deploy and confirm the `mudiii` row
+  reports an encoding rather than an error. A wrong path is the only way this fails, and nothing
+  local can tell you.
+  **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
 
 - **Food items render as primitive spheres.** The KayKit cheese and apple models have no row in the
   source repo's register, so their terms are unrecorded. `data/mudiii-assets.json`'s `_readme` says
@@ -745,49 +744,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   miss/verb-parse path; checkbox on, the same sentence writes a fact and the confirmation matches
   `confirmation()`'s shape in `world-teach.mjs`.
 
-- **`QUESTION_LEAD_RE` is duplicated in `world-teach.mjs`** because it is private to `chat.mjs`.
-  Verified byte-identical at `world-teach.mjs:48` and `chat.mjs:2371`.
-  **Tier:** Haiku.
-  **Do:** move the definition to `src/domain/interpret/normalize.mjs`, which already exports
-  `correctMisspellings` (`:122`), the function it is paired with at every call site per `chat.mjs`'s
-  own comment at `:2373`. Import it in both files. `chat.mjs` has about 40 readers, and the
-  identifier name stays the same, so no call site changes.
-  **Risk:** missing a call site during the const deletion.
-  **Mitigation:** `node --check` on both files catches an undefined reference, plus the existing
-  chat and world-teach test files that exercise question detection.
-
-- **`world-teach.mjs` and `adventure.mjs` import each other.** The cycle is static and every binding
-  crossing it is a hoisted function declaration, so it resolves. The danger is specific and known:
-  converting either side to a top-level `await import()` turns the same cycle into a deadlock where
-  both modules wait forever with no error. That happened to `mudiii-viz.mjs` and `mudiii-scene.mjs`
-  during this build.
-  **Tier:** Haiku.
-  **Do:** `test/estate/import-layers.test.mjs` already parses static imports, `export … from` and
-  `import(…)` out of every file under `src/` with plain regexes (`IMPORT_RE`/`DYNAMIC_IMPORT_RE`,
-  `:12`-`:14`), but it checks layer direction. Add a small standalone check, either a case there or
-  a new file in `test/estate/`, asserting neither file contains a top-level `await import()` of the
-  other's path.
-  **Feasibility:** it has to be a static text check. The failure it guards against never throws.
-  **Risk:** a blunt "no `await import(` at all" assertion would need loosening the first time either
-  file legitimately dynamic-imports something unrelated.
-  **Mitigation:** write the narrower path-matching version from the start.
-
-### Predictive text
-
-- **adventure.html's pill buttons carry no `data-command` attribute.** mud.html's already do, and
-  `mudiii-viz.mjs` adopted `pill-complete` correctly, so only adventure is affected. Keyboard
-  completion works; the rail highlight and `aria-activedescendant` wiring stay inert.
-  **Tier:** Haiku. One line.
-  **Do:** in `adventure-viz.mjs`'s `renderPills` (`:1526`-`:1533`), add
-  `data-command="' + esc(a) + '"` to the button, matching `mud-viz.mjs:1755`'s idiom. `a` is already
-  the full command string (`roomAffordances`/`pillsForRoom` return `string[]`, per
-  `pill-complete.mjs:47`), so the attribute and the label are the same string here, unlike mud's
-  separate command/label pair.
-  **Risk:** none. `pillCandidates` already normalizes bare strings, so keyboard completion is
-  unaffected either way.
-  **Mitigation:** add one assertion to the existing adventure pill-rail tests that a rendered pill's
-  `data-command` equals its visible label.
-
 ### p2p
 
 - **Retraction does not replicate.** `removeFacts` is a real local delete, reached by chat's
@@ -824,19 +780,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** a two-peer test in `test/services/p2p-room.test.mjs`'s style: peer A retracts, peer
   B still holds the fact, sync in both orders, assert both converge on retracted. Nothing exercises
   order-independence for a delete today.
-
-- **The read-time resolver purity check is not written down where it will be read.** `foldWorldState`
-  broke it once and was fixed from outside itself, by `p2p-room.mjs` sorting Fact individuals by
-  content-addressed id after every merge. A resolver that reads a wall clock, a local counter, or
-  array position passes a single-browser test and diverges on the mesh.
-  **Tier:** Sonnet. Matching `CLAUDE.md`'s prose register is the only judgment call.
-  **Do:** add a short bullet under `CLAUDE.md`'s "Working model" section stating the invariant: any
-  read-time resolver over the fact store must be a pure function of the fact set, with no wall clock,
-  no local counter, no reliance on arrival order. Cite `p2p-room.mjs`'s `sortFactIndividualsById` as
-  the precedent already in the tree, and `docs/references/papers/crdt.md`'s "Where 'latest wins'
-  happens" section for the full account. The check: feed one peer's facts in two different orders and
-  demand the same answer. `CLAUDE.md` has no p2p section today, so this is new prose, not an edit.
-  **Risk:** none. Docs-only, so the links and estate guards are the whole gate.
 
 ### Pipeline
 
