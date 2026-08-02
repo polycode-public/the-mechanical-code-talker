@@ -39,10 +39,8 @@ goes to one owner in the order the section states: grid size first, because two 
 
 - **T20 mudiii-viz cluster** — scenario grid size, the turn counter, and the chat teach-frame tick.
   `build-demo-site.mjs`, `mudiii-viz.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
-- **T21 "who put that there?"** — `mudiii-turn.mjs`. Sonnet. Status: started.
 - **T23 food size look** — `data/mudiii-assets.json`, and a screenshot it must open. Haiku.
   Status: started.
-- **T24 plan-doc citations** — `spider-fly-world.mjs`, `spider-fly-viz.mjs`. Haiku. Status: started.
 
 ## Open items
 
@@ -379,24 +377,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   **Mitigation:** re-apply `callScene("setCamera", camera)` right after the boot, and add an e2e
   that edits a prop's cell, waits for the synced status, and asserts the camera mode survived.
 
-- **"Who put that there?" has no recognizer.** `placeFood` (`predator-prey.mjs:565`-`:604`) writes
-  `mgx:placed-by player` with world-taught provenance and `foldTownSquareState` (`:132`-`:216`)
-  already folds it into `state.placedBy`, a `Map<subject, { by, turn, epoch }>`. No verb in
-  `mudiii-turn.mjs` reads it back, so the question falls through to the generic lanes.
-  **Tier:** Sonnet.
-  **Do:** add a `_RE` constant near the file's other regexes matching "who put/placed <item|cell>",
-  register it in `mudiiiTurn`'s dispatch chain after the narrower recognizers and before the generic
-  fallback, and answer from `state.placedBy.get(itemId).by` using the same
-  `foldTownSquareState`/`readFactRows` call shape the neighbouring recognizers use. Decline when the
-  item has no `placedBy` row (spawned food) or does not exist, in the file's existing honest-miss
-  phrasing.
-  **Feasibility:** the phrasing to recognize first is whatever the deception rail's pills emit, so
-  land this alongside that item rather than guessing wordings.
-  **Risk:** too broad a regex misclassifies unrelated "who" questions. Too narrow is an honest miss,
-  which is acceptable.
-  **Mitigation:** unit-test both legs in `test/services/mudiii-turn.test.mjs`: a player-placed item
-  hits, a spawned item declines.
-
 - **`smoke:deploy`'s new `mudiii.html` probe has not run against a real deployed URL.** The probe
   itself has landed: `mudiiiPage()` in `scripts/post-deploy-smoke.mjs` fetches `mudiii.html`
   relative to `PAGES_URL` and asserts both `res.ok` and a present `content-encoding`, registered in
@@ -658,14 +638,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   because nothing has been pushed.
   **Tier:** none. It closes on the next green pipeline.
   **Do:** confirm both jobs pass on the push that clears the red suite. If they do, delete this item.
-
-- **`PLAN_SPIDER_FLY.md §N` citations sit in comments in two files.** `spider-fly-world.mjs` and
-  `spider-fly-viz.mjs` cite a plan doc from inside code comments, which this repo's own rules
-  forbid because the reference rots once the doc is archived or renamed. Pre-existing, not new
-  drift.
-  **Tier:** Haiku. A comment-only sweep.
-  **Do:** delete the citations, keeping whatever non-obvious why each comment actually carries.
-  **Risk:** none. A comment-only diff takes the reference-sweep gate, not the full suite.
 
 - **Stale header comments in `mudiii-browser-entry.mjs`, `mudiii-viz.mjs` and `mudiii-scene.mjs`.**
   They say sibling modules "do not exist in every worktree yet"; all are on `main`.
