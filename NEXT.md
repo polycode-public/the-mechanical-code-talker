@@ -33,8 +33,24 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 0 of 5, dispatched 2026-08-02. Plus two features the
-operator added to the same run: world teach mode and pill-driven predictive text.
+**MUDIII build** (`PLAN_MUD_MUDIII.md`), wave 1 of 5, dispatched 2026-08-02. Plus two features the
+operator added to the same run: world teach mode and pill-driven predictive text. Standing
+authorisation: run every remaining wave without pausing, push only for a pipeline fix or on
+completion of all waves.
+
+Wave 1, in flight:
+
+| track | tier | worktree | status |
+|---|---|---|---|
+| W1-ENGINE — `town-square-world.mjs`, `predator-prey.mjs`, three world sources, the fixture's ticks | top | `.claude/worktrees/agent-abfd808e944937be1` | started |
+| W1-VIZ — `mudiii-viz.mjs`, `mudiii-browser-entry.mjs` | Sonnet | `.claude/worktrees/agent-ac9f33b91b04d1731` | started |
+| W1-VENDOR — `build-three-vendor.mjs`, `build-mudiii-bundle.mjs` | Haiku | `.claude/worktrees/agent-a67e08c2555b8ffe7` | started |
+
+`mudiii-viz.mjs` and `mudiii-scene.mjs` are split up front so the page shell and the 3D scene are
+disjoint files rather than one contended one; the contract between them is a single exported
+function name, `mudiiiSceneScript(opts)`, pasted into both briefs.
+
+Wave 0, landed:
 
 Wave-0 prerequisites landed on `main` first (c45a6fc7): `three` as a devDependency, the two npm
 script entries, two `.gitignore` page lines, `TRACKED_SITE_FILES` += `models`, and the
