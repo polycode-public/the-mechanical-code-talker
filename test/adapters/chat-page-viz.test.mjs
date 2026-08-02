@@ -355,13 +355,22 @@ test("renderChatHtml: the forget-everything control clears the device store and 
   assert.match(html, /forgot everything taught on this device/);
 });
 
-test("renderChatHtml: the brand line is one eyebrow element carrying tmct/chat/about links, lowercase, no heading beside it", () => {
+test("renderChatHtml: the brand line is one eyebrow element carrying tmct/chat/about links, lowercase, and carries no heading of its own", () => {
   const html = renderChatHtml();
   assert.ok(html.includes('<span class="eyebrow"><span class="eyebrow-links">'));
   assert.match(html, /<a href="\.\/index\.html">tmct<\/a>[\s\S]{0,20}<a href="\.\/chat\.html">chat<\/a>[\s\S]{0,20}<a href="\.\/chat-about\.html">about<\/a>/);
-  assert.ok(!html.includes("<h1>"));
+  const brandBlock = html.slice(html.indexOf('<div class="brand">'), html.indexOf("</div>", html.indexOf('<div class="brand">')));
+  assert.ok(!brandBlock.includes("<h1"), "the eyebrow is navigation, not the page title, so it stays out of the brand block");
   const eyebrowRule = html.match(/\.eyebrow \{[^}]*\}/)?.[0] ?? "";
   assert.ok(!eyebrowRule.includes("text-transform"), "eyebrow must not transform the brand's case");
+});
+
+test("renderChatHtml: carries exactly one h1, naming the page rather than repeating the eyebrow's nav links", () => {
+  const html = renderChatHtml();
+  const h1s = [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)];
+  assert.equal(h1s.length, 1, "exactly one h1 on the page");
+  assert.equal(h1s[0][1], "talk to it");
+  assert.ok(html.indexOf(h1s[0][0]) < html.indexOf('<header class="topbar">'), "the h1 lands before the topbar it titles");
 });
 
 // ---- parseResearchAnswer: the researched panel's own reading of a settled

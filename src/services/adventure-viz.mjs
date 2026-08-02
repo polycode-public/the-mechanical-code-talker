@@ -628,6 +628,7 @@ ${THEME_TOKENS_CSS}
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gilt); }
   ${EYEBROW_LINKS_CSS}
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: .3rem 0 1rem; }
@@ -994,6 +995,7 @@ ${THEME_TOKENS_CSS}
 </head>
 <body>
 <main>
+  <h1 class="visually-hidden">the adventure</h1>
   <div class="titlebar">
     <div class="eyebrow">${demoEyebrowHtml("adventure", "the adventure")}</div>
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>

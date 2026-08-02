@@ -109,7 +109,7 @@ ${DASH_DARK_CHROME_CSS}
   .brand { display: flex; flex-direction: column; gap: .3rem; max-width: 640px; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   ${EYEBROW_LINKS_CSS}
-  .subtitle { font-size: .92rem; color: var(--ink); opacity: .82; max-width: 58ch; }
+  .subtitle { margin: 0; font-size: .92rem; font-weight: 400; color: var(--ink); opacity: .82; max-width: 58ch; }
   .statuspanel { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
   .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
   .statuspanel .stat-label { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
@@ -242,7 +242,7 @@ ${DASH_DARK_CHROME_CSS}
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">${demoEyebrowHtml("research", "research")}</span>
-        <span class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</span>
+        <h1 class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</h1>
       </div>
       <div class="statuspanel" id="statusPanel" aria-live="polite">
         <div class="stat stat-facts"><span class="stat-label">facts in the graph</span><span class="stat-value" id="statFacts">&mdash;</span></div>

@@ -696,10 +696,18 @@ test("renderAdventureHtml: the 2/3-1/3 stage grid, the command box sits inside .
 test("renderAdventureHtml: the tagline is gone — the titlebar carries only the brand eyebrow and the edit-mode toggle", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.ok(!html.includes("A room, drawn from exactly what the text already says is there"));
-  assert.ok(!html.includes("<h1>"));
   const titlebarBlock = html.match(/<div class="titlebar">[\s\S]*?<\/div>\s*<\/div>/)[0];
+  assert.ok(!titlebarBlock.includes("<h1"), "the eyebrow is navigation, not the page title, so it stays out of the titlebar");
   assert.match(titlebarBlock, /class="eyebrow"/);
   assert.match(titlebarBlock, /id="editModeBtn"/);
+});
+
+test("renderAdventureHtml: carries exactly one h1, naming the page rather than repeating the eyebrow's nav links", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  const h1s = [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)];
+  assert.equal(h1s.length, 1, "exactly one h1 on the page");
+  assert.equal(h1s[0][1], "the adventure");
+  assert.ok(html.indexOf(h1s[0][0]) < html.indexOf('<div class="titlebar">'), "the h1 lands before the titlebar it titles");
 });
 
 test("renderAdventureHtml: the command box's pills sit in a header row beside the renamed heading, right-anchored so they wrap toward it rather than pushing it around", () => {
