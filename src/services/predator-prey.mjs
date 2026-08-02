@@ -1184,34 +1184,36 @@ export async function runTownSquareTick(memoryDir, {
       goal = goalLine("trapped");
       mood = "scared";
     } else if (threat) {
-      // A fleeing prey that already knows where food is should flee toward
-      // it, not away from it — among cells that are equally safe, break the
-      // tie toward the nearest believed crumb. Prey-only: the predator's own
-      // avoid rung passes nothing, so its ties still resolve the old way.
       const towardFood = role === "prey"
         ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts)
         : null;
       if (blendsPreyDecision && role === "prey" && towardFood) {
+        // The one case the two rungs disagree about: this prey believes a
+        // predator AND food, so a strict order has to pick between them and a
+        // score does not.
         nextCell = greedyBlend(fromCell, threat.cell, towardFood.cell, applyActions, preyThreatWeight);
-        const foodCell = cellId(towardFood.cell.x, towardFood.cell.y);
-        const closed = chebyshevDistance(fromCell.x, fromCell.y, towardFood.cell.x, towardFood.cell.y)
+        const closedOnFood = chebyshevDistance(fromCell.x, fromCell.y, towardFood.cell.x, towardFood.cell.y)
           > chebyshevDistance(nextCell.x, nextCell.y, towardFood.cell.x, towardFood.cell.y);
-        // The score is one number, but the step it picks is still one of two
+        // The score is one number, but the step it buys is still one of two
         // legible things: this move closed on the crumb, or it did not. The
-        // rung and the goal line report which, so the page never has to say
+        // rung and the goal line say which, so no surface has to render
         // "mostly evading, somewhat hungry".
-        rung = closed ? "forage" : "evade";
+        rung = closedOnFood ? "forage" : "evade";
         plan = stepPlan(fromCell, nextCell);
-        goal = closed
+        goal = closedOnFood
           ? goalLine("forage", {
             subject: towardFood.subject,
-            cell: foodCell,
+            cell: cellId(towardFood.cell.x, towardFood.cell.y),
             arrived: nextCell.x === towardFood.cell.x && nextCell.y === towardFood.cell.y,
           })
           : goalLine("evade", { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
-        mood = closed ? "calm" : "scared";
+        mood = closedOnFood ? "calm" : "scared";
       } else {
         rung = role === "predator" ? "avoid" : "evade";
+        // A fleeing prey that already knows where food is should flee toward
+        // it, not away from it — among cells that are equally safe, break the
+        // tie toward the nearest believed crumb. Prey-only: the predator's own
+        // avoid rung passes nothing, so its ties still resolve the old way.
         nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
         plan = stepPlan(fromCell, nextCell);
         goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
