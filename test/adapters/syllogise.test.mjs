@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   appendFact, appendFacts, loadMemory, readFactRows, removeFacts,
-  loadSyllogiseState, saveSyllogiseState,
+  loadSyllogiseState, saveSyllogiseState, factRecordIdForTag, readRetractions,
 } from "../../src/adapters/memory/core.mjs";
 import {
   deriveSubClassClosure, deriveSubClassClosureDelta, buildRelevanceFrontier,
@@ -1593,6 +1593,115 @@ test("retractSubClassOf: without appendFacts on the store, removal is still corr
     const survivor = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "d");
     assert.ok(survivor, "a⊑d still survives via its second environment");
     assert.equal(survivor.environments.length, 2, "no re-ground happened — the broken environment stays, stale but inert");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- retractSubClassOf: sourceTags scopes the target to ONE party's own ----
+// ---- record(s), the granularity /retract needs over the mesh --------------
+const SCOPED_STORE = { ...STORE, factRecordIdForTag };
+const retractScoped = (dir, subj, obj, opts) => retractSubClassOfSeam(dir, subj, obj, { store: SCOPED_STORE, ...opts });
+
+test("retractSubClassOf: sourceTags scoped to the sole asserter removes the fact and its cascade, "
+  + "exactly like the unscoped group-wide path", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-a@2026-01-01T00:00:00.000Z" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    assert.ok(hasEdge(readFactRows(await loadMemory(dir)), "a", "c"), "a⊑c entailed before retraction");
+
+    const res = await retractScoped(dir, "a", "b", { sourceTags: ["teach:chat:sess-a"] });
+    assert.equal(res.found, true);
+    assert.equal(res.ownRecord, true);
+    assert.equal(res.stillStands, false);
+    assert.equal(res.count, 2, "the premise itself + the entailment it justified");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"), "a⊑b gone");
+    assert.ok(!hasEdge(rows, "a", "c"), "a⊑c gone too — its only justification broke");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: two sources asserting the same triple — one's scoped retraction leaves the "
+  + "fact standing, cited to the other, and never touches anything entailed from it", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-a@2026-01-01T00:00:00.000Z" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-b@2026-01-01T00:00:00.000Z" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "b");
+    assert.equal(before.sourceIds.length, 2, "both sessions asserted it");
+
+    const res = await retractScoped(dir, "a", "b", { sourceTags: ["teach:chat:sess-a"] });
+    assert.equal(res.found, true);
+    assert.equal(res.ownRecord, true);
+    assert.equal(res.stillStands, true, "sess-b's record keeps the triple standing");
+    assert.equal(res.count, 1, "only sess-a's own record went — no cascade, the premise never broke");
+
+    const rows = readFactRows(await loadMemory(dir));
+    const surviving = rows.find((r) => r.subject === "a" && r.object === "b");
+    assert.ok(surviving, "a⊑b still stands");
+    assert.deepEqual(surviving.sourceIds, ["src:teach-chat:sess-b"], "cited to sess-b alone now");
+    assert.ok(hasEdge(rows, "a", "c"), "a⊑c is untouched — its premise never actually stopped holding");
+
+    const wire = readRetractions(await loadMemory(dir));
+    assert.equal(wire.length, 1, "the retraction is on record");
+    assert.equal(wire[0].subject, `${before.id}@src:teach-chat:sess-a`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: sourceTags naming a party that never asserted the triple removes nothing "
+  + "of theirs, and leaves the triple exactly as it stood", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-a@2026-01-01T00:00:00.000Z" });
+
+    const res = await retractScoped(dir, "a", "b", { sourceTags: ["teach:chat:sess-b"] });
+    assert.equal(res.found, true);
+    assert.equal(res.ownRecord, false);
+    assert.equal(res.retracted.length, 0);
+    assert.equal(res.count, 0);
+    assert.ok(hasEdge(readFactRows(await loadMemory(dir)), "a", "b"), "sess-a's assertion is untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: a party's positive assertion can carry EITHER of two provenance tags "
+  + "(the ACE-parsed lane and the free-form teach lane) — sourceTags names both, and either one "
+  + "matching is enough to own the record", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "ace:chat:sess-a@2026-01-01T00:00:00.000Z" });
+
+    const res = await retractScoped(dir, "a", "b", {
+      sourceTags: ["teach:chat:sess-a", "ace:chat:sess-a"],
+    });
+    assert.equal(res.ownRecord, true);
+    assert.equal(res.stillStands, false);
+    assert.ok(!hasEdge(readFactRows(await loadMemory(dir)), "a", "b"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: with no sourceTags at all, retraction stays group-wide — every source's "
+  + "record for the triple goes, the pre-existing behaviour every other caller keeps", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-a@2026-01-01T00:00:00.000Z" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "teach:chat:sess-b@2026-01-01T00:00:00.000Z" });
+
+    const res = await retractScoped(dir, "a", "b");
+    assert.equal(res.ownRecord, undefined, "the field only appears when sourceTags scoping is used");
+    assert.equal(res.stillStands, undefined);
+    assert.ok(!hasEdge(readFactRows(await loadMemory(dir)), "a", "b"), "both sources' records are gone");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

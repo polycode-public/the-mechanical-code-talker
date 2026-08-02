@@ -4791,23 +4791,54 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
     // RETRACTION — "forget that X is a Y": wires the data-layer retraction
     // primitive (retractSubClassOf, src/domain/syllogise.mjs) up to chat-level
-    // phrasing.
+    // phrasing. Scoped to THIS session's own assertion (sourceTags below) —
+    // the same tags teachFact/assertSentence write under — so retracting
+    // never erases a fact another source taught, only this session's own copy.
     //
     // TRIGGER, never itself the authority: RETRACT_FORGET_RE only recognizes
     // the SHAPE of a retraction sentence — it says nothing about whether
-    // subject⊑object was ever actually taught. retractSubClassOf is asked for
-    // real and is the only thing that decides:
-    //   - found:true  → a real stored (or entailed) fact existed and was
-    //     retracted (with its dependency-directed cascade) — confirmed here.
-    //   - found:false → subject⊑object was never a stored fact, and this falls
-    //     through to the rest of teachLane's ordinary cascade below rather than
-    //     claiming a specific, possibly-wrong reason.
+    // subject⊑object was ever actually taught, or taught by THIS session.
+    // retractSubClassOf is asked for real and is the only thing that decides:
+    //   - found:false  → subject⊑object was never a stored fact, and this
+    //     falls through to the rest of teachLane's ordinary cascade below
+    //     rather than claiming a specific, possibly-wrong reason.
+    //   - found:true, ownRecord:false → some OTHER source taught it; this
+    //     session has nothing of its own to withdraw.
+    //   - found:true, stillStands:true → this session's own record is gone,
+    //     but another source's record keeps the fact standing (no cascade —
+    //     its premise never actually broke).
+    //   - found:true, stillStands:false → this session held the only record;
+    //     the fact and its dependency-directed cascade are both gone.
     if (retractForgetMatch) {
       const { retractSubClassOf } = await import("../domain/syllogise.mjs");
-      const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts, appendFacts: appendFactsForRetract } = await import("../adapters/memory/core.mjs");
+      const { provenanceTag: aceProvenanceTag } = await import("../domain/grammar/assert.mjs");
+      const {
+        loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
+        appendFacts: appendFactsForRetract, factRecordIdForTag,
+      } = await import("../adapters/memory/core.mjs");
       const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
-        store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts, appendFacts: appendFactsForRetract },
+        // A session's own positive assertion of subject⊑object can have
+        // landed under either lane: the free-form teach lane (teachFact) or
+        // the ACE-parsed assert lane (assertSentence) — both tags name here.
+        sourceTags: [teachProvenanceTag(sessionId), aceProvenanceTag({ sessionId })],
+        store: {
+          loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
+          appendFacts: appendFactsForRetract, factRecordIdForTag,
+        },
       });
+      if (result.found && !result.ownRecord) {
+        return {
+          text: `"${retractSubject} is a kind of ${retractObject}" isn't something you taught me — it's on record from elsewhere, so there's nothing of yours to forget.`,
+          via: "retract", miss: false,
+        };
+      }
+      if (result.found && result.stillStands) {
+        return {
+          text: `noted — forgotten your own record of "${retractSubject} is a kind of ${retractObject}", `
+            + "but it's still stored, told to me by someone else.",
+          via: "retract", miss: false,
+        };
+      }
       if (result.found) {
         const extra = result.count - 1; // beyond the target fact itself
         return {
