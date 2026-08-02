@@ -69,7 +69,7 @@ test("the @spider pill then the east direction pill compose a phrase the grammar
     assert.equal(await page.locator("#chatq").inputValue(), "@spider ", "the addressee pill sets the prefix, nothing else");
 
     await page.locator('#chatpills button[data-direction="east"]').click();
-    assert.equal(await page.locator("#chatq").inputValue(), "@spider the fly is east", "the direction pill appends the composed phrase");
+    assert.equal(await page.locator("#chatq").inputValue(), "@spider the fly is east", "the direction pill composes the addressed phrase");
 
     const answersBefore = await page.locator("#chatlog .a").count();
     await page.locator("#chatq").press("Enter");
@@ -84,6 +84,23 @@ test("the @spider pill then the east direction pill compose a phrase the grammar
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "the page logs no error of its own");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a second direction pill click replaces the claim rather than appending to it", async () => {
+  const { context, page } = await openSpiderFlyPage();
+  try {
+    await page.locator('#chatpills button[data-addressee="spider"]').click();
+    await page.locator('#chatpills button[data-direction="north"]').click();
+    assert.equal(await page.locator("#chatq").inputValue(), "@spider the fly is north");
+
+    await page.locator('#chatpills button[data-direction="east"]').click();
+    assert.equal(
+      await page.locator("#chatq").inputValue(), "@spider the fly is east",
+      "the second click replaces the first claim instead of building an unparseable double claim",
+    );
   } finally {
     await context.close();
   }
