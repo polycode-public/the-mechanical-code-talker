@@ -33,19 +33,32 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Two tracks, and that is saturation rather than idling: every other open item is either inside one of
-these two briefs, waiting on a CI pipeline to run, or waiting on a real deploy. There is no free file
-to dispatch against. Concurrency here is bounded by file ownership, not by batch cadence.
+Six tracks. When the backlog's own files were all claimed, the answer was to generate work rather
+than idle — a playtest, a benchmark sweep, a docs audit and a weights refresh all touch files no
+track owns, and they produce the next wave's items.
 
 - **T38 the mudiii page remainder** — thirteen items across `mudiii-viz.mjs` and `mudiii-scene.mjs`:
-  both pill rails, the map panel's grid/key/aspect, the belief panel, EDIT mode, agent labels,
-  click-to-turn and the directional ring, the compass ring, the eat-flourish hold, the teach
-  checkbox, the eyebrow adoption, the stale headers, and the recast callers. One owner, in order,
-  because that file is the bottleneck and parallel edits to it cost more than sequencing saves. Top
-  tier. Status: started.
+  both pill rails, the map panel's grid/key/aspect and its desktop over-sizing, the belief panel,
+  EDIT mode, agent labels, click-to-turn and the directional ring, the compass ring, the
+  eat-flourish hold, the teach checkbox, the eyebrow adoption, the stale headers, the recast callers.
+  One owner, in order. Top tier. Status: started.
+- **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
+  three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
+  Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
+- **T41 prey sweep and status refresh** — the regimes the first comparison could not cover (market
+  and chapel boards, other vision radii, a starvation regime), then resynthesizes `STATUS.md`.
+  Sonnet. Status: started.
+- **T42 docs against code** — every README capability claim traced to the code that does it, every
+  `PLAN_*.md` status line checked against what has landed, and `crdt.md` read as one account rather
+  than three layers. Top tier. Status: started.
+- **T43 page weights** — `reports/PAGE_WEIGHTS.md` is stale by eleven about pages, a shared
+  stylesheet and a 3D page carrying model binaries. Sonnet. Status: started.
+- **T44 CLI edge-hunt** — hunts the command-line surface for dead-ends and, above all, for any answer
+  it guessed where a refusal was due. Writes a report. Top tier. Status: started.
 
-Not dispatchable: the CI-verification items wait on a pipeline, and `smoke:deploy`'s probe needs a
-real deploy.
+Waiting on one job: `e2e:deployed:pages` on pipeline 2725436237, the last of its 25. The other 24 are
+green. A docs-only push gets a 4-job pipeline that runs no tests, so those greens prove nothing —
+only a code push exercises the deployed tier.
 
 ## Open items
 
