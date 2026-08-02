@@ -33,14 +33,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Loop batch 1. Five tracks. `mudiii-viz.mjs` is the collision point again, so every item that edits it
-goes to one owner in the order the section states: grid size first, because two later items need its
-`gridSizeOf()`.
+Loop batch 1 is done. Four of five items landed. The food-size look never got to look and the
+mudiii-viz owner only reached its first item, both because several tracks ran `npm run demo:build`
+at once and the machine could not carry them. **Batches from here run at most one track that needs a
+demo build or a browser.**
 
-- **T20 mudiii-viz cluster** — scenario grid size, the turn counter, and the chat teach-frame tick.
-  `build-demo-site.mjs`, `mudiii-viz.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
-- **T23 food size look** — `data/mudiii-assets.json`, and a screenshot it must open. Haiku.
-  Status: started.
 
 ## Open items
 
@@ -175,29 +172,6 @@ until it does. Then the grid-size item, because the deception rail and the map p
   reaches 5 after five ticks and still holds.
   **Mitigation:** assert in the e2e that typing `tick` and pressing play both move
   `#globalTurnCount`, and that the two never disagree by more than the in-flight turn.
-
-- **Scenario grid size never follows the scenario.** `scripts/build-demo-site.mjs` builds each
-  scenario as `{ label, worldPayload, agents }` with no `gridSize`, and `renderMudiiiHtml` reads
-  `gridSize` from the first scenario only, so `DATA.gridSize` is 12 forever. On chapel (14x14) cells
-  13 and 14 render off the ground plane, map dots land past 100%, and a raycast click clamps to 12.
-  On market (10x10) the board is drawn two cells too large.
-  **Tier:** Sonnet. Three files and a pinned test string.
-  **Do:** add `gridSize: layoutNamed(worldPayload.name).gridSize` to each scenario in
-  `build-demo-site.mjs:581`; `layoutNamed` is already imported at `:566` and the three layouts run
-  12, 10 and 14 (`src/domain/town-square-world.mjs:148`, `:165`, `:195`). Add
-  `const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };` beside
-  `scenario()` (`mudiii-viz.mjs:815`) and use it in `renderMapPanel` (`:1030`) and `boot` (`:1219`).
-  **Feasibility:** the scenario-change handler (`:1099`) already calls `boot()`, so no separate
-  re-read is needed. The scene's `boot` applies `gridSize` (`mudiii-scene.mjs:704`), `rebuildGround`
-  (`:706`) redraws the plane and `GridHelper`, and `onPointerDown` (`:452`) reads the same updated
-  `GRID_SIZE`, so the raycast clamp follows. `renderMudiiiHtml:426`'s own JSDoc already documents
-  `gridSize` on each scenario.
-  **Risk:** `test/services/mudiii-viz.test.mjs:138` pins
-  `gridSize: DATA.gridSize` inside the `callScene("boot", …)` string and breaks. `:83` builds a
-  two-scenario page with no `gridSize` and exercises the fallback.
-  **Mitigation:** update that regex to `gridSize: gridSizeOf\(\)`. Add an e2e that switches
-  `#scenarioSelect` to chapel, calls `window.mudiiiHandleSceneClick("cell-13-13")`, and asserts the
-  chat log carries a morsel at `cell-13-13` rather than a clamped `cell-12-12`.
 
 - **The Players and Npcs sliders cannot reach their stated ranges.** The controls have the right
   ranges and defaults, but `pickRoster` slices from `scenario.agents`, which the site build derives
