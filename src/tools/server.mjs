@@ -23,6 +23,7 @@ import { ask } from "../domain/ask.mjs";
 import { createGraphService } from "../adapters/providers/graph-service.mjs";
 import { loadGraph } from "./graph-load.mjs";
 import { HANDLERS } from "./handlers/index.mjs";
+import { askToolResult } from "./handlers/tmct-ask.mjs";
 import { isToolResult } from "./handlers/kit.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
@@ -64,14 +65,7 @@ async function runHandler(name, args, { config, source = defaultSource, tel = nu
   // conversational memory store (tmct_export) prefers it over re-deriving a
   // backend from config when one is supplied; every other caller leaves it null
   // and gets today's re-derive-from-config behaviour unchanged.
-  //
-  // `factLookup` is the third seam of that kind: the conversational memory
-  // store's own vocabulary reader, which lives in the SERVICE layer and so
-  // cannot be imported here. A cold caller that holds a repo's memory hands it
-  // over, and a question the code graph misses gets the answer a chat session
-  // would give instead of a miss the same repo can already answer. A caller
-  // that leaves it null keeps the graph-only answer.
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, factLookup, graph: suppliedGraph });
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, graph: suppliedGraph });
   // `graph` is the third seam of the same kind: a caller that ALREADY holds a
   // parsed graph hands it over instead of making the tool layer load one. A
   // browser session is the case that needs it — its graph is built in memory
@@ -85,7 +79,35 @@ async function runHandler(name, args, { config, source = defaultSource, tel = nu
   // isn't there.
   const repoRoot = config?.graphFile ? dirname(dirname(config.graphFile)) : null;
   const svc = createGraphService(graph, { sourceAccess: Boolean(repoRoot), repoRoot, readFile, tel, ask });
-  return handle(args, { graph, svc, config, repoRoot, memoryBackend, factLookup });
+  const out = handle(args, { graph, svc, config, repoRoot, memoryBackend });
+  return name === "tmct_ask" ? askWithMemoryFallback(out, args, factLookup) : out;
+}
+
+/** Offer a graph miss to the caller's own memory reader before the miss stands.
+ *  `factLookup` is a seam of the same kind as `ingest`: the conversational
+ *  store's vocabulary reader lives in the SERVICE layer, which this layer sits
+ *  under and must not import, so a cold caller holding a repo's memory hands it
+ *  in. A caller that supplies none keeps the graph-only answer, byte for byte.
+ *
+ *  Composed HERE rather than inside the handler because the handler is a
+ *  synchronous entry the browser's code explorer calls directly — an `async`
+ *  handler hands that caller a promise whose `.data` is undefined, and its
+ *  sidebar silently draws nothing. Dispatch already awaits, so the awaiting
+ *  belongs here. */
+async function askWithMemoryFallback(out, args, factLookup) {
+  const envelope = out?.data;
+  if (!envelope?.miss || typeof factLookup !== "function") return out;
+  let fromMemory = null;
+  try { fromMemory = await factLookup(String(args?.query ?? ""), envelope); } catch { fromMemory = null; }
+  if (!fromMemory?.text) return out;
+  // A reader hit flagged `miss` is the same refusal in better words, so the
+  // envelope keeps its miss and only the prose improves.
+  const content = fromMemory.replace ? fromMemory.text : `${out.content}\n${fromMemory.text}`;
+  return askToolResult(content, {
+    ...envelope,
+    miss: Boolean(fromMemory.miss),
+    matchedVia: fromMemory.miss ? envelope.matchedVia : "memory",
+  });
 }
 
 /** The caller-facing string for one tool call. A handler that returns a structured
