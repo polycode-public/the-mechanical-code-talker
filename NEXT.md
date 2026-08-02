@@ -71,34 +71,6 @@ Four tracks.
   browser requests, so it passed on an exact byte count while every visitor got something unreadable.
   Whatever proves this in CI has to fetch the way a browser does.
 
-- **The playtest findings are closed except two.** `reports/PLAYTEST_DEMO_PAGES.md` and
-  `reports/PLAYTEST_UNCOVERED_AREAS.md` hold the transcripts.
-  **Still open:** ingest's Document mode never updates its source label — typing text directly
-  ingests correctly, but the header stays on "drop or browse for a file", because the input handler
-  at `src/services/ingest-viz.mjs:336`-`:340` updates the `sourceTag` variable and never writes it
-  back to `srcLabel.textContent`. And the twelve unfixed findings in `reports/CLI_EDGE_HUNT_2.md`,
-  ranked in that report, three of them in `chat.mjs`.
-  **Tier:** Sonnet for the label, mixed for the CLI set.
-
-### Inference
-
-- **INF-4's ceiling is a chat-layer bound, not a missing rule.** The benchmark at 5.0.5 reaches INF-8
-  on the chat arm with zero fabrications across 499 rows. Of its 56 ceiling declines, **30 are
-  already provable**: the bench's own read-only kernel proves all thirty at chain lengths 3, 4 and 5.
-  The chat layer declines them because `chat.mjs:9696` and `:9717` pass `{ maxHops: 2 }` to
-  `findIsaChain`, which declares `maxHops = 6` itself (`syllogise.mjs:1715`), check-then-extend and
-  cycle-safe. So the cheapest next rung buys 30 of 56 with no new inference rule.
-  **Stopped by the operator.** The work sits unmerged on its own branch.
-  **Tier:** Sonnet. Small edit, sharp trap.
-  **The trap, and it will bite:** the generator pins those 30 as `expect: { verdict: "unproven" }`
-  with a `ceiling` field. **Raising the bound alone turns 30 correct answers into 30 grader-counted
-  fabrications and takes INF-4 from PASS to FAIL.** The pin flip has to land in the same commit.
-  **Do:** raise the bound, flip the pins together, and re-run the bench to confirm INF-4 still passes
-  and the ceiling count drops to 26. `reports/BENCHMARK_INFERENCE_5.0.5.md` briefs it in six steps.
-  **Feasibility:** INF-7 needs Stage EL saturation and INF-8 a Stage DL tableau plus phase-0
-  `unionOf`/`complementOf`/negative-assertion representation. Those are the path above, not this.
-  **Risk:** deeper chains cost more per turn, and the per-turn cost has already grown (below).
-
 ### mudiii.html — further work
 
 - **The prey blend is measured and shipped off; one regime is unmeasured.** The weighted
