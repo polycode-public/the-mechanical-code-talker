@@ -473,26 +473,12 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   }
 
   // ---- props ---------------------------------------------------------------
-  // normalizeToHeight measures a Box3 off the object's own local geometry
-  // correctly only while the object is still detached and untouched. Once it
-  // has a parent, Box3.setFromObject reads through the parent's world matrix
-  // instead of the object's own, so calling this twice on a shared object
-  // (a cached loader handing the same parsed scene to several agents) makes
-  // the second call measure through whatever the first agent's own group
-  // happens to be doing at that instant, including a spawn flourish tween
-  // mid-flight. That is a different, effectively random wrong scale every
-  // time, not one fixed bug: the flourish just starting reads a shrunk
-  // height and produces an oversized mesh, the flourish nearly finished
-  // reads close to the true height and produces something near-correct
-  // instead, and a frame square in the middle of the tween falls somewhere
-  // between. The two guards below turn both misuses into a hard failure
-  // instead of a silently wrong render, which is what actually removes the
-  // race rather than narrowing it: every caller now owns a freshly parsed,
-  // never-touched object (see ensureAgent's own loadGlbRaw call), so a
-  // parent or a repeat call here means something upstream broke that
-  // guarantee. No backtick characters in this comment block: this
-  // function's source sits inside the module's own outer template literal,
-  // so a backtick here would close that literal early.
+  // Box3.setFromObject reads through a parent's world matrix, so measuring a
+  // parented object reads whatever that parent's spawn flourish is doing in
+  // that frame and applies a scale that depends on the frame. The guards make
+  // both misuses fail loudly rather than render a wrong size silently. Keep
+  // no backtick in this block: the function's source sits inside the module's
+  // own template literal.
   function normalizeToHeight(object3D, targetHeight) {
     if (object3D.parent) {
       throw new Error("normalizeToHeight refused an object that already has a parent: " + (object3D.name || object3D.uuid));
@@ -504,11 +490,8 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var size = new THREE.Vector3();
     box.getSize(size);
     if (!size.y) {
-      // A zero measured height used to fall back to inventing height 1, so
-      // the scale became targetHeight against a raw model that never
-      // actually measured that way — the exact formula behind the
-      // giant, many-times-house-height mesh. Failing loudly beats shipping
-      // a made-up size.
+      // Substituting 1 here invented a scale from an unmeasurable height, and
+      // that is what produced the house-height mesh.
       throw new Error("normalizeToHeight found no measurable height on: " + (object3D.name || object3D.uuid));
     }
     var scale = targetHeight ? targetHeight / size.y : 1;

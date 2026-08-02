@@ -199,13 +199,9 @@ async function waitForEveryMeshHeight(page, timeout) {
 }
 
 /** Every HUD-drawn agent's mesh sits within +-20% of its own manifest
- *  targetHeight and within 0.05 of the ground. This is the direct
- *  regression check for the shared-loader-cache bug: every agent past the
- *  first of its kind reused the same parsed GLTF scene, so normalizeToHeight
- *  ran again on an object that was already parented and already scaled,
- *  shrinking it further each time, and the same reused object caught
- *  mid-flourish at scale zero measured as height zero and blew up to the
- *  raw model's own unscaled size instead. */
+ *  targetHeight and within 0.05 of the ground. Agents past the first of their
+ *  kind once shared one parsed model, so each was measured through another
+ *  agent's group mid-flourish and came out a different wrong size. */
 function assertEveryMeshWithinTolerance(heights, label) {
   const ids = Object.keys(heights);
   assert.ok(ids.length > 0, `${label}: at least one HUD-drawn agent to check`);
