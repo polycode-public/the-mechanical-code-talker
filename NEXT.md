@@ -45,6 +45,40 @@ assertions but never run them; the coordinator runs the e2e tier after merge.
 
 ## Open items
 
+### The home page as a presentation deck
+
+- **Rename every demo claim, and give each one an about page.** The operator's brief: turn
+  `index.html` into a ready set of presentations. Two halves, and the item is not done until both
+  land.
+  **Half one, the renames.** `public/index.html` is hand-authored and git-tracked, not generated.
+  Each demo appears twice: a `.claim` block (`<h3>` + `<p>`, around `:405`) and a `.feature` section
+  (`<h2>` + `<p>` + a plate figure, around `:556`). The operator supplied exact replacement titles
+  for all ten claims; the bodies mostly stay, with one edit ("one shared world" becomes "one shared
+  muddy world"). The new titles name the capability rather than pitching it: Natural Language
+  Understanding, Competitive multi-agent system, Classical AI Planning, Fact based world
+  visualisation, Facts as RDF/OWL tripples, Code Index for RAG, Synthesise Facts from free text,
+  Search backed knowledge base, Competitive multi-agent system with Fact based visualisation (MUD),
+  MMORPG.
+  **Half two, the about pages.** An info link at the bottom right of each demo card goes to that
+  demo's own about page. Each page carries index.html's style, a left nav of named clickable
+  sections acting as breadcrumbs, and a Next button that jumps to the following section. Per demo:
+  what it demonstrates, examples of chat play, screenshots, the inferences and retrievals it makes,
+  an implementation overview, related academic work, and attribution with links for further reading.
+  Overlap between pages is fine; depth follows focus, so planning gets its fullest treatment on the
+  Hanoi page even though mudiii also plans.
+  **Tier:** top. It is a lot of authored prose that has to be accurate about the engine.
+  **Do:** source the bibliography from what the repo already has rather than inventing citations —
+  `README.md` carries one, and `docs/references/papers/` holds worked references. Screenshots exist
+  under `public/screenshots/` with a `manifest.json`. Every capability claim on an about page must be
+  checkable against the code; this page set is a promise about what the engine does.
+  **Risk:** `test-e2e/pages-index.test.mjs` and `test-e2e/pages-home.test.mjs` both pin the claim
+  count and the plate numerals, and one asserts claim text. New pages need adding to the service
+  worker's precache list and to whatever the deploy tracks, or they ship uncached or not at all.
+  **Mitigation:** grep every place a page list is enumerated before adding files —
+  `scripts/build-demo-site.mjs` holds more than one such list, and the e2e page-order arrays are
+  separate again.
+
+
 ### mudiii.html — behaviour the plan specifies that is missing or half built
 
 `PLAN_MUD_MUDIII.md` is the design of record and is marked BUILT AND DEPLOYED. These are the
