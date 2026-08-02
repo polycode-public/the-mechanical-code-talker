@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   mudiiiTurn, pillsForMudiii, oneStepDirectionBetween, believedFactSentence,
+  parseTownSquareTeachLine, planTaughtTownSquareTriple, townSquareTeachConfirmation,
 } from "../../src/services/mudiii-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 import { loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
@@ -391,6 +392,174 @@ test("an unaddressed plain question falls through to the ordinary lanes, board u
   await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
   const result = await mudiiiTurn("what is the capital of France", { planHolder, memoryDir, env: {} });
   assert.equal(result, null);
+}));
+
+// ---- the teach lane --------------------------------------------------------
+
+const TEACH_ON = { ...DEFAULT_GAME_CONFIG, mudiii: { ...DEFAULT_GAME_CONFIG.mudiii, teach: true } };
+
+// The shape world-teach.mjs's own confirmation() writes: "noted — <claim> now."
+const CONFIRMATION_SHAPE = /^noted — .+ now\.$/;
+
+test("the town-square sentence table reads each of its five predicates, and nothing outside it", () => {
+  assert.deepEqual(parseTownSquareTeachLine("Fox-1 is at cell-3-4."), {
+    kind: "placement", predicate: "mgx:currently-in", kindWord: "fox", num: "1", object: "cell-3-4",
+  });
+  assert.deepEqual(parseTownSquareTeachLine("the goblin weighs 4.5"), {
+    kind: "mass", predicate: "mgx:hasMass", kindWord: "goblin", num: null, object: "4.5",
+  });
+  assert.deepEqual(parseTownSquareTeachLine("The fox feels angry."), {
+    kind: "mood", predicate: "mgx:feels", kindWord: "fox", num: null, object: "angry",
+  });
+  assert.deepEqual(parseTownSquareTeachLine("Goblin-2 faces north."), {
+    kind: "facing", predicate: "mgx:facing", kindWord: "goblin", num: "2", object: "north",
+  });
+  assert.deepEqual(parseTownSquareTeachLine("The baker put morsel-1 there."), {
+    kind: "placed-by", predicate: "mgx:placed-by", kindWord: "morsel", num: "1", object: "baker",
+  });
+
+  assert.equal(parseTownSquareTeachLine("the fox feels peckish."), null, "a mood outside the engine's own four words does not parse");
+  assert.equal(parseTownSquareTeachLine("the fox faces up."), null, "a direction the grid has no delta for does not parse");
+  assert.equal(parseTownSquareTeachLine("the well is at cell-6-7."), null, "scenery is not teachable — moving a prop would leave every exit fact stale");
+  assert.equal(parseTownSquareTeachLine("the crumb feels happy."), null, "an inert item has no mood to teach");
+  assert.equal(parseTownSquareTeachLine("@fox the goblin is east"), null, "the addressed teach-frame keeps its own recognizer");
+});
+
+test("planTaughtTownSquareTriple appends a differing fact and nothing at all for one the board already holds", () => {
+  const state = {
+    placements: new Map([["fox-1", { cell: "cell-2-2" }]]),
+    mass: new Map([["goblin-1", { value: 8 }]]),
+    mood: new Map(), facing: new Map(), placedBy: new Map([["morsel-1", { by: "player" }]]),
+  };
+  const moved = planTaughtTownSquareTriple(state, { subject: "fox-1", predicate: "mgx:currently-in", object: "cell-5-5", kind: "placement" });
+  assert.equal(moved.toAppend.length, 1);
+  assert.match(moved.reason, /fox-1 moves from cell-2-2 to cell-5-5/);
+
+  const same = planTaughtTownSquareTriple(state, { subject: "fox-1", predicate: "mgx:currently-in", object: "cell-2-2", kind: "placement" });
+  assert.deepEqual(same.toAppend, []);
+  assert.match(same.reason, /already stands at cell-2-2/);
+
+  const sameMass = planTaughtTownSquareTriple(state, { subject: "goblin-1", predicate: "mgx:hasMass", object: "8", kind: "mass" });
+  assert.deepEqual(sameMass.toAppend, [], "a mass restated as the same number is not a write");
+
+  const firstMood = planTaughtTownSquareTriple(state, { subject: "fox-1", predicate: "mgx:feels", object: "angry", kind: "mood" });
+  assert.equal(firstMood.toAppend.length, 1, "a family the board holds nothing for yet is always a write");
+
+  const samePlacer = planTaughtTownSquareTriple(state, { subject: "morsel-1", predicate: "mgx:placed-by", object: "player", kind: "placed-by" });
+  assert.deepEqual(samePlacer.toAppend, []);
+});
+
+test("townSquareTeachConfirmation says every family back in world-teach's own noted-now shape", () => {
+  for (const kind of ["placement", "mass", "mood", "facing", "placed-by"]) {
+    const said = townSquareTeachConfirmation({ subject: "fox-1", object: "cell-3-4", kind });
+    assert.match(said, CONFIRMATION_SHAPE, `the ${kind} confirmation keeps the shared shape`);
+  }
+});
+
+test("teach off: a declarative sentence about the board takes the ordinary path, and writes nothing", () => withMemoryDir("tmct-mudiii-turn-teach-off-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const before = readFactRows(await loadMemory(memoryDir)).length;
+
+  const result = await mudiiiTurn("Fox-1 is at cell-4-4.", { planHolder, memoryDir, env: {} });
+  assert.equal(result, null, "with the switch off the lane never claims the sentence");
+  assert.equal(readFactRows(await loadMemory(memoryDir)).length, before, "and nothing reached the store");
+}));
+
+test("teach on: the same sentence writes a stamped fact and confirms in world-teach's own shape", () => withMemoryDir("tmct-mudiii-turn-teach-on-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+
+  const result = await mudiiiTurn("Fox-1 is at cell-4-4.", { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  assert.equal(result.text, "noted — fox-1 is at cell-4-4 now.");
+  assert.match(result.text, CONFIRMATION_SHAPE);
+  assert.equal(result.miss, false);
+
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const written = rows.find((r) => r.subject === "fox-1@turn1" && r.predicate === "mgx:currently-in");
+  assert.ok(written, "the placement is stamped at the next tick's own turn, so the fold ranks it above the opening roster");
+  assert.equal(written.object, "cell-4-4");
+  assert.match(written.provenance, /:taught:turn1$/, "it carries the same taught provenance a placed morsel does");
+}));
+
+test("a taught fact changes what the board itself reports back", () => withMemoryDir("tmct-mudiii-turn-teach-observable-", async (memoryDir) => {
+  const planHolder = { state: null };
+  const ask = (line) => mudiiiTurn(line, { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  await ask("visit the town square");
+
+  await ask("Fox-1 is at cell-4-4.");
+  const where = await ask("where is the fox?");
+  assert.match(where.text, /fox-1 at cell-4-4/, "the where-aside reads the taught position off the live fold");
+
+  await ask("put food at cell-5-5");
+  await ask("The baker put morsel-1 there.");
+  const who = await ask("who put morsel-1 there?");
+  assert.match(who.text, /baker put morsel-1 at cell-5-5/, "the provenance read names the taught placer, not the player who really placed it");
+
+  await ask("Goblin-1 weighs 3.");
+  const seen = readFactRows(await loadMemory(memoryDir));
+  assert.ok(seen.some((r) => r.subject === "goblin-1@turn1" && r.predicate === "mgx:hasMass" && r.object === "3"));
+}));
+
+test("teach on: re-asserting what the board already holds writes nothing and says so", () => withMemoryDir("tmct-mudiii-turn-teach-restate-", async (memoryDir) => {
+  const planHolder = { state: null };
+  const ask = (line) => mudiiiTurn(line, { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  await ask("visit the town square");
+  await ask("Fox-1 is at cell-4-4.");
+  const before = readFactRows(await loadMemory(memoryDir)).length;
+
+  const again = await ask("Fox-1 is at cell-4-4.");
+  assert.equal(again.text, "the board already says that.");
+  assert.equal(again.miss, false, "restating a true fact is not a miss");
+  assert.equal(readFactRows(await loadMemory(memoryDir)).length, before, "and it appends no duplicate row");
+}));
+
+test("teach on: a subject nothing live answers to, a cell off the board and a cell inside a building all decline by name", () => withMemoryDir("tmct-mudiii-turn-teach-declines-", async (memoryDir) => {
+  const planHolder = { state: null };
+  const ask = (line) => mudiiiTurn(line, { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  await ask("visit the town square");
+
+  const noSubject = await ask("Fox-9 is at cell-4-4.");
+  assert.match(noSubject.text, /no live fox on the board/);
+  assert.equal(noSubject.miss, true);
+
+  const offBoard = await ask("Fox-1 is at cell-99-99.");
+  assert.match(offBoard.text, /off the board — this square runs cell-1-1 to cell-12-12/);
+  assert.equal(offBoard.miss, true);
+
+  const blocked = await ask("Fox-1 is at cell-8-1."); // house-1 stands here
+  assert.match(blocked.text, /cell-8-1 is blocked/);
+  assert.equal(blocked.miss, true);
+
+  const rows = readFactRows(await loadMemory(memoryDir));
+  assert.ok(!rows.some((r) => r.subject.startsWith("fox-9")), "a declined teach mints nothing the board could not draw");
+}));
+
+test("teach on: a question is never read as a claim, however closely it matches the table", () => withMemoryDir("tmct-mudiii-turn-teach-question-", async (memoryDir) => {
+  const planHolder = { state: null };
+  const ask = (line) => mudiiiTurn(line, { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  await ask("visit the town square");
+  const before = readFactRows(await loadMemory(memoryDir)).length;
+
+  assert.equal(await ask("Fox-1 is at cell-4-4?"), null, "a trailing question mark stands the teach lane down");
+  const whoPlaced = await ask("who put morsel-1 there?");
+  assert.match(whoPlaced.text, /no live morsel on the board/, "the who-placed read still reaches its own recognizer");
+  assert.equal(readFactRows(await loadMemory(memoryDir)).length, before);
+}));
+
+test("teach on: the lane's own verbs still win over the sentence table", () => withMemoryDir("tmct-mudiii-turn-teach-precedence-", async (memoryDir) => {
+  const planHolder = { state: null };
+  const ask = (line) => mudiiiTurn(line, { planHolder, memoryDir, env: {}, gameConfig: TEACH_ON });
+  await ask("visit the town square");
+
+  const placed = await ask("put food at cell-3-4");
+  assert.match(placed.text, /a morsel now sits at cell-3-4/);
+
+  const ticked = await ask("tick");
+  assert.match(ticked.text, /^Turn 1 —/);
+
+  const addressed = await ask("@fox the goblin is east");
+  assert.match(addressed.text, /told the fox-1/);
 }));
 
 // ---- oneStepDirectionBetween -------------------------------------------

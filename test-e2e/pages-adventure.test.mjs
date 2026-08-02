@@ -331,3 +331,45 @@ test("clicking a room sprite opens the object lightbox — its live look reply a
     await context.close();
   }
 });
+
+/** The newest tmct reply in the chat log, as plain text. */
+const lastAnswer = async (page) => (await page.locator("#chatlog > div.a").last().textContent()).trim();
+
+test("the teach checkbox is read on every turn, not merely rendered: ticked it writes a world fact, unticked the same sentence writes nothing", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    await page.locator("#teachToggle").check();
+    await sendCommand(page, "Candle is in the study.");
+    assert.match(
+      await lastAnswer(page),
+      /^noted — there's a candle in the study now\./,
+      "a ticked box reads the sentence as a fact and answers in world-teach's own confirmation shape",
+    );
+
+    await page.locator("#teachToggle").uncheck();
+    await sendCommand(page, "Lantern is in the study.");
+    // Chat's own generic teach lane answers "noted — remembered: ...", so the
+    // check is against world-teach's confirmation in particular, not the word.
+    assert.doesNotMatch(
+      await lastAnswer(page),
+      /^noted — (?:there's a|the) lantern.* in the study now\./,
+      "unticked, the same kind of sentence takes the ordinary path instead",
+    );
+
+    // The proof that the unticked turn wrote nothing: ticking the box back on
+    // and saying it again still has a fact left to write. Had the checkbox
+    // been ignored, the world would already hold it and this would answer
+    // "the world already said that."
+    await page.locator("#teachToggle").check();
+    await sendCommand(page, "Lantern is in the study.");
+    assert.match(
+      await lastAnswer(page),
+      /^noted — (?:there's a lantern|the lantern is) in the study now\./,
+      "the unticked turn left the world untouched, so this one is still a real write",
+    );
+
+    assert.deepEqual(consoleErrors, [], "no console error running a turn either side of the teach checkbox");
+  } finally {
+    await context.close();
+  }
+});
