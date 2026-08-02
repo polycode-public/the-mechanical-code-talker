@@ -39,8 +39,8 @@ the whole collision point and the goblin item has to land first anyway.
 
 - **T11 p2p retraction replication** — new `memory/retraction.mjs`, the `p2p-room.mjs` merge hook,
   `sync-filter.mjs`'s covered set. Top tier. Status: started.
-- **T12 trust-score flake** — `test/adapters/memory-backend-memory.test.mjs`. Sonnet.
-  Status: started.
+- **T13 goblin e2e regressions** — the byte-cache loader rework in `mudiii-scene.mjs` and the two
+  failing tests in `test-e2e/pages-mudiii.test.mjs`. Sonnet. Status: started.
 
 Landed:
 
@@ -56,6 +56,9 @@ Landed:
   shorter than Playwright's own 30s default and so made the flake likelier. Both waits now share a
   named 60s constant.
 - **T8 teach mode UI for adventure and mud** — merged. mudiii's third stays open below.
+- **T12 trust-score flake** — merged, 8/8. It found the same wall-clock bug a second time in
+  `readFactRows`' folded `trust`, which had not flipped yet only because its two calls land closer
+  together in real time.
 - **T9 predator-prey trio** — merged. Blast radius 311/311 with T8. `recastTownSquare` also fixed
   `startTownSquareGame`'s guard to compare the placement's epoch rather than its existence, and
   stamped the roster's bootstrap facts so an epoch-aware guard has something to read.
