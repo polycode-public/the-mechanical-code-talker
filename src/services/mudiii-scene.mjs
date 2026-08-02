@@ -186,12 +186,14 @@ export function currentActionFor(agentId, agentsById, moving) {
  *  so acting on the ecology row too would double it). `kind` is one of
  *  "death" (the rig's own Death clip, then scale to zero) or "consume" (an
  *  eaten item scales to zero, no clip — items are primitive geometry).
- *  Pure. */
+ *  `eat-agent` alone also carries `actorId`, the predator that gets a
+ *  one-shot attack clip while its prey plays death — the one event where a
+ *  second, surviving agent has its own flourish to play. Pure. */
 export function flourishForEcologyEvent(event) {
   if (!event || !event.type) return null;
   switch (event.type) {
     case "eat-agent":
-      return { kind: "death", targetId: event.prey, cell: event.cell };
+      return { kind: "death", targetId: event.prey, cell: event.cell, actorId: event.predator };
     case "starve":
       return { kind: "death", targetId: event.agent, cell: event.cell };
     case "eat-item":
@@ -359,6 +361,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var manifestByKind = {};
   var lastAgentsById = {};
   var lastItemsById = {};
+  // Every removeAgent/removeItem call, kept small and reset on boot — an
+  // e2e assertion's read, so it can tell an eaten agent/item's flourish
+  // removal (source "ecology") apart from applyTick's own diff no-op
+  // (source "diff") without guessing from a vanished mesh alone.
+  var removalLog = [];
   var cameraState = { mode: "overhead", selectedId: null };
   var cameraTween = null, lookAtTween = null;
   var lastFrameTs = null;
@@ -606,10 +613,19 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     });
   }
 
-  function removeItem(id, withFlourish) {
+  function recordRemoval(kind, id, source) {
+    removalLog.push({ kind: kind, id: id, source: source });
+  }
+
+  // source ("ecology" | "diff") is recorded, never branched on — it exists
+  // so an e2e assertion can tell an eaten item's flourish removal apart from
+  // a plain diff no-op, since a vanished mesh alone does not say which path
+  // did the removing.
+  function removeItem(id, withFlourish, source) {
     var entry = itemMeshes[id];
     if (!entry) return;
     delete itemMeshes[id];
+    recordRemoval("item", id, source);
     if (withFlourish) animateScaleTo(entry.mesh, 0, performance.now());
     else if (entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
   }
@@ -624,7 +640,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var kind = roleOfAgentId(id);
     var entry = {
       group: new THREE.Group(), tween: null, cell: null, facing: agent.facing, role: agent.role,
-      kind: kind, mixer: null, actions: {}, currentClip: null, clipMap: null,
+      kind: kind, mixer: null, actions: {}, currentClip: null, clipMap: null, oneShotAction: null,
     };
     entry.group.visible = false;
     scene.add(entry.group);
@@ -649,6 +665,15 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   }
 
   function playClip(entry, clipName) {
+    // A one-shot flourish left its own action running at full weight (see
+    // playClipOnce below — fadeIn ramps the NEW action in but never ramps
+    // the old one out on its own, so without this the flourish pose would
+    // keep blending into every clip after it, forever). Fade it out before
+    // any of the guards below can skip the rest of this call.
+    if (entry.oneShotAction) {
+      entry.oneShotAction.fadeOut(0.15);
+      entry.oneShotAction = null;
+    }
     if (!entry.mixer || !clipName || entry.currentClip === clipName) return;
     var next = entry.actions[clipName];
     if (!next) return;
@@ -656,6 +681,28 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     next.reset().fadeIn(0.15).play();
     if (prev && prev !== next) prev.fadeOut(0.15);
     entry.currentClip = clipName;
+  }
+
+  // A one-shot version of playClip for a flourish (the predator's own bite
+  // on eat-agent): LoopOnce + clampWhenFinished so the clip plays through and
+  // holds its last pose rather than looping. Never skips a repeat of
+  // entry.currentClip the way playClip does — a flourish must always play,
+  // even if the actor happened to already be on this same clip. Clears
+  // entry.currentClip to null so the next applyAgentTick's own playClip call
+  // is never refused as "already on this clip", and records the action on
+  // entry.oneShotAction so that same next call fades it back out.
+  function playClipOnce(entry, clipName) {
+    if (!entry.mixer || !clipName) return;
+    var action = entry.actions[clipName];
+    if (!action) return;
+    var prev = entry.currentClip && entry.currentClip !== clipName ? entry.actions[entry.currentClip] : null;
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.fadeIn(0.15).play();
+    if (prev) prev.fadeOut(0.15);
+    entry.oneShotAction = action;
+    entry.currentClip = null;
   }
 
   function playSpawnFlourish(group, now) {
@@ -688,10 +735,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
   }
 
-  function removeAgent(id) {
+  function removeAgent(id, source) {
     var entry = agentGroups[id];
     if (!entry) return;
     delete agentGroups[id];
+    recordRemoval("agent", id, source);
     var deathClip = entry.clipMap && entry.clipMap.death;
     var deathClipName = Array.isArray(deathClip) ? deathClip[0] : deathClip;
     if (deathClipName) {
@@ -704,10 +752,17 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
 
   function applyEcology(ecology) {
     for (var i = 0; i < (ecology || []).length; i += 1) {
-      var flourish = flourishForEcologyEvent(ecology[i]);
+      var event = ecology[i];
+      var flourish = flourishForEcologyEvent(event);
       if (!flourish) continue;
-      if (flourish.kind === "death") removeAgent(flourish.targetId);
-      else if (flourish.kind === "consume") removeItem(flourish.targetId, true);
+      if (flourish.kind === "death") removeAgent(flourish.targetId, "ecology");
+      else if (flourish.kind === "consume") removeItem(flourish.targetId, true, "ecology");
+      if (flourish.actorId) {
+        var actorEntry = agentGroups[flourish.actorId];
+        if (actorEntry && actorEntry.clipMap) {
+          playClipOnce(actorEntry, clipForAction(actorEntry.role, event.type, actorEntry.clipMap));
+        }
+      }
     }
   }
 
@@ -762,6 +817,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     itemMeshes = {};
     lastAgentsById = {};
     lastItemsById = {};
+    removalLog = [];
     manifestByKind = buildManifestByKind(input && input.assetManifest);
     await placeProps((input && input.propPlacements) || []);
     setCamera({ mode: "overhead", selectedId: null });
@@ -775,9 +831,15 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     var items = (tick && tick.items) || {};
     for (var id in agents) if (Object.prototype.hasOwnProperty.call(agents, id)) applyAgentTick(id, agents[id], now);
     for (var itemId in items) if (Object.prototype.hasOwnProperty.call(items, itemId)) applyItemTick(itemId, items[itemId], now);
-    for (var goneAgent in lastAgentsById) if (!(goneAgent in agents)) removeAgent(goneAgent);
-    for (var goneItem in lastItemsById) if (!(goneItem in items)) removeItem(goneItem, false);
+    // Ecology first: an eaten agent/item is already gone from this tick's own
+    // agents/items map, so applyEcology's own removeAgent/removeItem call is
+    // what actually removes it (with its flourish). The two diff loops below
+    // then find that id already deleted and no-op — removeAgent/removeItem
+    // both delete their map entry before anything else, so a second call for
+    // the same id returns immediately.
     applyEcology(tick && tick.ecology);
+    for (var goneAgent in lastAgentsById) if (!(goneAgent in agents)) removeAgent(goneAgent, "diff");
+    for (var goneItem in lastItemsById) if (!(goneItem in items)) removeItem(goneItem, false, "diff");
     lastAgentsById = agents;
     lastItemsById = items;
     refreshCameraTween(now);
@@ -832,6 +894,15 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       box.getSize(size);
       var asset = manifestByKind[entry.kind];
       return { height: size.y, minY: box.min.y, targetHeight: asset ? asset.targetHeight : null };
+    },
+    // Every removal recorded for id, oldest first — each entry's own
+    // source is "ecology" (an eat/starve flourish removed it) or "diff"
+    // (applyTick found it missing from a tick's own agents/items map with no
+    // ecology event driving that). An e2e assertion's read.
+    removalsFor: function (id) {
+      var out = [];
+      for (var i = 0; i < removalLog.length; i += 1) if (removalLog[i].id === id) out.push(removalLog[i]);
+      return out;
     },
     ready: function () { return booted; },
   };

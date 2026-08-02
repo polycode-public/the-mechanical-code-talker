@@ -154,8 +154,8 @@ test("currentActionFor is idle whenever the tween is not running, regardless of 
 test("the ecology array maps to the right flourish per event type", () => {
   assert.deepEqual(
     flourishForEcologyEvent({ type: "eat-agent", predator: "fox-1", prey: "goblin-1", cell: "cell-4-3", massGained: 8 }),
-    { kind: "death", targetId: "goblin-1", cell: "cell-4-3" },
-    "eat-agent plays the prey's own death, never the predator's",
+    { kind: "death", targetId: "goblin-1", cell: "cell-4-3", actorId: "fox-1" },
+    "eat-agent plays the prey's own death, and also carries the predator as actorId for its own attack flourish",
   );
   assert.deepEqual(
     flourishForEcologyEvent({ type: "starve", agent: "goblin-3", cell: "cell-11-12" }),
@@ -175,6 +175,15 @@ test("the ecology array maps to the right flourish per event type", () => {
   }
   assert.equal(flourishForEcologyEvent(null), null);
   assert.equal(flourishForEcologyEvent({ type: "unknown-future-event" }), null);
+});
+
+test("flourishForEcologyEvent's actorId is the predator alone, never present on starve or eat-item", () => {
+  const eatAgent = flourishForEcologyEvent({ type: "eat-agent", predator: "fox-2", prey: "goblin-5", cell: "cell-1-1" });
+  assert.equal(eatAgent.actorId, "fox-2", "actorId is the predator that gets its own attack flourish, not the prey being removed");
+  const starve = flourishForEcologyEvent({ type: "starve", agent: "goblin-3", cell: "cell-2-2" });
+  assert.equal("actorId" in starve, false, "starve has no surviving actor to flourish");
+  const eatItem = flourishForEcologyEvent({ type: "eat-item", agent: "goblin-2", item: "morsel-1", cell: "cell-3-3" });
+  assert.equal("actorId" in eatItem, false, "eat-item's own eater already gets its regular movement-tick animation, no separate flourish here");
 });
 
 test("clipForAction falls back to idle rather than returning undefined for a rig with no matching clip", () => {
@@ -277,6 +286,33 @@ test("mudiiiSceneScript returns a self-contained IIFE string that embeds every s
   assert.equal(typeof script, "string");
   // Identical input produces identical output — pure, no timestamp/random baked in.
   assert.equal(script, mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 }));
+});
+
+test("mudiiiSceneScript's own applyTick runs applyEcology before either diff-removal loop", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  const applyTickBody = script.slice(script.indexOf("function applyTick("), script.indexOf("function renderLoop("));
+  const ecologyAt = applyTickBody.indexOf("applyEcology(");
+  const agentDiffAt = applyTickBody.indexOf("removeAgent(goneAgent");
+  const itemDiffAt = applyTickBody.indexOf("removeItem(goneItem");
+  assert.ok(ecologyAt >= 0 && agentDiffAt >= 0 && itemDiffAt >= 0, "all three calls are present in applyTick");
+  assert.ok(ecologyAt < agentDiffAt, "an eaten agent is removed by applyEcology's own flourish before the diff loop can find it missing");
+  assert.ok(ecologyAt < itemDiffAt, "an eaten item is removed by applyEcology's own flourish before the diff loop can find it missing");
+});
+
+test("mudiiiSceneScript ships a one-shot clip player and an e2e-observable removal log", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /function playClipOnce\(/, "the flourish clip player is a distinct function from the looping playClip");
+  assert.match(script, /THREE\.LoopOnce/, "the one-shot plays through once rather than looping like a movement clip");
+  assert.match(script, /clampWhenFinished/, "the one-shot holds its last pose instead of snapping back to bind pose");
+  assert.match(script, /removalsFor:/, "the removal log is exposed on window.mudiiiScene for an e2e read");
+  assert.match(script, /"ecology"/, "removals are tagged by which path drove them");
+  assert.match(script, /"diff"/);
+  assert.match(
+    script, /oneShotAction/,
+    "playClip explicitly fades the flourish action back out on the next call — fadeIn alone never ramps a sibling action down, so a nulled currentClip alone would leave the flourish pose blended in forever",
+  );
 });
 
 test("mudiiiSceneScript falls back to a default grid size and cell size for missing/invalid opts", async () => {
