@@ -582,6 +582,7 @@ async function loadScenarioWorlds(names) {
       label: MUDIII_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
       worldPayload,
       agents: castOf(worldPayload),
+      gridSize: layoutNamed(worldPayload.name).gridSize,
     }));
     const mudiiiPath = join(SITE, "mudiii.html");
     await writeF(mudiiiPath, renderMudiiiHtml({

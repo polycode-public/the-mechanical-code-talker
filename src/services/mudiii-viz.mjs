@@ -813,6 +813,7 @@ function pageScript() {
   const el = (id) => document.getElementById(id);
   let scenarioIndex = 0;
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
+  const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
   const rosterOf = function (s, role) {
     return (s.agents || []).filter(function (a) { return !role || a.role === role; }).map(function (a) { return a.id; });
   };
@@ -1027,7 +1028,7 @@ function pageScript() {
 
   // ---- the top-down map panel ---------------------------------------------
   function renderMapPanel() {
-    const dots = mapDotsFor(agentsList(), itemsList(), DATA.gridSize);
+    const dots = mapDotsFor(agentsList(), itemsList(), gridSizeOf());
     el("mapPanelBoard").innerHTML = dots.map(function (d) {
       return '<span class="map-dot map-dot-' + esc(d.kind) + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%" title="' + esc(d.id) + '"></span>';
     }).join("");
@@ -1216,7 +1217,7 @@ function pageScript() {
     agentsById = {};
     itemsById = {};
     el("chatInput").disabled = false;
-    await callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: DATA.gridSize, cellSize: 1 });
+    await callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1 });
 
     // The opening board, drawn through the very path a tick takes. Without
     // this the page's first sight of where anything stands is the first tick,

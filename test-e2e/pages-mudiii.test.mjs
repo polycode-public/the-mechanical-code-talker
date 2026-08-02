@@ -474,3 +474,72 @@ test("a typed 'put food at cell-3-4' and a click on the same cell both place a m
     await context.close();
   }
 });
+
+/** Switch the deck's scenario dropdown to the square whose label matches
+ *  `pattern`, and wait for the new square's own opening cast to be drawn.
+ *  Returns the picked scenario's embedded board size. The wait is on an
+ *  agent id only that square casts, because boot() draws the HUD after it
+ *  has the engine's own opening board — a count alone can match the square
+ *  being left behind. */
+async function switchScenario(page, pattern, waitForAgentId) {
+  const gridSize = await page.evaluate((source) => {
+    const index = MUDIII_PAGE_DATA.scenarios.findIndex((s) => new RegExp(source, "i").test(s.label || ""));
+    if (index < 0) return null;
+    const select = document.getElementById("scenarioSelect");
+    select.value = String(index);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return MUDIII_PAGE_DATA.scenarios[index].gridSize;
+  }, pattern.source);
+  await page.waitForFunction(
+    (id) => !!document.querySelector(`#hudRow .hud-card[data-agent="${id}"]`),
+    waitForAgentId,
+    { timeout: READY_TIMEOUT_MS },
+  );
+  return gridSize;
+}
+
+/** Every map-panel dot's own left/top percentage, back-solved into the cell
+ *  coordinate `size` would have produced. mapDotsFor draws a cell at
+ *  `((n - 0.5) / size) * 100`%, so a board drawn at the wrong size back-solves
+ *  to a fraction rather than a whole cell. */
+const mapDotCellsUnder = (page, size) => page.evaluate((gridSize) => {
+  const cellFrom = (pct) => Number(pct.replace("%", "")) * gridSize / 100 + 0.5;
+  return [...document.querySelectorAll("#mapPanelBoard .map-dot")].map((dot) => ({
+    id: dot.getAttribute("title"),
+    x: cellFrom(dot.style.left),
+    y: cellFrom(dot.style.top),
+  }));
+}, size);
+
+test("switching to the 14x14 chapel yard redraws the board at its own size and places food outside a 12-cell square", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    const gridSize = await switchScenario(page, /chapel/, "fox-2");
+    assert.equal(gridSize, 14, "the chapel yard's own board size travels with its scenario");
+
+    const dots = await mapDotCellsUnder(page, 14);
+    assert.ok(dots.length > 0, "the map panel draws the chapel yard's opening cast");
+    const onACell = (n) => Math.abs(n - Math.round(n)) < 0.001;
+    for (const dot of dots) {
+      assert.ok(
+        onACell(dot.x) && onACell(dot.y),
+        `${dot.id} sits on a whole cell of the 14-square board, not a fraction of a 12-square one (${dot.x}, ${dot.y})`,
+      );
+      assert.ok(dot.x >= 1 && dot.x <= 14 && dot.y >= 1 && dot.y <= 14, `${dot.id} is on the board`);
+    }
+
+    // cell-13-13 exists on the chapel yard alone.
+    const before = await readWorldSentences(page);
+    await page.locator("#foodPill").click();
+    await sendAndSettle(page, () =>
+      page.evaluate(() => window.mudiiiHandleSceneClick && window.mudiiiHandleSceneClick("cell-13-13")));
+    const added = (await readWorldSentences(page)).split("\n").filter((line) => !before.includes(line) && line.trim());
+    assert.ok(added.some((l) => /is a morsel/i.test(l)), "the click places a morsel");
+    assert.ok(added.some((l) => /cell-13-13/.test(l)), "the morsel lands on the cell clicked, never clamped back onto a 12-square board");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error switching squares and placing food on the far corner");
+  } finally {
+    await context.close();
+  }
+});
