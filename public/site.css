@@ -405,7 +405,11 @@ footer {
 /* ---- the capability matrix ------------------------------------------------------ */
 /* Twelve capability columns fit inside main's own width on a laptop; on
    anything narrower the box scrolls sideways so the page itself never does. */
-.matrix-wrap { overflow-x: auto; margin: 1.2rem 0 0.6rem; -webkit-overflow-scrolling: touch; }
+/* position: relative is doing real work. Each cell's mark carries an .sr-only
+   label, and .sr-only is absolutely positioned. Without a positioned ancestor
+   those labels resolve against the page itself, so the scroll box never clips
+   them and the widest one drags the whole document out to the table's width. */
+.matrix-wrap { position: relative; overflow-x: auto; margin: 1.2rem 0 0.6rem; -webkit-overflow-scrolling: touch; }
 table.matrix { border-collapse: collapse; font-size: 0.85rem; min-width: 55rem; width: 100%; }
 table.matrix th, table.matrix td { border-bottom: 1px solid var(--line); padding: 0.55rem 0.3rem; }
 table.matrix thead th {
