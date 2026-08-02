@@ -924,8 +924,16 @@ function pageScript() {
   function sendCommand(line) {
     appendChat("u", line);
     if (!session) { appendChat("a", "no session is open yet \\u2014 reset to start one."); return Promise.resolve(); }
-    return serializeTick(function () { return tmct.turn(line); }).then(function (res) {
+    // A chat line can run a real turn. An addressed told-fact does, and the
+    // visitor should watch the lie land, so the board is read back in the same
+    // queue slot. board() spends no turn, so a line that ran none costs
+    // nothing. It reports no goal or plan either, because a resting board has
+    // decided nothing, which is the blank boot() already draws at turn 0.
+    return serializeTick(async function () {
+      const res = await tmct.turn(line);
+      const board = await session.board();
       appendChat("a", res.answer);
+      applyTickResult(board);
       renderAll();
       return res;
     });
