@@ -653,7 +653,12 @@ const MUDIII_STYLE = `
     font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
     padding: .32rem .7rem; border: 1px solid var(--square-stone-dark); border-radius: 3px;
     background: rgba(255,255,255,.5); color: var(--square-ink);
+    /* A select is as wide as its longest option, and a square's label runs to
+       "town square (12x12, 1 fox, 3 goblins)" — on a phone that alone made the
+       whole page scroll sideways. */
+    min-width: 0; max-width: 100%;
   }
+  #scenarioSelect { flex: 1 1 9rem; }
   .deck-select:hover { border-color: var(--square-accent); }
   .deck-select:disabled { opacity: .45; cursor: default; }
   .deck-select:disabled:hover { border-color: var(--square-stone-dark); }
