@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Four.
+Three.
 
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
@@ -60,11 +60,6 @@ Four.
   **Owner:** a track is on it. **Tier:** Haiku.
   **Do:** fold `public/vendor/three.js` into the next page-weights pass.
   **Risk:** none beyond the report going stale on the next three bump, which is what it is for.
-
-- **Four plan-doc audits are running.** `PLAN_MUD*` (six docs) and the language and reasoning set
-  (six docs), each against the code rather than against itself. The mudiii audit that set the
-  pattern found four real bugs, so expect these to produce items rather than only cuts.
-  **Owner:** two tracks.
 
 ### Questions blocking work
 
