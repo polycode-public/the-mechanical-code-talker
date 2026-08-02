@@ -835,14 +835,18 @@ until it does. Then the grid-size item, because the deception rail and the map p
   Nothing in the batch touches this path, and the same suite passed twice earlier the same day.
   **Tier:** Haiku for the test-side fix; report rather than edit if the scorer itself needs changing,
   since a concurrent track owns the memory modules.
-  **Do:** stop pinning the exact rendered score in a parity assertion. The test's subject is that
-  backend B behaves like backend A, so compare the two backends' scores to each other, or assert the
-  score within a tolerance, rather than against a literal frozen last year. The `<ts>` placeholder
-  already used for `mgx:updatedAt` in the same list is the idiom to follow.
+  **The operator's decision:** compare the score at **3 significant figures**. Both readings become
+  `0.954`. The value stays asserted, at a precision the recency drift cannot move. No placeholder, no
+  tolerance band.
+  **Do:** apply the same 3sf transform to the actual and the expected side, so the assertion cannot
+  pass by one side alone being normalized. Every other property in the list stays compared exactly.
+  Give any sibling assertion in the file that pins a score the same treatment in the same commit,
+  whether or not it has failed yet.
   **Risk:** loosening the whole deep-equal would drop real parity coverage. Narrow the treatment to
   the one time-derived field and leave every other property compared exactly.
-  **Mitigation:** the fix must hold under a clock far from the fixture date. Prove it by running the
-  file with the score's own inputs shifted, not by re-running until it passes.
+  **Mitigation:** show a score differing in the sixth decimal now compares equal, and that one
+  differing in the third significant figure still fails. The second half matters as much as the
+  first: the assertion must still catch a real change.
 
 - **Two `pages-home.test.mjs` tests time out waiting for a page element.** "the adventure claim leads
   to a real room scene" waits on `#roomFrame` becoming visible (`:291`-`:298`) and "the ledger claim
