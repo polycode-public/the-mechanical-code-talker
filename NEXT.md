@@ -33,24 +33,28 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Three tracks, all live. Two of them want a browser, which is one more than the cap batch 1's losses
-set — the deck track was already holding that slot when the layout work came in, so the layout track
-is capped at a single `demo:build` and told to report rather than retry if it fails.
+Four tracks. The mudiii page files came free when the seven-item batch landed, so they were refilled
+the same turn rather than left idle — concurrency here is bounded by file ownership, not by batch
+cadence.
 
-- **T29 deck layout** — the map moves inside the control panel at both orientations.
-  `mudiii-viz.mjs`. Sonnet. Status: started, uncommitted work in its worktree.
+- **T35 prey scoring** — the weighted evade/forage blend plus the comparison harness that can tell it
+  from the priority chain. `predator-prey.mjs`, `agent-belief.mjs`, a new `scripts/` sweep. Top tier.
+  Status: started.
+- **T37 food size and screenshot flake** — the batch's browser slot, currently on its fourth repeat
+  run of the screenshot script. `data/mudiii-assets.json`, `gen-screenshots.mjs`. Sonnet.
+  Status: started.
+- **T38 the mudiii page remainder** — thirteen items across `mudiii-viz.mjs` and `mudiii-scene.mjs`:
+  both pill rails, the map panel's grid/key/aspect, the belief panel, EDIT mode, agent labels,
+  click-to-turn and the directional ring, the compass ring, the eat-flourish hold, the teach
+  checkbox, the eyebrow adoption, the stale headers, and the recast callers. One owner, in order,
+  because that file is the bottleneck and parallel edits to it cost more than sequencing saves. Top
+  tier. Status: started.
+- **T39 page headings and a stale label** — the five demo pages with no `<h1>`, and
+  `MUDIII_SCENARIO_LABELS`. `build-demo-site.mjs` and the page renderers the mudiii track does not
+  hold. Sonnet. Status: started.
 
-
-**On batch size.** The operator asked for wider concurrency, with each agent taking several items.
-The limit is file ownership, not agent count: `mudiii-viz.mjs` alone carries a dozen open items and
-one agent can hold it at a time. So batches are grouped by file, and the next wave — the map panel's
-grid, key and labels, the pill rails, EDIT mode, the camera and follow items, the sliders and the
-`Math.random` roster — fires as one multi-item batch the moment T29 releases that file. Likewise the
-prey-scoring blend behind T30's hold on `predator-prey.mjs`.
-
-Queued behind those two files coming free: the chat-above-belief-cards markup move, the directional
-ring, the click-to-turn item, and the demo-page header helper (which also needs the about pages to
-exist before its third link has a target).
+Not dispatchable: the CI-verification items wait on a pipeline, and `smoke:deploy`'s probe needs a
+real deploy.
 
 ## Open items
 
