@@ -53,6 +53,40 @@ its own, which is what running them was for.
 
 ## Open items
 
+### Found by playtest and benchmark, not yet fixed
+
+- **A plain English question locks the tab for seventeen minutes.**
+  `who is the president of France` on chat.html froze the page for a measured **1054 seconds** before
+  printing the correct refusal. A CPU profile puts 99% of self time in `findIsaChain`
+  (`syllogise.mjs:1715`), reached from `relationFactsFor` (`chat.mjs:9141`-`:9156`), which walks all
+  63,470 seed rows and runs a BFS per row. The trigger is the shape `<wh> is the <relation> of
+  <thing>` — `what is the capital of Peru` and `who is the queen of England` freeze; `the capital of
+  Peru` and `who is the president` answer in under 5s. The same lane freezes ingest, research and
+  code. Transcript and profile in `reports/PLAYTEST_DEMO_PAGES.md`.
+  **In flight** as the CLI track's new first item.
+  **The refusal is correct; the cost of reaching it is not.** Do not make it answer.
+  **Related:** a benchmark measured the same cycle at ~25 minutes against ~4.5 for an earlier
+  version, with the case pool only 5% larger. This may be the same cause.
+
+- **Two agents are minted on one cell.** `goblin-1` and `goblin-2` both open on `cell-14-14` in the
+  chapel yard, while `blockedCellReason` treats a single agent as enough to block a cell. Found while
+  diagnosing an unrelated e2e failure, and not on its path.
+  **Tier:** Sonnet.
+  **Do:** decide which is right — a mint that refuses to stack, or a blocked-cell rule that tolerates
+  it — rather than patching whichever is nearer. `seededRoster` filters `taken` and then falls back
+  to the unfiltered cell list, which is the likely route to a collision.
+
+- **23 further playtest findings.** In `reports/PLAYTEST_DEMO_PAGES.md`, grouped by page. Notable: the
+  home page advertises `/help` in its own banner and refuses it; sprites draws the animal-root
+  fallback for a lamp and a cabinet whose templates both exist; the mud food pill is empty until you
+  press PLAY; spider-fly direction pills append rather than replace, so a second click builds an
+  unparseable sentence.
+  **Tier:** mixed. The site-copy ones are in flight; the page-behaviour ones are not.
+  **Not covered by that playtest, and worth its own pass:** the p2p handshake past minting an invite,
+  file-upload paths, the four sprite group pages, ingest's Document mode, and reduced-motion
+  behaviour.
+
+
 ### Inference
 
 - **INF-4's ceiling is a chat-layer bound, not a missing rule.** The benchmark at 5.0.5 reaches INF-8
@@ -147,21 +181,6 @@ outrank every cosmetic item below.
   this item and leave the flag off.
 
 ### Pipeline
-
-- **Two mudiii e2e tests fail against the deployed site and predate the facing fix.** Found while
-  fixing the facing sampler, checked out to a scratch copy and re-run against the pre-change file:
-  both fail identically before those commits, and neither touches what changed.
-  - "a visitor who asked for reduced motion…" fails on *the opening cast is still drawn*.
-  - "switching to the 14x14 chapel yard…" times out on a 20s `waitForFunction`.
-  **Tier:** Sonnet. Diagnosis first; the two may not share a cause.
-  **Do:** run both against the deployed site and again against a local build. If they pass locally
-  and fail deployed, the difference is latency to CloudFront or something the deploy does to the
-  page, and that distinction is the finding. The reduced-motion one is the more interesting: it
-  asserts the board is drawn but still, so a failure there could mean the opening cast never
-  rendered, which would be a real fault rather than a timing artifact.
-  **Risk:** raising a timeout is the fix that always appears to work. Establish what the page is
-  actually doing before touching either test.
-
 
 ### Questions blocking work
 
