@@ -183,6 +183,34 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
   process.stdout.write([header, ...body].join("\n") + "\n");
 }
 
+/** The conversational memory store's vocabulary reader, bound to whatever store
+ *  the target repo already has. `cli tmct_ask` and chat answer over the same
+ *  `--repo`, so a term chat knows used to come back from the cold route as a
+ *  miss purely because the cold route reads the code graph and nothing else.
+ *
+ *  Read-only by construction: the reader is handed a throwaway in-memory copy
+ *  of the store, so a repo with no memory yet stays that way (opening a backend
+ *  would create one) and nothing a reader writes reaches disk. `{ factLookup:
+ *  null }` when the repo has no store, which leaves the graph-only answer. */
+async function openColdMemoryReader(config) {
+  const empty = { factLookup: null, close: async () => {} };
+  if (!config?.graphFile) return empty;
+  const { dirname: dirnameOf } = await import("node:path");
+  const repoRoot = dirnameOf(dirnameOf(config.graphFile));
+  const { openExistingMemoryBackend, readOnlyMemorySnapshot } = await import("../src/adapters/memory/core.mjs");
+  const store = await openExistingMemoryBackend(repoRoot);
+  if (!store) return empty;
+  let snapshot = null;
+  try { snapshot = await readOnlyMemorySnapshot(store.dir); }
+  finally { await store.close(); }
+  if (!snapshot) return empty;
+  const { factAnswer } = await import("../src/services/chat.mjs");
+  return {
+    factLookup: (query, envelope) => factAnswer(snapshot, query, envelope, true),
+    close: async () => {},
+  };
+}
+
 /** The carried `cli` dispatcher (digest / tmct_locate / any-tool fallback).
  *  Imports are lazy so `tmct --help` and chat startup never pay for the tool
  *  stack. */
@@ -266,15 +294,18 @@ async function runCliMode() {
       process.exit(2);
     }
     const config = await configFor(args.repo_path);
+    const memory = await openColdMemoryReader(config);
     try {
       // The recognizer seam a tool like tmct_ingest needs: injected here (bin
       // sits above the service layer) rather than imported by the tool layer.
       const { ingestText } = await import("../src/services/extract-facts.mjs");
-      const text = await dispatchTool(sub, args, { config, ingest: ingestText });
+      const text = await dispatchTool(sub, args, { config, ingest: ingestText, factLookup: memory.factLookup });
       process.stdout.write(text + "\n");
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);
       process.exit(1);
+    } finally {
+      await memory.close();
     }
     return;
   }

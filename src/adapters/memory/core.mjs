@@ -698,6 +698,29 @@ export async function openMemoryBackend(repoRoot, backendChoice) {
   return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
 }
 
+/** openMemoryBackend for a caller that only wants to READ what a repo already
+ *  holds: null when the repo has no store yet, because opening one creates it.
+ *  The cold surfaces (the `cli` tool route) answer over a repo they were merely
+ *  pointed at, and must leave a repo with no memory exactly as they found it. */
+export async function openExistingMemoryBackend(repoRoot, backendChoice = "") {
+  if (!repoRoot || typeof repoRoot !== "string") return null;
+  const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
+  try { await access(dbPath); } catch { return null; }
+  return openMemoryBackend(repoRoot, backendChoice);
+}
+
+/** A throwaway in-memory COPY of a store's facts: readers answer from the real
+ *  data, and anything a reader writes lands in the copy rather than on disk.
+ *  What a surface with no session behind it (the `cli` tool route, the HTTP
+ *  messages endpoint) hands a reader that expects a memory handle, so a cold
+ *  answer matches a chat answer without the cold call gaining a write. */
+export async function readOnlyMemorySnapshot(memoryDir) {
+  if (!memoryDir) return null;
+  const snapshot = createInMemoryStore();
+  applySeedPayload(snapshot, cloneMemoryPayload(await loadMemory(memoryDir)));
+  return snapshot;
+}
+
 /** openMemoryBackend for an entry point that holds only a repo path and has no
  *  CLI-flag tier (the fold's idle pass, `tmct import --file`): resolve the
  *  backend token the way the chat path does minus the flag —

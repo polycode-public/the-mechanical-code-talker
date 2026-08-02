@@ -143,7 +143,19 @@ function withRestNote(text, rest) {
  *   - a mapped, declared graph tool → tool_use
  *   - otherwise → end_turn text via runTurn
  */
-export async function respondToMessages(body, { config, graph, source = defaultSource } = {}) {
+/** The memory store's vocabulary reader over a throwaway copy of `memoryDir` —
+ *  the seam a cold tool call gets so `tmct_ask` here answers what chat answers
+ *  over the same repo. Null when the server was started without a store. */
+async function memoryFactLookup(memoryDir) {
+  if (!memoryDir) return null;
+  const { readOnlyMemorySnapshot } = await import("../../adapters/memory/core.mjs");
+  const snapshot = await readOnlyMemorySnapshot(memoryDir);
+  if (!snapshot) return null;
+  const { factAnswer } = await import("../../services/chat.mjs");
+  return (query, envelope) => factAnswer(snapshot, query, envelope, true);
+}
+
+export async function respondToMessages(body, { config, graph, memoryDir = null, source = defaultSource } = {}) {
   const { model, messages, tools } = body || {};
   const declaredNames = new Set(
     (Array.isArray(tools) ? tools : []).map((t) => t && t.name).filter(Boolean),
@@ -185,7 +197,7 @@ export async function respondToMessages(body, { config, graph, source = defaultS
       return msg;
     }
     try {
-      const out = await dispatchTool(name, input, { config, source });
+      const out = await dispatchTool(name, input, { config, source, factLookup: await memoryFactLookup(memoryDir) });
       const msg = assistantMessage(model, [{ type: "text", text: withRestNote(out, rest) }], "end_turn");
       msg.tmct_checked_call = { name, input, problems: [] };
       return msg;
@@ -225,10 +237,23 @@ export async function respondToMessages(body, { config, graph, source = defaultS
     }
   }
 
-  // text answer: the cited, read-only answer the chat surface gives. memoryDir is
-  // null so the endpoint is PURE — no session artifacts, no writes, deterministic.
-  const { answer } = await runTurn(userText, { config, graph, source, memoryDir: null });
-  return assistantMessage(model, [{ type: "text", text: answer }], "end_turn");
+  // text answer: the cited, read-only answer the chat surface gives, over the
+  // same repo's memory store — without it, a term chat answers came back from
+  // this endpoint as a miss. The store is handed over as a throwaway in-memory
+  // COPY, so the endpoint stays PURE: reads see the real facts, and anything a
+  // turn would write lands in the copy rather than on disk.
+  const { readOnlyMemorySnapshot } = await import("../../adapters/memory/core.mjs");
+  const snapshot = await readOnlyMemorySnapshot(memoryDir);
+  const storedBefore = snapshot?.payload?.individuals?.length ?? 0;
+  const { answer } = await runTurn(userText, { config, graph, source, memoryDir: snapshot });
+  // A teach turn lands in the copy and confirms itself. Say plainly that the
+  // fact went nowhere, rather than leaving "noted — remembered" as the last
+  // word on a write this endpoint never makes.
+  const wrote = (snapshot?.payload?.individuals?.length ?? 0) > storedBefore;
+  const text = wrote
+    ? `${answer}\n(nothing was stored — this endpoint reads the memory store and never writes to it. Teach the fact in a chat session to keep it.)`
+    : answer;
+  return assistantMessage(model, [{ type: "text", text }], "end_turn");
 }
 
 /** The capability names a /v1/plan request restricts its plan to (its `tools`
@@ -375,7 +400,7 @@ export async function startServer({ config, host = "127.0.0.1", port = 0, source
         sendError(res, 400, "invalid_request_error", "`messages` array is required");
         return;
       }
-      const out = await respondToMessages(body, { config, graph, source });
+      const out = await respondToMessages(body, { config, graph, memoryDir, source });
       sendJson(res, 200, out);
     } catch (e) {
       sendError(res, 500, "api_error", e && e.message ? e.message : String(e));
