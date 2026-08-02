@@ -89,27 +89,6 @@ outrank every cosmetic item below.
   sentences another lane owns. The corpus tests are where that shows up.
 
 
-### mudiii.html — behaviour the plan specifies that is missing or half built
-
-- **The goblin sizing fix is green locally and unproven on CI.** Goblins used to render at a
-  different wrong scale on every load, with one coming out many times house height, its foot above
-  the ground. The cause was a race with the spawn tween: a cached loader handed every agent of a kind
-  the same parsed `gltf.scene`, and `normalizeToHeight` measured it through a parent group's world
-  matrix while `playSpawnFlourish` was still tweening that group's scale, so the applied scale
-  depended on which frame the parse landed on. At or near scale zero the measured height read zero,
-  the `|| 1` fallback invented a height, and the scale became `targetHeight` against the raw model.
-  Fixed: each model URL's bytes are fetched once and parsed per agent off the shared buffer, so every
-  agent owns its own object graph without a duplicate request. `normalizeToHeight` throws on an
-  already-parented object and on a repeat call, the `|| 1` fallback is gone, `meshHeightOf(id)` is on
-  the scene surface, and `boot` is awaited so the opening tick no longer runs against a null scene.
-  `node --test test-e2e/pages-mudiii.test.mjs` passes 6/6 across three consecutive local runs, and
-  each of `fox.glb` and `goblin.glb` is requested exactly once across a load, a slider reboot and a
-  Reset.
-  **What is left:** none of that has reached CI. `e2e:deployed:pages` failed this test on pipeline
-  2725214193, which ran against a commit predating the fix.
-  **Tier:** none. It closes on the next green pipeline.
-  **Do:** confirm the job passes on the push that clears the red suite, then delete this item.
-
 ### mudiii.html — further work
 
 - **The desktop deck still carries a wide empty band.** With the map reduced to a 240px minimap in
