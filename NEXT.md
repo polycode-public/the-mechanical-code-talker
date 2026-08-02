@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+Seven tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
 them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
 router's phantom budget.
 
@@ -60,6 +60,13 @@ deployed site directly rather than serving its own.
 - **T62 the deployed seed readiness race** — three `pages-timing` failures where the page reports
   ready with an empty store. `pages-ingest.test.mjs`, `pages-chat-export.test.mjs`,
   `pages-service-worker.test.mjs`, `ingest-viz.mjs`. Top tier. Status: started.
+- **T63 a second CLI edge hunt** — the first found fifteen and all fifteen are fixed, so this is the
+  next wave rather than a re-file. `bin/tmct.mjs`, the tool handlers, the HTTP surface, `cli-verbs`,
+  `toml-config`, a new report. Top tier. Status: started.
+- **T64 sweep the ask grammar for real-but-wrong answers** — the impact-of fix uncovered a class: a
+  relaxation layer drops a word it does not recognise, re-parses, and answers a different question
+  against a real edge. Enumerates the capability labels and relation verbs from their own sources and
+  crosses them. `ask.mjs`, `ask-vocab.mjs`, `interpret/`, a new report. Top tier. Status: started.
 - **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
 
