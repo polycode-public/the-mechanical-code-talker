@@ -35,40 +35,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 Five.
 
-- **The deployed site serves the starter memory brotli-compressed twice.** Decompressing one layer
-  gives 4,534,836 bytes of more brotli; twice gives the real 93,496,025-byte JSON. Every browser
-  sends `Accept-Encoding: br`, decodes one layer, and hands `JSON.parse` binary, so a visitor gets no
-  starter memory at all — the pill reads `1 FACTS` and the composer tells them to run `tmct init`.
-  The build writes one brotli layer (`scripts/build-demo-site.mjs:783`-`:796`), a viewer-request
-  function rewrites `/chat-seed.json` to `.br` (`infra/lib/website-stack.ts:88`-`:107`), and that
-  behaviour carries `compress: true` (`:169`), so CloudFront encodes it again. A weak `W/"..."` etag
-  on the encoded variant against a strong etag on the stored object is CloudFront's own signature for
-  a re-encode.
-  **It varies deploy to deploy**, which is why this read as an untraceable CI flake for weeks: a
-  re-run that cleared it was hitting a different deploy's object. The scoped metadata
-  `BucketDeployment` (`:201`-`:249`) only re-runs when the sibling's content hash changes, so a
-  deploy where the seed did not move re-uploads it with the CLI's guessed metadata and no
-  `Content-Encoding`.
-  **Owner:** a track is on it. Top tier.
-  **Do:** `compress: false` on a behaviour matching `/chat-seed.json*` and an unconditional
-  `Content-Encoding: br` metadata pass. Both, or the object is undecodable either way.
-  **Risk:** `scripts/wait-for-site.mjs` used to ask for `identity` encoding, the one variant no
-  browser requests, so it passed on an exact byte count while every visitor got something unreadable.
-  Whatever proves this in CI has to fetch the way a browser does.
-
-- **A mudiii e2e test times out on a ground click.**
-  `test-e2e/pages-mudiii.test.mjs:560` — "clicking the ground with nothing armed heads the followed
-  agent that way" waits 27s and fails. The tier is 21 tests, 20 pass. The click moved from
-  pointerdown to pointerup with a 6px drag threshold, so a drag no longer walks the agent; that
-  commit edited this test file without running the tier.
-  **Owner:** a track is on it. Top tier.
-  **Do:** decide whether the test drives the click wrongly for the new model, or the threshold has a
-  real bug a visitor would hit too. Not by lengthening a timeout.
-
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
   sky either side. The 14x14 chapel yard is the worst of the three.
-  **Owner:** nobody. **Tier:** Sonnet.
+  **Owner:** a track is on it. **Tier:** Sonnet.
+  **Confirmed from the other side:** the e2e ground-click test failed for 27s because it clicked sky.
+  The 3D stage measures 1239x360 and the board draws as a 248px square in the middle, a fifth of the
+  width.
   **Do:** rig the height off the canvas aspect as well as the board, so a wide window pulls in rather
   than backing off.
   **Risk:** a rig that fills a wide window crops a tall one. The height has to fit the tighter of the
@@ -77,16 +50,30 @@ Five.
 - **The belief line reads every unseen individual by name.** "What does the goblin see?" answers with
   each unobserved crumb listed one by one, so the sentence is mostly a list of things that are not
   there, and it grows with the food cap.
-  **Owner:** nobody. **Tier:** Sonnet.
+  **Owner:** a track is on it. **Tier:** Sonnet.
   **Do:** count the unobserved rather than naming them, keeping the named ones for what is in view.
   **Risk:** the deception rail's whole point is that a lie about a specific individual lands visibly,
   so a taught individual has to keep its name even while unseen.
 
 - **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's largest
   single asset and the only measurement of it anywhere is prose.
-  **Owner:** nobody. **Tier:** Haiku.
+  **Owner:** a track is on it. **Tier:** Haiku.
   **Do:** fold `public/vendor/three.js` into the next page-weights pass.
   **Risk:** none beyond the report going stale on the next three bump, which is what it is for.
+
+- **A click that misses the board says nothing.** `resolveCellClick` returns silently when the ray
+  hits no ground, so a visitor clicking the sky beside the square gets no feedback. On a stage where
+  the board is a fifth of the width that is most of the canvas, and it is what made the e2e failure
+  above so opaque.
+  **Owner:** nobody. **Tier:** Sonnet.
+  **Do:** decide whether a miss deserves a word. It is a design call, not a bug fix.
+  **Risk:** a message on every stray sky click would be noise in follow and POV, where clicking past
+  the board is normal. Any answer has to be mode-aware.
+
+- **Four plan-doc audits are running.** `PLAN_MUD*` (six docs) and the language and reasoning set
+  (six docs), each against the code rather than against itself. The mudiii audit that set the
+  pattern found four real bugs, so expect these to produce items rather than only cuts.
+  **Owner:** two tracks.
 
 ### Questions blocking work
 
