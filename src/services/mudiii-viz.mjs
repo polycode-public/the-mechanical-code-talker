@@ -367,6 +367,28 @@ export function nextCameraSelection(prev, agents, ecology) {
   };
 }
 
+/** What one press on a camera-mode button should do, as
+ *  `{ mode, selectedId, status }`.
+ *
+ *  `overhead` needs nobody and keeps whatever was selected, so switching back
+ *  to `follow` resumes the same agent. The other two need one, and after a
+ *  fallback there is none: the agent that was followed has been eaten and the
+ *  selection was cleared. The dropdown, meanwhile, still lists the survivors
+ *  and shows its first one, so a press that did nothing left the deck naming
+ *  an agent the camera was not on. `offered` is that dropdown value, and a
+ *  press adopts it when it is still live.
+ *
+ *  With nobody left to adopt the press stays overhead and says why, rather
+ *  than lighting a button over a camera that did not move. `liveIds` is this
+ *  turn's roster. Pure, self-contained. */
+export function cameraSelectionForMode(mode, selectedId, offered, liveIds) {
+  const live = liveIds || [];
+  if (mode === "overhead") return { mode: "overhead", selectedId: selectedId || null, status: null };
+  if (selectedId && live.indexOf(selectedId) !== -1) return { mode, selectedId, status: null };
+  if (offered && live.indexOf(offered) !== -1) return { mode, selectedId: offered, status: null };
+  return { mode: "overhead", selectedId: null, status: "nobody left to follow — staying overhead." };
+}
+
 /** Every agent and item's own dot for the 2D top-down map panel, as
  *  percentage coordinates within a square panel (`{ id, kind, xPct, yPct
  *  }[]`) — never pixel values, so the panel's own CSS controls its actual
@@ -1052,6 +1074,7 @@ function pageScript() {
   const blockedCellReason = ${blockedCellReason.toString()};
   const cameraRigFor = ${cameraRigFor.toString()};
   const nextCameraSelection = ${nextCameraSelection.toString()};
+  const cameraSelectionForMode = ${cameraSelectionForMode.toString()};
   const mapDotsFor = ${mapDotsFor.toString()};
   const mapBlocksFor = ${mapBlocksFor.toString()};
   const hudCardFieldsFor = ${hudCardFieldsFor.toString()};
@@ -1550,8 +1573,13 @@ function pageScript() {
     const btn = e.target.closest("button[data-mode]");
     if (!btn) return;
     cameraModeBeforeFallback = null;
-    camera = { mode: btn.getAttribute("data-mode"), selectedId: camera.selectedId, status: null };
+    camera = cameraSelectionForMode(
+      btn.getAttribute("data-mode"), camera.selectedId, el("agentSelect").value, Object.keys(agentsById),
+    );
     renderCameraButtons();
+    renderAgentSelect();
+    renderDriveRing();
+    setSceneStatus(camera.status || "");
     sendCameraToScene(camera);
   });
 

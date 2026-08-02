@@ -16,7 +16,7 @@ import { DEFAULT_GRID_SIZE } from "../../src/domain/town-square-world.mjs";
 import { TWEEN_DURATION_MS, startTween, reseedTween } from "../../src/services/mudiii-scene.mjs";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
-  propPlacementsFrom, occupiedCells, currentPlacementsFrom, blockedCellReason, cameraRigFor, nextCameraSelection,
+  propPlacementsFrom, occupiedCells, currentPlacementsFrom, blockedCellReason, cameraRigFor, nextCameraSelection, cameraSelectionForMode,
   mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
@@ -954,6 +954,56 @@ test("renderMudiiiHtml: the belief summary is capped, and the full list comes fr
   assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
   assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
   assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
+});
+
+const LIVE = ["fox-2", "goblin-3", "goblin-4"];
+
+test("cameraSelectionForMode: overhead needs nobody and keeps the selection to come back to", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("overhead", "goblin-3", "goblin-3", LIVE),
+    { mode: "overhead", selectedId: "goblin-3", status: null },
+  );
+});
+
+test("cameraSelectionForMode: a live selection is kept as it stands", () => {
+  for (const mode of ["follow", "pov"]) {
+    assert.deepEqual(
+      cameraSelectionForMode(mode, "goblin-3", "fox-2", LIVE),
+      { mode, selectedId: "goblin-3", status: null },
+    );
+  }
+});
+
+test("cameraSelectionForMode: with nothing selected the press adopts the agent the deck is showing", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("follow", null, "goblin-4", LIVE),
+    { mode: "follow", selectedId: "goblin-4", status: null },
+  );
+});
+
+test("cameraSelectionForMode: an agent that has left the board is replaced, not followed", () => {
+  assert.deepEqual(
+    cameraSelectionForMode("pov", "goblin-1", "fox-2", LIVE),
+    { mode: "pov", selectedId: "fox-2", status: null },
+  );
+});
+
+test("cameraSelectionForMode: with nobody to follow the press says so instead of lighting a dead button", () => {
+  const answer = cameraSelectionForMode("follow", "goblin-1", "goblin-1", []);
+  assert.equal(answer.mode, "overhead");
+  assert.equal(answer.selectedId, null);
+  assert.match(answer.status, /nobody left to follow/);
+});
+
+test("renderMudiiiHtml: a camera-mode press redraws the follow controls with it", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const cameraSelectionForMode = /, "the rule is spliced into the page script");
+  assert.match(
+    html,
+    /camera = cameraSelectionForMode\(\s*btn\.getAttribute\("data-mode"\), camera\.selectedId, el\("agentSelect"\)\.value, Object\.keys\(agentsById\),\s*\);/,
+    "and the press runs through it, against the deck's own value",
+  );
+  assert.match(html, /renderCameraButtons\(\);\s*renderAgentSelect\(\);\s*renderDriveRing\(\);/, "the dropdown and the ring follow the camera");
 });
 
 const PLACE = (subject, object) => ({ subject, predicate: "mgx:currently-in", object });
