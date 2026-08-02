@@ -50,12 +50,6 @@ deployed site directly rather than serving its own.
   `sprites-viz.mjs`, `mud-viz.mjs`, `spider-fly-viz.mjs`, `adventure-viz.mjs`, `index.html`. Sonnet.
   Holds a build slot. Status: started.
 
-- **T49 the chat freeze and the CLI comfort items** — landed and merged, then broke five tests on
-  `main`. Four in `code-explorer-browser-entry.test.mjs`: real questions over a real code graph stop
-  parsing, so a lane change moved where a code-shaped question lands. One in `ui-context-miss.
-  test.mjs`: the count decline dropped its CLI remedy for every surface, where the test pins keeping
-  it for the CLI and dropping it only for a page. `main` is red and unpushed until both are fixed.
-  Status: resumed on the regressions.
 - **T55 mudiii's camera look, the double-minted cell and its STEP button** — drag to look in POV and
   FOLLOW, two agents opening on one cell, and a STEP button that advances one whole turn.
   `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier. Holds a build slot.
@@ -93,19 +87,6 @@ deployed site directly rather than serving its own.
   says the seed is ~93MB, which if true is the centre of this.
   **Risk:** the cheap move is a longer budget or a retry, and it would turn a red test green while
   leaving a page that lies about what it knows.
-
-- **Five tests fail on merged `main` after the chat-freeze track landed.** Four in
-  `test/adapters/code-explorer-browser-entry.test.mjs` (`:81`, `:98`, `:105`, `:121`) — the engine
-  stops parsing questions it used to parse, and one asks for `['Task.title']` and gets `[]`. One in
-  `test/services/ui-context-miss.test.mjs:49` — `answerCount`'s empty-graph miss now drops the
-  `tmct index` remedy on every surface, where the test pins keeping it for the CLI and dropping it
-  only for a page. The suite reads 6031 tests, 6026 pass, 5 fail.
-  **Tier:** top. Same track that caused it, resumed with its own context.
-  **Do:** find the real cause of the four rather than assuming a lane; the likely movers are the
-  `define dog` vocabulary read after the code lane misses, and the held-back index-this-repo nudge.
-  For the fifth, decide whether the remedy belongs on the CLI and restore it there.
-  **Risk:** `main` cannot be pushed while these are red, so every other track's merge queues behind
-  this one.
 
 - **A plain English question locks the tab for seventeen minutes.**
   `who is the president of France` on chat.html froze the page for a measured **1054 seconds** before
@@ -192,16 +173,18 @@ deployed site directly rather than serving its own.
   `unionOf`/`complementOf`/negative-assertion representation. Those are the path above, not this.
   **Risk:** deeper chains cost more per turn, and the per-turn cost has already grown (below).
 
-- **A chat turn has got much heavier since 3.0.3.** The inference bench took roughly 25 minutes
-  wall-clock for its double replay against about 4.5 minutes for the whole 3.0.3 cycle, while the
-  case pool grew only 5%. Nothing about the verdicts changed, so this is cost rather than
-  correctness.
-  **Tier:** Sonnet. Measurement before any optimisation.
-  **Do:** find where the time goes before changing anything. The bench replays a real chat turn per
-  case, so the growth is in the turn itself, and the honest first step is a profile rather than a
-  guess about which lane got expensive.
-  **Risk:** the obvious suspects are the ones that landed recently, which makes it tempting to blame
-  the newest change. Measure.
+- **A chat turn got much heavier since 3.0.3, and the likely cause is now fixed but unconfirmed.**
+  The inference bench took roughly 25 minutes wall-clock for its double replay against about 4.5
+  minutes for the whole 3.0.3 cycle, while the case pool grew only 5%.
+  **The candidate:** `findIsaChain` rebuilt its adjacency index over the whole subClassOf edge set on
+  every call, and `shortestChainTo` in `src/domain/memory/capability.mjs` is called once per
+  candidate row from `chat.mjs`, so the pair was nested quadratic. Threading a prebuilt successor
+  index through took a 63,470-row store from a 1054-second freeze to 577ms, and the corpus tier from
+  145s to 54s.
+  **What is still open:** nobody has re-run the inference bench since. The 25-minute figure stands
+  until a fresh cycle replaces it.
+  **Tier:** Sonnet. **In flight** as T60, which re-runs the bench for its own reason and will
+  produce the number as a side effect.
 
 
 ### mudiii.html — camera
