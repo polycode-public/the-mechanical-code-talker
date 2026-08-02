@@ -502,6 +502,15 @@ test("renderMudiiiHtml: the map board stays square in landscape, capped rather t
   assert.match(html, /\.map-panel-board \{ flex: 0 0 auto; width: min\(100%, 108px\); min-height: 0; margin: 0 auto; \}/);
 });
 
+test("renderMudiiiHtml: the eyebrow is the shared demo nav, not a bare page name", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<h1 class="eyebrow"><span class="eyebrow-links">/);
+  assert.match(html, /<a href="\.\/index\.html">tmct<\/a>/);
+  assert.match(html, /<a href="\.\/mudiii\.html">mudiii<\/a>/);
+  assert.match(html, /<a href="\.\/mudiii-about\.html">about<\/a>/);
+  assert.match(html, /\.eyebrow-links a \{ color: inherit; text-decoration: none; \}/);
+});
+
 test("renderMudiiiHtml: the deck carries a teach box, hinting a sentence this square can parse", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /<input type="checkbox" id="teachToggle">/);

@@ -49,7 +49,7 @@
 // was actually asking for.
 import {
   THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel,
-  rowsForWorld, appendLogLine, wordBeforeCursor,
+  rowsForWorld, appendLogLine, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "./viz-theme.mjs";
 import { createTicker, createSerialQueue, prefersReducedMotion } from "./viz-ticker.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "./mud-editor.mjs";
@@ -528,7 +528,7 @@ ${PILL_COMPLETE_CSS}
 <body>
 <main>
   <header class="mudiii-topbar">
-    <h1 class="eyebrow">tmct &middot; mudiii</h1>
+    <h1 class="eyebrow">${demoEyebrowHtml("mudiii", "mudiii")}</h1>
     <a class="mudiii-topbar-help" href="./help.html" target="_blank" rel="noopener"
        title="how this demo works, in a new tab" aria-label="how this demo works, opens in a new tab">?</a>
   </header>
@@ -679,6 +679,7 @@ const MUDIII_STYLE = `
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1280px; margin: 0 auto; padding: 1.1rem 1.2rem 2.4rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--square-ink); opacity: .85; margin: 0; }
+  ${EYEBROW_LINKS_CSS}
   h2 { font-family: ${DISPLAY_STACK}; font-size: 1rem; margin: 0; }
   h3 { font-family: ${MONO_STACK}; font-size: .58rem; margin: 0 0 .3rem; text-transform: uppercase; letter-spacing: .12em; color: var(--square-stone-dark); }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
