@@ -128,21 +128,6 @@ exist before its third link has a target).
 
 ### mudiii.html — behaviour the plan specifies that is missing or half built
 
-- **The page should open already playing.** The operator likes the play mode enough to want it on by
-  default. Today `autoOn` starts false (`mudiii-viz.mjs:848`) and the deck's control reads
-  `aria-pressed="false"`, and two reset paths (`:1160`, `:1212`) set it false again.
-  **Tier:** Haiku for the change, and it needs judgment about what it breaks.
-  **Do:** start playing on boot, and keep the reset paths honest about whatever the new default is.
-  **Risk:** two e2e tests encode the opposite on purpose. `test-e2e/pages-mudiii.test.mjs:110`, "the
-  page boots with nothing playing", asserts `aria-pressed="false"` and a turn count of zero, and the
-  file's own header states the intent. Another test at `:558` drives a teach-frame "with nothing
-  playing" and would race an autoplaying ticker. Both need rewriting deliberately rather than
-  deleting: the first becomes "opens playing", the second needs to pause before it types.
-  **Feasibility:** the scene respects reduced-motion elsewhere. Decide whether a visitor who asked
-  for reduced motion should still get an autoplaying board, rather than letting the default decide
-  it for them.
-
-
 - **The goblin sizing fix is green locally and unproven on CI.** Goblins used to render at a
   different wrong scale on every load, with one coming out many times house height, its foot above
   the ground. The cause was a race with the spawn tween: a cached loader handed every agent of a kind
@@ -224,88 +209,6 @@ exist before its third link has a target).
   today, which is why a dead pill shipped.
   **Mitigation:** add an e2e that clicks every button in `#chatPills` and asserts no answer contains
   `couldn't read a position` or the generic chat decline.
-
-- **The Players and Npcs sliders cannot reach their stated ranges.** The controls have the right
-  ranges and defaults, but `pickRoster` slices from `scenario.agents`, which the site build derives
-  from `layout.cast`. Town square casts 1 predator and 3 prey, so the default fox count of 2 already
-  cannot be met on the page that opens by default. The foxes slider "snapping back to 1" is the same
-  fault seen from the other end.
-  **Tier:** Sonnet. The engine side already works; the page side is a rewrite of one function.
-  **Do:** `startTownSquareGame` (`predator-prey.mjs:497`) already takes `predatorCount`/`preyCount`
-  and mints `<prefix>-1..N` at seeded cells via `seededRoster` (`:527`), and
-  `townSquareRosterArgs` (`mudiii-browser-entry.mjs:67`) already translates a named roster into
-  those counts. Replace `pickRoster` (`mudiii-viz.mjs:824`) with a mint that reads the prefix off
-  the scenario's first agent through the already-spliced `roleOfAgentId` (`:800`) and emits
-  `prefix + "-" + i` for `i` up to the slider value. Call it from `boot` (`:1207`).
-  **Feasibility:** `seededRoster` filters `taken` and falls back to the unfiltered cell list, so 4
-  predators and 10 prey on the 10x10 market board place without throwing. The world's own authored
-  fact (`town-square-world.mjs:367`, `square mgx:start-with 1 fox and 3 goblins`) then describes the
-  default rather than the live board. Leave it; it says "by default" already.
-  **Risk:** `test/services/mudiii-viz.test.mjs:58` and `:65` pin the slider ranges and defaults, not
-  the roster. Nothing pins `pickRoster`. More agents means more per-agent GLB parses, so land the
-  goblin-render item first and measure the Reset path at ten goblins.
-  **Mitigation:** e2e that drags `#playerCountSlider` to its top detent and `#npcCountSlider` to 10,
-  waits for the reboot, and asserts 14 `.hud-card`s and `#playerCountValue` reading 4. Reload and
-  assert the same ids land on the same cells.
-
-- **The foxes slider snaps back to 1.** Moving it shows the new value briefly, then it reads 1
-  whatever was chosen. The control is reporting the cast it actually got, capped by the layout's
-  authored count.
-  **Tier:** Sonnet, and not deliverable alone.
-  **Do:** nothing separate. `showFoxCount(foxes.length)` (`mudiii-viz.mjs:1210`) follows the roster,
-  so the mint in the item above closes this too. Dispatch the two to the same agent. Split them and
-  one agent "fixes" the readout without being able to, because the root cause sits outside its
-  scope.
-
-- **`pickRoster` shuffles with `Math.random()`.** `mudiii-viz.mjs:827` is the page's only
-  `Math.random` call. It breaks the project's seeded-determinism rule outright, so two loads of the
-  same scenario cast differently and a reload cannot reproduce a board.
-  **Tier:** Haiku alone, but do not do it alone.
-  **Do:** the roster-minting item above deletes `pickRoster` entirely and the engine's `seededPick`
-  chooses the cells, so the two close in the same change. Fold it in rather than patching the
-  shuffle.
-  **Risk:** none beyond that item's own.
-
-- **The page opens in overhead, not follow.** The operator's decision: mudiii.html opens in FOLLOW
-  mode on an agent, not looking down at the board. The page already intends this and does not get it.
-  `let camera` (`mudiii-viz.mjs:843`) is already `{ mode: "follow", selectedId: null, status: null }`,
-  but `boot()` (`mudiii-scene.mjs:715`) then calls `setCamera({ mode: "overhead", selectedId: null })`
-  unconditionally, and nothing ever writes a `selectedId`. Even without that reset,
-  `cameraRigFor(mode, null, …)` falls back to the overhead rig (`mudiii-scene.mjs:671`), because
-  follow with no agent has nowhere to sit.
-  **Tier:** Sonnet. Two small edits, but the ordering against `boot` is the whole job.
-  **Do:** after the awaited boot in `mudiii-viz.mjs` (`:1219`), set `camera.selectedId` to the same
-  id `renderAgentSelect` (`:1038`-`:1045`) marks selected by default, then `callScene("setCamera",
-  camera)`. Drive it off the roster the page already has rather than a hardcoded `fox-1`, which is a
-  roster pick and not present in every scenario/slider combination. Leave
-  `mudiii-scene.mjs:715`'s reset in place: EDIT mode's re-boot needs a defined camera state, and the
-  EDIT-mode item's own mitigation is to re-apply `setCamera` right after the boot, which is the same
-  shape as this fix.
-  **Risk:** the despawn-fallback item below adds `cameraModeBeforeFallback` next to `let camera`, and
-  both items write `camera` around `applyTickResult`. Land them in the same agent or sequence them.
-  A follow camera on load also means the opening frame depends on an agent mesh existing, so this
-  reads as broken until the goblin-render item lands.
-  **Mitigation:** e2e that loads the page and asserts `#cameraMode button[data-mode="follow"]` reads
-  `aria-pressed="true"` and `#agentSelect` has a non-empty `inputValue()` before any tick.
-
-- **Picking an agent after a despawn fallback does not resume follow.** `nextCameraSelection`
-  correctly falls back to `{ mode: "overhead", selectedId: null }` with a status line, but the
-  dropdown's change handler preserves `camera.mode`, so choosing a new agent leaves you in overhead
-  until you press follow.
-  **Tier:** Sonnet. Four lines and a small piece of state that has to be right.
-  **Do:** leave `nextCameraSelection` (`mudiii-viz.mjs:289`) alone; it is pure, correct, and pinned
-  across all five cases at `test/services/mudiii-viz.test.mjs:426`-`:466`. Track the fallback in the
-  page. Add `let cameraModeBeforeFallback = null;` beside `let camera` (`:843`). In
-  `applyTickResult` (`:882`), record the discarded mode when the new selection carries a `status`
-  and the old mode was not overhead. Restore it in the `#agentSelect` change handler (`:1046`) and
-  clear it in the `#cameraMode` click handler (`:1058`), so a visitor who deliberately picks
-  overhead after a fallback stays there.
-  **Risk:** `test/services/mudiii-viz.test.mjs:154` extracts the `#agentSelect` handler body and
-  asserts it contains `callScene("setCamera", camera)`. Keep that as the handler's last line.
-  **Mitigation:** e2e that forces a despawn (place a morsel under the fox, or drive
-  `applyTickResult` through `page.evaluate` with a synthetic `eat-agent` ecology row), asserts
-  `#sceneStatus` names the fallback, then changes `#agentSelect` and asserts the follow button reads
-  `aria-pressed="true"`.
 
 - **The 2D map panel has no grid, draws no props, and is not square.** `.map-panel-board` is a flat
   tinted rectangle with absolutely-positioned dots for agents and food. The plan specifies the grid
@@ -414,20 +317,6 @@ exist before its third link has a target).
   **Risk:** `seededWander` includes the current cell among its options, so a fox can hold still for a
   turn or two while the board really is advancing. Twelve turns makes that unlikely, not impossible.
 
-- **The belief panels sit above the command box.** On a phone the cast fills the screen between the
-  board and the chat, so the input is off-screen and every card has to be scrolled past. The same
-  order is wrong in landscape.
-  **Tier:** Haiku. A pure markup move.
-  **Do:** in `renderMudiiiHtml` (`mudiii-viz.mjs:553`-`:591`) move the `#hudRow` block (`:557`) to
-  after `.mudiii-chat`'s closing `</section>` (`:591`), before `</main>`. `renderHudRow`/`renderAll`
-  address it by id, so no JS changes. No page in this repo uses an `order:` CSS convention; moving
-  the markup matches how the others handle layout order.
-  **Risk:** `body.editing .hud-row { display: none; }` (`:718`) hides it in edit mode regardless of
-  position, and `MUDIII_STYLE` has no adjacent-sibling selector on `#hudRow`.
-  **Mitigation:** a Playwright bounding-box check at 375x667 and 812x375 asserting `#hudRow` now
-  sits below `.mudiii-chat`. `test-e2e/pages-mudiii.test.mjs` tests no geometry today, so this is a
-  new assertion.
-
 - **The map has no key.** Dots are coloured by role and nothing says which colour is which.
   **Tier:** Haiku.
   **Do:** add a legend block inside `.map-panel` after `.map-panel-board` (around
@@ -438,21 +327,6 @@ exist before its third link has a target).
   the class in a static flow row makes the swatches position against `.map-panel-board` and vanish.
   **Mitigation:** use plain inline-block swatches carrying the same background custom properties.
   A Playwright `boundingBox()` assertion for non-zero swatch size catches the trap directly.
-
-- **The follow dropdown resets to fox-1.** Selecting a goblin snaps the selection back.
-  **Tier:** Sonnet. Needs browser reproduction; static reading does not turn up the cause.
-  **Do:** reproduce first. `renderAgentSelect` (`mudiii-viz.mjs:1038`-`:1045`) rebuilds the options
-  every `renderAll()` and marks `id === camera.selectedId` selected; the change listener
-  (`:1046`-`:1050`) sets `camera.selectedId` synchronously; `nextCameraSelection` (`:289`-`:309`)
-  only clears `selectedId` when the agent is gone. So the fault is either a race between a
-  concurrent tick's `applyTickResult` and the change handler, or the browser resetting a `<select>`'s
-  visual selection when its `<option>`s are replaced while the native list is open. Extend
-  `test-e2e/pages-mudiii.test.mjs` (copy the five-tick play/wait pattern at `:125`-`:150`) with a
-  test that `page.selectOption`s a non-default agent, plays several ticks, and asserts
-  `#agentSelect`'s `inputValue()` still equals the picked id.
-  **Risk:** a fix aimed at `nextCameraSelection`, which reads correctly already, would look
-  plausible and pass a shallow check while leaving the real race.
-  **Mitigation:** the reproduction test is the acceptance check. It must fail before the fix.
 
 - **Agents carry no label in the scene or on the map.** Nothing on the board says which goblin is
   which; the id only exists in the HUD card.
@@ -529,6 +403,25 @@ exist before its third link has a target).
   the same discipline `decide()` applies at `predator-prey.mjs:711`-`:721`.
 
 ### mudiii.html — further work
+
+- **The map panel is still not square, and in landscape it swallows the fold.** Measured on the
+  layout as it stood before the map moved into the control panel, so re-check it against the current
+  one first. The finding: `.map-panel-board` fills the panel's width, so a 12x12 board renders into a
+  3:1 rectangle and the dots spread horizontally — the geometry the panel claims to show is not the
+  geometry it draws. In landscape the deck plus map overflowed a 375px viewport and pushed the 3D
+  board below the fold entirely.
+  **Tier:** Haiku if the current layout already fixed it, Sonnet if not.
+  **Do:** look first. The board now carries `aspect-ratio: 1` at base with a landscape override to
+  `auto`, which is what the earlier fix used to stop a square box blowing out to 283px tall. Decide
+  whether a square board or a visible 3D view matters more in landscape; they are in tension.
+
+- **`MUDIII_SCENARIO_LABELS` describes a cast the page no longer uses.**
+  `scripts/build-demo-site.mjs` still labels the opening square "town square (12x12, 1 fox, 3
+  goblins)". The roster now comes from the sliders, so that count is a layout default the page
+  ignores.
+  **Tier:** Haiku.
+  **Do:** drop the cast from the label, or derive it. The board size is still true.
+
 
 - **The eat flourish barely reads at a 220ms tick.** The flourish now plays on both sides, but the
   predator's clip fades in over 150ms and an attack animation runs several hundred ms, so the next
