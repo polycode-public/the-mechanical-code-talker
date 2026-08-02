@@ -33,14 +33,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Batch 1. Seven worktree tracks, each owning files no sibling touches. Every mudiii item that edits
-`mudiii-viz.mjs` beyond the goblin item's single `await` waits for batch 2, because that file is the
-batch's only real collision point and the goblin item has to land first anyway.
+Batch 2, running alongside the one batch-1 track still open. Each track owns files no sibling
+touches. Every remaining mudiii item that edits `mudiii-viz.mjs` waits for T1, because that file is
+the whole collision point and the goblin item has to land first anyway.
 
 - **T1 goblin-render** — `mudiii-scene.mjs`, the `await` on `mudiii-viz.mjs:1219`, and the three
-  test files that pin them. Sonnet. Status: started.
-- **T3 index/home PAGE_ORDER** — `test-e2e/pages-index.test.mjs`, `test-e2e/pages-home.test.mjs`.
-  Haiku. Status: started.
+  test files that pin them. Sonnet. Status: started, corrected mid-flight with the operator's
+  1%-scale observation.
+- **T8 teach mode UI, adventure and mud only** — those two viz files and their browser entries.
+  mudiii's third stays open, since it needs engine content that does not exist. Sonnet.
+  Status: started.
+- **T9 predator-prey trio** — the evade tie-break, food vision gating, and `recastTownSquare`, one
+  owner because all three edit the same engine file. Sonnet. Status: started.
+- **T10 pages-home wait hardening** — `test-e2e/pages-home.test.mjs`. Haiku. Status: started.
+- **T11 p2p retraction replication** — new `memory/retraction.mjs`, the `p2p-room.mjs` merge hook,
+  `sync-filter.mjs`'s covered set. Top tier. Status: started.
 
 Landed:
 
@@ -49,6 +56,7 @@ Landed:
 - **T5 import-cycle estate guard** — merged, `test/estate/no-deadlock-import-cycle.test.mjs`.
 - **T6 adventure pill `data-command`** — merged.
 - **T7 resolver purity invariant** — merged into `CLAUDE.md`'s working-model section.
+- **T3 index/home PAGE_ORDER** — merged. Both e2e files pinned the stale ten-page count.
 
 ## Open items
 
