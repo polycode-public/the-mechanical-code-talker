@@ -33,23 +33,23 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Five tracks. Two benchmarks landed this round and each produced a finding that became a fix track of
-its own, which is what running them was for.
+Four tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
+router's phantom budget.
 
-- **T49 the fifteen remaining CLI findings** — the retract-twice wall, `/help` never mentioning
-  retraction, `define dog` routing to the code lane, `--repo <typo>` silently scaffolding a repo, and
-  the rest. None is a wrong answer, so the bar is comfort without ever making the engine guess.
-  `chat.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier. Status: started.
-- **T50 the two deployed e2e failures** — reduced-motion's opening cast, and the chapel timeout. Both
-  predate the facing fix. `pages-mudiii.test.mjs`, `mudiii-scene.mjs`. Top tier. Status: started.
+- **T49 the chat freeze, then the CLI comfort items** — redirected: a plain English question locks
+  the tab for 1054s before refusing correctly, and that outranks everything else it was sent for.
+  `chat.mjs`, `syllogise.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier.
+  Status: started.
 - **T53 the router's bound and its tie guard** — a member-filter budget that counts steps it never
   takes, a command-register pick that answers a tie every other path declines, and a frame that
   re-executes a past-tense narration. `router/drive.mjs`, `router/resolver.mjs`. Top tier.
   Status: started.
-- **T41 prey sweep and status refresh** — down to one regime at a time after the sandbox killed its
+- **T54 the about pages' phone overflow and site copy** — four about pages clip their heading at
+  375px, the home page advertises a command it refuses, and a few copy faults. `site.css`,
+  `index.html`, the about pages. Sonnet. Status: started.
+- **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
-- **T40 browser playtest** — all twenty-two pages as a visitor, at three viewport sizes. Top tier.
-  Status: started.
 
 ## Open items
 
