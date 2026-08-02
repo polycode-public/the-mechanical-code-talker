@@ -1,0 +1,530 @@
+/* site.css — the shared stylesheet for the hand-authored pages: the home page
+   (index.html) and the eleven about pages beside it. Every generated demo page
+   keeps its own look; this file is not loaded by any of them.
+
+   The palette is a quiet near-monochrome one: a white ground, a neutral grey
+   scale, and a single restrained green accent reserved for grounding and
+   provenance cues. It deliberately does NOT mirror src/services/viz-theme.mjs;
+   those trust-tier tokens stay the shared source of truth for the
+   ledger/plan/chat/sprite pages. --code-bg/--code-fg are these pages own
+   terminal-block colours. */
+:root {
+  --font-display: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --bg: #FFFFFF;
+  --ink: #1A1A1A;
+  --muted: #6F6F76;
+  --taught: #1B7A4B;
+  --entail: #3F3F46;
+  --entail-soft: rgba(63, 63, 70, 0.10);
+  --card: #FAFAF9;
+  --line: #E6E6E1;
+  --code-bg: #18181B;
+  --code-fg: #E4E4E7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0B0B0C;
+    --ink: #F3F3F2;
+    --muted: #9A9AA1;
+    --taught: #4FB27C;
+    --entail: #A1A1AA;
+    --entail-soft: rgba(161, 161, 170, 0.12);
+    --card: #17171A;
+    --line: #2A2A2E;
+    --code-bg: #101012;
+    --code-fg: #D4D4D8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B0B0C; --ink: #F3F3F2; --muted: #9A9AA1; --taught: #4FB27C;
+  --entail: #A1A1AA; --entail-soft: rgba(161, 161, 170, 0.12);
+  --card: #17171A; --line: #2A2A2E; --code-bg: #101012; --code-fg: #D4D4D8;
+}
+:root[data-theme="light"] {
+  --bg: #FFFFFF; --ink: #1A1A1A; --muted: #6F6F76; --taught: #1B7A4B;
+  --entail: #3F3F46; --entail-soft: rgba(63, 63, 70, 0.10);
+  --card: #FAFAF9; --line: #E6E6E1; --code-bg: #18181B; --code-fg: #E4E4E7;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16.5px/1.65 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  padding: clamp(2.75rem, 6vw, 4.5rem) 1.25rem 5rem;
+}
+main { max-width: 62rem; margin: 0 auto; }
+.copy { max-width: 44rem; margin-left: auto; margin-right: auto; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
+h2 {
+  font-size: 1.3rem;
+  margin: 2.6rem 0 0.7rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.35rem;
+}
+p { margin: 0.7rem 0; }
+em { color: var(--taught); font-style: normal; font-weight: 600; }
+a { color: var(--taught); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; border-radius: 2px; }
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font: 13.5px/1.6 var(--font-mono);
+  padding: 1rem 1.2rem;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 0.9rem 0;
+}
+code {
+  font: 0.88em var(--font-mono);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.05em 0.32em;
+}
+pre code { background: none; border: none; padding: 0; }
+.eyebrow {
+  font: 600 0.72rem/1.5 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.7rem;
+}
+footer {
+  margin-top: 3.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* ---- hero ------------------------------------------------------------------------ */
+.hero { text-align: center; max-width: 48rem; margin: 0 auto 4rem; }
+.hero h1 {
+  font-size: clamp(2.15rem, 5.5vw, 3rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+.hero h1 .long {
+  display: block; font-family: var(--font-body); font-size: 1.05rem;
+  font-weight: 400; color: var(--muted);
+  margin-top: 0.6rem; font-style: normal; line-height: 1.5; letter-spacing: 0;
+}
+.lede {
+  font-size: 1.15rem; color: var(--muted);
+  margin: 1.2rem auto 0; max-width: 36rem;
+}
+.hero-install {
+  display: inline-block;
+  margin-top: 1.6rem;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font: 0.85rem/1 var(--font-mono);
+  padding: 0.8em 1.15em;
+  border-radius: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.hero-install .ps1 { color: var(--muted); }
+
+/* ---- claim grid (each claim links to the page that shows it) --------------------- */
+.band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.75rem; }
+.band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.6rem; }
+.claim-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
+  gap: 1rem; margin: 0 0 1rem;
+}
+.claim {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.claim:hover, .claim:focus-visible {
+  border-color: var(--entail);
+}
+.claim .claim-icon { height: 26px; color: var(--entail); }
+.claim .claim-icon svg { width: 26px; height: 26px; }
+.claim .claim-icon.dual svg { width: 22px; height: 22px; }
+.claim h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
+.claim p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+.claim .claim-page {
+  margin-top: auto; align-self: flex-start;
+  font: 0.7rem/1 var(--font-mono);
+  color: var(--muted); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 0.32em 0.8em;
+}
+.claim:hover .claim-page, .claim:focus-visible .claim-page {
+  color: var(--entail); border-color: var(--entail);
+}
+
+/* ---- new-tab cue: every demo-page link opens in a new tab -------------------------
+   .newtab-icon is the inline glyph inside .claim-page/.open-link; .plate-frame's own
+   override turns it into an absolutely-positioned corner badge, since that family has
+   no inline text to hang the glyph on. */
+.newtab-icon { display: inline-block; vertical-align: -0.15em; width: 0.85em; height: 0.85em; color: currentColor; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ---- feature sections, each screenshot framed as a numbered plate ---------------- */
+.feature {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 1.6rem 3.5rem; align-items: center;
+  margin: 4.2rem 0;
+}
+.feature.flip .plate { order: -1; }
+.feature h2 { border-bottom: none; padding-bottom: 0; margin: 0.2rem 0 0; font-size: 1.5rem; }
+.feature .feature-copy p { font-size: 1rem; color: var(--muted); }
+.feature .open-link { font-size: 0.92rem; }
+/* The plate frame and alt text keep a feature readable while its screenshot
+   is still awaiting capture, so the section never shows a bare broken image. */
+.plate { margin: 0; }
+.plate .plate-frame {
+  display: block;
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.6rem;
+  outline: 1px solid var(--entail-soft);
+  outline-offset: 4px;
+}
+/* .plate-frame has no inline text to hang the new-tab glyph on, so it becomes
+   a pill badge in the frame's top-right corner instead, echoing .claim-page's
+   own pill styling. */
+.plate-frame .newtab-icon {
+  position: absolute; top: 0.85rem; right: 0.85rem; width: 20px; height: 20px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px; box-sizing: content-box; color: var(--entail);
+}
+.plate img {
+  display: block; width: 100%; height: auto;
+  aspect-ratio: 1024 / 600; object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line);
+  color: var(--muted); font: 12px/1.5 var(--font-mono);
+}
+.plate figcaption {
+  margin-top: 0.65rem; text-align: center;
+  font: 0.7rem/1.5 var(--font-mono);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+}
+.plate figcaption .plate-no { color: var(--entail); }
+@media (max-width: 760px) {
+  .feature { grid-template-columns: 1fr; gap: 1rem; margin: 3rem 0; }
+  .feature.flip .plate { order: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .claim, .showcase-card { transition: none; }
+}
+
+/* ---- live chat demo (inside the code-explorer feature) --------------------------- */
+.demo-wrap { margin: 1.2rem 0 0.6rem; }
+.demo-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+#tmct-demo {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  font: 13.5px/1.6 var(--font-mono);
+  overflow-x: auto;
+  min-height: 3.5em;
+}
+#tmct-demo .term-lines > div { white-space: pre-wrap; word-break: break-word; }
+#tmct-demo .term-dim { color: var(--muted); }
+#tmct-demo .term-error { color: #d9704f; }
+#tmct-demo .term-answer { color: var(--code-fg); margin-bottom: 0.5em; }
+#tmct-demo .term-prompt-line { color: var(--code-fg); }
+#tmct-demo .term-prompt { color: var(--taught); }
+#tmct-demo.compact .term-lines > div { margin: 0; }
+#tmct-demo .term-input-row {
+  display: none;
+  align-items: baseline;
+  margin-top: 0.3em;
+}
+#tmct-demo .term-input-row.ready { display: flex; }
+#tmct-demo .term-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--code-fg);
+  font: inherit;
+  padding: 0;
+  min-width: 0;
+}
+#tmct-demo .term-input::placeholder { color: var(--muted); }
+#tmct-demo .term-input:disabled { opacity: 0.5; }
+.demo-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+.demo-cli {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.demo-cli pre {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  padding: 0.5rem 0.8rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+}
+
+/* ---- sprite teaser chips (inside the sprite-library feature) --------------------- */
+.sprite-teaser { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.sprite-chip {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 0.28rem 0.65rem 0.28rem 0.28rem;
+}
+.sprite-chip svg { width: 20px; height: 20px; color: var(--taught); flex: 0 0 auto; }
+.sprite-chip.size-sm svg { width: 14px; height: 14px; }
+.sprite-chip.size-lg svg { width: 27px; height: 27px; }
+.sprite-chip.size-xl svg { width: 34px; height: 34px; }
+.sprite-chain { font: 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; }
+.sprite-chain .own { color: var(--ink); }
+.sprite-chain .arrow { opacity: 0.55; padding: 0 0.15em; }
+
+/* ---- Polycode showcase ----------------------------------------------------------- */
+.showcase-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.9rem; margin: 1.1rem 0 0.4rem;
+}
+.showcase-card {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
+  transition: border-color 0.15s ease;
+}
+.showcase-card:hover, .showcase-card:focus-visible { border-color: var(--entail); }
+.showcase-card h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
+.showcase-card p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+.showcase-card .showcase-domain {
+  font: 0.72rem/1.4 var(--font-mono);
+  color: var(--taught);
+}
+
+/* ---- per-card actions: an info link and a share control -------------------------
+   .claim is itself a link, so these two cannot sit inside it. The cell wraps both
+   and positions the actions over the card's bottom-right corner, where .claim-page's
+   own pill leaves the row free. */
+.claim-cell { position: relative; display: flex; }
+.claim-cell > .claim { flex: 1 1 auto; }
+/* The actions share the card's last line with .claim-page's filename pill. The
+   pill is left-aligned and the actions are pinned right, so the pill only has
+   to stay on one line to keep its new-tab glyph out of their way. */
+.claim-cell > .claim .claim-page { white-space: nowrap; }
+.claim-actions {
+  position: absolute; right: 0.85rem; bottom: 0.95rem;
+  display: flex; gap: 0.4rem;
+}
+.card-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  background: var(--bg); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  cursor: pointer; text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.card-btn svg { width: 16px; height: 16px; }
+.card-btn:hover, .card-btn:focus-visible { color: var(--taught); border-color: var(--taught); text-decoration: none; }
+.card-btn:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+
+/* ---- the share sheet ------------------------------------------------------------
+   One dialog, reused by every card. share.mjs fills it with that demo's own posts. */
+/* The page reset clears the UA's own `margin: auto` on a dialog, so the sheet
+   needs it back to sit in the middle. It also has to be a column flex box, or
+   .share-list has no height to scroll its overflow against and the last posts
+   are clipped instead. */
+.share-sheet {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: min(40rem, calc(100vh - 4rem));
+  margin: auto;
+  padding: 0; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--bg); color: var(--ink);
+}
+.share-sheet[open] { display: flex; flex-direction: column; }
+.share-head, .share-note { flex: 0 0 auto; }
+.share-list { flex: 1 1 auto; min-height: 0; }
+.share-sheet::backdrop { background: rgba(0, 0, 0, 0.45); }
+.share-head {
+  display: flex; align-items: flex-start; gap: 1rem;
+  padding: 1.1rem 1.2rem 0.8rem; border-bottom: 1px solid var(--line);
+}
+.share-head h2 { font-size: 1.1rem; margin: 0; border: none; padding: 0; }
+.share-head p { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.share-close {
+  margin-left: auto; flex: 0 0 auto;
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); cursor: pointer; font: 1rem/1 var(--font-body);
+  width: 28px; height: 28px;
+}
+.share-close:hover { color: var(--ink); border-color: var(--entail); }
+.share-list { list-style: none; margin: 0; padding: 0.6rem 1.2rem 1.2rem; overflow-y: auto; }
+.share-post {
+  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 0;
+}
+.share-post:last-child { border-bottom: none; }
+.share-angle {
+  font: 600 0.68rem/1.5 var(--font-mono);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+}
+.share-text { margin: 0.25rem 0 0.5rem; font-size: 0.92rem; }
+.share-target { font: 0.72rem/1.5 var(--font-mono); color: var(--taught); word-break: break-all; }
+.share-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.55rem; }
+.share-act {
+  font: 0.78rem/1 var(--font-body);
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 0.5em 0.95em; cursor: pointer;
+}
+.share-act:hover, .share-act:focus-visible { border-color: var(--taught); color: var(--taught); }
+.share-act[data-done="1"] { color: var(--taught); border-color: var(--taught); }
+.share-note { padding: 0 1.2rem 1rem; margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+/* ---- the capability matrix ------------------------------------------------------ */
+/* Twelve capability columns fit inside main's own width on a laptop; on
+   anything narrower the box scrolls sideways so the page itself never does. */
+/* position: relative is doing real work. Each cell's mark carries an .sr-only
+   label, and .sr-only is absolutely positioned. Without a positioned ancestor
+   those labels resolve against the page itself, so the scroll box never clips
+   them and the widest one drags the whole document out to the table's width. */
+.matrix-wrap { position: relative; overflow-x: auto; margin: 1.2rem 0 0.6rem; -webkit-overflow-scrolling: touch; }
+table.matrix { border-collapse: collapse; font-size: 0.85rem; min-width: 55rem; width: 100%; }
+table.matrix th, table.matrix td { border-bottom: 1px solid var(--line); padding: 0.55rem 0.3rem; }
+table.matrix thead th {
+  font: 600 0.62rem/1.35 var(--font-mono);
+  letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted);
+  text-align: center; vertical-align: bottom; width: 3.7rem;
+  border-bottom: 1px solid var(--entail);
+}
+table.matrix thead th:first-child { text-align: left; width: auto; min-width: 10.5rem; padding-left: 0; }
+table.matrix tbody th {
+  text-align: left; font-weight: 600; font-size: 0.88rem;
+  white-space: nowrap; padding-left: 0;
+}
+table.matrix tbody th a { color: var(--ink); }
+table.matrix tbody th a:hover { color: var(--taught); }
+table.matrix tbody tr:hover { background: var(--card); }
+table.matrix td { text-align: center; color: var(--entail); }
+table.matrix td svg { width: 17px; height: 17px; vertical-align: -0.2em; }
+table.matrix td.focus { color: var(--taught); }
+.matrix-key {
+  display: flex; flex-wrap: wrap; gap: 1.2rem;
+  font-size: 0.82rem; color: var(--muted); margin-top: 0.8rem;
+}
+.matrix-key span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.matrix-key svg { width: 16px; height: 16px; }
+.matrix-key .focus svg { color: var(--taught); }
+
+/* ---- the about pages ------------------------------------------------------------
+   Same tokens, same type, a two-column shell: a sticky section nav on the left and
+   the sections themselves on the right. */
+.skip-link {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.6em 1em; z-index: 10;
+}
+.skip-link:focus { left: 1rem; top: 1rem; }
+.about-shell {
+  display: grid; grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 0 3rem; max-width: 66rem; margin: 0 auto;
+}
+.about-nav { position: sticky; top: 2rem; align-self: start; padding-bottom: 2rem; }
+.about-nav .eyebrow { margin-bottom: 0.5rem; }
+.about-crumbs { list-style: none; margin: 0 0 1.4rem; padding: 0; border-left: 1px solid var(--line); }
+.about-crumbs li { margin: 0; }
+.about-crumbs a {
+  display: block; padding: 0.42rem 0 0.42rem 0.9rem;
+  margin-left: -1px; border-left: 2px solid transparent;
+  font-size: 0.88rem; color: var(--muted); line-height: 1.4;
+}
+.about-crumbs a:hover { color: var(--ink); text-decoration: none; }
+.about-crumbs a[aria-current="true"] {
+  color: var(--taught); border-left-color: var(--taught); font-weight: 600;
+}
+.about-back, .about-open { display: block; font-size: 0.88rem; margin-bottom: 0.5rem; }
+.about-back { color: var(--muted); margin-bottom: 1.6rem; }
+.about-back:hover { color: var(--ink); }
+.about-head { margin-bottom: 2.4rem; }
+.about-head h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); line-height: 1.12; margin: 0; }
+.about-head .lede { margin-left: 0; max-width: 40rem; font-size: 1.08rem; }
+.about-section { scroll-margin-top: 1.5rem; padding-bottom: 1.6rem; }
+.about-section > h2 { font-size: 1.25rem; margin-top: 2.4rem; }
+.about-section:first-of-type > h2 { margin-top: 0; }
+.about-section p, .about-section li { max-width: 42rem; }
+.about-section ul, .about-section ol { margin: 0.7rem 0 0.7rem 1.2rem; }
+.about-section li { margin: 0.35rem 0; }
+.next-link {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  margin-top: 1.2rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 0.6em 1.1em; font-size: 0.88rem; color: var(--ink);
+}
+.next-link:hover, .next-link:focus-visible { border-color: var(--taught); color: var(--taught); text-decoration: none; }
+.next-link .next-label { color: var(--muted); }
+.next-link:hover .next-label { color: inherit; }
+.transcript {
+  background: var(--code-bg); color: var(--code-fg);
+  font: 13px/1.6 var(--font-mono);
+  padding: 1rem 1.2rem; border-radius: 12px; overflow-x: auto; margin: 0.9rem 0;
+  white-space: pre-wrap; word-break: break-word;
+}
+.transcript .you { color: var(--taught); }
+.transcript .cite { color: var(--muted); }
+.source-note { font-size: 0.82rem; color: var(--muted); margin-top: -0.4rem; }
+.source-note code { font-size: 0.9em; }
+.shot { margin: 1.1rem 0; }
+.shot img {
+  display: block; width: 100%; height: auto;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+}
+.shot figcaption { margin-top: 0.55rem; font-size: 0.84rem; color: var(--muted); }
+.refs { list-style: none; margin: 0.8rem 0 0; padding: 0; }
+.refs li { margin: 0 0 0.85rem; padding-left: 1.1rem; border-left: 2px solid var(--line); }
+.refs .ref-note { display: block; color: var(--muted); font-size: 0.86rem; margin-top: 0.15rem; }
+.factlist { list-style: none; margin: 0.8rem 0; padding: 0; }
+.factlist li {
+  font: 0.82rem/1.6 var(--font-mono);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.4em 0.7em; margin: 0.3rem 0; overflow-x: auto; white-space: nowrap;
+}
+@media (max-width: 860px) {
+  .about-shell { grid-template-columns: 1fr; gap: 0; }
+  .about-nav { position: static; padding-bottom: 1.5rem; border-bottom: 1px solid var(--line); margin-bottom: 2rem; }
+  .about-crumbs { columns: 2; column-gap: 1.5rem; border-left: none; }
+  .about-crumbs a { padding-left: 0; border-left: none; }
+  .about-crumbs a[aria-current="true"] { border-left: none; }
+}
+@media (max-width: 520px) {
+  .about-crumbs { columns: 1; }
+}
+
+/* ---- eyebrow strip: jumps into the page, plus one link out to the source ----------
+   Links here inherit the strip's own muted weight rather than taking the accent, so
+   the row still reads as an eyebrow. */
+.eyebrow a { color: inherit; text-decoration: none; }
+.eyebrow a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.eyebrow a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; border-radius: 2px; }
+
+.nowrap { white-space: nowrap; }

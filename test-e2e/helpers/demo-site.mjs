@@ -10,13 +10,26 @@ import { cpSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { SHARED_STYLESHEET, TRACKED_PAGES } from "../../scripts/site-pages.mjs";
 
 export const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 
 // The git-tracked half of public/. The build generates the rest (engine/,
 // demo-graph.json, demo-memory.json, ledger.html, plan.html) into the same
-// directory.
-const TRACKED_SITE_FILES = ["index.html", "demo-ui.mjs", "demo-templates.mjs", "tmct-browser.mjs", "engine-shims", "screenshots", "models"];
+// directory. The hand-authored pages and their shared stylesheet come from
+// scripts/site-pages.mjs, the one place the page list lives.
+const TRACKED_SITE_FILES = [
+  ...TRACKED_PAGES,
+  SHARED_STYLESHEET,
+  "share.mjs",
+  "about-nav.mjs",
+  "demo-ui.mjs",
+  "demo-templates.mjs",
+  "tmct-browser.mjs",
+  "engine-shims",
+  "screenshots",
+  "models",
+];
 
 /**
  * Build the site into a fresh temp directory and return its path.

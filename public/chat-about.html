@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — Natural Language Understanding</title>
+<meta name="description" content="How tmct reads a plain English question, answers it from a graph, and names the source of every fact it uses.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./chat.html" target="_blank" rel="noopener noreferrer">open chat.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 1 of 11 &middot; chat.html</p>
+      <h1>Natural Language Understanding</h1>
+      <p class="lede">The chat page runs the same engine as the command line, entirely in your browser. You type English. It answers from facts it can point at, and it says so when it cannot.</p>
+    </header>
+
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>Open <code>chat.html</code> and you get a full chat surface with no server behind it. The page ships the engine as a JavaScript bundle and loads a starter memory of about 63,000 facts. Everything after that happens on your machine.</p>
+      <p>Three things are worth watching in a demonstration. The engine reads ordinary sentences, not a query language. Every answer carries a citation showing where the fact came from. And a question it cannot ground gets a refusal instead of a plausible sentence.</p>
+      <p>That last one is the point of the whole project. The literature calls it abstention. tmct abstains because nothing in the store matched, not because a score fell under a threshold.</p>
+      <ul>
+        <li>Teach it something in a sentence and it repeats back the triple it stored.</li>
+        <li>Ask a question and it answers, with a source chip beside the reply.</li>
+        <li>Ask something it has no facts for and it declines, and tells you what shapes of question it does handle.</li>
+        <li>Turn on the Wikipedia mode and it will go and read a Simple English Wikipedia article before answering.</li>
+      </ul>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>Every exchange below is real. Each one is either asserted verbatim by a test in this repository or captured by running the command line in it. None of them are written by hand to look good.</p>
+      <p>Teach a fact, then ask a question that needs it plus something the corpus already knew. The answer cites both, and the <span class="nowrap">via:</span> clause names the fact it chained through.</p>
+      <pre class="transcript"><span class="you">tmct&gt; Rover is a dog.</span>
+noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+<span class="you">tmct&gt; Does Rover bark?</span>
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;)</pre>
+      <p class="source-note">Asserted in <code>test-e2e/pages-chat-taught-capability-chain.test.mjs</code>, which types this into the real page in a real browser. The same run is scripted in <code>examples/rover-infer.mjs</code>.</p>
+      <p>The same shape, run through the command line in this repository. Two taught facts, one chained answer.</p>
+      <pre class="transcript"><span class="you">tmct&gt; A robin is a bird.</span>
+noted — remembered 1 fact: robin rdfs:subClassOf bird (every robin is a bird)
+<span class="you">tmct&gt; A bird can fly.</span>
+noted — remembered 1 fact: bird mgx:capableOf fly
+<span class="you">tmct&gt; Can a robin fly?</span>
+yes — you told me: bird can fly (source: ace:chat:...@2026-08-02T17:13:26.750Z | corpus:human /r/CapableOf) — via: robin is a kind of bird (source: ace:chat:...@2026-08-02T17:13:26.539Z)</pre>
+      <p class="source-note">Captured by piping the lines into <code>node bin/tmct.mjs</code>. Session ids shortened for width; nothing else changed.</p>
+      <p>A two hop class chain. The answer walks poodle to dog to animal and cites each step.</p>
+      <pre class="transcript"><span class="you">tmct&gt; A poodle is a dog.</span>
+noted — remembered: poodle is a kind of dog
+<span class="you">tmct&gt; A dog is an animal.</span>
+noted — remembered 1 fact: dog rdfs:subClassOf animal (dog counts as an animal)
+<span class="you">tmct&gt; Is a poodle an animal?</span>
+yes — poodle is a kind of dog (source: teach:chat:...@...); dog is a kind of animal (source: ace:chat:...@... | corpus:human /r/IsA); so poodle is an animal</pre>
+      <p class="source-note">Captured from the command line. The same chain is a corpus row: <code>test/corpus/inference.jsonl</code>, key <code>inference-mixed-source-isa-chain-cites-both-premises</code>.</p>
+      <p>The honest miss. A question with nothing behind it gets a refusal and a hint, never a guess.</p>
+      <pre class="transcript"><span class="you">tmct&gt; Does a teapot own a spaceship?</span>
+I couldn't read that as a question I can answer. Try "what is a dog" for general vocabulary. Type /help for all query shapes.
+<span class="cite">(this repo has no code graph — index it with `tmct index`, point me at a `.tmct/graph.json` with `--repo &lt;path&gt;`, or run `npm run example:mini`.)</span></pre>
+      <p class="source-note">Captured from the command line. The core wall wording, <code>couldn't parse this as a graph question. Try:</code>, is asserted by four rows in <code>test/corpus/grammar.jsonl</code>, including <code>grammar/relaxation-unknown-verb-honest-miss</code>.</p>
+      <p>A missing quantifier is also a miss. It says what it was never told, rather than counting something up.</p>
+      <pre class="transcript"><span class="you">tmct&gt; redis is a cache</span>
+<span class="you">tmct&gt; how many redis are cache</span>
+I don't know — I was never told a quantifier for that.</pre>
+      <p class="source-note">Corpus row <code>grammar/recall-no-quantifier-honest-dont-know</code> in <code>test/corpus/grammar.jsonl</code>, asserted as an exact body match.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The chat page mid-answer, with a source chip beside the reply and the memory panel docked on the right.</p>
+      <figure class="shot">
+        <img src="./screenshots/chat.png" width="1024" height="600" alt="The tmct chat page answering the question 'what is a dog' with three facts, each naming its corpus source" loading="lazy">
+        <figcaption>chat.html. The question &ldquo;what is a dog&rdquo; answered with three facts, each naming the corpus row it came from.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p>The engine parses your sentence into a graph question, resolves the terms in it, walks the store, and renders an answer. Each of those four steps can decline, and a decline at any of them produces a refusal rather than a fallback.</p>
+      <p><strong>What it retrieves.</strong> A question resolves to a subject and a relation, and the answer is whatever facts sit on that edge. There is no ranking model and no embedding search on this path. If the edge is empty, the answer is empty.</p>
+      <p><strong>What it infers.</strong> Class membership chains through <code>rdfs:subClassOf</code>. Ask whether Rover barks and the engine finds no fact on Rover at all. It walks up to dog, finds <code>dog mgx:capableOf bark</code>, and answers yes, listing both the fact it used and the step it took to get there. That step is the <span class="nowrap">via:</span> clause.</p>
+      <p><strong>Where trust comes from.</strong> Every fact carries a provenance tag. <code>src/domain/memory/trust.mjs</code> parses the tag into a source kind and gives it a prior: an operator statement scores 1.0, something you taught scores 0.95, a curated corpus row 0.7, a live Wikipedia read 0.5, an entailed fact 0.3. The page turns that into one of three chips beside the answer.</p>
+      <ul class="factlist">
+        <li>rover  rdfs:subClassOf  dog          (source: ace:chat:&lt;session&gt;@&lt;timestamp&gt;)</li>
+        <li>dog    mgx:capableOf    bark         (source: corpus:human /r/CapableOf)</li>
+      </ul>
+      <p><strong>How it carries a thread.</strong> The session keeps the last resolved subject as a focus. Ask about something, then ask &ldquo;what calls it?&rdquo;, and the pronoun binds to that focus. A pronoun with no focus behind it resolves to nothing and is reported as unresolved, not guessed.</p>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p>The page is generated by <code>src/services/chat-page-viz.mjs</code>. It has no server side. Three files do the work.</p>
+      <ul>
+        <li><code>chat-browser.bundle.js</code>, built from <code>src/surfaces/web/chat-browser-entry.mjs</code>, wraps the real turn engine and puts it on <code>globalThis.tmct</code>.</li>
+        <li><code>chat-seed.json</code>, built by <code>scripts/build-chat-seed.mjs</code>, carries the starter memory: a persona band, the SEON code ontology, a capped ConceptNet slice, three technology bands and a WordNet band.</li>
+        <li><code>src/services/chat.mjs</code> is the turn engine itself. <code>runTurn</code> routes a line to a teach lane, an ask lane or a research lane, and <code>src/domain/ask.mjs</code> holds the graph question grammar.</li>
+      </ul>
+      <p>The seed's URL carries a content hash. That is what lets the service worker read it cache first without ever handing you a stale copy: a rebuilt seed is asked for by a different URL.</p>
+      <p>Nothing on this page calls a model. The only language machinery is wink-nlp, served from the site's own <code>vendor/wink.js</code>, used for lemmas and parts of speech.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>The behaviour this page shows has names in the literature. These are the works the repository already cites for it.</p>
+      <ul class="refs">
+        <li>Chow, &ldquo;On optimum recognition error and reject tradeoff&rdquo;, <em>IEEE Transactions on Information Theory</em> 16(1), 1970.<span class="ref-note">The reject option: a classifier allowed to decline. The root of what tmct calls the honest miss.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978, pp. 55&ndash;76.<span class="ref-note">The open world assumption. Absence of a fact is not evidence against it, which is why tmct declines instead of denying.</span></li>
+        <li>Ji et al., &ldquo;Survey of Hallucination in Natural Language Generation&rdquo;, <em>ACM Computing Surveys</em> 55(12), 2023.<span class="ref-note">The failure mode this design is aimed at.</span></li>
+        <li>Attempto Controlled English, ACE 6.7, 2013.<span class="ref-note">The controlled English tradition tmct's teach grammar sits in.</span></li>
+        <li>Kuhn, &ldquo;A Survey and Classification of Controlled Natural Languages&rdquo;, <em>Computational Linguistics</em> 40(1), 2014.<span class="ref-note">The survey that places ACE and its neighbours.</span></li>
+        <li>ConceptNet 5.7.0 relations.<span class="ref-note">The relation vocabulary behind the <code>/r/IsA</code> and <code>/r/CapableOf</code> citations you see in the answers.</span></li>
+        <li>Damerau, <em>CACM</em> 7(3), 1964; Levenshtein, <em>Soviet Physics Doklady</em> 10(8), 1966.<span class="ref-note">The edit distance work behind term matching on a typo.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>Everything on this page is in the repository. The full bibliography lives in the README.</p>
+      <ul class="refs">
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>, whose &ldquo;Standards and bibliography&rdquo; section carries every citation above with its full reference.</li>
+        <li>wink-nlp and wink-eng-lite-web-model, bundled first party as <code>vendor/wink.js</code>. They supply lemmas and parts of speech, and nothing else.</li>
+        <li>ConceptNet 5.7.0, the source of the commonsense relation slice in the starter memory.</li>
+        <li>The W3C recommendations the memory model follows: <a href="https://www.w3.org/TR/owl2-primer/">OWL 2</a>, <a href="https://www.w3.org/TR/rdf11-mt/">RDF 1.1 Semantics</a> and <a href="https://www.w3.org/TR/prov-o/">PROV-O</a>.</li>
+      </ul>
+      <a class="next-link" href="./spider-fly-about.html"><span class="next-label">Next demo</span> Competitive multi-agent system <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>

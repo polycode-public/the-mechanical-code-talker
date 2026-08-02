@@ -1,11 +1,13 @@
-// The deployed home page, in a real browser: it loads clean, the claim
-// blocks link to the demo pages, the feature sections show each page's
-// screenshot as a framed plate rather than a live embed, the showcase links
-// to the sibling Polycode projects, and it survives a phone-sized viewport.
-// Nothing else drives index.html end to end (the chat.html/plan.html/
-// adventure.html/ledger.html/sprites.html/spider-fly.html/code.html pages'
-// own content is each page's own test file's job — this file only checks
-// index.html links to them and shows what it says it shows).
+// The deployed home page and its eleven about pages, in a real browser: they
+// load clean, the claim cards link to the demo pages and offer an info link
+// and a share sheet, the capability table scrolls in its own box, the feature
+// sections show each page's screenshot as a framed plate rather than a live
+// embed, the showcase links to the sibling Polycode projects, and all of it
+// survives a phone-sized viewport. Nothing else drives these pages end to end
+// (the chat.html/plan.html/adventure.html/ledger.html/sprites.html/
+// spider-fly.html/code.html pages' own content is each page's own test file's
+// job — this file only checks index.html links to them and shows what it says
+// it shows).
 //
 // Third-party hosts are blocked for every run, and the block must cost the
 // page nothing: every asset — the wink lemma/POS tier included, via the
@@ -19,20 +21,9 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { DEMO_PAGES, aboutPageOf } from "../scripts/site-pages.mjs";
 
-const PAGE_ORDER = [
-  "chat",
-  "spider-fly",
-  "plan",
-  "adventure",
-  "ledger",
-  "code",
-  "ingest",
-  "sprites",
-  "research",
-  "mud",
-  "mudiii",
-];
+const PAGE_ORDER = DEMO_PAGES;
 
 // Plates whose screenshot the capture script has not written yet. The page
 // styles these to degrade to a framed panel with alt text; here they excuse
@@ -360,6 +351,119 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
       `the page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
     );
     await assert.doesNotReject(page.locator(".claim-grid").waitFor({ state: "visible" }));
+  } finally {
+    await context.close();
+  }
+});
+
+// ---- the about pages, and the two controls that reach them ------------------------
+
+test("every claim card offers an info link to its about page and a share button, both with an accessible name", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const cells = page.locator(".claim-cell");
+    assert.equal(await cells.count(), PAGE_ORDER.length, "one cell per demo");
+    for (const [i, name] of PAGE_ORDER.entries()) {
+      const cell = cells.nth(i);
+      const info = cell.locator("a.card-btn");
+      assert.equal(await info.getAttribute("href"), `./${aboutPageOf(name)}`, `${name}'s info link points at its about page`);
+      assert.match(await info.innerText(), /^About /, `${name}'s info link has a readable name, not a bare icon`);
+      const share = cell.locator("button.share-btn");
+      assert.equal(await share.getAttribute("data-share-demo"), name, `${name}'s share button names its demo`);
+      assert.match(await share.innerText(), /^Share /, `${name}'s share button has a readable name`);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("the share sheet opens with five or more posts, each with its own text and its own link", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    await page.locator(".claim-cell").first().locator("button.share-btn").click();
+    const sheet = page.locator("dialog.share-sheet");
+    await sheet.waitFor({ state: "visible" });
+    const posts = sheet.locator(".share-post");
+    const count = await posts.count();
+    assert.ok(count >= 5, `expected at least five posts, found ${count}`);
+    const texts = await posts.locator(".share-text").allInnerTexts();
+    assert.equal(new Set(texts).size, texts.length, "each post says something different");
+    const targets = await posts.locator("a.share-target").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.equal(new Set(targets).size, targets.length, "each post links somewhere different");
+    // Copy is always offered; Share only where the browser has navigator.share.
+    assert.ok((await posts.first().locator(".share-act").count()) >= 1, "a post offers at least a copy control");
+    await sheet.locator(".share-close").click();
+    await sheet.waitFor({ state: "hidden" });
+  } finally {
+    await context.close();
+  }
+});
+
+test("the capability table shows every demo and scrolls sideways inside its own box", async () => {
+  const { context, page } = await openHomePage({ viewport: { width: 375, height: 667 } });
+  try {
+    const rows = page.locator("table.matrix tbody tr");
+    assert.equal(await rows.count(), PAGE_ORDER.length, "one row per demo page");
+    const linked = await rows.locator('th[scope="row"] a').evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(linked, PAGE_ORDER.map((p) => `./${p}.html`));
+    // A wide table must scroll in its own container, never widen the document.
+    const wrap = page.locator(".matrix-wrap");
+    const scrolls = await wrap.evaluate((el) => el.scrollWidth > el.clientWidth);
+    assert.ok(scrolls, "the table is wider than its box, which is why the box scrolls");
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    assert.ok(
+      overflow.scrollWidth <= overflow.clientWidth + 1,
+      `the table pushed the page to ${overflow.scrollWidth}px in a ${overflow.clientWidth}px viewport`,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("every about page loads clean, styled by the shared sheet, with its nav and its Next chain working", async () => {
+  for (const name of PAGE_ORDER) {
+    const { context, page, consoleErrors, failedRequests } = await openPage(aboutPageOf(name));
+    try {
+      assert.deepEqual(failedRequests, [], `${name}'s about page serves every asset it asks for`);
+      assert.deepEqual(consoleErrors, [], `${name}'s about page logs no error of its own`);
+      // The shared stylesheet actually applied, rather than 404ing quietly.
+      const styled = await page.locator(".about-shell").evaluate((el) => getComputedStyle(el).display);
+      assert.equal(styled, "grid", `${name}'s about page picked up site.css`);
+      const crumbs = page.locator(".about-crumbs a");
+      assert.equal(await crumbs.count(), 7, `${name}'s nav lists all seven sections`);
+      // Each Next lands on a section that exists on the page it points into.
+      const withinPage = await page.locator('.next-link[href^="#"]').evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+      for (const target of withinPage) {
+        assert.equal(await page.locator(target).count(), 1, `${name}'s Next to ${target} lands on a real section`);
+      }
+      // The screenshot decodes rather than sitting as a broken image.
+      const shot = page.locator(".shot img").first();
+      await shot.waitFor({ state: "visible" });
+      assert.ok(
+        await shot.evaluate((el) => el.complete && el.naturalWidth > 0),
+        `${name}'s about page screenshot decodes to real pixels`,
+      );
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test("an about page reads on a phone without scrolling sideways", async () => {
+  const { context, page } = await openPage(aboutPageOf("mudiii"), { viewport: { width: 375, height: 667 } });
+  try {
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    assert.ok(
+      overflow.scrollWidth <= overflow.clientWidth + 1,
+      `the about page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
+    );
+    await assert.doesNotReject(page.locator(".about-crumbs").waitFor({ state: "visible" }));
   } finally {
     await context.close();
   }

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — MMORPG</title>
+<meta name="description" content="How a fox and goblins plan their own moves through a 3D town square, each acting only on what it has seen or been told.">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./mudiii.html" target="_blank" rel="noopener noreferrer">open mudiii.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 11 of 11 &middot; mudiii.html</p>
+      <h1>MMORPG</h1>
+      <p class="lede">A fox and a handful of goblins each plan their own next move across a shared town square, rendered in three dimensions. Every one of them acts only on what it has personally seen.</p>
+    </header>
+
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>This is the same engine as the flat game pages, drawn in three dimensions, and it is the one to open when you want the demonstration to look like a game rather than a diagram.</p>
+      <p>A goblin can walk straight into a fox it has not spotted. That is not a bug and it is not scripted. The goblin's plan was computed against what the goblin believed, and the fox was not in it.</p>
+      <p>Click the square to drop food and watch the goblins' plans change on the next tick. Address one by name in chat and tell it something, true or false, and watch it act on that instead.</p>
+      <p>Three cameras: follow one character, see through its eyes, or look down on the whole board. A top-down map panel shows what is actually there, so you can compare it against what any one character believes.</p>
+      <p>Three boards ship: a twelve by twelve square with one fox and three goblins, a ten by ten market row with stall lanes to corner a goblin in, and a fourteen by fourteen chapel yard with open ground and two foxes.</p>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>The opening is the world's own. The chat exchanges are assertions from the turn engine's test file.</p>
+      <p>The opening line.</p>
+      <pre class="transcript">a fox prowls the town square; goblins pick over the stalls for scraps. Neither is yours to move. Watch, or address one by name in chat.</pre>
+      <p class="source-note">The first line of <code>corpus/worlds/src/town-square.jsonl</code>.</p>
+      <p>Tell the fox where the goblin is. It believes you and moves there on the next tick.</p>
+      <pre class="transcript"><span class="you">tmct&gt; @fox the goblin is east</span>
+told the fox-1 the goblin-1 is at cell-3-2
+fox-1 is now at cell-3-2</pre>
+      <p class="source-note">Asserted in <code>test/services/mudiii-turn.test.mjs</code>.</p>
+      <p>Tell a goblin where food is, by cell.</p>
+      <pre class="transcript"><span class="you">tmct&gt; @goblin the crumb is at cell-6-7</span>
+told the goblin-1 the crumb-9 is at cell-6-7</pre>
+      <p class="source-note">Asserted in <code>test/services/mudiii-turn.test.mjs</code>.</p>
+      <p>A tick with the fox in sight of the goblin. The goal line, the plan and the mood all come out of the same decision.</p>
+      <pre class="transcript"><span class="cite">fox-1 at cell-5-5, goblin-1 at cell-8-5</span>
+<span class="cite">goal: chasing goblin-1, last seen at cell-8-5</span>
+<span class="cite">plan: east, east, east</span>
+<span class="cite">mood: angry</span></pre>
+      <p class="source-note">Asserted in <code>test/services/predator-prey.test.mjs</code>. &ldquo;Last seen&rdquo; is literal: it is the believed position, which may be out of date.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The square in three dimensions, with the HUD showing each character's current goal.</p>
+      <figure class="shot">
+        <img src="./screenshots/mudiii.png" width="1024" height="600" alt="The tmct mudiii page showing a fox and goblins moving through a 3D town square, each reacting only to what it has personally seen" loading="lazy">
+        <figcaption>mudiii.html. A fox and three goblins on the town square, each acting on its own view of it.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p><strong>Belief, not visibility.</strong> Each character's view of another is computed by one function, in four rungs. A removed character is believed nowhere. A character inside the vision radius is known exactly. Otherwise the newest thing anyone told this character about it. Otherwise nothing at all.</p>
+      <p>Vision is Chebyshev distance, default radius four, with no line of sight test. Buildings block movement, not sight. Keeping sight simple is what stops belief and the planner disagreeing.</p>
+      <p><strong>The decision ladder.</strong> Every tick, every character takes the first rung that applies: deliver, carry, escape a trap, avoid a rival it can see, chase or forage toward the nearest believed target, hold position, or wander on a seeded roll. The rung's name is also the goal line you read in the HUD.</p>
+      <p><strong>The plan.</strong> The chase rung calls the same bounded breadth-first search the <a href="./plan-about.html">Hanoi page</a> uses, over the board's own movement graph, toward the believed cell. If no path exists yet it takes one greedy step and tries again next tick. That is the whole reason a goblin walks into a fox: the plan was correct for what it knew.</p>
+      <p><strong>The board.</strong> Cells are named, distance is Chebyshev, and the prop vocabulary decides what blocks movement: blacksmith, bush, cart, fence, house, inn, oak, stall, well.</p>
+      <p><strong>Where the cast comes from.</strong> A town-square world ships the board only. The engine mints the characters onto it at seeded cells at start, so the opening cast is derived from the layout rather than read from the world's rows.</p>
+      <p><strong>What you can change.</strong> Talking to a character writes a real addressed fact. It is read back through the belief function on the next tick, exactly like something the character saw. Which means you can lie to it.</p>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p><code>src/services/predator-prey.mjs</code> is the tick engine, shared with the <a href="./spider-fly-about.html">spider and fly</a>. It is written against roles, so fox is the predator role and goblin is the prey role.</p>
+      <p><code>src/domain/agent-belief.mjs</code> holds belief. It imports nothing, so a belief is a pure function of the fact set and the observer.</p>
+      <p><code>src/domain/town-square-world.mjs</code> holds the board: cell naming, distance, direction deltas and the prop vocabulary.</p>
+      <p><code>src/services/mudiii-viz.mjs</code> builds the page shell and <code>src/services/mudiii-scene.mjs</code> holds the three-dimensional scene: model loading, the camera update, the render loop and click handling. The models are listed in <code>data/mudiii-assets.json</code>.</p>
+      <p>The three.js vendor bundle is built inside this page's own build step rather than beside the shared assets, because it is the only page that loads it. A build with no town-square world skips the compile entirely.</p>
+      <p>One ticker drives the whole simulation, through a serial queue, so every character's turn lands in a defined order.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>Multi-agent planning under partial observability, and the belief model behind it.</p>
+      <ul class="refs">
+        <li>Rao and Georgeff, &ldquo;BDI Agents: From Theory to Practice&rdquo;, 1995.<span class="ref-note">Belief, desire, intention. The goal line in the HUD is the intention; the belief is what it was computed against.</span></li>
+        <li>Fikes and Nilsson, &ldquo;STRIPS&rdquo;, <em>Artificial Intelligence</em> 2(3&ndash;4), 1971.<span class="ref-note">The action model the movement search grounds against.</span></li>
+        <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">Planning and acting as one loop. Here it runs once per character per tick.</span></li>
+        <li>Steel and Ho, <em>Planning and Execution using Partial Decision</em>, 1993; Steel and Alami (eds.), <em>Recent Advances in AI Planning</em> (ECP'97), LNCS.<span class="ref-note">Planning when you do not know everything, kept in <code>docs/references/planning/STEEL_AND_HO.md</code>.</span></li>
+        <li>Molineaux, Klenk and Aha, on goal driven autonomy, 2010; Cox, &ldquo;Perpetual Self-Aware Cognitive Agents&rdquo;, <em>AI Magazine</em> 28(1), 2007, pp. 32&ndash;45.<span class="ref-note">Dropping a goal that has stopped making sense, which is what the ladder does every tick.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">A character that believes nothing about a fox is not asserting there is no fox.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>Assets and related pages.</p>
+      <ul class="refs">
+        <li><code>public/models/CREDITS.md</code>, the credits for every three-dimensional model on the square.</li>
+        <li>three.js, bundled first party as <code>vendor/three.js</code> and loaded only by this page.</li>
+        <li><a href="./spider-fly-about.html">Competitive multi-agent system</a>, the same tick engine on a flat board with the belief model set out in full.</li>
+        <li><a href="./mud-about.html">The burrow</a>, for partial knowledge about facts rather than positions.</li>
+        <li><a href="./plan-about.html">Classical AI planning</a>, for the search every character calls each tick.</li>
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
+      </ul>
+      <a class="next-link" href="./index.html"><span class="next-label">Back to</span> all eleven demos <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>
