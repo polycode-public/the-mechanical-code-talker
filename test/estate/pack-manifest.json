@@ -462,6 +462,7 @@
   "src/services/mud-turn.mjs",
   "src/services/mud-viz.mjs",
   "src/services/mudiii-scene.mjs",
+  "src/services/mudiii-turn.mjs",
   "src/services/mudiii-viz.mjs",
   "src/services/p2p-room.mjs",
   "src/services/pill-complete.mjs",

@@ -23,6 +23,7 @@ const LANES = [
   "games/drilldowns",
   "games/guess-number",
   "games/messy-user",
+  "games/mudiii",
   "games/openers",
   "games/relation-touches",
   "games/spider-fly",

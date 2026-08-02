@@ -621,18 +621,23 @@ export async function mudiiiTurn(line, { planHolder, memoryDir, env, cache = nul
       note: "MUDIII — the game ended on request; the board's facts stay in the store",
     };
   }
+  // The food verb is checked BEFORE the plan-frame guard below, because
+  // "put food at cell-3-4" reads as a planning frame on its leading verb and
+  // would otherwise be answered with "stop watching, then set your goal" — a
+  // refusal to do the one thing this lane's own grammar most explicitly
+  // offers. A line the lane owns outright is not a plan frame.
+  const trimmed = String(line).trim();
+  const putMatch = trimmed.match(MUDIII_PUT_FOOD_RE) || trimmed.match(MUDIII_DROP_FOOD_RE);
+  if (putMatch) {
+    return runPlaceFoodTurn(putMatch[1], { memoryDir, gameConfig, world: mudiii.world, layout });
+  }
+
   if (isPlanFrameLine(line)) {
     return {
       text: 'the town square game is running — say "stop watching" to end it, then set your goal.',
       lane: "game-inform",
       note: "MUDIII — a plan frame arrived mid-game; the slot holds one thing at a time",
     };
-  }
-
-  const trimmed = String(line).trim();
-  const putMatch = trimmed.match(MUDIII_PUT_FOOD_RE) || trimmed.match(MUDIII_DROP_FOOD_RE);
-  if (putMatch) {
-    return runPlaceFoodTurn(putMatch[1], { memoryDir, gameConfig, world: mudiii.world, layout });
   }
 
   if (MUDIII_ADDRESS_LEAD_RE.test(line)) {

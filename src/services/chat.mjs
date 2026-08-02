@@ -63,6 +63,7 @@ import { subClassParents, ancestryChain, clusterSenses } from "../domain/sense-s
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
+import { mudiiiTurn } from "./mudiii-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
@@ -15406,6 +15407,29 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       if (sfTurn.goal) result.goal = sfTurn.goal;
       result.lane = sfTurn.lane;
       const rec = withLast(result, sfTurn.goal ?? "watch the spider-and-fly game");
+      rec.planState = planHolder.state;
+      return rec;
+    }
+  }
+
+  // MUDIII — the town-square openers (one per shipped layout), stop, the
+  // addressed teach-frame for agents and food alike, the bare tick, the
+  // food-placement verb, and a live game's own turns. It sits AFTER spider-fly
+  // and BEFORE the unclaimed-opener decline below on purpose: this lane's
+  // opener vocabulary never includes the bare word "mudiii", so "play mudiii"
+  // falls through to that decline and gets named honestly rather than being
+  // silently absorbed here.
+  {
+    const mTurn = await mudiiiTurn(workingLine, {
+      planHolder, memoryDir, env, cache: factRowsCache, isPlanFrameLine, gameConfig: resolvedGameConfig,
+    });
+    if (mTurn) {
+      note(trace, `lane: ${mTurn.note}`);
+      if (mTurn.goal) note(trace, `goal: ${mTurn.goal}`);
+      const result = plainTurn(workingLine, mTurn.text, { via: "game", miss: !!mTurn.miss, focus });
+      if (mTurn.goal) result.goal = mTurn.goal;
+      result.lane = mTurn.lane;
+      const rec = withLast(result, mTurn.goal ?? "watch the town square");
       rec.planState = planHolder.state;
       return rec;
     }
