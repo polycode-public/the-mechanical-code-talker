@@ -202,3 +202,30 @@ test("neither a claim nor a wave can move a character or open a room", async () 
   assert.equal(snap.state.placements.get("mole-1").object, "garden");
   assert.equal(snap.state.exits.get("garden").size, 1, "the garden still has exactly the one shaft it was written with");
 });
+
+// A page's teach checkbox reaches every character's turn as
+// `gameConfig.adventure.teach`, read fresh through `getTeachEnabled` rather
+// than fixed at open. worldPayload's garden carries mgx:is-origin, so
+// originRoomOf reads this as a burrow and liveWorldAnswer picks the mud
+// sentence table (parseMudEditorLine/planTaughtMudTriple), which says
+// placement as "lies in" rather than the manor's "is in".
+test("teach off: a declarative sentence takes chat's own generic teach lane, not world-teach's", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"], getTeachEnabled: () => false });
+  const result = await session.windows["mole-1"].turn("Pebble lies in the garden.");
+  assert.ok(!/there's a pebble/i.test(result.answer), "world-teach's own confirmation never fires");
+  const snap = await session.snapshot();
+  assert.equal(snap.state.placements.has("pebble"), false, "nothing was minted into the live world");
+});
+
+// A fresh session per leg (rather than flipping the same session's checkbox
+// mid-game, as the adventure test above does): the "off" leg's sentence still
+// reaches chat's own generic teach lane, which mints "pebble" under its own
+// provenance — a real, unrelated write that would shift world-teach's later
+// id-collision fallback to "pebble-1" and obscure what this test checks.
+test("teach on: the same sentence mints the thing and confirms in world-teach's own shape", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"], getTeachEnabled: () => true });
+  const result = await session.windows["mole-1"].turn("Pebble lies in the garden.");
+  assert.match(result.answer, /^noted — there's a pebble in the garden now\./, "matches confirmation()'s own minted-placement shape");
+  const snap = await session.snapshot();
+  assert.equal(snap.state.placements.get("pebble")?.object, "garden", "the pebble is written into the live world");
+});

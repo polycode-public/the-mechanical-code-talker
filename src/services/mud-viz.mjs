@@ -411,6 +411,10 @@ ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-sel
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
+        <label class="deck-teach" title="With this on, a sentence like &quot;Candle is in the study.&quot; writes a fact into the world instead of running as a command.">
+          <input type="checkbox" id="teachToggle">
+          teach
+        </label>
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
@@ -634,6 +638,8 @@ const MUD_STYLE = `
     background: rgba(255,255,255,.5); color: var(--mud-ink);
   }
   .deck-select:hover { border-color: var(--burrow-glow); }
+  .deck-teach { display: flex; align-items: center; gap: .3rem; font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--soil-mid); cursor: pointer; }
+  .deck-teach input[type="checkbox"] { accent-color: var(--burrow-glow); }
   .deck-play { background: var(--mud-ink) !important; color: var(--parchment); border-color: var(--mud-ink) !important; padding: .38rem 1.1rem !important; }
   .deck-play[aria-pressed="true"] { background: var(--burrow-glow) !important; border-color: var(--burrow-glow) !important; color: var(--mud-ink); }
   .deck-turns { margin-left: auto; font-size: .74rem; color: var(--soil-mid); }
@@ -1006,7 +1012,7 @@ const MUD_STYLE = `
     --lem-readout: var(--burrow-glow); --lem-readout-bg: var(--soil-deep);
     --lem-chalk: var(--soil-mid);
   }
-  .deck-slider, .deck h3 { color: var(--lem-chalk); }
+  .deck-slider, .deck h3, .deck-teach { color: var(--lem-chalk); }
   .deck-slider input[type="range"] { accent-color: var(--burrow-glow); }
   .deck button, .pane-controls button {
     background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 3px;
@@ -3052,7 +3058,10 @@ function pageScript() {
     // scenario's cast paired with the LAST scenario's pane ids, which is what
     // a null pane-element lookup in renderAll means when it happens.
     for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
-    const opened = await window.tmct.open(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
+    const opened = await window.tmct.open(scenario().worldPayload, {
+      characters: everyone(), epoch: nextEpoch,
+      getTeachEnabled: function () { return el("teachToggle").checked; },
+    });
     if (seq !== bootSeq) return;
     session = opened;
     if (liveRoom) {

@@ -44,7 +44,7 @@ import { waveFact, playedByFact, P2P_PREDICATES } from "../../domain/p2p/facts.m
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
-import { mudSpeciesOf } from "../../domain/game-config.mjs";
+import { mudSpeciesOf, DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
@@ -70,8 +70,14 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  *  keyed by character id, each value `{ character, turn, autoplayTick,
  *  visitedRoomIds, turnsTaken, isOutOfPlay, outOfPlayReason }`. `snapshot()` is
  *  the one OMNISCIENT read this module exposes — the central world map's own
- *  data source, never a per-window one. */
-export async function createMudSession(worldPayload, { characters = [], epoch = 0 } = {}) {
+ *  data source, never a per-window one.
+ *
+ *  `getTeachEnabled` (optional) is read fresh on every character's turn,
+ *  never once at boot — the page's own teach checkbox, shared by every
+ *  window since the flag is a property of the world, not of any one
+ *  character. Defaults to always-off, DEFAULT_GAME_CONFIG.adventure.teach's
+ *  own default. */
+export async function createMudSession(worldPayload, { characters = [], epoch = 0, getTeachEnabled = () => false } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
   const seedFacts = worldFactsForCast(worldPayload.facts, characters);
@@ -149,6 +155,7 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
       vocabHint: 'Try a world command ("dig north", "eat the carrot-1"), or ask "what food do you know about".',
       buildExtraOptions: () => ({
         actingSubject: character, planState: planHolder.state,
+        gameConfig: { ...DEFAULT_GAME_CONFIG, adventure: { ...DEFAULT_GAME_CONFIG.adventure, teach: getTeachEnabled() } },
       }),
       captureExtraState: async (result, state) => {
         if ("planState" in result) planHolder.state = state.planState;
