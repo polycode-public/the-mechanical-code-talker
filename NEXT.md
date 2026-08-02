@@ -40,7 +40,6 @@ goes to one owner in the order the section states: grid size first, because two 
 - **T20 mudiii-viz cluster** — scenario grid size, the turn counter, and the chat teach-frame tick.
   `build-demo-site.mjs`, `mudiii-viz.mjs`, `mudiii-browser-entry.mjs`. Top tier. Status: started.
 - **T21 "who put that there?"** — `mudiii-turn.mjs`. Sonnet. Status: started.
-- **T22 screenshot ready-check** — `scripts/gen-screenshots.mjs`. Sonnet. Status: started.
 - **T23 food size look** — `data/mudiii-assets.json`, and a screenshot it must open. Haiku.
   Status: started.
 - **T24 plan-doc citations** — `spider-fly-world.mjs`, `spider-fly-viz.mjs`. Haiku. Status: started.
@@ -423,21 +422,17 @@ until it does. Then the grid-size item, because the deception rail and the map p
   together and look again if it is wrong. Report the path.
   **Risk:** a bale taller than a goblin turns food into scenery.
 
-- **The screenshot ready-check has a dead branch.** `scripts/gen-screenshots.mjs:170`-`:175` waits on
-  `window.mudiiiScene?.cells?.()` or `cellOf("fox-1")`. The scene surface (`mudiii-scene.mjs:754`)
-  exposes only `boot`, `applyTick`, `setCamera`, `cellOf` and `ready`, so `cells()` is always false.
-  The check proves a mesh has a cell, never that it moved.
-  **Tier:** Sonnet.
-  **Do:** delete the dead disjunct. Capture a starting cell right after the `ready()` wait (`:142`)
-  and, after the existing turn-threshold wait (`:157`-`:164`), wait for `cellOf("fox-1")` to differ
-  from it.
-  **Feasibility:** `fox-1` is a roster pick, not guaranteed in every scenario/slider combination.
-  The current check already hardcodes it, so this is an inherited assumption, not a new one.
-  **Risk:** `seededWander` (`predator-prey.mjs:308`-`:310`) includes `fromCell` among its one-step
-  options, so a fox can hold still for a turn or two while the sim really is advancing. A before/after
-  comparison over too few turns flakes.
-  **Mitigation:** check `MUDIII_BUSY_TURN_THRESHOLD` and raise it if it is 1 or 2. Run
-  `npm run demo:build` then the screenshot script locally a few times and confirm it does not flake.
+- **The screenshot ready-check's fix has not been run repeatedly.** The dead disjunct is gone:
+  `scripts/gen-screenshots.mjs` no longer calls a `cells()` the scene never exposed, and now captures
+  fox-1's starting cell and waits for it to change, so the check proves movement rather than mere
+  presence. `MUDIII_BUSY_TURN_THRESHOLD` is 12, so it needed no raise.
+  **What is missing:** the point of the change is flake resistance, and a fix aimed at flakiness is
+  not evidenced by one green run. Nobody has run it repeatedly.
+  **Tier:** Haiku, and it is a run rather than an edit.
+  **Do:** `npm run demo:build`, then run the screenshot script several times on a quiet machine and
+  confirm none vary. Report how many runs.
+  **Risk:** `seededWander` includes the current cell among its options, so a fox can hold still for a
+  turn or two while the board really is advancing. Twelve turns makes that unlikely, not impossible.
 
 - **The belief panels sit above the command box.** On a phone the cast fills the screen between the
   board and the chat, so the input is off-screen and every card has to be scrolled past. The same
