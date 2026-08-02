@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
-  foldTownSquareState, gridApplyActions, greedyAway, greedyToward, hasActiveWebAt, isMudiiiStatePredicate,
+  foldTownSquareState, greedyBlend, gridApplyActions, greedyAway, greedyToward, hasActiveWebAt, isMudiiiStatePredicate,
   liveWebs, pathStateKey, placeFood, recastTownSquare, roleOfId, runTownSquareTick, seededWander,
   startTownSquareGame, townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
@@ -484,6 +484,115 @@ test("a fleeing predator's own tie-break is unchanged: the avoid rung never sees
     const tick = await runTownSquareTick(dir, { layout: LAYOUT });
     assert.equal(tick.rungs["fox-1"], "avoid");
     assert.equal(tick.agents["fox-1"].cell, "cell-5-6", "first-wins tie order, exactly as before the prey tie-break existed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the weighted alternative to strict evade-before-forage ------------------------
+// Every board below shares one geometry. A goblin stands at cell-5-5, a fox at
+// cell-2-5 (three west, inside a prey's vision), and a crumb at cell-5-3 (two
+// north). Fleeing due east to cell-6-5 buys one cell of distance and abandons
+// the crumb; stepping north to cell-5-4 halves the distance to the crumb and
+// costs nothing at all, since cell-5-4 is the same three cells from the fox.
+
+const blendBoard = (label) => boardWith([
+  classify("fox-1", "fox"), place("fox-1", "cell-2-5"), weigh("fox-1", 20),
+  classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  classify("crumb-1", "crumb"), place("crumb-1", "cell-5-3"), weigh("crumb-1", 1),
+], label);
+
+test("greedyBlend maximizes the weighted difference, and collapses to either pure rung at the ends", () => {
+  const applyActions = gridApplyActions([...worldFactRows(LAYOUT)]);
+  const from = { x: 5, y: 5 };
+  const fox = { x: 2, y: 5 };
+  const crumb = { x: 5, y: 3 };
+  assert.deepEqual(greedyBlend(from, fox, crumb, applyActions, 0.5), { x: 5, y: 4 }, "one cell of hunger for no cell of safety");
+  assert.deepEqual(greedyBlend(from, fox, crumb, applyActions, 1), greedyAway(from, fox, applyActions), "weight 1 is the evade rung");
+  assert.deepEqual(greedyBlend(from, fox, crumb, applyActions, 0), greedyToward(from, crumb, applyActions), "weight 0 is the forage rung");
+  assert.deepEqual(greedyBlend(from, null, crumb, applyActions, 0.5), greedyToward(from, crumb, applyActions), "nothing to run from");
+  assert.deepEqual(greedyBlend(from, fox, null, applyActions, 0.5), greedyAway(from, fox, applyActions), "nothing to run toward");
+});
+
+test("with blendPreyDecision off, a prey in sight of a predator abandons the crumb entirely", async () => {
+  const dir = await blendBoard("blend-off");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "evade", "evade beats forage, whatever the crumb costs");
+    assert.equal(tick.agents["goblin-1"].cell, "cell-6-5", "straight away from the fox, and away from the crumb with it");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("with blendPreyDecision on, a prey takes a crumb that costs it no distance from the predator", async () => {
+  const dir = await blendBoard("blend-on");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, blendPreyDecision: true } });
+    assert.equal(tick.agents["goblin-1"].cell, "cell-5-4", "still three cells from the fox, now one from the crumb");
+    assert.equal(tick.rungs["goblin-1"], "forage", "the step closed on the crumb, so that is what the rung says");
+    assert.match(tick.agents["goblin-1"].goal, /foraging — heading for crumb-1 at cell-5-3/);
+    assert.equal(tick.agents["goblin-1"].mood, "calm");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a blend weight of 1 reproduces the priority chain's own evade step, rung and goal line included", async () => {
+  const blended = await blendBoard("blend-weight-one");
+  const priority = await blendBoard("blend-weight-one-control");
+  try {
+    const withBlend = await runTownSquareTick(blended, { layout: LAYOUT, config: { ...CONFIG, blendPreyDecision: true, preyThreatWeight: 1 } });
+    const withPriority = await runTownSquareTick(priority, { layout: LAYOUT });
+    assert.equal(withBlend.rungs["goblin-1"], "evade");
+    assert.deepEqual(townSquareTickPayload(withBlend), townSquareTickPayload(withPriority));
+  } finally {
+    await rm(blended, { recursive: true, force: true });
+    await rm(priority, { recursive: true, force: true });
+  }
+});
+
+test("a prey that believes no food at all evades identically whether or not the blend is on", async () => {
+  const blended = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  ], "blend-no-food");
+  const priority = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+  ], "blend-no-food-control");
+  try {
+    const withBlend = await runTownSquareTick(blended, { layout: LAYOUT, config: { ...CONFIG, blendPreyDecision: true } });
+    const withPriority = await runTownSquareTick(priority, { layout: LAYOUT });
+    assert.equal(withBlend.rungs["goblin-1"], "evade");
+    assert.deepEqual(townSquareTickPayload(withBlend), townSquareTickPayload(withPriority));
+  } finally {
+    await rm(blended, { recursive: true, force: true });
+    await rm(priority, { recursive: true, force: true });
+  }
+});
+
+test("the blend leaves the predator's own avoid rung alone — it is a prey-side score", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("fox-2", "fox"), place("fox-2", "cell-2-2"), weigh("fox-2", 20),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-5-3"), weigh("crumb-1", 1),
+  ], "blend-predator-untouched");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, blendPreyDecision: true } });
+    assert.equal(tick.rungs["fox-1"], "avoid");
+    assert.equal(tick.agents["fox-1"].cell, "cell-5-6", "first-wins tie order, exactly as with the blend off");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a config that never heard of preyThreatWeight still blends, at the shipped weight", async () => {
+  const dir = await blendBoard("blend-missing-weight");
+  try {
+    const { preyThreatWeight, ...withoutWeight } = CONFIG;
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...withoutWeight, blendPreyDecision: true } });
+    assert.equal(tick.agents["goblin-1"].cell, "cell-5-4", "an unset weight falls back to the default, never to NaN");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
