@@ -1527,14 +1527,35 @@ function bestEnvironmentTrustOpts(provenance, environments, trustOfId) {
  * without it removal is still correct, the survivor's environments just stay
  * stale until the next syllogise pass.
  *
+ * `sourceTags` narrows the target removal to the INVOKING PARTY's own
+ * record(s) — a chat `/retract` names every provenance tag its own session
+ * could have asserted the triple under here (the free-form teach lane and
+ * the ACE-parsed assert lane both belong to one session, under two
+ * different tags), so two sources who independently asserted the same
+ * triple never let one's retraction erase the other's. Omitted (or empty),
+ * retraction stays group-wide (every source's record for the triple), which
+ * is what mud EDIT mode wants and what every pre-existing caller of this
+ * function already gets.
+ *
  * Returns { retracted, count, budget, depth, truncated, found } — `found` is
- * false when `subject ⊑ object` was never a stored fact.
+ * false when `subject ⊑ object` was never a stored fact. With `sourceTags`
+ * set, two more fields describe what the SCOPED removal actually did:
+ * `ownRecord` (false when the invoking party never asserted the triple
+ * itself, so nothing of theirs existed to retract) and `stillStands` (true
+ * when another source's record keeps the triple asserted after this one's
+ * record is gone — in which case nothing entailed from it is cascaded,
+ * because its premise never actually stopped holding).
  */
 export async function retractSubClassOf(repoDir, subject, object, {
-  budget = 50, depth = 32, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store,
+  budget = 50, depth = 32, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store, sourceTags = [],
 } = {}) {
   const { loadMemory, readFactRows, removeFacts } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
   const appendFactsFn = typeof store?.appendFacts === "function" ? store.appendFacts : null;
+  const factRecordIdForTag = typeof store?.factRecordIdForTag === "function" ? store.factRecordIdForTag : null;
+  const scoped = (sourceTags || []).filter(Boolean);
+  if (scoped.length && !factRecordIdForTag) {
+    throw new TypeError("retractSubClassOf needs a store option carrying factRecordIdForTag (memory/core.mjs's) to scope a retraction to sourceTags");
+  }
   const s = normFactTerm(subject);
   const o = normFactTerm(object);
   const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
@@ -1543,92 +1564,121 @@ export async function retractSubClassOf(repoDir, subject, object, {
   const byId = new Map(rows.map((r) => [r.id, r]));
   if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
 
-  // Only a purely-entailed fact ever carries a walkable justification —
-  // a fact later independently taught is never a cascade candidate at all.
-  const entailedRows = rows.filter((r) => environmentsOf(r).length && isPurelyEntailed(r.provenance));
-  // premise id -> the entailed fact ids whose environments cite it. Built
-  // ONCE; each round's candidate set reads it for the facts the newest
-  // removals could actually touch — backward relevance from the same
-  // structure a forward pass reads forward.
-  const citedBy = new Map();
-  for (const r of entailedRows) {
-    for (const env of environmentsOf(r)) {
-      for (const premiseId of env) {
-        if (!citedBy.has(premiseId)) citedBy.set(premiseId, new Set());
-        citedBy.get(premiseId).add(r.id);
-      }
-    }
+  // The invoking party's own record(s) for the target — one candidate source
+  // id per tag it could have asserted under — filtered down to whichever
+  // ones the triple is ACTUALLY recorded under. Zero of them means it was
+  // never this party's own assertion, whatever else stored it.
+  const targetSourceIds = byId.get(targetId).sourceIds || [];
+  const candidateSourceIds = scoped.map((tag) => factRecordIdForTag(targetId, tag).slice(targetId.length + 1));
+  const ownSourceIds = scoped.length ? targetSourceIds.filter((sid) => candidateSourceIds.includes(sid)) : [];
+  const ownsTarget = !scoped.length || ownSourceIds.length > 0;
+  if (scoped.length && !ownsTarget) {
+    return { retracted: [], count: 0, budget, depth, truncated: false, found: true, ownRecord: false, stillStands: true };
   }
+  // Another source's record keeps the triple standing even after this
+  // party's own record(s) go — the premise never actually broke, so no
+  // cascade runs.
+  const stillStands = scoped.length > 0 && ownSourceIds.length < targetSourceIds.length;
 
   const removed = new Set([targetId]);
   const order = [targetId]; // deterministic report order: target first, then removal order
   const reground = new Map(); // survivor fact id -> the environments to persist for it
   let truncated = false;
-  let round = 0;
-  let newlyRemoved = [targetId];
-  for (; round < depth; round += 1) {
-    const candidateIds = new Set();
-    for (const id of newlyRemoved) {
-      for (const cited of citedBy.get(id) || []) {
-        if (!removed.has(cited)) candidateIds.add(cited);
+
+  // A scoped retraction whose triple STILL STANDS through another source's
+  // record never runs the cascade at all — its premise never actually broke,
+  // so nothing entailed from it loses support.
+  if (!stillStands) {
+    // Only a purely-entailed fact ever carries a walkable justification —
+    // a fact later independently taught is never a cascade candidate at all.
+    const entailedRows = rows.filter((r) => environmentsOf(r).length && isPurelyEntailed(r.provenance));
+    // premise id -> the entailed fact ids whose environments cite it. Built
+    // ONCE; each round's candidate set reads it for the facts the newest
+    // removals could actually touch — backward relevance from the same
+    // structure a forward pass reads forward.
+    const citedBy = new Map();
+    for (const r of entailedRows) {
+      for (const env of environmentsOf(r)) {
+        for (const premiseId of env) {
+          if (!citedBy.has(premiseId)) citedBy.set(premiseId, new Set());
+          citedBy.get(premiseId).add(r.id);
+        }
       }
     }
-    const candidates = [...candidateIds].map((id) => byId.get(id))
-      .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
-    if (!candidates.length) break; // fixpoint — nothing cites what just fell
 
-    // The surviving fact set for THIS round excludes every candidate's own
-    // row too, not just `removed` — otherwise a candidate could trivially
-    // "reach itself" through its own not-yet-deleted edge, or lean on a
-    // sibling candidate standing on the same broken premise.
-    const survivors = rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id));
-    const survivorIds = new Set(survivors.map((r) => r.id));
-    const enumerateSupport = buildSupportEnumerator(survivors);
-    const stillDerivable = buildSurvivorDerivabilityCheck(survivors);
+    let round = 0;
+    let newlyRemoved = [targetId];
+    for (; round < depth; round += 1) {
+      const candidateIds = new Set();
+      for (const id of newlyRemoved) {
+        for (const cited of citedBy.get(id) || []) {
+          if (!removed.has(cited)) candidateIds.add(cited);
+        }
+      }
+      const candidates = [...candidateIds].map((id) => byId.get(id))
+        .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+      if (!candidates.length) break; // fixpoint — nothing cites what just fell
 
-    let progressed = false;
-    let hitBudget = false;
-    newlyRemoved = [];
-    for (const c of candidates) {
-      if (removed.size >= budget) { hitBudget = true; break; }
-      // FAST PATH: an environment whose every premise still stands keeps the
-      // fact — pure set membership, no re-derivation. When some environments
-      // broke, queue the pruned set so the next retraction still sees the
-      // survivor (the stale-justification fix).
-      const environments = environmentsOf(c);
-      const intact = environments.filter((env) => env.every((id) => survivorIds.has(id)));
-      if (intact.length) {
-        if (intact.length !== environments.length) reground.set(c.id, intact);
-        continue;
+      // The surviving fact set for THIS round excludes every candidate's own
+      // row too, not just `removed` — otherwise a candidate could trivially
+      // "reach itself" through its own not-yet-deleted edge, or lean on a
+      // sibling candidate standing on the same broken premise.
+      const survivors = rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id));
+      const survivorIds = new Set(survivors.map((r) => r.id));
+      const enumerateSupport = buildSupportEnumerator(survivors);
+      const stillDerivable = buildSurvivorDerivabilityCheck(survivors);
+
+      let progressed = false;
+      let hitBudget = false;
+      newlyRemoved = [];
+      for (const c of candidates) {
+        if (removed.size >= budget) { hitBudget = true; break; }
+        // FAST PATH: an environment whose every premise still stands keeps the
+        // fact — pure set membership, no re-derivation. When some environments
+        // broke, queue the pruned set so the next retraction still sees the
+        // survivor (the stale-justification fix).
+        const environments = environmentsOf(c);
+        const intact = environments.filter((env) => env.every((id) => survivorIds.has(id)));
+        if (intact.length) {
+          if (intact.length !== environments.length) reground.set(c.id, intact);
+          continue;
+        }
+        // ENUMERATE: a fresh premise environment among the survivors re-grounds
+        // the fact under new citations.
+        const fresh = enumerateSupport(c, { maxEnvironments });
+        if (fresh.length) {
+          reground.set(c.id, fresh);
+          continue;
+        }
+        // BOOLEAN BACKSTOP: the closure walk is the final authority — it sees
+        // multi-hop support with no materialised direct edge to cite, so a
+        // still-derivable fact is never removed on a stale citation alone (its
+        // environments stay as they were).
+        if (stillDerivable(c)) continue;
+        removed.add(c.id);
+        order.push(c.id);
+        newlyRemoved.push(c.id);
+        progressed = true;
       }
-      // ENUMERATE: a fresh premise environment among the survivors re-grounds
-      // the fact under new citations.
-      const fresh = enumerateSupport(c, { maxEnvironments });
-      if (fresh.length) {
-        reground.set(c.id, fresh);
-        continue;
-      }
-      // BOOLEAN BACKSTOP: the closure walk is the final authority — it sees
-      // multi-hop support with no materialised direct edge to cite, so a
-      // still-derivable fact is never removed on a stale citation alone (its
-      // environments stay as they were).
-      if (stillDerivable(c)) continue;
-      removed.add(c.id);
-      order.push(c.id);
-      newlyRemoved.push(c.id);
-      progressed = true;
+      if (hitBudget) { truncated = true; break; }
+      if (!progressed) break; // every candidate this round survived — fixpoint
     }
-    if (hitBudget) { truncated = true; break; }
-    if (!progressed) break; // every candidate this round survived — fixpoint
-  }
-  if (!truncated && round >= depth) {
-    // depth exhausted, not a natural fixpoint — honestly flag it if a pending
-    // candidate (any surviving fact whose environment union still cites a
-    // removed id) would have been checked next round.
-    truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+    if (!truncated && round >= depth) {
+      // depth exhausted, not a natural fixpoint — honestly flag it if a pending
+      // candidate (any surviving fact whose environment union still cites a
+      // removed id) would have been checked next round.
+      truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+    }
   }
 
-  const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
+  // The target's own position in `order` narrows to the invoking party's
+  // record(s) when scoped; every cascade id stays group-wide — an entailed
+  // fact is never itself "the invoking party's own", so there is no
+  // per-source record to narrow it to.
+  const removalIds = scoped.length
+    ? [...ownSourceIds.map((sid) => `${targetId}@${sid}`), ...order.slice(1)]
+    : order;
+  const { removed: actuallyRemoved } = await removeFacts(repoDir, removalIds);
   if (appendFactsFn) {
     const regroundWrites = [...reground.entries()]
       .filter(([id]) => !removed.has(id))
@@ -1644,7 +1694,10 @@ export async function retractSubClassOf(repoDir, subject, object, {
       });
     if (regroundWrites.length) await appendFactsFn(repoDir, regroundWrites);
   }
-  return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
+  return {
+    retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true,
+    ...(scoped.length ? { ownRecord: true, stillStands } : {}),
+  };
 }
 
 /**
