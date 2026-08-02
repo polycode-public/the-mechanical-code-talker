@@ -33,8 +33,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Four tracks. The pipeline is green on all 24 jobs including every deployed one, so nothing is
-blocked. Two of these are generating work rather than closing items. The thirteen-item
+Five tracks. The pipeline is green on all 24 jobs including every deployed one, so nothing is
+blocked. `chat.mjs` came free when the four honesty faults landed, so the fifteen remaining CLI
+findings were dispatched the same turn. The thirteen-item
 mudiii batch landed, which took the open count from 23 to 7 — so the backlog's own files are almost
 exhausted, and the playtest, the docs audit, the weights refresh and the CLI edge-hunt are what fill
 the slots. Their output is the next wave's items.
@@ -45,6 +46,12 @@ the slots. Their output is the next wave's items.
 - **T46 inference benchmark** — grades the classical-logic engine on the INF ladder and reports the
   rung, separating honest misses from wrong answers. Measure-only: an engine change would collide
   with the tracks working the tree. Top tier. Status: started.
+- **T49 the fifteen remaining CLI findings** — the retract-twice wall, `/help` never mentioning
+  retraction, "how do you know" dead-ending, `define dog` routing to the code lane, `cli`/`serve` not
+  reading the memory store, `--repo <typo>` silently scaffolding a repo, spider-and-fly never naming
+  its advance word, and the index-this-repo nudge, plus six cosmetics. None is a wrong answer, so the
+  bar is comfort without ever making the engine guess. `chat.mjs`, `ask.mjs`, `server.mjs`,
+  `codegraph.mjs`, `bin/tmct.mjs`. Top tier. Status: started.
 - **T40 browser playtest** — drives all eleven demo pages and eleven about pages as a visitor, at
   three viewport sizes: every pill clicked, every suggested sentence typed, every Next button walked.
   Fixes nothing; writes `reports/PLAYTEST_*.md`. Top tier. Status: started.
