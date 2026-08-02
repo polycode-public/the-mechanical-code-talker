@@ -8,6 +8,7 @@ Each asset in this directory is governed by the licence recorded below.
 | bush.glb | Quaternius | [quaternius.itch.io](https://quaternius.itch.io/stylized-nature-megakit) | [CC0-1.0](#cc0-10) | 49,064 |
 | cart.glb | Quaternius | [quaternius.com](https://quaternius.com/packs/medievalvillage.html) | [CC0-1.0](#cc0-10) | 30,972 |
 | fence.glb | Quaternius | [quaternius.com](https://quaternius.com/packs/medievalvillage.html) | [CC0-1.0](#cc0-10) | 4,836 |
+| haybale.glb | Kay Lousberg (KayKit) | [github.com](https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0) | [CC0-1.0](#cc0-10) | 14,004 |
 | fox.glb | Quaternius | [poly.pizza](https://poly.pizza/u/Quaternius · https://quaternius.com) | [CC0-1.0](#cc0-10) | 332,748 |
 | goblin.glb | Quaternius | [poly.pizza](https://poly.pizza/u/Quaternius · https://quaternius.com) | [CC0-1.0](#cc0-10) | 47,924 |
 | house_1.glb | Quaternius | [quaternius.com](https://quaternius.com/packs/medievalvillage.html) | [CC0-1.0](#cc0-10) | 84,484 |
@@ -20,7 +21,7 @@ Each asset in this directory is governed by the licence recorded below.
 | well.glb | Quaternius | [quaternius.com](https://quaternius.com/packs/medievalvillage.html) | [CC0-1.0](#cc0-10) | 27,788 |
 
 
-**Total: 1,143,152 bytes**
+**Total: 1,157,156 bytes**
 
 ## Licences
 

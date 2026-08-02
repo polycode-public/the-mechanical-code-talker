@@ -91,3 +91,21 @@ test("no allowlist entry matches forbidden sourcePath patterns (eastbrook/yumi_c
     );
   }
 });
+
+test("public/models/CREDITS.md matches what gen-model-credits.mjs would write", async () => {
+  const { generateCredits } = await import("../../scripts/gen-model-credits.mjs");
+  const onDisk = fs.readFileSync(path.join(REPO_ROOT, "public/models/CREDITS.md"), "utf8");
+  assert.equal(onDisk, generateCredits(), "public/models/CREDITS.md has drifted from data/mudiii-assets.json — run: node scripts/gen-model-credits.mjs");
+});
+
+test("two allowlist keys that share a destPath appear once in CREDITS.md, not once per key", () => {
+  const allowlist = loadAllowlist();
+  const destPaths = allowlist.map((a) => a.destPath);
+  const sharedDestPath = destPaths.find((d, i) => destPaths.indexOf(d) !== i);
+  assert.ok(sharedDestPath, "expected at least one destPath reused by two keys to exercise the dedupe path");
+
+  const onDisk = fs.readFileSync(path.join(REPO_ROOT, "public/models/CREDITS.md"), "utf8");
+  const filename = path.basename(sharedDestPath);
+  const occurrences = onDisk.split(`| ${filename} |`).length - 1;
+  assert.equal(occurrences, 1, `${filename} should list once in CREDITS.md even though ${destPaths.filter((d) => d === sharedDestPath).length} allowlist keys point at it`);
+});
