@@ -496,7 +496,7 @@ test("renderMudiiiHtml: the map panel draws its grid, its buildings and a key fo
 test("renderMudiiiHtml: the map names the cast beside each dot, and leaves items to the key", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /if \(d\.kind !== "predator" && d\.kind !== "prey"\) return dot;/);
-  assert.match(html, /<span class="map-label mono" style="left:/);
+  assert.match(html, /'<span class="map-label mono' \+ side \+ '" style="left:/);
   assert.match(html, /\.map-label \{[\s\S]*pointer-events: none;/, "a label never steals a click meant for the board");
 });
 
@@ -505,9 +505,16 @@ test("renderMudiiiHtml: the map is a square minimap on a wide window, not half t
   assert.match(html, /\.map-panel-board \{\s*position: relative;[\s\S]*aspect-ratio: 1;/, "the square the dot percentages assume");
   assert.match(
     html,
-    /@media \(min-width: 901px\) \{\s*\.map-panel \{ flex: 0 0 320px; max-width: 320px; \}/,
+    /@media \(min-width: 901px\) \{\s*\.deck \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 240px;/,
     "a percentage has no ceiling, so a wide viewport gets an absolute size",
   );
+  assert.match(html, /\.map-panel \{ grid-column: 2; grid-row: 2 \/ 4;/, "and the map stands beside the sliders and the camera row at once");
+});
+
+test("renderMudiiiHtml: a map label near the right edge hangs to the left of its dot", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const side = d\.xPct > 70 \? " map-label-left" : "";/);
+  assert.match(html, /\.map-label-left \{ margin-left: -\.3rem; transform: translateX\(-100%\); \}/);
 });
 
 test("renderMudiiiHtml: the eyebrow is the shared demo nav, not a bare page name", () => {

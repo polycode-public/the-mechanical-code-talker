@@ -774,6 +774,7 @@ const MUDIII_STYLE = `
     position: absolute; margin: -.66rem 0 0 .26rem; font-size: .44rem; line-height: 1; letter-spacing: .02em;
     color: var(--parchment); text-shadow: 0 1px 2px rgba(0,0,0,.85); white-space: nowrap; pointer-events: none;
   }
+  .map-label-left { margin-left: -.3rem; transform: translateX(-100%); }
   /* Plain inline-block swatches, never .map-dot: that class is absolutely
      positioned with a centring margin, so a legend reusing it would position
      against the board and disappear. */
@@ -923,9 +924,21 @@ const MUDIII_STYLE = `
   /* Half the deck is right on a phone and absurd on a 2000px window: a
      percentage has no ceiling, so a square board grew to roughly 950px tall
      and pushed the 3D view off the screen. Wide viewports get an absolute
-     size instead, and keep the square — there is room for it here. */
+     size instead, and keep the square — there is room for it here.
+
+     The map is also taller than the sliders beside it, which left a tall
+     empty stripe of parchment under them. On a wide screen the deck becomes
+     one grid so the map can stand beside the sliders AND the camera row at
+     once, and the space under the controls closes up. display:contents lifts
+     .deck-sliders and .map-panel out of .deck-body so both are grid items of
+     the deck itself. */
   @media (min-width: 901px) {
-    .map-panel { flex: 0 0 320px; max-width: 320px; }
+    .deck { display: grid; grid-template-columns: minmax(0, 1fr) 240px; grid-template-rows: auto 1fr auto; column-gap: .8rem; }
+    .deck-controls { grid-column: 1 / -1; grid-row: 1; }
+    .deck-body { display: contents; }
+    .deck-sliders { grid-column: 1; grid-row: 2; align-self: start; }
+    .deck-camera { grid-column: 1; grid-row: 3; align-self: end; }
+    .map-panel { grid-column: 2; grid-row: 2 / 4; flex: 0 0 auto; max-width: none; align-self: start; }
   }
 
 `;
@@ -1395,7 +1408,10 @@ function pageScript() {
       // Items are named by their colour in the key; only the cast, which the
       // HUD and the follow control both name, carries its id on the board.
       if (d.kind !== "predator" && d.kind !== "prey") return dot;
-      return dot + '<span class="map-label mono" style="left:' + d.xPct + '%;top:' + d.yPct + '%">' + esc(d.id) + "</span>";
+      // A label on a dot near the right edge would run off the board, so
+      // those hang to the left of their dot instead.
+      const side = d.xPct > 70 ? " map-label-left" : "";
+      return dot + '<span class="map-label mono' + side + '" style="left:' + d.xPct + '%;top:' + d.yPct + '%">' + esc(d.id) + "</span>";
     }).join("");
     el("mapPanelTurn").textContent = "turn " + globalTurn;
   }
