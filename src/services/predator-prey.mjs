@@ -268,26 +268,41 @@ export const pathStateKey = (searchState) => cellId(searchState.x, searchState.y
 const oneStepOptions = (fromCell, applyActions) =>
   [fromCell, ...findReachableSet(fromCell, applyActions, { maxDepth: 1, stateKey: pathStateKey }).map((r) => r.node)];
 
-function bestOneStepBy(fromCell, applyActions, scoreOf, isBetter) {
+function bestOneStepBy(fromCell, applyActions, scoreOf, isBetter, tieBreakScoreOf = null) {
   const options = oneStepOptions(fromCell, applyActions);
   let best = options[0];
   let bestScore = scoreOf(best);
+  let bestTieScore = tieBreakScoreOf ? tieBreakScoreOf(best) : null;
   for (let i = 1; i < options.length; i += 1) {
     const score = scoreOf(options[i]);
-    if (isBetter(score, bestScore)) { bestScore = score; best = options[i]; }
+    if (isBetter(score, bestScore)) {
+      bestScore = score; best = options[i];
+      bestTieScore = tieBreakScoreOf ? tieBreakScoreOf(options[i]) : null;
+    } else if (tieBreakScoreOf && score === bestScore) {
+      const tieScore = tieBreakScoreOf(options[i]);
+      if (tieScore < bestTieScore) { bestTieScore = tieScore; best = options[i]; }
+    }
   }
   return best;
 }
 
 /** One-ply greedy: the reachable cell (or staying put) furthest in Chebyshev
  *  terms from `awayFrom`. Both the prey's evade rung and the predator's avoid
- *  rung are this function. */
-export function greedyAway(fromCell, awayFrom, applyActions) {
+ *  rung are this function.
+ *
+ *  `opts.towardCell`, when given, breaks a tie among equally-safe cells in
+ *  favor of whichever is closest to it — a fleeing prey that knows where food
+ *  is should flee toward it, not toward whichever direction DIRECTION_DELTA's
+ *  key order happens to check first. Opt-in and null by default, so a caller
+ *  that never passes it (the predator's own avoid rung) sees no change at
+ *  all: same options, same scores, same first-wins tie order. */
+export function greedyAway(fromCell, awayFrom, applyActions, { towardCell = null } = {}) {
   if (!awayFrom) return fromCell;
   return bestOneStepBy(
     fromCell, applyActions,
     (cell) => chebyshevDistance(cell.x, cell.y, awayFrom.x, awayFrom.y),
     (score, bestScore) => score > bestScore,
+    towardCell ? (cell) => chebyshevDistance(cell.x, cell.y, towardCell.x, towardCell.y) : null,
   );
 }
 
@@ -698,7 +713,14 @@ export async function runTownSquareTick(memoryDir, {
     let mood;
     if (threat) {
       rung = role === "predator" ? "avoid" : "evade";
-      nextCell = greedyAway(fromCell, threat.cell, applyActions);
+      // A fleeing prey that already knows where food is should flee toward
+      // it, not away from it — among cells that are equally safe, break the
+      // tie toward the nearest believed crumb. Prey-only: the predator's own
+      // avoid rung passes nothing, so its ties still resolve the old way.
+      const towardFood = role === "prey"
+        ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, beliefOpts)
+        : null;
+      nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
       plan = stepPlan(fromCell, nextCell);
       goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
       mood = "scared";

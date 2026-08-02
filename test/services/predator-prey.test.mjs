@@ -381,6 +381,42 @@ test("a prey's chain is evade over forage over wander, and the ordering alone re
   }
 });
 
+test("a fleeing prey breaks an equally-safe tie toward food it knows about, not toward whichever direction comes first", async () => {
+  // From cell-5-5, fleeing cell-2-2 ties cell-5-6 and cell-6-5 at Chebyshev
+  // distance 4 — DIRECTION_DELTA's key order (north, south, east, west) would
+  // check south before east and settle for cell-5-6 with no tie-break at all.
+  // The crumb sits east, so the tie-break should send the goblin to cell-6-5.
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-2-2"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-7-5"), weigh("crumb-1", 1),
+  ], "evade-toward-food");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "evade");
+    assert.equal(tick.agents["goblin-1"].cell, "cell-6-5", "the tied safe cell closer to the known crumb, not the first-enumerated one");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a fleeing predator's own tie-break is unchanged: the avoid rung never sees the prey's food preference", async () => {
+  // Same geometry as the tie-break test above, but fox-2 is the threat and
+  // there is no food candidate in scope for a predator at all — the avoid
+  // rung must still land on cell-5-6, the first-enumerated tied cell.
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("fox-2", "fox"), place("fox-2", "cell-2-2"), weigh("fox-2", 20),
+  ], "avoid-unchanged");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["fox-1"], "avoid");
+    assert.equal(tick.agents["fox-1"].cell, "cell-5-6", "first-wins tie order, exactly as before the prey tie-break existed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("the vision asymmetry opens a band where a predator has acquired something that cannot see it back", async () => {
   const dir = await boardWith([
     classify("fox-1", "fox"), place("fox-1", "cell-1-5"), weigh("fox-1", 20),
