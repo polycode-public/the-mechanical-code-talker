@@ -467,7 +467,7 @@ turns), vision on spider-fly's:
     predatorInitialMass: 20,  predatorMassDecrementPerTurn: 0.08,  predatorVisionRadius: 4,
     preyInitialMass: 8,       preyMassDecrementPerTurn: 0.06,      preyVisionRadius: 3,
     preySpawnIntervalTurns: 5,  foodSpawnIntervalTurns: 3,
-    spawnedFoodMass: 1,  placedFoodMass: 2
+    spawnedFoodMass: 2,  placedFoodMass: 2
 
 A wrong default gets tuned on a working board; an absent one gets invented differently by every
 sub-agent. The three scenario layouts get the same treatment: authored as prop-fact tables

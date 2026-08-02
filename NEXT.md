@@ -40,9 +40,6 @@ cadence.
 - **T35 prey scoring** — the weighted evade/forage blend plus the comparison harness that can tell it
   from the priority chain. `predator-prey.mjs`, `agent-belief.mjs`, a new `scripts/` sweep. Top tier.
   Status: started.
-- **T37 food size and screenshot flake** — the batch's browser slot, currently on its fourth repeat
-  run of the screenshot script. `data/mudiii-assets.json`, `gen-screenshots.mjs`. Sonnet.
-  Status: started.
 - **T38 the mudiii page remainder** — thirteen items across `mudiii-viz.mjs` and `mudiii-scene.mjs`:
   both pill rails, the map panel's grid/key/aspect, the belief panel, EDIT mode, agent labels,
   click-to-turn and the directional ring, the compass ring, the eat-flourish hold, the teach
@@ -275,33 +272,6 @@ real deploy.
   reports an encoding rather than an error. A wrong path is the only way this fails, and nothing
   local can tell you.
   **Risk:** none. No sibling probe is unit-tested; don't invent a test where the others have none.
-
-- **The bigger single-food change is committed and not yet looked at.** The operator's decision:
-  one food, not two. Spawned and placed food are the same hay bale, worth the same, at the same
-  size. `spawnedFoodMass` is now 2, matching `placedFoodMass`, and both manifest rows carry
-  `targetHeight` 0.6 against the fox's 1.0. Green: manifest check OK, 130/130 across game-config,
-  predator-prey, the replay fixture and mudiii-turn. The frozen tape is insulated because it pins
-  its own `spawnedFoodMass`.
-  **What is missing is the look.** Nobody has seen 0.6 on the board. 0.6 was chosen by reasoning
-  about the fox's height, not by looking at a render.
-  **Tier:** Haiku.
-  **Do:** `npm run demo:build`, drive mudiii.html, place a morsel and let a crumb spawn, screenshot
-  it, and **open the PNG with the Read tool**. Judge whether a bale reads as food on the ground at
-  the follow camera, and whether it now hides agents behind it. Adjust `targetHeight` on both rows
-  together and look again if it is wrong. Report the path.
-  **Risk:** a bale taller than a goblin turns food into scenery.
-
-- **The screenshot ready-check's fix has not been run repeatedly.** The dead disjunct is gone:
-  `scripts/gen-screenshots.mjs` no longer calls a `cells()` the scene never exposed, and now captures
-  fox-1's starting cell and waits for it to change, so the check proves movement rather than mere
-  presence. `MUDIII_BUSY_TURN_THRESHOLD` is 12, so it needed no raise.
-  **What is missing:** the point of the change is flake resistance, and a fix aimed at flakiness is
-  not evidenced by one green run. Nobody has run it repeatedly.
-  **Tier:** Haiku, and it is a run rather than an edit.
-  **Do:** `npm run demo:build`, then run the screenshot script several times on a quiet machine and
-  confirm none vary. Report how many runs.
-  **Risk:** `seededWander` includes the current cell among its options, so a fox can hold still for a
-  turn or two while the board really is advancing. Twelve turns makes that unlikely, not impossible.
 
 - **The map has no key.** Dots are coloured by role and nothing says which colour is which.
   **Tier:** Haiku.
