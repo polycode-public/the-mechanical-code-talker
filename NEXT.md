@@ -33,7 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Three.
+Two.
 
 - **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
   with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
@@ -54,12 +54,6 @@ Three.
   **Do:** count the unobserved rather than naming them, keeping the named ones for what is in view.
   **Risk:** the deception rail's whole point is that a lie about a specific individual lands visibly,
   so a taught individual has to keep its name even while unseen.
-
-- **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's largest
-  single asset and the only measurement of it anywhere is prose.
-  **Owner:** a track is on it. **Tier:** Haiku.
-  **Do:** fold `public/vendor/three.js` into the next page-weights pass.
-  **Risk:** none beyond the report going stale on the next three bump, which is what it is for.
 
 ### Questions blocking work
 
