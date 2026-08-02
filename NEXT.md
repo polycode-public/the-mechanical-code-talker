@@ -33,21 +33,31 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Four tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
+Five tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
 them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
 router's phantom budget.
+
+**The bottleneck is the browser, not the file graph.** At most two tracks may hold
+`npm run demo:build` at once; three concurrent builds cost two tracks their work. T55 and T58 hold
+those two slots, so T56 (the page-behaviour playtest fixes on sprites, mud and spider-fly) is
+**queued behind T58**, not unowned. T57 works against the deployed site and needs no build.
 
 - **T49 the chat freeze, then the CLI comfort items** — redirected: a plain English question locks
   the tab for 1054s before refusing correctly, and that outranks everything else it was sent for.
   `chat.mjs`, `syllogise.mjs`, `ask.mjs`, `server.mjs`, `codegraph.mjs`, `bin/tmct.mjs`. Top tier.
   Status: started.
-- **T53 the router's bound and its tie guard** — a member-filter budget that counts steps it never
-  takes, a command-register pick that answers a tie every other path declines, and a frame that
-  re-executes a past-tense narration. `router/drive.mjs`, `router/resolver.mjs`. Top tier.
+- **T55 mudiii's camera look and the double-minted cell** — drag to look in POV and FOLLOW, and two
+  agents opening on one cell. `mudiii-scene.mjs`, `mudiii-viz.mjs`, the roster mint. Top tier.
+  Holds a build slot. Status: started.
+- **T57 the untested pages and the stale probe** — the p2p handshake past the invite, file upload,
+  the four sprite group pages, ingest's Document mode, reduced motion; plus the agentbench frontier
+  probe's section 3, which still prints "router REFUSES" for a case the router now answers.
+  `test-benchmarks/agentbench/frontier-probe.mjs`, a new report. Sonnet. No build. Status: started.
+- **T58 the five about pages that still overflow** — T54's `minmax(0, 1fr)` cleared six of eleven;
+  the other five are 376px to 711px wide at a 375px viewport. Dispatched with the measurement
+  already made, so it starts by naming the widest element rather than re-deriving the symptom.
+  `site.css`, `scripts/site-pages.mjs`, a new overflow guard. Sonnet. Holds the second build slot.
   Status: started.
-- **T54 the about pages' phone overflow and site copy** — four about pages clip their heading at
-  375px, the home page advertises a command it refuses, and a few copy faults. `site.css`,
-  `index.html`, the about pages. Sonnet. Status: started.
 - **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
   concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
 
@@ -76,15 +86,36 @@ router's phantom budget.
   it — rather than patching whichever is nearer. `seededRoster` filters `taken` and then falls back
   to the unfiltered cell list, which is the likely route to a collision.
 
-- **23 further playtest findings.** In `reports/PLAYTEST_DEMO_PAGES.md`, grouped by page. Notable: the
-  home page advertises `/help` in its own banner and refuses it; sprites draws the animal-root
-  fallback for a lamp and a cabinet whose templates both exist; the mud food pill is empty until you
-  press PLAY; spider-fly direction pills append rather than replace, so a second click builds an
-  unparseable sentence.
-  **Tier:** mixed. The site-copy ones are in flight; the page-behaviour ones are not.
-  **Not covered by that playtest, and worth its own pass:** the p2p handshake past minting an invite,
-  file-upload paths, the four sprite group pages, ingest's Document mode, and reduced-motion
-  behaviour.
+- **23 further playtest findings.** In `reports/PLAYTEST_DEMO_PAGES.md`, grouped by page.
+  **Fixed so far:** the ingest-about page claiming a preloaded sample it does not ship, the share
+  sheet's hard-coded post count, and the ledger focus crumb printing the whole typed question.
+  **The about-page overflow is only half fixed.** Changing the phone-width `.about-shell` track to
+  `minmax(0, 1fr)` cleared six of the eleven about pages. Measured after that fix, at a 375px
+  viewport: `chat-about` is 581px wide, `research-about` 711, `mud-about` 557, `plan-about` 507 and
+  `code-about` 376. On the research page the heading reads "Search backed knowledge b" and every
+  paragraph runs off the right edge, while the left nav renders correctly inside 375, so the content
+  column is what forces the width. **In flight** as T58.
+  **Still open, all page behaviour:** the home page advertises `/help` in its own banner and refuses
+  it; sprites draws the animal-root fallback for a lamp and a cabinet whose templates both exist;
+  the mud food pill is empty until you press PLAY; spider-fly direction pills append rather than
+  replace, so a second click builds an unparseable sentence.
+  **Tier:** Sonnet. **Queued behind T54's build slot**, not unowned — see the in-flight block.
+  **Not covered by that playtest:** the p2p handshake past minting an invite, file-upload paths, the
+  four sprite group pages, ingest's Document mode, and reduced-motion behaviour. **In flight** as
+  T57, against the deployed site so it needs no build slot.
+
+- **`run the impact of <file>` parses as a reverse-calls question about a file called "impact".**
+  Surfaced by the router track, which reproduced it and correctly did not fix it: the object binds as
+  `"impact app/lib/a.mjs"`, so nothing resolves and the chat refuses with an ambiguous-meta-goal
+  message. The refusal is honest, so this is comfort rather than a broken promise, but "run the
+  impact of X" is the phrasing the tool's own help suggests. It lives in `ask.mjs`'s grammar, which
+  the router track did not own. Genuinely a different subsystem from the router items that surfaced
+  it, so it is written here as its own item rather than as their remainder.
+  **Tier:** Sonnet.
+  **Do:** teach the grammar that `impact`, and the other tool names the help text uses, are verbs in
+  an imperative frame rather than nouns in an `of`-phrase.
+  **Risk:** widening a lane can capture sentences another lane owns. The corpus tests are where that
+  shows.
 
 
 ### Inference
@@ -180,24 +211,9 @@ outrank every cosmetic item below.
   couple of vision radii, and record what the numbers say. If they still favour the chain, delete
   this item and leave the flag off.
 
-### Pipeline
-
 ### Questions blocking work
 
-Three answers are outstanding. Each names the item it blocks. The three settled ones are recorded
-against their own items above and are repeated here only so nothing is looked for twice.
-
-- **Which model stands in for a pile of animal feed?** Partly answered. The operator asked for feed
-  on the ground — seeds, a sack or hay — and `haybale.glb` is committed and credited, tied to
-  KayKit's Dungeon Remastered pack through a real CC0 row rather than assumed from its filename. So
-  the food item is unblocked and needs no download. What is still open is whether a hay bale is the
-  wanted reading for both `crumb` and `morsel`, since one file now serves both at different heights.
-  The `world-of-claudecraft` `resources/` directory holds `food_pile_small/medium/large.glb`,
-  `food_flour.glb` and `gems_sack.glb`, which look closer to seeds and sacks, but that directory has
-  no pack provenance recorded anywhere, so none of them can be used until someone can name their
-  pack. Default: ship the hay bale and revisit only if the operator wants a different shape.
-Nothing is blocked. The three questions that used to sit here are answered and written into their
-own items.
+Nothing is blocked. Every question that used to sit here is answered and written into its own item.
 
 Settled, and written into the items themselves:
 
