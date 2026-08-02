@@ -54,6 +54,7 @@ import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
 } from "./pill-complete.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { DEFAULT_FACING, DEFAULT_GRID_SIZE } from "../domain/town-square-world.mjs";
 import { believedFactSentence } from "./mudiii-turn.mjs";
 
 // The scene module and this one import each other: this file embeds the
@@ -79,11 +80,10 @@ const NPC_COUNT_LABELLED = [1, 5, 10];
 const DEFAULT_NPC_COUNT = 2;
 const DEFAULT_DELAY_MS = 220;
 const DEFAULT_MAX_TURNS = 400;
-// test/fixtures/mudiii-ticks.json's own board size — the fallback for a
-// scenario that names no gridSize of its own.
-const DEFAULT_GRID_SIZE = 12;
-const DEFAULT_FACING = "south";
 const CAMERA_MODES = ["follow", "pov", "overhead"];
+// Every export below except renderMudiiiHtml is spliced by `.toString()` into
+// a generated script that shares no scope with this module, so none of them
+// may read a binding declared up here. mudiii-viz.test.mjs holds the line.
 // The ring reads ABSOLUTE, not relative to whichever way an agent happens to
 // face: every other direction word on this page is a compass point (a told
 // fact says "the goblin is east", the map is north-up), and driveRequest takes
@@ -254,8 +254,13 @@ export function blockedCellReason(cell, props, agents) {
  *  name, spliced alongside it. */
 export function cameraRigFor(mode, agent, gridSize) {
   const cellSize = 1;
+  // Both fallbacks are written out rather than read from this module's own
+  // constants: the browser runs a `.toString()` copy of this function in a
+  // script that declares neither, and the drive ring's diagonals set exactly
+  // the intercardinal facing that reaches the second one.
+  const FALLBACK_GRID_SIZE = 12;
   if (mode === "overhead") {
-    const height = Math.max(4, Number(gridSize) || DEFAULT_GRID_SIZE) * 1.4;
+    const height = Math.max(4, Number(gridSize) || FALLBACK_GRID_SIZE) * 1.4;
     return { mode: "overhead", position: { x: 0, y: height, z: 0 }, lookAt: { x: 0, y: 0, z: 0 } };
   }
   if (!agent || !agent.cell) return null;
@@ -264,7 +269,7 @@ export function cameraRigFor(mode, agent, gridSize) {
   const FACING_VECTOR = {
     north: { x: 0, z: -1 }, south: { x: 0, z: 1 }, east: { x: 1, z: 0 }, west: { x: -1, z: 0 },
   };
-  const dir = FACING_VECTOR[agent.facing] || FACING_VECTOR[DEFAULT_FACING];
+  const dir = FACING_VECTOR[agent.facing] || FACING_VECTOR.south;
   if (mode === "pov") {
     return {
       mode: "pov",

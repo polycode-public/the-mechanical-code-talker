@@ -100,8 +100,11 @@ export function tweenStep(tween, now) {
   return { ...point, t, done: false };
 }
 
-/** A fresh tween from `from` to `to`, starting at `now`. Pure. */
-export function startTween(from, to, now, durationMs = TWEEN_DURATION_MS) {
+/** A fresh tween from `from` to `to`, starting at `now`. Pure — the default
+ *  duration is written out rather than read from `TWEEN_DURATION_MS`, because
+ *  the browser runs a `.toString()` copy of this function in a script that
+ *  declares no such binding. mudiii-viz.test.mjs holds the two together. */
+export function startTween(from, to, now, durationMs = 250) {
   return { from, to, startedAt: now, durationMs };
 }
 
@@ -111,7 +114,7 @@ export function startTween(from, to, now, durationMs = TWEEN_DURATION_MS) {
  *  tweening); `to` is the new destination point. Pure — `tweenStep` is
  *  called on the OLD tween at `now` to read the current position before
  *  building the new one. */
-export function reseedTween(existingTween, to, now, durationMs = TWEEN_DURATION_MS) {
+export function reseedTween(existingTween, to, now, durationMs = 250) {
   const current = existingTween ? tweenStep(existingTween, now) : null;
   const from = current ? Object.fromEntries(Object.keys(to).map((k) => [k, current[k]])) : to;
   return startTween(from, to, now, durationMs);

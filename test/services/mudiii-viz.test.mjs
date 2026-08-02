@@ -11,6 +11,9 @@
 // manifest), so these tests need no engine build at all.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { DEFAULT_GRID_SIZE } from "../../src/domain/town-square-world.mjs";
+import { TWEEN_DURATION_MS, startTween, reseedTween } from "../../src/services/mudiii-scene.mjs";
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
   propPlacementsFrom, occupiedCells, blockedCellReason, cameraRigFor, nextCameraSelection,
@@ -951,4 +954,69 @@ test("renderMudiiiHtml: the belief summary is capped, and the full list comes fr
   assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
   assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
   assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
+});
+
+// Every export of these two modules except the page/script builder is spliced
+// by `.toString()` into a generated inline script that shares no scope with
+// its own module. A spliced function that reads a module-level binding runs
+// fine in Node, where the binding is in scope, and throws a ReferenceError the
+// moment the browser copy reaches the line — so the check has to read the
+// source text rather than the Node-side behaviour.
+const SPLICE_HOSTS = [
+  { path: "../../src/services/mudiii-viz.mjs", builder: "renderMudiiiHtml" },
+  { path: "../../src/services/mudiii-scene.mjs", builder: "mudiiiSceneScript" },
+];
+
+function topLevelConstNames(source) {
+  return [...source.matchAll(/^(?:export )?const ([A-Za-z_$][\w$]*)\s*=/gm)].map((m) => m[1]);
+}
+
+for (const host of SPLICE_HOSTS) {
+  const label = host.path.split("/").pop();
+  test(`${label}: no spliced export closes over a module-level constant`, async () => {
+    const url = new URL(host.path, import.meta.url);
+    const source = await readFile(url, "utf8");
+    const declared = topLevelConstNames(source);
+    assert.ok(declared.length, "the host module declares constants worth guarding against");
+    const module = await import(url.href);
+    const leaks = [];
+    for (const [name, value] of Object.entries(module)) {
+      if (typeof value !== "function" || name === host.builder) continue;
+      for (const constant of declared) {
+        if (new RegExp(`\\b${constant}\\b`).test(value.toString())) leaks.push(`${name} reads ${constant}`);
+      }
+    }
+    assert.deepEqual(leaks, [], "a spliced function must carry its own fallbacks");
+  });
+}
+
+test("the tween helpers' own default duration agrees with the named one", () => {
+  assert.equal(startTween({ x: 0 }, { x: 1 }, 0).durationMs, TWEEN_DURATION_MS);
+  assert.equal(reseedTween(null, { x: 1 }, 0).durationMs, TWEEN_DURATION_MS);
+});
+
+test("cameraRigFor: its own grid fallback agrees with the world's default board size", () => {
+  assert.deepEqual(
+    cameraRigFor("overhead", null, undefined),
+    cameraRigFor("overhead", null, DEFAULT_GRID_SIZE),
+  );
+});
+
+test("cameraRigFor: an intercardinal facing rigs south rather than failing", () => {
+  const south = cameraRigFor("follow", { cell: "cell-3-3", facing: "south" }, 12);
+  for (const facing of ["northeast", "southeast", "southwest", "northwest", undefined, null]) {
+    assert.deepEqual(
+      cameraRigFor("follow", { cell: "cell-3-3", facing }, 12), south,
+      `a ${facing} facing falls back to the default rather than throwing`,
+    );
+  }
+});
+
+test("cameraRigFor: the spliced copy survives an intercardinal facing in a bare scope", () => {
+  const spliced = new Function(
+    `${cellToWorld.toString()}\n${cameraRigFor.toString()}\nreturn cameraRigFor;`,
+  )();
+  assert.doesNotThrow(() => spliced("follow", { cell: "cell-3-3", facing: "northeast" }, 12));
+  assert.doesNotThrow(() => spliced("pov", { cell: "cell-3-3" }, 12));
+  assert.doesNotThrow(() => spliced("overhead", null, undefined));
 });
