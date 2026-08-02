@@ -57,6 +57,7 @@ import {
   pillCandidates, matchPills, pillCompleteMarkup, createPillComplete, PILL_COMPLETE_CSS,
 } from "./pill-complete.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { believedFactSentence } from "./mudiii-turn.mjs";
 
 // The scene module and this one import each other: this file embeds the
 // scene's generated IIFE, and the scene splices this file's pure geometry
@@ -436,7 +437,11 @@ export function agentCardMarkup(slot) {
       <div class="hud-meter" id="${w}-meter"><div class="hud-meter-fill" id="${w}-meter-fill"></div></div>
       <p class="hud-goal" id="${w}-goal"></p>
       <p class="hud-plan mono" id="${w}-plan"></p>
-      <p class="hud-belief mono" id="${w}-belief"></p>
+      <button type="button" class="hud-belief-toggle" id="${w}-belief-toggle"
+              aria-expanded="false" aria-controls="${w}-detail" hidden>
+        <span class="hud-belief mono" id="${w}-belief"></span>
+      </button>
+      <div class="hud-detail mono" id="${w}-detail" hidden></div>
     </div>`;
 }
 
@@ -776,6 +781,14 @@ const MUDIII_STYLE = `
   .hud-meter-fill { height: 100%; background: var(--square-accent); width: 0%; transition: width .3s ease; }
   .hud-goal { margin: 0; font-size: .74rem; }
   .hud-plan, .hud-belief { margin: 0; font-size: .62rem; color: var(--square-stone-dark); }
+  .hud-belief-toggle { display: flex; align-items: baseline; gap: .25rem; width: 100%; text-align: left; padding: 0; border: 0; background: none; }
+  .hud-belief-toggle[hidden] { display: none; }
+  .hud-belief-toggle .hud-belief { flex: 1; min-width: 0; }
+  .hud-belief-toggle::after { content: "\\25BE"; font-size: .55rem; color: var(--square-stone-dark); }
+  .hud-belief-toggle[aria-expanded="true"]::after { content: "\\25B4"; }
+  .hud-belief-toggle:hover .hud-belief, .hud-belief-toggle:hover::after { color: var(--square-ink); }
+  .hud-detail { display: flex; flex-direction: column; gap: .1rem; font-size: .6rem; color: var(--square-stone-dark); border-top: 1px solid rgba(0,0,0,.12); padding-top: .25rem; }
+  .hud-detail[hidden] { display: none; }
   @media (prefers-reduced-motion: reduce) { .hud-meter-fill { transition: none; } }
 
   .edit-stage { display: none; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; margin-bottom: 1rem; }
@@ -895,6 +908,7 @@ function pageScript() {
   const hudCardFieldsFor = ${hudCardFieldsFor.toString()};
   const clipForAction = ${clipForAction.toString()};
   const agentCardMarkup = ${agentCardMarkup.toString()};
+  const believedFactSentence = ${believedFactSentence.toString()};
 
   const el = (id) => document.getElementById(id);
   const SEED_COMMANDS = ["tick", "what does the fox see", "where is the goblin", "what can I do"];
@@ -939,6 +953,7 @@ function pageScript() {
   let foodArmed = false;
   let livePills = [];
   let selectedAddresseeId = null;
+  const expandedAgents = new Set();
   let pillComplete = null;
   let autoOn = false;
   let editing = false;
@@ -1183,13 +1198,45 @@ function pageScript() {
       card.querySelector(".hud-meter-fill").style.width = (fields.massPct === null ? 0 : fields.massPct) + "%";
       card.querySelector(".hud-goal").textContent = fields.goal;
       card.querySelector(".hud-plan").textContent = "plan: " + fields.planText;
-      card.querySelector(".hud-belief").textContent = fields.beliefEntries.length
-        ? "believes: " + fields.beliefEntries.map(function (entry) {
-          return entry[0] + (entry[1] ? " @ " + entry[1] : " unseen");
-        }).join(" \\u00b7 ")
-        : "";
+      renderBelief(card, id, fields.beliefEntries);
     }
   }
+
+  // A belief map grows with the cast, so the card shows the first three and a
+  // count and keeps the rest behind a toggle. Which cards are open is held
+  // against the AGENT ID, never the DOM: renderHudRow only rebuilds its
+  // markup when the card count changes, and card slots are positional while
+  // agents re-bind by sorted id, so state left in a card would follow the
+  // slot rather than the animal.
+  const BELIEF_SUMMARY_LIMIT = 3;
+  function renderBelief(card, id, entries) {
+    const toggle = card.querySelector(".hud-belief-toggle");
+    const detail = card.querySelector(".hud-detail");
+    const expanded = expandedAgents.has(id);
+    const shown = entries.slice(0, BELIEF_SUMMARY_LIMIT).map(function (entry) {
+      return entry[0] + (entry[1] ? " @ " + entry[1] : " unseen");
+    }).join(" \\u00b7 ");
+    const rest = entries.length - BELIEF_SUMMARY_LIMIT;
+    card.querySelector(".hud-belief").textContent = entries.length
+      ? "believes: " + shown + (rest > 0 ? " +" + rest + " more" : "")
+      : "";
+    toggle.hidden = entries.length === 0;
+    toggle.setAttribute("aria-expanded", expanded && entries.length ? "true" : "false");
+    detail.hidden = !expanded || entries.length === 0;
+    detail.innerHTML = entries.map(function (entry) {
+      return '<div class="hud-detail-line">' + esc(believedFactSentence(entry[0], entry[1])) + "</div>";
+    }).join("");
+  }
+
+  el("hudRow").addEventListener("click", function (e) {
+    const toggle = e.target.closest(".hud-belief-toggle");
+    if (!toggle) return;
+    const card = toggle.closest(".hud-card");
+    const id = card && card.getAttribute("data-agent");
+    if (!id) return;
+    if (expandedAgents.has(id)) expandedAgents.delete(id); else expandedAgents.add(id);
+    renderHudRow();
+  });
 
   // ---- the top-down map panel ---------------------------------------------
   function renderMapPanel() {
@@ -1388,6 +1435,7 @@ function pageScript() {
     tickQueue = createSerialQueue();
     camera = { mode: "follow", selectedId: null, status: null };
     cameraModeBeforeFallback = null;
+    expandedAgents.clear();
     const s = scenario();
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());

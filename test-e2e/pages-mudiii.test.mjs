@@ -339,6 +339,71 @@ test("a single pill click appends to what is already typed, so two clicks compos
   }
 });
 
+test("an expanded belief panel stays with its own agent across two ticks, not with the card slot", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    // A belief only exists once someone has seen something, so the board runs
+    // until at least one card has a toggle to press.
+    await page.waitForFunction(
+      () => [...document.querySelectorAll("#hudRow .hud-belief-toggle")].some((b) => !b.hidden),
+      null,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+
+    const expandedId = await page.evaluate(() => {
+      const toggle = [...document.querySelectorAll("#hudRow .hud-belief-toggle")].find((b) => !b.hidden);
+      const card = toggle.closest(".hud-card");
+      toggle.click();
+      return card.getAttribute("data-agent");
+    });
+    assert.ok(expandedId, "a card with a belief was opened");
+
+    const detailOf = (id) => page.evaluate((agent) => {
+      const card = document.querySelector(`#hudRow .hud-card[data-agent="${agent}"]`);
+      if (!card) return null;
+      return {
+        expanded: card.querySelector(".hud-belief-toggle").getAttribute("aria-expanded"),
+        detailHidden: card.querySelector(".hud-detail").hidden,
+        lines: card.querySelectorAll(".hud-detail-line").length,
+      };
+    }, id);
+
+    const opened = await detailOf(expandedId);
+    assert.equal(opened.expanded, "true", "the toggle reports itself open");
+    assert.equal(opened.detailHidden, false, "and the panel under it is showing");
+    assert.ok(opened.lines > 0, "with one sentence per thing that agent believes");
+
+    const startedAt = await turnCountOf(page);
+    await page.locator("#autoToggle").click();
+    await page.waitForFunction(
+      (n) => {
+        const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
+        return m && Number(m[0]) >= n;
+      },
+      startedAt + 2,
+      { timeout: TICK_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+
+    const after = await detailOf(expandedId);
+    if (after) {
+      assert.equal(after.expanded, "true", "two ticks later the same agent's panel is still open");
+      assert.equal(after.detailHidden, false);
+    }
+    const openedElsewhere = await page.evaluate((agent) => [...document.querySelectorAll("#hudRow .hud-card")]
+      .filter((c) => c.getAttribute("data-agent") !== agent)
+      .filter((c) => c.querySelector(".hud-belief-toggle").getAttribute("aria-expanded") === "true")
+      .map((c) => c.getAttribute("data-agent")), expandedId);
+    assert.deepEqual(openedElsewhere, [], "and no other agent inherited the open state through its card slot");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error expanding a belief panel");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the 3D scene canvas boots without a console error, when the model catalogue is present", { skip: !modelsPresent }, async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {

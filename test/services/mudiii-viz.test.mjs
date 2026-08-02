@@ -766,3 +766,27 @@ test("agentCardMarkup: one card's whole markup, keyed on the slot alone, charact
   assert.match(html, /id="hud-2-plan"/);
   assert.match(html, /id="hud-2-belief"/);
 });
+
+test("agentCardMarkup: the belief line sits inside a button that controls its own detail panel", () => {
+  const html = agentCardMarkup("2");
+  assert.match(html, /<button type="button" class="hud-belief-toggle" id="hud-2-belief-toggle"/);
+  assert.match(html, /aria-expanded="false" aria-controls="hud-2-detail"/);
+  assert.match(html, /<div class="hud-detail mono" id="hud-2-detail" hidden><\/div>/);
+  assert.match(html, /aria-controls="hud-2-detail"[\s\S]*id="hud-2-belief"/, "the summary id the HUD writes into is kept, inside the toggle");
+});
+
+test("renderMudiiiHtml: which belief panel is open is keyed on the agent id, never left in the DOM", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const expandedAgents = new Set\(\);/);
+  assert.match(html, /const id = card && card\.getAttribute\("data-agent"\);/, "the toggle reads the agent off the card, not the slot");
+  assert.match(html, /if \(expandedAgents\.has\(id\)\) expandedAgents\.delete\(id\); else expandedAgents\.add\(id\);/, "the set is keyed on that id");
+  assert.match(html, /const expanded = expandedAgents\.has\(id\);/, "and every render re-applies it");
+});
+
+test("renderMudiiiHtml: the belief summary is capped, and the full list comes from believedFactSentence", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /const BELIEF_SUMMARY_LIMIT = 3;/);
+  assert.match(html, /entries\.slice\(0, BELIEF_SUMMARY_LIMIT\)/);
+  assert.match(html, /\+ rest \+ " more"/, "what is cut is counted, never silently dropped");
+  assert.match(html, /const believedFactSentence = /, "the detail panel reuses the lane's own sentence");
+});
