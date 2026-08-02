@@ -33,128 +33,52 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Seven tracks. The playtest and both benchmarks have landed, and each one spawned a fix track — running
-them when the backlog's own files were claimed is what turned up the seventeen-minute freeze and the
-router's phantom budget.
+Four tracks.
 
-**The bottleneck is the browser, not the file graph.** At most two tracks may hold
-`npm run demo:build` at once; three concurrent builds cost two tracks their work. T55 and T56 hold
-those two slots. Two things that look like they need a build and do not: the `*-about.html` pages are
-committed source, so a full build on `main` leaves them untouched, and a track can measure the
-deployed site directly rather than serving its own.
-
-- **T56 four page-behaviour playtest faults, plus mud's STEP button** — the `/help` banner the home
-  page refuses, the animal-root fallback drawn for a lamp and a cabinet, the empty mud food pill
-  before PLAY, spider-fly direction pills that append when they should replace, and a STEP button
-  for `mud-viz.mjs`. Also checks the adventure and spider-fly step buttons advance a whole turn.
-  `sprites-viz.mjs`, `mud-viz.mjs`, `spider-fly-viz.mjs`, `adventure-viz.mjs`, `index.html`. Sonnet.
-  Holds a build slot. Status: started.
-
-- **T62 the deployed seed readiness race** — three `pages-timing` failures where the page reports
-  ready with an empty store. `pages-ingest.test.mjs`, `pages-chat-export.test.mjs`,
-  `pages-service-worker.test.mjs`, `ingest-viz.mjs`. Top tier. Status: started.
-- **T41 prey sweep and status refresh** — one regime at a time after the sandbox killed its
-  concurrent sweeps; `STATUS.md` prioritised over further sweeping. Sonnet. Status: started.
+- **The CloudFront double-brotli fix** — `compress: false` on the seed behaviour and an
+  unconditional `Content-Encoding: br` metadata pass, plus whatever proves it in CI.
+  `infra/website-stack.ts`, `scripts/wait-for-site.mjs`, a deployed e2e assertion. Top tier.
+- **The mudiii ground-click e2e failure** — one test times out at 27s after the click moved from
+  pointerdown to pointerup with a 6px drag threshold. Deciding whether the test drives it wrongly or
+  the threshold has a real bug. `test-e2e/pages-mudiii.test.mjs`, `mudiii-scene.mjs`. Top tier.
+- **The `PLAN_MUD_MUDIII.md` audit** — every item in that 515-line doc into shipped-as-planned,
+  shipped-differently, not-shipped, or no-longer-wanted, then the doc cut to what is open. Top tier.
+- **The prey sweep and `STATUS.md`** — one regime at a time after the sandbox killed its concurrent
+  sweeps. Sonnet.
 
 ## Open items
 
 ### Found by playtest and benchmark, not yet fixed
 
-- **The deployed pages report ready before their seed is in.** Job `e2e:deployed:pages-timing` on
-  pipeline 2725564857: 34 tests, 31 pass, 3 fail. `pages-ingest` reads a starter-memory total of 0,
-  `pages-chat-export` finds no `dog is a kind of animal` turn, and `pages-service-worker` gets
-  `I don't know "dog" yet` from a page whose seed holds it.
-  **These are not timeout failures.** The job already runs at `--test-concurrency=1`. The three files
-  carry a 30s ready budget and 20s answer budgets, and all three failures landed in **under 2.4
-  seconds** — 627ms for ingest. Nothing came near a budget, so raising one changes nothing.
-  The tests do await the readiness promise (`pages-ingest.test.mjs:74`-`:77` does `goto`, then
-  `waitForFunction` on `window.tmctIngestReady`, then `await page.evaluate` of it). The diagnostic
-  already in the test reports **no console errors and no failed requests**. So the page said ready,
-  every asset loaded, and the store was empty.
-  **The refusal itself is correct, and this is not an honesty fault.** Operator's ruling: "the answer
-  is not wrong. If the graph does not know what a dog is at the time that it is asked then it doesn't
-  know. We are loading more data so we can be helpful and inform the user but there is no single
-  state, the graph is a moving state." A miss is honest at the moment it is given, and the graph
-  growing afterwards does not make it retrospectively a lie. So there is no "ready" boundary to build
-  and nothing to gate the input on.
-  **Tier:** top. **In flight** as T62.
-  **Do:** two separate things. On the product side, an indicator that reports real load state read off
-  the actual load — is it loading, has it loaded, and how far along as a percentage if a true number
-  is available. `Content-Length` against streamed bytes is the likely source; a service-worker cache
-  hit and any post-download parse phase both change what it means, so check rather than assume. On
-  the test side, wait for the same loaded signal before asserting on seeded content — a
-  test-correctness fix, not a product contract, and not a bigger budget.
-  **The percentage is real or absent.** No timer-driven bar, no interpolation against an expected
-  duration. A guessed percentage is the same fault in a progress bar that a guessed answer is in the
-  chat. With a real signal nobody has to measure a window and guess a timeout, so the timing
-  measurement stops being a design input and is only worth reporting.
-  **Risk:** the cheap move is a longer budget or a retry, which turns a red test green while leaving
-  it asserting against a store that has not finished arriving.
+- **The deployed site serves the starter memory brotli-compressed twice.** Decompressing one layer
+  gives 4,534,836 bytes of more brotli; twice gives the real 93,496,025-byte JSON. Every browser
+  sends `Accept-Encoding: br`, decodes one layer, and hands `JSON.parse` binary, so a visitor gets no
+  starter memory at all — the pill reads `1 FACTS` and the composer tells them to run `tmct init`.
+  The build writes one brotli layer (`scripts/build-demo-site.mjs:783`-`:796`), a viewer-request
+  function rewrites `/chat-seed.json` to `.br` (`infra/lib/website-stack.ts:88`-`:107`), and that
+  behaviour carries `compress: true` (`:169`), so CloudFront encodes it again. A weak `W/"..."` etag
+  on the encoded variant against a strong etag on the stored object is CloudFront's own signature for
+  a re-encode.
+  **It varies deploy to deploy**, which is why this read as an untraceable CI flake for weeks: a
+  re-run that cleared it was hitting a different deploy's object. The scoped metadata
+  `BucketDeployment` (`:201`-`:249`) only re-runs when the sibling's content hash changes, so a
+  deploy where the seed did not move re-uploads it with the CLI's guessed metadata and no
+  `Content-Encoding`.
+  **In flight.**
+  **Do:** `compress: false` on a behaviour matching `/chat-seed.json*` and an unconditional
+  `Content-Encoding: br` metadata pass. Both, or the object is undecodable either way.
+  **Risk:** `scripts/wait-for-site.mjs` used to ask for `identity` encoding, the one variant no
+  browser requests, so it passed on an exact byte count while every visitor got something unreadable.
+  Whatever proves this in CI has to fetch the way a browser does.
 
-- **Two agents are minted on one cell.** `goblin-1` and `goblin-2` both open on `cell-14-14` in the
-  chapel yard, while `blockedCellReason` treats a single agent as enough to block a cell. Found while
-  diagnosing an unrelated e2e failure, and not on its path.
-  **Tier:** Sonnet.
-  **Do:** decide which is right — a mint that refuses to stack, or a blocked-cell rule that tolerates
-  it — rather than patching whichever is nearer. `seededRoster` filters `taken` and then falls back
-  to the unfiltered cell list, which is the likely route to a collision.
-
-- **23 further playtest findings.** In `reports/PLAYTEST_DEMO_PAGES.md`, grouped by page.
-  **Fixed so far:** the ingest-about page claiming a preloaded sample it does not ship, the share
-  sheet's hard-coded post count, and the ledger focus crumb printing the whole typed question.
-  **The about-page overflow is fixed**, all eleven pages at 375px, 320px and 1440px, with a guard at
-  `test-e2e/pages-about-overflow.test.mjs` (22 tests). The cause was `site.css`'s bare `main {
-  margin: 0 auto }` rule, meant to centre a lone `<main>` on the other demo pages. Auto margins on a
-  grid item turn off Grid's default stretch and fall back to shrink-to-fit, so the column grew to its
-  own min-content width — set by an unbreakable file path inside a `<code>` tag, up to 448px on
-  `plan-about`. Clamping the track to `minmax(0, 1fr)` was necessary and not sufficient: it
-  constrains the track, and the bug lived in the item.
-  **Still open, all page behaviour:** the home page advertises `/help` in its own banner and refuses
-  it; sprites draws the animal-root fallback for a lamp and a cabinet whose templates both exist;
-  the mud food pill is empty until you press PLAY; spider-fly direction pills append rather than
-  replace, so a second click builds an unparseable sentence.
-  **Tier:** Sonnet. **Queued behind T54's build slot**, not unowned — see the in-flight block.
-  **Not covered by that playtest:** the p2p handshake past minting an invite, file-upload paths, the
-  four sprite group pages, ingest's Document mode, and reduced-motion behaviour. **In flight** as
-  T57, against the deployed site so it needs no build slot.
-
-- **Every demo page with PLAY needs a STEP button that advances one whole turn.** Operator request.
-  Three pages already have one and are the pattern: `plan-viz.mjs:452` (`step ▶`),
-  `adventure-viz.mjs:1012` (`stepBtn`, wired to `ticker.stepOnce()` at `:1884`, disabled while
-  playing at `:1868`) and `spider-fly-viz.mjs:458`. The two missing it are `mud-viz.mjs`, whose play
-  control is `autoToggle`, and `mudiii-viz.mjs`.
-  **Tier:** Sonnet for mud, top tier for mudiii. **In flight**, folded into T56 and T55 respectively
-  since they already own those two files.
-  **Do:** one whole turn means every agent acts once, not one agent's single move. The check is that
-  the turn counter reads exactly one higher after a click. T56 also checks the adventure and
-  spider-fly buttons against that reading and fixes either if it steps a fraction of a turn.
-  **Risk:** stepping during autoplay is meaningless, so the button disables while playing, the same
-  way FOLLOW does.
-
-- **Reset should leave every page paused.** Operator request. Opening a page keeps its autoplay; only
-  reset changes. The shared `createTicker.reset()` (`viz-ticker.mjs:98`) already clears `playing`
-  before calling `onReset`, so adventure (`adventure-viz.mjs:1885`) and spider-fly
-  (`spider-fly-viz.mjs:1135`) inherit it. Two pages bypass the ticker: `mud-viz.mjs:2924` calls
-  `boot()`, which re-runs the whole opening path, and `mudiii-viz.mjs:1510` calls `resetBoard()`.
-  `plan-viz.mjs:449` has its own reset outside the ticker too.
-  **Tier:** Sonnet. **In flight**, folded into T56 (mud, plan, and verifying the two ticker pages)
-  and T55 (mudiii).
-  **Do:** the check is the same on each page — play, run a few turns, reset, and confirm the board is
-  seeded and not advancing. A PLAY button still reading "pause" over a stopped board is the same bug.
-
-- **mudiii should open following a goblin, and cut to overhead when it is eaten.** Operator request,
-  and the reasoning is the spec: "I like that we get a crazy run through then it gets eaten and we
-  see a more sedate overhead view to what it play out." So autoplay-on-open sets FOLLOW and picks a
-  goblin, and when the followed agent leaves the board the camera drops to OVERHEAD and keeps
-  playing — no stop, no second goblin, no camera stranded on a dead agent.
-  **Tier:** top. **In flight** as T55.
-  **Do:** decide and record what happens when the followed agent leaves for a reason other than being
-  eaten, whether the cut lands on the death tick or one after (one after, so the visitor sees the
-  moment rather than cutting away from it), and whether the same fallback applies when a visitor has
-  chosen FOLLOW themselves mid-session.
-  **Risk:** FOLLOW disables while playing, with a "pause to swap" hint. Opening in FOLLOW while
-  autoplaying shows a disabled follow control on a page that is following something, so check the
-  hint explains that rather than confusing it.
+- **The playtest findings are closed except two.** `reports/PLAYTEST_DEMO_PAGES.md` and
+  `reports/PLAYTEST_UNCOVERED_AREAS.md` hold the transcripts.
+  **Still open:** ingest's Document mode never updates its source label — typing text directly
+  ingests correctly, but the header stays on "drop or browse for a file", because the input handler
+  at `src/services/ingest-viz.mjs:336`-`:340` updates the `sourceTag` variable and never writes it
+  back to `srcLabel.textContent`. And the twelve unfixed findings in `reports/CLI_EDGE_HUNT_2.md`,
+  ranked in that report, three of them in `chat.mjs`.
+  **Tier:** Sonnet for the label, mixed for the CLI set.
 
 ### Inference
 
@@ -164,6 +88,7 @@ deployed site directly rather than serving its own.
   The chat layer declines them because `chat.mjs:9696` and `:9717` pass `{ maxHops: 2 }` to
   `findIsaChain`, which declares `maxHops = 6` itself (`syllogise.mjs:1715`), check-then-extend and
   cycle-safe. So the cheapest next rung buys 30 of 56 with no new inference rule.
+  **Stopped by the operator.** The work sits unmerged on its own branch.
   **Tier:** Sonnet. Small edit, sharp trap.
   **The trap, and it will bite:** the generator pins those 30 as `expect: { verdict: "unproven" }`
   with a `ceiling` field. **Raising the bound alone turns 30 correct answers into 30 grader-counted
@@ -173,31 +98,6 @@ deployed site directly rather than serving its own.
   **Feasibility:** INF-7 needs Stage EL saturation and INF-8 a Stage DL tableau plus phase-0
   `unionOf`/`complementOf`/negative-assertion representation. Those are the path above, not this.
   **Risk:** deeper chains cost more per turn, and the per-turn cost has already grown (below).
-
-### mudiii.html — camera
-
-- **In POV and FOLLOW the mouse cannot look around.** The operator wants to drag to look while
-  following or riding an agent. Today `orbitControls.enabled = cameraState.mode === "overhead"`
-  (`mudiii-scene.mjs:888`), so orbiting works only in overhead; in the other two modes the camera is
-  pinned to whatever `cameraRigFor` computes and re-aimed on every tick.
-  **Tier:** Sonnet. The hard part is what happens when the agent moves under a camera the visitor has
-  turned.
-  **Do:** let the visitor's drag own the *direction* while the rig keeps owning the *position*. In
-  POV the rig sits the camera at the agent's eye (`world.x, 1.6, world.z`) and looks four cells along
-  its facing; in follow it sits behind and above. Keep those positions tweened as they are, and apply
-  a visitor-controlled yaw and pitch offset on top of the rig's own aim rather than replacing it.
-  Orbit controls as they stand will fight the per-tick re-aim, because both want to set the camera.
-  Either drive the offset directly from pointer events, or keep OrbitControls and re-seed its target
-  from the rig each tick instead of letting it own the position.
-  **Decisions worth making explicitly:** whether the look resets when the agent turns (it should not,
-  or every tick would yank the view back), whether pitch is clamped so a visitor cannot roll under
-  the ground plane, and whether switching camera mode clears the offset.
-  **Risk:** `applyTickResult` re-issues `setCamera` on every tick, and `reseedTween` re-aims from
-  wherever the camera currently is. A naive fix produces a camera that snaps back 220ms after every
-  drag, which reads as broken rather than as locked.
-  **Mitigation:** this is a feel change, so watch it rather than asserting it. A unit test can pin
-  that the offset survives a tick; only using it tells you whether it moves nicely.
-
 
 ### mudiii.html — further work
 
