@@ -144,9 +144,9 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
 
   /** ONE whole-world step (`runTownSquareTick`) — every live agent moves,
    *  the ecology pass runs, and the result names what happened this turn.
-   *  `k` is the caller's own global turn counter, mirroring mud-viz.mjs's
-   *  page-level serialization. */
-  async function tick(k) {
+   *  The engine counts the turns; the result's own `turn` is what a page
+   *  displays. */
+  async function tick() {
     return runTownSquareTick(memoryDir, { layout });
   }
 

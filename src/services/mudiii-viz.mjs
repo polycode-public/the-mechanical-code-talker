@@ -882,6 +882,9 @@ function pageScript() {
 
   function applyTickResult(result) {
     if (!result) return;
+    // The engine owns the count. Anything that advances a turn — the deck, a
+    // chat frame — lands here, so the page never keeps a rival tally.
+    if (typeof result.turn === "number") globalTurn = result.turn;
     if (result.agents) agentsById = result.agents;
     if (result.items) itemsById = result.items;
     callScene("applyTick", { agents: result.agents, items: result.items, ecology: result.ecology });
@@ -893,8 +896,7 @@ function pageScript() {
   async function runOneTick() {
     return serializeTick(async function () {
       if (!session) return null;
-      globalTurn += 1;
-      const result = await session.tick(globalTurn);
+      const result = await session.tick();
       applyTickResult(result);
       renderAll();
       return result;
@@ -1226,7 +1228,6 @@ function pageScript() {
     // the cells both come back from it rather than being guessed here.
     const opening = await session.board();
     if (seq !== bootSeq) return;
-    globalTurn = opening.turn || 0;
     camera.selectedId = Object.keys(opening.agents || {}).sort()[0] || null;
     applyTickResult(opening);
     renderAll();
