@@ -33,11 +33,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In-flight right now
 
-Loop batch 1 is done. Four of five items landed. The food-size look never got to look and the
-mudiii-viz owner only reached its first item, both because several tracks ran `npm run demo:build`
-at once and the machine could not carry them. **Batches from here run at most one track that needs a
-demo build or a browser.**
+Loop batch 2. Three tracks, and **only one of them touches a browser** — batch 1 lost two tracks to
+three concurrent `npm run demo:build` runs, so that is now the cap. The other two write e2e
+assertions but never run them; the coordinator runs the e2e tier after merge.
 
+- **T25 mudiii-viz** — the turn counter, then the chat teach-frame tick. `mudiii-viz.mjs`,
+  `mudiii-browser-entry.mjs`. Top tier. Status: started.
+- **T26 eat flourish** — `mudiii-scene.mjs`. Sonnet. Status: started.
+- **T27 food size** — `data/mudiii-assets.json` and the screenshot it must open. The batch's one
+  browser track. Sonnet. Status: started.
 
 ## Open items
 
