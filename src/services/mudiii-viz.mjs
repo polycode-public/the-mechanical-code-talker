@@ -600,6 +600,10 @@ ${openingAgents.map((a) => `            <option value="${escapeHtml(a.id)}">${es
           <button type="button" data-mode="overhead" aria-pressed="false">overhead</button>
         </div>
         <button type="button" class="pill affordance" id="foodPill" data-command="place food" aria-pressed="false">place food</button>
+        <label class="deck-teach" title="With this on, a sentence like &quot;The fox is at cell-3-4.&quot; writes a fact into the square instead of running as a command.">
+          <input type="checkbox" id="teachToggle">
+          teach
+        </label>
       </div>
       <div class="deck-info-popup mudiii-note" id="deckInfoPopup" role="dialog" aria-label="about this demo" hidden>
         ${MUDIII_NOTE_LINES.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n        ")}
@@ -729,6 +733,8 @@ const MUDIII_STYLE = `
   .deck-sliders { display: flex; flex-wrap: wrap; gap: 1rem; flex: 1 1 auto; min-width: 0; }
   .deck-slider { display: flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--square-stone-dark); min-width: 0; }
   .deck-slider input[type="range"] { accent-color: var(--square-accent); flex: 1 1 4rem; min-width: 2.5rem; width: auto; max-width: 8rem; }
+  .deck-teach { display: flex; align-items: center; gap: .3rem; font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--square-stone-dark); cursor: pointer; }
+  .deck-teach input[type="checkbox"] { accent-color: var(--square-accent); }
   .camera-mode { display: inline-flex; gap: .25rem; }
   .camera-mode button[aria-pressed="true"] { background: var(--square-accent); border-color: var(--square-accent); color: var(--square-ink); }
   .deck-info-popup {
@@ -1642,7 +1648,11 @@ function pageScript() {
     showFoxCount(foxes.length);
     showGoblinCount(goblins.length);
     props = propPlacementsFrom((s.worldPayload && s.worldPayload.facts) || [], DATA.assetManifest);
-    const opened = await window.tmct.open(s.worldPayload, { agents: cast, epoch: 0 });
+    const opened = await window.tmct.open(s.worldPayload, {
+      agents: cast,
+      epoch: 0,
+      getTeachEnabled: function () { return el("teachToggle").checked; },
+    });
     if (seq !== bootSeq) return;
     session = opened;
     agentsById = {};

@@ -502,6 +502,14 @@ test("renderMudiiiHtml: the map board stays square in landscape, capped rather t
   assert.match(html, /\.map-panel-board \{ flex: 0 0 auto; width: min\(100%, 108px\); min-height: 0; margin: 0 auto; \}/);
 });
 
+test("renderMudiiiHtml: the deck carries a teach box, hinting a sentence this square can parse", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /<input type="checkbox" id="teachToggle">/);
+  assert.match(html, /The fox is at cell-3-4\./, "the hint is the town square's own vocabulary");
+  assert.doesNotMatch(html, /lies in the garden/, "never the manor's sentence, which this lane cannot read");
+  assert.match(html, /getTeachEnabled: function \(\) \{ return el\("teachToggle"\)\.checked; \}/, "read fresh, so ticking it mid-session lands on the next line");
+});
+
 test("renderMudiiiHtml: the chat placeholder is a line the town square can read", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
   assert.match(html, /placeholder="@fox the goblin is east"/);

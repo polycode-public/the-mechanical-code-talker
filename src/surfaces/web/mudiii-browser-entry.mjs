@@ -25,6 +25,7 @@ import {
   COMPASS_POINTS, DEFAULT_FACING, cellId, layoutNamed, parseCellId, reverseFacing, stepCellFrom, turnedFacing,
 } from "../../domain/town-square-world.mjs";
 import { findActionPath } from "../../domain/planning.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
 import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
@@ -167,8 +168,14 @@ export async function routeBetweenCells(factRows, fromCell, toCell) {
  *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick, board,
  *  snapshot, applyEdit, placeFood, driveAgent }`. A reset is not a method here: the
  *  page re-opens a whole session for it, which is what a reset means when the
- *  store is in memory and belongs to one visitor. */
-export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0 } = {}) {
+ *  store is in memory and belongs to one visitor.
+ *
+ *  `getTeachEnabled` is read fresh on every turn, so a visitor can tick the
+ *  page's teach box mid-session and have the very next line read as a fact to
+ *  store rather than a command to run. */
+export async function createMudiiiSession(
+  worldPayload, { agents = [], epoch = 0, getTeachEnabled = () => false } = {},
+) {
   const {
     startTownSquareGame, runTownSquareTick, townSquareBoard, foldTownSquareState,
     placeFood: engPlaceFood, roleOfId,
@@ -213,7 +220,10 @@ export async function createMudiiiSession(worldPayload, { agents = [], epoch = 0
   const turnSession = createTurnSession({
     memoryDir, graph: codeGraph, lexicon, sessionId: "town-square",
     vocabHint: 'Try "@fox the goblin is east", or "what does the fox see".',
-    buildExtraOptions: () => ({ planState: planHolder.state }),
+    buildExtraOptions: () => ({
+      planState: planHolder.state,
+      gameConfig: { ...DEFAULT_GAME_CONFIG, mudiii: { ...DEFAULT_GAME_CONFIG.mudiii, teach: getTeachEnabled() } },
+    }),
     captureExtraState: async (result, state) => {
       if ("planState" in result) planHolder.state = state.planState;
     },
