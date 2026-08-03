@@ -581,17 +581,42 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
     const before = await turnCountOf(page);
     const box = await page.locator("#sceneCanvas").boundingBox();
     // Aimed at the board's own drawn footprint rather than a fixed share of
-    // the canvas. A square board on a canvas several times wider than it is
+    // the canvas. A square board on a stage several times wider than it is
     // tall leaves most of the width as sky, and a fraction picked by hand
-    // lands on that sky as the framing moves. Half way out from the middle on
-    // each axis is inside the board and off its centre, so the route has
-    // somewhere to run.
+    // lands on that sky, where the ray meets nothing and the click is not a
+    // click on the ground at all. Several points because any one of them can
+    // land on a building's own cell, which the board grants no route into.
     const frame = await page.evaluate(() => window.mudiiiScene.boardFrameFraction());
-    await page.mouse.click(
-      box.x + box.width * (0.5 - frame.width / 4),
-      box.y + box.height * (0.5 + frame.height / 4),
-    );
+    const AIM_POINTS = [[-0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [0.25, 0.25], [0, 0.35], [-0.35, 0]];
+    let route = [];
+    let status = "";
+    for (const [dx, dy] of AIM_POINTS) {
+      await page.evaluate(() => { document.getElementById("sceneStatus").textContent = ""; });
+      await page.mouse.click(
+        box.x + box.width * (0.5 + frame.width * dx),
+        box.y + box.height * (0.5 + frame.height * dy),
+      );
+      await page.waitForFunction(
+        () => (document.querySelector("#sceneStatus")?.textContent ?? "").length > 0,
+        null,
+        { timeout: TICK_TIMEOUT_MS },
+      );
+      status = await page.locator("#sceneStatus").textContent();
+      // Whatever the board then does with it, the ray met the ground and named
+      // the cell it hit — a click that fell on the sky says nothing at all.
+      assert.match(status, /cell-\d+-\d+/, `a click inside the board's own footprint resolved to no cell: ${status}`);
+      route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
+      if (route.length) break;
+      assert.match(status, /no way through to|is already at/, "a cell with no route is declined visibly, never drawn");
+    }
 
+    assert.ok(route.length >= 2, `no click on the board found a cell to walk to: ${status}`);
+    for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
+    // Every hop is one orthogonal step, which is what "along the board's own
+    // exits" means — a straight segment would jump diagonally through walls.
+    for (let i = 1; i < route.length; i += 1) {
+      assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
+    }
     await page.waitForFunction(
       (n) => {
         const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
@@ -600,20 +625,6 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
       before,
       { timeout: TICK_TIMEOUT_MS },
     );
-
-    const route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
-    const status = await page.locator("#sceneStatus").textContent();
-    if (route.length) {
-      assert.ok(route.length >= 2, "a drawn route runs from the agent to the cell");
-      for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
-      // Every hop is one orthogonal step, which is what "along the board's own
-      // exits" means — a straight segment would jump diagonally through walls.
-      for (let i = 1; i < route.length; i += 1) {
-        assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
-      }
-    } else {
-      assert.match(status, /no way through to/, "an unreachable cell is declined visibly, never drawn");
-    }
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error clicking the ground unarmed");
