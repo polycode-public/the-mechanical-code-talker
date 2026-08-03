@@ -106,6 +106,17 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
   taught position or a hand-dropped morsel, both stamped `:taught:turnK` on the winning placement
   row. Everything else unobserved is one count. Naming every unseen crumb instead made the answer
   grow with the food cap and buried the one individual a visitor had just planted a claim on.
+- **Board feedback belongs to ground clicks, not camera buttons.** Clicking a cell flashes it,
+  draws a line from the followed agent, and has that agent plan a route there
+  (`walkFollowedTo` in `mudiii-viz.mjs`, `flashCell`/`showRoute` in `mudiii-scene.mjs`). FOLLOW /
+  POV / OVERHEAD switch the camera and do nothing else.
+- **Claim pills append rather than replace or submit.** A single click appends the pill's text to
+  whatever is already in the input, so pills compose: click `look at`, then click `the book`.
+  Return submits, and a double-click appends and submits in one gesture. `appendToChatInput` in
+  `mudiii-viz.mjs` adds a separating space and puts the caret at the end. This differs from every
+  other pill rail in the repo: adventure-viz.mjs assigns `chatqEl.value = btn.textContent`,
+  replacing what was typed, and mud-viz.mjs's chat pills skip the input altogether and call
+  `sendCommand` straight away.
 
 ## Where the page went past the plan
 
