@@ -37,22 +37,10 @@ None.
 
 ### Questions blocking work
 
-Nothing is blocked. Every question that used to sit here is answered and written into its own item.
-
-Settled, and written into the items themselves:
-
-- **Claim pills append rather than replace or submit.** A single click appends the pill's text to
-  whatever is already in the input, so pills compose: click `look at`, then click `the book`. Return
-  submits, and a double-click appends and submits in one gesture. This is a change from every other
-  pill rail in the repo — adventure and mud both assign `chatqEl.value = btn.textContent`, replacing
-  what was typed. The mudiii rail must append with a separating space and put the caret at the end.
-  Recorded on the deception-rail item.
-- **Board feedback belongs to ground clicks, not camera buttons.** Clicking a cell flashes it, draws
-  a line from the followed agent, and has that agent plan a route there. FOLLOW / POV / OVERHEAD
-  switch the camera and do nothing else. The camera-feedback item merges into the click-to-turn item.
-- **A retraction suppresses one source's assertion, not the whole triple group.** If two peers
-  independently taught the same fact, one retracting leaves the fact standing, cited to the other,
-  and the retraction stays on record rather than erasing the assertion. Recorded on the p2p item.
+Nothing is blocked. The mudiii pill-append and ground-click decisions live in
+`PLAN_MUD_MUDIII.md`'s "The decisions that still bind"; the retraction decision lives in
+`src/domain/memory/retraction.mjs`'s own header comment and `docs/references/papers/crdt.md`'s
+"Where 'latest wins' happens".
 
 ## Discipline
 
