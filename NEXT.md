@@ -33,27 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Two.
-
-- **Overhead frames the board small in a wide window.** The overhead rig sits at `gridSize * 1.4`
-  with a 55-degree camera, which fills the frame vertically and leaves most of a wide canvas on the
-  sky either side. The 14x14 chapel yard is the worst of the three.
-  **Owner:** a track is on it. **Tier:** Sonnet.
-  **Confirmed from the other side:** the e2e ground-click test failed for 27s because it clicked sky.
-  The 3D stage measures 1239x360 and the board draws as a 248px square in the middle, a fifth of the
-  width.
-  **Do:** rig the height off the canvas aspect as well as the board, so a wide window pulls in rather
-  than backing off.
-  **Risk:** a rig that fills a wide window crops a tall one. The height has to fit the tighter of the
-  two axes, not the looser.
-
-- **The belief line reads every unseen individual by name.** "What does the goblin see?" answers with
-  each unobserved crumb listed one by one, so the sentence is mostly a list of things that are not
-  there, and it grows with the food cap.
-  **Owner:** a track is on it. **Tier:** Sonnet.
-  **Do:** count the unobserved rather than naming them, keeping the named ones for what is in view.
-  **Risk:** the deception rail's whole point is that a lie about a specific individual lands visibly,
-  so a taught individual has to keep its name even while unseen.
+None.
 
 ### Questions blocking work
 
