@@ -225,7 +225,7 @@ const TOWN_SQUARE_MARKET = layout({
 
 /** The chapel corner: an L of buildings in the north-west, a fence line across
  *  the south, three oaks. The only shipped layout with two predators, so it is
- *  where the avoid branch actually runs. */
+ *  where two hunters working the same board show up. */
 const TOWN_SQUARE_CHAPEL = layout({
   name: "town-square-chapel",
   gridSize: 14,

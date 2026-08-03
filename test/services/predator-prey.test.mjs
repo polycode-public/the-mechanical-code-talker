@@ -6,7 +6,8 @@ import { join } from "node:path";
 import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
   foldTownSquareState, greedyBlend, gridApplyActions, greedyAway, greedyToward, hasActiveWebAt, isMudiiiStatePredicate,
-  liveWebs, pathStateKey, placeFood, recastTownSquare, roleOfId, runTownSquareTick, seededWander,
+  liveWebs, pathStateKey, placeFood, recastTownSquare, roleOfId, rolesHuntedBy, rolesHunting,
+  runTownSquareTick, seededWander,
   startTownSquareGame, townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
 import { TOWN_SQUARE_LAYOUTS, cellId, openCells, worldFactRows } from "../../src/domain/town-square-world.mjs";
@@ -35,14 +36,37 @@ const classify = (id, kind) => ({ subject: id, predicate: "rdf:type", object: ki
 
 test("the cast is data, keyed by role rather than by species", () => {
   assert.deepEqual(MUDIII_ROLES, {
-    predator: { role: "predator", kind: "fox", idPrefix: "fox" },
-    prey: { role: "prey", kind: "goblin", idPrefix: "goblin" },
+    predator: { role: "predator", kind: "fox", idPrefix: "fox", hunts: "prey" },
+    prey: { role: "prey", kind: "goblin", idPrefix: "goblin", hunts: null },
     food: { spawnedKind: "crumb", placedKind: "morsel" },
   });
   assert.equal(roleOfId("fox-2"), "predator");
   assert.equal(roleOfId("goblin-10"), "prey");
   assert.equal(roleOfId("crumb-1"), null, "food has no role");
   assert.equal(roleOfId("well-1"), null, "nor does a prop");
+});
+
+test("who preys on whom is read off the cast's own links, in both directions", () => {
+  assert.deepEqual(rolesHuntedBy("predator"), ["prey"]);
+  assert.deepEqual(rolesHuntedBy("prey"), [], "a goblin hunts nothing on this board");
+  assert.deepEqual(rolesHunting("prey"), ["predator"]);
+  assert.deepEqual(rolesHunting("predator"), [], "nothing preys on a fox, so a fox has no threat list");
+
+  const withoutLinks = {
+    predator: { role: "predator", kind: "fox", idPrefix: "fox" },
+    prey: { role: "prey", kind: "goblin", idPrefix: "goblin" },
+    food: null,
+  };
+  assert.deepEqual(rolesHuntedBy("predator", withoutLinks), ["prey"], "a cast that states no link keeps the pairing its role names already state");
+  assert.deepEqual(rolesHunting("predator", withoutLinks), []);
+
+  const twoWay = {
+    predator: { role: "predator", kind: "fox", idPrefix: "fox", hunts: "prey" },
+    prey: { role: "prey", kind: "goblin", idPrefix: "goblin", hunts: ["predator"] },
+    food: null,
+  };
+  assert.deepEqual(rolesHunting("predator", twoWay), ["prey"], "a cast may declare something that hunts the hunter");
+  assert.deepEqual(rolesHuntedBy("prey", twoWay), ["predator"]);
 });
 
 test("the state-predicate filter names the families a turn writes, and nothing else", () => {
@@ -453,17 +477,67 @@ test("a predator that believes prey chases it with a real multi-step path, and t
   }
 });
 
-test("a second live predator in view beats the chase — avoid is rung one", async () => {
+test("a predator does not treat another predator as a threat — both chase the prey standing between them", async () => {
+  // fox-1 east of fox-2 with a goblin between them, each fox inside the
+  // other's vision radius. A threat list built from "another agent I can see"
+  // sends the two foxes stepping apart forever with the goblin untouched.
   const dir = await boardWith([
-    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
-    classify("fox-2", "fox"), place("fox-2", "cell-6-5"), weigh("fox-2", 20),
-    classify("goblin-1", "goblin"), place("goblin-1", "cell-4-5"), weigh("goblin-1", 8),
-  ], "avoid");
+    classify("fox-1", "fox"), place("fox-1", "cell-8-5"), weigh("fox-1", 20),
+    classify("fox-2", "fox"), place("fox-2", "cell-4-5"), weigh("fox-2", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-6-5"), weigh("goblin-1", 8),
+  ], "predator-rival");
   try {
     const tick = await runTownSquareTick(dir, { layout: LAYOUT });
-    assert.equal(tick.rungs["fox-1"], "avoid");
+    assert.equal(tick.rungs["fox-1"], "chase");
+    assert.equal(tick.rungs["fox-2"], "chase");
+    assert.equal(tick.agents["fox-1"].cell, "cell-7-5", "closes on the goblin rather than backing east");
+    assert.equal(tick.agents["fox-2"].cell, "cell-5-5", "and closes from the other side");
+    assert.equal(tick.agents["fox-1"].belief["fox-2"], "cell-4-5", "each fox still sees the other; it just isn't a threat");
+    assert.ok(
+      tick.ecology.some((e) => e.type === "eat-agent" && e.prey === "goblin-1"),
+      "prey caught between two hunters is eaten, not left standing while they retreat",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prey does not treat other prey as a threat — nothing preys on a goblin but a fox", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-5"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-6-5"), weigh("goblin-2", 8),
+    classify("crumb-1", "crumb"), place("crumb-1", "cell-7-5"), weigh("crumb-1", 1),
+  ], "prey-neighbour");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
+    assert.equal(tick.rungs["goblin-1"], "forage", "a neighbour in view never displaces the forage rung");
+    assert.equal(tick.agents["goblin-1"].mood, "calm");
+    assert.equal(tick.agents["goblin-1"].belief["goblin-2"], "cell-6-5", "believed, and still not a threat");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a cast that declares a hunter of predators sends its predator to the evade rung", async () => {
+  // The same engine, one roles object away: the links are reversed, so the
+  // goblin gives chase and the fox flees. Nothing in the decision names a
+  // species — it reads the cast's own links.
+  const rolesWherePreyHunts = {
+    predator: { role: "predator", kind: "fox", idPrefix: "fox", hunts: null },
+    prey: { role: "prey", kind: "goblin", idPrefix: "goblin", hunts: "predator" },
+    food: { spawnedKind: "crumb", placedKind: "morsel" },
+  };
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-8-5"), weigh("goblin-1", 8),
+  ], "two-way-cast");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, roles: rolesWherePreyHunts });
+    assert.equal(tick.rungs["fox-1"], "evade");
     assert.equal(tick.agents["fox-1"].mood, "scared");
-    assert.match(tick.agents["fox-1"].goal, /avoiding fox-2, last seen at cell-6-5/);
+    assert.match(tick.agents["fox-1"].goal, /evading — last saw goblin-1 at cell-8-5/);
+    assert.equal(tick.rungs["goblin-1"], "chase");
+    assert.match(tick.agents["goblin-1"].goal, /chasing fox-1, last seen at cell-5-5/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -516,21 +590,15 @@ test("a fleeing prey breaks an equally-safe tie toward food it knows about, not 
   }
 });
 
-test("a fleeing predator's own tie-break is unchanged: the avoid rung never sees the prey's food preference", async () => {
-  // Same geometry as the tie-break test above, but fox-2 is the threat and
-  // there is no food candidate in scope for a predator at all — the avoid
-  // rung must still land on cell-5-6, the first-enumerated tied cell.
-  const dir = await boardWith([
-    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
-    classify("fox-2", "fox"), place("fox-2", "cell-2-2"), weigh("fox-2", 20),
-  ], "avoid-unchanged");
-  try {
-    const tick = await runTownSquareTick(dir, { layout: LAYOUT });
-    assert.equal(tick.rungs["fox-1"], "avoid");
-    assert.equal(tick.agents["fox-1"].cell, "cell-5-6", "first-wins tie order, exactly as before the prey tie-break existed");
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+test("greedyAway without a towardCell keeps its first-wins tie order — the food tie-break is opt-in", () => {
+  // Same geometry as the tie-break test above: from cell-5-5, fleeing
+  // cell-2-2 ties cell-5-6 and cell-6-5 at Chebyshev distance 4, and
+  // DIRECTION_DELTA's key order checks south before east.
+  const applyActions = gridApplyActions([...worldFactRows(LAYOUT)]);
+  const from = { x: 5, y: 5 };
+  const away = { x: 2, y: 2 };
+  assert.deepEqual(greedyAway(from, away, applyActions), { x: 5, y: 6 }, "the first-enumerated tied cell");
+  assert.deepEqual(greedyAway(from, away, applyActions, { towardCell: { x: 7, y: 5 } }), { x: 6, y: 5 }, "the tied cell closer to the crumb");
 });
 
 // ---- the weighted alternative to strict evade-before-forage ------------------------
@@ -616,7 +684,7 @@ test("a prey that believes no food at all evades identically whether or not the 
   }
 });
 
-test("the blend leaves the predator's own avoid rung alone — it is a prey-side score", async () => {
+test("the blend is a score for whatever the food is for — a hunter with a crumb in view never forages", async () => {
   const dir = await boardWith([
     classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
     classify("fox-2", "fox"), place("fox-2", "cell-2-2"), weigh("fox-2", 20),
@@ -624,8 +692,8 @@ test("the blend leaves the predator's own avoid rung alone — it is a prey-side
   ], "blend-predator-untouched");
   try {
     const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: { ...CONFIG, blendPreyDecision: true } });
-    assert.equal(tick.rungs["fox-1"], "avoid");
-    assert.equal(tick.agents["fox-1"].cell, "cell-5-6", "first-wins tie order, exactly as with the blend off");
+    assert.equal(tick.rungs["fox-1"], "wander", "no goblin on the board, and a crumb is not a fox's business");
+    assert.doesNotMatch(tick.agents["fox-1"].goal, /crumb-1/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

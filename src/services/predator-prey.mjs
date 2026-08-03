@@ -52,12 +52,35 @@ import { objectClassChain, parseSnapshotSubject, snapshotSubject, worldEpochFact
 export { DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor };
 
 /** The v1 cast. Keyed by role, never by species — every knob this engine reads
- *  is role-keyed too, so swapping the pair is data. */
+ *  is role-keyed too, so swapping the pair is data. `hunts` is the cast's own
+ *  statement of who preys on whom, and it is the only thing the decision chain
+ *  reads to tell a threat from a bystander. */
 export const MUDIII_ROLES = Object.freeze({
-  predator: { role: "predator", kind: "fox", idPrefix: "fox" },
-  prey: { role: "prey", kind: "goblin", idPrefix: "goblin" },
+  predator: { role: "predator", kind: "fox", idPrefix: "fox", hunts: "prey" },
+  prey: { role: "prey", kind: "goblin", idPrefix: "goblin", hunts: null },
   food: { spawnedKind: "crumb", placedKind: "morsel" },
 });
+
+const CAST_ROLES = Object.freeze(["predator", "prey"]);
+
+/** Which roles `role` hunts, as the cast declares it: a role name, a list of
+ *  them, or null for a role that hunts nothing. A roles object that states no
+ *  link at all keeps the pairing its two role names already name, so a cast
+ *  written before `hunts` existed hunts exactly as it did. Pure. */
+export function rolesHuntedBy(role, roles = MUDIII_ROLES) {
+  const entry = roles?.[role];
+  if (!entry) return [];
+  const declared = "hunts" in entry ? entry.hunts : (role === "predator" ? "prey" : null);
+  if (declared === null || declared === undefined) return [];
+  return [].concat(declared).filter((named) => CAST_ROLES.includes(named));
+}
+
+/** Which roles hunt `role`, read back off those same links. Empty for a role
+ *  nothing preys on, which is what keeps a predator hunting when it catches
+ *  sight of another predator rather than fleeing its own kind. Pure. */
+export function rolesHunting(role, roles = MUDIII_ROLES) {
+  return CAST_ROLES.filter((other) => rolesHuntedBy(other, roles).includes(role));
+}
 
 const PLACEMENT_PREDICATE = "mgx:currently-in";
 const MASS_PREDICATE = "mgx:hasMass";
@@ -371,15 +394,14 @@ function bestOneStepBy(fromCell, applyActions, scoreOf, isBetter, tieBreakScoreO
 }
 
 /** One-ply greedy: the reachable cell (or staying put) furthest in Chebyshev
- *  terms from `awayFrom`. Both the prey's evade rung and the predator's avoid
- *  rung are this function.
+ *  terms from `awayFrom`. The evade rung is this function.
  *
  *  `opts.towardCell`, when given, breaks a tie among equally-safe cells in
  *  favor of whichever is closest to it — a fleeing prey that knows where food
  *  is should flee toward it, not toward whichever direction DIRECTION_DELTA's
  *  key order happens to check first. Opt-in and null by default, so a caller
- *  that never passes it (the predator's own avoid rung) sees no change at
- *  all: same options, same scores, same first-wins tie order. */
+ *  that never passes it sees no change at all: same options, same scores, same
+ *  first-wins tie order. */
 export function greedyAway(fromCell, awayFrom, applyActions, { towardCell = null } = {}) {
   if (!awayFrom) return fromCell;
   return bestOneStepBy(
@@ -511,14 +533,13 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // ---- the goal line and the mood word -------------------------------------------
 // Every branch assigns a mood beside the goal sentence it renders, and that
 // word is written as a real mgx:feels fact for the turn. The words are the four
-// spider-fly already uses: a predator mid-chase is angry, one avoiding a rival
-// is scared, anything wandering or foraging is calm, and anything that just ate
-// is happy.
+// spider-fly already uses: an agent mid-chase is angry, one fleeing something
+// that hunts it is scared, anything wandering or foraging is calm, and anything
+// that just ate is happy.
 
 function goalLine(kind, { subject, cell, arrived, boardNoun = "square", catches = false, facing = null, held = false } = {}) {
   switch (kind) {
     case "driven": return held ? `driven by hand — holding at ${cell}, facing ${facing}.` : `driven by hand — stepping to ${cell}.`;
-    case "avoid": return `avoiding ${subject}, last seen at ${cell}.`;
     case "chase":
       if (!arrived) return `chasing ${subject}, last seen at ${cell}.`;
       return catches ? `co-located with ${subject} — catching it.` : `standing over ${subject} — taking it.`;
@@ -1070,7 +1091,7 @@ function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
  * `agents` and `items` and `ecology` are the frozen render payload — see
  * townSquareTickPayload, which projects exactly those three plus the turn.
  * `rungs` is the decision each live agent reached this turn ("driven" for a
- * hand-driven move, then "chase", "evade", "forage", "avoid", "wander", and —
+ * hand-driven move, then "chase", "evade", "forage", "wander", and —
  * on a cast that carries or spins webs —
  * "carry", "deliver", "carried", "trapped", "hold-web", "build-web"); an agent
  * that decided and then died still has a rung and no longer has an `agents`
@@ -1121,6 +1142,10 @@ export async function runTownSquareTick(memoryDir, {
     }
   }
 
+  const liveIdsOfRole = { predator: predators, prey };
+  const agentsOfRoles = (roleList, exceptId) =>
+    roleList.flatMap((r) => liveIdsOfRole[r] ?? []).filter((id) => id !== exceptId).sort();
+
   const decide = (agentId, role) => {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
     // The visitor's hand, checked before any of the belief chain below. A
@@ -1141,8 +1166,14 @@ export async function runTownSquareTick(memoryDir, {
     // visionRadius: Infinity call, not new belief machinery. The rival-threat
     // lookup below stays on beliefOpts either way: this switch is about food.
     const foodBeliefOpts = foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
-    const rivals = role === "predator" ? predators.filter((id) => id !== agentId) : predators;
-    const threat = driven ? null : nearestBelievedTarget(agentId, fromCell, rivals, state, beliefOpts);
+    // Who counts as a threat and who counts as quarry both come off the cast's
+    // own hunts links. Nothing hunts a predator on either shipped board, so a
+    // predator's threat list is empty and a second predator in view is just
+    // another animal on the square.
+    const huntedRoles = rolesHuntedBy(role, roles);
+    const huntsAgents = huntedRoles.length > 0;
+    const hunters = agentsOfRoles(rolesHunting(role, roles), agentId);
+    const threat = driven ? null : nearestBelievedTarget(agentId, fromCell, hunters, state, beliefOpts);
 
     let rung;
     let nextCell;
@@ -1151,8 +1182,7 @@ export async function runTownSquareTick(memoryDir, {
     let mood;
     let drivenFacing = null;
     // A carried prey and its captor both leave the ordinary chain. A carrying
-    // predator never drops its catch to dodge a rival or chase a second one:
-    // nothing here eats a predator, so "avoid" is contention, not survival.
+    // predator never drops its catch to chase a second one.
     const carriedPreyId = (carriesPrey && role === "predator") ? (state.carrying.get(agentId)?.prey ?? null) : null;
     const isCarrying = Boolean(carriedPreyId) && prey.includes(carriedPreyId);
     const captorId = (carriesPrey && role === "prey") ? (captorOfPrey.get(agentId) ?? null) : null;
@@ -1203,10 +1233,10 @@ export async function runTownSquareTick(memoryDir, {
       goal = goalLine("trapped");
       mood = "scared";
     } else if (threat) {
-      const towardFood = role === "prey"
-        ? nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts)
-        : null;
-      if (blendsPreyDecision && role === "prey" && towardFood) {
+      const towardFood = huntsAgents
+        ? null
+        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
+      if (blendsPreyDecision && !huntsAgents && towardFood) {
         // The one case the two rungs disagree about: this prey believes a
         // predator AND food, so a strict order has to pick between them and a
         // score does not.
@@ -1228,22 +1258,22 @@ export async function runTownSquareTick(memoryDir, {
           : goalLine("evade", { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
         mood = closedOnFood ? "calm" : "scared";
       } else {
-        rung = role === "predator" ? "avoid" : "evade";
-        // A fleeing prey that already knows where food is should flee toward
-        // it, not away from it — among cells that are equally safe, break the
-        // tie toward the nearest believed crumb. Prey-only: the predator's own
-        // avoid rung passes nothing, so its ties still resolve the old way.
+        rung = "evade";
+        // An agent that already knows where food is should flee toward it, not
+        // away from it — among cells that are equally safe, break the tie
+        // toward the nearest believed crumb. An agent that hunts has no food
+        // cell to offer, so its ties resolve on first-wins order alone.
         nextCell = greedyAway(fromCell, threat.cell, applyActions, { towardCell: towardFood?.cell ?? null });
         plan = stepPlan(fromCell, nextCell);
         goal = goalLine(rung, { subject: threat.subject, cell: cellId(threat.cell.x, threat.cell.y) });
         mood = "scared";
       }
     } else {
-      const quarry = role === "predator"
-        ? nearestBelievedTarget(agentId, fromCell, prey, state, beliefOpts)
+      const quarry = huntsAgents
+        ? nearestBelievedTarget(agentId, fromCell, agentsOfRoles(huntedRoles, agentId), state, beliefOpts)
         : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
       if (quarry) {
-        rung = role === "predator" ? "chase" : "forage";
+        rung = huntsAgents ? "chase" : "forage";
         const path = findActionPath(fromCell, (s) => s.x === quarry.cell.x && s.y === quarry.cell.y, applyActions, { stateKey: pathStateKey });
         if (path && path.actions.length) {
           nextCell = path.states[1];
@@ -1257,7 +1287,7 @@ export async function runTownSquareTick(memoryDir, {
         }
         const arrived = nextCell.x === quarry.cell.x && nextCell.y === quarry.cell.y;
         goal = goalLine(rung, { subject: quarry.subject, cell: cellId(quarry.cell.x, quarry.cell.y), arrived, catches: carriesPrey });
-        mood = role === "predator" ? "angry" : "calm";
+        mood = huntsAgents ? "angry" : "calm";
       } else if (role === "predator" && buildsWebs) {
         // A web-spinning predator with nothing in sight has something better to
         // do than wander: hold this cell, and spin a web here unless a live one

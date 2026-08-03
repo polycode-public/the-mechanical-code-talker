@@ -52,6 +52,11 @@ them. `mudiii.co.uk` is the eventual public URL and was unregistered as of 2026-
 - **Goblins cannot tell world crumbs from player morsels.** The forage read walks the `food`
   class chain, so the two compete on distance alone. Placing food beside a lurking fox is a
   working trap, and nobody wrote a trap mechanic.
+- **Who preys on whom is in the cast, not in the branch.** Each role carries a `hunts` link, and
+  the decision reads it both ways: an agent's threats are the agents whose role hunts it, its
+  quarry the agents of the role it hunts. Nothing hunts a fox or a spider, so a predator that
+  sees another predator keeps hunting. There is one rung for fleeing, `evade`, because every
+  agent that flees now flees something that hunts it.
 - **The prey's chain is priority order, not a blended score.** Evade a believed predator, else
   forage toward believed food, else wander. Ties among equally-safe cells break toward the
   nearest believed food, through `greedyAway`'s own `towardCell`. The blended one-ply score ships
