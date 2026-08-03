@@ -284,21 +284,40 @@ export function blockedCellReason(cell, props, agents) {
  *  `cellToWorld` does.
  *
  *  "overhead" ignores `agent` entirely and looks straight down at the
- *  board's own centre. "follow" sits back and above the agent's cell, offset
- *  opposite its facing, looking at the agent. "pov" sits AT the agent's cell
- *  at eye height, looking the way it is facing. Returns null when a
- *  non-overhead mode is asked for with no agent (or an agent standing on no
- *  cell) to rig against. Pure, self-contained — calls `cellToWorld` by bare
- *  name, spliced alongside it. */
-export function cameraRigFor(mode, agent, gridSize) {
+ *  board's own centre, high enough that the whole board fits the canvas
+ *  `view` describes (`{ aspect, fovDegrees }`, the live camera's own two
+ *  numbers). "follow" sits back and above the agent's cell, offset opposite
+ *  its facing, looking at the agent. "pov" sits AT the agent's cell at eye
+ *  height, looking the way it is facing. Returns null when a non-overhead
+ *  mode is asked for with no agent (or an agent standing on no cell) to rig
+ *  against. Pure, self-contained — calls `cellToWorld` by bare name, spliced
+ *  alongside it. */
+export function cameraRigFor(mode, agent, gridSize, view) {
   const cellSize = 1;
-  // Both fallbacks are written out rather than read from this module's own
+  // Every fallback here is written out rather than read from this module's own
   // constants: the browser runs a `.toString()` copy of this function in a
-  // script that declares neither, and the drive ring's diagonals set exactly
-  // the intercardinal facing that reaches the second one.
+  // script that declares none of them, and the drive ring's diagonals set
+  // exactly the intercardinal facing that reaches the facing one.
   const FALLBACK_GRID_SIZE = 12;
   if (mode === "overhead") {
-    const height = Math.max(4, Number(gridSize) || FALLBACK_GRID_SIZE) * 1.4;
+    const FALLBACK_FOV_DEGREES = 55;
+    // Looking straight down pushes the TOP of a standing model outward from
+    // the centre of frame, so a fit measured on the flat ground plane alone
+    // cuts the head off whoever stands in an outermost cell. This is the room
+    // the tallest of the cast needs out there, counting the id label floating
+    // above it, which is the part a visitor most needs to read. Props run
+    // taller still and are allowed to overhang.
+    const EDGE_ROOM = 1.2;
+    const board = Math.max(4, Number(gridSize) || FALLBACK_GRID_SIZE) * cellSize;
+    const fovDegrees = Number(view && view.fovDegrees) > 0 ? Number(view.fovDegrees) : FALLBACK_FOV_DEGREES;
+    const aspect = Number(view && view.aspect) > 0 ? Number(view.aspect) : 1;
+    const tanHalfVertical = Math.tan((Math.min(fovDegrees, 175) * Math.PI) / 360);
+    const tanHalfHorizontal = tanHalfVertical * aspect;
+    // Fit the TIGHTER axis. A wide canvas runs out of height first, a tall one
+    // runs out of width, and taking the larger of the two distances is what
+    // stops a portrait window cropping the board's own left and right edges.
+    const fitsBothAxes = Math.max(1 / tanHalfVertical, 1 / tanHalfHorizontal);
+    const height = (board / 2) * EDGE_ROOM * fitsBothAxes;
     return { mode: "overhead", position: { x: 0, y: height, z: 0 }, lookAt: { x: 0, y: 0, z: 0 } };
   }
   if (!agent || !agent.cell) return null;

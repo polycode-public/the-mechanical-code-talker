@@ -21,7 +21,7 @@ import {
   MUDIII_ROLES, foldTownSquareState, startTownSquareGame, runTownSquareTick,
   placeFood, roleOfId, beliefSnapshotFor,
 } from "./predator-prey.mjs";
-import { snapshotSubject } from "./adventure.mjs";
+import { snapshotSubject, parseSnapshotSubject } from "./adventure.mjs";
 import { correctMisspellings, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
@@ -424,6 +424,63 @@ export function believedFactSentence(id, believedCell) {
   return believedCell ? `${id} is at ${believedCell}.` : `${id} has not been observed.`;
 }
 
+// The mark both visitor-driven write paths stamp on a placement row: the teach
+// lane's `world:<name>:taught:turnK`, and placeFood's own, which builds the
+// same tag. The board's own ticks write the bare world tag with no such mark.
+const TAUGHT_PROVENANCE_MARK = ":taught:";
+
+/** Every subject standing where a VISITOR put it — taught into place by a
+ *  sentence, or dropped there by the food verb. Both write the same
+ *  `:taught:turnK` provenance, and the board's own ticks write none of it.
+ *
+ *  Reads the row that WON, ranked the way foldTownSquareState ranks a
+ *  placement, so a crumb a visitor moved and the board has since moved on from
+ *  no longer counts. `epoch` is the fold's own, which unstamped rows (a
+ *  hand-built fixture, a seed row) are ranked at. Pure. */
+export function taughtPlacementSubjects(factRows, epoch = 0) {
+  const winner = new Map(); // subject -> { epoch, turn, taught }
+  for (const row of factRows || []) {
+    if (row.predicate !== PLACEMENT_PREDICATE) continue;
+    const snap = parseSnapshotSubject(row.subject);
+    const base = snap ? snap.base : row.subject;
+    const rowEpoch = snap ? snap.epoch : epoch;
+    const turn = snap ? snap.turn : 0;
+    const prior = winner.get(base);
+    if (prior && !(rowEpoch > prior.epoch || (rowEpoch === prior.epoch && turn >= prior.turn))) continue;
+    winner.set(base, { epoch: rowEpoch, turn, taught: String(row.provenance || "").includes(TAUGHT_PROVENANCE_MARK) });
+  }
+  const taught = new Set();
+  for (const [subject, entry] of winner) if (entry.taught) taught.add(subject);
+  return taught;
+}
+
+/** One observer's whole belief snapshot as a sentence.
+ *
+ *  Anything the observer can place is named: seen, or told. So is anything the
+ *  visitor put where it stands, seen or not, because the teach lane exists so
+ *  a claim about ONE individual lands where a visitor can watch it, and an
+ *  individual that dissolved into a count would take that with it.
+ *
+ *  Everything else unobserved is counted rather than listed. A square at its
+ *  food cap otherwise answers a question about what a goblin can see with a
+ *  row of crumbs it cannot, and the list grows with the cap.
+ *
+ *  `beliefEntries` is `Object.entries(beliefSnapshotFor(...))` and
+ *  `taughtSubjects` a Set from taughtPlacementSubjects. Pure. */
+export function beliefLineFor(observerId, beliefEntries, taughtSubjects) {
+  const taught = taughtSubjects || new Set();
+  const named = [];
+  let unobserved = 0;
+  for (const [id, cell] of beliefEntries || []) {
+    if (cell || taught.has(id)) named.push(believedFactSentence(id, cell));
+    else unobserved += 1;
+  }
+  if (!named.length && !unobserved) return `${observerId} is alone on the board — nothing else to see.`;
+  const rest = unobserved === 1 ? "1 other has not been observed." : `${unobserved} others have not been observed.`;
+  if (!named.length) return `${observerId} sees nothing yet. ${rest}`;
+  return `${observerId} sees: ${named.join(" ")}${unobserved ? ` ${rest}` : ""}`;
+}
+
 /** "what does the goblin see?" / "what does the fox see?" rendered as plain
  *  text: the same beliefSnapshotFor read predator-prey.mjs's own tick loop
  *  uses, over the CURRENT board state — read-only, no tick runs. Candidates
@@ -431,7 +488,9 @@ export function believedFactSentence(id, believedCell) {
  *  goblin's own forage target), exactly the beliefCandidates set
  *  runTownSquareTick itself builds. toldFacts is empty — a told position only
  *  ever arrives fresh alongside a tick, so there is none standing between
- *  ticks to read back here. */
+ *  ticks to read back here. beliefLineFor turns the snapshot into the
+ *  sentence, naming what the observer can place and what a visitor put where
+ *  it stands, and counting the rest. */
 async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_CONFIG }) {
   const kind = match[1].toLowerCase();
   const num = match[2];
@@ -451,10 +510,7 @@ async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_
     ? gameConfig?.mudiii?.predatorVisionRadius
     : gameConfig?.mudiii?.preyVisionRadius;
   const belief = beliefSnapshotFor(observerId, observerCell, candidateIds, state, { visionRadius });
-  const entries = Object.entries(belief);
-  const text = entries.length
-    ? `${observerId} sees: ${entries.map(([id, cell]) => believedFactSentence(id, cell)).join(" ")}`
-    : `${observerId} is alone on the board — nothing else to see.`;
+  const text = beliefLineFor(observerId, Object.entries(belief), taughtPlacementSubjects(rows, state.epoch));
   return {
     text,
     lane: "game-inform",

@@ -65,6 +65,12 @@ import { prefersReducedMotion } from "./viz-ticker.mjs";
  *  own `transition: left .25s ease` becomes in a requestAnimationFrame loop. */
 export const TWEEN_DURATION_MS = 250;
 
+/** The vertical field of view the page's one perspective camera is built with.
+ *  Every rig this scene asks `cameraRigFor` for is measured against the live
+ *  `camera3.fov`, so this number is only ever the camera's own starting value
+ *  rather than a second copy a rig could drift from. */
+export const CAMERA_FIELD_OF_VIEW_DEGREES = 55;
+
 // ---------------------------------------------------------------------------
 // Pure geometry/tween helpers — unit-tested directly in Node, then spliced
 // via `.toString()` into the standalone browser IIFE below, the same
@@ -446,6 +452,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // first call — boot's own overhead call, which changes nothing — would read
   // as "no change" and leave the camera at its construction position.
   var cameraRigged = false;
+  // Whether the visitor has turned or zoomed the overhead view themselves.
+  // OrbitControls writes straight to the camera, so a resize cannot tell an
+  // orbited view from a rigged one by reading the camera back.
+  var overheadOrbited = false;
   // The visitor's own look, turned by dragging the canvas and applied on top
   // of whatever rig the camera mode computes. It survives every tick: a tick
   // re-issues setCamera with the same mode and the same agent, so clearing it
@@ -517,7 +527,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   function setUpScene() {
     scene = new THREE.Scene();
     scene.background = buildSkyTexture();
-    camera3 = new THREE.PerspectiveCamera(55, (canvas.clientWidth || 640) / Math.max(1, canvas.clientHeight || 360), 0.1, 500);
+    camera3 = new THREE.PerspectiveCamera(${CAMERA_FIELD_OF_VIEW_DEGREES}, canvasAspect(), 0.1, 500);
     camera3.position.set(0, 8, 8);
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
@@ -533,6 +543,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     orbitControls.target.set(0, 0, 0);
 
     canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("wheel", function () {
+      if (cameraState.mode === "overhead") overheadOrbited = true;
+    }, { passive: true });
     // On the window, not the canvas: a look-around that runs off the edge of
     // the 3D stage must keep turning, and must still end when the button comes
     // up over the deck.
@@ -561,12 +574,35 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     scene.add(grid);
   }
 
+  function canvasAspect() {
+    return (canvas.clientWidth || 640) / Math.max(1, canvas.clientHeight || 360);
+  }
+
+  // What the overhead rig has to fit the board into. Read off the LIVE camera
+  // so one field of view drives both the projection and the distance chosen to
+  // suit it.
+  function cameraView() {
+    return { aspect: canvasAspect(), fovDegrees: camera3 ? camera3.fov : ${CAMERA_FIELD_OF_VIEW_DEGREES} };
+  }
+
   function onResize() {
     if (!renderer || !camera3) return;
     var w = canvas.clientWidth || 640, h = canvas.clientHeight || 360;
     renderer.setSize(w, h, false);
-    camera3.aspect = w / Math.max(1, h);
+    camera3.aspect = canvasAspect();
     camera3.updateProjectionMatrix();
+    refitOverheadCamera();
+  }
+
+  // A new canvas shape fits a different amount of board, so the overhead rig is
+  // recomputed for it — a phone turned on its side otherwise keeps the height
+  // the old shape earned and crops the board's edges. A visitor who has already
+  // orbited keeps the view they made: pulling it back to the board's centre
+  // would undo their own gesture.
+  function refitOverheadCamera() {
+    if (!cameraRigged || cameraState.mode !== "overhead" || overheadOrbited) return;
+    var rig = cameraRigFor("overhead", null, GRID_SIZE, cameraView());
+    if (rig) tweenCameraToRig(rig, performance.now());
   }
 
   function pointFromEvent(evt) {
@@ -594,7 +630,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     drag.travelled += Math.abs(dx) + Math.abs(dy);
     // Overhead is OrbitControls' own drag, and two things turning one camera
     // fight each other.
-    if (cameraState.mode === "overhead") return;
+    if (cameraState.mode === "overhead") { overheadOrbited = true; return; }
     lookOffset.yaw -= dx * LOOK_RADIANS_PER_PIXEL;
     lookOffset.pitch -= dy * LOOK_RADIANS_PER_PIXEL;
   }
@@ -1050,8 +1086,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     // own turn goes with the old one.
     lookOffset.yaw = 0;
     lookOffset.pitch = 0;
+    overheadOrbited = false;
     var agent = cameraState.selectedId ? agentSnapshotFor(cameraState.selectedId) : null;
-    var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE) || cameraRigFor("overhead", null, GRID_SIZE);
+    var view = cameraView();
+    var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE, view) || cameraRigFor("overhead", null, GRID_SIZE, view);
     if (!rig) return;
     cameraRigged = true;
     tweenCameraToRig(rig, performance.now());
@@ -1064,7 +1102,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     if (cameraState.mode === "overhead") return;
     if (!cameraState.selectedId) return;
     var agent = agentSnapshotFor(cameraState.selectedId);
-    var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE);
+    var rig = cameraRigFor(cameraState.mode, agent, GRID_SIZE, cameraView());
     if (!rig) return;
     tweenCameraToRig(rig, now);
   }
@@ -1219,6 +1257,23 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       var out = [];
       for (var i = 0; i < removalLog.length; i += 1) if (removalLog[i].id === id) out.push(removalLog[i]);
       return out;
+    },
+    // How much of the canvas the ground plane actually covers, width and
+    // height, each 0..1 — an e2e assertion's read, so a framing check measures
+    // the projection the visitor sees rather than re-deriving the rig from the
+    // numbers that built it. The four corners are projected through the live
+    // camera, so a cropped board reads over 1 on the axis it runs off.
+    boardFrameFraction: function () {
+      if (!camera3 || !groundMesh) return null;
+      var half = (GRID_SIZE * CELL_SIZE) / 2;
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      var corners = [[-half, -half], [-half, half], [half, -half], [half, half]];
+      for (var i = 0; i < corners.length; i += 1) {
+        var ndc = new THREE.Vector3(corners[i][0], 0, corners[i][1]).project(camera3);
+        minX = Math.min(minX, ndc.x); maxX = Math.max(maxX, ndc.x);
+        minY = Math.min(minY, ndc.y); maxY = Math.max(maxY, ndc.y);
+      }
+      return { width: (maxX - minX) / 2, height: (maxY - minY) / 2 };
     },
     ready: function () { return booted; },
   };

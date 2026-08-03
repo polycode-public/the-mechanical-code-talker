@@ -581,18 +581,43 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
     const before = await turnCountOf(page);
     const standing = (await agentCellsOf(page))[firstAgent];
     const box = await page.locator("#sceneCanvas").boundingBox();
-    // The overhead camera looks straight down at the middle of the board, so
-    // the whole square draws as a square centred on the canvas — and its size
-    // is set by the canvas's HEIGHT, about two thirds of it across, whatever
-    // the width happens to be. The 3D stage is far wider than it is tall, so a
-    // click placed by a fraction of the WIDTH lands on the sky beside the
-    // board and the ray hits no ground at all.
-    const reach = box.height * 0.22;
-    await page.mouse.click(box.x + box.width / 2 + reach, box.y + box.height / 2 + reach);
+    // Aimed at the board's own drawn footprint rather than a fixed share of
+    // the canvas. A square board on a stage several times wider than it is
+    // tall leaves most of the width as sky, and a fraction picked by hand
+    // lands on that sky, where the ray meets nothing and the click is not a
+    // click on the ground at all. Several points because any one of them can
+    // land on a building's own cell, which the board grants no route into.
+    const frame = await page.evaluate(() => window.mudiiiScene.boardFrameFraction());
+    const AIM_POINTS = [[-0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [0.25, 0.25], [0, 0.35], [-0.35, 0]];
+    let route = [];
+    let status = "";
+    for (const [dx, dy] of AIM_POINTS) {
+      await page.evaluate(() => { document.getElementById("sceneStatus").textContent = ""; });
+      await page.mouse.click(
+        box.x + box.width * (0.5 + frame.width * dx),
+        box.y + box.height * (0.5 + frame.height * dy),
+      );
+      await page.waitForFunction(
+        () => (document.querySelector("#sceneStatus")?.textContent ?? "").length > 0,
+        null,
+        { timeout: TICK_TIMEOUT_MS },
+      );
+      status = await page.locator("#sceneStatus").textContent();
+      // Whatever the board then does with it, the ray met the ground and named
+      // the cell it hit — a click that fell on the sky says nothing at all.
+      assert.match(status, /cell-\d+-\d+/, `a click inside the board's own footprint resolved to no cell: ${status}`);
+      route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
+      if (route.length) break;
+      assert.match(status, /no way through to|is already at/, "a cell with no route is declined visibly, never drawn");
+    }
 
-    // Either answer ends the click, and only one of them spends a turn: a
-    // route walks its first step, and a cell with nothing leading to it is
-    // declined on the spot.
+    assert.ok(route.length >= 2, `no click on the board found a cell to walk to: ${status}`);
+    for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
+    // Every hop is one orthogonal step, which is what "along the board's own
+    // exits" means — a straight segment would jump diagonally through walls.
+    for (let i = 1; i < route.length; i += 1) {
+      assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
+    }
     await page.waitForFunction(
       (n) => {
         const m = (document.querySelector("#globalTurnCount")?.textContent ?? "").match(/\d+/);
@@ -603,24 +628,56 @@ test("clicking the ground with nothing armed heads the followed agent that way, 
       { timeout: TICK_TIMEOUT_MS },
     );
 
-    const route = await page.evaluate(() => window.mudiiiScene.routeCellsDrawn());
-    const status = await page.locator("#sceneStatus").textContent();
-    if (route.length) {
-      assert.ok(await turnCountOf(page) > before, "walking the route's first step spends a whole-world turn");
-      assert.ok(route.length >= 2, "a drawn route runs from the agent to the cell");
-      assert.equal(route[0], standing, "and it starts where the followed agent was standing");
-      for (const cell of route) assert.match(cell, /^cell-\d+-\d+$/);
-      // Every hop is one orthogonal step, which is what "along the board's own
-      // exits" means — a straight segment would jump diagonally through walls.
-      for (let i = 1; i < route.length; i += 1) {
-        assert.ok(directionOfHop(route[i - 1], route[i]), `${route[i - 1]} to ${route[i]} is a single step the board grants`);
-      }
-    } else {
-      assert.match(status, /no way through to/, "an unreachable cell is declined visibly, never drawn");
-    }
+    assert.ok(await turnCountOf(page) > before, "walking the route's first step spends a whole-world turn");
+    assert.equal(route[0], standing, "and it starts where the followed agent was standing");
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error clicking the ground unarmed");
+  } finally {
+    await context.close();
+  }
+});
+
+// The two window shapes the overhead rig has to serve at once: a desktop
+// canvas several times wider than it is tall, and a phone one that is barely
+// wider than it is tall. Whichever axis runs out first is the one the board has
+// to fit inside.
+const FRAMING_WINDOWS = [
+  { label: "wide", width: 1440, height: 780 },
+  { label: "narrow", width: 380, height: 900 },
+];
+
+test("overhead frames the whole board and fills the axis that runs out first, in a wide window and a narrow one", { skip: !modelsPresent }, async () => {
+  const { context, page, consoleErrors } = await openMudiiiPage();
+  try {
+    await page.waitForFunction(
+      () => window.mudiiiScene && typeof window.mudiiiScene.ready === "function" && window.mudiiiScene.ready(),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    await pauseBoard(page);
+    await page.locator('#cameraMode button[data-mode="overhead"]').click();
+
+    // The largest board is the hardest to frame, so it is the one worth
+    // measuring alongside the square the page opens on.
+    for (const scenario of [null, /chapel/]) {
+      if (scenario) await switchScenario(page, scenario);
+      await page.locator('#cameraMode button[data-mode="overhead"]').click();
+      for (const shape of FRAMING_WINDOWS) {
+        await page.setViewportSize({ width: shape.width, height: shape.height });
+        await page.waitForTimeout(600);
+        const frame = await page.evaluate(() => window.mudiiiScene.boardFrameFraction());
+        const where = `${scenario ? "the chapel yard" : "the opening square"} in a ${shape.label} window`;
+        assert.ok(frame.width <= 1, `${where} runs off the canvas sideways, at ${frame.width} of its width`);
+        assert.ok(frame.height <= 1, `${where} runs off the canvas vertically, at ${frame.height} of its height`);
+        assert.ok(
+          Math.max(frame.width, frame.height) > 0.8,
+          `${where} sits small in frame, filling only ${Math.max(frame.width, frame.height)} of its tighter axis`,
+        );
+      }
+    }
+
+    assert.deepEqual(consoleErrors, [], "no console error re-rigging the camera for a new window shape");
   } finally {
     await context.close();
   }
