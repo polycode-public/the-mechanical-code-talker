@@ -37,8 +37,8 @@ export const SPIDER_MASS_DECREMENT_PER_TURN = 0.5;
  *  the town square's own roles object, minus the food entry: nothing inert
  *  lies on a spider-and-fly board, and a null food role is what says so. */
 export const SPIDER_FLY_ROLES = Object.freeze({
-  predator: Object.freeze({ role: "predator", kind: "spider", idPrefix: "spider" }),
-  prey: Object.freeze({ role: "prey", kind: "fly", idPrefix: "fly" }),
+  predator: Object.freeze({ role: "predator", kind: "spider", idPrefix: "spider", hunts: "prey" }),
+  prey: Object.freeze({ role: "prey", kind: "fly", idPrefix: "fly", hunts: null }),
   food: null,
 });
 

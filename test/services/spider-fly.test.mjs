@@ -46,8 +46,8 @@ const weigh = (id, mass) => ({ subject: id, predicate: "mgx:hasMass", object: St
 
 test("the cast names spiders and flies as the two roles, with nothing inert on the board", () => {
   assert.deepEqual(SPIDER_FLY_ROLES, {
-    predator: { role: "predator", kind: "spider", idPrefix: "spider" },
-    prey: { role: "prey", kind: "fly", idPrefix: "fly" },
+    predator: { role: "predator", kind: "spider", idPrefix: "spider", hunts: "prey" },
+    prey: { role: "prey", kind: "fly", idPrefix: "fly", hunts: null },
     food: null,
   });
   assert.equal(SPIDER_FLY_LAYOUT.gridSize, 10);
@@ -277,16 +277,15 @@ test("the spider engages a visible fly, and the fly is eaten or starved within a
   }
 });
 
-test("a spider avoids another spider believed visible, even with no fly anywhere on the board", async () => {
-  const dir = await boardWith([place("spider-1", "cell-5-5"), place("spider-2", "cell-5-6")], "avoid");
+test("a spider believing another spider stays on its own work — nothing on this board hunts a spider", async () => {
+  const dir = await boardWith([place("spider-1", "cell-5-5"), place("spider-2", "cell-5-6")], "rival");
   try {
     const tick = await runSpiderFlyTick(dir);
-    assert.equal(tick.agents["spider-1"].cell, "cell-5-4", "moves away from spider-2 (north opens the most distance) rather than holding");
-    assert.equal(tick.agents["spider-2"].cell, "cell-5-7", "moves away from spider-1 symmetrically (south)");
-    assert.match(tick.agents["spider-1"].goal, /avoiding spider-2/);
-    assert.match(tick.agents["spider-2"].goal, /avoiding spider-1/);
-    assert.equal(tick.agents["spider-1"].mood, "scared", "backing off a rival reads as fear, not the predatory focus of a chase");
-    assert.equal(tick.agents["spider-2"].mood, "scared");
+    assert.equal(tick.agents["spider-1"].cell, "cell-5-5", "holds and spins rather than backing off the other spider");
+    assert.equal(tick.agents["spider-2"].cell, "cell-5-6");
+    assert.match(tick.agents["spider-1"].goal, /building a web here/);
+    assert.equal(tick.agents["spider-1"].belief["spider-2"], "cell-5-6", "believed, and still not a threat");
+    assert.equal(tick.agents["spider-1"].mood, "calm");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
