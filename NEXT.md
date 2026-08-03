@@ -33,7 +33,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-None.
+One.
+
+- **Two foxes evade each other and the goblin between them goes uneaten.** Seen on the live page:
+  `fox-1` reads "avoiding fox-2, last seen at cell-4-4" with plan east, and `fox-2` reads "avoiding
+  fox-1, last seen at cell-8-4" with plan west. Both cards say PREDATOR. fox-1 is east of fox-2, so
+  each steps directly away from the other and they oscillate, while a goblin stands between them.
+  **This is the prey's chain running on a predator.** Evade, then forage, then wander belongs to the
+  goblins. A fox's chain is chase the nearest believed prey. The decision path is treating any other
+  visible agent as a threat rather than an agent whose role preys on this one, so the role check on
+  that branch is missing or reversed.
+  **Not the belief layer.** Both foxes hold each other's positions and a list of crumbs, so vision
+  and the fold are working. It is the decision that reads them.
+  **Owner:** a track is on it. **Tier:** top.
+  **Do:** find where the evade branch decides what counts as a threat and make it ask about roles.
+  **Risk:** spider-fly runs on the same engine with its own roles object, so a fix in the shared
+  decision path has to keep that board's behaviour intact. The frozen tick fixture is the guard.
 
 ### Questions blocking work
 
