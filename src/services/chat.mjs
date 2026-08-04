@@ -14071,14 +14071,27 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // graph entity.
     // Contraction-expanded, so "what's X" earns the same offer "what is X"
     // does. Both shapes below anchor on the written-out copula.
-    const offerSrc = expandContractions(String(query).trim());
-    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
+    //
     // "who is grelb" asks about a term the same way "what is grelb" does, and
     // a name is exactly what a person teaches next — without this the who-form
     // dead-ends on the bare grammar wall while its what-form twin offers the
     // teach phrasing.
-    const whoTerm = shortTermQuestionTerm(offerSrc) ? offerSrc.match(WHO_IS_BARE_RE)?.[1]?.trim() : null;
-    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope) || whoTerm;
+    const teachableTermOf = (src) => {
+      const knowAbout = src.match(KNOW_ABOUT_RE)?.[1]?.trim();
+      const who = shortTermQuestionTerm(src) ? src.match(WHO_IS_BARE_RE)?.[1]?.trim() : null;
+      return { knowAbout, term: knowAbout || metaTermOf(src, envelope) || who };
+    };
+    const offerSrc = expandContractions(String(query).trim());
+    // All three shapes anchor at the start of the string, so a politeness or
+    // modal wrapper ("please tell me what a grelb is") hides the term from
+    // every one of them and the turn dead-ends on the bare wall instead. The
+    // peeled form is a fallback, tried only when the raw one names nothing, so
+    // a query that already matched resolves exactly as before.
+    let { knowAbout: knowAboutTerm, term: offerTerm } = teachableTermOf(offerSrc);
+    if (!offerTerm) {
+      const peeledSrc = applyPreambleFrames(offerSrc);
+      if (peeledSrc !== offerSrc) ({ knowAbout: knowAboutTerm, term: offerTerm } = teachableTermOf(peeledSrc));
+    }
     // A term that LEADS with a bindable anaphor ("it used for", from an
     // unresolved "what is it used for") is a pronoun that failed to bind,
     // not a teachable subject — offering to learn facts about it would echo

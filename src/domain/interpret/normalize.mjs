@@ -235,6 +235,10 @@ const WONDERING_WRAPPER_RE = /^i(?:\s+was|\s+am|'m)?\s+(?:just\s+)?(?:wonder(?:i
  *  ("what the parser does with X …") is never re-inverted. */
 const EMBEDDED_WHATIS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+(is|are)\??$/i;
 const EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+means\??$/i;
+/** The memory-question sibling: "tell me what you know about X" peels to
+ *  "what you know about X", which keeps the same declarative order and misses
+ *  the memory lane's own "what do you know about X" shape. */
+const EMBEDDED_KNOW_ABOUT_RE = /^what\s+you\s+(know|remember)\s+about\s+(.+?)\??$/i;
 /** show/give-me presentation bridge: a kind-listing remainder is left
  *  untouched, a relation/interrogative remainder unwraps to itself, anything
  *  else bridges to "describe <thing>". */
@@ -309,6 +313,8 @@ export function applyPreambleFrames(text) {
     if (m) q = `what ${m[2].toLowerCase()} ${m[1].trim()}`;
     m = q.match(EMBEDDED_MEANS_RE);
     if (m) q = `what does ${m[1].trim()} mean`;
+    m = q.match(EMBEDDED_KNOW_ABOUT_RE);
+    if (m) q = `what do you ${m[1].toLowerCase()} about ${m[2].trim()}`;
     m = q.match(SHOW_GIVE_ME_RE);
     if (m) {
       const rest = m[1].trim();
