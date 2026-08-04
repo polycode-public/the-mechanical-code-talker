@@ -84,7 +84,7 @@ Facts every task may rely on without re-checking:
 | 13 about-polycode | holds | T12, blocked on operator bio/contact D1 |
 | 14 stale GitLab Pages copy | **debunked in location.** No such copy on the index; the two real stale references are comments at `scripts/build-demo-site.mjs:1` and `:740` | T3 |
 | 15 page weight | **debunked in premise.** Wire weight is already solved (brotli, 0.85–1.83 MB); sprites is 3.96 MB raw, under the claimed floor; `reports/PAGE_WEIGHTS.md` rev 3 already documents all of it. The live question is first paint on the embedded payload | T6, reframed |
-| 16 receipts numbers | **debunked.** No rig measures token-reduction-vs-RAG, query latency, or index size; zero hits across all committed reports. The notes asked to be told rather than estimated: all three are missing | T8 builds receipts from what exists + a new latency/size bench; RAG comparison deferred until a harness for it is designed |
+| 16 receipts numbers | **debunked.** No rig measures token-reduction-vs-RAG, query latency, or index size; zero hits across all committed reports. The notes asked to be told rather than estimated: all three are missing | moved to [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md): R1 bench, R2 page, R3 RAG-harness design sketch |
 | 17 why.html | holds | T9, drafts for operator review D2 |
 | 18 README overhaul | holds; Mermaid needs an SVG fallback for the npm page | T10 |
 | 19 CONTRIBUTING etc. | holds | T11a files; T11b drafts the issue list for approval D3 |
@@ -104,7 +104,7 @@ Facts every task may rely on without re-checking:
 | 2 | T11a | Haiku | `CONTRIBUTING.md`, `SECURITY.md`, `.github/pull_request_template.md` (new files) |
 | 3 | T5 | Sonnet | `public/index.html` hero block |
 | 3 | T6 | Sonnet | `scripts/build-demo-site.mjs` splash, `reports/PAGE_WEIGHTS.md` |
-| 3 | T8 | Sonnet | `scripts/bench-receipts.mjs` (new), receipts template in build script, committed results JSON |
+| 3 | R1, R2 | Sonnet | see [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md) |
 | 4 | T7 | Sonnet | mobile fixes in generated-page templates |
 | 4 | T9, T10, T11b, T14 | Sonnet | drafts + README overhaul |
 | unblocked-by-operator | T12, T13, analytics | — | after D1/D4/D5 |
@@ -285,28 +285,10 @@ Acceptance: the four pages at both viewports show no horizontal scroll and a liv
 `npm run test:fast` passes; named e2e files for touched demos if they exist under
 `test-e2e/` (list them in the report).
 
-### T8 — receipts.html from committed numbers (Sonnet)
+### T8 — moved
 
-The three figures the notes named (token reduction vs RAG, query latency, index size) exist
-in no rig today. This task ships what is measurable now and keeps the page generated from
-committed JSON so it cannot drift:
-
-1. New `scripts/bench-receipts.mjs`: runs N=100 representative `ask()` queries against the
-   demo graph and records latency percentiles, plus the byte size of each demo page's
-   embedded graph payload and fact counts. Writes `test-benchmarks/receipts/receipts.json`
-   (committed).
-2. `build-demo-site.mjs` gains a `receipts.html` template rendering only from that JSON plus
-   already-committed sources: the latest chatbench `summary.json`, idxbench results, the
-   PAGE_WEIGHTS wire totals, the $0-running-cost statement (static hosting, no inference
-   API), and the supply-chain chain (provenance + release tag) already in README. Every
-   number on the page names its source file. No number is typed into HTML.
-3. A RAG comparison is a separate harness with its own methodology questions; it is not in
-   this plan. The page must not claim one.
-
-Acceptance: `node scripts/bench-receipts.mjs` exits 0 and the JSON parses;
-`npm run demo:build` emits `public/receipts.html`; a new
-`test/estate/receipts.test.mjs` asserts every figure on the page appears in a committed
-JSON source; `npm run test:fast` passes.
+The receipts page (bench, template, and the RAG-harness design sketch) lives in
+[PLAN_RECEIPTS.md](PLAN_RECEIPTS.md) as R1–R3.
 
 ### T9 — why.html draft (Sonnet, output for operator review)
 
