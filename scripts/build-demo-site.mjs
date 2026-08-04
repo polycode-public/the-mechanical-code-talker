@@ -38,7 +38,8 @@ import { shortCommit, versionFileText } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
-import { ABOUT_PAGES, SHARED_STYLESHEET } from "./site-pages.mjs";
+import { ABOUT_PAGES, DEMO_PAGES, DEMO_PAGE_META, INDEX_META, SHARED_STYLESHEET } from "./site-pages.mjs";
+import { escapeHtml } from "../src/services/viz-theme.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
@@ -60,6 +61,71 @@ const DYNAMICALLY_LOADED = ["adapters/wink-model.mjs", "adapters/ask-nlp.mjs"];
 // Ashcombe Hall's own world facts are read once at build time rather than
 // bundled.
 const spriteTemplates = readSpriteTemplateFiles();
+
+// Every page's head metadata: title, description, canonical link, and the
+// og:*/twitter:* tags a link preview reads. A demo page and its about page
+// share one DEMO_PAGE_META entry (title, description) and og:image; only
+// their own canonical/og:url differ. og:image always points at
+// scripts/gen-og-images.mjs's output — this build does not generate those
+// PNGs itself.
+const SITE_ORIGIN = "https://tmct.polycode.co.uk";
+
+function renderMetaHeadBlock({ pageTitleTag, socialTitle, description, canonicalUrl, ogImageUrl }) {
+  return [
+    `<title>${escapeHtml(pageTitleTag)}</title>`,
+    `<meta name="description" content="${escapeHtml(description)}">`,
+    `<link rel="canonical" href="${canonicalUrl}">`,
+    `<meta property="og:title" content="${escapeHtml(socialTitle)}">`,
+    `<meta property="og:description" content="${escapeHtml(description)}">`,
+    `<meta property="og:image" content="${ogImageUrl}">`,
+    `<meta property="og:url" content="${canonicalUrl}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:site_name" content="the-mechanical-code-talker">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:image" content="${ogImageUrl}">`,
+  ].join("\n");
+}
+
+/** A demo page's own head metadata: <slug>.html, its title suffixed the same
+ *  " — tmct" on every page, its og:image at og/<slug>.png. */
+function demoPageMeta(slug) {
+  const { title, description } = DEMO_PAGE_META[slug];
+  return {
+    pageTitleTag: `${title} — tmct`,
+    socialTitle: title,
+    description,
+    canonicalUrl: `${SITE_ORIGIN}/${slug}.html`,
+    ogImageUrl: `${SITE_ORIGIN}/og/${slug}.png`,
+  };
+}
+
+/** An about page shares its demo page's title, description and og:image;
+ *  only its own canonical/og:url point at itself. */
+function aboutPageMeta(slug) {
+  return { ...demoPageMeta(slug), canonicalUrl: `${SITE_ORIGIN}/${slug}-about.html` };
+}
+
+/** The home page's head metadata. It keeps its own, longer <title> text —
+ *  only the social tags use INDEX_META's shorter title. */
+function indexHeadMeta() {
+  return {
+    pageTitleTag: "tmct — The Mechanical Code Talker",
+    socialTitle: INDEX_META.title,
+    description: INDEX_META.description,
+    canonicalUrl: `${SITE_ORIGIN}/`,
+    ogImageUrl: `${SITE_ORIGIN}/og/index.png`,
+  };
+}
+
+/** Overwrites a freshly rendered demo page's own <title> line with this
+ *  build's full head-metadata block. Every renderXHtml still writes its own
+ *  <title> so the module renders something sensible standalone; this is
+ *  where the page-list metadata wins. */
+function injectMetaHead(html, meta) {
+  const titleLineRe = /<title>[^<]*<\/title>\n/;
+  if (!titleLineRe.test(html)) throw new Error("no <title> line found to inject the head-metadata block into");
+  return html.replace(titleLineRe, `${renderMetaHeadBlock(meta)}\n`);
+}
 
 // version.txt: written fresh on every build, gitignored like every other
 // build output under public/ — nothing here is committed, so there is
@@ -180,7 +246,7 @@ const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle
 const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
 console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }));
+await writeF(ledgerPath, injectMetaHead(renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }), demoPageMeta("ledger")));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The code explorer: the exact page the Electron shell renders for itself
@@ -213,13 +279,13 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   const codeGraphPayload = JSON.parse(await readF(join(SITE, "demo-graph.json"), "utf8"));
   const codeExplorerData = computeCodeExplorerData(codeGraphPayload, { title: "demo code graph" });
   const codePath = join(SITE, "code.html");
-  await writeF(codePath, renderCodeExplorerHtml(codeExplorerData, {
+  await writeF(codePath, injectMetaHead(renderCodeExplorerHtml(codeExplorerData, {
     bundleAvailable: true,
     winkLoaderInline: VENDOR_WINK_LOADER_JS,
     sourceName: "demo code graph",
     showDesktopLink: true,
     seedStamp,
-  }));
+  }), demoPageMeta("code")));
   console.log(`wrote ${codePath} (focus "${codeExplorerData.focus}", ${codeExplorerData.hints.length} hints)`);
 }
 
@@ -263,7 +329,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   // with a composed digest instead of always falling back to the flat list.
   const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const chatPagePath = join(SITE, "chat.html");
-  await writeF(chatPagePath, renderChatHtml({ digestStructures: readDigestStructures(), seedStamp, seedBytes: seed.bytes }));
+  await writeF(chatPagePath, injectMetaHead(renderChatHtml({ digestStructures: readDigestStructures(), seedStamp, seedBytes: seed.bytes }), demoPageMeta("chat")));
   console.log(`wrote ${chatPagePath}`);
 }
 
@@ -277,7 +343,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   console.log(`wrote ${ingestBundlePath} (${(ingestBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderIngestHtml } = await import(join(ROOT, "src", "services", "ingest-viz.mjs"));
   const ingestPagePath = join(SITE, "ingest.html");
-  await writeF(ingestPagePath, renderIngestHtml({ seedStamp, seedBytes: seed.bytes }));
+  await writeF(ingestPagePath, injectMetaHead(renderIngestHtml({ seedStamp, seedBytes: seed.bytes }), demoPageMeta("ingest")));
   console.log(`wrote ${ingestPagePath}`);
 }
 
@@ -298,7 +364,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   // over the store it grows in the browser — no TOML parser ever ships.
   const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const researchPagePath = join(SITE, "research.html");
-  await writeF(researchPagePath, renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }));
+  await writeF(researchPagePath, injectMetaHead(renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }), demoPageMeta("research")));
   console.log(`wrote ${researchPagePath}`);
 }
 
@@ -350,7 +416,7 @@ let largeSpriteManifest = null;
 
   const spritesPagePath = join(SITE, "sprites.html");
   const spritesHtml = renderSpriteCatalogLandingHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
-  await writeF(spritesPagePath, spritesHtml);
+  await writeF(spritesPagePath, injectMetaHead(spritesHtml, demoPageMeta("sprites")));
   console.log(`wrote ${spritesPagePath}`);
 
   for (const group of CATALOG_GROUPS) {
@@ -388,7 +454,7 @@ let largeSpriteManifest = null;
   if (!plan) throw new Error("the default hanoi-3 puzzle failed to solve — plan.html would have nothing to embed");
   const { rendersAs, sizeOrder } = renderInputsFromPlan(plan);
   const planPath = join(SITE, "plan.html");
-  await writeF(planPath, renderPlanHtml({ plan, rendersAs, sizeOrder, title: plan.goal?.text || "tmct plan" }));
+  await writeF(planPath, injectMetaHead(renderPlanHtml({ plan, rendersAs, sizeOrder, title: plan.goal?.text || "tmct plan" }), demoPageMeta("plan")));
   console.log(`wrote ${planPath} (${plan.actions.length} moves, ${plan.states.length} snapshots)`);
 }
 
@@ -418,7 +484,7 @@ let largeSpriteManifest = null;
   // (not shared with the sprites.html block's own spriteLargeTemplates)
   // so this step stays self-contained regardless of build-step ordering.
   const spiderFlySpriteTemplates = readSpriteLargeTemplateFiles();
-  await writeF(spiderFlyPath, renderSpiderFlyHtml({ spriteTemplates: spiderFlySpriteTemplates }));
+  await writeF(spiderFlyPath, injectMetaHead(renderSpiderFlyHtml({ spriteTemplates: spiderFlySpriteTemplates }), demoPageMeta("spider-fly")));
   console.log(`wrote ${spiderFlyPath}`);
 }
 
@@ -495,12 +561,12 @@ async function loadScenarioWorlds(names) {
       worldPayload,
     }));
     const adventurePath = join(SITE, "adventure.html");
-    await writeF(adventurePath, renderAdventureHtml({
+    await writeF(adventurePath, injectMetaHead(renderAdventureHtml({
       worldPayload: scenarios[0].worldPayload,
       scenarios,
       spriteTemplates,
       largeSpriteTemplates: largeSpriteManifest ? largeSpriteManifest.templates : [],
-    }));
+    }), demoPageMeta("adventure")));
     console.log(`wrote ${adventurePath}`);
   }
 }
@@ -538,12 +604,12 @@ async function loadScenarioWorlds(names) {
     }));
     const mudSpriteTemplates = readSpriteLargeTemplateFiles();
     const mudPath = join(SITE, "mud.html");
-    await writeF(mudPath, renderMudHtml({
+    await writeF(mudPath, injectMetaHead(renderMudHtml({
       worldPayload: scenarios[0].worldPayload,
       characters: scenarios[0].characters,
       scenarios,
       spriteTemplates: mudSpriteTemplates,
-    }));
+    }), demoPageMeta("mud")));
     console.log(`wrote ${mudPath}`);
   }
 }
@@ -588,14 +654,63 @@ async function loadScenarioWorlds(names) {
       gridSize: layoutNamed(worldPayload.name).gridSize,
     }));
     const mudiiiPath = join(SITE, "mudiii.html");
-    await writeF(mudiiiPath, renderMudiiiHtml({
+    await writeF(mudiiiPath, injectMetaHead(renderMudiiiHtml({
       worldPayload: scenarios[0].worldPayload,
       agents: scenarios[0].agents,
       scenarios,
       assetManifest,
-    }));
+    }), demoPageMeta("mudiii")));
     console.log(`wrote ${mudiiiPath}`);
   }
+}
+
+// The 12 hand-authored pages (index.html + the 11 about pages) carry a
+// <!-- meta:begin -->/<!-- meta:end --> marker pair in their tracked <head>
+// in place of their own <title>/<meta name="description"> lines; this fills
+// the marker's interior fresh on every build, so a title/description edit
+// only ever needs to land in scripts/site-pages.mjs.
+{
+  const markerRe = /<!-- meta:begin -->[\s\S]*?<!-- meta:end -->/;
+  const fillMetaMarker = (path, meta) => {
+    const html = readFileSync(path, "utf8");
+    if (!markerRe.test(html)) throw new Error(`${path} has no <!-- meta:begin -->/<!-- meta:end --> marker to fill`);
+    writeFileSync(path, html.replace(markerRe, `<!-- meta:begin -->\n${renderMetaHeadBlock(meta)}\n<!-- meta:end -->`));
+  };
+  fillMetaMarker(join(SITE, "index.html"), indexHeadMeta());
+  for (const slug of DEMO_PAGES) fillMetaMarker(join(SITE, `${slug}-about.html`), aboutPageMeta(slug));
+  console.log(`filled meta:begin/meta:end blocks in index.html and ${DEMO_PAGES.length} about pages`);
+}
+
+// robots.txt and sitemap.xml: the live site was serving both as an HTTP 403
+// because neither existed in the build, which search engines read as the
+// whole site being blocked from crawling.
+const ROBOTS_TXT = `User-agent: *
+Allow: /
+Sitemap: ${SITE_ORIGIN}/sitemap.xml
+`;
+
+function renderSitemapXml() {
+  const locs = [`${SITE_ORIGIN}/`];
+  for (const slug of DEMO_PAGES) {
+    locs.push(`${SITE_ORIGIN}/${slug}.html`);
+    locs.push(`${SITE_ORIGIN}/${slug}-about.html`);
+  }
+  const entries = locs.map((loc) => `  <url><loc>${loc}</loc></url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</urlset>
+`;
+}
+
+{
+  const robotsPath = join(SITE, "robots.txt");
+  writeFileSync(robotsPath, ROBOTS_TXT);
+  console.log(`wrote ${robotsPath}`);
+  const sitemapXml = renderSitemapXml();
+  const sitemapPath = join(SITE, "sitemap.xml");
+  writeFileSync(sitemapPath, sitemapXml);
+  console.log(`wrote ${sitemapPath} (${(sitemapXml.match(/<loc>/g) || []).length} locs)`);
 }
 
 // The site's service worker. What it caches is best-effort and volatile —
