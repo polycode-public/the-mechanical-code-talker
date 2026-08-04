@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-08-04T22:41:16.702Z",
+  "commit": "2f881912e96f",
+  "latencyMs": {
+    "p50": 9.195295000000215,
+    "p90": 58.01559999999972,
+    "p99": 72.7686020000001,
+    "max": 75.2198649999998,
+    "n": 100
+  },
+  "graph": {
+    "facts": 63470,
+    "individuals": 63481,
+    "bytesRaw": 93496025,
+    "bytesBrotli": 4544799
+  },
+  "pages": [
+    {
+      "slug": "adventure-about",
+      "bytesRaw": 15586,
+      "bytesWire": 3930
+    },
+    {
+      "slug": "adventure",
+      "bytesRaw": 4759966,
+      "bytesWire": 109441
+    },
+    {
+      "slug": "chat-about",
+      "bytesRaw": 17128,
+      "bytesWire": 4545
+    },
+    {
+      "slug": "chat",
+      "bytesRaw": 157437,
+      "bytesWire": 35387
+    },
+    {
+      "slug": "code-about",
+      "bytesRaw": 14195,
+      "bytesWire": 3563
+    },
+    {
+      "slug": "code",
+      "bytesRaw": 103968,
+      "bytesWire": 15796
+    },
+    {
+      "slug": "index",
+      "bytesRaw": 85579,
+      "bytesWire": 8214
+    },
+    {
+      "slug": "ingest-about",
+      "bytesRaw": 13695,
+      "bytesWire": 3534
+    },
+    {
+      "slug": "ingest",
+      "bytesRaw": 50264,
+      "bytesWire": 12299
+    },
+    {
+      "slug": "ledger-about",
+      "bytesRaw": 14900,
+      "bytesWire": 3923
+    },
+    {
+      "slug": "ledger",
+      "bytesRaw": 160059,
+      "bytesWire": 25325
+    },
+    {
+      "slug": "mud-about",
+      "bytesRaw": 14425,
+      "bytesWire": 3783
+    },
+    {
+      "slug": "mud",
+      "bytesRaw": 4854671,
+      "bytesWire": 131682
+    },
+    {
+      "slug": "mudiii-about",
+      "bytesRaw": 14631,
+      "bytesWire": 3810
+    },
+    {
+      "slug": "mudiii",
+      "bytesRaw": 313452,
+      "bytesWire": 41375
+    },
+    {
+      "slug": "plan-about",
+      "bytesRaw": 15809,
+      "bytesWire": 4148
+    },
+    {
+      "slug": "plan",
+      "bytesRaw": 48369,
+      "bytesWire": 10559
+    },
+    {
+      "slug": "research-about",
+      "bytesRaw": 15038,
+      "bytesWire": 3872
+    },
+    {
+      "slug": "research",
+      "bytesRaw": 58090,
+      "bytesWire": 12895
+    },
+    {
+      "slug": "spider-fly-about",
+      "bytesRaw": 14395,
+      "bytesWire": 3747
+    },
+    {
+      "slug": "spider-fly",
+      "bytesRaw": 4684149,
+      "bytesWire": 100092
+    },
+    {
+      "slug": "sprites-about",
+      "bytesRaw": 13930,
+      "bytesWire": 3419
+    },
+    {
+      "slug": "sprites-adventure-props",
+      "bytesRaw": 3679352,
+      "bytesWire": 114046
+    },
+    {
+      "slug": "sprites-emotions",
+      "bytesRaw": 3584694,
+      "bytesWire": 107571
+    },
+    {
+      "slug": "sprites-objects",
+      "bytesRaw": 4525203,
+      "bytesWire": 145270
+    },
+    {
+      "slug": "sprites-person-roles",
+      "bytesRaw": 5902615,
+      "bytesWire": 147284
+    },
+    {
+      "slug": "sprites",
+      "bytesRaw": 4153694,
+      "bytesWire": 124052
+    }
+  ],
+  "host": {
+    "model": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz",
+    "cores": 16
+  }
+}
