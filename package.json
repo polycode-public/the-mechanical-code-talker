@@ -154,7 +154,7 @@
     "template:coverage": "node scripts/template-coverage.mjs",
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
-    "demo:build": "node scripts/build-demo-site.mjs && node scripts/gen-og-images.mjs",
+    "demo:build": "node scripts/build-demo-site.mjs",
     "bench:receipts": "node scripts/bench-receipts.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",

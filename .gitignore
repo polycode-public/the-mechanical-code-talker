@@ -151,4 +151,3 @@ electron/renderer/
 # a human/agent to look at, regenerated fresh on every run, never a golden
 # image compared pixel-to-pixel and never committed.
 .screenshots/
-public/og/

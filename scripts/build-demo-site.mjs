@@ -749,6 +749,7 @@ const CONTENT_ADDRESSED = [
 // caches it here without a second edit.
 const DEPLOY_TRACKING = [
   "./index.html",
+  "./og/index.png",
   "./chat.html",
   "./ingest.html",
   "./research.html",

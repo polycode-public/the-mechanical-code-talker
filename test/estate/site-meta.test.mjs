@@ -18,6 +18,11 @@ const PUBLIC_DIR = fileURLToPath(new URL("../../public/", import.meta.url));
 
 const ALL_PAGES = ["index.html", ...DEMO_PAGES.map((slug) => `${slug}.html`), ...DEMO_PAGES.map(aboutPageOf)];
 
+// The generated pages, robots.txt and sitemap.xml exist only after a build, and
+// the unit CI job runs on a fresh checkout with no built site — these checks
+// run wherever a build has happened (locally, and in the web e2e jobs).
+const siteUnbuilt = !existsSync(join(PUBLIC_DIR, "chat.html"));
+
 function readPage(name) {
   const path = join(PUBLIC_DIR, name);
   assert.ok(existsSync(path), `${name} is missing from public/ — run \`npm run demo:build\` first`);
