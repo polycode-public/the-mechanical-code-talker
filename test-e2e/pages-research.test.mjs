@@ -15,7 +15,9 @@ import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
-const GROW_TIMEOUT_MS = 20_000;
+// The in-page engine can block the main thread for tens of seconds on the
+// shared CI runners, so grow-side waits and interactions need matching patience.
+const GROW_TIMEOUT_MS = 60_000;
 // A multi-topic research run is paced by the adapter's polite 2s interval
 // between round trips and the page's own 2.4s auto-play tick.
 const DEEP_RUN_TIMEOUT_MS = 60_000;
@@ -42,6 +44,7 @@ async function openResearchPage({ viewport, colorScheme } = {}) {
     ...(colorScheme ? { colorScheme } : {}),
   });
   const page = await context.newPage();
+  page.setDefaultTimeout(GROW_TIMEOUT_MS * 2);
   const consoleErrors = [];
   const failedRequests = [];
 
