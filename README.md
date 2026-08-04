@@ -1,5 +1,15 @@
 # tmct — The Mechanical Code Talker
 
+[![npm version](https://img.shields.io/npm/v/@polycode-projects/the-mechanical-code-talker)](https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker)
+[![npm downloads](https://img.shields.io/npm/dm/@polycode-projects/the-mechanical-code-talker)](https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker)
+[![licence](https://img.shields.io/npm/l/@polycode-projects/the-mechanical-code-talker)](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/blob/main/LICENSE)
+[![live demos](https://img.shields.io/badge/demos-tmct.polycode.co.uk-blue)](https://tmct.polycode.co.uk)
+
+> Canonical home: [GitLab](https://gitlab.com/polycode-projects/the-mechanical-code-talker).
+> Installs come from [npm](https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker).
+> The [GitHub repo](https://github.com/polycode-public/the-mechanical-code-talker) is a
+> read-only mirror, synced hourly. Issues and merge requests go to GitLab.
+
 `@polycode-projects/the-mechanical-code-talker`
 
 A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage.
