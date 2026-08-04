@@ -76,7 +76,7 @@ Facts every task may rely on without re-checking:
 | 5 About panel | holds | text drafted below; manual M3 |
 | 6 README banner/badges | holds; use `img.shields.io/npm/...` endpoints | T4 |
 | 7 MMORPG rename | holds (two live surfaces only; `PLAN_MUD_*.md` file names are deliberate, untouched) | T1 (about title) + T3 (index card) |
-| 8 GitHub Releases workflow | **debunked as written.** The mirror pushes with the Actions `GITHUB_TOKEN`, which cannot push a new or changed workflow file — GitHub rejects the push and the whole mirror wedges. Identical-content pushes pass (the mirror works today with `mirror-from-gitlab.yml` in tree). The `schedule`-not-`on: push` reasoning is correct. | T13, blocked on decision D4 (one-time manual bootstrap push vs `workflow`-scoped PAT) |
+| 8 | dropped by the operator | — |
 | 9 footer GitHub link | holds | T3 |
 | 10 grid titles | holds | T3, payload verbatim below |
 | 11 titles/descriptions | partly — 12 of 23 pages already have descriptions | T1 fills the missing 11, normalizes titles |
@@ -85,9 +85,9 @@ Facts every task may rely on without re-checking:
 | 14 stale GitLab Pages copy | **debunked in location.** No such copy on the index; the two real stale references are comments at `scripts/build-demo-site.mjs:1` and `:740` | T3 |
 | 15 page weight | **debunked in premise.** Wire weight is already solved (brotli, 0.85–1.83 MB); sprites is 3.96 MB raw, under the claimed floor; `reports/PAGE_WEIGHTS.md` rev 3 already documents all of it. The live question is first paint on the embedded payload | T6, reframed |
 | 16 receipts numbers | **debunked.** No rig measures token-reduction-vs-RAG, query latency, or index size; zero hits across all committed reports. The notes asked to be told rather than estimated: all three are missing | moved to [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md): R1 bench, R2 page, R3 RAG-harness design sketch |
-| 17 why.html | holds | T9, drafts for operator review D2 |
+| 17 why.html | dropped by the operator | — |
 | 18 README overhaul | holds; Mermaid needs an SVG fallback for the npm page | T10 |
-| 19 CONTRIBUTING etc. | holds | T11a files; T11b drafts the issue list for approval D3 |
+| 19 CONTRIBUTING etc. | holds | T11a files shipped; the five drafted starter items land as corpus rows instead of issues |
 | 20 org profile | holds | T14 drafts text; manual M4 |
 | 21 mobile pass | holds | T7 |
 | 22 analytics | **debunked as scoped.** CloudFront log analysis meets every stated constraint with zero client-side code; beacon options fail offline anyway | D5 decision; AWS work is coordinator/operator-side, no page changes |
@@ -106,8 +106,8 @@ Facts every task may rely on without re-checking:
 | 3 | T6 | Sonnet | `scripts/build-demo-site.mjs` splash, `reports/PAGE_WEIGHTS.md` |
 | 3 | R1, R2 | Sonnet | see [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md) |
 | 4 | T7 | Sonnet | mobile fixes in generated-page templates |
-| 4 | T9, T10, T11b, T14 | Sonnet | drafts + README overhaul |
-| unblocked-by-operator | T12, T13, analytics | — | after D1/D4/D5 |
+| 4 | T10 | Sonnet | README overhaul |
+| unblocked-by-operator | T12, analytics | — | after D1/D5 |
 
 Waves run as concurrent background sub-agents in worktrees, one wave at a time; the
 coordinator merges, removes each worktree at merge, and pushes per the repo's standing
@@ -290,17 +290,6 @@ Acceptance: the four pages at both viewports show no horizontal scroll and a liv
 The receipts page (bench, template, and the RAG-harness design sketch) lives in
 [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md) as R1–R3.
 
-### T9 — why.html draft (Sonnet, output for operator review)
-
-Write `docs/drafts/why-draft.md`: where symbolic grounding beats a language model
-(determinism, provenance, cost, offline, abstention instead of confabulation) and where it
-does not (open-domain coverage, paraphrase breadth, fluency, anything outside the graph).
-Claims must be present-tense descriptions of current behaviour with a named demo or report
-behind each. No publication in this task; the operator reviews, then a Haiku task turns the
-approved draft into a generated page.
-
-Acceptance: `npm run check:links` exits 0; the draft cites only files that exist.
-
 ### T10 — README overhaul (Sonnet, after T4)
 
 Reshape README.md: 30-second quickstart at top (install, one `runTurn` snippet, the CLI
@@ -325,19 +314,15 @@ Three new files, content in full:
   the GitHub repo is a mirror and PRs opened there will be redirected.
 - `.github/pull_request_template.md`: two sentences — this repo is a read-only mirror;
   please open this change as a merge request on GitLab (link), where CI runs.
-  **Note:** this file lives under `.github/` but is not a workflow, so the mirror's
-  `GITHUB_TOKEN` push delivers it fine (the workflow-file restriction covers
-  `.github/workflows/` only).
 - `SECURITY.md`: report privately to `antony@polycode.co.uk` (operator to confirm address,
   decision D6); no bounty; acknowledgement target one week.
 
 Acceptance: `npm run check:links` exits 0; `node --test test/estate/links.test.mjs` passes.
 
-### T11b — good-first-issue list draft (Sonnet, output for operator approval)
+### T11b — starter-item corpus rows
 
-From `NEXT.md`, recent playtest logs, and the audit facts in this doc, draft 5–10 candidate
-GitLab issues: title, two-sentence body, files involved, expected size. Output is a list for
-the operator (decision D3). Create nothing.
+Delivered as five verified candidates; the operator chose to land them directly as corpus
+rows rather than open them as issues.
 
 ### T12 — about-polycode.html (blocked on D1)
 
@@ -346,58 +331,9 @@ Blocked until the operator supplies biography and contact route. Then: a generat
 MPL-2.0, Seonix and Marginalia as sibling projects, and the contact route; linked from the
 index footer.
 
-### T13 — GitHub Releases workflow (blocked on D4)
-
-The workflow content, ready to commit to GitLab once D4 is decided:
-
-```yaml
-name: publish-releases
-on:
-  schedule:
-    - cron: '37 * * * *'
-  workflow_dispatch:
-permissions:
-  contents: write
-jobs:
-  releases:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: create a release for any tag that lacks one
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for tag in $(git tag --list 'v*'); do
-            if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              version="${tag#v}"
-              gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
-                --title "$tag" --verify-tag \
-                --notes "[\`@polycode-projects/the-mechanical-code-talker@$version\`](https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker/v/$version) on npm."
-            fi
-          done
-```
-
-Idempotent by construction (view-before-create). Why it is blocked: the mirror authenticates
-with the Actions `GITHUB_TOKEN`, which GitHub refuses for any push that adds or changes a
-file under `.github/workflows/`. Committing this file to GitLab alone would wedge the next
-mirror sync. Identical-content pushes pass (today's mirror proves it), so after a one-time
-out-of-band delivery of this exact file to GitHub, hourly syncs continue cleanly — until the
-file is next edited, which repeats the manual step. The standing constraint to record
-wherever the mirror is documented: **a change to any `.github/workflows/` file must be
-pushed to GitHub manually by the operator in the same breath as its GitLab commit.**
-
 ## Operator decisions needed
 
 - **D1** — biography and contact route for about-polycode.html (T12).
-- **D2** — review the why.html draft before anything is published (T9).
-- **D3** — approve/edit the good-first-issue list before creation (T11b).
-- **D4** — item 8 bootstrap: (a) one-time manual `git push` of the workflow file to the
-  GitHub mirror alongside the GitLab commit (no new secrets, repeats on future edits), or
-  (b) re-key the mirror workflow to a fine-grained PAT with `contents` + `workflows` write
-  (new secret to mint and rotate, never manual again). Recommendation: (a) — the file
-  should change rarely.
 - **D5** — analytics: recommendation is CloudFront standard logs to an S3 bucket, analyzed
   offline; zero client-side code, nothing to consent-banner, offline operation untouched.
   Needs an AWS change (coordinator or operator with credentials), not a page change.
@@ -415,8 +351,7 @@ pushed to GitHub manually by the operator in the same breath as its GitLab commi
   *Deterministic, no-LLM chat over an OWL-labelled JSON graph memory. Grounded answers with
   provenance, or a refusal. Pure JS, offline, $0 to run. Read-only mirror of the GitLab
   repo; live demos at tmct.polycode.co.uk.*
-- **M4** — create the polycode-public org profile README (T14 drafts it) and pin the repo.
-- **M5** — if D4(a): the one-time workflow-file push to the mirror.
+- **M4** — put the drafted profile README on the polycode-public account and pin the repo.
 
 ## Launch sequencing
 

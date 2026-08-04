@@ -1,6 +1,7 @@
 # Polycode
 
-We build deterministic software. No model calls in the product path, offline-first, $0 to run.
+Polycode is one developer building deterministic software. No model calls in the product
+path, offline-first, $0 to run.
 
 ## Projects
 
