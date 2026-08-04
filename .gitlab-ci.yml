@@ -49,6 +49,18 @@ stages:
   - site-ready
   - e2e-deployed
 
+# publish:npm creates a release tag AFTER that commit's own pipeline has already
+# tested and shipped it, so a tag pipeline would re-run the suite against a
+# commit that just passed it. Most jobs here rule on `changes:` alone, and
+# GitLab evaluates `changes:` as always-true outside branch and merge request
+# pipelines — so without this, every release would cost a second near-full
+# pipeline.
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
 # ---- security scanning (free tier) -----------------------------------------
 # SAST (semgrep) + Pipeline Secret Detection via GitLab's stock templates.
 # Harmless if the group doesn't license the report UI — the jobs still run.
@@ -462,6 +474,28 @@ publish:npm:
     - |
       if npm run --silent check:publish -- "$PUBLISHED_VERSION"; then
         npm publish --provenance --access public
+        # Tag the commit that built the tarball we just published. This sits
+        # inside the same conditional because it is the only place in the
+        # pipeline that knows a publish actually happened — a job-level
+        # `release:` block would fire on every push to main, including all the
+        # ones check:publish skipped. node writes the payload rather than a
+        # heredoc so nothing in package.json can break out of the JSON, and the
+        # ref is the exact commit, not a branch head that has already moved on.
+        node -e '
+          const { name, version } = require("./package.json");
+          process.stdout.write(JSON.stringify({
+            tag_name: `v${version}`,
+            name: `v${version}`,
+            ref: process.env.CI_COMMIT_SHA,
+            description: `[\`${name}@${version}\`](https://www.npmjs.com/package/${name}/v/${version}) on npm.`,
+          }));
+        ' > release.json
+        curl --fail --silent --show-error \
+          --request POST \
+          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --header "Content-Type: application/json" \
+          --data @release.json \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
       fi
 
 # Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
