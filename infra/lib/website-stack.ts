@@ -145,6 +145,21 @@ export class WebsiteStack extends Stack {
       autoDeleteObjects: envName !== "prod",
     });
 
+    // ---------- CloudFront access log bucket ----------
+    // CloudFront's standard logging delivery writes objects via a canned ACL,
+    // which the default (bucket-owner-enforced) ObjectOwnership rejects. This
+    // is the only bucket in the stack that needs OBJECT_WRITER.
+    const logBucket = new s3.Bucket(this, "LogBucket", {
+      bucketName: `tmct-${envName}-${slug}-logs-${this.account}`,
+      objectOwnership: s3.ObjectOwnership.OBJECT_WRITER,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [{ expiration: Duration.days(400) }],
+      removalPolicy: envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      autoDeleteObjects: envName !== "prod",
+    });
+
     const oversizedPaths = findOversizedAssets(SITE_SOURCE_DIR);
 
     const oversizedRewriteFn = new cloudfront.Function(this, "OversizedAssetRewriteFn", {
@@ -179,6 +194,10 @@ export class WebsiteStack extends Stack {
         compress: true,
         functionAssociations: rewriteAssociation,
       },
+      enableLogging: true,
+      logBucket,
+      logFilePrefix: "cf/",
+      logIncludesCookies: false,
       // The oversized paths are the only ones the rewrite function ever swaps
       // for a sibling that is already brotli or gzip on disk. An object that
       // arrives at the edge already compressed must not be compressed again:
