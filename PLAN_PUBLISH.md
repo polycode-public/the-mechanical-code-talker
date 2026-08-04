@@ -81,7 +81,7 @@ Facts every task may rely on without re-checking:
 | 10 grid titles | holds | T3, payload verbatim below |
 | 11 titles/descriptions | partly — 12 of 23 pages already have descriptions | T1 fills the missing 11, normalizes titles |
 | 12 grid order | holds; "Plate I-XI" vocabulary does not exist in the codebase — the narrative `<h2>` sections are what stays put | T3 |
-| 13 about-polycode | holds | T12, blocked on operator bio/contact D1 |
+| 13 | dropped by the operator | — |
 | 14 stale GitLab Pages copy | **debunked in location.** No such copy on the index; the two real stale references are comments at `scripts/build-demo-site.mjs:1` and `:740` | T3 |
 | 15 page weight | **debunked in premise.** Wire weight is already solved (brotli, 0.85–1.83 MB); sprites is 3.96 MB raw, under the claimed floor; `reports/PAGE_WEIGHTS.md` rev 3 already documents all of it. The live question is first paint on the embedded payload | T6, reframed |
 | 16 receipts numbers | **debunked.** No rig measures token-reduction-vs-RAG, query latency, or index size; zero hits across all committed reports. The notes asked to be told rather than estimated: all three are missing | moved to [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md): R1 bench, R2 page, R3 RAG-harness design sketch |
@@ -90,7 +90,7 @@ Facts every task may rely on without re-checking:
 | 19 CONTRIBUTING etc. | holds | T11a files shipped; the five drafted starter items land as corpus rows instead of issues |
 | 20 org profile | holds | T14 drafts text; manual M4 |
 | 21 mobile pass | holds | T7 |
-| 22 analytics | **debunked as scoped.** CloudFront log analysis meets every stated constraint with zero client-side code; beacon options fail offline anyway | D5 decision; AWS work is coordinator/operator-side, no page changes |
+| 22 analytics | **debunked as scoped.** CloudFront log analysis meets every stated constraint with zero client-side code; beacon options fail offline anyway | approved as CloudFront standard logs: T15 |
 | 23 robots/sitemap | holds, and is urgent (403 = full crawl block) | T1 |
 
 ## Waves
@@ -107,7 +107,7 @@ Facts every task may rely on without re-checking:
 | 3 | R1, R2 | Sonnet | see [PLAN_RECEIPTS.md](PLAN_RECEIPTS.md) |
 | 4 | T7 | Sonnet | mobile fixes in generated-page templates |
 | 4 | T10 | Sonnet | README overhaul |
-| unblocked-by-operator | T12, analytics | — | after D1/D5 |
+| 3 | T15 | Sonnet | `infra/lib/website-stack.ts` |
 
 Waves run as concurrent background sub-agents in worktrees, one wave at a time; the
 coordinator merges, removes each worktree at merge, and pushes per the repo's standing
@@ -314,8 +314,8 @@ Three new files, content in full:
   the GitHub repo is a mirror and PRs opened there will be redirected.
 - `.github/pull_request_template.md`: two sentences — this repo is a read-only mirror;
   please open this change as a merge request on GitLab (link), where CI runs.
-- `SECURITY.md`: report privately to `antony@polycode.co.uk` (operator to confirm address,
-  decision D6); no bounty; acknowledgement target one week.
+- `SECURITY.md`: report privately to `antony@polycode.co.uk`; no bounty; acknowledgement
+  target one week.
 
 Acceptance: `npm run check:links` exits 0; `node --test test/estate/links.test.mjs` passes.
 
@@ -324,21 +324,20 @@ Acceptance: `npm run check:links` exits 0; `node --test test/estate/links.test.m
 Delivered as five verified candidates; the operator chose to land them directly as corpus
 rows rather than open them as issues.
 
-### T12 — about-polycode.html (blocked on D1)
+### T15 — CloudFront standard access logs (Sonnet)
 
-Blocked until the operator supplies biography and contact route. Then: a generated page
-(same head-block machinery as T1) covering who built this, the commercial intent behind
-MPL-2.0, Seonix and Marginalia as sibling projects, and the contact route; linked from the
-index footer.
+File: `infra/lib/website-stack.ts` only. The operator approved CloudFront standard logs as
+the site's analytics: zero page code, offline operation untouched. Add an S3 log bucket to
+the website stack (CloudFront log delivery needs ACL-enabled/preferred-writer object
+ownership; add a lifecycle expiry around 400 days) and enable logging on the distribution
+(`enableLogging`, `logBucket`, a `cf/` prefix, cookies excluded). Verify the exact prop
+names against the `aws-cdk-lib` version pinned in `infra/package.json`; if the installed
+API differs from these names, stop and report. No page, service-worker, or CI change; the
+existing `deploy:website` job ships it on the next push.
 
-## Operator decisions needed
-
-- **D1** — biography and contact route for about-polycode.html (T12).
-- **D5** — analytics: recommendation is CloudFront standard logs to an S3 bucket, analyzed
-  offline; zero client-side code, nothing to consent-banner, offline operation untouched.
-  Needs an AWS change (coordinator or operator with credentials), not a page change.
-  Confirm before anything is enabled.
-- **D6** — confirm the security contact address for SECURITY.md.
+Acceptance: the infra package's own compile/synth commands (read `infra/package.json` for
+what exists) exit 0 and the synthesized template contains the logging configuration; `git
+status` shows changes under `infra/` only.
 
 ## Manual checklist (operator, web UIs)
 
