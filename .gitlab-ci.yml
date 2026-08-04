@@ -474,29 +474,51 @@ publish:npm:
     - |
       if npm run --silent check:publish -- "$PUBLISHED_VERSION"; then
         npm publish --provenance --access public
-        # Tag the commit that built the tarball we just published. This sits
-        # inside the same conditional because it is the only place in the
-        # pipeline that knows a publish actually happened — a job-level
-        # `release:` block would fire on every push to main, including all the
-        # ones check:publish skipped. node writes the payload rather than a
-        # heredoc so nothing in package.json can break out of the JSON, and the
-        # ref is the exact commit, not a branch head that has already moved on.
-        node -e '
-          const { name, version } = require("./package.json");
-          process.stdout.write(JSON.stringify({
-            tag_name: `v${version}`,
-            name: `v${version}`,
-            ref: process.env.CI_COMMIT_SHA,
-            description: `[\`${name}@${version}\`](https://www.npmjs.com/package/${name}/v/${version}) on npm.`,
-          }));
-        ' > release.json
-        curl --fail --silent --show-error \
-          --request POST \
-          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data @release.json \
-          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
       fi
+    # Then make sure this version has a release tag, on every run of this job
+    # rather than only the run that published. Publishing and tagging are two
+    # calls to two services, and the second can fail on its own; a re-run then
+    # finds the version already on the registry, skips the publish above, and
+    # would otherwise skip the tag with it and go green with nothing tagged. So
+    # ask for the release first: 200 means it is already there and there is
+    # nothing to do, 404 means create it, anything else is a real failure and
+    # says so. `--fail` is deliberately absent from the GET — it turns the 404
+    # this branches on into a dead job — and deliberately present on the POST.
+    # node writes the payload rather than a heredoc so nothing in package.json
+    # can break out of the JSON, and the ref is the exact commit, not a branch
+    # head that has already moved on.
+    - |
+      VERSION=$(node -p 'require("./package.json").version')
+      RELEASES_API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
+      RELEASE_STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+        --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+        "$RELEASES_API/v$VERSION")
+      case "$RELEASE_STATUS" in
+        200)
+          echo "release v$VERSION already exists"
+          ;;
+        404)
+          node -e '
+            const { name, version } = require("./package.json");
+            process.stdout.write(JSON.stringify({
+              tag_name: `v${version}`,
+              name: `v${version}`,
+              ref: process.env.CI_COMMIT_SHA,
+              description: `[\`${name}@${version}\`](https://www.npmjs.com/package/${name}/v/${version}) on npm.`,
+            }));
+          ' > release.json
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data @release.json \
+            "$RELEASES_API"
+          ;;
+        *)
+          echo "releases API answered $RELEASE_STATUS for v$VERSION" >&2
+          exit 1
+          ;;
+      esac
 
 # Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
 # GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds
