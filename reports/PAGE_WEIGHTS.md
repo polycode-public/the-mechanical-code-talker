@@ -175,3 +175,35 @@ as same-origin unless proven otherwise. This revision found the CDP total runs a
 the curl-summed total, largest on the smallest pages (see the table's note) — that gap is response
 headers, not a measurement error, so don't chase it to zero. `npm run smoke:deploy` separately
 verifies version stamps and that compressible assets serve with a `content-encoding`.
+
+## First paint on the four heavy pages (2026-08-05)
+
+Wire weight is already solved (brotli precompression, ~1.8 MB on the heaviest page). The open
+question was whether first paint waits on the multi-megabyte embedded payload adventure.html,
+mud.html, spider-fly.html and sprites.html each carry in their own HTML (raw `own HTML` column
+above, 3.7-4.9 MB per page).
+
+Measured cold-load first contentful paint (FCP) with Playwright CDP against a local static
+server of a fresh `npm run demo:build` (version 5.0.7): a fresh browser context per run,
+`{ serviceWorkers: "block" }` so no precached response shortcuts the load, `performance
+.getEntriesByType("paint")` read from the page after `waitUntil: "load"`. Three cold runs per
+page, median reported (the browser's own `first-contentful-paint` and `first-paint` entries
+were identical on every run, since these pages have no separate non-content first paint).
+
+| page | responseStart (median, ms) | FCP (median, ms) | FCP after first byte (median, ms) |
+|---|---:|---:|---:|
+| adventure.html | 4.3 | 164 | 159.7 |
+| mud.html | 4.9 | 212 | 207.1 |
+| spider-fly.html | 4.1 | 136 | 131.9 |
+| sprites.html | 3.4 | 124 | 120.6 |
+
+All four sit far under the 500ms threshold — the worst single run across 12 cold loads was
+312ms (mud.html), still well clear. The browser paints the shell before the embedded payload
+is parsed, so the multi-megabyte JSON blob these pages carry does not stall first paint. No
+splash was added: the stop rule in `PLAN_PUBLISH.md`'s T6 only calls for one past 500ms, and
+none of the four crossed it. No payload splitting either, for the same reason.
+
+This is a local-loopback measurement (no network latency), matching what "first paint" means
+for a visitor whose connection has already delivered the HTML's opening bytes — CloudFront's own
+time-to-first-byte is a separate, already-monitored concern (`npm run smoke:deploy`), not what
+this measurement targets.
