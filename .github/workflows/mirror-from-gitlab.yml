@@ -1,0 +1,30 @@
+name: Mirror from GitLab
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-from-gitlab
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push GitLab refs to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE: https://gitlab.com/polycode-projects/the-mechanical-code-talker.git
+        run: |
+          set -euo pipefail
+          git clone --mirror "$SOURCE" repo.git
+          cd repo.git
+          git push --prune \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
