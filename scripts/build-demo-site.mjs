@@ -1,4 +1,4 @@
-// scripts/build-demo-site.mjs — regenerate everything the GitLab Pages site
+// scripts/build-demo-site.mjs — regenerate everything the demo site
 // generates rather than tracks:
 //
 //   engine/           unmodified copies of the engine sources the in-page demo runs
@@ -851,8 +851,8 @@ self.addEventListener("fetch", (event) => {
   console.log(`wrote ${swPath} (cache tmct-precache-v${version}-${buildHash}, seed content ${seedStamp || "unhashed"})`);
 }
 
-// Precompressed siblings (.gz/.br) for every sizable text asset, last, over
-// the finished site: GitLab Pages documents serving these variants when they
+// Precompressed siblings (.gz/.br) for every sizable text asset, last, added to
+// the finished site: served from the deployment when they
 // sit next to the file. The per-article reference-pack tier is skipped on
 // purpose — thousands of small files whose individual wins are tiny, tripling
 // the pack's file count for near-zero wire savings; scripts/post-deploy-smoke
