@@ -114,6 +114,8 @@ public/viz-ticker.mjs
 public/sprites-pack/
 public/vendor/
 public/tmct-sw.js
+public/robots.txt
+public/sitemap.xml
 public/*.gz
 public/*.br
 

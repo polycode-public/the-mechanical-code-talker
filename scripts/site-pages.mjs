@@ -7,7 +7,11 @@
 // adding a page meant finding all of them and a page missed one list silently.
 //
 // DEMO_PAGES is the order the home page reads in. ABOUT_PAGES is derived from
-// it, never typed out again.
+// it, never typed out again. DEMO_PAGES itself stays a plain slug list — every
+// existing reader (aboutPageOf below, the service worker's precache set, the
+// e2e page-order tests) treats an entry as a string — so the head-tag
+// metadata each slug now carries rides in DEMO_PAGE_META instead, keyed by
+// the same slugs, rather than reshaping DEMO_PAGES's own entries.
 
 export const DEMO_PAGES = [
   "chat",
@@ -33,3 +37,63 @@ export const ABOUT_PAGES = DEMO_PAGES.map(aboutPageOf);
 export const TRACKED_PAGES = ["index.html", ...ABOUT_PAGES];
 
 export const SHARED_STYLESHEET = "site.css";
+
+/** Per-slug head-tag metadata: the title and description build-demo-site.mjs
+ *  puts into <title>, <meta name="description">, og:title/og:description and
+ *  twitter:image on both a demo page and its about page. Each description is
+ *  copied verbatim from that slug's own <slug>-about.html, the only place any
+ *  of these pages carried one before. */
+export const DEMO_PAGE_META = {
+  chat: {
+    title: "Ask it anything, check every answer",
+    description: "How tmct reads a plain English question, answers it from a graph, and names the source of every fact it uses.",
+  },
+  "spider-fly": {
+    title: "A spider hunts a fly, each planning blind",
+    description: "How a spider and a fly each plan their own moves over one graph, acting on what each believes rather than on the true board.",
+  },
+  plan: {
+    title: "Watch it solve a puzzle it was taught",
+    description: "How tmct solves the Tower of Hanoi with a bounded breadth-first search and shows the plan as PDDL and OWL triples.",
+  },
+  adventure: {
+    title: "A house drawn only from what its facts say",
+    description: "How Ashcombe Hall draws a room from its own facts and nothing else, and how an auto-player works out its own goal.",
+  },
+  ledger: {
+    title: "Every fact, its source, and how far to trust it",
+    description: "How tmct stores memory as RDF triples with OWL labels, and shows where every fact came from and how far to trust it.",
+  },
+  code: {
+    title: "Ask a codebase what calls what",
+    description: "How tmct answers questions about a codebase from a graph of imports, calls and members, and carries a pronoun across turns.",
+  },
+  ingest: {
+    title: "Paste text, watch it refuse what it can't ground",
+    description: "How tmct turns pasted prose into checkable triples, and refuses the sentences it cannot ground.",
+  },
+  sprites: {
+    title: "A poodle draws as a dog, because it is one",
+    description: "How tmct picks a shape for a word by walking the class hierarchy until it finds one it has.",
+  },
+  research: {
+    title: "Teach it, feed it, or let it look things up",
+    description: "How tmct grows one graph by research, teaching and ingest, then answers a question scoped to only the sources you trust.",
+  },
+  mud: {
+    title: "Four burrowers, one world, four partial maps",
+    description: "How four burrowing animals share one dug-out world while each knows only what it has personally found out.",
+  },
+  mudiii: {
+    title: "A fox and goblins in a 3D town square",
+    description: "How a fox and goblins plan their own moves through a 3D town square, each acting only on what it has seen or been told.",
+  },
+};
+
+/** The home page's own head-tag metadata. `title` feeds only the social tags
+ *  (og:title/twitter): the page's own <title> element keeps its existing,
+ *  longer text, so it stays out of this object. */
+export const INDEX_META = {
+  title: "the-mechanical-code-talker",
+  description: "A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage: mechanical interpretation, OWL graph memory, honest misses.",
+};
