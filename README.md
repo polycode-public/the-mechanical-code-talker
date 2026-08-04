@@ -1499,6 +1499,11 @@ hardened:
 - A nightly **`npm audit` + OSV-Scanner** job watches dependencies.
 - Releases are published with **npm provenance** (`--provenance`).
 
+The npm tarball carries Sigstore-signed provenance naming the GitLab pipeline
+that built it. Every published version also gets a GitLab release tag pinned to
+the exact commit that pipeline ran against. Follow both and an install traces
+back to the source it was built from.
+
 The content-address hash is single-sourced in `src/domain/hash.mjs`, so the
 cross-version-stable fact-id contract has exactly one definition.
 
