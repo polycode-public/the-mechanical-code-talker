@@ -245,3 +245,61 @@ test("a place adverb in the object slot refuses to store instead of minting an u
     assert.equal((await factRows(dir)).length, 0, "no fact whose object is a place adverb");
   });
 });
+
+test("'X is not a Y' stores the same class-pair disjointness 'no X is a Y' does, and the isa reader answers no from it", async () => {
+  await withStore(async (dir) => {
+    const taught = await runTurn("a car is not a bike", { memoryDir: dir, sessionId: "s1" });
+    assert.match(taught.answer, /^noted — remembered: no car is a bike/);
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "car");
+    assert.equal(rows[0].predicate, "owl:disjointWith");
+    assert.equal(rows[0].object, "bike");
+    const asked = await runTurn("is a car a bike", { memoryDir: dir, sessionId: "s1" });
+    assert.match(asked.answer, /^no — /);
+    assert.match(asked.answer, /car is not a bike/);
+  });
+});
+
+test("every 'is not a' phrasing (bare, contracted, article, kind-of) reaches the same disjointness store", async () => {
+  for (const sentence of ["car is not a bike", "car isn't a bike", "a car is not a kind of bike"]) {
+    await withStore(async (dir) => {
+      const { answer } = await runTurn(sentence, { memoryDir: dir, sessionId: "s1" });
+      assert.match(answer, /^noted — remembered: no car is a bike/, sentence);
+      const rows = await factRows(dir);
+      assert.deepEqual([rows[0].subject, rows[0].predicate, rows[0].object], ["car", "owl:disjointWith", "bike"], sentence);
+    });
+  }
+});
+
+test("'X is not Y' over an adjective property still declines instead of minting a false class exclusion", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("zeus is not mortal", { memoryDir: dir, sessionId: "s1" });
+    assert.doesNotMatch(answer, /noted — remembered/);
+    assert.equal((await factRows(dir)).length, 0);
+  });
+});
+
+test("a bare single letter teaches once its class is grounded, the same free pass any other unknown noun subject gets", async () => {
+  await withStore(async (dir) => {
+    const groundClass = await runTurn("alphabet letter is a thing", { memoryDir: dir, sessionId: "s1" });
+    assert.match(groundClass.answer, /noted — remembered/);
+    const { answer } = await runTurn("a is a kind of alphabet letter", { memoryDir: dir, sessionId: "s1" });
+    assert.match(answer, /^noted — remembered: a is a kind of alphabet letter/);
+    const rows = await factRows(dir);
+    const letterRow = rows.find((r) => r.subject === "a");
+    assert.ok(letterRow, "the letter 'a' itself is stored as the subject, not folded into 'an' or dropped");
+    assert.equal(letterRow.object, "alphabet letter");
+  });
+});
+
+test("the ungrounded-pair refusal names the same unrecognized terms in both its clauses", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("p is a kind of alphabet letter", { memoryDir: dir, sessionId: "s1" });
+    const firstClause = answer.split(".")[0];
+    assert.match(firstClause, /"p"/);
+    assert.match(firstClause, /"alphabet letter"/);
+    assert.match(answer, /I don't know "p" or "alphabet letter" yet/);
+    assert.equal((await factRows(dir)).length, 0);
+  });
+});

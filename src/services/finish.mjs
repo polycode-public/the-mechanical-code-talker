@@ -226,6 +226,14 @@ function pluralityOf(seg) {
   return null;
 }
 
+// An article is NEVER directly followed by a bare copula/auxiliary — "a is",
+// "an are" isn't a shape English grammar produces. The one place this
+// combination shows up in tmct's own output is a stored fact whose SUBJECT
+// literally is the word "a" ("noted — remembered: a is a kind of animal"),
+// where the article-selection rewrite below would otherwise mistake that
+// content "a" for its own article and rewrite it to "an".
+const ARTICLE_NEVER_PRECEDES_RE = /^(?:is|are|was|were|am|be|been|being)$/i;
+
 // Rule 1 — article selection (a/an). Reads the following word: in-span when the
 // whole "a word" pair is inside one prose span; across the boundary when the
 // prose ends in "a"/"an" and the next span supplies the word (only fires when
@@ -240,6 +248,7 @@ function ruleArticle(segments, rule) {
     // hyphenated NAME ("peg-a", "option-a"), not an article — rewriting it
     // corrupts user-quoted data ("peg-a\nUtterance" read as "a Utterance").
     seg.text = seg.text.replace(/(^|[^\w-])(a|an)(\s+)([A-Za-z][\w-]*)/gi, (m, pre, art, sp, word) => {
+      if (ARTICLE_NEVER_PRECEDES_RE.test(word)) return m;
       const vowel = beginsWithVowelSound(word, rule);
       if (vowel === null) return m;
       return pre + matchCase(art, vowel ? "an" : "a") + sp + word;
@@ -250,7 +259,7 @@ function ruleArticle(segments, rule) {
     if (bm) {
       const next = out[i + 1];
       const word = next && typeof next.text === "string" ? leadingWord(next.text) : "";
-      const vowel = word ? beginsWithVowelSound(word, rule) : null;
+      const vowel = word && !ARTICLE_NEVER_PRECEDES_RE.test(word) ? beginsWithVowelSound(word, rule) : null;
       if (vowel !== null) {
         const fixed = matchCase(bm[2], vowel ? "an" : "a");
         seg.text = seg.text.slice(0, bm.index + bm[1].length) + fixed + bm[3];
