@@ -310,3 +310,35 @@ test("'N of N' leaves the definite relational frame to pattern 7", () => {
     { subject: "tmct:work", predicate: "tmct:unit", object: "a task", kind: "owl:DatatypeProperty" },
   ]);
 });
+
+test("individual-vs-class: a capitalized single-token subject with no lexicon entry of its own stores rdf:type", () => {
+  const r = parseAce("Rover is a dog.");
+  assert.equal(r.pattern, "typeAssertion");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:rover", predicate: "rdf:type", object: "tmct:dog", kind: "rdf:type" },
+  ]);
+});
+
+test("individual-vs-class: a lowercase common-noun subject stays subClassOf, capitalization is the only signal G5(d) reads", () => {
+  const r = parseAce("cache is a component");
+  assert.equal(r.pattern, "subClassOf");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:cache", predicate: "rdfs:subClassOf", object: "tmct:component", kind: "rdfs:subClassOf" },
+  ]);
+});
+
+test("individual-vs-class: a universally-quantified subject stays subClassOf regardless of capitalization", () => {
+  const r = parseAce("every Rover is a dog");
+  assert.equal(r.pattern, "subClassOf");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:rover", predicate: "rdfs:subClassOf", object: "tmct:dog", kind: "rdfs:subClassOf" },
+  ]);
+});
+
+test("individual-vs-class: an articled subject stays subClassOf — G4's single-token requirement never sees a bare name", () => {
+  const r = parseAce("the Rover is a dog");
+  assert.equal(r.pattern, "subClassOf");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:rover", predicate: "rdfs:subClassOf", object: "tmct:dog", kind: "rdfs:subClassOf" },
+  ]);
+});
