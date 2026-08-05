@@ -56,7 +56,7 @@ test("the plural of a multi-word class name folds to the singular the rows are s
   // Stored as "sprite class"; asked as "sprite classes".
   const r = await turn("how many sprite classes are there?", memoryDir);
   assert.equal(!!r.record?.miss, false, r.answer);
-  assert.match(r.answer, /^2 sprite classes\.$/);
+  assert.match(r.answer, /^2 sprite classes\. Say "list sprite classes" to see them\.$/);
 });
 
 test("a single-word class carrying a real restrictor tail still reads the class as one word", async () => {

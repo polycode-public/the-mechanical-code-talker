@@ -995,7 +995,10 @@ async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundl
 /** Count the taught members of a class named by a noun phrase ("how many animals
  *  are there" → every "X is a kind of animal"). Declines (null) for a real
  *  code-countable class (answerCount owns it) or a class nothing was taught
- *  about, so structural counts and the quantifier lane are unaffected. */
+ *  about, so structural counts and the quantifier lane are unaffected. A count
+ *  above zero carries a follow-up pointing at the list lane — a bare number
+ *  answers the question asked but leaves the obvious next question ("which
+ *  ones?") with no signposted way to ask it. */
 async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache = null) {
   if (!memoryDir) return null;
   const m = String(query).trim().match(TAUGHT_CLASS_COUNT_RE);
@@ -1009,7 +1012,8 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
   // one class-level fact.
   if (hit.members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
   const n = hit.members.length;
-  return `${n} ${n === 1 ? hit.asked.replace(/s$/, "") : hit.asked}.`;
+  const hint = n > 0 ? ` Say "list ${hit.asked}" to see them.` : "";
+  return `${n} ${n === 1 ? hit.asked.replace(/s$/, "") : hit.asked}.${hint}`;
 }
 
 // "list all animals" / "list the animals" — enumerate a taught class's members,
@@ -1019,10 +1023,19 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
 // orientation lane claims the bare "list …" phrasing before factReadBack runs.
 const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
+// "list letters but not greek letters" — the tail left over once the class name
+// is stripped, when that tail names an EXCLUSION rather than an unreadable
+// restrictor. Checked ahead of the DYNAMIC_TAIL_OK_RE refusal below so a real
+// subtraction still gets its own trigger to run, rather than sharing "list
+// letters"'s bare enumeration and losing the "but not …" clause entirely.
+const EXCLUSION_TAIL_RE = /^(?:but\s+not|except(?:\s+for)?|excluding|other\s+than)\s+(.+)$/i;
+
 /** List the taught members of a class named by a noun phrase ("list all animals"
  *  → every "X is a kind of animal"). Declines (null) for a code-countable class
  *  or a class nothing was taught about; declines with a message for a real
- *  restrictor tail rather than answering as if it weren't there. */
+ *  restrictor tail rather than answering as if it weren't there. An exclusion
+ *  tail ("but not greek letters") is its own case: it resolves the excluded
+ *  phrase the same way and subtracts, rather than falling into that refusal. */
 async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache = null) {
   if (!memoryDir) return null;
   const m = String(query).trim().match(MEMBERSHIP_LIST_RE);
@@ -1030,18 +1043,74 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
   if (!hit) return null;
   const { asked, tail, members } = hit;
+  const declineTail = (badTail) => ({
+    text: `I can list the ${asked}, but not the "${badTail}" part of that question — `
+      + `so I won't answer as if you hadn't asked it. Ask "list ${asked}" for all of them.`,
+    miss: true,
+  });
+  const renderMembers = (list, note) => {
+    const lines = list.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra + (note || ""), ...(rest.length ? { pending: { items: rest, noun: asked } } : {}) };
+  };
+  const exclusionM = tail.match(EXCLUSION_TAIL_RE);
+  if (exclusionM) {
+    const excludedHit = await longestTaughtClassInRun(memoryDir, exclusionM[1], "", biasByBundle, cache);
+    if (!excludedHit || !DYNAMIC_TAIL_OK_RE.test(excludedHit.tail)) {
+      // The excluded phrase itself named no taught class, or left its own
+      // residue behind — decline naming whatever part stayed unresolved.
+      return declineTail(excludedHit ? excludedHit.tail : tail);
+    }
+    let normFactTerm;
+    try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return declineTail(tail); }
+    const excludedSubjects = new Set();
+    for (const f of excludedHit.members) {
+      for (const v of factTermVariants(normFactTerm, f.subject)) excludedSubjects.add(v);
+    }
+    const kept = members.filter((f) => {
+      for (const v of factTermVariants(normFactTerm, f.subject)) {
+        if (excludedSubjects.has(v)) return false;
+      }
+      return true;
+    });
+    const note = kept.length === members.length
+      ? `\n(none of the ${asked} I know are marked as ${excludedHit.asked} yet.)`
+      : "";
+    return renderMembers(kept, note);
+  }
+  if (!DYNAMIC_TAIL_OK_RE.test(tail)) return declineTail(tail);
+  return renderMembers(members);
+}
+
+// "give me an example of a letter" / "name a letter" — the single-member
+// counterpart to the list trigger above: the same taught class, but one
+// representative rather than the whole enumeration, for a user who wants a
+// sample before asking for everything.
+const EXAMPLE_OF_RE = /^(?:give me\s+|what(?:'s|\s+is)\s+)?(?:an\s+example\s+of|example\s+of|name)\s+(?:an?\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
+
+/** Answer with one taught member of a class named by a noun phrase ("give me an
+ *  example of a letter" → the top-ranked "X is a kind of letter"). Resolves the
+ *  class exactly as answerMembershipList does, and declines the same way: null
+ *  for a code-countable or untaught class, a named-tail refusal for a real
+ *  restrictor. */
+async function answerMembershipExample(memoryDir, query, biasByBundle = {}, cache = null) {
+  if (!memoryDir) return null;
+  const m = String(query).trim().match(EXAMPLE_OF_RE);
+  if (!m) return null;
+  const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
+  if (!hit) return null;
+  const { asked, tail, members } = hit;
   if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
     return {
-      text: `I can list the ${asked}, but not the "${tail}" part of that question — `
-        + `so I won't answer as if you hadn't asked it. Ask "list ${asked}" for all of them.`,
+      text: `I can name a ${asked}, but not the "${tail}" part of that question — `
+        + `so I won't answer as if you hadn't asked it. Ask "name a ${asked}" for one.`,
       miss: true,
     };
   }
-  const lines = members.map(renderFactLine);
-  const shown = lines.slice(0, FACT_ANSWER_CAP);
-  const rest = lines.slice(FACT_ANSWER_CAP);
-  const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
-  return { text: shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun: asked } } : {}) };
+  const n = members.length;
+  return { text: `${renderFactLine(members[0])}\nSay "list ${asked}" for all ${n}.` };
 }
 
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
@@ -16053,9 +16122,12 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
       const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
-      // A bare numeric count ("1 source.") stays silent, matching every other
-      // count lane's tested contract — only a real list enumeration gets the
-      // trailer. answerMemoryClassQuery serves both shapes through one lane.
+      // A bare numeric count ("1 source.") stays silent here — only a real list
+      // enumeration gets the trailer. answerMemoryClassQuery serves both shapes
+      // through one lane. answerTaughtClassCount below is the one count lane that
+      // does NOT stay silent: it appends its own recovery hint pointing at the
+      // list lane, since a taught-class count always has a corresponding "list
+      // <class>" trigger to point at.
       if (!memClass.miss && memClass.kind !== "count") turn.goal = goal;
       if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
       return withLast(turn, goal);
@@ -16084,6 +16156,20 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus });
       if (!memberList.miss) turn.goal = goal;
       if (memberList.pending) turn.detail = { traversal: null, matches: [], pending: memberList.pending };
+      return withLast(turn, goal);
+    }
+  }
+  // "give me an example of a letter"/"name a letter" — one taught member of a
+  // class rather than the whole enumeration, right next to the list trigger it
+  // shares a class-resolution path with.
+  if (memoryDir) {
+    const memberExample = await answerMembershipExample(memoryDir, workingLine, biasByBundle, factRowsCache);
+    if (memberExample != null) {
+      const goal = "give an example of a taught class's member";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerMembershipExample — matched 'example of a <noun>'/'name a <noun>' over taught isa-facts whose OBJECT is that class");
+      const turn = plainTurn(workingLine, memberExample.text, { via: memberExample.miss ? "miss" : "fact", miss: !!memberExample.miss, focus });
+      if (!memberExample.miss) turn.goal = goal;
       return withLast(turn, goal);
     }
   }
