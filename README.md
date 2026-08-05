@@ -10,6 +10,82 @@
 > The [GitHub repo](https://github.com/polycode-public/the-mechanical-code-talker) is a
 > read-only mirror, synced hourly. Issues and merge requests go to GitLab.
 
+## 30-second quickstart
+
+Install it:
+
+```bash skip=network
+npm install @polycode-projects/the-mechanical-code-talker
+```
+
+Teach it a fact, then ask about it. This is the whole public API for a
+one-off library call:
+
+```js
+import { runTurn } from "@polycode-projects/the-mechanical-code-talker";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const memoryDir = await mkdtemp(join(tmpdir(), "tmct-quickstart-"));
+await runTurn("a dog is an animal", { memoryDir });
+const { answer } = await runTurn("what is a dog", { memoryDir });
+console.log(answer);
+await rm(memoryDir, { recursive: true, force: true });
+```
+
+Cloned the repo instead? The same engine runs as a chat over stdin:
+
+```bash skip=repo-state
+printf 'hi\n/exit\n' | node bin/tmct.mjs
+```
+
+That greets you and exits 0. It's the project's own smoke test. (This one is
+marked `skip=` so the README suite doesn't run it. It would seed `.tmct/` in
+whatever directory it runs from, and every other example here runs from a
+disposable temp dir instead of your clone.)
+
+## Architecture
+
+Four layers, top to bottom. A **surface** (CLI, HTTP, TUI, or the browser)
+takes input. A **service** (chat, plan, research, ledger, adventure) runs
+the use case. **Domain** logic decides what's true and does no I/O of its
+own. An **adapter** sits at the seam. It is the only layer that touches
+disk, reading and writing the **graph store**, the OWL-labelled `.tmct/`
+graph.
+
+![tmct architecture: surfaces call services, services call domain, adapters sit at the seam between domain and the graph store](docs/architecture.svg)
+
+<details>
+<summary>Mermaid source (GitLab and GitHub render this natively; npm does not, which is why the image above is the diagram of record)</summary>
+
+```mermaid
+flowchart TB
+  subgraph Surfaces
+    CLI
+    HTTP
+    TUI
+    Web[Web browser]
+  end
+  subgraph Services
+    chat
+    plan
+    research
+    ledger
+    adventure
+  end
+  Domain["domain — pure logic<br/>router · planner · codegraph · completions"]
+  Adapters["adapters — the seam<br/>I/O · storage · providers"]
+  Store[(".tmct/ graph store<br/>SQLite or in-memory")]
+
+  Surfaces --> Services
+  Services --> Domain
+  Domain -.->|interface| Adapters
+  Adapters --> Store
+```
+
+</details>
+
 `@polycode-projects/the-mechanical-code-talker`
 
 A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage.

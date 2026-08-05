@@ -22,7 +22,7 @@ test("every README fence carries a recognized harness tag", () => {
   for (const block of blocks) {
     assert.match(
       block.tag,
-      /^(js|bash|session|output|output:help:[\w-]+|toml|text)$/,
+      /^(js|bash|session|output|output:help:[\w-]+|toml|text|mermaid)$/,
       `README line ${block.startLine}: untagged or unrecognized info string "${block.tag}"`,
     );
   }

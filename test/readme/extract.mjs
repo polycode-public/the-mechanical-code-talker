@@ -19,6 +19,8 @@
 //   toml               not executed; validated by parsing with smol-toml and
 //                      loading through src/adapters/toml-config.mjs
 //   text               illustrative only; never executed or asserted
+//   mermaid            a diagram source for GitLab/GitHub's native renderer;
+//                      illustrative only, same as `text`
 //
 // Attributes after the tag refine treatment:
 //   e2e                runs from test-e2e/readme-examples.test.mjs, not the fast tier
