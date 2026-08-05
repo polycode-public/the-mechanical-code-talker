@@ -2,10 +2,11 @@
 // sprites.html's own landing cards: sprites-adventure-props.html,
 // sprites-person-roles.html, sprites-objects.html, sprites-emotions.html —
 // one per src/services/sprite-catalog-viz.mjs's own CATALOG_GROUPS entry.
-// Each renders that ONE group's full card gallery, unchanged from what a
-// single sprites.html page used to show for it before the operator's split
-// (see PLAN docs' own sprites.html reorg note) — same styling, same
-// swatches, same animated cycles. The composer and the ask dock still
+// Each renders that ONE group's full card gallery: same styling, same
+// swatches, and one animated cell per class that clicks through its display
+// modes. The section ontology trees are not repeated here — a card's
+// ancestry pills link across to the landing page's tree instead, which is
+// what several tests below follow. The composer and the ask dock still
 // answer over the WHOLE catalog from any one of these pages, never just
 // this group's own classes — test-e2e/pages-sprites.test.mjs covers the
 // lighter landing page these link out from.
@@ -134,79 +135,101 @@ test("the person-roles page's person card renders all six curated emotion varian
   }
 });
 
-test("the objects page's bear card gains a mood-cycle swatch that steps through the plain sprite and every real mood on click", async () => {
+test("the objects page's bear card carries one image cell that clicks through every display mode and wraps back to static", async () => {
   // reducedMotion pins the page's auto-step off, so every frame change below
   // is the test's own click and the walk is fully deterministic.
   const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
   try {
     const card = page.locator('.card[data-cls="bear"]');
     await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-mood .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one mood-cycle swatch");
+    const cell = card.locator(".swatch.cycle-mode");
+    assert.equal(await cell.count(), 1, "one animated cell for the whole class");
+    assert.equal(await card.locator(".swatch.cycle").count(), 1, "no separate cell per axis any more");
+    const cellButton = cell.locator(".swatch-img");
     // The card sits far down a content-visibility:auto page — bring it on
     // screen before reading, so the first frame's text is really rendered.
-    await cycleButton.scrollIntoViewIfNeeded();
-    const labels = [];
+    await cellButton.scrollIntoViewIfNeeded();
+    const walk = [];
     const markups = new Set();
-    // bear's mood cycle is plain + its six curated emotions = 7 frames; one
-    // extra click proves the wrap-around lands back on a real frame.
-    for (let i = 0; i < 8; i += 1) {
-      labels.push(await card.locator(".swatch.cycle-mood .swatch-label").textContent());
-      markups.add(await cycleButton.innerHTML());
-      await cycleButton.click();
+    // bear's cell is the static sprite + its moving pose + five turntable
+    // angles + six moods = 13 frames; the fourteenth read proves the wrap.
+    for (let i = 0; i < 14; i += 1) {
+      walk.push({
+        mode: await cell.locator(".swatch-mode").textContent(),
+        label: await cell.locator(".swatch-label").textContent(),
+      });
+      markups.add(await cellButton.innerHTML());
+      await cellButton.click();
     }
-    for (const expected of ["bear", "happy", "calm"]) {
-      assert.ok(labels.includes(expected), `the mood cycle walks through the ${expected} frame (saw: ${labels.join(", ")})`);
+    assert.deepEqual([...new Set(walk.map((f) => f.mode))], ["static", "moving", "turning", "emotions"],
+      `the clicks walk every mode in order (saw: ${walk.map((f) => f.mode).join(", ")})`);
+    assert.deepEqual(walk[0], { mode: "static", label: "bear" }, "the cell rests on the class's own plain sprite");
+    assert.deepEqual(walk[13], walk[0], "the fourteenth frame wraps back to where it started");
+    for (const expected of ["moving", "left", "centre", "right", "happy", "calm"]) {
+      assert.ok(walk.some((f) => f.label === expected), `the walk names its ${expected} frame`);
     }
-    assert.equal(labels[7], labels[0], "the eighth click wraps back around to the first frame");
-    assert.ok(markups.size >= 7, `every mood frame is genuinely different markup, got ${markups.size} distinct frames`);
+    // 12 distinct drawings for 13 frames: the turntable's centre angle is the
+    // class's own plain sprite, the same one the cell rests on.
+    assert.equal(markups.size, 12, `each frame is its own real drawing, got ${markups.size}`);
     assert.deepEqual(consoleErrors, [], "cycling logs no console error");
   } finally {
     await context.close();
   }
 });
 
-test("the objects page's bear card's turn-sweep swatch steps through every facing angle, centred on the plain sprite", async () => {
-  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
+test("with reduced motion the cell only ever moves when clicked, and hovering it does nothing", async () => {
+  const { context, page } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
   try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-turn .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one turn-sweep swatch");
-    await cycleButton.scrollIntoViewIfNeeded();
-    const labels = [];
-    // left, half-left, centre, half-right, right = 5 frames.
-    for (let i = 0; i < 6; i += 1) {
-      labels.push(await card.locator(".swatch.cycle-turn .swatch-label").textContent());
-      await cycleButton.click();
-    }
-    for (const expected of ["left", "half-left", "centre", "half-right", "right"]) {
-      assert.ok(labels.includes(expected), `the turn sweep walks through the ${expected} frame (saw: ${labels.join(", ")})`);
-    }
-    assert.equal(labels[5], labels[0], "the sixth click wraps back around to the first frame");
-    assert.deepEqual(consoleErrors, [], "the turn sweep logs no console error");
+    const cell = page.locator('.card[data-cls="bear"] .swatch.cycle-mode');
+    await cell.scrollIntoViewIfNeeded();
+    await cell.hover();
+    assert.equal(await cell.getAttribute("data-mode"), "static", "hovering never previews under reduced motion");
+
+    await cell.locator(".swatch-img").click();
+    const parked = { mode: await cell.getAttribute("data-mode"), svg: await cell.locator(".swatch-img").innerHTML() };
+    assert.equal(parked.mode, "moving", "the click is what moved it");
+    await page.waitForTimeout(2000);
+    assert.equal(await cell.getAttribute("data-mode"), parked.mode, "nothing steps the cell on by itself");
+    assert.equal(await cell.locator(".swatch-img").innerHTML(), parked.svg);
   } finally {
     await context.close();
   }
 });
 
-test("the objects page's bear card's moving-pose swatch toggles between its idle and moving frame", async () => {
-  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
+test("with motion allowed the resting cell previews the moving pose while the pointer is over it, and lets go on mouse-out", async () => {
+  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html");
   try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cycleButton = card.locator(".swatch.cycle-moving .swatch-img");
-    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one moving-pose swatch");
-    await cycleButton.scrollIntoViewIfNeeded();
-    const first = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    await cycleButton.click();
-    const second = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    assert.notEqual(first, second, "a click toggles to the other pose");
-    assert.deepEqual([first, second].sort(), ["idle", "moving"], "the toggle's two states are exactly idle and moving");
-    await cycleButton.click();
-    const third = await card.locator(".swatch.cycle-moving .swatch-label").textContent();
-    assert.equal(third, first, "a second click toggles back");
-    assert.deepEqual(consoleErrors, [], "the moving toggle logs no console error");
+    const cell = page.locator('.card[data-cls="bear"] .swatch.cycle-mode');
+    await cell.scrollIntoViewIfNeeded();
+    assert.equal(await cell.getAttribute("data-mode"), "static", "the static frame is the resting state and never auto-steps");
+    await cell.hover();
+    await page.waitForFunction(() => document.querySelector('.card[data-cls="bear"] .swatch.cycle-mode')?.dataset.mode === "moving");
+    await page.mouse.move(0, 0);
+    await page.waitForFunction(() => document.querySelector('.card[data-cls="bear"] .swatch.cycle-mode')?.dataset.mode === "static");
+    assert.deepEqual(consoleErrors, [], "the hover preview logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a group page's ancestry pills link to the landing page's own tree node for each term", async () => {
+  const { context, page } = await openGroupPage("sprites-person-roles.html");
+  try {
+    assert.equal(await page.locator(".ontology").count(), 0, "the trees all live on the landing page");
+    const card = page.locator('.card[data-cls="driver"]');
+    await card.scrollIntoViewIfNeeded();
+    const hrefs = await card.locator("a.chain-link").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(hrefs, [
+      "./sprites.html#tree-person-worker-driver",
+      "./sprites.html#tree-person-worker-worker",
+      "./sprites.html#tree-person-worker-doer",
+      "./sprites.html#tree-person-worker-person",
+      "./sprites.html#tree-person-worker-organism",
+    ], "every pill points at driver's own cluster tree, not some other section's");
+
+    await card.locator("a.chain-link").first().click();
+    await page.waitForURL(/sprites\.html#tree-person-worker-driver$/);
+    assert.equal(await page.locator("#tree-person-worker-driver .tree-term").textContent(), "driver", "the link lands on a node that really exists");
   } finally {
     await context.close();
   }

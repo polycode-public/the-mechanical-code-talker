@@ -15,9 +15,11 @@ import {
   renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, buildSpriteCatalogEntries, groupForClass,
   paletteTreatmentFor, tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE,
   GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
-  moodFrameSequence, turnFrameSequence, movingFrameSequence, CATALOG_GROUPS, groupIsClustered,
+  moodFrameSequence, turnFrameSequence, movingFrameSequence, displayModeSequence, DISPLAY_MODE_ORDER,
+  CATALOG_GROUPS, groupIsClustered,
   catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
-  loadSpriteOntologyFactRows,
+  loadSpriteOntologyFactRows, subClassIndex, buildOntologyTree, sectionSlugFor, ontologyTreeNodeId,
+  ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT,
 } from "../../src/services/sprite-catalog-viz.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
@@ -69,8 +71,8 @@ test("the real ancestor chain (via classAncestorChain, never invented) is presen
   // must show the same real chain classAncestorChain itself returns.
   const poodleChain = classAncestorChain("poodle", SEED_ROWS);
   assert.deepEqual(poodleChain, ["poodle", "dog", "animal"]);
-  assert.match(html, /data-cls="poodle"[\s\S]{0,400}chain-link own">poodle</);
-  assert.match(html, /data-cls="poodle"[\s\S]{0,400}chain-link">dog</);
+  assert.match(html, /data-cls="poodle"[\s\S]{0,400}chain-link own"[^>]*>poodle</);
+  assert.match(html, /data-cls="poodle"[\s\S]{0,400}chain-link"[^>]*>dog</);
   // a class with no ancestor fact at all still shows its own name as the chain.
   const chairChain = classAncestorChain("chair", SEED_ROWS);
   assert.deepEqual(chairChain, ["chair"]);
@@ -207,13 +209,14 @@ test("a swatch born from a property fact carries that property as a data attribu
   assert.doesNotMatch(html, /class="swatch large plain"[^>]*data-property/, "a plain swatch never claims a property");
 });
 
-test("the rendered page ships the animated-swatch machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
+test("the rendered page ships the animated-cell machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /MOOD_PROPERTY = "mgx:feels"/);
   assert.match(html, /FACING_PROPERTY = "mgx:faces"/);
   assert.match(html, /POSE_PROPERTY = "mgx:pose"/);
   assert.match(html, /prefers-reduced-motion: reduce/);
-  assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle swatch has its own styling");
+  assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle cell has its own styling");
+  assert.match(html, /\.swatch\.cycle \.swatch-mode/, "the visible mode label has its own styling");
 });
 
 // ---- the three animated swatches: mood, facing, pose ----
@@ -257,9 +260,10 @@ test("the pose toggle alternates the idle sprite with the moving one, and needs 
   assert.deepEqual(movingFrameSequence(null, svgFrame("moving")), [], "no idle sprite, no toggle");
 });
 
-/** The three frame lists sprites.html's own inline script builds for one
- *  class, selected off real tierSwatchesFor output by the same properties
- *  and labels the page selects DOM swatches by. Keeps these tests honest
+/** The frame lists sprites.html's own inline script builds for one class,
+ *  selected off real tierSwatchesFor output by the same properties and
+ *  labels the page selects DOM swatches by, then flattened into the one
+ *  click-through sequence its image cell walks. Keeps these tests honest
  *  about the real catalog rather than about a hand-built frame fixture. */
 function pageCyclesFor(cls) {
   const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
@@ -270,11 +274,19 @@ function pageCyclesFor(cls) {
   const facingFrames = {};
   for (const s of swatches) if (s.property === "mgx:faces") facingFrames[s.label] = frameOf(s);
   const movingSwatch = swatches.find((s) => s.property === "mgx:pose" && s.label === "moving");
+  const mood = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames);
+  const turn = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
+  const moving = movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch));
   return {
     swatches,
-    mood: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames),
-    turn: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
-    moving: movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch)),
+    mood,
+    turn,
+    moving,
+    modes: displayModeSequence(baseFrame && { svg: baseFrame.svg, label: cls }, {
+      movingFrame: movingSwatch && frameOf(movingSwatch),
+      turnFrames: turn,
+      moodFrames: mood,
+    }),
   };
 }
 
@@ -307,10 +319,45 @@ test("a combined facing-and-pose variant joins neither single-axis cycle, so eac
 });
 
 test("a class the catalog gives no facing or pose art animates nothing on those axes rather than faking a frame", () => {
-  const { turn, moving, mood } = pageCyclesFor("person");
+  const { turn, moving, mood, modes } = pageCyclesFor("person");
   assert.deepEqual(turn, [], "no facing sprites, no sweep");
   assert.deepEqual(moving, [], "no moving sprite, no toggle");
   assert.equal(mood.length, 7, "its moods still cycle");
+  assert.deepEqual([...new Set(modes.map((f) => f.mode))], ["static", "emotions"], "the cell offers only the modes there is art for");
+});
+
+// ---- the one image cell's display modes ----
+
+test("displayModeSequence walks static, moving, turning then emotions, and the static sprite is never repeated as a mood frame", () => {
+  const frames = displayModeSequence({ svg: "<svg id=\"plain\"/>", label: "bear" }, {
+    movingFrame: svgFrame("moving"),
+    turnFrames: [svgFrame("left"), { svg: "<svg id=\"plain\"/>", label: "centre" }, svgFrame("right")],
+    moodFrames: [{ svg: "<svg id=\"plain\"/>", label: "bear" }, svgFrame("happy"), svgFrame("sad")],
+  });
+  assert.deepEqual(frames.map((f) => f.mode), ["static", "moving", "turning", "turning", "turning", "emotions", "emotions"]);
+  assert.deepEqual(frames.map((f) => f.label), ["bear", "moving", "left", "centre", "right", "happy", "sad"]);
+  assert.deepEqual([...new Set(frames.map((f) => f.mode))], DISPLAY_MODE_ORDER, "every mode in the declared order");
+});
+
+test("displayModeSequence keeps only the modes a class has real art for, static always leading", () => {
+  const staticOnly = { svg: "<svg/>", label: "lamp" };
+  assert.deepEqual(displayModeSequence(staticOnly, {}), [], "one frame is not a cycle, so the cell never appears");
+  const moodOnly = displayModeSequence(staticOnly, { moodFrames: [staticOnly, svgFrame("happy"), svgFrame("calm")] });
+  assert.deepEqual(moodOnly.map((f) => f.mode), ["static", "emotions", "emotions"]);
+  const moveOnly = displayModeSequence(staticOnly, { movingFrame: svgFrame("moving") });
+  assert.deepEqual(moveOnly.map((f) => [f.mode, f.label]), [["static", "lamp"], ["moving", "moving"]]);
+  assert.deepEqual(displayModeSequence(null, { movingFrame: svgFrame("moving") }), [], "no resting frame, no cell");
+});
+
+test("a fully-illustrated real class offers all four display modes from one cell, its own name resting on top", () => {
+  for (const cls of ["bear", "cat", "dog", "king"]) {
+    const { modes } = pageCyclesFor(cls);
+    assert.deepEqual([...new Set(modes.map((f) => f.mode))], DISPLAY_MODE_ORDER, `${cls} carries art for every mode`);
+    assert.deepEqual(modes[0], { mode: "static", svg: modes[0].svg, label: cls }, `${cls} rests on its own plain sprite`);
+    assert.equal(modes.filter((f) => f.mode === "moving").length, 1);
+    assert.equal(modes.filter((f) => f.mode === "turning").length, 5, `${cls} sweeps the whole turntable`);
+    assert.equal(modes.filter((f) => f.mode === "emotions").length, 6, `${cls} cycles its six curated moods`);
+  }
 });
 
 test("a moving-pose template's swatch carries mgx:pose, the property the page's toggle selects it by", () => {
@@ -328,11 +375,11 @@ test("a moving-pose template's swatch carries mgx:pose, the property the page's 
   assert.notEqual(frames[0].svg, frames[1].svg);
 });
 
-test("all three animated swatches run off one delay and one interval, so their tempos can never drift apart", () => {
-  assert.equal(CYCLE_FRAME_DELAY_MS, 800, "the mood cycle's established tempo, now shared by the sweep and the toggle");
+test("every axis runs off one delay and one interval, so their tempos can never drift apart", () => {
+  assert.equal(CYCLE_FRAME_DELAY_MS, 800, "the mood cycle's established tempo, now shared by every axis");
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, new RegExp(`const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};`));
-  assert.equal((html.match(/setInterval\(/g) || []).length, 1, "one interval drives every animated swatch on the page");
+  assert.equal((html.match(/setInterval\(/g) || []).length, 1, "one interval drives every animated cell on the page");
   assert.match(html, /\}, CYCLE_FRAME_DELAY_MS\)/, "the interval is fed the shared constant, never a second hard-coded number");
 });
 
@@ -341,14 +388,195 @@ test("the page splices in the same frame-order functions this file tests, never 
   assert.ok(html.includes(moodFrameSequence.toString()), "the mood cycle's real ordering function reaches the page");
   assert.ok(html.includes(turnFrameSequence.toString()), "the facing sweep's real ordering function reaches the page");
   assert.ok(html.includes(movingFrameSequence.toString()), "the pose toggle's real ordering function reaches the page");
+  assert.ok(html.includes(displayModeSequence.toString()), "the mode order this file tests is the one the page runs");
   assert.match(html, /const FACING_TURN_ORDER = \["left","half-left",null,"half-right","right"\]/);
 });
 
-test("the facing sweep takes the plain swatch's place and the pose toggle takes happy's, so neither adds a grid cell", () => {
+test("the one animated cell takes the plain swatch's place, so the three separate cycles never come back as extra grid cells", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
-  assert.match(html, /replaceChild\(makeCycleSwatch\(turnFrames[\s\S]{0,120}baseSwatch\)/, "the sweep replaces the plain swatch");
-  assert.match(html, /replaceChild\(makeCycleSwatch\(movingFrames[\s\S]{0,120}\(happyRow \|\| movingRow\)\.el\)/, "the toggle replaces the happy swatch");
-  assert.match(html, /insertBefore\(makeCycleSwatch\(moodFrames[\s\S]{0,120}swatchRow\.firstChild\)/, "the mood cycle still leads the row");
+  assert.match(html, /replaceChild\(makeModeCell\(modeFrames, cls\), baseSwatch\)/, "the cell stands where the plain swatch was");
+  assert.equal((html.match(/swatchRow\.(insertBefore|replaceChild|appendChild)\(/g) || []).length, 1,
+    "the animated cell is the only thing the script puts in a swatch row, so no axis adds a grid cell of its own");
+  assert.equal((html.match(/makeModeCell\(/g) || []).length, 2, "one cell factory, called from one place");
+});
+
+test("the hover preview and the auto-step are both off under reduced motion, and a click still steps a frame", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /if \(!reducedMotion && movingIndex > 0\) \{[\s\S]{0,80}mouseenter/, "the hover preview is only wired when motion is allowed");
+  assert.match(html, /if \(cycleSteppers\.length && !reducedMotion\)/, "the interval only starts when motion is allowed");
+  assert.match(html, /frameImgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,140}frameIndex = \(frameIndex \+ 1\) % frames\.length;/, "a click advances one frame whatever the motion setting");
+});
+
+// ---- the section ontology trees ----
+
+const realIndex = subClassIndex(realFactRows);
+const realEntriesByClass = new Map(realEntries.map((e) => [e.className, e]));
+const realSections = catalogSections(realEntries, realSpritedClasses);
+const sectionNamed = (groupId, label) => realSections.find((s) => s.group.id === groupId && s.label === label);
+const treeFor = (section) => buildOntologyTree(section, {
+  index: realIndex, spritedClasses: realSpritedClasses, entriesByClass: realEntriesByClass,
+});
+const allNodes = (tree) => [...tree.branches.flatMap((b) => b.levels.flat()), ...tree.apart];
+const nodeNamed = (tree, term) => allNodes(tree).find((n) => n.term === term);
+
+test("subClassIndex reads both directions off the rdfs:subClassOf rows and de-duplicates each list", () => {
+  const { parentsOf, childrenOf } = subClassIndex([
+    isA("poodle", "dog"), isA("poodle", "dog"), isA("beagle", "dog"), isA("dog", "animal"),
+    { subject: "dog", predicate: "mgx:feels", object: "happy" },
+  ]);
+  assert.deepEqual(parentsOf.get("poodle"), ["dog"], "the repeated row is stored once");
+  assert.deepEqual(childrenOf.get("dog").sort(), ["beagle", "poodle"]);
+  assert.deepEqual(parentsOf.get("dog"), ["animal"]);
+  assert.equal(parentsOf.has("happy"), false, "a row of another predicate contributes nothing");
+});
+
+test("a section's tree covers every term its cards' ancestry pills print, so no pill can point at a missing node", () => {
+  for (const section of realSections) {
+    const terms = new Set(allNodes(treeFor(section)).map((n) => n.term));
+    for (const entry of section.entries) {
+      for (const term of entry.chain.slice(0, 6)) {
+        assert.ok(terms.has(term), `${section.label}: "${term}" is on a pill but has no tree node`);
+      }
+    }
+  }
+});
+
+test("a class with two recorded parents keeps both, drawn as two chains meeting at the class", () => {
+  const queen = nodeNamed(treeFor(sectionNamed("person", "everything else")), "queen");
+  assert.deepEqual(queen.parents, ["insect", "woman"], "queen is on record as both, and neither is dropped");
+  const fly = nodeNamed(treeFor(sectionNamed("object", "insect")), "fly");
+  assert.ok(fly.parents.length > 1, `fly keeps every recorded parent, got ${fly.parents.join(", ")}`);
+  assert.ok(fly.parents.includes("insect"));
+});
+
+test("a tree node sits one level below its deepest drawn parent, and the levels at each rung read alphabetically", () => {
+  const tree = treeFor(sectionNamed("person", "worker"));
+  for (const branch of tree.branches) {
+    branch.levels.forEach((nodes, level) => {
+      assert.deepEqual(nodes.map((n) => n.term), nodes.map((n) => n.term).slice().sort(), `level ${level} is alphabetical`);
+      for (const node of nodes) {
+        assert.equal(node.level, level);
+        for (const parent of node.parents) {
+          const parentNode = nodeNamed(tree, parent);
+          assert.ok(parentNode.level < level, `${node.term} must sit below its parent ${parent}`);
+        }
+      }
+    });
+  }
+  assert.equal(nodeNamed(tree, "person").level, 1, "person hangs under organism here");
+  assert.equal(nodeNamed(tree, "driver").level, 4);
+});
+
+test("the biggest connected sub-graph leads, and a term connected to nothing else is set apart rather than faked into the graph", () => {
+  const tree = treeFor(sectionNamed("object", "everything else"));
+  const sizes = tree.branches.map((b) => b.size);
+  assert.deepEqual(sizes, sizes.slice().sort((a, b) => b - a), "sub-graphs run biggest first");
+  assert.ok(tree.apart.length, "the objects section really does carry classes that stand apart");
+  for (const node of tree.apart) assert.deepEqual(node.parents, [], "a term standing apart draws no parent link");
+  assert.deepEqual(tree.apart.map((n) => n.term), tree.apart.map((n) => n.term).slice().sort());
+});
+
+test("a tree names the section's own classes, their ancestors, and the other catalog classes sharing those ancestors", () => {
+  const tree = treeFor(sectionNamed("object", "animal"));
+  const byKind = (kind) => allNodes(tree).filter((n) => n.kind === kind).map((n) => n.term);
+  assert.deepEqual(byKind("member").sort(), ["dog", "insect", "spider"], "the section's own classes are its members");
+  assert.ok(byKind("ancestor").includes("organism"), "an abstract ancestor is drawn as its own node");
+  const siblings = byKind("sibling");
+  assert.ok(siblings.length, "the animal sub-graph really is shared with catalog classes from other sections");
+  for (const term of siblings) {
+    assert.ok(realEntriesByClass.has(term), `${term} is a real catalog class, never an invented sibling`);
+  }
+});
+
+test("no ancestor recruits more than the capped number of siblings, so one crowded parent can't flood a tree", () => {
+  for (const section of realSections) {
+    const tree = treeFor(section);
+    const siblingsPerParent = new Map();
+    for (const node of allNodes(tree)) {
+      if (node.kind !== "sibling") continue;
+      for (const parent of node.parents) siblingsPerParent.set(parent, (siblingsPerParent.get(parent) || 0) + 1);
+    }
+    for (const [parent, count] of siblingsPerParent) {
+      assert.ok(count <= MAX_TREE_SIBLINGS_PER_PARENT, `${section.label}: ${parent} drew ${count} siblings`);
+    }
+  }
+});
+
+test("a term with no sprite of its own carries a stand-in description written from its own place in the graph", () => {
+  const tree = treeFor(sectionNamed("person", "worker"));
+  const doer = nodeNamed(tree, "doer");
+  assert.equal(doer.sprited, false, "doer is a real ancestor this catalog draws no art for");
+  assert.equal(doer.description, "a kind of person. No sprite yet.");
+  const person = nodeNamed(tree, "person");
+  assert.equal(person.sprited, true, "a term that really has a template needs no stand-in");
+  assert.equal(person.description, null);
+  for (const node of allNodes(tree)) {
+    assert.equal(node.sprited, node.description === null, `${node.term} must carry a description exactly when it has no sprite`);
+  }
+});
+
+test("ontologyNodeDescription names at most two parents and says plainly when a term tops its branch", () => {
+  assert.equal(ontologyNodeDescription([]), "the widest concept this branch reaches. No sprite yet.");
+  assert.equal(ontologyNodeDescription(["insect", "woman"]), "a kind of insect and woman. No sprite yet.");
+  assert.equal(ontologyNodeDescription(["change", "hit", "insect"]), "a kind of change and hit. No sprite yet.");
+});
+
+test("buildOntologyTree is a pure function of the fact set — the same facts in a different order build the same tree", () => {
+  const section = sectionNamed("object", "insect");
+  const shuffled = realFactRows.slice().reverse();
+  const forward = treeFor(section);
+  const backward = buildOntologyTree(section, {
+    index: subClassIndex(shuffled), spritedClasses: realSpritedClasses, entriesByClass: realEntriesByClass,
+  });
+  assert.deepEqual(backward, forward);
+});
+
+test("a subClassOf loop in the fact set lays out without spinning, and both recorded edges still show", () => {
+  const looped = [isA("hen", "bird"), isA("bird", "hen"), isA("hen", "animal")];
+  const section = { group: CATALOG_GROUPS[2], label: "loop", entries: [{ className: "hen", chain: ["hen", "bird", "animal"] }] };
+  const tree = buildOntologyTree(section, {
+    index: subClassIndex(looped), spritedClasses: new Set(), entriesByClass: new Map(),
+  });
+  const hen = nodeNamed(tree, "hen");
+  assert.deepEqual(hen.parents, ["animal", "bird"], "both of hen's recorded parents are drawn");
+  assert.deepEqual(nodeNamed(tree, "bird").parents, ["hen"], "the loop's other edge is drawn too");
+});
+
+test("sectionSlugFor keeps two sections with the same label apart by their own group", () => {
+  const person = sectionSlugFor({ group: { id: GROUP_PERSON }, label: "everything else" });
+  const object = sectionSlugFor({ group: { id: GROUP_OBJECT }, label: "everything else" });
+  assert.equal(person, "person-everything-else");
+  assert.equal(object, "object-everything-else");
+  assert.notEqual(person, object);
+  assert.equal(sectionSlugFor({ group: { id: GROUP_OBJECT }, label: "body of water" }), "object-body-of-water");
+});
+
+test("ontologyTreeNodeId builds one stable, slugified id per section and term", () => {
+  assert.equal(ontologyTreeNodeId("object-animal", "dog"), "tree-object-animal-dog");
+  assert.equal(ontologyTreeNodeId("object-everything-else", "body of water"), "tree-object-everything-else-body-of-water");
+});
+
+test("the landing page draws one tree per section, every node id distinct and every ancestry pill resolving to one", () => {
+  const html = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: realFactRows });
+  assert.equal((html.match(/class="ontology-head"/g) || []).length, realSections.length, "one tree per section");
+  const ids = [...html.matchAll(/ id="(tree-[^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(ids).size, ids.length, "every tree node id is unique on the page");
+  const idSet = new Set(ids);
+  const pillTargets = [...html.matchAll(/<a class="chain-link[^"]*" href="#([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(pillTargets.length, "the pills really are links now");
+  for (const target of pillTargets) assert.ok(idSet.has(target), `the pill linking to #${target} points at no node`);
+});
+
+test("a term with no sprite renders an obvious placeholder slot carrying its own description, sprited terms render real art", () => {
+  const html = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: realFactRows });
+  assert.match(html, /id="tree-person-worker-doer"[^>]*><span class="tree-img-placeholder" role="img" aria-label="doer: a kind of person\. No sprite yet\.">a kind of person\. No sprite yet\.<\/span>/);
+  assert.match(html, /id="tree-person-worker-person"[^>]*>\s*<span class="tree-img" role="img" aria-label="the person sprite"><svg/);
+});
+
+test("a group page draws no trees of its own and sends its ancestry pills to the landing page's node for that term", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: realFactRows, groupId: GROUP_OBJECT });
+  assert.equal((html.match(/class="ontology-head"/g) || []).length, 0, "the trees all live on the landing page");
+  assert.match(html, /<a class="chain-link own" href="\.\/sprites\.html#tree-object-animal-dog">dog<\/a>/);
 });
 
 // ---- grouping ----

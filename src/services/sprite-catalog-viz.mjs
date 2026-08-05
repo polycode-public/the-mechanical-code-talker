@@ -45,6 +45,7 @@
 // why the mechanism exists, just not exercised by any class shown here).
 
 import { classAncestorChain, SPRITE_REGISTRY } from "../domain/sprite-map.mjs";
+import { normFactTerm } from "../domain/hash.mjs";
 import { resolveSpriteAsset, matchConstraints } from "../domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../domain/sprite-materials.mjs";
 import { spriteFactRows } from "../domain/sprite-facts.mjs";
@@ -249,6 +250,185 @@ export function catalogSections(entries, spritedClasses) {
     }
   }
   return sections;
+}
+
+// ---- the section ontology trees ----
+//
+// Above each landing-page section sits the real rdfs:subClassOf graph its own
+// classes live in, drawn from the SAME fact rows the cards' ancestry pills
+// print — so a pill and a tree node can never disagree about who a class's
+// parents are. A tree carries three kinds of node:
+//   - the section's own classes ("member"),
+//   - every term their own chains walk through ("ancestor"), and
+//   - any OTHER catalog class that hangs off one of those ancestors
+//     ("sibling"), which is what makes a shared sub-graph visible.
+// Terms come from each entry's chain PREFIX, cut at the same
+// MAX_CHAIN_DISPLAY the pills are cut at, so every pill on the page has a
+// node to point at.
+//
+// A class with more than one parent gets both drawn (queen really is on
+// record as both an insect and a woman; fly as an insect and four verbs).
+// Neither parent is dropped to make the picture a single tree, because the
+// disagreement is part of what the page is showing.
+
+/** How many other catalog classes hanging off the same parent one tree node
+ *  shows. Alphabetical, so which ones survive the cut never depends on fact
+ *  arrival order. */
+export const MAX_TREE_SIBLINGS_PER_PARENT = 6;
+
+function slugify(text) {
+  return String(text).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** `factRows`' rdfs:subClassOf rows as two lookups, parent-of and child-of,
+ *  both normFactTerm-keyed and de-duplicated. Built once per page: a tree
+ *  asks for the parents of a few hundred terms, and re-scanning the whole
+ *  23k-row fact set for each of them is the same walk over and over. Pure. */
+export function subClassIndex(factRows) {
+  const parentsOf = new Map();
+  const childrenOf = new Map();
+  const push = (map, key, value) => {
+    if (!map.has(key)) map.set(key, []);
+    const list = map.get(key);
+    if (!list.includes(value)) list.push(value);
+  };
+  for (const row of factRows || []) {
+    if (row?.predicate !== "rdfs:subClassOf") continue;
+    const child = normFactTerm(row.subject);
+    const parent = normFactTerm(row.object);
+    if (!child || !parent) continue;
+    push(parentsOf, child, parent);
+    push(childrenOf, parent, child);
+  }
+  return { parentsOf, childrenOf };
+}
+
+/** The DOM id prefix a section's own tree nodes share — group id plus the
+ *  section's own label, so the "everything else" bucket in Person roles and
+ *  the one in Physical objects never collide. Pure. */
+export function sectionSlugFor(section) {
+  return `${section.group.id}-${slugify(section.label)}`;
+}
+
+/** One tree node's stable DOM id. An ancestry pill on a card links straight
+ *  to this, on this page or on the landing page. Pure. */
+export function ontologyTreeNodeId(sectionSlug, term) {
+  return `tree-${sectionSlug}-${slugify(term)}`;
+}
+
+/** The stand-in text a tree node shows when its term carries no sprite of its
+ *  own, written from the term's own place in the graph and nothing else. The
+ *  node prints its name alongside, so this says only what the name doesn't. A
+ *  later pass swaps real art in behind it. Pure. */
+export function ontologyNodeDescription(parentTerms) {
+  const parents = (parentTerms || []).slice(0, 2);
+  if (!parents.length) return "the widest concept this branch reaches. No sprite yet.";
+  return `a kind of ${parents.join(" and ")}. No sprite yet.`;
+}
+
+/** One section's ontology as a layered DAG. Returns `{branches, apart,
+ *  termCount, truncated}`:
+ *  - `branches` are the connected sub-graphs, biggest first, each a list of
+ *    levels (level 0 is the widest concept, each level a longest-path step
+ *    down from it) with the nodes at each level in alphabetical order;
+ *  - `apart` holds every term that connects to nothing else here, which is
+ *    what "this class stands on its own" looks like;
+ *  - `truncated` is true when a real chain runs past the display cut.
+ *  Pure, and a pure function of the fact SET: every list is sorted by name or
+ *  size, never by the order facts arrived in. */
+export function buildOntologyTree(section, { index, spritedClasses, entriesByClass, maxChainDisplay = MAX_CHAIN_DISPLAY, maxSiblings = MAX_TREE_SIBLINGS_PER_PARENT } = {}) {
+  const { parentsOf, childrenOf } = index;
+  const memberTerms = new Set((section?.entries || []).map((e) => e.className));
+  const chainTerms = new Set();
+  let truncated = false;
+  for (const entry of section?.entries || []) {
+    const chain = entry.chain || [entry.className];
+    for (const term of chain.slice(0, maxChainDisplay)) chainTerms.add(term);
+    if (chain.length > maxChainDisplay) truncated = true;
+  }
+  const siblingTerms = new Set();
+  for (const term of [...chainTerms].sort()) {
+    const kin = (childrenOf.get(term) || [])
+      .filter((child) => !chainTerms.has(child) && entriesByClass.has(child))
+      .sort();
+    for (const child of kin.slice(0, maxSiblings)) siblingTerms.add(child);
+  }
+  const allTerms = new Set([...chainTerms, ...siblingTerms]);
+
+  const drawnParentsOf = new Map();
+  for (const term of allTerms) {
+    drawnParentsOf.set(term, (parentsOf.get(term) || []).filter((p) => allTerms.has(p)).sort());
+  }
+
+  // Longest-path layering. A fact set can carry a subClassOf loop (two terms
+  // each recorded as the other's parent); the back edge is skipped for
+  // layering only, so a loop can't spin here, and both edges are still drawn.
+  const levelOf = new Map();
+  const walking = new Set();
+  const levelFor = (term) => {
+    if (levelOf.has(term)) return levelOf.get(term);
+    if (walking.has(term)) return 0;
+    walking.add(term);
+    let deepest = 0;
+    for (const parent of drawnParentsOf.get(term) || []) deepest = Math.max(deepest, levelFor(parent) + 1);
+    walking.delete(term);
+    levelOf.set(term, deepest);
+    return deepest;
+  };
+  const sortedTerms = [...allTerms].sort();
+  for (const term of sortedTerms) levelFor(term);
+
+  const componentRoot = new Map(sortedTerms.map((t) => [t, t]));
+  const findRoot = (term) => {
+    let root = term;
+    while (componentRoot.get(root) !== root) root = componentRoot.get(root);
+    return root;
+  };
+  for (const term of sortedTerms) {
+    for (const parent of drawnParentsOf.get(term) || []) {
+      const a = findRoot(term);
+      const b = findRoot(parent);
+      if (a !== b) componentRoot.set(a, b);
+    }
+  }
+
+  const nodeFor = (term) => {
+    const realParents = (parentsOf.get(term) || []).slice().sort();
+    const sprited = spritedClasses.has(term);
+    return {
+      term,
+      level: levelOf.get(term) || 0,
+      parents: drawnParentsOf.get(term) || [],
+      kind: memberTerms.has(term) ? "member" : siblingTerms.has(term) ? "sibling" : "ancestor",
+      sprited,
+      description: sprited ? null : ontologyNodeDescription(realParents),
+    };
+  };
+
+  const byComponent = new Map();
+  for (const term of sortedTerms) {
+    const root = findRoot(term);
+    if (!byComponent.has(root)) byComponent.set(root, []);
+    byComponent.get(root).push(term);
+  }
+  const branches = [];
+  const apart = [];
+  for (const terms of byComponent.values()) {
+    if (terms.length === 1) { apart.push(nodeFor(terms[0])); continue; }
+    const levels = [];
+    for (const term of terms) {
+      const level = levelOf.get(term) || 0;
+      if (!levels[level]) levels[level] = [];
+      levels[level].push(nodeFor(term));
+    }
+    for (let i = 0; i < levels.length; i += 1) {
+      levels[i] = (levels[i] || []).sort((a, b) => a.term.localeCompare(b.term));
+    }
+    branches.push({ size: terms.length, key: terms.slice().sort()[0], levels });
+  }
+  branches.sort((a, b) => b.size - a.size || a.key.localeCompare(b.key));
+  apart.sort((a, b) => a.term.localeCompare(b.term));
+  return { branches, apart, termCount: allTerms.size, truncated };
 }
 
 /** The operator's own curated example sprites, one per landing-page section,
@@ -463,17 +643,18 @@ export function sceneComposerClassIndex(entries) {
 // (mgx:take-parameter, mgx:accept-emotion, mgx:offer-variant) are what those
 // lanes read, so the page hands the line over and renders what comes back.
 
-// ---- the animated swatches (pure) ----
+// ---- the animated cell (pure) ----
 //
-// Each card's large tier carries three animated swatches, one per axis the
-// sprite tier actually varies on: mood (mgx:feels), facing (mgx:faces) and
-// pose (mgx:pose). The page builds their frames client-side out of its own
-// already-rendered swatches (see the inline script below — the same
-// read-the-DOM posture the scene composer's class index takes), but the
+// A card's large tier varies on three axes: mood (mgx:feels), facing
+// (mgx:faces) and pose (mgx:pose). One image cell per class shows all three,
+// stepping through its display modes on click: static, moving, turning,
+// cycle-emotions, back to static. The page builds the frames client-side out
+// of its own already-rendered swatches (see the inline script below — the
+// same read-the-DOM posture the scene composer's class index takes), but the
 // frame ORDER and the tempo are real logic worth pinning on their own, so
 // they live here as pure functions the page splices in by `.toString()`.
-// One delay constant serves all three, so the three can't drift apart into
-// three tempos.
+// One delay constant serves every axis, so they can't drift into three
+// tempos.
 //
 // A `frame` is `{svg, label}`. An empty return means there is nothing worth
 // animating for that class, and the page leaves its static swatch alone.
@@ -529,6 +710,32 @@ export function movingFrameSequence(idleFrame, movingFrame) {
   return [{ svg: idleFrame.svg, label: "idle" }, { svg: movingFrame.svg, label: "moving" }];
 }
 
+/** The display modes a card's one image cell steps through, in click order.
+ *  A class only carries the modes it has real art for; static is always
+ *  first, because that is what the cell rests on. */
+export const DISPLAY_MODE_ORDER = Object.freeze(["static", "moving", "turning", "emotions"]);
+
+/** The three axis sequences above, flattened into the ONE click-through
+ *  sequence a card's single image cell walks: the static sprite, its moving
+ *  pose, the whole turntable, then every mood, and round again. Each frame
+ *  carries the mode it belongs to, so the cell can name what it is showing
+ *  and can auto-step within one mode without running off into the next.
+ *
+ *  The leading frame of `moodFrames` is dropped: moodFrameSequence puts the
+ *  plain sprite there, and that is already this sequence's static frame.
+ *  A class with nothing but its static frame gets an empty sequence and
+ *  keeps its ordinary swatch — there is nothing to cycle.
+ *
+ *  Pure; self-contained (no outer refs), `.toString()`-splice safe. */
+export function displayModeSequence(staticFrame, { movingFrame = null, turnFrames = [], moodFrames = [] } = {}) {
+  if (!staticFrame) return [];
+  const frames = [{ mode: "static", svg: staticFrame.svg, label: staticFrame.label }];
+  if (movingFrame) frames.push({ mode: "moving", svg: movingFrame.svg, label: "moving" });
+  for (const frame of turnFrames || []) frames.push({ mode: "turning", svg: frame.svg, label: frame.label });
+  for (const frame of (moodFrames || []).slice(1)) frames.push({ mode: "emotions", svg: frame.svg, label: frame.label });
+  return frames.length > 1 ? frames : [];
+}
+
 // ---- rendering ----
 
 /** The DOM id a class's own card carries on whichever full-gallery page
@@ -537,17 +744,98 @@ export function movingFrameSequence(idleFrame, movingFrame) {
  *  exactly on the class they clicked through for rather than the top of a
  *  page with dozens or hundreds of other cards above it. Pure. */
 export function classAnchorId(className) {
-  return `card-${String(className).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+  return `card-${slugify(className)}`;
 }
 
-function chainHtml(chain) {
+/** A card's ancestry pills. With a `treeAnchorBase` (the href prefix for this
+ *  card's own section tree — `#tree-<section>-` on a page that draws the
+ *  tree, `./sprites.html#tree-<section>-` on a group page that leaves the
+ *  trees to the landing page) each pill is a real link to that term's own
+ *  tree node. Without one the pills stay plain text. */
+function chainHtml(chain, treeAnchorBase = null) {
   const shown = chain.slice(0, MAX_CHAIN_DISPLAY);
   const rest = chain.length - shown.length;
   const links = shown
-    .map((term, i) => `<span class="chain-link${i === 0 ? " own" : ""}">${escapeHtml(term)}</span>`)
+    .map((term, i) => {
+      const cls = `chain-link${i === 0 ? " own" : ""}`;
+      if (!treeAnchorBase) return `<span class="${cls}">${escapeHtml(term)}</span>`;
+      return `<a class="${cls}" href="${escapeHtml(treeAnchorBase + slugify(term))}">${escapeHtml(term)}</a>`;
+    })
     .join('<span class="chain-arrow">&rsaquo;</span>');
   const more = rest > 0 ? `<span class="chain-more">+${rest} more on record</span>` : "";
   return `<div class="chain">${links}${more}</div>`;
+}
+
+function joinWithAnd(parts) {
+  if (parts.length < 2) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+function treeNodeHtml(node, { sectionSlug, entriesByClass, resolveNodeSprite }) {
+  const art = node.sprited
+    ? `<span class="tree-img" role="img" aria-label="the ${escapeHtml(node.term)} sprite">${resolveNodeSprite(node.term)}</span>`
+    : `<span class="tree-img-placeholder" role="img" aria-label="${escapeHtml(`${node.term}: ${node.description}`)}">${escapeHtml(node.description)}</span>`;
+  const entry = entriesByClass.get(node.term);
+  const groupPage = entry ? (CATALOG_GROUPS.find((g) => g.id === entry.group) || {}).page : null;
+  const name = groupPage
+    ? `<a class="tree-term" href="./${groupPage}#${classAnchorId(node.term)}">${escapeHtml(node.term)}</a>`
+    : `<span class="tree-term">${escapeHtml(node.term)}</span>`;
+  const parentLinks = node.parents.map((p) => `<a href="#${ontologyTreeNodeId(sectionSlug, p)}">${escapeHtml(p)}</a>`);
+  const up = parentLinks.length
+    ? `<span class="tree-up">under ${joinWithAnd(parentLinks)}</span>`
+    : "";
+  const classes = ["tree-node", node.kind, node.sprited ? "sprited" : "abstract", node.parents.length > 1 ? "dual" : ""]
+    .filter(Boolean).join(" ");
+  return `<div class="${classes}" id="${ontologyTreeNodeId(sectionSlug, node.term)}" data-term="${escapeHtml(node.term)}" data-level="${node.level}" data-parents="${node.parents.length}" tabindex="-1">${art}${name}${up}</div>`;
+}
+
+/** One section's tree, in its own scrolling box so a wide graph never widens
+ *  the page itself. Levels run left to right, widest concept first. */
+export function ontologyTreeHtml(tree, options) {
+  const { sectionLabel } = options;
+  const levelHtml = (nodes, level) =>
+    `<div class="tree-level" data-level="${level}">${nodes.map((n) => treeNodeHtml(n, options)).join("")}</div>`;
+  const branches = tree.branches
+    .map((b) => `<div class="tree-branch">${b.levels.map((nodes, i) => levelHtml(nodes, i)).join("")}</div>`)
+    .join("");
+  const apart = tree.apart.length
+    ? `<div class="tree-branch tree-apart"><h4 class="tree-apart-head">on their own</h4>${levelHtml(tree.apart, 0)}</div>`
+    : "";
+  const note = tree.truncated
+    ? `<p class="tree-note">Some of these chains run further up than the levels shown. The rest stays on record.</p>`
+    : "";
+  return `<div class="ontology">
+    <h3 class="ontology-head">the ontology behind ${escapeHtml(sectionLabel)} <span class="count">${tree.termCount} concepts</span></h3>
+    <div class="tree-scroll" tabindex="0" role="group" aria-label="ontology tree for ${escapeHtml(sectionLabel)}">
+      <div class="ontology-tree">${branches}${apart}</div>
+    </div>
+    ${note}
+  </div>`;
+}
+
+/** The two per-section functions every page-body builder below needs: the
+ *  tree to draw above a section (empty on a page that defers its trees to the
+ *  landing page) and the href prefix that section's ancestry pills point at.
+ *  `treeHost` null means this page draws no trees of its own, so its pills
+ *  reach across to sprites.html instead. Pure given already-loaded inputs. */
+function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasses, drawsTrees }) {
+  const entriesByClass = new Map(entries.map((e) => [e.className, e]));
+  const index = subClassIndex(factRows);
+  const treeFor = (section) => {
+    if (!drawsTrees) return "";
+    const sectionSlug = sectionSlugFor(section);
+    const tree = buildOntologyTree(section, { index, spritedClasses, entriesByClass });
+    return ontologyTreeHtml(tree, {
+      sectionSlug,
+      sectionLabel: section.label,
+      entriesByClass,
+      resolveNodeSprite: (term) =>
+        resolveSpriteAsset(term, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `tree-${sectionSlug}-${term}` }),
+    });
+  };
+  const anchorBaseFor = (section) =>
+    `${drawsTrees ? "" : "./sprites.html"}#tree-${sectionSlugFor(section)}-`;
+  return { treeFor, anchorBaseFor };
 }
 
 function swatchHtml(s) {
@@ -567,10 +855,10 @@ function tierRowHtml(tierName, swatches) {
     </div>`;
 }
 
-function cardHtml(entry) {
+function cardHtml(entry, { treeAnchorBase = null } = {}) {
   return `<article class="card" id="${classAnchorId(entry.className)}" data-cls="${escapeHtml(entry.className)}" data-group="${escapeHtml(entry.group)}">
     <h3 class="card-name">${escapeHtml(entry.className)}</h3>
-    ${chainHtml(entry.chain)}
+    ${chainHtml(entry.chain, treeAnchorBase)}
     ${tierRowHtml("icon", entry.iconSwatches)}
     ${tierRowHtml("large", entry.largeSwatches)}
   </article>`;
@@ -580,24 +868,35 @@ function cardHtml(entry) {
  *  ancestor's OWN resolved sprite (the proof the fallback has art to land
  *  on), then that cluster's cards. `ancestorSvg` is null for the trailing
  *  no-illustrated-ancestor bucket. */
-function clusterHtml(cluster, ancestorSvg) {
+function clusterHtml(cluster, ancestorSvg, { section, treeFor, anchorBaseFor }) {
   const name = cluster.ancestor || "everything else";
   const chip = ancestorSvg ? `<span class="cluster-chip">${ancestorSvg}</span>` : "";
+  const treeAnchorBase = anchorBaseFor(section);
   return `<div class="cluster">
     <h3 class="cluster-head">${chip}<span class="cluster-name">${escapeHtml(name)}</span><span class="count">${cluster.entries.length}</span></h3>
-    <div class="cards">${cluster.entries.map(cardHtml).join("")}</div>
+    ${treeFor(section)}
+    <div class="cards">${cluster.entries.map((e) => cardHtml(e, { treeAnchorBase })).join("")}</div>
   </div>`;
 }
 
-function sectionHtml(group, entries, { clusterBy = null } = {}) {
+function sectionHtml(group, entries, { clusterBy = null, treeFor, anchorBaseFor }) {
   const rows = entries.filter((e) => e.group === group.id);
   if (!rows.length) return "";
   const note = group.note ? `<p class="section-note">${escapeHtml(group.note)}</p>` : "";
-  const body = clusterBy
-    ? clusterEntriesByAncestor(rows, clusterBy.spritedClasses)
-        .map((c) => clusterHtml(c, c.ancestor ? clusterBy.resolveChip(c.ancestor) : null))
-        .join("")
-    : `<div class="cards">${rows.map(cardHtml).join("")}</div>`;
+  let body;
+  if (clusterBy) {
+    body = clusterEntriesByAncestor(rows, clusterBy.spritedClasses)
+      .map((c) => clusterHtml(c, c.ancestor ? clusterBy.resolveChip(c.ancestor) : null, {
+        section: { group, label: c.ancestor || "everything else", entries: c.entries },
+        treeFor,
+        anchorBaseFor,
+      }))
+      .join("");
+  } else {
+    const section = { group, label: group.label, entries: rows };
+    const treeAnchorBase = anchorBaseFor(section);
+    body = `${treeFor(section)}<div class="cards">${rows.map((e) => cardHtml(e, { treeAnchorBase })).join("")}</div>`;
+  }
   return `<section class="group" id="g-${group.id}" aria-label="${escapeHtml(group.label)}">
     <h2>${escapeHtml(group.label)} <span class="count">${rows.length}</span></h2>
     ${note}
@@ -654,9 +953,15 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
     resolveChip: (ancestor) =>
       resolveSpriteAsset(ancestor, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `cluster-${ancestor}` }),
   };
+  // A per-group page leaves the trees to sprites.html, which holds every
+  // section's, and points its own pills there. The full single-page render
+  // holds every section itself, so it draws and anchors its own.
+  const { treeFor, anchorBaseFor } = sectionTreeRenderers({
+    entries, largeTemplates, factRows, spritedClasses, drawsTrees: !groupId,
+  });
   const groupsToRender = groupId ? CATALOG_GROUPS.filter((g) => g.id === groupId) : CATALOG_GROUPS;
   const bodyHtml = groupsToRender
-    .map((g) => sectionHtml(g, entries, { clusterBy: groupIsClustered(g.id) ? clusterBy : null }))
+    .map((g) => sectionHtml(g, entries, { clusterBy: groupIsClustered(g.id) ? clusterBy : null, treeFor, anchorBaseFor }))
     .join("");
   const navHtml = groupId
     ? crossPageNavHtml(entries, { currentGroupId: groupId, includeOverviewLink: true })
@@ -937,13 +1242,42 @@ ${THEME_TOKENS_CSS}
   .group h2 { font-family: ${MONO_STACK}; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h2 .count { font-size: .7rem; color: var(--muted); font-weight: 400; }
   .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .8rem; max-width: 68ch; }
-  .landing-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.1rem 1rem; }
+  .landing-sections { display: flex; flex-direction: column; gap: 1.6rem; }
   .landing-section { min-width: 0; }
   .landing-section-name { font-family: ${MONO_STACK}; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .4rem; display: flex; align-items: baseline; gap: .4rem; }
   .landing-section-name .count { font-weight: 400; opacity: .75; }
-  .landing-section .cards { grid-template-columns: 1fr; }
+  .landing-section .cards { grid-template-columns: minmax(0, 260px); }
   .viewall { display: inline-block; font-family: ${MONO_STACK}; font-size: .7rem; margin-top: .4rem; color: var(--taught); text-decoration: none; }
   .viewall:hover { color: var(--corpus); text-decoration: underline; }
+  /* The section ontology trees. Levels run left to right, widest concept
+     first, inside a box that scrolls on its own so a wide graph never widens
+     the page. */
+  .ontology { margin: .3rem 0 .9rem; }
+  .ontology-head { font-family: ${MONO_STACK}; font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
+  .ontology-head .count { font-weight: 400; opacity: .75; }
+  .tree-scroll { overflow: auto; max-height: 22rem; border: 1px solid var(--ai-edge); border-radius: 4px; background: var(--ai-panel); padding: .55rem; overscroll-behavior: contain; }
+  .ontology-tree { display: flex; flex-direction: column; gap: .9rem; width: max-content; min-width: 100%; }
+  .tree-branch { display: flex; align-items: flex-start; gap: .45rem; }
+  .tree-apart { flex-direction: column; }
+  .tree-apart-head { font-family: ${MONO_STACK}; font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .3rem; }
+  .tree-apart .tree-level { flex-direction: row; flex-wrap: wrap; width: auto; }
+  .tree-level { display: flex; flex-direction: column; gap: .4rem; width: 10.5rem; flex: none; }
+  .tree-node { display: flex; flex-direction: column; align-items: center; gap: .18rem; text-align: center; padding: .3rem .3rem .35rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: var(--card); width: 10.5rem; box-sizing: border-box; }
+  .tree-node.member { border-color: var(--taught); }
+  .tree-node.sibling { opacity: .72; }
+  .tree-node.dual { border-left-width: 3px; border-left-color: var(--corpus); }
+  .tree-node:target { outline: 2px solid var(--corpus); outline-offset: 2px; }
+  .tree-img, .tree-img-placeholder { width: 100%; height: 3.2rem; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .tree-img { padding: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
+  .tree-img svg { height: 100%; width: auto; max-width: 100%; display: block; filter: var(--sprite-pop); }
+  .tree-img-placeholder { border-style: dashed; padding: .2rem .25rem; overflow: hidden; font-family: ${MONO_STACK}; font-size: .52rem; line-height: 1.25; color: var(--muted); }
+  .tree-term { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--ink); word-break: break-word; }
+  a.tree-term { color: var(--taught); text-decoration: none; }
+  a.tree-term:hover { color: var(--corpus); text-decoration: underline; }
+  .tree-up { font-family: ${MONO_STACK}; font-size: .55rem; color: var(--muted); line-height: 1.25; word-break: break-word; }
+  .tree-up a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--ai-edge); }
+  .tree-up a:hover { color: var(--corpus); }
+  .tree-note { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .35rem 0 0; }
   .cluster { margin: 1rem 0 1.5rem; }
   .cluster-head { display: flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .55rem; }
   .cluster-head .count { font-weight: 400; opacity: .75; }
@@ -956,6 +1290,8 @@ ${THEME_TOKENS_CSS}
   .card-name { font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .35rem; }
   .chain { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); margin-bottom: .5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; }
   .chain-link { padding: .04rem .35rem; border: 1px solid var(--ai-edge); border-radius: 99px; }
+  a.chain-link { color: inherit; text-decoration: none; }
+  a.chain-link:hover { border-color: var(--corpus); color: var(--corpus); }
   .chain-link.own { border-color: var(--taught); color: var(--taught); }
   .chain-arrow { color: var(--muted); opacity: .6; }
   .chain-more { font-style: italic; opacity: .75; }
@@ -975,6 +1311,7 @@ ${THEME_TOKENS_CSS}
   .swatch.cycle .swatch-img { border-color: var(--taught); cursor: pointer; display: block; }
   .swatch.cycle .swatch-img:hover { border-color: var(--corpus); }
   .swatch.cycle .swatch-caption { color: var(--taught); }
+  .swatch.cycle .swatch-mode { display: block; font-size: .54rem; letter-spacing: .05em; text-transform: uppercase; color: var(--corpus); }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--ai-edge); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, color .12s ease, opacity .12s ease; } }
 ${dockCss}</style>
@@ -1077,18 +1414,23 @@ ${spriteBundleScript}
   }
   wireSceneComposer();
 
-  // ---- the animated swatches — a card's large tier gains one moving
-  // swatch per axis its own templates actually vary on: mood (mgx:feels),
-  // facing (mgx:faces) and pose (mgx:pose). Frames are the card's own
-  // already-rendered swatches (read straight off the DOM here — unlike the
-  // composer's classIndex above, this only ever needs whatever cards THIS
-  // page actually renders, never the whole catalog), ordered by the pure
-  // *FrameSequence functions spliced in below, and one shared interval
-  // steps every cycle in sync at one shared delay. The mood cycle leads the
-  // row; the facing sweep and the pose toggle take over the static plain
-  // and happy swatches' own places rather than adding cells, so the row
-  // keeps its width. Reduced motion disables the auto-step only; each frame
-  // is a button, so a click or Enter always advances one frame by hand.
+  // ---- the animated cell — one image per class, standing where its plain
+  // swatch was, stepping through the display modes its own templates carry
+  // art for: static, moving, turning, cycle-emotions, back to static. Frames
+  // are the card's own already-rendered swatches (read straight off the DOM
+  // here — unlike the composer's classIndex above, this only ever needs
+  // whatever cards THIS page renders, never the whole catalog), ordered by
+  // the pure *FrameSequence functions spliced in below and flattened by
+  // displayModeSequence.
+  //
+  // A click always advances one frame, so every mode is reachable by hand.
+  // Inside an animated mode one shared interval steps the frames on, looping
+  // within that mode rather than running on into the next one; the static
+  // frame is the resting state and never auto-steps. Hovering the resting
+  // cell shows the moving pose while the pointer is over it.
+  //
+  // Reduced motion turns off the interval and the hover preview both. Clicks
+  // still step frame by frame, which is what keeps the walk deterministic.
   const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
   const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
   const MOOD_PROPERTY = "mgx:feels";
@@ -1097,6 +1439,8 @@ ${spriteBundleScript}
   const moodFrameSequence = ${moodFrameSequence.toString()};
   const turnFrameSequence = ${turnFrameSequence.toString()};
   const movingFrameSequence = ${movingFrameSequence.toString()};
+  const displayModeSequence = ${displayModeSequence.toString()};
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const cycleSteppers = [];
 
   function frameFromSwatch(swatch) {
@@ -1106,22 +1450,62 @@ ${spriteBundleScript}
     return { svg: img.innerHTML, label: label.textContent.trim() };
   }
 
-  function makeCycleSwatch(frames, ariaLabel, kind) {
+  function makeModeCell(frames, cls) {
     const holder = document.createElement("div");
-    holder.className = "swatch large cycle cycle-" + kind;
-    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="' + esc(ariaLabel)
-      + '"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
+    holder.className = "swatch large cycle cycle-mode";
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="step the ' + esc(cls)
+      + ' sprite through its display modes"></button>'
+      + '<div class="swatch-caption"><span class="swatch-mode"></span><span class="swatch-label"></span></div>';
     const frameImgEl = holder.querySelector(".swatch-img");
+    const frameModeEl = holder.querySelector(".swatch-mode");
     const frameLabelEl = holder.querySelector(".swatch-label");
+    const movingIndex = frames.findIndex((f) => f.mode === "moving");
     let frameIndex = 0;
+    let previewIndex = -1;
+    // Once the visitor starts clicking, the hover preview stops second-
+    // guessing them: it is the same pointer doing both, so without this the
+    // preview keeps pulling the cell back to the moving pose between clicks.
+    // Leaving the cell arms it again.
+    let previewBlocked = false;
     const showFrame = () => {
-      frameImgEl.innerHTML = frames[frameIndex].svg;
-      frameLabelEl.textContent = frames[frameIndex].label;
+      const frame = frames[previewIndex >= 0 ? previewIndex : frameIndex];
+      frameImgEl.innerHTML = frame.svg;
+      frameModeEl.textContent = frame.mode;
+      frameLabelEl.textContent = frame.label;
+      holder.dataset.mode = frame.mode;
     };
-    const stepFrame = () => { frameIndex = (frameIndex + 1) % frames.length; showFrame(); };
-    frameImgEl.addEventListener("click", stepFrame);
+    frameImgEl.addEventListener("click", () => {
+      previewIndex = -1;
+      previewBlocked = true;
+      frameIndex = (frameIndex + 1) % frames.length;
+      showFrame();
+    });
+    if (!reducedMotion && movingIndex > 0) {
+      holder.addEventListener("mouseenter", () => {
+        if (previewBlocked || previewIndex >= 0 || frames[frameIndex].mode !== "static") return;
+        previewIndex = movingIndex;
+        showFrame();
+      });
+      holder.addEventListener("mouseleave", () => {
+        previewBlocked = false;
+        if (previewIndex < 0) return;
+        previewIndex = -1;
+        showFrame();
+      });
+    }
+    // Auto-stepping stays inside the mode the visitor stopped on, so the cell
+    // animates what they asked to see instead of drifting through the rest.
+    cycleSteppers.push(() => {
+      if (previewIndex >= 0) return;
+      const mode = frames[frameIndex].mode;
+      if (mode === "static") return;
+      const inMode = [];
+      for (let i = 0; i < frames.length; i += 1) if (frames[i].mode === mode) inMode.push(i);
+      if (inMode.length < 2) return;
+      frameIndex = inMode[(inMode.indexOf(frameIndex) + 1) % inMode.length];
+      showFrame();
+    });
     showFrame();
-    cycleSteppers.push(stepFrame);
     return holder;
   }
 
@@ -1134,28 +1518,20 @@ ${spriteBundleScript}
       .filter((r) => r.frame);
     const baseSwatch = swatchRow.querySelector(".swatch.plain, .swatch.fallback");
     const baseFrame = frameFromSwatch(baseSwatch);
+    if (!baseSwatch || !baseFrame) continue;
 
     const moodRows = rows.filter((r) => r.property === MOOD_PROPERTY);
-    const moodFrames = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame));
-    if (moodFrames.length) {
-      swatchRow.insertBefore(makeCycleSwatch(moodFrames, "step through the " + cls + " expressions", "mood"), swatchRow.firstChild);
-    }
-
     const facingFrames = {};
     for (const r of rows) { if (r.property === FACING_PROPERTY) facingFrames[r.frame.label] = r.frame; }
-    const turnFrames = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
-    if (turnFrames.length && baseSwatch) {
-      swatchRow.replaceChild(makeCycleSwatch(turnFrames, "watch the " + cls + " turn through every direction", "turn"), baseSwatch);
-    }
-
     const movingRow = rows.find((r) => r.property === POSE_PROPERTY && r.frame.label === "moving");
-    const movingFrames = movingFrameSequence(baseFrame, movingRow && movingRow.frame);
-    if (movingFrames.length) {
-      const happyRow = moodRows.find((r) => r.frame.label === "happy");
-      swatchRow.replaceChild(makeCycleSwatch(movingFrames, "watch the " + cls + " move", "moving"), (happyRow || movingRow).el);
-    }
+
+    const modeFrames = displayModeSequence({ svg: baseFrame.svg, label: cls }, {
+      movingFrame: movingRow && movingRow.frame,
+      turnFrames: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
+      moodFrames: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame)),
+    });
+    if (modeFrames.length) swatchRow.replaceChild(makeModeCell(modeFrames, cls), baseSwatch);
   }
-  const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (cycleSteppers.length && !reducedMotion) {
     setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, CYCLE_FRAME_DELAY_MS);
   }
@@ -1188,6 +1564,9 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const sections = catalogSections(entries, spritedClasses);
+  const { treeFor, anchorBaseFor } = sectionTreeRenderers({
+    entries, largeTemplates, factRows, spritedClasses, drawsTrees: true,
+  });
   const bodyHtml = CATALOG_GROUPS.map((g) => {
     const groupEntries = entries.filter((e) => e.group === g.id);
     if (!groupEntries.length) return "";
@@ -1203,7 +1582,8 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
         : "";
       return `<div class="landing-section">
         ${heading}
-        <div class="cards">${cardHtml(example)}</div>
+        ${treeFor(section)}
+        <div class="cards">${cardHtml(example, { treeAnchorBase: anchorBaseFor(section) })}</div>
         <a class="viewall" href="./${g.page}#${classAnchorId(example.className)}">view all ${section.entries.length} &rsaquo;</a>
       </div>`;
     }).join("");
