@@ -249,6 +249,24 @@ export function buildDominantSense(memberOwners, senseIndex) {
   return dominant;
 }
 
+// ---- alphabet families (pure, unit-tested) ---------------------------------
+// WordNet's alphabetic-character members carry no structural family relation
+// (Greek/Hebrew/Roman only lives in each synset's OWN definition text, e.g.
+// "the 2nd letter of the Greek alphabet") — fixing the naming ladder alone
+// does not separate them, they'd all still resolve to "letter of the
+// alphabet" as a flat 82-member group. This regex reads the family straight
+// out of the definition WordNet already carries.
+export const ALPHABET_LETTER_DEF =
+  /^the (?:\d+(?:st|nd|rd|th)|last \(\d+(?:st|nd|rd|th)\)) letter of the ([A-Z][a-z]+) alphabet$/;
+
+/** "greek letter" | "hebrew letter" | "roman letter" | null — read off
+ *  `synset.definition[0]`, the only place WordNet records this grouping. */
+export function alphabetFamilyOf(synset) {
+  const def = String(synset?.definition?.[0] ?? "").trim();
+  const m = ALPHABET_LETTER_DEF.exec(def);
+  return m ? `${m[1].toLowerCase()} letter` : null;
+}
+
 /** The naming ladder's decision, rung included — `senseTermFor` below is the
  *  public one-string-out wrapper; main() also calls this directly to tally
  *  which rung fired across the whole dump for its stderr drift-visibility
@@ -258,9 +276,13 @@ export function buildDominantSense(memberOwners, senseIndex) {
  *  1. unique lemma — members[0] owned by only this synset.
  *  2. dominant sense — this synset wins members[0]'s WordNet-frequency contest.
  *  3. distinguishing member — the first later member no other synset owns.
- *  4. lexname gloss — `members[0] (lexname)`, nouns/verbs only, skipped when
- *     another same-lemma synset shares the lexfile (the gloss wouldn't
- *     distinguish them) or the lexfile segment is a non-semantic bucket.
+ *  4. qualified gloss — `members[0] (qualifier)`, nouns/verbs only. The
+ *     qualifier is the alphabet family when the definition names one (e.g.
+ *     "beta (greek letter)" — more readable, and it's what the family
+ *     grouping in buildFullFacts/buildXlFacts re-points these synsets'
+ *     hypernym edge at anyway); otherwise the lexname, skipped when another
+ *     same-lemma synset shares the lexfile (the gloss wouldn't distinguish
+ *     them) or the lexfile segment is a non-semantic bucket.
  *  5. residue — bare members[0], unconditionally (today's behavior; the
  *     final fallback has nowhere further to reject to). */
 function ladderDecision(id, synset, ctx) {
@@ -281,15 +303,21 @@ function ladderDecision(id, synset, ctx) {
 
   const pos = posOfSynsetId(id);
   if (pos === "n" || pos === "v") {
-    const lexfile = ctx.lexOf.get(id);
-    const segment = lexfile ? lexfile.split(".")[1] : null;
-    if (segment && !LEXNAME_NOT_A_GLOSS.includes(segment)) {
-      const sameLexfileElsewhere = ownersA
-        ? [...ownersA].some((otherId) => otherId !== id && ctx.lexOf.get(otherId) === lexfile)
-        : false;
-      if (!sameLexfileElsewhere) {
-        const candidate = `${A} (${segment})`;
-        if (!isArticleUnsafe(candidate)) return { rung: 4, name: candidate };
+    const family = alphabetFamilyOf(synset);
+    if (family) {
+      const candidate = `${A} (${family})`;
+      if (!isArticleUnsafe(candidate)) return { rung: 4, name: candidate };
+    } else {
+      const lexfile = ctx.lexOf.get(id);
+      const segment = lexfile ? lexfile.split(".")[1] : null;
+      if (segment && !LEXNAME_NOT_A_GLOSS.includes(segment)) {
+        const sameLexfileElsewhere = ownersA
+          ? [...ownersA].some((otherId) => otherId !== id && ctx.lexOf.get(otherId) === lexfile)
+          : false;
+        if (!sameLexfileElsewhere) {
+          const candidate = `${A} (${segment})`;
+          if (!isArticleUnsafe(candidate)) return { rung: 4, name: candidate };
+        }
       }
     }
   }
@@ -341,8 +369,20 @@ export function buildFullFacts(bySynset, ctx) {
       for (const targetId of targets) {
         const targetSynset = bySynset.get(targetId);
         if (!targetSynset) continue;
-        const B = senseTermFor(targetId, targetSynset, ctx);
+        let B = senseTermFor(targetId, targetSynset, ctx);
         if (!B) continue;
+        if (wnRel === "hypernym") {
+          // an alphabet-family member (beta, aleph, A...) re-points its own
+          // hypernym edge at its family instead of the flat "letter of the
+          // alphabet" parent, and the family gets its own edge up to that
+          // parent — makeRowBuilder's dedup collapses the repeat across
+          // every member of the same family down to one row.
+          const family = alphabetFamilyOf(synset);
+          if (family) {
+            add(family, "/r/IsA", B);
+            B = family;
+          }
+        }
         if (flip) add(B, rel, A); else add(A, rel, B);
       }
     }
@@ -409,8 +449,10 @@ export function buildXlFacts(bySynset, full, ctx, budget = 24000) {
     const targetSynset = bySynset.get(target);
     if (!sourceSynset || !targetSynset) continue;
     const A = senseTermFor(source, sourceSynset, ctx);
-    const B = senseTermFor(target, targetSynset, ctx);
+    let B = senseTermFor(target, targetSynset, ctx);
     if (!A || !B) continue;
+    const family = alphabetFamilyOf(sourceSynset);
+    if (family) { add(family, "/r/IsA", B); B = family; }
     add(A, "/r/IsA", B);
   }
 

@@ -12,6 +12,7 @@ import {
   RELATION_MAP, SKIPPED_RELATIONS, encodeTerm, humanize, synonymPairs,
   buildFullFacts, buildXlFacts, hypernymRefCounts, resolveYamlDir, DEFAULT_YAML_DIR,
   POS_RANK, LEXNAME_NOT_A_GLOSS, isArticleUnsafe, buildMemberOwners, buildDominantSense, senseTermFor,
+  ALPHABET_LETTER_DEF, alphabetFamilyOf,
 } from "../../corpus/wordnet/generate.mjs";
 import { termText, loadMap } from "../../src/adapters/corpus/conceptnet.mjs";
 
@@ -355,4 +356,61 @@ test("buildFullFacts: synonyms chain off the CHOSEN name (never the discarded or
   assert.ok(!has("/r/Synonym", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "never a Synonym edge back to the discarded headword");
   assert.ok(!has("/r/Synonym", "/c/en/letter", "/c/en/letter_of_the_alphabet"), "not in the other direction either");
   assert.ok(has("/r/RelatedTo", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "the lemma bridge: weak-trust RelatedTo carries the discarded headword");
+});
+
+// ---- alphabet families: WordNet's own definition text is the only place the
+// Greek/Hebrew/Roman grouping lives, e.g. "the 2nd letter of the Greek
+// alphabet" (confirmed by direct inspection of the OEWN yaml). --------------
+
+test("alphabetFamilyOf: reads the family straight off the definition text", () => {
+  assert.equal(alphabetFamilyOf({ definition: ["the 2nd letter of the Greek alphabet"] }), "greek letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the 22nd letter of the Hebrew alphabet"] }), "hebrew letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the 1st letter of the Roman alphabet"] }), "roman letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the last (24th) letter of the Greek alphabet"] }), "greek letter", "the omega-shaped 'last (Nth)' wording matches too");
+});
+
+test("alphabetFamilyOf: a definition naming a letter without an alphabet is ignored", () => {
+  assert.equal(alphabetFamilyOf({ definition: ["the first letter of a word (especially a person's name)"] }), null, "initial: no 'of the X alphabet' clause");
+  assert.equal(alphabetFamilyOf({ definition: ["a lowercase letter that has a part extending above other lowercase letters"] }), null, "ascender: same");
+  assert.equal(alphabetFamilyOf({ definition: ["two successive letters used to represent a single sound"] }), null, "digraph: same");
+  assert.equal(alphabetFamilyOf({}), null, "no definition at all");
+  assert.equal(alphabetFamilyOf({ definition: [] }), null, "empty definition array");
+});
+
+test("ALPHABET_LETTER_DEF: the family capture group is exactly the alphabet's proper name", () => {
+  const m = ALPHABET_LETTER_DEF.exec("the 3rd letter of the Greek alphabet");
+  assert.equal(m?.[1], "Greek");
+});
+
+/** A parent synset shaped like the real alphabetic-character sense (the
+ *  contested "letter" collapsing to "letter of the alphabet" — see
+ *  senseFixture), plus three of its own members: two Greek letters and one
+ *  non-family oddment (mirrors the real "initial" member, which has no
+ *  "of the X alphabet" clause in its own definition). */
+function alphabetFamilyFixture() {
+  const bySynset = new Map(Object.entries({
+    "80001-n": { members: ["letter", "missive"] },
+    "80002-n": { members: ["letter", "letter of the alphabet", "alphabetic character"] },
+    "80003-n": { members: ["beta"], hypernym: ["80002-n"], definition: ["the 2nd letter of the Greek alphabet"] },
+    "80004-n": { members: ["gamma"], hypernym: ["80002-n"], definition: ["the 3rd letter of the Greek alphabet"] },
+    "80005-n": { members: ["initial"], hypernym: ["80002-n"], definition: ["the first letter of a word (especially a person's name)"] },
+  }));
+  const memberOwners = buildMemberOwners(bySynset);
+  const senseIndex = new Map([["letter 80001-n", 0], ["letter 80002-n", 1]]);
+  const dominantBySynset = buildDominantSense(memberOwners, senseIndex);
+  return { bySynset, ctx: { memberOwners, dominantBySynset, lexOf: new Map() } };
+}
+
+test("buildFullFacts: Greek members re-point their own IsA at the family, and the family bridges up to letter of the alphabet exactly once", () => {
+  const { bySynset, ctx } = alphabetFamilyFixture();
+  const facts = buildFullFacts(bySynset, ctx);
+  const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
+
+  assert.ok(has("/r/IsA", "/c/en/beta", "/c/en/greek_letter"), "beta re-points at the family, not the flat parent");
+  assert.ok(has("/r/IsA", "/c/en/gamma", "/c/en/greek_letter"));
+  assert.ok(!has("/r/IsA", "/c/en/beta", "/c/en/letter_of_the_alphabet"), "the direct edge to the flat parent is gone");
+  assert.ok(has("/r/IsA", "/c/en/greek_letter", "/c/en/letter_of_the_alphabet"), "the family itself bridges up to the flat parent");
+  assert.equal(facts.filter((f) => f.rel === "/r/IsA" && f.start === "/c/en/greek_letter").length, 1, "one family row, deduped across every member that shares it");
+
+  assert.ok(has("/r/IsA", "/c/en/initial", "/c/en/letter_of_the_alphabet"), "a member whose own definition names no alphabet keeps the flat parent");
 });
