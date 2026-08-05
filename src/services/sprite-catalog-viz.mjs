@@ -45,6 +45,7 @@
 // why the mechanism exists, just not exercised by any class shown here).
 
 import { classAncestorChain, SPRITE_REGISTRY } from "../domain/sprite-map.mjs";
+import { normFactTerm } from "../domain/hash.mjs";
 import { resolveSpriteAsset, matchConstraints } from "../domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../domain/sprite-materials.mjs";
 import { spriteFactRows } from "../domain/sprite-facts.mjs";
@@ -249,6 +250,184 @@ export function catalogSections(entries, spritedClasses) {
     }
   }
   return sections;
+}
+
+// ---- the section ontology trees ----
+//
+// Above each landing-page section sits the real rdfs:subClassOf graph its own
+// classes live in, drawn from the SAME fact rows the cards' ancestry pills
+// print — so a pill and a tree node can never disagree about who a class's
+// parents are. A tree carries three kinds of node:
+//   - the section's own classes ("member"),
+//   - every term their own chains walk through ("ancestor"), and
+//   - any OTHER catalog class that hangs off one of those ancestors
+//     ("sibling"), which is what makes a shared sub-graph visible.
+// Terms come from each entry's chain PREFIX, cut at the same
+// MAX_CHAIN_DISPLAY the pills are cut at, so every pill on the page has a
+// node to point at.
+//
+// A class with more than one parent gets both drawn (queen really is on
+// record as both an insect and a woman; fly as an insect and four verbs).
+// Neither parent is dropped to make the picture a single tree, because the
+// disagreement is part of what the page is showing.
+
+/** How many other catalog classes hanging off the same parent one tree node
+ *  shows. Alphabetical, so which ones survive the cut never depends on fact
+ *  arrival order. */
+export const MAX_TREE_SIBLINGS_PER_PARENT = 6;
+
+function slugify(text) {
+  return String(text).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** `factRows`' rdfs:subClassOf rows as two lookups, parent-of and child-of,
+ *  both normFactTerm-keyed and de-duplicated. Built once per page: a tree
+ *  asks for the parents of a few hundred terms, and re-scanning the whole
+ *  23k-row fact set for each of them is the same walk over and over. Pure. */
+export function subClassIndex(factRows) {
+  const parentsOf = new Map();
+  const childrenOf = new Map();
+  const push = (map, key, value) => {
+    if (!map.has(key)) map.set(key, []);
+    const list = map.get(key);
+    if (!list.includes(value)) list.push(value);
+  };
+  for (const row of factRows || []) {
+    if (row?.predicate !== "rdfs:subClassOf") continue;
+    const child = normFactTerm(row.subject);
+    const parent = normFactTerm(row.object);
+    if (!child || !parent) continue;
+    push(parentsOf, child, parent);
+    push(childrenOf, parent, child);
+  }
+  return { parentsOf, childrenOf };
+}
+
+/** The DOM id prefix a section's own tree nodes share — group id plus the
+ *  section's own label, so the "everything else" bucket in Person roles and
+ *  the one in Physical objects never collide. Pure. */
+export function sectionSlugFor(section) {
+  return `${section.group.id}-${slugify(section.label)}`;
+}
+
+/** One tree node's stable DOM id. An ancestry pill on a card links straight
+ *  to this, on this page or on the landing page. Pure. */
+export function ontologyTreeNodeId(sectionSlug, term) {
+  return `tree-${sectionSlug}-${slugify(term)}`;
+}
+
+/** The stand-in text a tree node shows when the term carries no sprite of its
+ *  own, written from the term's own place in the graph and nothing else. A
+ *  later pass swaps real art in behind it. Pure. */
+export function ontologyNodeDescription(term, parentTerms) {
+  const parents = (parentTerms || []).slice(0, 2);
+  if (!parents.length) return "the widest concept this branch reaches. No sprite yet.";
+  return `a kind of ${parents.join(" and ")}. No sprite yet.`;
+}
+
+/** One section's ontology as a layered DAG. Returns `{branches, apart,
+ *  termCount, truncated}`:
+ *  - `branches` are the connected sub-graphs, biggest first, each a list of
+ *    levels (level 0 is the widest concept, each level a longest-path step
+ *    down from it) with the nodes at each level in alphabetical order;
+ *  - `apart` holds every term that connects to nothing else here, which is
+ *    what "this class stands on its own" looks like;
+ *  - `truncated` is true when a real chain runs past the display cut.
+ *  Pure, and a pure function of the fact SET: every list is sorted by name or
+ *  size, never by the order facts arrived in. */
+export function buildOntologyTree(section, { index, spritedClasses, entriesByClass, maxChainDisplay = MAX_CHAIN_DISPLAY, maxSiblings = MAX_TREE_SIBLINGS_PER_PARENT } = {}) {
+  const { parentsOf, childrenOf } = index;
+  const memberTerms = new Set((section?.entries || []).map((e) => e.className));
+  const chainTerms = new Set();
+  let truncated = false;
+  for (const entry of section?.entries || []) {
+    const chain = entry.chain || [entry.className];
+    for (const term of chain.slice(0, maxChainDisplay)) chainTerms.add(term);
+    if (chain.length > maxChainDisplay) truncated = true;
+  }
+  const siblingTerms = new Set();
+  for (const term of [...chainTerms].sort()) {
+    const kin = (childrenOf.get(term) || [])
+      .filter((child) => !chainTerms.has(child) && entriesByClass.has(child))
+      .sort();
+    for (const child of kin.slice(0, maxSiblings)) siblingTerms.add(child);
+  }
+  const allTerms = new Set([...chainTerms, ...siblingTerms]);
+
+  const drawnParentsOf = new Map();
+  for (const term of allTerms) {
+    drawnParentsOf.set(term, (parentsOf.get(term) || []).filter((p) => allTerms.has(p)).sort());
+  }
+
+  // Longest-path layering. A fact set can carry a subClassOf loop (two terms
+  // each recorded as the other's parent); the back edge is skipped for
+  // layering only, so a loop can't spin here, and both edges are still drawn.
+  const levelOf = new Map();
+  const walking = new Set();
+  const levelFor = (term) => {
+    if (levelOf.has(term)) return levelOf.get(term);
+    if (walking.has(term)) return 0;
+    walking.add(term);
+    let deepest = 0;
+    for (const parent of drawnParentsOf.get(term) || []) deepest = Math.max(deepest, levelFor(parent) + 1);
+    walking.delete(term);
+    levelOf.set(term, deepest);
+    return deepest;
+  };
+  const sortedTerms = [...allTerms].sort();
+  for (const term of sortedTerms) levelFor(term);
+
+  const componentRoot = new Map(sortedTerms.map((t) => [t, t]));
+  const findRoot = (term) => {
+    let root = term;
+    while (componentRoot.get(root) !== root) root = componentRoot.get(root);
+    return root;
+  };
+  for (const term of sortedTerms) {
+    for (const parent of drawnParentsOf.get(term) || []) {
+      const a = findRoot(term);
+      const b = findRoot(parent);
+      if (a !== b) componentRoot.set(a, b);
+    }
+  }
+
+  const nodeFor = (term) => {
+    const realParents = (parentsOf.get(term) || []).slice().sort();
+    const sprited = spritedClasses.has(term);
+    return {
+      term,
+      level: levelOf.get(term) || 0,
+      parents: drawnParentsOf.get(term) || [],
+      kind: memberTerms.has(term) ? "member" : siblingTerms.has(term) ? "sibling" : "ancestor",
+      sprited,
+      description: sprited ? null : ontologyNodeDescription(term, realParents),
+    };
+  };
+
+  const byComponent = new Map();
+  for (const term of sortedTerms) {
+    const root = findRoot(term);
+    if (!byComponent.has(root)) byComponent.set(root, []);
+    byComponent.get(root).push(term);
+  }
+  const branches = [];
+  const apart = [];
+  for (const terms of byComponent.values()) {
+    if (terms.length === 1) { apart.push(nodeFor(terms[0])); continue; }
+    const levels = [];
+    for (const term of terms) {
+      const level = levelOf.get(term) || 0;
+      if (!levels[level]) levels[level] = [];
+      levels[level].push(nodeFor(term));
+    }
+    for (let i = 0; i < levels.length; i += 1) {
+      levels[i] = (levels[i] || []).sort((a, b) => a.term.localeCompare(b.term));
+    }
+    branches.push({ size: terms.length, key: terms.slice().sort()[0], levels });
+  }
+  branches.sort((a, b) => b.size - a.size || a.key.localeCompare(b.key));
+  apart.sort((a, b) => a.term.localeCompare(b.term));
+  return { branches, apart, termCount: allTerms.size, truncated };
 }
 
 /** The operator's own curated example sprites, one per landing-page section,
@@ -537,17 +716,92 @@ export function movingFrameSequence(idleFrame, movingFrame) {
  *  exactly on the class they clicked through for rather than the top of a
  *  page with dozens or hundreds of other cards above it. Pure. */
 export function classAnchorId(className) {
-  return `card-${String(className).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+  return `card-${slugify(className)}`;
 }
 
-function chainHtml(chain) {
+/** A card's ancestry pills. With a `treeAnchorBase` (the href prefix for this
+ *  card's own section tree — `#tree-<section>-` on a page that draws the
+ *  tree, `./sprites.html#tree-<section>-` on a group page that leaves the
+ *  trees to the landing page) each pill is a real link to that term's own
+ *  tree node. Without one the pills stay plain text. */
+function chainHtml(chain, treeAnchorBase = null) {
   const shown = chain.slice(0, MAX_CHAIN_DISPLAY);
   const rest = chain.length - shown.length;
   const links = shown
-    .map((term, i) => `<span class="chain-link${i === 0 ? " own" : ""}">${escapeHtml(term)}</span>`)
+    .map((term, i) => {
+      const cls = `chain-link${i === 0 ? " own" : ""}`;
+      if (!treeAnchorBase) return `<span class="${cls}">${escapeHtml(term)}</span>`;
+      return `<a class="${cls}" href="${escapeHtml(treeAnchorBase + slugify(term))}">${escapeHtml(term)}</a>`;
+    })
     .join('<span class="chain-arrow">&rsaquo;</span>');
   const more = rest > 0 ? `<span class="chain-more">+${rest} more on record</span>` : "";
   return `<div class="chain">${links}${more}</div>`;
+}
+
+function treeNodeHtml(node, { sectionSlug, entriesByClass, resolveNodeSprite }) {
+  const art = node.sprited
+    ? `<span class="tree-img" role="img" aria-label="the ${escapeHtml(node.term)} sprite">${resolveNodeSprite(node.term)}</span>`
+    : `<span class="tree-img-placeholder" role="img" aria-label="${escapeHtml(`${node.term}: ${node.description}`)}">${escapeHtml(node.description)}</span>`;
+  const entry = entriesByClass.get(node.term);
+  const groupPage = entry ? (CATALOG_GROUPS.find((g) => g.id === entry.group) || {}).page : null;
+  const name = groupPage
+    ? `<a class="tree-term" href="./${groupPage}#${classAnchorId(node.term)}">${escapeHtml(node.term)}</a>`
+    : `<span class="tree-term">${escapeHtml(node.term)}</span>`;
+  const up = node.parents.length
+    ? `<span class="tree-up">under ${node.parents.map((p) => `<a href="#${ontologyTreeNodeId(sectionSlug, p)}">${escapeHtml(p)}</a>`).join(" and ")}</span>`
+    : "";
+  const classes = ["tree-node", node.kind, node.sprited ? "sprited" : "abstract", node.parents.length > 1 ? "dual" : ""]
+    .filter(Boolean).join(" ");
+  return `<div class="${classes}" id="${ontologyTreeNodeId(sectionSlug, node.term)}" data-term="${escapeHtml(node.term)}" data-level="${node.level}" data-parents="${node.parents.length}" tabindex="-1">${art}${name}${up}</div>`;
+}
+
+/** One section's tree, in its own scrolling box so a wide graph never widens
+ *  the page itself. Levels run left to right, widest concept first. */
+export function ontologyTreeHtml(tree, options) {
+  const { sectionLabel } = options;
+  const levelHtml = (nodes, level) =>
+    `<div class="tree-level" data-level="${level}">${nodes.map((n) => treeNodeHtml(n, options)).join("")}</div>`;
+  const branches = tree.branches
+    .map((b) => `<div class="tree-branch">${b.levels.map((nodes, i) => levelHtml(nodes, i)).join("")}</div>`)
+    .join("");
+  const apart = tree.apart.length
+    ? `<div class="tree-branch tree-apart"><h4 class="tree-apart-head">on their own</h4>${levelHtml(tree.apart, 0)}</div>`
+    : "";
+  const note = tree.truncated
+    ? `<p class="tree-note">Some of these chains run further up than the levels shown. The rest stays on record.</p>`
+    : "";
+  return `<div class="ontology">
+    <h3 class="ontology-head">the ontology behind ${escapeHtml(sectionLabel)} <span class="count">${tree.termCount} concepts</span></h3>
+    <div class="tree-scroll" tabindex="0" role="group" aria-label="ontology tree for ${escapeHtml(sectionLabel)}">
+      <div class="ontology-tree">${branches}${apart}</div>
+    </div>
+    ${note}
+  </div>`;
+}
+
+/** The two per-section functions every page-body builder below needs: the
+ *  tree to draw above a section (empty on a page that defers its trees to the
+ *  landing page) and the href prefix that section's ancestry pills point at.
+ *  `treeHost` null means this page draws no trees of its own, so its pills
+ *  reach across to sprites.html instead. Pure given already-loaded inputs. */
+function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasses, drawsTrees }) {
+  const entriesByClass = new Map(entries.map((e) => [e.className, e]));
+  const index = subClassIndex(factRows);
+  const treeFor = (section) => {
+    if (!drawsTrees) return "";
+    const sectionSlug = sectionSlugFor(section);
+    const tree = buildOntologyTree(section, { index, spritedClasses, entriesByClass });
+    return ontologyTreeHtml(tree, {
+      sectionSlug,
+      sectionLabel: section.label,
+      entriesByClass,
+      resolveNodeSprite: (term) =>
+        resolveSpriteAsset(term, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `tree-${sectionSlug}-${term}` }),
+    });
+  };
+  const anchorBaseFor = (section) =>
+    `${drawsTrees ? "" : "./sprites.html"}#tree-${sectionSlugFor(section)}-`;
+  return { treeFor, anchorBaseFor };
 }
 
 function swatchHtml(s) {
@@ -567,10 +821,10 @@ function tierRowHtml(tierName, swatches) {
     </div>`;
 }
 
-function cardHtml(entry) {
+function cardHtml(entry, { treeAnchorBase = null } = {}) {
   return `<article class="card" id="${classAnchorId(entry.className)}" data-cls="${escapeHtml(entry.className)}" data-group="${escapeHtml(entry.group)}">
     <h3 class="card-name">${escapeHtml(entry.className)}</h3>
-    ${chainHtml(entry.chain)}
+    ${chainHtml(entry.chain, treeAnchorBase)}
     ${tierRowHtml("icon", entry.iconSwatches)}
     ${tierRowHtml("large", entry.largeSwatches)}
   </article>`;
@@ -580,24 +834,35 @@ function cardHtml(entry) {
  *  ancestor's OWN resolved sprite (the proof the fallback has art to land
  *  on), then that cluster's cards. `ancestorSvg` is null for the trailing
  *  no-illustrated-ancestor bucket. */
-function clusterHtml(cluster, ancestorSvg) {
+function clusterHtml(cluster, ancestorSvg, { section, treeFor, anchorBaseFor }) {
   const name = cluster.ancestor || "everything else";
   const chip = ancestorSvg ? `<span class="cluster-chip">${ancestorSvg}</span>` : "";
+  const treeAnchorBase = anchorBaseFor(section);
   return `<div class="cluster">
     <h3 class="cluster-head">${chip}<span class="cluster-name">${escapeHtml(name)}</span><span class="count">${cluster.entries.length}</span></h3>
-    <div class="cards">${cluster.entries.map(cardHtml).join("")}</div>
+    ${treeFor(section)}
+    <div class="cards">${cluster.entries.map((e) => cardHtml(e, { treeAnchorBase })).join("")}</div>
   </div>`;
 }
 
-function sectionHtml(group, entries, { clusterBy = null } = {}) {
+function sectionHtml(group, entries, { clusterBy = null, treeFor, anchorBaseFor }) {
   const rows = entries.filter((e) => e.group === group.id);
   if (!rows.length) return "";
   const note = group.note ? `<p class="section-note">${escapeHtml(group.note)}</p>` : "";
-  const body = clusterBy
-    ? clusterEntriesByAncestor(rows, clusterBy.spritedClasses)
-        .map((c) => clusterHtml(c, c.ancestor ? clusterBy.resolveChip(c.ancestor) : null))
-        .join("")
-    : `<div class="cards">${rows.map(cardHtml).join("")}</div>`;
+  let body;
+  if (clusterBy) {
+    body = clusterEntriesByAncestor(rows, clusterBy.spritedClasses)
+      .map((c) => clusterHtml(c, c.ancestor ? clusterBy.resolveChip(c.ancestor) : null, {
+        section: { group, label: c.ancestor || "everything else", entries: c.entries },
+        treeFor,
+        anchorBaseFor,
+      }))
+      .join("");
+  } else {
+    const section = { group, label: group.label, entries: rows };
+    const treeAnchorBase = anchorBaseFor(section);
+    body = `${treeFor(section)}<div class="cards">${rows.map((e) => cardHtml(e, { treeAnchorBase })).join("")}</div>`;
+  }
   return `<section class="group" id="g-${group.id}" aria-label="${escapeHtml(group.label)}">
     <h2>${escapeHtml(group.label)} <span class="count">${rows.length}</span></h2>
     ${note}
@@ -654,9 +919,15 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
     resolveChip: (ancestor) =>
       resolveSpriteAsset(ancestor, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `cluster-${ancestor}` }),
   };
+  // A per-group page leaves the trees to sprites.html, which holds every
+  // section's, and points its own pills there. The full single-page render
+  // holds every section itself, so it draws and anchors its own.
+  const { treeFor, anchorBaseFor } = sectionTreeRenderers({
+    entries, largeTemplates, factRows, spritedClasses, drawsTrees: !groupId,
+  });
   const groupsToRender = groupId ? CATALOG_GROUPS.filter((g) => g.id === groupId) : CATALOG_GROUPS;
   const bodyHtml = groupsToRender
-    .map((g) => sectionHtml(g, entries, { clusterBy: groupIsClustered(g.id) ? clusterBy : null }))
+    .map((g) => sectionHtml(g, entries, { clusterBy: groupIsClustered(g.id) ? clusterBy : null, treeFor, anchorBaseFor }))
     .join("");
   const navHtml = groupId
     ? crossPageNavHtml(entries, { currentGroupId: groupId, includeOverviewLink: true })
@@ -937,13 +1208,42 @@ ${THEME_TOKENS_CSS}
   .group h2 { font-family: ${MONO_STACK}; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h2 .count { font-size: .7rem; color: var(--muted); font-weight: 400; }
   .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .8rem; max-width: 68ch; }
-  .landing-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.1rem 1rem; }
+  .landing-sections { display: flex; flex-direction: column; gap: 1.6rem; }
   .landing-section { min-width: 0; }
   .landing-section-name { font-family: ${MONO_STACK}; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .4rem; display: flex; align-items: baseline; gap: .4rem; }
   .landing-section-name .count { font-weight: 400; opacity: .75; }
-  .landing-section .cards { grid-template-columns: 1fr; }
+  .landing-section .cards { grid-template-columns: minmax(0, 260px); }
   .viewall { display: inline-block; font-family: ${MONO_STACK}; font-size: .7rem; margin-top: .4rem; color: var(--taught); text-decoration: none; }
   .viewall:hover { color: var(--corpus); text-decoration: underline; }
+  /* The section ontology trees. Levels run left to right, widest concept
+     first, inside a box that scrolls on its own so a wide graph never widens
+     the page. */
+  .ontology { margin: .3rem 0 .9rem; }
+  .ontology-head { font-family: ${MONO_STACK}; font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
+  .ontology-head .count { font-weight: 400; opacity: .75; }
+  .tree-scroll { overflow: auto; max-height: 22rem; border: 1px solid var(--ai-edge); border-radius: 4px; background: var(--ai-panel); padding: .55rem; overscroll-behavior: contain; }
+  .ontology-tree { display: flex; flex-direction: column; gap: .9rem; width: max-content; min-width: 100%; }
+  .tree-branch { display: flex; align-items: flex-start; gap: .45rem; }
+  .tree-apart { flex-direction: column; }
+  .tree-apart-head { font-family: ${MONO_STACK}; font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .3rem; }
+  .tree-apart .tree-level { flex-direction: row; flex-wrap: wrap; width: auto; }
+  .tree-level { display: flex; flex-direction: column; gap: .4rem; width: 10.5rem; flex: none; }
+  .tree-node { display: flex; flex-direction: column; align-items: center; gap: .18rem; text-align: center; padding: .3rem .3rem .35rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: var(--card); width: 10.5rem; box-sizing: border-box; }
+  .tree-node.member { border-color: var(--taught); }
+  .tree-node.sibling { opacity: .72; }
+  .tree-node.dual { border-left-width: 3px; border-left-color: var(--corpus); }
+  .tree-node:target { outline: 2px solid var(--corpus); outline-offset: 2px; }
+  .tree-img, .tree-img-placeholder { width: 100%; height: 3.2rem; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .tree-img { padding: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
+  .tree-img svg { height: 100%; width: auto; max-width: 100%; display: block; filter: var(--sprite-pop); }
+  .tree-img-placeholder { border-style: dashed; padding: .2rem .25rem; overflow: hidden; font-family: ${MONO_STACK}; font-size: .52rem; line-height: 1.25; color: var(--muted); }
+  .tree-term { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--ink); word-break: break-word; }
+  a.tree-term { color: var(--taught); text-decoration: none; }
+  a.tree-term:hover { color: var(--corpus); text-decoration: underline; }
+  .tree-up { font-family: ${MONO_STACK}; font-size: .55rem; color: var(--muted); line-height: 1.25; word-break: break-word; }
+  .tree-up a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--ai-edge); }
+  .tree-up a:hover { color: var(--corpus); }
+  .tree-note { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .35rem 0 0; }
   .cluster { margin: 1rem 0 1.5rem; }
   .cluster-head { display: flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .55rem; }
   .cluster-head .count { font-weight: 400; opacity: .75; }
@@ -956,6 +1256,8 @@ ${THEME_TOKENS_CSS}
   .card-name { font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .35rem; }
   .chain { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); margin-bottom: .5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; }
   .chain-link { padding: .04rem .35rem; border: 1px solid var(--ai-edge); border-radius: 99px; }
+  a.chain-link { color: inherit; text-decoration: none; }
+  a.chain-link:hover { border-color: var(--corpus); color: var(--corpus); }
   .chain-link.own { border-color: var(--taught); color: var(--taught); }
   .chain-arrow { color: var(--muted); opacity: .6; }
   .chain-more { font-style: italic; opacity: .75; }
@@ -1188,6 +1490,9 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const sections = catalogSections(entries, spritedClasses);
+  const { treeFor, anchorBaseFor } = sectionTreeRenderers({
+    entries, largeTemplates, factRows, spritedClasses, drawsTrees: true,
+  });
   const bodyHtml = CATALOG_GROUPS.map((g) => {
     const groupEntries = entries.filter((e) => e.group === g.id);
     if (!groupEntries.length) return "";
@@ -1203,7 +1508,8 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
         : "";
       return `<div class="landing-section">
         ${heading}
-        <div class="cards">${cardHtml(example)}</div>
+        ${treeFor(section)}
+        <div class="cards">${cardHtml(example, { treeAnchorBase: anchorBaseFor(section) })}</div>
         <a class="viewall" href="./${g.page}#${classAnchorId(example.className)}">view all ${section.entries.length} &rsaquo;</a>
       </div>`;
     }).join("");
