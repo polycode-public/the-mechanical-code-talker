@@ -64,16 +64,20 @@ test("humanize: the surfaceText-facing inverse of underscore-joining", () => {
   assert.equal(humanize("dog"), "dog");
 });
 
-test("synonymPairs: N members -> exactly N-1 pairs (chained, not the N*(N-1)/2 cross product)", () => {
-  assert.deepEqual(synonymPairs([]), []);
-  assert.deepEqual(synonymPairs(["solo"]), []);
-  assert.deepEqual(synonymPairs(["a", "b"]), [["a", "b"]]);
-  assert.deepEqual(synonymPairs(["a", "b", "c", "d"]), [["a", "b"], ["a", "c"], ["a", "d"]]);
-  // exactly N-1, always chained off the FIRST member, never the full
+test("synonymPairs: N members -> exactly N-1 pairs, chained off the CHOSEN name, never the N*(N-1)/2 cross product", () => {
+  assert.deepEqual(synonymPairs("a", []), []);
+  assert.deepEqual(synonymPairs("solo", ["solo"]), []);
+  assert.deepEqual(synonymPairs("a", ["a", "b"]), [["a", "b"]]);
+  assert.deepEqual(synonymPairs("a", ["a", "b", "c", "d"]), [["a", "b"], ["a", "c"], ["a", "d"]]);
+  // exactly N-1, always chained off the CHOSEN name, never the full
   // combinatorial cross product (which would be N*(N-1)/2 = 6 for N=4)
-  const four = synonymPairs(["a", "b", "c", "d"]);
+  const four = synonymPairs("a", ["a", "b", "c", "d"]);
   assert.equal(four.length, 3);
   assert.ok(four.every(([m0]) => m0 === "a"));
+  // a chosen name that differs from members[0] (the naming ladder overrode
+  // it) chains to every OTHER member but never back to members[0] itself —
+  // that specific edge is the lemma bridge, added separately at RelatedTo.
+  assert.deepEqual(synonymPairs("b", ["a", "b", "c"]), [["b", "c"]]);
 });
 
 // ---- a small synthetic synset universe, mirroring the REAL shape confirmed
@@ -123,8 +127,19 @@ function fixtureSynsets() {
   }));
 }
 
+/** Every member in fixtureSynsets() is globally unique, so every synset
+ *  resolves at ladder rung 1 (unique lemma) — bare members[0], the same name
+ *  the old repTerm gave it. Builds the naming ladder's ctx the way main()
+ *  does, just with an empty senseIndex (nothing here is ever contested). */
+function fixtureCtx(bySynset) {
+  const memberOwners = buildMemberOwners(bySynset);
+  const dominantBySynset = buildDominantSense(memberOwners, new Map());
+  return { memberOwners, dominantBySynset, lexOf: new Map() };
+}
+
 test("buildFullFacts: direction, flip, self-loop/dangling-target skip, entails/exemplifies never emitted", () => {
-  const facts = buildFullFacts(fixtureSynsets());
+  const synsets = fixtureSynsets();
+  const facts = buildFullFacts(synsets, fixtureCtx(synsets));
   const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
 
   assert.ok(has("/r/IsA", "/c/en/dog", "/c/en/animal"), "hypernym: dog IsA animal (direct, no flip)");
@@ -165,8 +180,9 @@ test("buildFullFacts: direction, flip, self-loop/dangling-target skip, entails/e
 
 test("buildXlFacts: budget-bounded, only IsA + Synonym rows, proportioned to the real full-corpus ratio", () => {
   const synsets = fixtureSynsets();
-  const full = buildFullFacts(synsets);
-  const xl = buildXlFacts(synsets, full, 4);
+  const ctx = fixtureCtx(synsets);
+  const full = buildFullFacts(synsets, ctx);
+  const xl = buildXlFacts(synsets, full, ctx, 4);
   assert.ok(xl.length <= 6, `stays roughly within budget (got ${xl.length})`); // a synonym chain isn't split, so a small fixture can slightly overshoot
   for (const f of xl) {
     assert.ok(f.rel === "/r/IsA" || f.rel === "/r/Synonym", `XL only ever carries the hypernym backbone + synonym chains, got ${f.rel}`);
@@ -327,4 +343,16 @@ test("senseTermFor: same result for a synset map built in a different insertion 
       `${id}: same name regardless of map iteration order`,
     );
   }
+  assert.deepEqual(buildFullFacts(reversedBySynset, ctx), buildFullFacts(forward.bySynset, forward.ctx));
+});
+
+test("buildFullFacts: synonyms chain off the CHOSEN name (never the discarded original headword), and the lemma bridge is weak-trust RelatedTo, never Synonym", () => {
+  const { bySynset, ctx } = senseFixture();
+  const facts = buildFullFacts(bySynset, ctx);
+  const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
+
+  assert.ok(has("/r/Synonym", "/c/en/letter_of_the_alphabet", "/c/en/alphabetic_character"), "chosen name chains to the other non-primary member");
+  assert.ok(!has("/r/Synonym", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "never a Synonym edge back to the discarded headword");
+  assert.ok(!has("/r/Synonym", "/c/en/letter", "/c/en/letter_of_the_alphabet"), "not in the other direction either");
+  assert.ok(has("/r/RelatedTo", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "the lemma bridge: weak-trust RelatedTo carries the discarded headword");
 });
