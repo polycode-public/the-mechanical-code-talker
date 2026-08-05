@@ -1168,6 +1168,67 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   return renderMembers(directMembers, inheritedMembers);
 }
 
+// "list the letters in the alphabet" — a membership list RESTRICTED to a
+// container. answerMembershipList reads the "in the alphabet" tail as an
+// unanswerable restrictor and declines, so this lane takes the shape first.
+const COLLECTION_CONTENTS_LIST_RE =
+  /^(?:list|show(?:\s+me)?)\s+(?:all\s+(?:the\s+)?|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*?)\s+in\s+(?:the\s+|an?\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s*[?.!]*$/i;
+// "list what is in the alphabet" / "list the contents of the alphabet" — the
+// unrestricted twin, no member type named.
+const COLLECTION_CONTENTS_ALL_RE =
+  /^(?:list|show(?:\s+me)?)\s+(?:what(?:'s|\s+is)\s+in|the\s+contents\s+of)\s+(?:the\s+|an?\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s*[?.!]*$/i;
+
+/** "list the letters in the alphabet" / "list what is in the alphabet" — the
+ *  taught contents of a declared collection (mgx:memberOf/mgx:partOf rows),
+ *  optionally restricted to a named member type. Declines (null) when the
+ *  named container holds no containment rows at all, so answerMembershipList
+ *  keeps its own restrictor-tail refusal for an ordinary untaught noun —
+ *  this lane only ever takes over on a real container hit. A restricted ask
+ *  whose type doesn't match what's declared, or what any member's own isa
+ *  fact says, is an honest miss naming the mismatch — never the unfiltered
+ *  contents rendered as if they answered the question that wasn't asked. */
+async function answerCollectionContents(memoryDir, query, biasByBundle = {}, cache = null) {
+  if (!memoryDir) return null;
+  const q = String(query).trim();
+  // The unrestricted twin is tried first: its "what is in"/"the contents of"
+  // lead is a strict prefix the restricted pattern's own greedy member-phrase
+  // capture would otherwise swallow whole ("list what is in the alphabet"
+  // reading "what is" as the asked member type).
+  const unrestricted = q.match(COLLECTION_CONTENTS_ALL_RE);
+  const restricted = unrestricted ? null : q.match(COLLECTION_CONTENTS_LIST_RE);
+  if (!restricted && !unrestricted) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const containerRaw = restricted ? restricted[2] : unrestricted[1];
+  const rows = await factRows(memoryDir, cache);
+  const containerVariants = factTermVariants(normFactTerm, containerRaw);
+  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object));
+  if (!members.length) return null; // no containment rows at all — answerMembershipList keeps this noun
+  const renderMembers = (list, noun) => {
+    const ranked = rankByBiasThenTrust(uniqueFacts(list), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun } } : {}) };
+  };
+  if (unrestricted) return renderMembers(members, "members");
+  const asked = singularizeSurface(restricted[1]);
+  const askedVariants = factTermVariants(normFactTerm, asked);
+  const declaredAsType = rows.some(
+    (f) => f.predicate === "mgx:collectionOf" && containerVariants.has(f.subject) && askedVariants.has(f.object),
+  );
+  if (declaredAsType) return renderMembers(members, asked);
+  const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const typed = members.filter((f) => isaRows.some((g) => g.subject === f.subject && askedVariants.has(g.object)));
+  if (typed.length) return renderMembers(typed, asked);
+  const n = new Set(members.map((f) => f.subject)).size;
+  return {
+    text: `I hold ${n} thing${n === 1 ? "" : "s"} in the ${containerRaw}, but nothing I remember says any of them is a ${asked}.`,
+    miss: true,
+  };
+}
+
 // "give me an example of a letter" / "name a letter" — the single-member
 // counterpart to the list trigger above: the same taught class, but one
 // representative rather than the whole enumeration, for a user who wants a
@@ -7946,6 +8007,14 @@ const WHERE_DOES_FACT_RE = /^where\s+(?:does|do|did)\s+(.+?)\s+[a-z][a-z'-]*(?:\
  *  to the ordinary BARE_WHATIS_RE handling untouched. */
 const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
 
+/** "what are the parts of a car" / "what are the members of the alphabet" /
+ *  "what is the contents of the alphabet" — the explicit-noun surfaces of the
+ *  containment question, beside WHAT_IS_PREP_FACT_RE's bare "what is in X".
+ *  "parts" reads mgx:partOf ALONE: a set member is not a part, and answering
+ *  a parts question with set members would state a claim nobody taught. */
+const CONTAINMENT_NOUN_ASK_RE =
+  /^what(?:'s|\s+is|\s+are)\s+(?:the\s+)?(parts|members|contents)\s+of\s+(?:the\s+|an?\s+)?(.+?)\s*[?.!]*$/i;
+
 /** "what parameters does a person sprite take" / "what materials does a bed
  *  accept" — the object-fronted property question, where the property noun
  *  leads and the verb closes. It reads the same folded verb-plus-noun predicates
@@ -8187,9 +8256,11 @@ const REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
 // also be ASKED as a forward yes/no, instead of each one needing its own
 // hand-written lane. Excluded: the isa family and hasProperty (ISA_ASK_RE /
 // IS_ADJECTIVE_YESNO_RE territory), hasA and capableOf (their dedicated
-// readers above carry teach hints these derived ones deliberately don't —
-// no derived hint is emitted because no teach phrasing for these relations
-// is verified to round-trip).
+// readers above carry teach hints these derived ones deliberately don't).
+// Whether a MISS on one of the surviving predicates offers a teach hint is
+// now decided per-predicate by FORWARD_YESNO_TEACHABLE below, not by this
+// exclusion list — a derived reader is not automatically a verified teach
+// surface, so most of them still emit no hint at all.
 const FORWARD_YESNO_EXCLUDE = new Set([
   "rdfs:subClassOf", "rdf:type", "owl:disjointWith", "mgx:hasProperty",
   "mgx:hasA", "mgx:capableOf",
@@ -8198,6 +8269,11 @@ const FORWARD_YESNO_EXCLUDE = new Set([
   // confirm", so the derived reader must never intercept it.
   "mgx:ownedBy",
 ]);
+/** The derived forward yes/no readers emit no teach hint by default — a
+ *  derived phrase is not a verified teach surface. These two are: the part-of
+ *  and membership frames accept the rendered phrase VERBATIM, so the hint is
+ *  the phrase itself and is guaranteed to round-trip. */
+const FORWARD_YESNO_TEACHABLE = new Set(["mgx:partOf", "mgx:memberOf"]);
 const FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
   .filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate) && !WORLD_PLACEMENT_PREDICATES.has(predicate))
   .map(([predicate, phrase]) => {
@@ -8459,6 +8535,41 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const rest = lines.slice(FACT_ANSWER_CAP);
       const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
       return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (a-pre5b) "what is in the alphabet" / "what are the parts of a car" /
+  // "what are the members of the alphabet" / "what is the contents of the
+  // alphabet" — the containment question, over mgx:partOf/mgx:memberOf rows
+  // rather than the locative predicates (a-pre5) reads. Two surfaces feed the
+  // same lookup: WHAT_IS_PREP_FACT_RE's bare "what is in X" (reusing the
+  // whatIsPrepQ match above, restricted to "in"/"inside") and
+  // CONTAINMENT_NOUN_ASK_RE's explicit "parts"/"members"/"contents" noun. A
+  // "parts" ask reads mgx:partOf alone — a set member is not a part. Hit-gated
+  // like every reader in this cascade: zero hits falls through untouched, so
+  // "what is in the study" (a placement, not a collection) keeps its own
+  // answer from the adventure world.
+  {
+    const containmentNounQ = q.match(CONTAINMENT_NOUN_ASK_RE);
+    const containerRaw = containmentNounQ
+      ? containmentNounQ[2]
+      : (whatIsPrepQ && ["in", "inside"].includes(whatIsPrepQ[1].toLowerCase())) ? whatIsPrepQ[2] : null;
+    if (containerRaw != null) {
+      const predicates = containmentNounQ && containmentNounQ[1].toLowerCase() === "parts"
+        ? ["mgx:partOf"]
+        : CONTAINMENT_PREDICATES;
+      const containerVariants = factTermVariants(normFactTerm, containerRaw.replace(/^(?:an?|the)\s+/i, "").trim());
+      const hits = (await factRows(memoryDir, cache)).filter(
+        (f) => predicates.includes(f.predicate) && containerVariants.has(f.object),
+      );
+      if (hits.length) {
+        const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+        const lines = ranked.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+      }
     }
   }
 
@@ -8734,18 +8845,19 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, m[2]);
     const hit = facts.find((f) => f.predicate === predicate && subj.has(f.subject) && obj.has(f.object));
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const teachHint = FORWARD_YESNO_TEACHABLE.has(predicate) ? ` If it's true, teach me: "${m[1]} ${phrase} ${m[2]}".` : "";
     const sameRelation = facts.filter((f) => f.predicate === predicate && subj.has(f.subject));
     if (sameRelation.length) {
       const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
       return {
-        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}. I do know: ${shown}.`,
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}. I do know: ${shown}.${teachHint}`,
         replace: true,
         miss: true,
       };
     }
     if (!envelope?.parsed && facts.some((f) => subj.has(f.subject))) {
       return {
-        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}.`,
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}.${teachHint}`,
         replace: true,
         miss: true,
       };
@@ -16558,6 +16670,22 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       if (!lettered.miss) turn.goal = goal;
       turn.lane = lettered.miss ? "honest-miss" : "ask-set";
       if (lettered.pending) turn.detail = { traversal: null, matches: [], pending: lettered.pending };
+      return withLast(turn, goal);
+    }
+  }
+  // "list the letters in the alphabet" — the taught contents of a declared
+  // collection, restricted or not. Ahead of answerTaughtClassCount/
+  // answerMembershipList below: those read "in the alphabet" as an
+  // unanswerable restrictor tail over a CLASS, not a container's contents.
+  if (memoryDir) {
+    const collectionContents = await answerCollectionContents(memoryDir, workingLine, biasByBundle, factRowsCache);
+    if (collectionContents != null) {
+      const goal = "list a declared collection's taught contents";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerCollectionContents — matched a container-restricted or bare containment list over mgx:memberOf/mgx:partOf rows");
+      const turn = plainTurn(workingLine, collectionContents.text, { via: collectionContents.miss ? "miss" : "fact", miss: !!collectionContents.miss, focus });
+      if (!collectionContents.miss) turn.goal = goal;
+      if (collectionContents.pending) turn.detail = { traversal: null, matches: [], pending: collectionContents.pending };
       return withLast(turn, goal);
     }
   }
