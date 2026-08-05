@@ -19,26 +19,31 @@ directly each one stops a system producing useful output. The top rows prevent u
 output from ever appearing; the bottom rows erode it after it exists. Six rows (●) come
 from the operator's own list; the rest come from the wider record: McCarthy's papers, the
 expert-systems era, and Cyc's own workarounds. The last row is an extension this audit
-added. The right-hand column states how the closed-domain bet meets each problem: escape
-it, convert it, measure it, or name it as open.
+added.
 
-| # | problem | what goes wrong | limiting resource | the closed-domain bet |
+Graph neutrality changes the right-hand column's subject. The old column bet on one
+closed domain; the new one bets on the domain pack: a lexicon, an ontology, a corpus and
+its adapters, shipped as one loadable unit, with code as the first example.
+`PLAN_GRAPH_NEUTRALITY.md` owns the pack contract. The column states how a pack meets
+each problem: escape it, convert it, measure it, or name it as open.
+
+| # | problem | what goes wrong | limiting resource | the domain-pack answer |
 |---|---|---|---|---|
-| 1 | ● Ambiguity under unbounded context (word-sense disambiguation at scale) | Input cannot be reliably understood, so nothing downstream matters. The senses and contexts to resolve grow faster than the knowledge that resolves them | Disambiguating context, which grows combinatorially with domain breadth | Escapes it, and this is the bet itself: a bounded lexicon keeps senses enumerable. E2 measures the lexicon |
-| 2 | The qualification problem (McCarthy 1977) | Every rule needs endless preconditions ("a match lights when struck, unless wet, unless in a vacuum, unless…"), so rules are only ever approximated | Exceptions per rule, unbounded in the open world | Escapes it in formal domains, where semantics are language-defined. An import either resolves or it does not |
-| 3 | ● The knowledge-acquisition bottleneck (Feigenbaum 1977) | The knowledge base never gets built. Hand-curation costs more than it yields: Cyc has taken about 2,000 person-years over four decades (Marcus & Lenat 2023) | Expert human labour per fact | Escapes it where the parser is the curator: facts extracted from artifacts, not typed by people. It returns for hand-taught corpora, and the E1/E2 deltas price that cost |
-| 4 | ● The long tail of commonsense | Coverage never completes. Each marginal term repays less than it costs | Utility per fact: marginal value decays while acquisition cost does not | Sidesteps it by refusing the race. The tail is finite inside a domain, and L1's grounding rate measures the tail left uncovered |
-| 5 | The frame problem (McCarthy & Hayes 1969) | Reasoning about action drowns in stating what does not change | Axioms per action | Largely settled within classical planning by the STRIPS assumption (Fikes & Nilsson 1971), which the planner's English-taught action rules inherit; open for open-world action. C7 measures the planner it applies to |
-| 6 | ● Brittleness (the expert-systems failure) | Works inside the rules, fails hard and silently one step outside them, and users cannot tell which side they are on | Edge coverage: open domains are all edges | Converted rather than escaped. Calibrated refusal turns silent failure into a visible refusal, and C2/L2 price brittleness instead of denying it |
-| 7 | ● Combinatorial explosion in inference | Sound general reasoning over a large knowledge base is intractable. Cyc grew over 1,100 specialised reasoners because one general reasoner could not cope (Marcus & Lenat 2023) | Compute against KB size times expressivity | A bounded KB keeps inference tractable, and C7's published envelope is this problem measured |
-| 8 | Non-monotonic reasoning cost | Real knowledge has defaults and retractions ("birds fly; penguins do not"), and default logics (Reiter 1980) are semantically hard and computationally worse | Tractable semantics for exceptions | Mostly avoided: formal-domain facts are monotonic. It turns live the moment taught facts can contradict, and the trust-tier ledger is the primitive there |
-| 9 | Knowledge maintenance over time | The world moves and the KB does not. A stale fact is worse than a missing one, because it is confidently cited | Ongoing curation labour: the acquisition bottleneck, forever | Escaped for code, where the graph regenerates deterministically from source and refresh costs one re-run. Live for taught and researched facts: provenance timestamps are the partial answer, and an expiry and refresh story is the open gap (Q10) |
-| 10 | ● The symbol grounding problem (Harnad 1990) | Symbols defined only in other symbols never touch the world. The system manipulates tokens it does not mean | Perception: a channel from symbol to referent | Sidestepped for code, where the parser grounds symbols in artifacts deterministically, and for taught facts, grounded in the speech act that provenance records. Open for everything else, and the page says so |
-| 11 | Context partitioning (Cyc's microtheories; Guha 1991) | One consistent KB proves impossible, so knowledge splits into contexts. Deciding which context applies is the ambiguity problem again, one level up | Human judgement to partition and select | The research page's per-source scoping is microtheories with the selection given to the user instead of inferred, which is why it works |
-| 12 | Elaboration tolerance (McCarthy 1998) | A small change in the scenario forces large rewrites of the formalisation. The KB resists growth | Rewrite cost per change | Partly escaped where facts regenerate from source. Live for hand-built ontologies, and E2's extend-a-lexicon recipe is the mitigation to demonstrate |
-| 13 | Ontology alignment | Two KBs about the same things cannot merge. Every mapping is its own research project | Shared semantics across authors | Live the moment E4 ships a second source: Wikidata terms will not align with the seed ontology by default. T9's adapter contract is the cheap place to flag it now |
-| 14 | The evaluation vacuum | No agreed benchmark for "does it understand". Cyc ran for decades without an external scoreboard, so nobody could tell whether it was working | A falsifiable success criterion | This plan's claims surface is the counter-move: refusal rates, grounding rates, and citation invariants are scoreboards the field's flagship never published |
-| 15 | The learning gap (extension) | The system improves only when a person authors an improvement. Nothing gets better from use alone, while statistical rivals improve with every corpus pass | Authored change per unit of improvement | Not escaped, and not fought. Growth is authored on purpose (teach, import, index) so every fact stays citable, and the offline eval harness is where use feeds tuning — never the product path. E3's teach delta prices the authored path |
+| 1 | ● Ambiguity under unbounded context (word-sense disambiguation at scale) | Input cannot be reliably understood, so nothing downstream matters. The senses and contexts to resolve grow faster than the knowledge that resolves them | Disambiguating context, which grows combinatorially with domain breadth | Escaped by construction, and this is the bet itself: a loaded pack bounds the lexicon, so the senses in play are enumerable. Loading a pack is choosing which ambiguities exist. E2 measures the lexicon |
+| 2 | The qualification problem (McCarthy 1977) | Every rule needs endless preconditions ("a match lights when struck, unless wet, unless in a vacuum, unless…"), so rules are only ever approximated | Exceptions per rule, unbounded in the open world | Escaped where a pack's ontology defines its own semantics. Within the domain a relation either holds or it does not, and the pack's author decides the vocabulary of exceptions instead of inheriting the world's |
+| 3 | ● The knowledge-acquisition bottleneck (Feigenbaum 1977) | The knowledge base never gets built. Hand-curation costs more than it yields: Cyc has taken about 2,000 person-years over four decades (Marcus & Lenat 2023) | Expert human labour per fact | Escaped wherever a pack pairs its ontology with an extraction adapter: facts derive from the domain's artifacts (source trees, journal articles, structured records), not from hand-typing. Curation shrinks to authoring the seed pack once, and the E1/E2 deltas price that cost |
+| 4 | ● The long tail of commonsense | Coverage never completes. Each marginal term repays less than it costs | Utility per fact: marginal value decays while acquisition cost does not | Sidesteps it by refusing the race. A pack covers its own domain's tail, which is finite, and declines the world's. L1's grounding rate measures the tail left uncovered |
+| 5 | The frame problem (McCarthy & Hayes 1969) | Reasoning about action drowns in stating what does not change | Axioms per action | Largely settled within classical planning by the STRIPS assumption (Fikes & Nilsson 1971), which a pack's English-taught action rules inherit; PDDL is an export, not an input. Open for open-world action, and a pack should say so. C7 measures the planner it applies to |
+| 6 | ● Brittleness (the expert-systems failure) | Works inside the rules, fails hard and silently one step outside them, and users cannot tell which side they are on | Edge coverage: open domains are all edges | Converted rather than escaped. The grounding gate makes the pack's edge visible. Inside the edge you get cited answers; at the edge you get a refusal, never a guess dressed as an answer. C2/L2 price the edge per pack |
+| 7 | ● Combinatorial explosion in inference | Sound general reasoning over a large knowledge base is intractable. Cyc grew over 1,100 specialised reasoners because one general reasoner could not cope (Marcus & Lenat 2023) | Compute against KB size times expressivity | A pack's knowledge base is sized to its domain, which keeps inference interactive, and C7's published envelope states the wall per pack instead of suffering it |
+| 8 | Non-monotonic reasoning cost | Real knowledge has defaults and retractions ("birds fly; penguins do not"), and default logics (Reiter 1980) are semantically hard and computationally worse | Tractable semantics for exceptions | Mostly avoided: pack-extracted facts are monotonic. It turns live the moment taught facts contradict a pack's, and the trust-tier ledger arbitrates by source rather than by default logic |
+| 9 | Knowledge maintenance over time | The world moves and the KB does not. A stale fact is worse than a missing one, because it is confidently cited | Ongoing curation labour: the acquisition bottleneck, forever | Escaped for any pack whose corpus regenerates from its artifacts: re-ingest is deterministic, so refresh costs one re-run. Live for taught and researched facts. Provenance timestamps are the partial answer, and an expiry and refresh story is the one named gap (Q10) |
+| 10 | ● The symbol grounding problem (Harnad 1990) | Symbols defined only in other symbols never touch the world. The system manipulates tokens it does not mean | Perception: a channel from symbol to referent | Sidestepped per pack, because each pack names its grounding channel. An extraction adapter grounds symbols in the domain's artifacts; teaching grounds them in the recorded speech act. Symbols without a channel do not enter the graph, and that is what the gate refuses |
+| 11 | Context partitioning (Cyc's microtheories; Guha 1991) | One consistent KB proves impossible, so knowledge splits into contexts. Deciding which context applies is the ambiguity problem again, one level up | Human judgement to partition and select | Packs are microtheories made explicit: partitioned by their author, selected by the user (loading a pack, scoping a source), never inferred. Cyc's hardest meta-problem becomes a checkbox |
+| 12 | Elaboration tolerance (McCarthy 1998) | A small change in the scenario forces large rewrites of the formalisation. The KB resists growth | Rewrite cost per change | Partly escaped where a pack's facts regenerate from its corpus. For the ontology itself a pack localises the rewrite: extending a domain touches its pack, not the engine, which is the point of the neutrality plan. E2's extend-a-lexicon recipe is the mitigation to demonstrate |
+| 13 | Ontology alignment | Two KBs about the same things cannot merge. Every mapping is its own research project | Shared semantics across authors | Live the moment two packs meet, or a pack meets an external source such as Wikidata (E4). Packs narrow the problem: alignment happens at declared pack boundaries with provenance intact, not diffusely across one KB. T9's adapter contract is the cheap place to flag it now |
+| 14 | The evaluation vacuum | No agreed benchmark for "does it understand". Cyc ran for decades without an external scoreboard, so nobody could tell whether it was working | A falsifiable success criterion | Per-pack scoreboards are the counter-move: each domain ships with its grounding rate, refusal matrix and citation invariants, numbers the field's flagship never published. A pack is done when its numbers publish, not when its ontology compiles |
+| 15 | The learning gap (extension) | The system improves only when a person authors an improvement. Nothing gets better from use alone, while statistical rivals improve with every corpus pass | Authored change per unit of improvement | Not escaped, and not fought. A pack improves only by authored or re-extracted change (teach, import, re-ingest), so every fact stays citable, and the offline eval harness is where use feeds tuning, never the product path. E3's teach delta prices the authored path |
 
 Sources, in the README bibliography's shape: McCarthy (1977) *Epistemological Problems of
 Artificial Intelligence*; McCarthy & Hayes (1969) *Some Philosophical Problems from the
@@ -51,12 +56,13 @@ Generative AI to Trustworthy AI: What LLMs might learn from Cyc* (the 2,000 pers
 person-years by 2002, so the older folklore figure "hundreds of person-centuries" has no
 citable source and is not repeated here).
 
-Three observations fall out of the ranking:
+Four observations fall out of the ranking:
 
 1. The architecture already answers rows 1 through 7 and 10, the rows that stop usefulness
-   from appearing at all. It answers each with one of two moves: the domain restriction or
-   the refusal gate. That is the tight version of the thesis. The fatal problems are all
-   functions of openness, and what remains (rows 8, 9, 13) is chronic rather than fatal.
+   from appearing at all. It answers each with one of two moves: the pack boundary or the
+   refusal gate. That is the tight version of the thesis. The fatal problems are all
+   functions of openness, a pack is the unit of boundedness, and what remains (rows 8, 9,
+   13) is chronic rather than fatal.
 2. Row 9 is the one gap with no story beyond provenance timestamps. Everything else is
    escaped, converted, or measured by the program below. The page should carry one line
    saying so, and a refresh mechanism is the eventual answer (Q10).
@@ -64,9 +70,17 @@ Three observations fall out of the ranking:
    done with user selection instead of inference, and the claims surface is the evaluation
    discipline the field historically lacked. A neurosymbolic audience will recognise both
    unprompted (Q11).
+4. Two rows hand `PLAN_GRAPH_NEUTRALITY.md` its hardest requirements. Row 10 defines what
+   a pack is: without a grounding channel, an ontology and lexicon are symbols defined in
+   symbols, a miniature Cyc, so the channel (an extraction adapter, or a declared
+   taught-only mode) belongs in the pack contract as a requirement rather than an option.
+   Row 14 gives that plan its finish line: neutrality is done when a bare install shows no
+   code-hinted behaviour in the claims tests, and loading the code pack restores the
+   code-index benchmark's 25/25. Every later pack, the journal-ingest idea included, ships
+   against the same bar.
 
 The claims, extensibilities, and limits below are the measurement program for the bets this
-table names.
+table names, and the neutrality plan is what makes the program repeat per pack.
 
 ## Dispatch contract (applies to every task)
 
@@ -216,6 +230,12 @@ Answer these before dispatch. Each names what blocks on it and a recommended ans
     itself. Fold all three into T14's copy, one sentence each? Recommended: yes — they are
     the cheapest credibility lines the section identifies, and T14 is the only task that
     touches that copy.
+12. **Per-pack claim runs.** Shapes T1's schema and the frontier table's wording. The
+    reframed table prices several rows per pack (C2/L2, C7, row 14), while every rig in
+    this pass measures the one shipped build. Recommended: this pass measures the shipped
+    build as the implicit first pack (code plus the shipped corpora), each results JSON
+    carries a `pack` field from day one, and per-pack re-runs arrive with
+    `PLAN_GRAPH_NEUTRALITY.md`'s pack mechanism.
 
 ## Waves
 
