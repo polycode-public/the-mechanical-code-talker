@@ -316,9 +316,9 @@ test("'how many animals are there' counts a taught class's members, past the qua
     }
     const there = await runTurn("how many animals are there", { config: CONFIG, memoryDir: dir });
     assert.equal(there.record.miss, false);
-    assert.match(there.answer, /^3 animals\.$/);
+    assert.match(there.answer, /^3 animals\. Say "list animals" to see them\.$/);
     const know = await runTurn("how many animals do you know", { config: CONFIG, memoryDir: dir });
-    assert.match(know.answer, /^3 animals\.$/);
+    assert.match(know.answer, /^3 animals\. Say "list animals" to see them\.$/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
@@ -337,6 +337,99 @@ test("'list all animals' / 'list the animals' enumerate the taught members from 
       assert.match(r.answer, /dog is a kind of animal/, q);
       assert.match(r.answer, /horse is a kind of animal/, q);
     }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'give me an example of a letter' and its phrasings answer with one taught member and a list pointer", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-member-example-"));
+  try {
+    for (const s of ["a", "b", "c"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "letter", provenance: `ace:chat:${s}@2026-07-07T00:00:00.000Z` });
+    }
+    for (const q of [
+      "give me an example of a letter",
+      "an example of a letter",
+      "example of a letter",
+      "name a letter",
+      "what's an example of a letter",
+    ]) {
+      const r = await runTurn(q, { config: CONFIG, memoryDir: dir });
+      assert.equal(r.record.miss, false, q);
+      assert.match(r.answer, /is a kind of letter/, q);
+      assert.match(r.answer, /Say "list letter" for all 3\./, q);
+      // exactly one member line, not the whole enumeration
+      assert.equal((r.answer.match(/is a kind of letter/g) || []).length, 1, q);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an example request for an untaught class declines the way the list lane does", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-member-example-miss-"));
+  try {
+    const r = await runTurn("name a widget", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'list letters but not greek letters' subtracts the excluded taught subclass's members", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-list-exclude-"));
+  try {
+    for (const s of ["vee", "double-u", "zed", "alpha", "beta"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "letter", provenance: `ace:chat:${s}L@2026-07-07T00:00:00.000Z` });
+    }
+    for (const s of ["alpha", "beta"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "greek letter", provenance: `ace:chat:${s}G@2026-07-07T00:00:00.000Z` });
+    }
+    const r = await runTurn("list letters but not greek letters", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /vee is a kind of letter/);
+    assert.match(r.answer, /double-u is a kind of letter/);
+    assert.match(r.answer, /zed is a kind of letter/);
+    assert.doesNotMatch(r.answer, /alpha is a kind of letter/);
+    assert.doesNotMatch(r.answer, /beta is a kind of letter/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an exclusion with zero overlap still answers the full list, with an honest note rather than a silent no-op", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-list-exclude-none-"));
+  try {
+    for (const s of ["vee", "double-u", "zed"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "letter", provenance: `ace:chat:${s}@2026-07-07T00:00:00.000Z` });
+    }
+    await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:dog@2026-07-07T00:00:00.000Z" });
+    const r = await runTurn("list letters but not animals", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /vee is a kind of letter/);
+    assert.match(r.answer, /double-u is a kind of letter/);
+    assert.match(r.answer, /zed is a kind of letter/);
+    assert.match(r.answer, /none of the letters I know are marked as animals yet/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an exclusion phrase naming no taught class declines rather than answering as if it weren't there", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-list-exclude-unknown-"));
+  try {
+    for (const s of ["a", "b", "c"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "letter", provenance: `ace:chat:${s}@2026-07-07T00:00:00.000Z` });
+    }
+    const r = await runTurn("list letters excluding vowels", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /won't answer as if you hadn't asked it/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
