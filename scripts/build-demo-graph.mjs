@@ -1,5 +1,5 @@
 // scripts/build-demo-graph.mjs — regenerate public/demo-graph.json, the static graph
-// the GitLab Pages site's browser chat demo fetches.
+// the deployed site's browser chat demo fetches.
 //
 // Source of truth is examples/mini-webapp/.tmct/graph.json (the repo's own committed
 // fixture graph, already used by `npm run example:mini`). The one transformation

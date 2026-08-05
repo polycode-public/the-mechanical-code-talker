@@ -49,9 +49,10 @@ async function pagesVersion() {
 }
 
 /** Whether the deployment actually serves the precompressed sibling of the
- *  wink vendor asset. GitLab Pages documents picking up the .gz/.br files the
- *  build writes next to it; this probe is what turns that documented behavior
- *  into a verified one. Returns the content-encoding served, or throws. */
+ *  wink vendor asset. The CloudFront function rewrites the request to the
+ *  .gz/.br files the build writes next to it, by Accept-Encoding; this probe
+ *  is what turns that behavior into a verified one. Returns the
+ *  content-encoding served, or throws. */
 async function vendorEncoding() {
   const url = new URL("vendor/wink.js", PAGES_URL.endsWith("/") ? PAGES_URL : `${PAGES_URL}/`).href;
   const res = await fetch(url, {
