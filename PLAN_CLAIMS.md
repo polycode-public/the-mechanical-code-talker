@@ -311,7 +311,7 @@ Both scripts READ, never re-measure: `claim-latency.mjs` copies `latencyMs` from
 `value` = p50 with p90/p99/n under `detail`, `sources` = the receipts JSON path.
 `claim-index-fabrication.mjs` publishes 25/25 with `sources` =
 `reports/BENCHMARK_CODE_INDEX_3.0.3.md` after grepping that file for `25/25` (stop on no
-match). These stay honest by construction: the claims page's numbers and the receipts
+match). These stay consistent by construction: the claims page's numbers and the receipts
 page's numbers can never disagree, because one file feeds both.
 
 Acceptance: both `claim:*` scripts exit 0; `node --test test/estate/claims.test.mjs`
@@ -418,7 +418,7 @@ Files: the labelled corpus per Q2's answer, new `scripts/claims/claim-ground-gat
 committed `results/claims/ground-gate.json`. Ingest every labelled item; publish the
 full matrix (accepted-correct, accepted-wrong, refused-groundable, refused-rightly).
 Two headlines from one run: C2's accepted-wrong % (threshold max) and L2's
-refused-but-groundable % (published under limits, threshold max with honest headroom).
+refused-but-groundable % (published under limits, threshold max with stated headroom).
 
 ### T12 — claim:commonsense — out-of-box vs one corpus loaded — blocked on Q3
 
