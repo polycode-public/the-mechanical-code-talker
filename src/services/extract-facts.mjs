@@ -63,7 +63,7 @@ import { normFactTerm } from "../domain/hash.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, predicateOf,
-  OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
+  OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS, readsAsIndividualName,
 } from "../domain/grammar/lexicon.mjs";
 
 export const USAGE = "usage: tmct extract <text-file>|--file <text-file> [--repo <path>] [--out <file.jsonl>] [--optimistic] [--canonical]";
@@ -289,13 +289,21 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   // complex — the subject scan starts left of it, while a free-standing VERB
   // on the way still voids the frame. An of-chain subject climbs to its head
   // ("the weight of the snow is …" → weight); a mis-headed of-chain abstains.
+  // Returns { label, hi } — `hi` is the run's own head-token index (same
+  // right-edge convention entityRunAt already heads a multi-word run by),
+  // read by Pass 1 below to tell a PROPN subject (an individual) from a NOUN
+  // one (a class), wink's own tag standing in for readsAsIndividualName's
+  // lexicon-level signal.
   const copulaSubjectAt = (i) => {
     let k = i - 1;
     while (k >= 0 && pos[k] === "AUX") k -= 1;
     const found = nearestEntityIndex(k + 1, -1, COPULA_FRAME_BLOCKERS);
     if (found === null) return null;
     const climbed = climbSubjectRun(found);
-    return climbed === null ? null : entityRunAt(climbed);
+    if (climbed === null) return null;
+    let hi = climbed;
+    while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+    return { label: entityRunAt(climbed), hi };
   };
 
   const triples = [];
@@ -316,9 +324,14 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
       const subject = copulaSubjectAt(i);
       const object = copulaObjectAt(i);
-      if (subject && object && subject !== object.label) {
-        push(subject, "rdfs:subClassOf", object.label);
-        copulaSubject = subject;
+      if (subject && object && subject.label !== object.label) {
+        // "is" only, never are/was/were/be/been/being/am — the same G2 rule
+        // every other individual-vs-class anchor holds to: a plural/non-
+        // present copula is never one named individual, however its subject
+        // tags.
+        const namedIndividual = values[i].toLowerCase() === "is" && pos[subject.hi] === "PROPN";
+        push(subject.label, namedIndividual ? "rdf:type" : "rdfs:subClassOf", object.label);
+        copulaSubject = subject.label;
         copulaObjHi = object.hi;
         break;
       }
@@ -369,15 +382,18 @@ function optimisticTriplesLexical(sentence, lexicon) {
   const raw = String(sentence || "").match(/[A-Za-z][A-Za-z'-]*/g) || [];
   if (raw.length < 3) return [];
   const lower = raw.map((w) => w.toLowerCase());
+  // Returns { term, raw } — `raw` is the surface AS TYPED, read by the isa
+  // mint below through readsAsIndividualName the same way ace.mjs's
+  // parseCopula reads a bare copula subject's own spelling.
   const nearestEntity = (idx, step) => {
     for (let i = idx + step, hops = 0; i >= 0 && i < lower.length && hops < OPTIMISTIC_ENTITY_HOPS; i += step, hops += 1) {
       const w = lower[i];
       if (OPTIMISTIC_SKIP.has(w) || lookupAdjective(lexicon, w)) continue;
       const noun = lookupNoun(lexicon, w);
-      if (noun) return normFactTerm(noun.lemma);
+      if (noun) return { term: normFactTerm(noun.lemma), raw: raw[i] };
       const proper = lookupProperName(lexicon, w);
-      if (proper) return normFactTerm(proper);
-      if (i > 0 && /^[A-Z]/.test(raw[i])) return normFactTerm(raw[i]);
+      if (proper) return { term: normFactTerm(proper), raw: raw[i] };
+      if (i > 0 && /^[A-Z]/.test(raw[i])) return { term: normFactTerm(raw[i]), raw: raw[i] };
       return null;
     }
     return null;
@@ -386,7 +402,12 @@ function optimisticTriplesLexical(sentence, lexicon) {
     if (!OPTIMISTIC_COPULAS.has(lower[i])) continue;
     const subject = nearestEntity(i, -1);
     const object = nearestEntity(i, +1);
-    if (subject && object && subject !== object) return [{ subject, predicate: "rdfs:subClassOf", object }];
+    if (subject && object && subject.term !== object.term) {
+      // "is" only (the same G2 rule the POS tier and every ACE anchor hold
+      // to) — are/was/were is never one named individual.
+      const namedIndividual = lower[i] === "is" && readsAsIndividualName(subject.raw, lexicon);
+      return [{ subject: subject.term, predicate: namedIndividual ? "rdf:type" : "rdfs:subClassOf", object: object.term }];
+    }
   }
   return [];
 }

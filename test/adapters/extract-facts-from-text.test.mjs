@@ -311,10 +311,12 @@ test("optimisticTriples: the isa scan never crosses a clause or a prepositional 
     optimisticTriples("Most of this land is grouped into large continents, like North America and Africa."),
     [],
   );
-  // The clean copula frames those guards must not touch.
+  // The clean copula frames those guards must not touch. Earth is a proper
+  // noun (wink tags it PROPN) naming one specific planet — an individual,
+  // not a class, the same rdf:type reading "tmct is a project" gets.
   assert.deepEqual(
     optimisticTriples("Earth is the third planet from the Sun and the only place known where life exists."),
-    [{ subject: "earth", predicate: "rdfs:subClassOf", object: "planet" }],
+    [{ subject: "earth", predicate: "rdf:type", object: "planet" }],
   );
   // The relative clause "that has lava" predicates about the SENTENCE subject:
   // the isa AND the relation verb it grounds both come out of one sentence.
@@ -380,10 +382,12 @@ test("optimisticTriples: a partitive container is composition, never a class; a 
     optimisticTriples("A dog is a type of mammal."),
     [{ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal" }],
   );
-  // A plain content head before "of" keeps the outer class.
+  // A plain content head before "of" keeps the outer class. "Chess" is a
+  // proper noun (wink tags it PROPN) naming one specific game — rdf:type,
+  // not rdfs:subClassOf.
   assert.deepEqual(
     optimisticTriples("Chess is a game of skill."),
-    [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }],
+    [{ subject: "chess", predicate: "rdf:type", object: "game" }],
   );
 });
 
@@ -468,7 +472,7 @@ test("optimisticTriples: the widened tiers leave every abstention and clean-isa 
   assert.deepEqual(optimisticTriples("A dog is a type of mammal."),
     [{ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal" }]);
   assert.deepEqual(optimisticTriples("Chess is a game of skill."),
-    [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }]);
+    [{ subject: "chess", predicate: "rdf:type", object: "game" }]);
   assert.deepEqual(
     optimisticTriples("An identifier can be termed as a name given to something unique, an object, or a set of objects."),
     [{ subject: "identifier", predicate: "rdfs:subClassOf", object: "name" }]);
