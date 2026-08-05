@@ -95,6 +95,7 @@
     "test:e2e:heavy": "node --disable-warning=ExperimentalWarning --test \"test-e2e/heavy/*.test.mjs\"",
     "check:readme": "TMCT_CHECK_README=1 node --disable-warning=ExperimentalWarning --test test-e2e/readme-examples.test.mjs",
     "e2e:browsers": "playwright install chromium",
+    "capture:hero": "node --disable-warning=ExperimentalWarning test-capture/hero-mudiii.capture.mjs",
     "gen:screenshots": "node scripts/gen-screenshots.mjs",
     "gen:og-images": "node scripts/gen-og-images.mjs",
     "check:links": "node scripts/check-links.mjs",
