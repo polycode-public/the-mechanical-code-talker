@@ -46,7 +46,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
-import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
+import { loadLexicon, lookupNoun, readsAsIndividualName } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import {
   REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
@@ -4083,9 +4083,12 @@ const PARTICIPLE_PREP_TEACH_RE = new RegExp(
  *  path) AND the relational half (sales mgx:related-to selling). The NP head is
  *  a single token, followed by a closed participle — which keeps this disjoint
  *  from PARTICIPLE_PREP_TEACH_RE, where the participle sits right after the
- *  copula. */
+ *  copula. The leading the/a/an is CAPTURED (group 1, empty when absent) so a
+ *  caller can tell a determined subject ("the sales…") apart from a bare one
+ *  ("Rover…") the same way unknownSubjectFallback's own `det` capture does —
+ *  the individual-vs-class predicate choice below reads it. */
 const COPULA_NP_PARTICIPLE_TEACH_RE = new RegExp(
-  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(is|are|was|were)\\s+(?:an?\\s+)?([\\w'-]+)\\s+(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
+  `^(the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(is|are|was|were)\\s+(?:an?\\s+)?([\\w'-]+)\\s+(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
   "i",
 );
 /** "A and B have/share the same <noun>" — "sales and marketing have the same
@@ -4131,7 +4134,7 @@ function matchesRelationalTeachFrame(sentence) {
   const pp = payload.match(PARTICIPLE_PREP_TEACH_RE);
   if (pp) return !isTeachPronoun(pp[1]);
   const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
-  if (np) return !isTeachPronoun(np[1]);
+  if (np) return !isTeachPronoun(np[2]);
   const same = payload.match(SAME_NOUN_TEACH_RE);
   if (same) return !isTeachPronoun(same[1]) && !isTeachPronoun(same[2]);
   return false;
@@ -4151,7 +4154,7 @@ async function relationalFrameNamesGraphEntity(sentence, graph) {
   if (pp) terms = [pp[1], participleObject(pp[4])];
   else {
     const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
-    if (np) terms = [np[1], np[3], participleObject(np[6])];
+    if (np) terms = [np[2], np[4], participleObject(np[7])];
     else {
       const same = payload.match(SAME_NOUN_TEACH_RE);
       if (same) terms = [same[1], same[2]];
@@ -5419,12 +5422,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // to disagree with, there is nothing here to record, so the sentence falls
     // through to the ordinary cascade exactly as it always has.
     if (retractNotMatch) {
-      const { SUBCLASS_PREDICATE } = await import("../domain/syllogise.mjs");
       const { loadMemory: loadMemForNeg, normFactTerm: normTermForNeg, readFactRows: readRowsForNeg } = await import("../adapters/memory/core.mjs");
       const negSubject = normTermForNeg(retractSubject);
       const negObject = normTermForNeg(retractObject);
       const priorRows = readRowsForNeg(await loadMemForNeg(memoryDir));
-      const positive = priorRows.find((r) => r.subject === negSubject && r.predicate === SUBCLASS_PREDICATE && r.object === negObject);
+      // Either isa predicate counts as "the positive" — a stored rdf:type
+      // (an individual reading) disagrees with a bare negative exactly as a
+      // stored rdfs:subClassOf does. mgxneg:subClassOf stays the single
+      // negative isa predicate either way (no mgxneg:type — spec's own §8).
+      const positive = priorRows.find((r) => r.subject === negSubject && ISA_PREDICATES.has(r.predicate) && r.object === negObject);
       if (positive) {
         const stored = await teachFact(memoryDir, sessionId, {
           subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject, observedAt, dateText,
@@ -5432,7 +5438,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         if (stored) {
           return {
             ...stored,
-            text: `${stored.text} — you told me earlier that ${negSubject} is a kind of ${negObject}, so both are now stored `
+            text: `${stored.text} — you told me earlier that ${negSubject} ${predicatePhrase(positive.predicate)} ${negObject}, so both are now stored `
               + `and I'll report the disagreement rather than pick one. `
               + `To drop the earlier fact instead, say "forget that ${negSubject} is ${indefiniteArticleFor(negObject)} ${negObject}".`,
           };
@@ -6292,14 +6298,27 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // stand on its own if the other's write fails.
       const np = posPayload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
       if (np) {
-        const subject = np[1].trim();
-        const relPred = `mgx:${np[4].toLowerCase()}-${np[5].toLowerCase()}`;
+        const npDet = np[1];
+        const subject = np[2].trim();
+        const npCopula = np[3];
+        const relPred = `mgx:${np[5].toLowerCase()}-${np[6].toLowerCase()}`;
+        // Same individual-vs-class read as unknownSubjectFallback's own
+        // namedIndividual (chat.mjs:3.4): no subject determiner, an "is"
+        // copula (never are/was/were — those are never one individual), an
+        // indefinite-articled complement, and a subject that spells like a
+        // named individual.
+        const npLex = lexicon || loadLexicon();
+        const namedIndividual = !npDet
+          && /^is$/i.test(npCopula)
+          && !/\s/.test(subject)
+          && objectCarriesArticle(posPayload)
+          && readsAsIndividualName(subject, npLex);
         const isaStored = await teachFact(memoryDir, sessionId, {
-          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]), observedAt, dateText,
+          subject, predicate: namedIndividual ? TYPE_PREDICATE : SUBCLASS_PREDICATE, object: singularizeSurface(np[4]), observedAt, dateText,
         });
         const relStored = await teachFact(memoryDir, sessionId, {
           subject, predicate: negated ? negatedPredicate(relPred) : relPred,
-          object: participleObject(np[6]), observedAt, dateText,
+          object: participleObject(np[7]), observedAt, dateText,
         });
         const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
         if (isaStored && relStored) return { text: `noted — remembered both: ${stripNoted(isaStored.text)}; and ${stripNoted(relStored.text)}`, via: "assert", miss: false };
@@ -16190,7 +16209,13 @@ function rewriteUsesAsBaseFrame(text) {
   if (m) return `is ${m[1].trim()} a kind of ${m[2].trim()}`;
   if (/\?\s*$/.test(t)) return null; // an unrecognized question shape — never guessed as a teach
   m = t.match(USES_AS_BASE_TEACH_RE);
-  if (m) return `${m[1].trim()} is a kind of ${m[2].trim()}`;
+  // "every" leads the rewritten declarative (not a bare copula) so the class
+  // relationship this frame always means (X inherits from Y) stays class-
+  // level no matter how the taught subject spells — a bare copula would let
+  // an undeclared/capitalized subject (readsAsIndividualName) read as one
+  // named individual instead, and "TaskController uses Base as its base"
+  // means a subclass relationship, never an instance.
+  if (m) return `every ${m[1].trim()} is a ${m[2].trim()}`;
   return null;
 }
 
