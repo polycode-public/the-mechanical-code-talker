@@ -13,6 +13,7 @@ import {
   SLICE_FILE, MAP_FILE, loadSlice, loadMap, toFacts, termText, seedMemory,
 } from "../../src/adapters/corpus/conceptnet.mjs";
 import { bareEnTerm, toRow, CANONICAL_RELS } from "../../corpus/conceptnet/fetch-slice.mjs";
+import { cutReason, DENIED_ROWS } from "../../corpus/conceptnet/quality-filter.mjs";
 import { loadMemory, normFactTerm } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { lookupByProseTokens } from "../../src/domain/prose.mjs";
@@ -166,6 +167,36 @@ test("seedMemory: facts land in .tmct/memory via appendFact, retrievable via loa
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("committed slice: no beta-is-a-programming-language or psi-is-software claim survives the quality filter", async () => {
+  const assertions = await loadSlice();
+  const has = (start, rel, end) => assertions.some((a) => a.start === start && a.rel === rel && a.end === end);
+  assert.equal(has("/c/en/beta", "/r/IsA", "/c/en/programming_language"), false);
+  assert.equal(has("/c/en/psi", "/r/IsA", "/c/en/software"), false);
+  assert.equal(has("/c/en/letter", "/r/Antonym", "/c/en/email"), false);
+});
+
+test("quality-filter: DENIED_ROWS cuts a row only when relation, start and end all match; changing any one leaves it alone", () => {
+  for (const key of DENIED_ROWS) {
+    const [rel, start, end] = key.split(" ");
+    assert.equal(cutReason({ start, rel, end }), "denied-row", `exact match cut: ${key}`);
+  }
+  assert.equal(
+    cutReason({ start: "/c/en/beta", rel: "/r/IsA", end: "/c/en/greek_letter" }),
+    null,
+    "a re-fetch that changes the object leaves the new row alone",
+  );
+  assert.equal(
+    cutReason({ start: "/c/en/gamma", rel: "/r/IsA", end: "/c/en/programming_language" }),
+    null,
+    "a different subject with the denied object is not itself denied",
+  );
+  assert.equal(
+    cutReason({ start: "/c/en/beta", rel: "/r/RelatedTo", end: "/c/en/programming_language" }),
+    null,
+    "a different relation over the same terms is not itself denied",
+  );
 });
 
 test("loadSlice/loadMap: bad data fails loudly (file:line for JSONL; named relation for the table)", async () => {

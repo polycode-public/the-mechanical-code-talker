@@ -11223,8 +11223,11 @@
 {"start":"/c/en/humanistic discipline","rel":"/r/IsA","end":"/c/en/discipline","weight":1,"surfaceText":"[[humanistic discipline]] IsA [[discipline]]"}
 {"start":"/c/en/nub","rel":"/r/IsA","end":"/c/en/content","weight":1,"surfaceText":"[[nub]] IsA [[content]]"}
 {"start":"/c/en/vow","rel":"/r/IsA","end":"/c/en/assurance","weight":1,"surfaceText":"[[vow]] IsA [[assurance]]"}
-{"start":"/c/en/beta","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[beta]] IsA [[letter]]"}
-{"start":"/c/en/letter","rel":"/r/IsA","end":"/c/en/character","weight":1,"surfaceText":"[[letter]] IsA [[character]]"}
+{"start":"/c/en/beta","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[beta]] IsA [[greek letter]]"}
+{"start":"/c/en/letter of the alphabet","rel":"/r/IsA","end":"/c/en/character","weight":1,"surfaceText":"[[letter of the alphabet]] IsA [[character]]"}
+{"start":"/c/en/greek letter","rel":"/r/IsA","end":"/c/en/letter of the alphabet","weight":1,"surfaceText":"[[greek letter]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/alpha","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[alpha]] IsA [[greek letter]]"}
+{"start":"/c/en/letter","rel":"/r/RelatedTo","end":"/c/en/letter of the alphabet","weight":1,"surfaceText":"[[letter]] RelatedTo [[letter of the alphabet]]"}
 {"start":"/c/en/written symbol","rel":"/r/IsA","end":"/c/en/symbol","weight":1,"surfaceText":"[[written symbol]] IsA [[symbol]]"}
 {"start":"/c/en/brag","rel":"/r/IsA","end":"/c/en/boast","weight":1,"surfaceText":"[[brag]] IsA [[boast]]"}
 {"start":"/c/en/boast","rel":"/r/IsA","end":"/c/en/speech act","weight":1,"surfaceText":"[[boast]] IsA [[speech act]]"}
@@ -11271,7 +11274,7 @@
 {"start":"/c/en/dynamical system","rel":"/r/IsA","end":"/c/en/phase space","weight":1,"surfaceText":"[[dynamical system]] IsA [[phase space]]"}
 {"start":"/c/en/phase space","rel":"/r/IsA","end":"/c/en/space","weight":1,"surfaceText":"[[phase space]] IsA [[space]]"}
 {"start":"/c/en/conga","rel":"/r/IsA","end":"/c/en/dance music","weight":1,"surfaceText":"[[conga]] IsA [[dance music]]"}
-{"start":"/c/en/delta","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[delta]] IsA [[letter]]"}
+{"start":"/c/en/delta","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[delta]] IsA [[greek letter]]"}
 {"start":"/c/en/demur","rel":"/r/IsA","end":"/c/en/objection","weight":1,"surfaceText":"[[demur]] IsA [[objection]]"}
 {"start":"/c/en/dread","rel":"/r/IsA","end":"/c/en/fear","weight":1,"surfaceText":"[[dread]] IsA [[fear]]"}
 {"start":"/c/en/fable","rel":"/r/IsA","end":"/c/en/story","weight":1,"surfaceText":"[[fable]] IsA [[story]]"}
@@ -11417,7 +11420,7 @@
 {"start":"/c/en/gradual","rel":"/r/IsA","end":"/c/en/antiphon","weight":1,"surfaceText":"[[gradual]] IsA [[antiphon]]"}
 {"start":"/c/en/antiphon","rel":"/r/IsA","end":"/c/en/religious music","weight":1,"surfaceText":"[[antiphon]] IsA [[religious music]]"}
 {"start":"/c/en/gravity","rel":"/r/IsA","end":"/c/en/feeling","weight":1,"surfaceText":"[[gravity]] IsA [[feeling]]"}
-{"start":"/c/en/initial","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[initial]] IsA [[letter]]"}
+{"start":"/c/en/initial","rel":"/r/IsA","end":"/c/en/letter of the alphabet","weight":1,"surfaceText":"[[initial]] IsA [[letter of the alphabet]]"}
 {"start":"/c/en/inquiry","rel":"/r/IsA","end":"/c/en/questioning","weight":1,"surfaceText":"[[inquiry]] IsA [[questioning]]"}
 {"start":"/c/en/lingual","rel":"/r/IsA","end":"/c/en/consonant","weight":1,"surfaceText":"[[lingual]] IsA [[consonant]]"}
 {"start":"/c/en/loyalty","rel":"/r/IsA","end":"/c/en/love","weight":1,"surfaceText":"[[loyalty]] IsA [[love]]"}
@@ -11877,8 +11880,8 @@
 {"start":"/c/en/description","rel":"/r/IsA","end":"/c/en/speech act","weight":1,"surfaceText":"[[description]] IsA [[speech act]]"}
 {"start":"/c/en/predetermination","rel":"/r/IsA","end":"/c/en/decision","weight":1,"surfaceText":"[[predetermination]] IsA [[decision]]"}
 {"start":"/c/en/decision","rel":"/r/IsA","end":"/c/en/judgment","weight":1,"surfaceText":"[[decision]] IsA [[judgment]]"}
-{"start":"/c/en/pi","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[pi]] IsA [[letter]]"}
-{"start":"/c/en/xi","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[xi]] IsA [[letter]]"}
+{"start":"/c/en/pi","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[pi]] IsA [[greek letter]]"}
+{"start":"/c/en/xi","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[xi]] IsA [[greek letter]]"}
 {"start":"/c/en/boo","rel":"/r/IsA","end":"/c/en/cry","weight":1,"surfaceText":"[[boo]] IsA [[cry]]"}
 {"start":"/c/en/bye","rel":"/r/IsA","end":"/c/en/concession","weight":1,"surfaceText":"[[bye]] IsA [[concession]]"}
 {"start":"/c/en/concession","rel":"/r/IsA","end":"/c/en/assent","weight":1,"surfaceText":"[[concession]] IsA [[assent]]"}
@@ -11890,7 +11893,7 @@
 {"start":"/c/en/nay","rel":"/r/IsA","end":"/c/en/negative","weight":1,"surfaceText":"[[nay]] IsA [[negative]]"}
 {"start":"/c/en/pic","rel":"/r/IsA","end":"/c/en/product","weight":1,"surfaceText":"[[pic]] IsA [[product]]"}
 {"start":"/c/en/pic","rel":"/r/HasA","end":"/c/en/sequence","weight":1,"surfaceText":"[[pic]] HasA [[sequence]]"}
-{"start":"/c/en/psi","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[psi]] IsA [[letter]]"}
+{"start":"/c/en/psi","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[psi]] IsA [[greek letter]]"}
 {"start":"/c/en/pun","rel":"/r/IsA","end":"/c/en/fun","weight":1,"surfaceText":"[[pun]] IsA [[fun]]"}
 {"start":"/c/en/wai","rel":"/r/IsA","end":"/c/en/gesture","weight":1,"surfaceText":"[[wai]] IsA [[gesture]]"}
 {"start":"/c/en/woe","rel":"/r/IsA","end":"/c/en/mournfulness","weight":1,"surfaceText":"[[woe]] IsA [[mournfulness]]"}
@@ -11906,7 +11909,7 @@
 {"start":"/c/en/grin","rel":"/r/IsA","end":"/c/en/facial expression","weight":1,"surfaceText":"[[grin]] IsA [[facial expression]]"}
 {"start":"/c/en/heed","rel":"/r/IsA","end":"/c/en/attention","weight":1,"surfaceText":"[[heed]] IsA [[attention]]"}
 {"start":"/c/en/idyl","rel":"/r/IsA","end":"/c/en/musical composition","weight":1,"surfaceText":"[[idyl]] IsA [[musical composition]]"}
-{"start":"/c/en/iota","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[iota]] IsA [[letter]]"}
+{"start":"/c/en/iota","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[iota]] IsA [[greek letter]]"}
 {"start":"/c/en/jive","rel":"/r/IsA","end":"/c/en/jazz","weight":1,"surfaceText":"[[jive]] IsA [[jazz]]"}
 {"start":"/c/en/moan","rel":"/r/IsA","end":"/c/en/utterance","weight":1,"surfaceText":"[[moan]] IsA [[utterance]]"}
 {"start":"/c/en/muse","rel":"/r/IsA","end":"/c/en/source","weight":1,"surfaceText":"[[muse]] IsA [[source]]"}
@@ -11964,7 +11967,7 @@
 {"start":"/c/en/emotional arousal","rel":"/r/IsA","end":"/c/en/arousal","weight":1,"surfaceText":"[[emotional arousal]] IsA [[arousal]]"}
 {"start":"/c/en/arousal","rel":"/r/IsA","end":"/c/en/physical condition","weight":1,"surfaceText":"[[arousal]] IsA [[physical condition]]"}
 {"start":"/c/en/frown","rel":"/r/IsA","end":"/c/en/facial expression","weight":1,"surfaceText":"[[frown]] IsA [[facial expression]]"}
-{"start":"/c/en/gamma","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[gamma]] IsA [[letter]]"}
+{"start":"/c/en/gamma","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[gamma]] IsA [[greek letter]]"}
 {"start":"/c/en/gamut","rel":"/r/IsA","end":"/c/en/scale","weight":1,"surfaceText":"[[gamut]] IsA [[scale]]"}
 {"start":"/c/en/scale","rel":"/r/IsA","end":"/c/en/musical notation","weight":1,"surfaceText":"[[scale]] IsA [[musical notation]]"}
 {"start":"/c/en/grief","rel":"/r/IsA","end":"/c/en/negative stimulus","weight":1,"surfaceText":"[[grief]] IsA [[negative stimulus]]"}
@@ -11976,7 +11979,7 @@
 {"start":"/c/en/macro","rel":"/r/IsA","end":"/c/en/instruction","weight":1,"surfaceText":"[[macro]] IsA [[instruction]]"}
 {"start":"/c/en/instruction","rel":"/r/IsA","end":"/c/en/code","weight":1,"surfaceText":"[[instruction]] IsA [[code]]"}
 {"start":"/c/en/odour","rel":"/r/IsA","end":"/c/en/sensation","weight":1,"surfaceText":"[[odour]] IsA [[sensation]]"}
-{"start":"/c/en/omega","rel":"/r/IsA","end":"/c/en/letter","weight":1,"surfaceText":"[[omega]] IsA [[letter]]"}
+{"start":"/c/en/omega","rel":"/r/IsA","end":"/c/en/greek letter","weight":1,"surfaceText":"[[omega]] IsA [[greek letter]]"}
 {"start":"/c/en/paean","rel":"/r/IsA","end":"/c/en/hymn","weight":1,"surfaceText":"[[paean]] IsA [[hymn]]"}
 {"start":"/c/en/pavan","rel":"/r/IsA","end":"/c/en/dance music","weight":1,"surfaceText":"[[pavan]] IsA [[dance music]]"}
 {"start":"/c/en/peeve","rel":"/r/IsA","end":"/c/en/temper","weight":1,"surfaceText":"[[peeve]] IsA [[temper]]"}

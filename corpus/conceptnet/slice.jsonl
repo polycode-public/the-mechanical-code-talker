@@ -77,7 +77,6 @@
 {"start":"/c/en/kinetic","rel":"/r/Antonym","end":"/c/en/logic","weight":1}
 {"start":"/c/en/lady","rel":"/r/Antonym","end":"/c/en/class","weight":0.128,"surfaceText":"[[lady]] is the opposite of [[class]]"}
 {"start":"/c/en/leaf","rel":"/r/Antonym","end":"/c/en/branch","weight":0.237,"surfaceText":"[[leaf]] is the opposite of [[branch]]"}
-{"start":"/c/en/letter","rel":"/r/Antonym","end":"/c/en/email","weight":0.272,"surfaceText":"[[letter]] is the opposite of [[email]]"}
 {"start":"/c/en/library","rel":"/r/Antonym","end":"/c/en/book","weight":0.139,"surfaceText":"[[library]] is the opposite of [[book]]"}
 {"start":"/c/en/library","rel":"/r/Antonym","end":"/c/en/book_store","weight":0.139,"surfaceText":"[[library]] is the opposite of [[book store]]"}
 {"start":"/c/en/library","rel":"/r/Antonym","end":"/c/en/bookstore","weight":0.108,"surfaceText":"[[library]] is the opposite of [[bookstore]]"}
@@ -342,7 +341,6 @@
 {"start":"/c/en/fluid","rel":"/r/AtLocation","end":"/c/en/container","weight":2,"surfaceText":"*Something you find in [[a container]] is [[fluid]]"}
 {"start":"/c/en/food","rel":"/r/AtLocation","end":"/c/en/container","weight":2,"surfaceText":"*Something you find in [[a container]] is [[food]]"}
 {"start":"/c/en/fortune","rel":"/r/AtLocation","end":"/c/en/cookie","weight":3.464,"surfaceText":"You are likely to find [[a fortune]] in [[a cookie]]"}
-{"start":"/c/en/fox_in","rel":"/r/AtLocation","end":"/c/en/tree","weight":1,"surfaceText":"You are likely to find [[a fox in]] in [[a tree]]"}
 {"start":"/c/en/frazzled_teacher","rel":"/r/AtLocation","end":"/c/en/class","weight":1,"surfaceText":"*Something you find in [[class]] is [[a frazzled teacher]]"}
 {"start":"/c/en/freeze_dried_apricots","rel":"/r/AtLocation","end":"/c/en/container","weight":1,"surfaceText":"*Something you find in [[a container]] is [[freeze dried apricots]]"}
 {"start":"/c/en/fresh_fruit","rel":"/r/AtLocation","end":"/c/en/container","weight":1,"surfaceText":"*Something you find in [[a container]] is [[fresh fruit]]"}
@@ -912,7 +910,6 @@
 {"start":"/c/en/iron","rel":"/r/CapableOf","end":"/c/en/rust","weight":4,"surfaceText":"[[iron]] can [[rust]]"}
 {"start":"/c/en/iron_alloys","rel":"/r/CapableOf","end":"/c/en/rust","weight":1,"surfaceText":"An activity [[iron alloys]] can do is [[rust]]"}
 {"start":"/c/en/library","rel":"/r/CapableOf","end":"/c/en/fine_borrower","weight":1,"surfaceText":"[[a library]] can [[fine a borrower]]"}
-{"start":"/c/en/library","rel":"/r/CapableOf","end":"/c/en/lend_books_to","weight":1,"surfaceText":"[[a library]] can [[lend books to anyone]]"}
 {"start":"/c/en/library","rel":"/r/CapableOf","end":"/c/en/stock_many_books","weight":1,"surfaceText":"[[a library]] can [[stock many books]]"}
 {"start":"/c/en/list","rel":"/r/CapableOf","end":"/c/en/include_many_items","weight":1,"surfaceText":"[[A list]] can [[include many items]]"}
 {"start":"/c/en/list","rel":"/r/CapableOf","end":"/c/en/include_several_items","weight":1,"surfaceText":"[[A list]] can [[include several items]]"}
@@ -1481,7 +1478,6 @@
 {"start":"/c/en/chiclet_keyboard","rel":"/r/DerivedFrom","end":"/c/en/keyboard","weight":1}
 {"start":"/c/en/chip_and_pin","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":1}
 {"start":"/c/en/chip_butty","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":1}
-{"start":"/c/en/chip_in","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":1}
 {"start":"/c/en/chip_leader","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":1}
 {"start":"/c/en/chip_shop","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":2}
 {"start":"/c/en/chip_shot","rel":"/r/DerivedFrom","end":"/c/en/chip","weight":1}
@@ -2667,7 +2663,6 @@
 {"start":"/c/en/logicless","rel":"/r/DerivedFrom","end":"/c/en/logic","weight":1}
 {"start":"/c/en/logograph","rel":"/r/DerivedFrom","end":"/c/en/graph","weight":1}
 {"start":"/c/en/longlist","rel":"/r/DerivedFrom","end":"/c/en/list","weight":1}
-{"start":"/c/en/loop_in","rel":"/r/DerivedFrom","end":"/c/en/loop","weight":1}
 {"start":"/c/en/loop_loop","rel":"/r/DerivedFrom","end":"/c/en/loop","weight":1}
 {"start":"/c/en/loopable","rel":"/r/DerivedFrom","end":"/c/en/loop","weight":1}
 {"start":"/c/en/loopback","rel":"/r/DerivedFrom","end":"/c/en/loop","weight":1}
@@ -2702,7 +2697,6 @@
 {"start":"/c/en/magnetologic","rel":"/r/DerivedFrom","end":"/c/en/logic","weight":1}
 {"start":"/c/en/mailfile","rel":"/r/DerivedFrom","end":"/c/en/file","weight":1}
 {"start":"/c/en/mainspring","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
-{"start":"/c/en/make_hash_of","rel":"/r/DerivedFrom","end":"/c/en/hash","weight":1}
 {"start":"/c/en/malware","rel":"/r/DerivedFrom","end":"/c/en/malicious","weight":1}
 {"start":"/c/en/malware","rel":"/r/DerivedFrom","end":"/c/en/software","weight":1}
 {"start":"/c/en/man_in_browser","rel":"/r/DerivedFrom","end":"/c/en/browser","weight":1}
@@ -3683,7 +3677,6 @@
 {"start":"/c/en/scorefile","rel":"/r/DerivedFrom","end":"/c/en/file","weight":1}
 {"start":"/c/en/scrapheap","rel":"/r/DerivedFrom","end":"/c/en/heap","weight":1}
 {"start":"/c/en/screen_free","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
-{"start":"/c/en/screen_in","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screen_out","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screen_reader","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screenable","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
@@ -3692,7 +3685,6 @@
 {"start":"/c/en/screenburn","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screencast","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screencraft","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
-{"start":"/c/en/screened_in","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screenee","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screener","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screenful","rel":"/r/DerivedFrom","end":"/c/en/screen","weight":1}
@@ -3884,20 +3876,16 @@
 {"start":"/c/en/spittlebug","rel":"/r/DerivedFrom","end":"/c/en/bug","weight":1}
 {"start":"/c/en/splinternet","rel":"/r/DerivedFrom","end":"/c/en/internet","weight":1}
 {"start":"/c/en/spring_arch","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
-{"start":"/c/en/spring_at","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_back","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_butt","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
-{"start":"/c/en/spring_for","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_forth","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_hare","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
-{"start":"/c/en/spring_in","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_into_action","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_jack","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_leak","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_lobster","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_loose","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_luff","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
-{"start":"/c/en/spring_on","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_out","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_rattle","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
 {"start":"/c/en/spring_to_life","rel":"/r/DerivedFrom","end":"/c/en/spring","weight":1}
@@ -5129,7 +5117,6 @@
 {"start":"/c/en/adapter_pattern","rel":"/r/HasContext","end":"/c/en/software","weight":1}
 {"start":"/c/en/adblocker","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
 {"start":"/c/en/add","rel":"/r/HasContext","end":"/c/en/computer_science","weight":1}
-{"start":"/c/en/add_on","rel":"/r/HasContext","end":"/c/en/software","weight":1}
 {"start":"/c/en/address","rel":"/r/HasContext","end":"/c/en/computer_science","weight":2,"surfaceText":"[[address]] is used in the context of [[computer science]]"}
 {"start":"/c/en/address","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
 {"start":"/c/en/address_of_record","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
@@ -6252,7 +6239,6 @@
 {"start":"/c/en/dotted_quad","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
 {"start":"/c/en/double","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
 {"start":"/c/en/double_free","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
-{"start":"/c/en/double_opt_in","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
 {"start":"/c/en/double_turnstile","rel":"/r/HasContext","end":"/c/en/logic","weight":1}
 {"start":"/c/en/doubly_linked","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
 {"start":"/c/en/downcall","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
@@ -7447,7 +7433,6 @@
 {"start":"/c/en/mischan","rel":"/r/HasContext","end":"/c/en/internet","weight":1}
 {"start":"/c/en/mit_license","rel":"/r/HasContext","end":"/c/en/software","weight":1}
 {"start":"/c/en/mitm","rel":"/r/HasContext","end":"/c/en/cryptography","weight":1}
-{"start":"/c/en/mix_in","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
 {"start":"/c/en/mlp","rel":"/r/HasContext","end":"/c/en/machine_learning","weight":1}
 {"start":"/c/en/mmapi","rel":"/r/HasContext","end":"/c/en/programming","weight":1}
 {"start":"/c/en/mmb","rel":"/r/HasContext","end":"/c/en/cryptography","weight":1}
@@ -9528,7 +9513,6 @@
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/lear_programing_language","weight":2,"surfaceText":"If you want to [[program]] then you should [[lear a programing language]]"}
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_computer_language","weight":2,"surfaceText":"If you want to [[program]] then you should [[learn a computer language]]"}
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_how","weight":1,"surfaceText":"If you want to [[program]] then you should [[learn how]]"}
-{"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_how_to","weight":1,"surfaceText":"If you want to [[program]] then you should [[learn how to]]"}
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_programming","weight":2.828,"surfaceText":"If you want to [[program]] then you should [[learn programming]]"}
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_programming_language","weight":6.633,"surfaceText":"If you want to [[program]] then you should [[learn a programming language]]"}
 {"start":"/c/en/program","rel":"/r/HasPrerequisite","end":"/c/en/learn_to_code","weight":1,"surfaceText":"If you want to [[program]] then you should [[learn to code]]"}
@@ -9660,7 +9644,6 @@
 {"start":"/c/en/abstraction","rel":"/r/IsA","end":"/c/en/painting","weight":2,"surfaceText":"[[abstraction]] is a type of [[painting]]"}
 {"start":"/c/en/abstraction","rel":"/r/IsA","end":"/c/en/removal","weight":2,"surfaceText":"[[abstraction]] is a type of [[removal]]"}
 {"start":"/c/en/abstraction","rel":"/r/IsA","end":"/c/en/theorization","weight":2,"surfaceText":"[[abstraction]] is a type of [[theorization]]"}
-{"start":"/c/en/abstraction","rel":"/r/IsA","end":"/c/en/visual_representation_of","weight":1,"surfaceText":"[[Abstraction]] is [[a visual representation of something]]"}
 {"start":"/c/en/abv","rel":"/r/IsA","end":"/c/en/virus","weight":1}
 {"start":"/c/en/acacia","rel":"/r/IsA","end":"/c/en/tree","weight":2,"surfaceText":"[[acacia]] is a type of [[tree]]"}
 {"start":"/c/en/acc","rel":"/r/IsA","end":"/c/en/programming_language","weight":0.5}
@@ -10017,7 +10000,6 @@
 {"start":"/c/en/beos","rel":"/r/IsA","end":"/c/en/software","weight":0.5}
 {"start":"/c/en/bequest","rel":"/r/IsA","end":"/c/en/inheritance","weight":2,"surfaceText":"[[bequest]] is a type of [[inheritance]]"}
 {"start":"/c/en/bessel_function","rel":"/r/IsA","end":"/c/en/function","weight":1}
-{"start":"/c/en/beta","rel":"/r/IsA","end":"/c/en/programming_language","weight":0.5}
 {"start":"/c/en/beta_function","rel":"/r/IsA","end":"/c/en/function","weight":1}
 {"start":"/c/en/beta_software","rel":"/r/IsA","end":"/c/en/software","weight":2,"surfaceText":"[[beta software]] is a type of [[software]]"}
 {"start":"/c/en/betrothal","rel":"/r/IsA","end":"/c/en/authorization","weight":1}
@@ -10573,7 +10555,6 @@
 {"start":"/c/en/contact_list","rel":"/r/IsA","end":"/c/en/list","weight":1}
 {"start":"/c/en/contacts","rel":"/r/IsA","end":"/c/en/software","weight":0.5}
 {"start":"/c/en/container","rel":"/r/IsA","end":"/c/en/container_shaped_object","weight":1}
-{"start":"/c/en/container","rel":"/r/IsA","end":"/c/en/general_term_for","weight":1,"surfaceText":"[[Container]] is [[a general term for something]]"}
 {"start":"/c/en/container","rel":"/r/IsA","end":"/c/en/hollow_thing","weight":1}
 {"start":"/c/en/container","rel":"/r/IsA","end":"/c/en/instrumentality","weight":2,"surfaceText":"[[container]] is a type of [[instrumentality]]"}
 {"start":"/c/en/container","rel":"/r/IsA","end":"/c/en/item","weight":1,"surfaceText":"[[A container]] is [[an item]]"}
@@ -10696,7 +10677,6 @@
 {"start":"/c/en/darwin_awards","rel":"/r/IsA","end":"/c/en/website","weight":0.5}
 {"start":"/c/en/data","rel":"/r/IsA","end":"/c/en/android","weight":1,"surfaceText":"[[Data]] is [[a android]]"}
 {"start":"/c/en/data","rel":"/r/IsA","end":"/c/en/collection","weight":2,"surfaceText":"[[data]] is a type of [[collection]]"}
-{"start":"/c/en/data","rel":"/r/IsA","end":"/c/en/facts_given_from","weight":1,"surfaceText":"[[Data]] are [[facts given from]]"}
 {"start":"/c/en/data","rel":"/r/IsA","end":"/c/en/information","weight":3.464,"surfaceText":"[[Data]] is [[information]]"}
 {"start":"/c/en/data","rel":"/r/IsA","end":"/c/en/raw_facts","weight":1,"surfaceText":"[[Data]] are [[raw facts]]"}
 {"start":"/c/en/data_input_device","rel":"/r/IsA","end":"/c/en/peripheral","weight":2,"surfaceText":"[[data input device]] is a type of [[peripheral]]"}
@@ -12482,8 +12462,6 @@
 {"start":"/c/en/playbill","rel":"/r/IsA","end":"/c/en/program","weight":2,"surfaceText":"[[playbill]] is a type of [[program]]"}
 {"start":"/c/en/playlist","rel":"/r/IsA","end":"/c/en/list","weight":2,"surfaceText":"[[playlist]] is a type of [[list]]"}
 {"start":"/c/en/plectomycetes","rel":"/r/IsA","end":"/c/en/class","weight":2,"surfaceText":"[[Plectomycetes]] is a type of [[class]]"}
-{"start":"/c/en/plug_in","rel":"/r/IsA","end":"/c/en/module","weight":1}
-{"start":"/c/en/plug_in","rel":"/r/IsA","end":"/c/en/software","weight":2,"surfaceText":"[[plug-in]] is a type of [[software]]"}
 {"start":"/c/en/plum_tree","rel":"/r/IsA","end":"/c/en/tree","weight":1}
 {"start":"/c/en/plume","rel":"/r/IsA","end":"/c/en/cloud","weight":1}
 {"start":"/c/en/pneumovirus","rel":"/r/IsA","end":"/c/en/virus","weight":1}
@@ -12628,7 +12606,6 @@
 {"start":"/c/en/proxy_server","rel":"/r/IsA","end":"/c/en/server","weight":1}
 {"start":"/c/en/prunoideae","rel":"/r/IsA","end":"/c/en/tree","weight":1}
 {"start":"/c/en/pseudopod","rel":"/r/IsA","end":"/c/en/process","weight":2,"surfaceText":"[[pseudopod]] is a type of [[process]]"}
-{"start":"/c/en/psi","rel":"/r/IsA","end":"/c/en/software","weight":0.5}
 {"start":"/c/en/psilopsida","rel":"/r/IsA","end":"/c/en/class","weight":2,"surfaceText":"[[Psilopsida]] is a type of [[class]]"}
 {"start":"/c/en/psychological_feature","rel":"/r/IsA","end":"/c/en/abstraction","weight":2,"surfaceText":"[[psychological feature]] is a type of [[abstraction]]"}
 {"start":"/c/en/pteridospermopsida","rel":"/r/IsA","end":"/c/en/class","weight":2,"surfaceText":"[[Pteridospermopsida]] is a type of [[class]]"}
@@ -13862,14 +13839,12 @@
 {"start":"/c/en/buck","rel":"/r/MannerOf","end":"/c/en/react","weight":2,"surfaceText":"[[buck]] is a way to [[react]]"}
 {"start":"/c/en/buffer","rel":"/r/MannerOf","end":"/c/en/modify","weight":2,"surfaceText":"[[buffer]] is a way to [[modify]]"}
 {"start":"/c/en/bunch_together","rel":"/r/MannerOf","end":"/c/en/cluster","weight":2,"surfaceText":"[[bunch together]] is a way to [[cluster]]"}
-{"start":"/c/en/burst_in_on","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[burst in on]] is a way to [[interrupt]]"}
 {"start":"/c/en/camphorate","rel":"/r/MannerOf","end":"/c/en/process","weight":2,"surfaceText":"[[camphorate]] is a way to [[process]]"}
 {"start":"/c/en/carbonate","rel":"/r/MannerOf","end":"/c/en/process","weight":2,"surfaceText":"[[carbonate]] is a way to [[process]]"}
 {"start":"/c/en/carboxylate","rel":"/r/MannerOf","end":"/c/en/process","weight":2,"surfaceText":"[[carboxylate]] is a way to [[process]]"}
 {"start":"/c/en/cavil","rel":"/r/MannerOf","end":"/c/en/object","weight":2,"surfaceText":"[[cavil]] is a way to [[object]]"}
 {"start":"/c/en/challenge","rel":"/r/MannerOf","end":"/c/en/object","weight":2,"surfaceText":"[[challenge]] is a way to [[object]]"}
 {"start":"/c/en/charge","rel":"/r/MannerOf","end":"/c/en/command","weight":2,"surfaceText":"[[charge]] is a way to [[command]]"}
-{"start":"/c/en/chime_in","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[chime in]] is a way to [[interrupt]]"}
 {"start":"/c/en/chip","rel":"/r/MannerOf","end":"/c/en/cut","weight":2,"surfaceText":"[[chip]] is a way to [[cut]]"}
 {"start":"/c/en/chip","rel":"/r/MannerOf","end":"/c/en/separate","weight":2,"surfaceText":"[[chip]] is a way to [[separate]]"}
 {"start":"/c/en/chip","rel":"/r/MannerOf","end":"/c/en/shape","weight":2,"surfaceText":"[[chip]] is a way to [[shape]]"}
@@ -13905,7 +13880,6 @@
 {"start":"/c/en/curry","rel":"/r/MannerOf","end":"/c/en/process","weight":2,"surfaceText":"[[curry]] is a way to [[process]]"}
 {"start":"/c/en/cut","rel":"/r/MannerOf","end":"/c/en/function","weight":2,"surfaceText":"[[cut]] is a way to [[function]]"}
 {"start":"/c/en/cut","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[cut]] is a way to [[interrupt]]"}
-{"start":"/c/en/cut_in","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[cut in]] is a way to [[interrupt]]"}
 {"start":"/c/en/cut_short","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[cut short]] is a way to [[interrupt]]"}
 {"start":"/c/en/debug","rel":"/r/MannerOf","end":"/c/en/correct","weight":2,"surfaceText":"[[debug]] is a way to [[correct]]"}
 {"start":"/c/en/demur","rel":"/r/MannerOf","end":"/c/en/object","weight":2,"surfaceText":"[[demur]] is a way to [[object]]"}
@@ -13939,7 +13913,6 @@
 {"start":"/c/en/heap","rel":"/r/MannerOf","end":"/c/en/fill","weight":2,"surfaceText":"[[heap]] is a way to [[fill]]"}
 {"start":"/c/en/heap","rel":"/r/MannerOf","end":"/c/en/give","weight":2,"surfaceText":"[[heap]] is a way to [[give]]"}
 {"start":"/c/en/heckle","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[heckle]] is a way to [[interrupt]]"}
-{"start":"/c/en/hold_on","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[hold on]] is a way to [[interrupt]]"}
 {"start":"/c/en/hospitalize","rel":"/r/MannerOf","end":"/c/en/commit","weight":2,"surfaceText":"[[hospitalize]] is a way to [[commit]]"}
 {"start":"/c/en/huddle","rel":"/r/MannerOf","end":"/c/en/cluster","weight":2,"surfaceText":"[[huddle]] is a way to [[cluster]]"}
 {"start":"/c/en/index","rel":"/r/MannerOf","end":"/c/en/determine","weight":2,"surfaceText":"[[index]] is a way to [[determine]]"}
@@ -13948,7 +13921,6 @@
 {"start":"/c/en/interject","rel":"/r/MannerOf","end":"/c/en/interrupt","weight":2,"surfaceText":"[[interject]] is a way to [[interrupt]]"}
 {"start":"/c/en/interrupt","rel":"/r/MannerOf","end":"/c/en/act","weight":2,"surfaceText":"[[interrupt]] is a way to [[act]]"}
 {"start":"/c/en/interrupt","rel":"/r/MannerOf","end":"/c/en/break","weight":2,"surfaceText":"[[interrupt]] is a way to [[break]]"}
-{"start":"/c/en/interrupt","rel":"/r/MannerOf","end":"/c/en/chime_in","weight":2,"surfaceText":"[[interrupt]] is a way to [[chime in]]"}
 {"start":"/c/en/interrupt","rel":"/r/MannerOf","end":"/c/en/end","weight":2,"surfaceText":"[[interrupt]] is a way to [[end]]"}
 {"start":"/c/en/inventory","rel":"/r/MannerOf","end":"/c/en/list","weight":2,"surfaceText":"[[inventory]] is a way to [[list]]"}
 {"start":"/c/en/iodize","rel":"/r/MannerOf","end":"/c/en/process","weight":2,"surfaceText":"[[iodize]] is a way to [[process]]"}
@@ -14097,7 +14069,6 @@
 {"start":"/c/en/read_newspaper","rel":"/r/MotivatedByGoal","end":"/c/en/information","weight":2,"surfaceText":"You would [[read a newspaper]] because you want [[information]]"}
 {"start":"/c/en/study_for_subject","rel":"/r/MotivatedByGoal","end":"/c/en/information","weight":1,"surfaceText":"You would [[study for a subject]] because you want [[information]]"}
 {"start":"/c/en/surf_net","rel":"/r/MotivatedByGoal","end":"/c/en/information","weight":2.828,"surfaceText":"You would [[surf the net]] because you want [[information]]"}
-{"start":"/c/en/talk_to","rel":"/r/MotivatedByGoal","end":"/c/en/information","weight":1,"surfaceText":"You would [[talk to someone]] because you want [[information]]"}
 {"start":"/c/en/use_computer","rel":"/r/MotivatedByGoal","end":"/c/en/information","weight":1,"surfaceText":"You would [[use a computer]] because you want [[information]]"}
 {"start":"/c/en/action","rel":"/r/PartOf","end":"/c/en/keyboard","weight":2,"surfaceText":"[[action]] is a part of [[keyboard]]"}
 {"start":"/c/en/aeciospore","rel":"/r/PartOf","end":"/c/en/rust","weight":2,"surfaceText":"[[aeciospore]] is a part of [[rust]]"}
@@ -14462,7 +14433,6 @@
 {"start":"/c/en/account","rel":"/r/RelatedTo","end":"/c/en/partition","weight":0.11,"surfaceText":"[[account]] is related to [[partition]]"}
 {"start":"/c/en/account","rel":"/r/RelatedTo","end":"/c/en/password","weight":0.276,"surfaceText":"[[account]] is related to [[password]]"}
 {"start":"/c/en/account","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
-{"start":"/c/en/account_for","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/account_statement","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
 {"start":"/c/en/accounting","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
 {"start":"/c/en/accouter","rel":"/r/RelatedTo","end":"/c/en/array","weight":1}
@@ -14506,7 +14476,6 @@
 {"start":"/c/en/act","rel":"/r/RelatedTo","end":"/c/en/function","weight":0.102,"surfaceText":"[[act]] is related to [[function]]"}
 {"start":"/c/en/act","rel":"/r/RelatedTo","end":"/c/en/partition","weight":0.15,"surfaceText":"[[act]] is related to [[partition]]"}
 {"start":"/c/en/act","rel":"/r/RelatedTo","end":"/c/en/screen","weight":0.102,"surfaceText":"[[act]] is related to [[screen]]"}
-{"start":"/c/en/act_on","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/act_upon","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/actant","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/actinomycin","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
@@ -14536,7 +14505,6 @@
 {"start":"/c/en/ad_hoc_polymorphism","rel":"/r/RelatedTo","end":"/c/en/polymorphism","weight":1}
 {"start":"/c/en/ad_hocery","rel":"/r/RelatedTo","end":"/c/en/artificial_intelligence","weight":1}
 {"start":"/c/en/ad_hocery","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
-{"start":"/c/en/ad_in","rel":"/r/RelatedTo","end":"/c/en/server","weight":1}
 {"start":"/c/en/ad_inventory","rel":"/r/RelatedTo","end":"/c/en/website","weight":1}
 {"start":"/c/en/ad_lib","rel":"/r/RelatedTo","end":"/c/en/script","weight":1}
 {"start":"/c/en/ada","rel":"/r/RelatedTo","end":"/c/en/programming_language","weight":1}
@@ -14553,10 +14521,6 @@
 {"start":"/c/en/adblocking","rel":"/r/RelatedTo","end":"/c/en/webpage","weight":1}
 {"start":"/c/en/add","rel":"/r/RelatedTo","end":"/c/en/function","weight":0.554,"surfaceText":"[[add]] is related to [[function]]"}
 {"start":"/c/en/add","rel":"/r/RelatedTo","end":"/c/en/process","weight":0.105,"surfaceText":"[[add]] is related to [[process]]"}
-{"start":"/c/en/add_on","rel":"/r/RelatedTo","end":"/c/en/chip","weight":1}
-{"start":"/c/en/add_on","rel":"/r/RelatedTo","end":"/c/en/hardware","weight":1}
-{"start":"/c/en/add_on","rel":"/r/RelatedTo","end":"/c/en/peripheral","weight":1}
-{"start":"/c/en/add_on","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
 {"start":"/c/en/addeem","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/additive_function","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
 {"start":"/c/en/address","rel":"/r/RelatedTo","end":"/c/en/array","weight":1}
@@ -14811,7 +14775,6 @@
 {"start":"/c/en/alkyl_nitrite","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
 {"start":"/c/en/all_elbows","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/all_embracing","rel":"/r/RelatedTo","end":"/c/en/application","weight":1}
-{"start":"/c/en/all_in","rel":"/r/RelatedTo","end":"/c/en/chip","weight":1}
 {"start":"/c/en/all_nighter","rel":"/r/RelatedTo","end":"/c/en/session","weight":1}
 {"start":"/c/en/allen_bolt","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/allen_screw","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
@@ -14874,7 +14837,6 @@
 {"start":"/c/en/aluminium_oxide","rel":"/r/RelatedTo","end":"/c/en/ruby","weight":1}
 {"start":"/c/en/alveolar","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/alveolus","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
-{"start":"/c/en/always_on","rel":"/r/RelatedTo","end":"/c/en/internet","weight":1}
 {"start":"/c/en/alzheimer's_disease","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
 {"start":"/c/en/amacrine","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/amalgamate","rel":"/r/RelatedTo","end":"/c/en/merge","weight":1}
@@ -15336,7 +15298,6 @@
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/cause","weight":1}
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/clothe","weight":1}
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/collection","weight":1}
-{"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/collection_of","weight":0.184,"surfaceText":"[[array]] is related to [[collection of]]"}
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/columns","weight":0.175,"surfaceText":"[[array]] is related to [[columns]]"}
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/deploy","weight":1}
 {"start":"/c/en/array","rel":"/r/RelatedTo","end":"/c/en/hedgehogs","weight":1}
@@ -15899,7 +15860,6 @@
 {"start":"/c/en/bareword","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
 {"start":"/c/en/bargain_bin","rel":"/r/RelatedTo","end":"/c/en/container","weight":1}
 {"start":"/c/en/barge","rel":"/r/RelatedTo","end":"/c/en/disk","weight":1}
-{"start":"/c/en/barge_in","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
 {"start":"/c/en/bariolage","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
 {"start":"/c/en/bark","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
 {"start":"/c/en/barker","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
@@ -16007,7 +15967,6 @@
 {"start":"/c/en/bb_gun","rel":"/r/RelatedTo","end":"/c/en/spring","weight":1}
 {"start":"/c/en/bcpl","rel":"/r/RelatedTo","end":"/c/en/compiler","weight":1}
 {"start":"/c/en/bdellomicrovirus","rel":"/r/RelatedTo","end":"/c/en/virus","weight":1}
-{"start":"/c/en/be_seized_of","rel":"/r/RelatedTo","end":"/c/en/assembly","weight":1}
 {"start":"/c/en/beachcomber","rel":"/r/RelatedTo","end":"/c/en/port","weight":1}
 {"start":"/c/en/beacon","rel":"/r/RelatedTo","end":"/c/en/smartphone","weight":1}
 {"start":"/c/en/beaconing","rel":"/r/RelatedTo","end":"/c/en/network","weight":1}
@@ -16038,7 +15997,6 @@
 {"start":"/c/en/bed_of_nails","rel":"/r/RelatedTo","end":"/c/en/chip","weight":1}
 {"start":"/c/en/bed_of_nails","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/bedamn","rel":"/r/RelatedTo","end":"/c/en/iteration","weight":1}
-{"start":"/c/en/bedded_in","rel":"/r/RelatedTo","end":"/c/en/bug","weight":1}
 {"start":"/c/en/bede","rel":"/r/RelatedTo","end":"/c/en/command","weight":1}
 {"start":"/c/en/bedrive","rel":"/r/RelatedTo","end":"/c/en/commit","weight":1}
 {"start":"/c/en/bedstead","rel":"/r/RelatedTo","end":"/c/en/framework","weight":1}
@@ -16106,7 +16064,6 @@
 {"start":"/c/en/bescreen","rel":"/r/RelatedTo","end":"/c/en/screen","weight":1}
 {"start":"/c/en/besilesomab","rel":"/r/RelatedTo","end":"/c/en/mouse","weight":1}
 {"start":"/c/en/bessemer_process","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
-{"start":"/c/en/best_of","rel":"/r/RelatedTo","end":"/c/en/compilation","weight":1}
 {"start":"/c/en/bet","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":0.371,"surfaceText":"[[bet]] is related to [[transaction]]"}
 {"start":"/c/en/bet_exchange","rel":"/r/RelatedTo","end":"/c/en/website","weight":1}
 {"start":"/c/en/beta_distribution","rel":"/r/RelatedTo","end":"/c/en/parameter","weight":1}
@@ -16470,7 +16427,6 @@
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/gag","weight":0.177,"surfaceText":"[[bit]] is related to [[gag]]"}
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/guide","weight":0.135,"surfaceText":"[[bit]] is related to [[guide]]"}
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/half","weight":0.103,"surfaceText":"[[bit]] is related to [[half]]"}
-{"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/half_of","weight":0.103,"surfaceText":"[[bit]] is related to [[half of]]"}
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/hole","weight":1}
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/horse","weight":1.081,"surfaceText":"[[bit]] is related to [[horse]]"}
 {"start":"/c/en/bit","rel":"/r/RelatedTo","end":"/c/en/horse_bridle","weight":0.141,"surfaceText":"[[bit]] is related to [[horse bridle]]"}
@@ -17011,7 +16967,6 @@
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/arise","weight":1}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/arkansas","weight":1}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/arm","weight":4.38,"surfaceText":"[[branch]] is related to [[arm]]"}
-{"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/arm_of","weight":0.134,"surfaceText":"[[branch]] is related to [[arm of]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/arms","weight":1.875,"surfaceText":"[[branch]] is related to [[arms]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/attached","weight":0.151,"surfaceText":"[[branch]] is related to [[attached]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/bank","weight":2.174,"surfaceText":"[[branch]] is related to [[bank]]"}
@@ -17041,7 +16996,6 @@
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/build","weight":1}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/certificate","weight":1}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/climb","weight":0.128,"surfaceText":"[[branch]] is related to [[climb]]"}
-{"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/climb_on","weight":0.128,"surfaceText":"[[branch]] is related to [[climb on]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/climbing","weight":0.727,"surfaceText":"[[branch]] is related to [[climbing]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/climbing_trees","weight":0.419,"surfaceText":"[[branch]] is related to [[climbing trees]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/code","weight":1}
@@ -17122,7 +17076,6 @@
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves","weight":5.139,"surfaceText":"[[branch]] is related to [[leaves]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves_attached","weight":0.151,"surfaceText":"[[branch]] is related to [[leaves attached]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves_nest","weight":0.182,"surfaceText":"[[branch]] is related to [[leaves nest]]"}
-{"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves_on","weight":0.221,"surfaceText":"[[branch]] is related to [[leaves on]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves_trees","weight":0.136,"surfaceText":"[[branch]] is related to [[leaves trees]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/leaves_twigs","weight":0.384,"surfaceText":"[[branch]] is related to [[leaves twigs]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/library","weight":0.123,"surfaceText":"[[branch]] is related to [[library]]"}
@@ -17166,7 +17119,6 @@
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/out","weight":0.166,"surfaceText":"[[branch]] is related to [[out]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/outcrop","weight":0.141,"surfaceText":"[[branch]] is related to [[outcrop]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/part","weight":6.018,"surfaceText":"[[branch]] is related to [[part]]"}
-{"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/part_of","weight":0.218,"surfaceText":"[[branch]] is related to [[part of]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/part_tree","weight":1.914,"surfaceText":"[[branch]] is related to [[part tree]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/partition","weight":0.102,"surfaceText":"[[branch]] is related to [[partition]]"}
 {"start":"/c/en/branch","rel":"/r/RelatedTo","end":"/c/en/perch","weight":0.126,"surfaceText":"[[branch]] is related to [[perch]]"}
@@ -17517,7 +17469,6 @@
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/flake","weight":1}
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/flight","weight":1}
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/friend","weight":1}
-{"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/hanger_on","weight":1}
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/hemiptera","weight":1}
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/hiv","weight":1}
 {"start":"/c/en/bug","rel":"/r/RelatedTo","end":"/c/en/hobgoblin","weight":1}
@@ -17649,7 +17600,6 @@
 {"start":"/c/en/burgundy_mixture","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
 {"start":"/c/en/burl","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
 {"start":"/c/en/burn","rel":"/r/RelatedTo","end":"/c/en/rom","weight":1}
-{"start":"/c/en/burn_in","rel":"/r/RelatedTo","end":"/c/en/assembly","weight":1}
 {"start":"/c/en/burrow","rel":"/r/RelatedTo","end":"/c/en/heap","weight":1}
 {"start":"/c/en/burrows_wheeler_transform","rel":"/r/RelatedTo","end":"/c/en/algorithm","weight":1}
 {"start":"/c/en/burrows_wheeler_transform","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
@@ -17668,8 +17618,6 @@
 {"start":"/c/en/bustic","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
 {"start":"/c/en/butt","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
 {"start":"/c/en/butt_fusion","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
-{"start":"/c/en/butt_in","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
-{"start":"/c/en/butt_in","rel":"/r/RelatedTo","end":"/c/en/queue","weight":1}
 {"start":"/c/en/butt_wink","rel":"/r/RelatedTo","end":"/c/en/error","weight":1}
 {"start":"/c/en/butterfly","rel":"/r/RelatedTo","end":"/c/en/bug","weight":0.166,"surfaceText":"[[butterfly]] is related to [[bug]]"}
 {"start":"/c/en/butterfly_keyboard","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
@@ -17796,7 +17744,6 @@
 {"start":"/c/en/call_graph","rel":"/r/RelatedTo","end":"/c/en/code","weight":1}
 {"start":"/c/en/call_graph","rel":"/r/RelatedTo","end":"/c/en/subroutine","weight":1}
 {"start":"/c/en/call_number","rel":"/r/RelatedTo","end":"/c/en/library","weight":1}
-{"start":"/c/en/call_on","rel":"/r/RelatedTo","end":"/c/en/error","weight":1}
 {"start":"/c/en/call_originator","rel":"/r/RelatedTo","end":"/c/en/network","weight":1}
 {"start":"/c/en/call_sign","rel":"/r/RelatedTo","end":"/c/en/command","weight":1}
 {"start":"/c/en/call_site","rel":"/r/RelatedTo","end":"/c/en/code","weight":1}
@@ -18209,8 +18156,6 @@
 {"start":"/c/en/cheater","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
 {"start":"/c/en/check","rel":"/r/RelatedTo","end":"/c/en/list","weight":1}
 {"start":"/c/en/check_hook","rel":"/r/RelatedTo","end":"/c/en/loop","weight":1}
-{"start":"/c/en/check_in","rel":"/r/RelatedTo","end":"/c/en/repository","weight":1}
-{"start":"/c/en/check_in","rel":"/r/RelatedTo","end":"/c/en/source_code","weight":1}
 {"start":"/c/en/check_off","rel":"/r/RelatedTo","end":"/c/en/list","weight":1}
 {"start":"/c/en/check_out","rel":"/r/RelatedTo","end":"/c/en/library","weight":1}
 {"start":"/c/en/check_out","rel":"/r/RelatedTo","end":"/c/en/repository","weight":1}
@@ -18334,7 +18279,6 @@
 {"start":"/c/en/chip","rel":"/r/RelatedTo","end":"/c/en/up","weight":1}
 {"start":"/c/en/chip","rel":"/r/RelatedTo","end":"/c/en/vegetable","weight":1}
 {"start":"/c/en/chip","rel":"/r/RelatedTo","end":"/c/en/woodchip","weight":1}
-{"start":"/c/en/chip_in","rel":"/r/RelatedTo","end":"/c/en/chip","weight":1}
 {"start":"/c/en/chip_leader","rel":"/r/RelatedTo","end":"/c/en/chip","weight":1}
 {"start":"/c/en/chipcard","rel":"/r/RelatedTo","end":"/c/en/microchip","weight":1}
 {"start":"/c/en/chiphead","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
@@ -18740,7 +18684,6 @@
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/pupil_group","weight":0.171,"surfaceText":"[[class]] is related to [[pupil group]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/pupil_grouping","weight":0.102,"surfaceText":"[[class]] is related to [[pupil grouping]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/pupils","weight":0.949,"surfaceText":"[[class]] is related to [[pupils]]"}
-{"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/pupils_in","weight":0.102,"surfaceText":"[[class]] is related to [[pupils in]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/pupils_teacher","weight":0.169,"surfaceText":"[[class]] is related to [[pupils teacher]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/rank","weight":1}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/ranking","weight":0.101,"surfaceText":"[[class]] is related to [[ranking]]"}
@@ -18820,7 +18763,6 @@
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/student_time","weight":0.272,"surfaceText":"[[class]] is related to [[student time]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students","weight":5.09,"surfaceText":"[[class]] is related to [[students]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students_group","weight":0.204,"surfaceText":"[[class]] is related to [[students group]]"}
-{"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students_in","weight":0.447,"surfaceText":"[[class]] is related to [[students in]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students_room","weight":0.278,"surfaceText":"[[class]] is related to [[students room]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students_teacher","weight":0.416,"surfaceText":"[[class]] is related to [[students teacher]]"}
 {"start":"/c/en/class","rel":"/r/RelatedTo","end":"/c/en/students_teachers","weight":0.171,"surfaceText":"[[class]] is related to [[students teachers]]"}
@@ -19256,12 +19198,10 @@
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain","weight":5.907,"surfaceText":"[[cloud]] is related to [[rain]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_bearer","weight":0.102,"surfaceText":"[[cloud]] is related to [[rain bearer]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_container","weight":0.176,"surfaceText":"[[cloud]] is related to [[rain container]]"}
-{"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_from","weight":0.435,"surfaceText":"[[cloud]] is related to [[rain from]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_gathering","weight":0.277,"surfaceText":"[[cloud]] is related to [[rain gathering]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_giver","weight":0.155,"surfaceText":"[[cloud]] is related to [[rain giver]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_holder","weight":0.399,"surfaceText":"[[cloud]] is related to [[rain holder]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_home","weight":0.265,"surfaceText":"[[cloud]] is related to [[rain home]]"}
-{"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_in","weight":0.162,"surfaceText":"[[cloud]] is related to [[rain in]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_inside","weight":0.534,"surfaceText":"[[cloud]] is related to [[rain inside]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_maker","weight":0.173,"surfaceText":"[[cloud]] is related to [[rain maker]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/rain_mass","weight":0.103,"surfaceText":"[[cloud]] is related to [[rain mass]]"}
@@ -19330,7 +19270,6 @@
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/snow","weight":0.136,"surfaceText":"[[cloud]] is related to [[snow]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/snows","weight":0.185,"surfaceText":"[[cloud]] is related to [[snows]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/soft","weight":0.183,"surfaceText":"[[cloud]] is related to [[soft]]"}
-{"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/something_in","weight":0.109,"surfaceText":"[[cloud]] is related to [[something in]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/sometimes","weight":0.127,"surfaceText":"[[cloud]] is related to [[sometimes]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/source","weight":1.496,"surfaceText":"[[cloud]] is related to [[source]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/steam","weight":1}
@@ -19365,7 +19304,6 @@
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_droplets","weight":0.45,"surfaceText":"[[cloud]] is related to [[water droplets]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_evaporated","weight":0.185,"surfaceText":"[[cloud]] is related to [[water evaporated]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_holder","weight":0.18,"surfaceText":"[[cloud]] is related to [[water holder]]"}
-{"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_in","weight":0.105,"surfaceText":"[[cloud]] is related to [[water in]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_molecules","weight":0.175,"surfaceText":"[[cloud]] is related to [[water molecules]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_particles","weight":0.101,"surfaceText":"[[cloud]] is related to [[water particles]]"}
 {"start":"/c/en/cloud","rel":"/r/RelatedTo","end":"/c/en/water_sky","weight":0.282,"surfaceText":"[[cloud]] is related to [[water sky]]"}
@@ -19788,7 +19726,6 @@
 {"start":"/c/en/combinational_logic","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
 {"start":"/c/en/combinatory_logic","rel":"/r/RelatedTo","end":"/c/en/computation","weight":1}
 {"start":"/c/en/comdag","rel":"/r/RelatedTo","end":"/c/en/graph","weight":1}
-{"start":"/c/en/come_by","rel":"/r/RelatedTo","end":"/c/en/command","weight":1}
 {"start":"/c/en/comedown","rel":"/r/RelatedTo","end":"/c/en/crash","weight":1}
 {"start":"/c/en/comedy_of_manners","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
 {"start":"/c/en/comet","rel":"/r/RelatedTo","end":"/c/en/browser","weight":1}
@@ -19808,7 +19745,6 @@
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/bestow","weight":1}
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/body","weight":1}
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/chain","weight":0.298,"surfaceText":"[[command]] is related to [[chain]]"}
-{"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/chain_of","weight":0.134,"surfaceText":"[[command]] is related to [[chain of]]"}
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/claim","weight":1}
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/commanding","weight":1}
 {"start":"/c/en/command","rel":"/r/RelatedTo","end":"/c/en/compel","weight":1}
@@ -21051,7 +20987,6 @@
 {"start":"/c/en/cut","rel":"/r/RelatedTo","end":"/c/en/partition","weight":1}
 {"start":"/c/en/cut","rel":"/r/RelatedTo","end":"/c/en/queue","weight":1}
 {"start":"/c/en/cut_and_paste","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
-{"start":"/c/en/cut_in","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
 {"start":"/c/en/cut_off","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
 {"start":"/c/en/cut_out","rel":"/r/RelatedTo","end":"/c/en/circuit","weight":1}
 {"start":"/c/en/cut_short","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
@@ -22276,7 +22211,6 @@
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/book_definitions","weight":0.319,"surfaceText":"[[dictionary]] is related to [[book definitions]]"}
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/book_lexicon","weight":0.171,"surfaceText":"[[dictionary]] is related to [[book lexicon]]"}
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/book_library","weight":0.215,"surfaceText":"[[dictionary]] is related to [[book library]]"}
-{"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/book_of","weight":0.233,"surfaceText":"[[dictionary]] is related to [[book of]]"}
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/books","weight":0.363,"surfaceText":"[[dictionary]] is related to [[books]]"}
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/bookshelf","weight":0.25,"surfaceText":"[[dictionary]] is related to [[bookshelf]]"}
 {"start":"/c/en/dictionary","rel":"/r/RelatedTo","end":"/c/en/checking","weight":0.18,"surfaceText":"[[dictionary]] is related to [[checking]]"}
@@ -22863,7 +22797,6 @@
 {"start":"/c/en/double_entry","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
 {"start":"/c/en/double_exposure","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/double_fault","rel":"/r/RelatedTo","end":"/c/en/cpu","weight":1}
-{"start":"/c/en/double_opt_in","rel":"/r/RelatedTo","end":"/c/en/hyperlink","weight":1}
 {"start":"/c/en/double_precision","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/double_talk","rel":"/r/RelatedTo","end":"/c/en/code","weight":1}
 {"start":"/c/en/double_threaded","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
@@ -22968,7 +22901,6 @@
 {"start":"/c/en/drive","rel":"/r/RelatedTo","end":"/c/en/test","weight":0.157,"surfaceText":"[[drive]] is related to [[test]]"}
 {"start":"/c/en/drive_by_download","rel":"/r/RelatedTo","end":"/c/en/script","weight":1}
 {"start":"/c/en/drive_by_download","rel":"/r/RelatedTo","end":"/c/en/website","weight":1}
-{"start":"/c/en/drive_in","rel":"/r/RelatedTo","end":"/c/en/screen","weight":1}
 {"start":"/c/en/drivepipe","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
 {"start":"/c/en/driver","rel":"/r/RelatedTo","end":"/c/en/application","weight":1}
 {"start":"/c/en/driver","rel":"/r/RelatedTo","end":"/c/en/barrel","weight":1}
@@ -24449,7 +24381,6 @@
 {"start":"/c/en/filing","rel":"/r/RelatedTo","end":"/c/en/file","weight":1}
 {"start":"/c/en/filipendulous","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
 {"start":"/c/en/fill","rel":"/r/RelatedTo","end":"/c/en/container","weight":1}
-{"start":"/c/en/fill_in","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/fill_out","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/filler","rel":"/r/RelatedTo","end":"/c/en/cobol","weight":1}
 {"start":"/c/en/filler","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
@@ -24773,7 +24704,6 @@
 {"start":"/c/en/fly","rel":"/r/RelatedTo","end":"/c/en/bug","weight":3.315,"surfaceText":"[[fly]] is related to [[bug]]"}
 {"start":"/c/en/fly","rel":"/r/RelatedTo","end":"/c/en/process","weight":0.162,"surfaceText":"[[fly]] is related to [[process]]"}
 {"start":"/c/en/fly_couch","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
-{"start":"/c/en/fly_in","rel":"/r/RelatedTo","end":"/c/en/application","weight":1}
 {"start":"/c/en/flyer","rel":"/r/RelatedTo","end":"/c/en/information","weight":0.121,"surfaceText":"[[flyer]] is related to [[information]]"}
 {"start":"/c/en/flyer","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
 {"start":"/c/en/flying_bridge","rel":"/r/RelatedTo","end":"/c/en/port","weight":1}
@@ -26367,7 +26297,6 @@
 {"start":"/c/en/home","rel":"/r/RelatedTo","end":"/c/en/mouse","weight":0.161,"surfaceText":"[[home]] is related to [[mouse]]"}
 {"start":"/c/en/home_directory","rel":"/r/RelatedTo","end":"/c/en/directory","weight":1}
 {"start":"/c/en/home_directory","rel":"/r/RelatedTo","end":"/c/en/file","weight":1}
-{"start":"/c/en/home_in_on","rel":"/r/RelatedTo","end":"/c/en/error","weight":1}
 {"start":"/c/en/home_row","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/home_row","rel":"/r/RelatedTo","end":"/c/en/keyboard","weight":1}
 {"start":"/c/en/home_shopping","rel":"/r/RelatedTo","end":"/c/en/internet","weight":1}
@@ -27660,7 +27589,6 @@
 {"start":"/c/en/j_curve","rel":"/r/RelatedTo","end":"/c/en/graph","weight":1}
 {"start":"/c/en/jacaranda","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
 {"start":"/c/en/jack","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
-{"start":"/c/en/jack_in","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/jack_o_lantern","rel":"/r/RelatedTo","end":"/c/en/shell","weight":1}
 {"start":"/c/en/jack_sinker","rel":"/r/RelatedTo","end":"/c/en/loop","weight":1}
 {"start":"/c/en/jack_sinker","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
@@ -27918,7 +27846,6 @@
 {"start":"/c/en/kedani","rel":"/r/RelatedTo","end":"/c/en/vector","weight":1}
 {"start":"/c/en/keelage","rel":"/r/RelatedTo","end":"/c/en/port","weight":1}
 {"start":"/c/en/keeling_curve","rel":"/r/RelatedTo","end":"/c/en/graph","weight":1}
-{"start":"/c/en/keep_tabs_on","rel":"/r/RelatedTo","end":"/c/en/monitor","weight":1}
 {"start":"/c/en/keep_track","rel":"/r/RelatedTo","end":"/c/en/monitor","weight":1}
 {"start":"/c/en/keepsake","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/keg","rel":"/r/RelatedTo","end":"/c/en/container","weight":1}
@@ -28012,7 +27939,6 @@
 {"start":"/c/en/key","rel":"/r/RelatedTo","end":"/c/en/index","weight":1}
 {"start":"/c/en/key","rel":"/r/RelatedTo","end":"/c/en/keyboard","weight":1}
 {"start":"/c/en/key","rel":"/r/RelatedTo","end":"/c/en/password","weight":1}
-{"start":"/c/en/key_in","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
 {"start":"/c/en/key_logger","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
 {"start":"/c/en/key_logger","rel":"/r/RelatedTo","end":"/c/en/hardware","weight":1}
 {"start":"/c/en/key_logger","rel":"/r/RelatedTo","end":"/c/en/keyboard","weight":1}
@@ -28149,7 +28075,6 @@
 {"start":"/c/en/knitting","rel":"/r/RelatedTo","end":"/c/en/thread","weight":0.102,"surfaceText":"[[knitting]] is related to [[thread]]"}
 {"start":"/c/en/knittle","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
 {"start":"/c/en/knob_and_tube","rel":"/r/RelatedTo","end":"/c/en/hardware","weight":1}
-{"start":"/c/en/knock_on","rel":"/r/RelatedTo","end":"/c/en/commit","weight":1}
 {"start":"/c/en/knot","rel":"/r/RelatedTo","end":"/c/en/branch","weight":1}
 {"start":"/c/en/knot","rel":"/r/RelatedTo","end":"/c/en/loop","weight":1}
 {"start":"/c/en/knot","rel":"/r/RelatedTo","end":"/c/en/node","weight":1}
@@ -28361,7 +28286,6 @@
 {"start":"/c/en/lawn_billiards","rel":"/r/RelatedTo","end":"/c/en/port","weight":1}
 {"start":"/c/en/laws_number","rel":"/r/RelatedTo","end":"/c/en/code","weight":1}
 {"start":"/c/en/lay","rel":"/r/RelatedTo","end":"/c/en/chip","weight":0.26,"surfaceText":"[[lay]] is related to [[chip]]"}
-{"start":"/c/en/lay_by","rel":"/r/RelatedTo","end":"/c/en/driver","weight":1}
 {"start":"/c/en/lay_eggs","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
 {"start":"/c/en/lay_foundation","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/lay_open","rel":"/r/RelatedTo","end":"/c/en/application","weight":1}
@@ -28374,7 +28298,6 @@
 {"start":"/c/en/lead","rel":"/r/RelatedTo","end":"/c/en/circuit","weight":1}
 {"start":"/c/en/lead","rel":"/r/RelatedTo","end":"/c/en/command","weight":1}
 {"start":"/c/en/lead","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":0.448,"surfaceText":"[[lead]] is related to [[pipe]]"}
-{"start":"/c/en/lead_in","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
 {"start":"/c/en/lead_out","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
 {"start":"/c/en/lead_out","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/lead_out","rel":"/r/RelatedTo","end":"/c/en/session","weight":1}
@@ -28592,7 +28515,6 @@
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/many_books","weight":1.53,"surfaceText":"[[library]] is related to [[many books]]"}
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/out","weight":0.268,"surfaceText":"[[library]] is related to [[out]]"}
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/place","weight":2.826,"surfaceText":"[[library]] is related to [[place]]"}
-{"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/place_for","weight":0.167,"surfaceText":"[[library]] is related to [[place for]]"}
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/plenty","weight":0.219,"surfaceText":"[[library]] is related to [[plenty]]"}
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/plenty_books","weight":0.219,"surfaceText":"[[library]] is related to [[plenty books]]"}
 {"start":"/c/en/library","rel":"/r/RelatedTo","end":"/c/en/public","weight":0.836,"surfaceText":"[[library]] is related to [[public]]"}
@@ -28979,8 +28901,6 @@
 {"start":"/c/en/loft","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/log","rel":"/r/RelatedTo","end":"/c/en/compilation","weight":1}
 {"start":"/c/en/log","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
-{"start":"/c/en/log_in","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
-{"start":"/c/en/log_in","rel":"/r/RelatedTo","end":"/c/en/password","weight":1}
 {"start":"/c/en/log_linear","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
 {"start":"/c/en/log_linear","rel":"/r/RelatedTo","end":"/c/en/parameter","weight":1}
 {"start":"/c/en/log_scaler","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
@@ -29074,7 +28994,6 @@
 {"start":"/c/en/longword","rel":"/r/RelatedTo","end":"/c/en/variable","weight":1}
 {"start":"/c/en/look","rel":"/r/RelatedTo","end":"/c/en/function","weight":0.287,"surfaceText":"[[look]] is related to [[function]]"}
 {"start":"/c/en/look","rel":"/r/RelatedTo","end":"/c/en/searching","weight":0.187,"surfaceText":"[[look]] is related to [[searching]]"}
-{"start":"/c/en/look_in_on","rel":"/r/RelatedTo","end":"/c/en/monitor","weight":1}
 {"start":"/c/en/look_over","rel":"/r/RelatedTo","end":"/c/en/error","weight":1}
 {"start":"/c/en/look_up","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/lookahead","rel":"/r/RelatedTo","end":"/c/en/algorithm","weight":1}
@@ -32500,7 +32419,6 @@
 {"start":"/c/en/page_fault","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/page_flow","rel":"/r/RelatedTo","end":"/c/en/directory","weight":1}
 {"start":"/c/en/page_flow","rel":"/r/RelatedTo","end":"/c/en/file","weight":1}
-{"start":"/c/en/page_in","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/page_out","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/page_table","rel":"/r/RelatedTo","end":"/c/en/data_structure","weight":1}
 {"start":"/c/en/pagerank","rel":"/r/RelatedTo","end":"/c/en/algorithm","weight":1}
@@ -32807,7 +32725,6 @@
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/gain","weight":1}
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
-{"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/log_in","weight":1}
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/login","weight":1}
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/network","weight":1}
 {"start":"/c/en/password","rel":"/r/RelatedTo","end":"/c/en/passphrase","weight":1}
@@ -33150,7 +33067,6 @@
 {"start":"/c/en/phoenix","rel":"/r/RelatedTo","end":"/c/en/spring","weight":1}
 {"start":"/c/en/phone","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
 {"start":"/c/en/phone","rel":"/r/RelatedTo","end":"/c/en/version","weight":0.133,"surfaceText":"[[phone]] is related to [[version]]"}
-{"start":"/c/en/phone_in","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/phonebook","rel":"/r/RelatedTo","end":"/c/en/directory","weight":1}
 {"start":"/c/en/phonemic_merger","rel":"/r/RelatedTo","end":"/c/en/merge","weight":1}
 {"start":"/c/en/phoneticize","rel":"/r/RelatedTo","end":"/c/en/script","weight":1}
@@ -33584,15 +33500,11 @@
 {"start":"/c/en/plug","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/plug_and_play","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/plug_and_play","rel":"/r/RelatedTo","end":"/c/en/hardware","weight":2}
-{"start":"/c/en/plug_in","rel":"/r/RelatedTo","end":"/c/en/circuit","weight":1}
-{"start":"/c/en/plug_in","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
-{"start":"/c/en/plug_in","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/plug_out","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/plugboard","rel":"/r/RelatedTo","end":"/c/en/circuit","weight":1}
 {"start":"/c/en/plugfest","rel":"/r/RelatedTo","end":"/c/en/hardware","weight":1}
 {"start":"/c/en/plugfest","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/pluggable","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
-{"start":"/c/en/plugged_in","rel":"/r/RelatedTo","end":"/c/en/socket","weight":1}
 {"start":"/c/en/plumber","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/plumber","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
 {"start":"/c/en/plumbing","rel":"/r/RelatedTo","end":"/c/en/pipe","weight":1}
@@ -34239,7 +34151,6 @@
 {"start":"/c/en/printing","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/printing_form","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/printing_form","rel":"/r/RelatedTo","end":"/c/en/screen","weight":1}
-{"start":"/c/en/printing_in","rel":"/r/RelatedTo","end":"/c/en/cloud","weight":1}
 {"start":"/c/en/printwheel","rel":"/r/RelatedTo","end":"/c/en/disk","weight":1}
 {"start":"/c/en/prior_art","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/prioritarianism","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
@@ -34986,7 +34897,6 @@
 {"start":"/c/en/quicksort","rel":"/r/RelatedTo","end":"/c/en/algorithm","weight":1}
 {"start":"/c/en/quicksort","rel":"/r/RelatedTo","end":"/c/en/partition","weight":1}
 {"start":"/c/en/quickstart","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
-{"start":"/c/en/quids_in","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
 {"start":"/c/en/quiet","rel":"/r/RelatedTo","end":"/c/en/library","weight":1,"surfaceText":"[[quiet]] is related to [[library]]"}
 {"start":"/c/en/quill","rel":"/r/RelatedTo","end":"/c/en/thread","weight":1}
 {"start":"/c/en/quill_bit","rel":"/r/RelatedTo","end":"/c/en/bit","weight":1}
@@ -35511,7 +35421,6 @@
 {"start":"/c/en/refined","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/refinement","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
 {"start":"/c/en/reflash","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
-{"start":"/c/en/reflect_on","rel":"/r/RelatedTo","end":"/c/en/data_type","weight":1}
 {"start":"/c/en/reflectogram","rel":"/r/RelatedTo","end":"/c/en/data","weight":1}
 {"start":"/c/en/reflector","rel":"/r/RelatedTo","end":"/c/en/disk","weight":1}
 {"start":"/c/en/reflex_hammer","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
@@ -36792,7 +36701,6 @@
 {"start":"/c/en/screen","rel":"/r/RelatedTo","end":"/c/en/wire","weight":1}
 {"start":"/c/en/screen_capture","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/screen_free","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
-{"start":"/c/en/screen_in","rel":"/r/RelatedTo","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screen_motion_capture","rel":"/r/RelatedTo","end":"/c/en/screen","weight":1}
 {"start":"/c/en/screen_motion_capture","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
 {"start":"/c/en/screen_name","rel":"/r/RelatedTo","end":"/c/en/internet","weight":1}
@@ -37246,7 +37154,6 @@
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/interaction","weight":1}
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/jam_session","weight":1}
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/legislative","weight":1}
-{"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/log_in","weight":1}
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/lunch","weight":1}
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/meeting","weight":1}
 {"start":"/c/en/session","rel":"/r/RelatedTo","end":"/c/en/period","weight":1}
@@ -37685,12 +37592,7 @@
 {"start":"/c/en/sign","rel":"/r/RelatedTo","end":"/c/en/object","weight":0.106,"surfaceText":"[[sign]] is related to [[object]]"}
 {"start":"/c/en/sign","rel":"/r/RelatedTo","end":"/c/en/pointer","weight":0.168,"surfaceText":"[[sign]] is related to [[pointer]]"}
 {"start":"/c/en/sign_bit","rel":"/r/RelatedTo","end":"/c/en/bit","weight":1}
-{"start":"/c/en/sign_in","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
-{"start":"/c/en/sign_in","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/sign_off","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
-{"start":"/c/en/sign_on","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
-{"start":"/c/en/sign_on","rel":"/r/RelatedTo","end":"/c/en/password","weight":1}
-{"start":"/c/en/sign_on","rel":"/r/RelatedTo","end":"/c/en/script","weight":1}
 {"start":"/c/en/sign_out","rel":"/r/RelatedTo","end":"/c/en/computer","weight":1}
 {"start":"/c/en/sign_out","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/sign_up","rel":"/r/RelatedTo","end":"/c/en/list","weight":1}
@@ -37800,7 +37702,6 @@
 {"start":"/c/en/sister","rel":"/r/RelatedTo","end":"/c/en/data_structure","weight":1}
 {"start":"/c/en/sister","rel":"/r/RelatedTo","end":"/c/en/node","weight":1}
 {"start":"/c/en/sit","rel":"/r/RelatedTo","end":"/c/en/session","weight":1}
-{"start":"/c/en/sit_in_on","rel":"/r/RelatedTo","end":"/c/en/class","weight":1}
 {"start":"/c/en/site","rel":"/r/RelatedTo","end":"/c/en/internet","weight":1}
 {"start":"/c/en/site","rel":"/r/RelatedTo","end":"/c/en/website","weight":1}
 {"start":"/c/en/site_map","rel":"/r/RelatedTo","end":"/c/en/webpage","weight":1}
@@ -38638,7 +38539,6 @@
 {"start":"/c/en/stamnos","rel":"/r/RelatedTo","end":"/c/en/container","weight":1}
 {"start":"/c/en/stanchion","rel":"/r/RelatedTo","end":"/c/en/framework","weight":1}
 {"start":"/c/en/stand","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
-{"start":"/c/en/stand_up_to","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/standard","rel":"/r/RelatedTo","end":"/c/en/tree","weight":1}
 {"start":"/c/en/standard_gravity","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/standard_port","rel":"/r/RelatedTo","end":"/c/en/port","weight":1}
@@ -39366,7 +39266,6 @@
 {"start":"/c/en/swap_file","rel":"/r/RelatedTo","end":"/c/en/disk","weight":1}
 {"start":"/c/en/swap_file","rel":"/r/RelatedTo","end":"/c/en/file","weight":1}
 {"start":"/c/en/swap_file","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
-{"start":"/c/en/swap_in","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/swap_out","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/swap_spit","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/swapper","rel":"/r/RelatedTo","end":"/c/en/software","weight":1}
@@ -39645,7 +39544,6 @@
 {"start":"/c/en/take_away","rel":"/r/RelatedTo","end":"/c/en/memory","weight":1}
 {"start":"/c/en/take_exception","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/take_for_spin","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
-{"start":"/c/en/take_in","rel":"/r/RelatedTo","end":"/c/en/process","weight":1}
 {"start":"/c/en/take_number","rel":"/r/RelatedTo","end":"/c/en/queue","weight":1}
 {"start":"/c/en/takedown","rel":"/r/RelatedTo","end":"/c/en/website","weight":1}
 {"start":"/c/en/takic","rel":"/r/RelatedTo","end":"/c/en/branch","weight":1}
@@ -40186,7 +40084,6 @@
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/questionnaire","weight":0.199,"surfaceText":"[[test]] is related to [[questionnaire]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/questions","weight":4.273,"surfaceText":"[[test]] is related to [[questions]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/questions_answers","weight":0.484,"surfaceText":"[[test]] is related to [[questions answers]]"}
-{"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/questions_in","weight":0.262,"surfaceText":"[[test]] is related to [[questions in]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/quiz","weight":7.795,"surfaceText":"[[test]] is related to [[quiz]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/quiz_exam","weight":0.961,"surfaceText":"[[test]] is related to [[quiz exam]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/quizzes","weight":0.159,"surfaceText":"[[test]] is related to [[quizzes]]"}
@@ -40244,7 +40141,6 @@
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/students_examination","weight":0.184,"surfaceText":"[[test]] is related to [[students examination]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/students_take","weight":0.136,"surfaceText":"[[test]] is related to [[students take]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/study","weight":0.133,"surfaceText":"[[test]] is related to [[study]]"}
-{"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/study_for","weight":0.133,"surfaceText":"[[test]] is related to [[study for]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/studying","weight":0.187,"surfaceText":"[[test]] is related to [[studying]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/take","weight":0.136,"surfaceText":"[[test]] is related to [[take]]"}
 {"start":"/c/en/test","rel":"/r/RelatedTo","end":"/c/en/teacher","weight":0.131,"surfaceText":"[[test]] is related to [[teacher]]"}
@@ -40800,7 +40696,6 @@
 {"start":"/c/en/trade","rel":"/r/RelatedTo","end":"/c/en/thread","weight":0.111,"surfaceText":"[[trade]] is related to [[thread]]"}
 {"start":"/c/en/trade","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1.325,"surfaceText":"[[trade]] is related to [[transaction]]"}
 {"start":"/c/en/trade_dress","rel":"/r/RelatedTo","end":"/c/en/register","weight":1}
-{"start":"/c/en/trade_in","rel":"/r/RelatedTo","end":"/c/en/transaction","weight":1}
 {"start":"/c/en/trade_name","rel":"/r/RelatedTo","end":"/c/en/register","weight":1}
 {"start":"/c/en/trade_newspaper","rel":"/r/RelatedTo","end":"/c/en/information","weight":1}
 {"start":"/c/en/trade_secret","rel":"/r/RelatedTo","end":"/c/en/compilation","weight":1}
@@ -41129,7 +41024,6 @@
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/leaves","weight":5.531,"surfaceText":"[[tree]] is related to [[leaves]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/leaves_bark","weight":0.337,"surfaceText":"[[tree]] is related to [[leaves bark]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/leaves_branches","weight":1.047,"surfaceText":"[[tree]] is related to [[leaves branches]]"}
-{"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/leaves_on","weight":0.103,"surfaceText":"[[tree]] is related to [[leaves on]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/leaves_trunk","weight":0.346,"surfaceText":"[[tree]] is related to [[leaves trunk]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/lenormand","weight":1}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/like","weight":0.165,"surfaceText":"[[tree]] is related to [[like]]"}
@@ -41179,7 +41073,6 @@
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/recursive","weight":1}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/reminiscent","weight":1}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/rodent","weight":0.179,"surfaceText":"[[tree]] is related to [[rodent]]"}
-{"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/rodent_in","weight":0.179,"surfaceText":"[[tree]] is related to [[rodent in]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/roots","weight":0.747,"surfaceText":"[[tree]] is related to [[roots]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/roots_branches","weight":0.152,"surfaceText":"[[tree]] is related to [[roots branches]]"}
 {"start":"/c/en/tree","rel":"/r/RelatedTo","end":"/c/en/roots_leaves","weight":0.173,"surfaceText":"[[tree]] is related to [[roots leaves]]"}
@@ -41431,8 +41324,6 @@
 {"start":"/c/en/truthiness","rel":"/r/RelatedTo","end":"/c/en/boolean","weight":1}
 {"start":"/c/en/truthy","rel":"/r/RelatedTo","end":"/c/en/boolean","weight":1}
 {"start":"/c/en/try","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
-{"start":"/c/en/try_it_on","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
-{"start":"/c/en/try_on","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/try_out","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/tryout","rel":"/r/RelatedTo","end":"/c/en/test","weight":1}
 {"start":"/c/en/tryte","rel":"/r/RelatedTo","end":"/c/en/byte","weight":1}
@@ -41585,7 +41476,6 @@
 {"start":"/c/en/type_erasure","rel":"/r/RelatedTo","end":"/c/en/data_type","weight":1}
 {"start":"/c/en/type_erasure","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/type_hinting","rel":"/r/RelatedTo","end":"/c/en/variable","weight":1}
-{"start":"/c/en/type_in","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/type_inference","rel":"/r/RelatedTo","end":"/c/en/programming_language","weight":1}
 {"start":"/c/en/type_introspection","rel":"/r/RelatedTo","end":"/c/en/object","weight":1}
 {"start":"/c/en/type_out","rel":"/r/RelatedTo","end":"/c/en/keyboard","weight":1}
@@ -42567,7 +42457,6 @@
 {"start":"/c/en/wabbit","rel":"/r/RelatedTo","end":"/c/en/program","weight":1}
 {"start":"/c/en/wabbit","rel":"/r/RelatedTo","end":"/c/en/virus","weight":1}
 {"start":"/c/en/wada_test","rel":"/r/RelatedTo","end":"/c/en/function","weight":1}
-{"start":"/c/en/wade_in","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
 {"start":"/c/en/wafer","rel":"/r/RelatedTo","end":"/c/en/circuit","weight":1}
 {"start":"/c/en/wafer","rel":"/r/RelatedTo","end":"/c/en/cookie","weight":1}
 {"start":"/c/en/wafer","rel":"/r/RelatedTo","end":"/c/en/semiconductor","weight":1}
@@ -42583,7 +42472,6 @@
 {"start":"/c/en/wald","rel":"/r/RelatedTo","end":"/c/en/command","weight":1}
 {"start":"/c/en/walk","rel":"/r/RelatedTo","end":"/c/en/method","weight":0.106,"surfaceText":"[[walk]] is related to [[method]]"}
 {"start":"/c/en/walk_dog","rel":"/r/RelatedTo","end":"/c/en/string","weight":1}
-{"start":"/c/en/walk_in_on","rel":"/r/RelatedTo","end":"/c/en/interrupt","weight":1}
 {"start":"/c/en/walking_bus","rel":"/r/RelatedTo","end":"/c/en/driver","weight":1}
 {"start":"/c/en/walking_frame","rel":"/r/RelatedTo","end":"/c/en/framework","weight":1}
 {"start":"/c/en/walkthrough","rel":"/r/RelatedTo","end":"/c/en/algorithm","weight":1}
@@ -43447,7 +43335,6 @@
 {"start":"/c/en/accumulate","rel":"/r/Synonym","end":"/c/en/heap","weight":1}
 {"start":"/c/en/acervate","rel":"/r/Synonym","end":"/c/en/heap","weight":1}
 {"start":"/c/en/action","rel":"/r/Synonym","end":"/c/en/process","weight":1}
-{"start":"/c/en/add_in","rel":"/r/Synonym","end":"/c/en/circuit_board","weight":2,"surfaceText":"[[add-in]] is a synonym of [[circuit board]]"}
 {"start":"/c/en/aggregate","rel":"/r/Synonym","end":"/c/en/cluster","weight":1}
 {"start":"/c/en/agreement","rel":"/r/Synonym","end":"/c/en/concurrency","weight":1}
 {"start":"/c/en/ai","rel":"/r/Synonym","end":"/c/en/artificial_intelligence","weight":2,"surfaceText":"[[AI]] is a synonym of [[artificial intelligence]]"}
@@ -43740,7 +43627,6 @@
 {"start":"/c/en/cow_chip","rel":"/r/Synonym","end":"/c/en/chip","weight":2,"surfaceText":"[[cow chip]] is a synonym of [[chip]]"}
 {"start":"/c/en/cow_dung","rel":"/r/Synonym","end":"/c/en/chip","weight":2,"surfaceText":"[[cow dung]] is a synonym of [[chip]]"}
 {"start":"/c/en/cpu","rel":"/r/Synonym","end":"/c/en/central_processing_unit","weight":2,"surfaceText":"[[CPU]] is a synonym of [[central processing unit]]"}
-{"start":"/c/en/crash","rel":"/r/Synonym","end":"/c/en/barge_in","weight":2,"surfaceText":"[[crash]] is a synonym of [[barge in]]"}
 {"start":"/c/en/crash","rel":"/r/Synonym","end":"/c/en/clang","weight":2,"surfaceText":"[[crash]] is a synonym of [[clang]]"}
 {"start":"/c/en/crash","rel":"/r/Synonym","end":"/c/en/doss","weight":2,"surfaceText":"[[crash]] is a synonym of [[doss]]"}
 {"start":"/c/en/crisp","rel":"/r/Synonym","end":"/c/en/chip","weight":2,"surfaceText":"[[crisp]] is a synonym of [[chip]]"}
@@ -44181,7 +44067,6 @@
 {"start":"/c/en/ple","rel":"/r/Synonym","end":"/c/en/tuple","weight":1}
 {"start":"/c/en/pleomorphism","rel":"/r/Synonym","end":"/c/en/polymorphism","weight":2,"surfaceText":"[[pleomorphism]] is a synonym of [[polymorphism]]"}
 {"start":"/c/en/plot","rel":"/r/Synonym","end":"/c/en/graph","weight":1}
-{"start":"/c/en/plug_in","rel":"/r/Synonym","end":"/c/en/circuit_board","weight":2,"surfaceText":"[[plug-in]] is a synonym of [[circuit board]]"}
 {"start":"/c/en/pointer","rel":"/r/Synonym","end":"/c/en/arrow","weight":2,"surfaceText":"[[pointer]] is a synonym of [[arrow]]"}
 {"start":"/c/en/pointer","rel":"/r/Synonym","end":"/c/en/cursor","weight":2,"surfaceText":"[[pointer]] is a synonym of [[cursor]]"}
 {"start":"/c/en/pointer","rel":"/r/Synonym","end":"/c/en/fescue","weight":1}
@@ -44590,7 +44475,6 @@
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/cool_temperature","weight":1,"surfaceText":"You can use [[a cloud]] to [[cool the temperature]]"}
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/dreaming","weight":1,"surfaceText":"[[a cloud]] is for [[dreaming]]"}
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/exercise_childs_imagination","weight":1,"surfaceText":"You can use [[a cloud]] to [[exercise a childs' imagination]]"}
-{"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/get_rain_from","weight":1,"surfaceText":"You can use [[a cloud]] to [[get rain from]]"}
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/hail","weight":1,"surfaceText":"[[a cloud]] is for [[hail]]"}
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/hide_plane","weight":1,"surfaceText":"You can use [[a cloud]] to [[hide a plane]]"}
 {"start":"/c/en/cloud","rel":"/r/UsedFor","end":"/c/en/hiding_sun","weight":1,"surfaceText":"[[a cloud]] is for [[hiding the sun]]"}
@@ -44729,7 +44613,6 @@
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/chemistry_experiments","weight":1,"surfaceText":"[[a flask]] is for [[chemistry experiments]]"}
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/dispense_liquid","weight":1,"surfaceText":"You can use [[a flask]] to [[dispense liquid]]"}
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/drinking","weight":2.828,"surfaceText":"[[a flask]] is used for [[drinking]]"}
-{"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/drinking_from","weight":1,"surfaceText":"[[a flask]] is for [[drinking from]]"}
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/for_storing_liquids","weight":1,"surfaceText":"[[a flask]] is used for [[for storing liquids]]"}
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/hold_liquid","weight":2.828,"surfaceText":"You can use [[a flask]] to [[hold liquid]]"}
 {"start":"/c/en/flask","rel":"/r/UsedFor","end":"/c/en/hold_whisky","weight":1,"surfaceText":"You can use [[a flask]] to [[hold whisky]]"}
@@ -44781,7 +44664,6 @@
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/storing_keys","weight":1,"surfaceText":"[[a keyboard]] is for [[storing keys]]"}
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/type","weight":1,"surfaceText":"You can use [[a keyboard]] to [[type]]"}
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/type_letter","weight":2,"surfaceText":"You can use [[a keyboard]] to [[type a letter]]"}
-{"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/type_on","weight":1,"surfaceText":"[[a keyboard]] is used to [[type on]]"}
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/typing","weight":9.165,"surfaceText":"[[A keyboard ]] is for [[typing]]"}
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/work","weight":1,"surfaceText":"[[keyboard]] is for [[work]]"}
 {"start":"/c/en/keyboard","rel":"/r/UsedFor","end":"/c/en/writing_text","weight":1,"surfaceText":"[[a keyboard]] is for [[writing text]]"}
@@ -44828,7 +44710,6 @@
 {"start":"/c/en/mechanism","rel":"/r/UsedFor","end":"/c/en/function","weight":2,"surfaceText":"[[mechanism]] is used for [[function]]"}
 {"start":"/c/en/memory","rel":"/r/UsedFor","end":"/c/en/function","weight":2,"surfaceText":"[[memory]] is used for [[function]]"}
 {"start":"/c/en/motherboard","rel":"/r/UsedFor","end":"/c/en/addressing_memory","weight":1,"surfaceText":"[[a motherboard]] is for [[addressing memory]]"}
-{"start":"/c/en/motherboard","rel":"/r/UsedFor","end":"/c/en/base_computer_on","weight":1,"surfaceText":"You can use [[a motherboard]] to [[base a computer on]]"}
 {"start":"/c/en/motherboard","rel":"/r/UsedFor","end":"/c/en/computers","weight":1,"surfaceText":"[[a motherboard]] is for [[computers]]"}
 {"start":"/c/en/motherboard","rel":"/r/UsedFor","end":"/c/en/computing_machines","weight":1,"surfaceText":"[[a motherboard]] is used for [[computing machines]]"}
 {"start":"/c/en/motherboard","rel":"/r/UsedFor","end":"/c/en/controlling_computer","weight":1,"surfaceText":"[[a motherboard]] is for [[controlling a computer]]"}
@@ -44906,7 +44787,6 @@
 {"start":"/c/en/telephone_book","rel":"/r/UsedFor","end":"/c/en/directory","weight":1,"surfaceText":"[[a telephone book]] is for [[directory]]"}
 {"start":"/c/en/term_paper","rel":"/r/UsedFor","end":"/c/en/class","weight":1,"surfaceText":"[[A term paper]] is for [[a class]]"}
 {"start":"/c/en/thinking","rel":"/r/UsedFor","end":"/c/en/sorting","weight":1,"surfaceText":"[[thinking]] is for [[sorting]]"}
-{"start":"/c/en/thread","rel":"/r/UsedFor","end":"/c/en/sew_with","weight":1,"surfaceText":"[[thread]] can be used to [[sew with]]"}
 {"start":"/c/en/thread","rel":"/r/UsedFor","end":"/c/en/sewing","weight":2,"surfaceText":"[[thread]] is used for [[sewing]]"}
 {"start":"/c/en/title","rel":"/r/UsedFor","end":"/c/en/information","weight":1,"surfaceText":"[[a title]] is used for [[information]]"}
 {"start":"/c/en/tree","rel":"/r/UsedFor","end":"/c/en/add_beauty","weight":1,"surfaceText":"You can use [[a tree]] to [[add beauty]]"}
