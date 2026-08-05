@@ -343,23 +343,17 @@ status` shows changes under `infra/` only.
 
 - **M1** — done, verified 2026-08-05: custom social preview live (serves from
   repository-images.githubusercontent.com, not GitHub's auto-generated card).
-- **M2** — the recording itself is automated: `npm run capture:hero` writes a 75-second
-  silent 1280x640 `clips/hero-mudiii.webm` from a local build, and CI's `capture:hero`
-  job records the same clip off the deployed site and keeps it as an artifact for a week.
-  What is left by hand: convert the webm to MP4 (`ffmpeg -i clips/hero-mudiii.webm -c:v
-  libx264 -pix_fmt yuv420p -movflags +faststart -an clips/hero-mudiii.mp4`) and a looping
-  GIF, place the MP4 at `public/media/hero-mudiii.mp4`, then add
-  `<source src="media/hero-mudiii.mp4" type="video/mp4">` inside the hero
-  `<video>` in `public/index.html` (the video element ships source-less and
-  shows its poster until then).
+- **M2** — done 2026-08-05: the clip is committed (`clips/`, with the regeneration
+  prompt in `clips/README.md`), the MP4 ships at `public/media/hero-mudiii.mp4`, and the
+  hero `<video>` carries its `<source>`. `npm run capture:hero` re-records locally and
+  CI's `capture:hero` job re-records off the deployed site after each deploy.
 - **M3** — done, verified 2026-08-05: About panel has the website link
   (`https://tmct.polycode.co.uk`), the drafted description verbatim, and all seven listed
   topics (`symbolic-ai`, `knowledge-graph`, `owl`, `rdf`, `provenance`, `no-llm`, `eliza`);
   an eighth topic, `symbolic-artificial-intelligence`, is also present but wasn't on the list.
-- **M4** — repo pin verified 2026-08-05 (the-mechanical-code-talker is pinned on
-  github.com/polycode-public), but the profile README is not live: it's committed at
-  `.github/README.md` in the `polycode-public/.github` repo, and GitHub only renders an org
-  profile README from `.github/profile/README.md`. Move the file to that path to finish M4.
+- **M4** — done, verified 2026-08-05: the profile README was moved to
+  `profile/README.md` in the `polycode-public/.github` repo and the org page now renders
+  it; the-mechanical-code-talker is pinned.
 
 ## Launch sequencing
 

@@ -153,7 +153,3 @@ electron/renderer/
 # image compared pixel-to-pixel and never committed.
 .screenshots/
 
-# `npm run capture:hero` writes the recorded hero clip here, and the CI capture
-# job uploads it as a build artifact. Video is heavy and re-recordable, so it
-# stays out of the repo.
-clips/
