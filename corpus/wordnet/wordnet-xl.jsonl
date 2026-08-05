@@ -1,4 +1,4 @@
-{"start":"/c/en/a","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[a]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/a","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[a]] IsA [[roman letter]]"}
 {"start":"/c/en/a-list","rel":"/r/IsA","end":"/c/en/list","weight":1,"surfaceText":"[[A-list]] IsA [[list]]"}
 {"start":"/c/en/a.m.","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[A.M.]] IsA [[time period]]"}
 {"start":"/c/en/aalii","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[aalii]] IsA [[tree]]"}
@@ -256,7 +256,7 @@
 {"start":"/c/en/alderwoman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[alderwoman]] IsA [[woman]]"}
 {"start":"/c/en/aldol","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[aldol]] IsA [[organic compound]]"}
 {"start":"/c/en/alendronate","rel":"/r/IsA","end":"/c/en/medicament","weight":1,"surfaceText":"[[alendronate]] IsA [[medicament]]"}
-{"start":"/c/en/aleph","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[aleph]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/aleph","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[aleph]] IsA [[hebrew letter]]"}
 {"start":"/c/en/aleph-null","rel":"/r/IsA","end":"/c/en/large_integer","weight":1,"surfaceText":"[[aleph-null]] IsA [[large integer]]"}
 {"start":"/c/en/alexander","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[alexander]] IsA [[herb]]"}
 {"start":"/c/en/algerian","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Algerian]] IsA [[African]]"}
@@ -297,7 +297,7 @@
 {"start":"/c/en/almond_extract","rel":"/r/IsA","end":"/c/en/flavorer","weight":1,"surfaceText":"[[almond extract]] IsA [[flavorer]]"}
 {"start":"/c/en/almond_tree","rel":"/r/IsA","end":"/c/en/fruit_tree","weight":1,"surfaceText":"[[almond tree]] IsA [[fruit tree]]"}
 {"start":"/c/en/alpaca_(artifact)","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[alpaca (artifact)]] IsA [[fabric]]"}
-{"start":"/c/en/alpha","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[alpha]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/alpha","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[alpha]] IsA [[greek letter]]"}
 {"start":"/c/en/alphabetize_(possession)","rel":"/r/IsA","end":"/c/en/supply_(possession)","weight":1,"surfaceText":"[[alphabetize (possession)]] IsA [[supply (possession)]]"}
 {"start":"/c/en/alpine_azalea","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[alpine azalea]] IsA [[shrub]]"}
 {"start":"/c/en/alpine_coltsfoot","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[alpine coltsfoot]] IsA [[herb]]"}
@@ -624,7 +624,6 @@
 {"start":"/c/en/argentineness","rel":"/r/IsA","end":"/c/en/property_(attribute)","weight":1,"surfaceText":"[[Argentineness]] IsA [[property (attribute)]]"}
 {"start":"/c/en/argentite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[argentite]] IsA [[mineral]]"}
 {"start":"/c/en/argyrodite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[argyrodite]] IsA [[mineral]]"}
-{"start":"/c/en/arianism","rel":"/r/IsA","end":"/c/en/theological_doctrine","weight":1,"surfaceText":"[[Arianism]] IsA [[theological doctrine]]"}
 {"start":"/c/en/aries","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[Aries]] IsA [[doer]]"}
 {"start":"/c/en/arista","rel":"/r/IsA","end":"/c/en/process_(body)","weight":1,"surfaceText":"[[arista]] IsA [[process (body)]]"}
 {"start":"/c/en/aristocrat","rel":"/r/IsA","end":"/c/en/leader","weight":1,"surfaceText":"[[aristocrat]] IsA [[leader]]"}
@@ -766,7 +765,6 @@
 {"start":"/c/en/asystole","rel":"/r/IsA","end":"/c/en/pathology_(state)","weight":1,"surfaceText":"[[asystole]] IsA [[pathology (state)]]"}
 {"start":"/c/en/atavist","rel":"/r/IsA","end":"/c/en/organism","weight":1,"surfaceText":"[[atavist]] IsA [[organism]]"}
 {"start":"/c/en/atelectasis","rel":"/r/IsA","end":"/c/en/pathology_(state)","weight":1,"surfaceText":"[[atelectasis]] IsA [[pathology (state)]]"}
-{"start":"/c/en/athanasianism","rel":"/r/IsA","end":"/c/en/theological_doctrine","weight":1,"surfaceText":"[[Athanasianism]] IsA [[theological doctrine]]"}
 {"start":"/c/en/atherogenesis","rel":"/r/IsA","end":"/c/en/pathology_(state)","weight":1,"surfaceText":"[[atherogenesis]] IsA [[pathology (state)]]"}
 {"start":"/c/en/athletic_field","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[athletic field]] IsA [[tract]]"}
 {"start":"/c/en/atmometer","rel":"/r/IsA","end":"/c/en/measuring_instrument","weight":1,"surfaceText":"[[atmometer]] IsA [[measuring instrument]]"}
@@ -847,7 +845,7 @@
 {"start":"/c/en/axillary_artery","rel":"/r/IsA","end":"/c/en/artery","weight":1,"surfaceText":"[[axillary artery]] IsA [[artery]]"}
 {"start":"/c/en/axillary_vein","rel":"/r/IsA","end":"/c/en/vein","weight":1,"surfaceText":"[[axillary vein]] IsA [[vein]]"}
 {"start":"/c/en/ayapana","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[ayapana]] IsA [[herb]]"}
-{"start":"/c/en/ayin","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[ayin]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/ayin","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[ayin]] IsA [[hebrew letter]]"}
 {"start":"/c/en/azadirachtin","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[azadirachtin]] IsA [[organic compound]]"}
 {"start":"/c/en/azathioprine","rel":"/r/IsA","end":"/c/en/medicament","weight":1,"surfaceText":"[[azathioprine]] IsA [[medicament]]"}
 {"start":"/c/en/azerbaijani_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Azerbaijani monetary unit]] IsA [[monetary unit]]"}
@@ -858,7 +856,7 @@
 {"start":"/c/en/azygos_vein","rel":"/r/IsA","end":"/c/en/vein","weight":1,"surfaceText":"[[azygos vein]] IsA [[vein]]"}
 {"start":"/c/en/azymia","rel":"/r/IsA","end":"/c/en/pathology_(state)","weight":1,"surfaceText":"[[azymia]] IsA [[pathology (state)]]"}
 {"start":"/c/en/b-girl","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[B-girl]] IsA [[woman]]"}
-{"start":"/c/en/b_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[B (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/b_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[B (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/baba","rel":"/r/IsA","end":"/c/en/cake","weight":1,"surfaceText":"[[baba]] IsA [[cake]]"}
 {"start":"/c/en/babble","rel":"/r/IsA","end":"/c/en/talk","weight":1,"surfaceText":"[[babble]] IsA [[talk]]"}
 {"start":"/c/en/babbler_(animal)","rel":"/r/IsA","end":"/c/en/oscine","weight":1,"surfaceText":"[[babbler (animal)]] IsA [[oscine]]"}
@@ -1168,9 +1166,9 @@
 {"start":"/c/en/beryllium","rel":"/r/IsA","end":"/c/en/metallic_element","weight":1,"surfaceText":"[[beryllium]] IsA [[metallic element]]"}
 {"start":"/c/en/best_(person)","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[best (person)]] IsA [[doer]]"}
 {"start":"/c/en/bestialize","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[bestialize]] IsA [[change]]"}
-{"start":"/c/en/beta","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[beta]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/beta","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[beta]] IsA [[greek letter]]"}
 {"start":"/c/en/betake_oneself","rel":"/r/IsA","end":"/c/en/locomote","weight":1,"surfaceText":"[[betake oneself]] IsA [[locomote]]"}
-{"start":"/c/en/beth","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[beth]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/beth","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[beth]] IsA [[hebrew letter]]"}
 {"start":"/c/en/better","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[better]] IsA [[change]]"}
 {"start":"/c/en/better","rel":"/r/IsA","end":"/c/en/change_state","weight":1,"surfaceText":"[[better]] IsA [[change state]]"}
 {"start":"/c/en/betting_odds","rel":"/r/IsA","end":"/c/en/ratio","weight":1,"surfaceText":"[[betting odds]] IsA [[ratio]]"}
@@ -1371,7 +1369,6 @@
 {"start":"/c/en/body_english","rel":"/r/IsA","end":"/c/en/motion","weight":1,"surfaceText":"[[body English]] IsA [[motion]]"}
 {"start":"/c/en/body_length","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[body length]] IsA [[linear unit]]"}
 {"start":"/c/en/bodybuilder","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[bodybuilder]] IsA [[doer]]"}
-{"start":"/c/en/boehmenism","rel":"/r/IsA","end":"/c/en/theological_doctrine","weight":1,"surfaceText":"[[Boehmenism]] IsA [[theological doctrine]]"}
 {"start":"/c/en/bog_asphodel","rel":"/r/IsA","end":"/c/en/liliaceous_plant","weight":1,"surfaceText":"[[bog asphodel]] IsA [[liliaceous plant]]"}
 {"start":"/c/en/bog_aster","rel":"/r/IsA","end":"/c/en/aster","weight":1,"surfaceText":"[[bog aster]] IsA [[aster]]"}
 {"start":"/c/en/bohemian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Bohemian]] IsA [[European]]"}
@@ -1727,7 +1724,7 @@
 {"start":"/c/en/byelorussian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Byelorussian]] IsA [[European]]"}
 {"start":"/c/en/byte","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[byte]] IsA [[computer memory unit]]"}
 {"start":"/c/en/byzantine","rel":"/r/IsA","end":"/c/en/asian","weight":1,"surfaceText":"[[Byzantine]] IsA [[Asian]]"}
-{"start":"/c/en/c","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[C]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/c_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[C (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/c_program","rel":"/r/IsA","end":"/c/en/computer_program","weight":1,"surfaceText":"[[C program]] IsA [[computer program]]"}
 {"start":"/c/en/cabin_boy","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[cabin boy]] IsA [[man]]"}
 {"start":"/c/en/cabin_girl","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[cabin girl]] IsA [[woman]]"}
@@ -2216,7 +2213,7 @@
 {"start":"/c/en/chestnut","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[chestnut]] IsA [[wood]]"}
 {"start":"/c/en/chestnut_tree","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[chestnut tree]] IsA [[tree]]"}
 {"start":"/c/en/chewa","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Chewa]] IsA [[African]]"}
-{"start":"/c/en/chi","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[chi]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/chi","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[chi]] IsA [[greek letter]]"}
 {"start":"/c/en/chiasma","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[chiasma]] IsA [[anatomical structure]]"}
 {"start":"/c/en/chiasmus","rel":"/r/IsA","end":"/c/en/rhetorical_device","weight":1,"surfaceText":"[[chiasmus]] IsA [[rhetorical device]]"}
 {"start":"/c/en/chicken_and_rice","rel":"/r/IsA","end":"/c/en/dish_(food)","weight":1,"surfaceText":"[[chicken and rice]] IsA [[dish (food)]]"}
@@ -3190,7 +3187,7 @@
 {"start":"/c/en/czech","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Czech]] IsA [[European]]"}
 {"start":"/c/en/czech_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Czech monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/czechoslovakian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Czechoslovakian]] IsA [[European]]"}
-{"start":"/c/en/d_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[D (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/d_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[D (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/dacrydium_colensoi","rel":"/r/IsA","end":"/c/en/conifer","weight":1,"surfaceText":"[[Dacrydium colensoi]] IsA [[conifer]]"}
 {"start":"/c/en/dacryocystitis","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[dacryocystitis]] IsA [[inflammation]]"}
 {"start":"/c/en/dadaism","rel":"/r/IsA","end":"/c/en/artistic_movement","weight":1,"surfaceText":"[[dadaism]] IsA [[artistic movement]]"}
@@ -3204,7 +3201,7 @@
 {"start":"/c/en/daisybush","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[daisybush]] IsA [[shrub]]"}
 {"start":"/c/en/daktylos","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[daktylos]] IsA [[linear unit]]"}
 {"start":"/c/en/dalea_spinosa","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[Dalea spinosa]] IsA [[shrub]]"}
-{"start":"/c/en/daleth","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[daleth]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/daleth","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[daleth]] IsA [[hebrew letter]]"}
 {"start":"/c/en/dallisgrass","rel":"/r/IsA","end":"/c/en/grass","weight":1,"surfaceText":"[[dallisgrass]] IsA [[grass]]"}
 {"start":"/c/en/dally","rel":"/r/IsA","end":"/c/en/act","weight":1,"surfaceText":"[[dally]] IsA [[act]]"}
 {"start":"/c/en/dally_(motion)","rel":"/r/IsA","end":"/c/en/act","weight":1,"surfaceText":"[[dally (motion)]] IsA [[act]]"}
@@ -3365,7 +3362,7 @@
 {"start":"/c/en/deliverywoman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[deliverywoman]] IsA [[woman]]"}
 {"start":"/c/en/delouse","rel":"/r/IsA","end":"/c/en/remove","weight":1,"surfaceText":"[[delouse]] IsA [[remove]]"}
 {"start":"/c/en/delphinium","rel":"/r/IsA","end":"/c/en/flower","weight":1,"surfaceText":"[[delphinium]] IsA [[flower]]"}
-{"start":"/c/en/delta_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[delta (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/delta_(greek_letter)","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[delta (greek letter)]] IsA [[greek letter]]"}
 {"start":"/c/en/deltoid","rel":"/r/IsA","end":"/c/en/skeletal_muscle","weight":1,"surfaceText":"[[deltoid]] IsA [[skeletal muscle]]"}
 {"start":"/c/en/delve","rel":"/r/IsA","end":"/c/en/remove","weight":1,"surfaceText":"[[delve]] IsA [[remove]]"}
 {"start":"/c/en/demagnetization","rel":"/r/IsA","end":"/c/en/natural_process","weight":1,"surfaceText":"[[demagnetization]] IsA [[natural process]]"}
@@ -3851,7 +3848,7 @@
 {"start":"/c/en/dysprosium","rel":"/r/IsA","end":"/c/en/metallic_element","weight":1,"surfaceText":"[[dysprosium]] IsA [[metallic element]]"}
 {"start":"/c/en/dystopia","rel":"/r/IsA","end":"/c/en/state","weight":1,"surfaceText":"[[dystopia]] IsA [[state]]"}
 {"start":"/c/en/dysuria","rel":"/r/IsA","end":"/c/en/disorder","weight":1,"surfaceText":"[[dysuria]] IsA [[disorder]]"}
-{"start":"/c/en/e_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[E (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/e_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[E (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/eager_beaver","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[eager beaver]] IsA [[doer]]"}
 {"start":"/c/en/eagle_(possession)","rel":"/r/IsA","end":"/c/en/coin","weight":1,"surfaceText":"[[eagle (possession)]] IsA [[coin]]"}
 {"start":"/c/en/earldom","rel":"/r/IsA","end":"/c/en/rank","weight":1,"surfaceText":"[[earldom]] IsA [[rank]]"}
@@ -4126,7 +4123,7 @@
 {"start":"/c/en/episcleritis","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[episcleritis]] IsA [[inflammation]]"}
 {"start":"/c/en/episcopacy","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[episcopacy]] IsA [[people]]"}
 {"start":"/c/en/episode","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[episode]] IsA [[happening]]"}
-{"start":"/c/en/epsilon","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[epsilon]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/epsilon","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[epsilon]] IsA [[greek letter]]"}
 {"start":"/c/en/equal_(change)","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[equal (change)]] IsA [[change]]"}
 {"start":"/c/en/equalization","rel":"/r/IsA","end":"/c/en/human_action","weight":1,"surfaceText":"[[equalization]] IsA [[human action]]"}
 {"start":"/c/en/equerry","rel":"/r/IsA","end":"/c/en/official","weight":1,"surfaceText":"[[equerry]] IsA [[official]]"}
@@ -4169,7 +4166,7 @@
 {"start":"/c/en/estonian_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Estonian monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/estonianess","rel":"/r/IsA","end":"/c/en/property_(attribute)","weight":1,"surfaceText":"[[Estonianess]] IsA [[property (attribute)]]"}
 {"start":"/c/en/estrus","rel":"/r/IsA","end":"/c/en/physical_condition","weight":1,"surfaceText":"[[estrus]] IsA [[physical condition]]"}
-{"start":"/c/en/eta","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[eta]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/eta","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[eta]] IsA [[greek letter]]"}
 {"start":"/c/en/etamine","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[etamine]] IsA [[fabric]]"}
 {"start":"/c/en/eternal_damnation","rel":"/r/IsA","end":"/c/en/state","weight":1,"surfaceText":"[[eternal damnation]] IsA [[state]]"}
 {"start":"/c/en/eternise","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[eternise]] IsA [[change]]"}
@@ -4311,7 +4308,7 @@
 {"start":"/c/en/eyecup","rel":"/r/IsA","end":"/c/en/vessel","weight":1,"surfaceText":"[[eyecup]] IsA [[vessel]]"}
 {"start":"/c/en/eyeful","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[eyeful]] IsA [[woman]]"}
 {"start":"/c/en/eyelet","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[eyelet]] IsA [[fabric]]"}
-{"start":"/c/en/f","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[f]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/f","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[f]] IsA [[roman letter]]"}
 {"start":"/c/en/fabric","rel":"/r/IsA","end":"/c/en/artifact","weight":1,"surfaceText":"[[fabric]] IsA [[artifact]]"}
 {"start":"/c/en/face","rel":"/r/IsA","end":"/c/en/be","weight":1,"surfaceText":"[[face]] IsA [[be]]"}
 {"start":"/c/en/face","rel":"/r/IsA","end":"/c/en/cover","weight":1,"surfaceText":"[[face]] IsA [[cover]]"}
@@ -4891,7 +4888,7 @@
 {"start":"/c/en/futurism","rel":"/r/IsA","end":"/c/en/artistic_movement","weight":1,"surfaceText":"[[futurism]] IsA [[artistic movement]]"}
 {"start":"/c/en/g-man","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[G-man]] IsA [[man]]"}
 {"start":"/c/en/g-woman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[G-woman]] IsA [[woman]]"}
-{"start":"/c/en/g_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[G (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/g_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[G (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/gabardine","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[gabardine]] IsA [[fabric]]"}
 {"start":"/c/en/gabonese","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Gabonese]] IsA [[African]]"}
 {"start":"/c/en/gadolinite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[gadolinite]] IsA [[mineral]]"}
@@ -4925,7 +4922,7 @@
 {"start":"/c/en/game_(animal)","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[game (animal)]] IsA [[animal]]"}
 {"start":"/c/en/gamebag","rel":"/r/IsA","end":"/c/en/bag","weight":1,"surfaceText":"[[gamebag]] IsA [[bag]]"}
 {"start":"/c/en/games-mistress","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[games-mistress]] IsA [[woman]]"}
-{"start":"/c/en/gamma","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[gamma]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/gamma","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[gamma]] IsA [[greek letter]]"}
 {"start":"/c/en/gamma_acid","rel":"/r/IsA","end":"/c/en/acid","weight":1,"surfaceText":"[[gamma acid]] IsA [[acid]]"}
 {"start":"/c/en/gammopathy","rel":"/r/IsA","end":"/c/en/pathology_(state)","weight":1,"surfaceText":"[[gammopathy]] IsA [[pathology (state)]]"}
 {"start":"/c/en/gang_(artifact)","rel":"/r/IsA","end":"/c/en/tool","weight":1,"surfaceText":"[[gang (artifact)]] IsA [[tool]]"}
@@ -5079,7 +5076,7 @@
 {"start":"/c/en/gilder","rel":"/r/IsA","end":"/c/en/skilled_worker","weight":1,"surfaceText":"[[gilder]] IsA [[skilled worker]]"}
 {"start":"/c/en/gill_arch","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[gill arch]] IsA [[anatomical structure]]"}
 {"start":"/c/en/gill_slit","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[gill slit]] IsA [[anatomical structure]]"}
-{"start":"/c/en/gimel","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[gimel]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/gimel","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[gimel]] IsA [[hebrew letter]]"}
 {"start":"/c/en/gimmickry","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[gimmickry]] IsA [[collection]]"}
 {"start":"/c/en/ginger","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[ginger]] IsA [[herb]]"}
 {"start":"/c/en/gingerbread","rel":"/r/IsA","end":"/c/en/cake","weight":1,"surfaceText":"[[gingerbread]] IsA [[cake]]"}
@@ -5242,6 +5239,7 @@
 {"start":"/c/en/great_year","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[great year]] IsA [[time period]]"}
 {"start":"/c/en/greater_butterfly_orchid","rel":"/r/IsA","end":"/c/en/orchid","weight":1,"surfaceText":"[[greater butterfly orchid]] IsA [[orchid]]"}
 {"start":"/c/en/grecian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Grecian]] IsA [[European]]"}
+{"start":"/c/en/greek_letter","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[greek letter]] IsA [[letter of the alphabet]]"}
 {"start":"/c/en/greek_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Greek monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/greekness","rel":"/r/IsA","end":"/c/en/property_(attribute)","weight":1,"surfaceText":"[[Greekness]] IsA [[property (attribute)]]"}
 {"start":"/c/en/green_adder's_mouth","rel":"/r/IsA","end":"/c/en/orchid","weight":1,"surfaceText":"[[green adder's mouth]] IsA [[orchid]]"}
@@ -5361,7 +5359,7 @@
 {"start":"/c/en/gypsy","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[gypsy]] IsA [[doer]]"}
 {"start":"/c/en/gyromitra","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[gyromitra]] IsA [[fungus]]"}
 {"start":"/c/en/gyrus","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[gyrus]] IsA [[anatomical structure]]"}
-{"start":"/c/en/h_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[H (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/h_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[H (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/haastia_pulvinaris","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[Haastia pulvinaris]] IsA [[herb]]"}
 {"start":"/c/en/hack","rel":"/r/IsA","end":"/c/en/cut","weight":1,"surfaceText":"[[hack]] IsA [[cut]]"}
 {"start":"/c/en/hack","rel":"/r/IsA","end":"/c/en/tool","weight":1,"surfaceText":"[[hack]] IsA [[tool]]"}
@@ -5465,7 +5463,7 @@
 {"start":"/c/en/hazel","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[hazel]] IsA [[tree]]"}
 {"start":"/c/en/hazel","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[hazel]] IsA [[wood]]"}
 {"start":"/c/en/hazmat","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[hazmat]] IsA [[material]]"}
-{"start":"/c/en/he","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[he]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/he","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[he]] IsA [[hebrew letter]]"}
 {"start":"/c/en/head","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[head]] IsA [[anatomical structure]]"}
 {"start":"/c/en/head","rel":"/r/IsA","end":"/c/en/object","weight":1,"surfaceText":"[[head]] IsA [[object]]"}
 {"start":"/c/en/head","rel":"/r/IsA","end":"/c/en/word","weight":1,"surfaceText":"[[head]] IsA [[word]]"}
@@ -5513,6 +5511,7 @@
 {"start":"/c/en/heaves","rel":"/r/IsA","end":"/c/en/animal_disease","weight":1,"surfaceText":"[[heaves]] IsA [[animal disease]]"}
 {"start":"/c/en/heavy_metal","rel":"/r/IsA","end":"/c/en/metallic_element","weight":1,"surfaceText":"[[heavy metal]] IsA [[metallic element]]"}
 {"start":"/c/en/heavy_spar","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[heavy spar]] IsA [[mineral]]"}
+{"start":"/c/en/hebrew_letter","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[hebrew letter]] IsA [[letter of the alphabet]]"}
 {"start":"/c/en/hedge_mustard","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[hedge mustard]] IsA [[herb]]"}
 {"start":"/c/en/hedge_nettle","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[hedge nettle]] IsA [[herb]]"}
 {"start":"/c/en/hee-haw_(communication)","rel":"/r/IsA","end":"/c/en/utter","weight":1,"surfaceText":"[[hee-haw (communication)]] IsA [[utter]]"}
@@ -5598,7 +5597,7 @@
 {"start":"/c/en/heterosexual","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[heterosexual]] IsA [[person]]"}
 {"start":"/c/en/heterotroph","rel":"/r/IsA","end":"/c/en/organism","weight":1,"surfaceText":"[[heterotroph]] IsA [[organism]]"}
 {"start":"/c/en/heterozygosity","rel":"/r/IsA","end":"/c/en/state","weight":1,"surfaceText":"[[heterozygosity]] IsA [[state]]"}
-{"start":"/c/en/heth","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[heth]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/heth","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[heth]] IsA [[hebrew letter]]"}
 {"start":"/c/en/hexapod","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[hexapod]] IsA [[animal]]"}
 {"start":"/c/en/heyday","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[heyday]] IsA [[time period]]"}
 {"start":"/c/en/hiccup","rel":"/r/IsA","end":"/c/en/symptom","weight":1,"surfaceText":"[[hiccup]] IsA [[symptom]]"}
@@ -5904,7 +5903,7 @@
 {"start":"/c/en/hysterectomy","rel":"/r/IsA","end":"/c/en/ablation","weight":1,"surfaceText":"[[hysterectomy]] IsA [[ablation]]"}
 {"start":"/c/en/hysteron_proteron","rel":"/r/IsA","end":"/c/en/rhetorical_device","weight":1,"surfaceText":"[[hysteron proteron]] IsA [[rhetorical device]]"}
 {"start":"/c/en/hysterotomy","rel":"/r/IsA","end":"/c/en/surgical_operation","weight":1,"surfaceText":"[[hysterotomy]] IsA [[surgical operation]]"}
-{"start":"/c/en/i_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[I (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/i_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[I (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/iberian","rel":"/r/IsA","end":"/c/en/asian","weight":1,"surfaceText":"[[Iberian]] IsA [[Asian]]"}
 {"start":"/c/en/iberian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Iberian]] IsA [[European]]"}
 {"start":"/c/en/ice-cream_bean","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[ice-cream bean]] IsA [[tree]]"}
@@ -6194,7 +6193,7 @@
 {"start":"/c/en/ionization_chamber","rel":"/r/IsA","end":"/c/en/measuring_instrument","weight":1,"surfaceText":"[[ionization chamber]] IsA [[measuring instrument]]"}
 {"start":"/c/en/ionize","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[ionize]] IsA [[change]]"}
 {"start":"/c/en/ionize","rel":"/r/IsA","end":"/c/en/change_state","weight":1,"surfaceText":"[[ionize]] IsA [[change state]]"}
-{"start":"/c/en/iota_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[iota (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/iota_(greek_letter)","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[iota (greek letter)]] IsA [[greek letter]]"}
 {"start":"/c/en/iowan","rel":"/r/IsA","end":"/c/en/american","weight":1,"surfaceText":"[[Iowan]] IsA [[American]]"}
 {"start":"/c/en/irani","rel":"/r/IsA","end":"/c/en/asian","weight":1,"surfaceText":"[[Irani]] IsA [[Asian]]"}
 {"start":"/c/en/iranian_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Iranian monetary unit]] IsA [[monetary unit]]"}
@@ -6251,7 +6250,7 @@
 {"start":"/c/en/ivory_black","rel":"/r/IsA","end":"/c/en/pigment","weight":1,"surfaceText":"[[ivory black]] IsA [[pigment]]"}
 {"start":"/c/en/ivory_tree","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[ivory tree]] IsA [[tree]]"}
 {"start":"/c/en/ivy","rel":"/r/IsA","end":"/c/en/vine","weight":1,"surfaceText":"[[ivy]] IsA [[vine]]"}
-{"start":"/c/en/j","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[j]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/j","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[j]] IsA [[roman letter]]"}
 {"start":"/c/en/jaboticaba","rel":"/r/IsA","end":"/c/en/fruit_tree","weight":1,"surfaceText":"[[jaboticaba]] IsA [[fruit tree]]"}
 {"start":"/c/en/jaboticaba_(food)","rel":"/r/IsA","end":"/c/en/edible_fruit","weight":1,"surfaceText":"[[jaboticaba (food)]] IsA [[edible fruit]]"}
 {"start":"/c/en/jack","rel":"/r/IsA","end":"/c/en/electrical_device","weight":1,"surfaceText":"[[jack]] IsA [[electrical device]]"}
@@ -6371,7 +6370,7 @@
 {"start":"/c/en/jute","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Jute]] IsA [[European]]"}
 {"start":"/c/en/juvenile","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[juvenile]] IsA [[person]]"}
 {"start":"/c/en/juxtapose","rel":"/r/IsA","end":"/c/en/put","weight":1,"surfaceText":"[[juxtapose]] IsA [[put]]"}
-{"start":"/c/en/k_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[K (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/k_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[K (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/kabbalism","rel":"/r/IsA","end":"/c/en/doctrine","weight":1,"surfaceText":"[[Kabbalism]] IsA [[doctrine]]"}
 {"start":"/c/en/kabbalist","rel":"/r/IsA","end":"/c/en/expert","weight":1,"surfaceText":"[[kabbalist]] IsA [[expert]]"}
 {"start":"/c/en/kabob","rel":"/r/IsA","end":"/c/en/dish_(food)","weight":1,"surfaceText":"[[kabob]] IsA [[dish (food)]]"}
@@ -6387,8 +6386,8 @@
 {"start":"/c/en/kansan","rel":"/r/IsA","end":"/c/en/american","weight":1,"surfaceText":"[[Kansan]] IsA [[American]]"}
 {"start":"/c/en/kanzu","rel":"/r/IsA","end":"/c/en/garment","weight":1,"surfaceText":"[[kanzu]] IsA [[garment]]"}
 {"start":"/c/en/kaolinite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[kaolinite]] IsA [[mineral]]"}
-{"start":"/c/en/kaph","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[kaph]] IsA [[letter of the alphabet]]"}
-{"start":"/c/en/kappa","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[kappa]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/kaph","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[kaph]] IsA [[hebrew letter]]"}
+{"start":"/c/en/kappa","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[kappa]] IsA [[greek letter]]"}
 {"start":"/c/en/kapuka","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[kapuka]] IsA [[shrub]]"}
 {"start":"/c/en/karat","rel":"/r/IsA","end":"/c/en/unit_of_measurement","weight":1,"surfaceText":"[[karat]] IsA [[unit of measurement]]"}
 {"start":"/c/en/karyokinesis","rel":"/r/IsA","end":"/c/en/organic_process","weight":1,"surfaceText":"[[karyokinesis]] IsA [[organic process]]"}
@@ -6512,7 +6511,7 @@
 {"start":"/c/en/kuwaiti_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Kuwaiti monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/kyanite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[kyanite]] IsA [[mineral]]"}
 {"start":"/c/en/kyrgyzstani_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Kyrgyzstani monetary unit]] IsA [[monetary unit]]"}
-{"start":"/c/en/l_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[L (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/l_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[L (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/labial_artery","rel":"/r/IsA","end":"/c/en/artery","weight":1,"surfaceText":"[[labial artery]] IsA [[artery]]"}
 {"start":"/c/en/labial_palpus","rel":"/r/IsA","end":"/c/en/process_(body)","weight":1,"surfaceText":"[[labial palpus]] IsA [[process (body)]]"}
 {"start":"/c/en/labial_vein","rel":"/r/IsA","end":"/c/en/vein","weight":1,"surfaceText":"[[labial vein]] IsA [[vein]]"}
@@ -6556,9 +6555,9 @@
 {"start":"/c/en/lake_poets","rel":"/r/IsA","end":"/c/en/artistic_movement","weight":1,"surfaceText":"[[lake poets]] IsA [[artistic movement]]"}
 {"start":"/c/en/lamaist","rel":"/r/IsA","end":"/c/en/disciple","weight":1,"surfaceText":"[[Lamaist]] IsA [[disciple]]"}
 {"start":"/c/en/lamb_succory","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[lamb succory]] IsA [[herb]]"}
-{"start":"/c/en/lambda","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[lambda]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/lambda","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[lambda]] IsA [[greek letter]]"}
 {"start":"/c/en/lame_(artifact)","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[lame (artifact)]] IsA [[fabric]]"}
-{"start":"/c/en/lamedh","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[lamedh]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/lamedh","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[lamedh]] IsA [[hebrew letter]]"}
 {"start":"/c/en/lamentation_(act)","rel":"/r/IsA","end":"/c/en/activity","weight":1,"surfaceText":"[[lamentation (act)]] IsA [[activity]]"}
 {"start":"/c/en/laminate","rel":"/r/IsA","end":"/c/en/cover","weight":1,"surfaceText":"[[laminate]] IsA [[cover]]"}
 {"start":"/c/en/laminating_machine","rel":"/r/IsA","end":"/c/en/machine","weight":1,"surfaceText":"[[laminating machine]] IsA [[machine]]"}
@@ -6992,7 +6991,7 @@
 {"start":"/c/en/lysiloma_sabicu","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[Lysiloma sabicu]] IsA [[shrub]]"}
 {"start":"/c/en/lysogenization","rel":"/r/IsA","end":"/c/en/organic_process","weight":1,"surfaceText":"[[lysogenization]] IsA [[organic process]]"}
 {"start":"/c/en/lysozyme","rel":"/r/IsA","end":"/c/en/enzyme","weight":1,"surfaceText":"[[lysozyme]] IsA [[enzyme]]"}
-{"start":"/c/en/m_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[M (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/m_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[M (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/ma'am","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[ma'am]] IsA [[woman]]"}
 {"start":"/c/en/macadamize","rel":"/r/IsA","end":"/c/en/coat","weight":1,"surfaceText":"[[macadamize]] IsA [[coat]]"}
 {"start":"/c/en/macao_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Macao monetary unit]] IsA [[monetary unit]]"}
@@ -7288,7 +7287,7 @@
 {"start":"/c/en/melt_off","rel":"/r/IsA","end":"/c/en/change_state","weight":1,"surfaceText":"[[melt off]] IsA [[change state]]"}
 {"start":"/c/en/meltability","rel":"/r/IsA","end":"/c/en/physical_property","weight":1,"surfaceText":"[[meltability]] IsA [[physical property]]"}
 {"start":"/c/en/melter","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[melter]] IsA [[worker]]"}
-{"start":"/c/en/mem","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[mem]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/mem","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[mem]] IsA [[hebrew letter]]"}
 {"start":"/c/en/membrane_bone","rel":"/r/IsA","end":"/c/en/bone","weight":1,"surfaceText":"[[membrane bone]] IsA [[bone]]"}
 {"start":"/c/en/membranous_labyrinth","rel":"/r/IsA","end":"/c/en/anatomical_structure","weight":1,"surfaceText":"[[membranous labyrinth]] IsA [[anatomical structure]]"}
 {"start":"/c/en/memorability","rel":"/r/IsA","end":"/c/en/quality","weight":1,"surfaceText":"[[memorability]] IsA [[quality]]"}
@@ -7641,7 +7640,7 @@
 {"start":"/c/en/mozambican","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Mozambican]] IsA [[African]]"}
 {"start":"/c/en/mozambique_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Mozambique monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/msasa","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[msasa]] IsA [[tree]]"}
-{"start":"/c/en/mu","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[mu]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/mu","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[mu]] IsA [[greek letter]]"}
 {"start":"/c/en/muck_(change)","rel":"/r/IsA","end":"/c/en/remove","weight":1,"surfaceText":"[[muck (change)]] IsA [[remove]]"}
 {"start":"/c/en/mucuna","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[mucuna]] IsA [[shrub]]"}
 {"start":"/c/en/mud_flat","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[mud flat]] IsA [[tract]]"}
@@ -7722,7 +7721,7 @@
 {"start":"/c/en/mythologize_(change)","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[mythologize (change)]] IsA [[change]]"}
 {"start":"/c/en/mythology","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[mythology]] IsA [[collection]]"}
 {"start":"/c/en/myxomatosis","rel":"/r/IsA","end":"/c/en/animal_disease","weight":1,"surfaceText":"[[myxomatosis]] IsA [[animal disease]]"}
-{"start":"/c/en/n","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[n]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/n","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[n]] IsA [[roman letter]]"}
 {"start":"/c/en/nagi","rel":"/r/IsA","end":"/c/en/conifer","weight":1,"surfaceText":"[[nagi]] IsA [[conifer]]"}
 {"start":"/c/en/nail_(quantity)","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[nail (quantity)]] IsA [[linear unit]]"}
 {"start":"/c/en/nailer","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[nailer]] IsA [[worker]]"}
@@ -8012,7 +8011,7 @@
 {"start":"/c/en/november_5","rel":"/r/IsA","end":"/c/en/day","weight":1,"surfaceText":"[[November 5]] IsA [[day]]"}
 {"start":"/c/en/novitiate","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[novitiate]] IsA [[time period]]"}
 {"start":"/c/en/novobiocin","rel":"/r/IsA","end":"/c/en/antibiotic","weight":1,"surfaceText":"[[novobiocin]] IsA [[antibiotic]]"}
-{"start":"/c/en/nu","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[nu]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/nu","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[nu]] IsA [[greek letter]]"}
 {"start":"/c/en/nuclear_club","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[nuclear club]] IsA [[collection]]"}
 {"start":"/c/en/nuclear_deterrence","rel":"/r/IsA","end":"/c/en/doctrine","weight":1,"surfaceText":"[[nuclear deterrence]] IsA [[doctrine]]"}
 {"start":"/c/en/nuclear_medicine","rel":"/r/IsA","end":"/c/en/medicine","weight":1,"surfaceText":"[[nuclear medicine]] IsA [[medicine]]"}
@@ -8025,7 +8024,7 @@
 {"start":"/c/en/nullifier","rel":"/r/IsA","end":"/c/en/advocate","weight":1,"surfaceText":"[[nullifier]] IsA [[advocate]]"}
 {"start":"/c/en/nullipara","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[nullipara]] IsA [[woman]]"}
 {"start":"/c/en/numbness","rel":"/r/IsA","end":"/c/en/symptom","weight":1,"surfaceText":"[[numbness]] IsA [[symptom]]"}
-{"start":"/c/en/nun","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[nun]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/nun","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[nun]] IsA [[hebrew letter]]"}
 {"start":"/c/en/nurser","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[nurser]] IsA [[doer]]"}
 {"start":"/c/en/nurseryman","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[nurseryman]] IsA [[man]]"}
 {"start":"/c/en/nurserywoman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[nurserywoman]] IsA [[woman]]"}
@@ -8042,7 +8041,7 @@
 {"start":"/c/en/nymphet","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[nymphet]] IsA [[woman]]"}
 {"start":"/c/en/nymphomaniac","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[nymphomaniac]] IsA [[woman]]"}
 {"start":"/c/en/nystatin","rel":"/r/IsA","end":"/c/en/antibiotic","weight":1,"surfaceText":"[[nystatin]] IsA [[antibiotic]]"}
-{"start":"/c/en/o","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[o]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/o","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[o]] IsA [[roman letter]]"}
 {"start":"/c/en/oak","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[oak]] IsA [[wood]]"}
 {"start":"/c/en/oak_chestnut","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[oak chestnut]] IsA [[tree]]"}
 {"start":"/c/en/oak_fern","rel":"/r/IsA","end":"/c/en/fern","weight":1,"surfaceText":"[[oak fern]] IsA [[fern]]"}
@@ -8140,9 +8139,9 @@
 {"start":"/c/en/omani_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Omani monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/ombudsman","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[ombudsman]] IsA [[man]]"}
 {"start":"/c/en/ombudswoman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[ombudswoman]] IsA [[woman]]"}
-{"start":"/c/en/omega_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[omega (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/omega_(greek_letter)","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[omega (greek letter)]] IsA [[greek letter]]"}
 {"start":"/c/en/omelet","rel":"/r/IsA","end":"/c/en/dish_(food)","weight":1,"surfaceText":"[[omelet]] IsA [[dish (food)]]"}
-{"start":"/c/en/omicron","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[omicron]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/omicron","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[omicron]] IsA [[greek letter]]"}
 {"start":"/c/en/omnipotence","rel":"/r/IsA","end":"/c/en/state","weight":1,"surfaceText":"[[omnipotence]] IsA [[state]]"}
 {"start":"/c/en/omniscience","rel":"/r/IsA","end":"/c/en/state","weight":1,"surfaceText":"[[omniscience]] IsA [[state]]"}
 {"start":"/c/en/omnivore_(animal)","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[omnivore (animal)]] IsA [[animal]]"}
@@ -8328,7 +8327,7 @@
 {"start":"/c/en/ozone","rel":"/r/IsA","end":"/c/en/gas","weight":1,"surfaceText":"[[ozone]] IsA [[gas]]"}
 {"start":"/c/en/ozonide","rel":"/r/IsA","end":"/c/en/chemical_compound","weight":1,"surfaceText":"[[ozonide]] IsA [[chemical compound]]"}
 {"start":"/c/en/ozonize","rel":"/r/IsA","end":"/c/en/convert","weight":1,"surfaceText":"[[ozonize]] IsA [[convert]]"}
-{"start":"/c/en/p","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[p]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/p","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[p]] IsA [[roman letter]]"}
 {"start":"/c/en/p.m.","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[P.M.]] IsA [[time period]]"}
 {"start":"/c/en/paca","rel":"/r/IsA","end":"/c/en/rodent","weight":1,"surfaceText":"[[paca]] IsA [[rodent]]"}
 {"start":"/c/en/pace","rel":"/r/IsA","end":"/c/en/locomote","weight":1,"surfaceText":"[[pace]] IsA [[locomote]]"}
@@ -8552,7 +8551,7 @@
 {"start":"/c/en/paying_back","rel":"/r/IsA","end":"/c/en/group_action","weight":1,"surfaceText":"[[paying back]] IsA [[group action]]"}
 {"start":"/c/en/payne's_grey","rel":"/r/IsA","end":"/c/en/pigment","weight":1,"surfaceText":"[[Payne's grey]] IsA [[pigment]]"}
 {"start":"/c/en/paypig","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[paypig]] IsA [[doer]]"}
-{"start":"/c/en/pe","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[pe]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/pe","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[pe]] IsA [[hebrew letter]]"}
 {"start":"/c/en/pea_shooter","rel":"/r/IsA","end":"/c/en/plaything","weight":1,"surfaceText":"[[pea shooter]] IsA [[plaything]]"}
 {"start":"/c/en/pea_tree","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[pea tree]] IsA [[shrub]]"}
 {"start":"/c/en/peace_corps","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[Peace Corps]] IsA [[organization]]"}
@@ -8704,7 +8703,7 @@
 {"start":"/c/en/pheasant_under_glass","rel":"/r/IsA","end":"/c/en/dish_(food)","weight":1,"surfaceText":"[[pheasant under glass]] IsA [[dish (food)]]"}
 {"start":"/c/en/phenol","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[phenol]] IsA [[organic compound]]"}
 {"start":"/c/en/phenomenology","rel":"/r/IsA","end":"/c/en/doctrine","weight":1,"surfaceText":"[[phenomenology]] IsA [[doctrine]]"}
-{"start":"/c/en/phi","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[phi]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/phi","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[phi]] IsA [[greek letter]]"}
 {"start":"/c/en/philadelphus","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[philadelphus]] IsA [[shrub]]"}
 {"start":"/c/en/philippine_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Philippine monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/philosopher","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[philosopher]] IsA [[doer]]"}
@@ -8751,7 +8750,7 @@
 {"start":"/c/en/physostegia","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[physostegia]] IsA [[herb]]"}
 {"start":"/c/en/phytophthora_citrophthora","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[Phytophthora citrophthora]] IsA [[fungus]]"}
 {"start":"/c/en/phytophthora_infestans","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[Phytophthora infestans]] IsA [[fungus]]"}
-{"start":"/c/en/pi_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[pi (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/pi_(greek_letter)","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[pi (greek letter)]] IsA [[greek letter]]"}
 {"start":"/c/en/pia","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[pia]] IsA [[herb]]"}
 {"start":"/c/en/pianist","rel":"/r/IsA","end":"/c/en/musician","weight":1,"surfaceText":"[[pianist]] IsA [[musician]]"}
 {"start":"/c/en/pica_em","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[pica em]] IsA [[linear unit]]"}
@@ -9343,7 +9342,7 @@
 {"start":"/c/en/pruner","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[pruner]] IsA [[worker]]"}
 {"start":"/c/en/prunus_caroliniana","rel":"/r/IsA","end":"/c/en/angiospermous_tree","weight":1,"surfaceText":"[[Prunus caroliniana]] IsA [[angiospermous tree]]"}
 {"start":"/c/en/pseudopod","rel":"/r/IsA","end":"/c/en/process_(body)","weight":1,"surfaceText":"[[pseudopod]] IsA [[process (body)]]"}
-{"start":"/c/en/psi_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[psi (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/psi_(greek_letter)","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[psi (greek letter)]] IsA [[greek letter]]"}
 {"start":"/c/en/psilomelane","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[psilomelane]] IsA [[mineral]]"}
 {"start":"/c/en/psittacosis","rel":"/r/IsA","end":"/c/en/animal_disease","weight":1,"surfaceText":"[[psittacosis]] IsA [[animal disease]]"}
 {"start":"/c/en/psoas","rel":"/r/IsA","end":"/c/en/skeletal_muscle","weight":1,"surfaceText":"[[psoas]] IsA [[skeletal muscle]]"}
@@ -9447,9 +9446,9 @@
 {"start":"/c/en/pythium","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[pythium]] IsA [[fungus]]"}
 {"start":"/c/en/pyuria","rel":"/r/IsA","end":"/c/en/symptom","weight":1,"surfaceText":"[[pyuria]] IsA [[symptom]]"}
 {"start":"/c/en/pyxie","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[pyxie]] IsA [[shrub]]"}
-{"start":"/c/en/q","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[Q]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/q","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[Q]] IsA [[roman letter]]"}
 {"start":"/c/en/qatari_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Qatari monetary unit]] IsA [[monetary unit]]"}
-{"start":"/c/en/qoph","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[qoph]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/qoph","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[qoph]] IsA [[hebrew letter]]"}
 {"start":"/c/en/quack_(body)","rel":"/r/IsA","end":"/c/en/act","weight":1,"surfaceText":"[[quack (body)]] IsA [[act]]"}
 {"start":"/c/en/quack_(communication)","rel":"/r/IsA","end":"/c/en/utter","weight":1,"surfaceText":"[[quack (communication)]] IsA [[utter]]"}
 {"start":"/c/en/quack_(event)","rel":"/r/IsA","end":"/c/en/sound_(event)","weight":1,"surfaceText":"[[quack (event)]] IsA [[sound (event)]]"}
@@ -9502,7 +9501,7 @@
 {"start":"/c/en/quoter","rel":"/r/IsA","end":"/c/en/communicator","weight":1,"surfaceText":"[[quoter]] IsA [[communicator]]"}
 {"start":"/c/en/quotient","rel":"/r/IsA","end":"/c/en/ratio","weight":1,"surfaceText":"[[quotient]] IsA [[ratio]]"}
 {"start":"/c/en/quotient_(quantity)","rel":"/r/IsA","end":"/c/en/number_(quantity)","weight":1,"surfaceText":"[[quotient (quantity)]] IsA [[number (quantity)]]"}
-{"start":"/c/en/r_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[R (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/r_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[R (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/rabbinate_(act)","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[rabbinate (act)]] IsA [[position]]"}
 {"start":"/c/en/race","rel":"/r/IsA","end":"/c/en/move","weight":1,"surfaceText":"[[race]] IsA [[move]]"}
 {"start":"/c/en/race_(social)","rel":"/r/IsA","end":"/c/en/act","weight":1,"surfaceText":"[[race (social)]] IsA [[act]]"}
@@ -9799,7 +9798,7 @@
 {"start":"/c/en/reserve_ratio","rel":"/r/IsA","end":"/c/en/ratio","weight":1,"surfaceText":"[[reserve ratio]] IsA [[ratio]]"}
 {"start":"/c/en/reservist","rel":"/r/IsA","end":"/c/en/soldier","weight":1,"surfaceText":"[[reservist]] IsA [[soldier]]"}
 {"start":"/c/en/reset","rel":"/r/IsA","end":"/c/en/device","weight":1,"surfaceText":"[[reset]] IsA [[device]]"}
-{"start":"/c/en/resh","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[resh]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/resh","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[resh]] IsA [[hebrew letter]]"}
 {"start":"/c/en/residency","rel":"/r/IsA","end":"/c/en/human_action","weight":1,"surfaceText":"[[residency]] IsA [[human action]]"}
 {"start":"/c/en/residency","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[residency]] IsA [[position]]"}
 {"start":"/c/en/resin","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[resin]] IsA [[organic compound]]"}
@@ -9874,7 +9873,7 @@
 {"start":"/c/en/rhinotracheitis","rel":"/r/IsA","end":"/c/en/animal_disease","weight":1,"surfaceText":"[[rhinotracheitis]] IsA [[animal disease]]"}
 {"start":"/c/en/rhizoctinia","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[rhizoctinia]] IsA [[fungus]]"}
 {"start":"/c/en/rhizotomy","rel":"/r/IsA","end":"/c/en/surgical_operation","weight":1,"surfaceText":"[[rhizotomy]] IsA [[surgical operation]]"}
-{"start":"/c/en/rho","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[rho]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/rho","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[rho]] IsA [[greek letter]]"}
 {"start":"/c/en/rhode_islander","rel":"/r/IsA","end":"/c/en/american","weight":1,"surfaceText":"[[Rhode Islander]] IsA [[American]]"}
 {"start":"/c/en/rhodium","rel":"/r/IsA","end":"/c/en/metallic_element","weight":1,"surfaceText":"[[rhodium]] IsA [[metallic element]]"}
 {"start":"/c/en/rhodochrosite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[rhodochrosite]] IsA [[mineral]]"}
@@ -9967,6 +9966,7 @@
 {"start":"/c/en/roller_ironer","rel":"/r/IsA","end":"/c/en/machine","weight":1,"surfaceText":"[[roller ironer]] IsA [[machine]]"}
 {"start":"/c/en/roman","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Roman]] IsA [[European]]"}
 {"start":"/c/en/roman_building","rel":"/r/IsA","end":"/c/en/building","weight":1,"surfaceText":"[[Roman building]] IsA [[building]]"}
+{"start":"/c/en/roman_letter","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[roman letter]] IsA [[letter of the alphabet]]"}
 {"start":"/c/en/roman_mile","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[Roman mile]] IsA [[linear unit]]"}
 {"start":"/c/en/roman_pace","rel":"/r/IsA","end":"/c/en/linear_unit","weight":1,"surfaceText":"[[Roman pace]] IsA [[linear unit]]"}
 {"start":"/c/en/romanian","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Romanian]] IsA [[European]]"}
@@ -10064,7 +10064,7 @@
 {"start":"/c/en/rydberg's_penstemon","rel":"/r/IsA","end":"/c/en/wildflower","weight":1,"surfaceText":"[[Rydberg's penstemon]] IsA [[wildflower]]"}
 {"start":"/c/en/rye_grass","rel":"/r/IsA","end":"/c/en/grass","weight":1,"surfaceText":"[[rye grass]] IsA [[grass]]"}
 {"start":"/c/en/s-shape","rel":"/r/IsA","end":"/c/en/curve","weight":1,"surfaceText":"[[S-shape]] IsA [[curve]]"}
-{"start":"/c/en/s_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[S (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/s_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[S (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/saber","rel":"/r/IsA","end":"/c/en/kill","weight":1,"surfaceText":"[[saber]] IsA [[kill]]"}
 {"start":"/c/en/sabicu","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[sabicu]] IsA [[wood]]"}
 {"start":"/c/en/sabre","rel":"/r/IsA","end":"/c/en/cut","weight":1,"surfaceText":"[[sabre]] IsA [[cut]]"}
@@ -10084,7 +10084,7 @@
 {"start":"/c/en/saddle_(animal)","rel":"/r/IsA","end":"/c/en/body_part","weight":1,"surfaceText":"[[saddle (animal)]] IsA [[body part]]"}
 {"start":"/c/en/saddle_sore","rel":"/r/IsA","end":"/c/en/animal_disease","weight":1,"surfaceText":"[[saddle sore]] IsA [[animal disease]]"}
 {"start":"/c/en/saddlebag","rel":"/r/IsA","end":"/c/en/bag","weight":1,"surfaceText":"[[saddlebag]] IsA [[bag]]"}
-{"start":"/c/en/sadhe","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[sadhe]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/sadhe","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[sadhe]] IsA [[hebrew letter]]"}
 {"start":"/c/en/sadness","rel":"/r/IsA","end":"/c/en/feeling","weight":1,"surfaceText":"[[sadness]] IsA [[feeling]]"}
 {"start":"/c/en/safety","rel":"/r/IsA","end":"/c/en/condition","weight":1,"surfaceText":"[[safety]] IsA [[condition]]"}
 {"start":"/c/en/safety_device","rel":"/r/IsA","end":"/c/en/device","weight":1,"surfaceText":"[[safety device]] IsA [[device]]"}
@@ -10130,7 +10130,7 @@
 {"start":"/c/en/samarium","rel":"/r/IsA","end":"/c/en/metallic_element","weight":1,"surfaceText":"[[samarium]] IsA [[metallic element]]"}
 {"start":"/c/en/samarskite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[samarskite]] IsA [[mineral]]"}
 {"start":"/c/en/samba_(motion)","rel":"/r/IsA","end":"/c/en/trip_the_light_fantastic","weight":1,"surfaceText":"[[samba (motion)]] IsA [[trip the light fantastic]]"}
-{"start":"/c/en/samekh","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[samekh]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/samekh","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[samekh]] IsA [[hebrew letter]]"}
 {"start":"/c/en/sameness","rel":"/r/IsA","end":"/c/en/quality","weight":1,"surfaceText":"[[sameness]] IsA [[quality]]"}
 {"start":"/c/en/samite","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[samite]] IsA [[fabric]]"}
 {"start":"/c/en/samphire","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[samphire]] IsA [[herb]]"}
@@ -10551,7 +10551,7 @@
 {"start":"/c/en/shilling_(possession)","rel":"/r/IsA","end":"/c/en/coin","weight":1,"surfaceText":"[[shilling (possession)]] IsA [[coin]]"}
 {"start":"/c/en/shimmy_(creation)","rel":"/r/IsA","end":"/c/en/trip_the_light_fantastic","weight":1,"surfaceText":"[[shimmy (creation)]] IsA [[trip the light fantastic]]"}
 {"start":"/c/en/shin","rel":"/r/IsA","end":"/c/en/body_part","weight":1,"surfaceText":"[[shin]] IsA [[body part]]"}
-{"start":"/c/en/shin_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[shin (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/shin_(hebrew_letter)","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[shin (hebrew letter)]] IsA [[hebrew letter]]"}
 {"start":"/c/en/shin_splints","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[shin splints]] IsA [[inflammation]]"}
 {"start":"/c/en/shine","rel":"/r/IsA","end":"/c/en/exist","weight":1,"surfaceText":"[[shine]] IsA [[exist]]"}
 {"start":"/c/en/shiner_(object)","rel":"/r/IsA","end":"/c/en/object","weight":1,"surfaceText":"[[shiner (object)]] IsA [[object]]"}
@@ -10633,7 +10633,7 @@
 {"start":"/c/en/sift","rel":"/r/IsA","end":"/c/en/locomote","weight":1,"surfaceText":"[[sift]] IsA [[locomote]]"}
 {"start":"/c/en/sigh_(communication)","rel":"/r/IsA","end":"/c/en/utter","weight":1,"surfaceText":"[[sigh (communication)]] IsA [[utter]]"}
 {"start":"/c/en/sigh_(event)","rel":"/r/IsA","end":"/c/en/sound_(event)","weight":1,"surfaceText":"[[sigh (event)]] IsA [[sound (event)]]"}
-{"start":"/c/en/sigma","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[sigma]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/sigma","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[sigma]] IsA [[greek letter]]"}
 {"start":"/c/en/sigmoid_vein","rel":"/r/IsA","end":"/c/en/vein","weight":1,"surfaceText":"[[sigmoid vein]] IsA [[vein]]"}
 {"start":"/c/en/sigmoidectomy","rel":"/r/IsA","end":"/c/en/ablation","weight":1,"surfaceText":"[[sigmoidectomy]] IsA [[ablation]]"}
 {"start":"/c/en/sign","rel":"/r/IsA","end":"/c/en/communicate","weight":1,"surfaceText":"[[sign]] IsA [[communicate]]"}
@@ -10683,7 +10683,7 @@
 {"start":"/c/en/simplicity","rel":"/r/IsA","end":"/c/en/quality","weight":1,"surfaceText":"[[simplicity]] IsA [[quality]]"}
 {"start":"/c/en/simplify","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[simplify]] IsA [[change]]"}
 {"start":"/c/en/simulator","rel":"/r/IsA","end":"/c/en/machine","weight":1,"surfaceText":"[[simulator]] IsA [[machine]]"}
-{"start":"/c/en/sin_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[sin (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/sin_(hebrew_letter)","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[sin (hebrew letter)]] IsA [[hebrew letter]]"}
 {"start":"/c/en/sinciput","rel":"/r/IsA","end":"/c/en/bone","weight":1,"surfaceText":"[[sinciput]] IsA [[bone]]"}
 {"start":"/c/en/sinecure_(act)","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[sinecure (act)]] IsA [[position]]"}
 {"start":"/c/en/sing","rel":"/r/IsA","end":"/c/en/talk","weight":1,"surfaceText":"[[sing]] IsA [[talk]]"}
@@ -11626,7 +11626,7 @@
 {"start":"/c/en/system_program","rel":"/r/IsA","end":"/c/en/computer_program","weight":1,"surfaceText":"[[system program]] IsA [[computer program]]"}
 {"start":"/c/en/t-man","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[T-man]] IsA [[man]]"}
 {"start":"/c/en/t-woman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[T-woman]] IsA [[woman]]"}
-{"start":"/c/en/t_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[T (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/t_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[T (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/table_of_contents","rel":"/r/IsA","end":"/c/en/list","weight":1,"surfaceText":"[[table of contents]] IsA [[list]]"}
 {"start":"/c/en/table_salt","rel":"/r/IsA","end":"/c/en/flavorer","weight":1,"surfaceText":"[[table salt]] IsA [[flavorer]]"}
 {"start":"/c/en/tablespoon","rel":"/r/IsA","end":"/c/en/containerful","weight":1,"surfaceText":"[[tablespoon]] IsA [[containerful]]"}
@@ -11726,11 +11726,11 @@
 {"start":"/c/en/tasman_dwarf_pine","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[Tasman dwarf pine]] IsA [[shrub]]"}
 {"start":"/c/en/tassel_flower","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[tassel flower]] IsA [[herb]]"}
 {"start":"/c/en/taste_property","rel":"/r/IsA","end":"/c/en/property_(attribute)","weight":1,"surfaceText":"[[taste property]] IsA [[property (attribute)]]"}
-{"start":"/c/en/tau","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[tau]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/tau","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[tau]] IsA [[greek letter]]"}
 {"start":"/c/en/taurine","rel":"/r/IsA","end":"/c/en/chemical_compound","weight":1,"surfaceText":"[[taurine]] IsA [[chemical compound]]"}
 {"start":"/c/en/taurus","rel":"/r/IsA","end":"/c/en/doer","weight":1,"surfaceText":"[[Taurus]] IsA [[doer]]"}
 {"start":"/c/en/tavern","rel":"/r/IsA","end":"/c/en/building","weight":1,"surfaceText":"[[tavern]] IsA [[building]]"}
-{"start":"/c/en/taw","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[taw]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/taw","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[taw]] IsA [[hebrew letter]]"}
 {"start":"/c/en/taxi","rel":"/r/IsA","end":"/c/en/locomote","weight":1,"surfaceText":"[[taxi]] IsA [[locomote]]"}
 {"start":"/c/en/taxis","rel":"/r/IsA","end":"/c/en/surgical_operation","weight":1,"surfaceText":"[[taxis]] IsA [[surgical operation]]"}
 {"start":"/c/en/taxman","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[taxman]] IsA [[man]]"}
@@ -11843,7 +11843,7 @@
 {"start":"/c/en/testify","rel":"/r/IsA","end":"/c/en/inform","weight":1,"surfaceText":"[[testify]] IsA [[inform]]"}
 {"start":"/c/en/testudo","rel":"/r/IsA","end":"/c/en/protective_covering","weight":1,"surfaceText":"[[testudo]] IsA [[protective covering]]"}
 {"start":"/c/en/tet","rel":"/r/IsA","end":"/c/en/day","weight":1,"surfaceText":"[[Tet]] IsA [[day]]"}
-{"start":"/c/en/teth","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[teth]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/teth","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[teth]] IsA [[hebrew letter]]"}
 {"start":"/c/en/tetrabasic_acid","rel":"/r/IsA","end":"/c/en/acid","weight":1,"surfaceText":"[[tetrabasic acid]] IsA [[acid]]"}
 {"start":"/c/en/tetrachloride","rel":"/r/IsA","end":"/c/en/chemical_compound","weight":1,"surfaceText":"[[tetrachloride]] IsA [[chemical compound]]"}
 {"start":"/c/en/tetragen","rel":"/r/IsA","end":"/c/en/chemical_element","weight":1,"surfaceText":"[[tetragen]] IsA [[chemical element]]"}
@@ -11877,7 +11877,7 @@
 {"start":"/c/en/thermogravimetry","rel":"/r/IsA","end":"/c/en/measurement","weight":1,"surfaceText":"[[thermogravimetry]] IsA [[measurement]]"}
 {"start":"/c/en/thermometer","rel":"/r/IsA","end":"/c/en/measuring_instrument","weight":1,"surfaceText":"[[thermometer]] IsA [[measuring instrument]]"}
 {"start":"/c/en/thermometry","rel":"/r/IsA","end":"/c/en/measurement","weight":1,"surfaceText":"[[thermometry]] IsA [[measurement]]"}
-{"start":"/c/en/theta","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[theta]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/theta","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[theta]] IsA [[greek letter]]"}
 {"start":"/c/en/thiazine","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[thiazine]] IsA [[organic compound]]"}
 {"start":"/c/en/thicken","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[thicken]] IsA [[change]]"}
 {"start":"/c/en/thicken","rel":"/r/IsA","end":"/c/en/change_state","weight":1,"surfaceText":"[[thicken]] IsA [[change state]]"}
@@ -12379,7 +12379,7 @@
 {"start":"/c/en/tyrolean","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Tyrolean]] IsA [[European]]"}
 {"start":"/c/en/tyrosine_kinase_inhibitor","rel":"/r/IsA","end":"/c/en/medicament","weight":1,"surfaceText":"[[tyrosine kinase inhibitor]] IsA [[medicament]]"}
 {"start":"/c/en/tyrothricin","rel":"/r/IsA","end":"/c/en/antibiotic","weight":1,"surfaceText":"[[tyrothricin]] IsA [[antibiotic]]"}
-{"start":"/c/en/u_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[U (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/u_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[U (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/ugandan","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Ugandan]] IsA [[African]]"}
 {"start":"/c/en/ugandan_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Ugandan monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/ugli","rel":"/r/IsA","end":"/c/en/edible_fruit","weight":1,"surfaceText":"[[ugli]] IsA [[edible fruit]]"}
@@ -12517,7 +12517,7 @@
 {"start":"/c/en/uproot_(contact)","rel":"/r/IsA","end":"/c/en/move","weight":1,"surfaceText":"[[uproot (contact)]] IsA [[move]]"}
 {"start":"/c/en/upset_(artifact)","rel":"/r/IsA","end":"/c/en/tool","weight":1,"surfaceText":"[[upset (artifact)]] IsA [[tool]]"}
 {"start":"/c/en/upside-down_cake","rel":"/r/IsA","end":"/c/en/cake","weight":1,"surfaceText":"[[upside-down cake]] IsA [[cake]]"}
-{"start":"/c/en/upsilon","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[upsilon]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/upsilon","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[upsilon]] IsA [[greek letter]]"}
 {"start":"/c/en/upstage_(motion)","rel":"/r/IsA","end":"/c/en/move","weight":1,"surfaceText":"[[upstage (motion)]] IsA [[move]]"}
 {"start":"/c/en/upstart","rel":"/r/IsA","end":"/c/en/unpleasant_person","weight":1,"surfaceText":"[[upstart]] IsA [[unpleasant person]]"}
 {"start":"/c/en/uptime","rel":"/r/IsA","end":"/c/en/time_period","weight":1,"surfaceText":"[[uptime]] IsA [[time period]]"}
@@ -12568,7 +12568,7 @@
 {"start":"/c/en/uvulitis","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[uvulitis]] IsA [[inflammation]]"}
 {"start":"/c/en/uzbekistani_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Uzbekistani monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/v-day","rel":"/r/IsA","end":"/c/en/day","weight":1,"surfaceText":"[[V-day]] IsA [[day]]"}
-{"start":"/c/en/v_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[V (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/v_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[V (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/vacuole","rel":"/r/IsA","end":"/c/en/bodily_cavity","weight":1,"surfaceText":"[[vacuole]] IsA [[bodily cavity]]"}
 {"start":"/c/en/vacuolization","rel":"/r/IsA","end":"/c/en/condition","weight":1,"surfaceText":"[[vacuolization]] IsA [[condition]]"}
 {"start":"/c/en/vagabond","rel":"/r/IsA","end":"/c/en/object","weight":1,"surfaceText":"[[vagabond]] IsA [[object]]"}
@@ -12778,7 +12778,7 @@
 {"start":"/c/en/vulvectomy","rel":"/r/IsA","end":"/c/en/ablation","weight":1,"surfaceText":"[[vulvectomy]] IsA [[ablation]]"}
 {"start":"/c/en/vulvitis","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[vulvitis]] IsA [[inflammation]]"}
 {"start":"/c/en/vulvovaginitis","rel":"/r/IsA","end":"/c/en/inflammation","weight":1,"surfaceText":"[[vulvovaginitis]] IsA [[inflammation]]"}
-{"start":"/c/en/w","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[w]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/w","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[w]] IsA [[roman letter]]"}
 {"start":"/c/en/wac","rel":"/r/IsA","end":"/c/en/soldier","weight":1,"surfaceText":"[[Wac]] IsA [[soldier]]"}
 {"start":"/c/en/wac","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[Wac]] IsA [[woman]]"}
 {"start":"/c/en/wad","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[wad]] IsA [[material]]"}
@@ -12885,7 +12885,7 @@
 {"start":"/c/en/waver","rel":"/r/IsA","end":"/c/en/communicator","weight":1,"surfaceText":"[[waver]] IsA [[communicator]]"}
 {"start":"/c/en/waver","rel":"/r/IsA","end":"/c/en/motion","weight":1,"surfaceText":"[[waver]] IsA [[motion]]"}
 {"start":"/c/en/wavy-leaved_aster","rel":"/r/IsA","end":"/c/en/aster","weight":1,"surfaceText":"[[wavy-leaved aster]] IsA [[aster]]"}
-{"start":"/c/en/waw","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[waw]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/waw","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[waw]] IsA [[hebrew letter]]"}
 {"start":"/c/en/wax_(contact)","rel":"/r/IsA","end":"/c/en/cover","weight":1,"surfaceText":"[[wax (contact)]] IsA [[cover]]"}
 {"start":"/c/en/wax_myrtle","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[wax myrtle]] IsA [[shrub]]"}
 {"start":"/c/en/wax_paper","rel":"/r/IsA","end":"/c/en/paper","weight":1,"surfaceText":"[[wax paper]] IsA [[paper]]"}
@@ -13169,18 +13169,18 @@
 {"start":"/c/en/wynnea_sparassoides","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[Wynnea sparassoides]] IsA [[fungus]]"}
 {"start":"/c/en/wyomingite","rel":"/r/IsA","end":"/c/en/american","weight":1,"surfaceText":"[[Wyomingite]] IsA [[American]]"}
 {"start":"/c/en/x-ray_machine","rel":"/r/IsA","end":"/c/en/apparatus","weight":1,"surfaceText":"[[X-ray machine]] IsA [[apparatus]]"}
-{"start":"/c/en/x_(communication)","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[X (communication)]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/x_(roman_letter)","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[X (roman letter)]] IsA [[roman letter]]"}
 {"start":"/c/en/xanthate","rel":"/r/IsA","end":"/c/en/salt","weight":1,"surfaceText":"[[xanthate]] IsA [[salt]]"}
 {"start":"/c/en/xanthic_acid","rel":"/r/IsA","end":"/c/en/acid","weight":1,"surfaceText":"[[xanthic acid]] IsA [[acid]]"}
 {"start":"/c/en/xanthine","rel":"/r/IsA","end":"/c/en/organic_compound","weight":1,"surfaceText":"[[xanthine]] IsA [[organic compound]]"}
 {"start":"/c/en/xenotime","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[xenotime]] IsA [[mineral]]"}
 {"start":"/c/en/xeranthemum","rel":"/r/IsA","end":"/c/en/flower","weight":1,"surfaceText":"[[xeranthemum]] IsA [[flower]]"}
 {"start":"/c/en/xhosa","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Xhosa]] IsA [[African]]"}
-{"start":"/c/en/xi","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[xi]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/xi","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[xi]] IsA [[greek letter]]"}
 {"start":"/c/en/xiphoid_process","rel":"/r/IsA","end":"/c/en/bone","weight":1,"surfaceText":"[[xiphoid process]] IsA [[bone]]"}
 {"start":"/c/en/xylometer","rel":"/r/IsA","end":"/c/en/measuring_instrument","weight":1,"surfaceText":"[[xylometer]] IsA [[measuring instrument]]"}
 {"start":"/c/en/xylosma","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[xylosma]] IsA [[shrub]]"}
-{"start":"/c/en/y","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[y]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/y","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[y]] IsA [[roman letter]]"}
 {"start":"/c/en/yacca","rel":"/r/IsA","end":"/c/en/conifer","weight":1,"surfaceText":"[[yacca]] IsA [[conifer]]"}
 {"start":"/c/en/yachtsman","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[yachtsman]] IsA [[man]]"}
 {"start":"/c/en/yachtswoman","rel":"/r/IsA","end":"/c/en/woman","weight":1,"surfaceText":"[[yachtswoman]] IsA [[woman]]"}
@@ -13222,7 +13222,7 @@
 {"start":"/c/en/yo-yo","rel":"/r/IsA","end":"/c/en/plaything","weight":1,"surfaceText":"[[yo-yo]] IsA [[plaything]]"}
 {"start":"/c/en/yobibit","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[yobibit]] IsA [[computer memory unit]]"}
 {"start":"/c/en/yobibyte","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[yobibyte]] IsA [[computer memory unit]]"}
-{"start":"/c/en/yodh","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[yodh]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/yodh","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[yodh]] IsA [[hebrew letter]]"}
 {"start":"/c/en/yoke","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[yoke]] IsA [[fabric]]"}
 {"start":"/c/en/yoke","rel":"/r/IsA","end":"/c/en/support","weight":1,"surfaceText":"[[yoke]] IsA [[support]]"}
 {"start":"/c/en/yottabit","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[yottabit]] IsA [[computer memory unit]]"}
@@ -13234,7 +13234,7 @@
 {"start":"/c/en/yugoslav","rel":"/r/IsA","end":"/c/en/european","weight":1,"surfaceText":"[[Yugoslav]] IsA [[European]]"}
 {"start":"/c/en/yugoslavian_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Yugoslavian monetary unit]] IsA [[monetary unit]]"}
 {"start":"/c/en/yus","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[yus]] IsA [[letter of the alphabet]]"}
-{"start":"/c/en/z","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[z]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/z","rel":"/r/IsA","end":"/c/en/roman_letter","weight":1,"surfaceText":"[[z]] IsA [[roman letter]]"}
 {"start":"/c/en/zaatar","rel":"/r/IsA","end":"/c/en/flavorer","weight":1,"surfaceText":"[[zaatar]] IsA [[flavorer]]"}
 {"start":"/c/en/zairese","rel":"/r/IsA","end":"/c/en/african","weight":1,"surfaceText":"[[Zairese]] IsA [[African]]"}
 {"start":"/c/en/zairese_monetary_unit","rel":"/r/IsA","end":"/c/en/monetary_unit","weight":1,"surfaceText":"[[Zairese monetary unit]] IsA [[monetary unit]]"}
@@ -13243,14 +13243,14 @@
 {"start":"/c/en/zamboni","rel":"/r/IsA","end":"/c/en/machine","weight":1,"surfaceText":"[[Zamboni]] IsA [[machine]]"}
 {"start":"/c/en/zap_(contact)","rel":"/r/IsA","end":"/c/en/kill","weight":1,"surfaceText":"[[zap (contact)]] IsA [[kill]]"}
 {"start":"/c/en/zapper","rel":"/r/IsA","end":"/c/en/electrical_device","weight":1,"surfaceText":"[[zapper]] IsA [[electrical device]]"}
-{"start":"/c/en/zayin","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[zayin]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/zayin","rel":"/r/IsA","end":"/c/en/hebrew_letter","weight":1,"surfaceText":"[[zayin]] IsA [[hebrew letter]]"}
 {"start":"/c/en/zebibit","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[zebibit]] IsA [[computer memory unit]]"}
 {"start":"/c/en/zebibyte","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[zebibyte]] IsA [[computer memory unit]]"}
 {"start":"/c/en/zebrawood","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[zebrawood]] IsA [[wood]]"}
 {"start":"/c/en/zebrawood_tree","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[zebrawood tree]] IsA [[tree]]"}
 {"start":"/c/en/zen_buddhist","rel":"/r/IsA","end":"/c/en/disciple","weight":1,"surfaceText":"[[Zen Buddhist]] IsA [[disciple]]"}
 {"start":"/c/en/zeolite","rel":"/r/IsA","end":"/c/en/mineral","weight":1,"surfaceText":"[[zeolite]] IsA [[mineral]]"}
-{"start":"/c/en/zeta","rel":"/r/IsA","end":"/c/en/letter_of_the_alphabet","weight":1,"surfaceText":"[[zeta]] IsA [[letter of the alphabet]]"}
+{"start":"/c/en/zeta","rel":"/r/IsA","end":"/c/en/greek_letter","weight":1,"surfaceText":"[[zeta]] IsA [[greek letter]]"}
 {"start":"/c/en/zettabit","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[zettabit]] IsA [[computer memory unit]]"}
 {"start":"/c/en/zettabyte","rel":"/r/IsA","end":"/c/en/computer_memory_unit","weight":1,"surfaceText":"[[zettabyte]] IsA [[computer memory unit]]"}
 {"start":"/c/en/zettaflop","rel":"/r/IsA","end":"/c/en/unit_of_measurement","weight":1,"surfaceText":"[[zettaflop]] IsA [[unit of measurement]]"}
