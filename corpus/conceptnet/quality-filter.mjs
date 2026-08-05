@@ -34,9 +34,16 @@
 //   7. opinion object        — /r/IsA or /r/DefinedAs whose object is one of a
 //                              small, evidence-based OPINION set (adjectives /
 //                              value words that never name a class)
+//   8. denied row             — the exact (rel, start, end) triple is in a
+//                              small, hand-curated DENIED_ROWS set: a claim
+//                              read as demonstrably false in general English
+//                              while reading the committed slice, too
+//                              specific for any shape rule above to catch
+//                              ("beta IsA programming_language")
 //
-// Rules 1-5 apply to every relation (they only ever remove junk); 6-7 are the
-// definitional band the sims flagged. Stats land on stderr; JSONL on stdout.
+// Rules 1-5 and 8 apply to every relation (they only ever remove junk); 6-7
+// are the definitional band the sims flagged. Stats land on stderr; JSONL on
+// stdout.
 
 import { readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
@@ -65,8 +72,18 @@ export const KNOWN_MISSPELLINGS = new Set([
   "vessle",
 ]);
 
+// Rows whose claim is demonstrably false in general English, found by reading
+// the committed slice. Keyed `rel start end` so a row is cut only when all
+// three match — a re-fetch that changes the object leaves the new row alone.
+export const DENIED_ROWS = new Set([
+  "/r/IsA /c/en/beta /c/en/programming_language",
+  "/r/IsA /c/en/psi /c/en/software",
+  "/r/Antonym /c/en/letter /c/en/email",
+]);
+
 /** Why this row is noise, or null to keep it. Pure function of the row shape. */
 export function cutReason(row) {
+  if (DENIED_ROWS.has(`${row.rel} ${row.start} ${row.end}`)) return "denied-row";
   const s = bareTerm(row.start);
   const e = bareTerm(row.end);
   for (const t of [s, e]) {
