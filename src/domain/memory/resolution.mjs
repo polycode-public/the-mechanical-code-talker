@@ -37,7 +37,7 @@ export const RESOLUTION_CONTRADICTION = "contradiction";
  *  sing" are two claims, not a self-contradiction. */
 const MERGE_PREDICATE_STEMS = [
   "mgx:hasA", "mgx:capableOf",
-  "rdfs:subClassOf", "rdf:type", "owl:disjointWith", "mgx:partOf",
+  "rdfs:subClassOf", "rdf:type", "owl:disjointWith", "mgx:partOf", "mgx:memberOf", "mgx:collectionOf",
   "mgx:usedFor", "mgx:receivesAction", "mgx:causes", "mgx:causesDesire",
   "mgx:hasSubevent", "mgx:hasPrerequisite", "mgx:motivatedByGoal", "mgx:obstructedBy",
   "mgx:desires", "mgx:hasProperty", "mgx:madeOf", "mgx:atLocation", "mgx:locatedNear",

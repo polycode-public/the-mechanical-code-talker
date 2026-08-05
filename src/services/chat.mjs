@@ -2891,6 +2891,12 @@ const TEACH_HAS_METHOD_RE =
 const COMPOSE2_RULE_TEACH_RE =
   /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
 
+/** The relation-name slot of a composition rule never holds a partitive head:
+ *  "a wheel is a part of a car" states a part-of FACT, and the part/membership
+ *  frames above own it. Without this, a failed fact write falls through and
+ *  stores "wheel = compose2(part, car)" — a rule nobody asked for. */
+const RULE_RELATION_EXCLUDED_HEADS = new Set(["part", "member"]);
+
 /** "a <name> is a <base> who is <property>" — the PROPERTY-FILTERED
  *  composition-rule teach declarative: "a grandfather is a grandparent who
  *  is male" teaches a RULE (mgx:ruleKind "filter"), never a Fact. `m[1]` =
@@ -4747,6 +4753,29 @@ const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^(?:${RETRACT_LEAD_VERBS})\\s+(?:
  *  token object, articles tolerated on both. */
 const RELATED_TO_TEACH_RE = /^(?:a\s+|an\s+|the\s+)?([\w-]+)\s+(?:relates\s+to|is\s+related\s+to)\s+(?:a\s+|an\s+|the\s+)?([\w-]+(?:\s+[\w-]+)?)$/i;
 
+/** The closed PART-OF / MEMBERSHIP teach frames. "of" is never folded into a
+ *  minted predicate (PREP_SRC omits it deliberately — see its own docblock),
+ *  so each of these surfaces names ONE curated predicate instead. The subject
+ *  is the same 1–2-token noun phrase every relational frame above captures;
+ *  the copula is captured so a plural surface folds to the singular spelling
+ *  the isa facts already use. */
+const PART_OF_TEACH_RE = /^(?:the\s+|an?\s+|every\s+|each\s+|all\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+(?:an?\s+)?part\s+of\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+const MEMBER_OF_TEACH_RE = /^(?:the\s+|an?\s+|every\s+|each\s+|all\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+(?:an?\s+)?member\s+of\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+
+/** "X is in Y" is ambiguous between a placement ("the lamp is in the study")
+ *  and set membership ("p is in the alphabet"). The frame is a TRIGGER only:
+ *  it stores nothing unless the fact store already says Y is a collection —
+ *  see collectionMembershipTeach's gate. */
+const IN_COLLECTION_TEACH_RE = /^(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+in\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+
+const COLLECTION_HEAD_SRC = "collection|set|group|family";
+const COLLECTION_DECL_TEACH_RE = new RegExp(
+  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+an?\\s+(?:${COLLECTION_HEAD_SRC})\\s+of\\s+(?:the\\s+)?([\\w'-]+)[.!?]*$`,
+  "i",
+);
+
+const CONTAINMENT_PREDICATES = Object.freeze(["mgx:memberOf", "mgx:partOf"]);
+
 /** NEGATIVE UNIVERSAL — "no X is a Y" / "no Xs are Ys": a class-level
  *  exclusion, stored as `X owl:disjointWith Y` on the RESOLVED class pair.
  *  The ACE grammar already mints exactly this triple when both words sit in
@@ -5461,6 +5490,76 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (stored) return stored;
   }
 
+  // PART-OF / MEMBERSHIP — the closed teach frames for mereological part-of,
+  // set membership, and collection declaration. Tried on the SAME ownSrc,
+  // ahead of RELATIONAL FACT / COMPOSE2 below so "a wheel is a part of a car"
+  // states a fact through here rather than falling into COMPOSE2_RULE_TEACH_RE's
+  // "a <name> is a <base1> of a <base2>" composition-rule mint. Every subject/
+  // object pair is checked against isTeachPronoun first — "it is part of that"
+  // and "this belongs to me" never land a fact, same guard
+  // matchesRelationalTeachFrame applies to the relational frames above.
+  const collectionDecl = ownSrc.match(COLLECTION_DECL_TEACH_RE);
+  if (collectionDecl && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(collectionDecl[1]) && !isTeachPronoun(collectionDecl[2])) {
+    const collection = collectionDecl[1];
+    const typedMemberSurface = collectionDecl[2];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: collection, predicate: "mgx:collectionOf", object: singularizeSurface(typedMemberSurface), observedAt, dateText,
+    });
+    if (stored) {
+      return {
+        text: `noted — remembered: ${collection} is a collection of ${typedMemberSurface}. `
+          + `Say "<x> is in the ${collection}" to add one, and "what is in the ${collection}" to read them back.`,
+        via: "assert", miss: false,
+      };
+    }
+  }
+
+  const memberOf = ownSrc.match(MEMBER_OF_TEACH_RE);
+  if (memberOf && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(memberOf[1]) && !isTeachPronoun(memberOf[3])) {
+    const subject = memberOf[2].toLowerCase() === "are" ? singularizeSurface(memberOf[1]) : memberOf[1];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject, predicate: "mgx:memberOf", object: memberOf[3], observedAt, dateText,
+    });
+    if (stored) return stored;
+  }
+
+  const partOf = ownSrc.match(PART_OF_TEACH_RE);
+  if (partOf && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(partOf[1]) && !isTeachPronoun(partOf[3])) {
+    const subject = partOf[2].toLowerCase() === "are" ? singularizeSurface(partOf[1]) : partOf[1];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject, predicate: "mgx:partOf", object: partOf[3], observedAt, dateText,
+    });
+    if (stored) return stored;
+  }
+
+  // "X is in Y" stores ONLY when Y is already known as a collection — a
+  // COLLECTION_DECL row naming Y, or a memberOf row already naming Y as a
+  // container. Otherwise the sentence is a locative placement, not
+  // membership, and storing here would misfile it: "the lamp is in the
+  // study" must keep reading as a placement, byte for byte, since no
+  // collectionOf row for "study" will ever exist.
+  const inCollection = ownSrc.match(IN_COLLECTION_TEACH_RE);
+  if (inCollection && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(inCollection[1]) && !isTeachPronoun(inCollection[3])) {
+    try {
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const rows = await factRows(memoryDir, cache);
+      const containerVariants = factTermVariants(normFactTerm, inCollection[3]);
+      const declared = rows.some((f) => f.predicate === "mgx:collectionOf" && containerVariants.has(f.subject))
+        || rows.some((f) => f.predicate === "mgx:memberOf" && containerVariants.has(f.object));
+      if (declared) {
+        const subject = inCollection[2].toLowerCase() === "are" ? singularizeSurface(inCollection[1]) : inCollection[1];
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject, predicate: "mgx:memberOf", object: inCollection[3], observedAt, dateText,
+        });
+        if (stored) return stored;
+      }
+    } catch { /* store unavailable — the frame declines rather than storing blind */ }
+  }
+
   // RELATIONAL FACT — "<Name> is the <role> of <Name>". Grouped with the
   // other relational/possessive teach shapes just above (both ownership
   // forms), tried on the SAME ownSrc, unconditionally
@@ -5470,7 +5569,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // to part of speech, so a role noun like "father" mints mgx:father the same
   // way a general verb would; an ordinary Fact, no new storage shape.
   const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
-  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !RULE_RELATION_EXCLUDED_HEADS.has(rel[2].toLowerCase())) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3], observedAt, dateText,
     });
@@ -5538,7 +5638,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // COMPOSE2_RULE_TEACH_RE's own docblock). The query-side hop-counted chase
   // lives in factReadBack's relational-query dispatcher.
   const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
-  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !RULE_RELATION_EXCLUDED_HEADS.has(compose2[2].toLowerCase())) {
     try {
       const { appendRule, RULE_KIND_COMPOSE2 } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
@@ -6967,6 +7068,8 @@ const FACT_PREDICATE_PHRASES = {
   "rdf:type": "is a",
   "owl:disjointWith": "is not a",
   "mgx:partOf": "is part of",
+  "mgx:memberOf": "is a member of",
+  "mgx:collectionOf": "is a collection of",
   "mgx:hasA": "has",
   "mgx:usedFor": "is used for",
   "mgx:capableOf": "can",
