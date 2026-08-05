@@ -10,8 +10,8 @@
 //
 // The word source is this repo's own WordNet corpus (corpus/wordnet/*.jsonl),
 // which is committed and offline. So this generator needs no system dictionary
-// and no new package, and it reproduces anywhere the repo does — which is what
-// lets test/estate/generated-artifacts.test.mjs rebuild the table and compare.
+// and no new package, and it reproduces anywhere the repo does, which is what
+// lets an estate guard rebuild the table and compare it against the committed copy.
 //
 // WordNet carries lemmas only ("rest" is present, "rests" is absent), and
 // "rests" -> "tests" is the collision that matters most, so every lemma is
