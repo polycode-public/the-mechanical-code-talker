@@ -11,7 +11,7 @@
 // the rows away — this module is that scan, kept out of the pure selector so
 // the selector stays a function of its inputs.
 
-import { subClassParents, ancestryChain } from "../sense-split.mjs";
+import { subClassParents, ancestryChain, STOP_SET } from "../sense-split.mjs";
 
 // The predicates the digest groups under the isa family (kept in step with
 // select.mjs's FAMILY_OF): a subclass edge and a type edge both name a class
@@ -56,7 +56,7 @@ export function chainsForObjects(subClassEdges, objects, cap = 6) {
   const chains = {};
   for (const obj of objects || []) {
     if (obj in chains) continue;
-    const chain = ancestryChain(obj, parents, { cap });
+    const chain = ancestryChain(obj, parents, { cap, stopAt: STOP_SET });
     if (chain.length > 1) chains[obj] = chain;
   }
   return chains;

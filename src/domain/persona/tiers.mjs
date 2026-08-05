@@ -7,20 +7,13 @@
 // scripts/lib/wordnet-source.mjs, the fact targets and the run itself in
 // scripts/build-persona-tiers.mjs.
 
-// human-base's own category roots, plus every hypernym TARGET term Small's
-// curation already established as a "root" word (generate.mjs's own comment:
-// "category-root nouns used as a hypernym TARGET") — a real hypernym chain
-// walk stops here rather than continuing on to WordNet's ultra-abstract
-// "entity"/"abstraction"/"physical_entity" tops, which would add depth
-// without adding anything a plain-English question would ever ask about.
-export const STOP_SET = new Set([
-  "person", "place", "object", "event", "time", "quantity", "organization", "group",
-  "animal", "plant", "furniture", "vehicle", "insect", "emotion", "metal", "liquid",
-  "weather", "planet", "jewelry", "cutlery", "government", "material", "artifact",
-  "location", "structure", "food", "drink", "clothing", "body", "language", "mind",
-  "family", "meal", "season", "number", "entity", "abstraction", "physical_entity",
-  "attribute", "state", "act", "communication", "cognition", "measure", "unit",
-]);
+// The hub-word stop set lives in ../hub-terms.mjs (re-exported here for every
+// existing caller of this module) so sense-split.mjs's runtime chain walker
+// can share it without importing this whole build-time curation module —
+// this file's other exports (buildClump, stripDenylisted, …) are WordNet-walk
+// logic with no business in the browser bundle the digest layer links into.
+import { STOP_SET } from "../hub-terms.mjs";
+export { STOP_SET };
 
 export const BLOCKLIST_RE = /\b(archaic|obsolete|offensive|derogatory|informal|slang|dialect|euphemism|hypothetical|imaginary|mythical|mythology|extraterrestrial|fictional|taxonomic genus|genus of|family [A-Z]|nonstandard|vulgar|disparaging|obscene|coarse|genital|ethnic slur|ethnic epithet|excrement|contemptuous|insulting|trade name|street name|controlled substance|illegal|sexual assault|monoclonal antibody|chemical compound|chemical formula|proprietary name)\b/i;
 

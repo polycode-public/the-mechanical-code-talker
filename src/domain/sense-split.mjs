@@ -16,6 +16,9 @@
 //   5. otherwise                     -> not distinct.
 
 import { SUBCLASS_PREDICATE } from "./syllogise.mjs";
+import { STOP_SET } from "./hub-terms.mjs";
+
+export { STOP_SET };
 
 /** child term -> Set of its direct superclasses, from `[child, parent]` edges.
  *  Self-loops and blank endpoints are dropped. */
@@ -32,8 +35,18 @@ export function subClassParents(subClassEdges) {
 /** The single rendering chain above `term` — `[term, parent, grandparent, …]`
  *  — following one deterministic (lowest-sorted) parent per hop, capped at
  *  `cap` nodes, cycle-safe. A branch point still yields one readable line;
- *  the full-ancestor-set comparisons below never rely on this single path. */
-export function ancestryChain(term, parents, { cap = 6 } = {}) {
+ *  the full-ancestor-set comparisons below never rely on this single path.
+ *
+ *  `stopAt` (e.g. hub-terms.mjs's STOP_SET) names ancestors too abstract for
+ *  a plain-English chain to climb into — "letter → character → property →
+ *  concept" reads fine, "…→ cognition" doesn't. The walk halts BEFORE
+ *  appending a later hub ancestor, so a hub never shows up mid-chain with
+ *  more abstraction stacked past it. The direct first parent is the one
+ *  exception: it is always shown even when it is itself a hub, so a term
+ *  whose only real parent is a hub still renders that one direct parent
+ *  (matching the plain "term is a kind of parent" sentence already stated)
+ *  rather than an empty chain — the walk then still stops right there. */
+export function ancestryChain(term, parents, { cap = 6, stopAt = null } = {}) {
   const chain = [term];
   const seen = new Set([term]);
   let node = term;
@@ -41,8 +54,11 @@ export function ancestryChain(term, parents, { cap = 6 } = {}) {
     const ups = [...(parents.get(node) || [])].filter((p) => !seen.has(p)).sort();
     if (!ups.length) break;
     node = ups[0];
+    const isHub = stopAt && stopAt.has(node);
+    if (isHub && chain.length > 1) break;
     seen.add(node);
     chain.push(node);
+    if (isHub) break;
   }
   return chain;
 }

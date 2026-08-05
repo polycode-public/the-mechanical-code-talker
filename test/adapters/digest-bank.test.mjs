@@ -34,9 +34,15 @@ test("digestStoreStats counts distinct subjects per class over one row scan", ()
 });
 
 test("chainsForObjects walks the store's subClassOf edges to an ancestry chain", () => {
-  const edges = [["mammal", "vertebrate"], ["vertebrate", "animal"]];
+  const edges = [["mammal", "vertebrate"], ["vertebrate", "chordate"]];
   const chains = chainsForObjects(edges, ["mammal"]);
-  assert.deepEqual(chains.mammal, ["mammal", "vertebrate", "animal"]);
+  assert.deepEqual(chains.mammal, ["mammal", "vertebrate", "chordate"]);
+});
+
+test("chainsForObjects truncates before an abstraction-tier ancestor rather than climbing into it", () => {
+  const edges = [["mammal", "vertebrate"], ["vertebrate", "animal"], ["animal", "organism"]];
+  const chains = chainsForObjects(edges, ["mammal"]);
+  assert.deepEqual(chains.mammal, ["mammal", "vertebrate"], "the walk stops before appending the stored hub word \"animal\"");
 });
 
 test("isaObjectsOf returns the isa objects in first-seen order, deduped", () => {

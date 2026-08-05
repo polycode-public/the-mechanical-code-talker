@@ -80,8 +80,14 @@ function provKey(tier) {
  *
  * Multiple citations (a multi-step proof chain) resolve by the same
  * taught-over-entailed-over-corpus precedence provBucketFor's own header
- * documents for one fact's sourceTypes, applied across citations instead:
- * a chain resting on any taught premise reads as "taught" overall.
+ * documents for one fact's sourceTypes, applied across citations instead —
+ * but only on a real teach turn (`record.via === "assert"`), where the
+ * user's own action IS the taught premise the chip announces. A READ turn
+ * (a question answered by citing stored facts) only earns the "taught" chip
+ * when EVERY citation is taught: one taught fact among otherwise-corpus or
+ * entailed citations is the query resting on background data, not the user
+ * teaching anything, so it falls through to the same entailed-over-corpus
+ * choice a wholly non-taught answer gets.
  *
  * Self-contained (no outer refs beyond the injected `bucketFor`),
  * `.toString()`-splice safe.
@@ -91,7 +97,8 @@ export function provenanceChipFor(answer, record, bucketFor) {
   const cites = [...String(answer || "").matchAll(/\(source: ([^)]+)\)/g)].map((m) => m[1]);
   if (!cites.length) return record.via === "assert" ? "taught" : null;
   const buckets = cites.map((c) => bucketFor([], c));
-  if (buckets.includes("taught")) return "taught";
+  const allTaught = buckets.every((b) => b === "taught");
+  if (buckets.includes("taught") && (record.via === "assert" || allTaught)) return "taught";
   if (buckets.includes("entailed")) return "entailed";
   return "corpus";
 }
