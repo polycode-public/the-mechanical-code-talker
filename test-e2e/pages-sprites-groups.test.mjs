@@ -108,7 +108,7 @@ test("clicking a group page's own overview link really returns to the sprites.ht
   try {
     await page.locator(".jump-overview").click();
     await page.waitForURL(/sprites\.html$/);
-    assert.equal(await page.locator(".card").count(), 28, "the landing page's own ~28 example cards render, not the full objects gallery");
+    assert.equal(await page.locator(".card").count(), 23, "the landing page's own one-card-per-section examples render, not the full objects gallery");
   } finally {
     await context.close();
   }
@@ -280,6 +280,8 @@ test("the dock on the person-roles page still counts and enumerates the WHOLE ca
     await page.press("#dockq", "Enter");
     await page.waitForFunction(() => document.querySelectorAll("#dockLog .a").length > 0);
     const text = await page.locator("#dockLog .a").last().innerText();
+    // The count answer carries its own "say list ... to see them" nudge after
+    // the count itself, so the count is a prefix match, not the whole line.
     const counted = Number((text.match(/^(\d+) sprite classes\./) || [])[1]);
     const cardsOnThisPage = await page.locator(".card").count();
     assert.equal(cardsOnThisPage, 57, "this page's own gallery is just Person roles");

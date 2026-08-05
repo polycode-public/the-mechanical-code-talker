@@ -4,9 +4,9 @@
 // see sprite-catalog-viz.mjs's own catalogSections), each linking out to its
 // own class's card on the group page that actually holds the full gallery.
 // The composer (the "there is a" lead-in) and the chat dock both still
-// answer over the WHOLE catalog from this page, even though only ~28 of its
-// classes have a card here — see test-e2e/pages-sprites-groups.test.mjs for
-// the four full-gallery pages this page links out to.
+// answer over the WHOLE catalog from this page, even though only one class
+// per section has a card here — see test-e2e/pages-sprites-groups.test.mjs
+// for the four full-gallery pages this page links out to.
 //
 // Third-party hosts are blocked for every run, exactly as in pages-home/
 // pages-spider-fly: the whole page ships with itself, so nothing here needs
@@ -96,8 +96,8 @@ test("the landing page shows exactly one example card per section — the operat
   const { context, page } = await openSpritesPage();
   try {
     const total = await page.locator(".card").count();
-    assert.equal(total, 28, "one card per section: the whole adventure and emoji groups plus every person/object ancestor cluster");
-    for (const cls of ["adventurer", "engineer", "king", "family", "bear", "frog", "autumn"]) {
+    assert.equal(total, 23, "one card per section: the whole adventure and emoji groups plus every person/object ancestor cluster");
+    for (const cls of ["adventurer", "engineer", "king", "family", "spider", "frog", "autumn"]) {
       assert.equal(await page.locator(`.card[data-cls="${cls}"]`).count(), 1, `${cls} is one of the curated landing examples`);
     }
     assert.equal(await page.locator('.card[data-cls="doctor"]').count(), 0, "a class that isn't a curated example has no card here");
@@ -111,7 +111,7 @@ test("every 'view all' link points to that example's own card on its group's ful
   const { context, page } = await openSpritesPage();
   try {
     const links = await page.locator(".viewall").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    assert.equal(links.length, 28);
+    assert.equal(links.length, 23);
     assert.ok(links.includes("./sprites-person-roles.html#card-king"), "the person 'man' cluster's own favourite links to its own card");
     assert.ok(links.includes("./sprites-objects.html#card-frog"), "the object group's trailing 'everything else' cluster links to its own favourite's card");
     assert.ok(links.includes("./sprites-adventure-props.html#card-adventurer"));
@@ -300,17 +300,19 @@ test("an ungrounded dock question gets a refusal, never a guess", async () => {
   }
 });
 
-test("the dock's classes-on-record question grounds in the WHOLE catalog, not just this page's own ~28 example cards", async () => {
+test("the dock's classes-on-record question grounds in the WHOLE catalog, not just this page's own example cards", async () => {
   const { context, page, consoleErrors } = await openSpritesPage();
   try {
     const footerText = await page.locator("footer.page").innerText();
     const wholeCatalogTotal = Number((footerText.match(/^(\d+) classes/) || [])[1]);
     assert.ok(Number.isFinite(wholeCatalogTotal), `the footer names the whole catalog's real total, got: ${footerText}`);
     const cardsOnThisPage = await page.locator(".card").count();
-    assert.ok(wholeCatalogTotal > cardsOnThisPage, "the whole catalog is far bigger than this page's ~28 example cards, or this test proves nothing");
+    assert.ok(wholeCatalogTotal > cardsOnThisPage, "the whole catalog is far bigger than this page's one-per-section example cards, or this test proves nothing");
 
     const reply = await askDock(page, "how many sprite classes are there?");
     const text = await reply.innerText();
+    // The count answer carries its own "say list ... to see them" nudge after
+    // the count itself, so the count is a prefix match, not the whole line.
     const counted = Number((text.match(/^(\d+) sprite classes\./) || [])[1]);
     assert.ok(Number.isFinite(counted), `the answer is a real count, got: ${text}`);
     assert.equal(counted, wholeCatalogTotal, "the dock counts the whole catalog, never just the cards this landing page happens to show");
@@ -346,7 +348,7 @@ test("a dock pill fills the input with its exact question without submitting it"
   }
 });
 
-test("the catalog filter narrows the ~28 example cards, hides emptied groups, counts the survivors, and clears back to everything", async () => {
+test("the catalog filter narrows the example cards, hides emptied groups, counts the survivors, and clears back to everything", async () => {
   const { context, page, consoleErrors } = await openSpritesPage();
   try {
     const total = await page.locator(".card").count();
