@@ -1202,7 +1202,11 @@ async function answerCollectionContents(memoryDir, query, biasByBundle = {}, cac
   const containerRaw = restricted ? restricted[2] : unrestricted[1];
   const rows = await factRows(memoryDir, cache);
   const containerVariants = factTermVariants(normFactTerm, containerRaw);
-  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object));
+  // Sorted by content-addressed key before ranking, same discipline as
+  // taughtMembersUnder: rankByBiasThenTrust's own tiebreak is array index, so
+  // an unsorted filter would render two peers' facts in their own arrival
+  // order instead of one shared order.
+  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object)).sort(orderKeyCompare);
   if (!members.length) return null; // no containment rows at all — answerMembershipList keeps this noun
   const renderMembers = (list, noun) => {
     const ranked = rankByBiasThenTrust(uniqueFacts(list), biasByBundle);
@@ -8561,7 +8565,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const containerVariants = factTermVariants(normFactTerm, containerRaw.replace(/^(?:an?|the)\s+/i, "").trim());
       const hits = (await factRows(memoryDir, cache)).filter(
         (f) => predicates.includes(f.predicate) && containerVariants.has(f.object),
-      );
+      ).sort(orderKeyCompare); // content-addressed order, not arrival order — see answerCollectionContents' own note
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
