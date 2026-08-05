@@ -55,7 +55,7 @@ test("teach + read-back: the syllogist demo's turns hold as an engine contract",
   const replies = [];
   for (const line of demo.turns) replies.push(await session.turn(line));
   assert.match(replies[0].answer, /^noted — remembered: dog is a kind of mammal/);
-  assert.match(replies[1].answer, /^noted — remembered: rex is a kind of dog/);
+  assert.match(replies[1].answer, /^noted — remembered: rex is a dog/);
   assert.match(replies[2].answer, /^yes — /);
   assert.match(replies[2].answer, /so rex is a mammal/);
 });

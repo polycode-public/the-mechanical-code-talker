@@ -736,14 +736,14 @@ tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code
     already knows a dog can bark; teach it that Rover is a dog and it
     reasons the rest, citing both facts it chained through:</p>
     <pre data-tmct-session="node examples/rover-infer.mjs" data-tmct-cwd="repo"><code>tmct&gt; Rover is a dog.
-noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+noted — remembered 1 fact: rover rdf:type dog
 
 Goal (inferred): Teach/remember a new fact.
 
-Canonical: rover rdfs:subClassOf dog — fact("rover", "rdfs:subClassOf", "dog")
+Canonical: rover rdf:type dog — fact("rover", "rdf:type", "dog")
 
 tmct&gt; Does Rover bark?
-yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;)</code></pre>
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;)</code></pre>
 
     <p>
       A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY

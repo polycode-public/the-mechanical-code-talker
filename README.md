@@ -229,14 +229,14 @@ both the taught fact and the corpus fact the answer chained through:
 
 ```output cmd="node examples/rover-infer.mjs" cwd=repo
 tmct> Rover is a dog.
-noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+noted — remembered 1 fact: rover rdf:type dog
 
 Goal (inferred): Teach/remember a new fact.
 
-Canonical: rover rdfs:subClassOf dog — fact("rover", "rdfs:subClassOf", "dog")
+Canonical: rover rdf:type dog — fact("rover", "rdf:type", "dog")
 
 tmct> Does Rover bark?
-yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:<session-id>@<timestamp>)
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a dog (source: ace:chat:<session-id>@<timestamp>)
 ```
 
 Every fact above is a small stored record, not just words in an answer. Here
@@ -848,8 +848,10 @@ rather than the code graph. A taught class answers both shapes too: after
 "list all animals" reads them back, each cited to where it came from.
 
 When you ask about a term, the read-back shows each "is a kind of" object with
-its own superclass chain: "what is rover" answers "rover is a kind of dog →
-canine → mammal → animal". If one label carries two unrelated senses (you
+its own superclass chain: "what is rover" answers "rover is a dog →
+canine → mammal → animal" (a bare, undeclared name like "rover" reads as one
+named individual, so the first hop drops "kind of" — every class hop after it
+keeps the phrase). If one label carries two unrelated senses (you
 taught "rover is a dog" and a corpus row says "rover is a scout"), the answer
 groups by concept ("rover, the dog:" / "rover, the scout:") instead of listing
 two unrelated lines as if they were one thing. The split is deterministic over

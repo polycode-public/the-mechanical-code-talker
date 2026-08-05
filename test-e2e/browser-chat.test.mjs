@@ -134,7 +134,7 @@ test("the dock answers a second question in the same session", async () => {
     await ask(page, "what is a dog");
     const second = await ask(page, "what is disk-1");
     assert.equal(second.isMiss, false, "the dock keeps answering after its first reply");
-    assert.match(second.text, /disk-1 is a kind of disk/, "the second answer reads back its own fact");
+    assert.match(second.text, /disk-1 is a disk/, "the second answer reads back its own fact");
   } finally {
     await context.close();
   }
