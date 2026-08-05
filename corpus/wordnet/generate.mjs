@@ -147,6 +147,147 @@ const repTerm = (synset) => {
   return m.length ? m[0] : null;
 };
 
+// ---- sense-preserving naming ladder (pure, unit-tested) --------------------
+// Names a synset from its OWN members, never a sense-suffixed id: the read
+// side (src/adapters/corpus/conceptnet.mjs termText, chat.mjs factPhrase)
+// prints stored terms verbatim, so the stored string IS the sense identity.
+// One rung wins per synset, tried in order; each candidate that would
+// normalise away under src/domain/hash.mjs normFactTerm's leading-article
+// strip is rejected and the ladder moves on.
+
+export const POS_RANK = Object.freeze({ n: 0, v: 1, a: 2, s: 2, r: 3 });
+export const LEXNAME_NOT_A_GLOSS = Object.freeze(["all", "Tops", "pert", "ppl"]);
+
+const ENTRIES_FILE_RE = /^entries-[0-9a-z]\.yaml$/;
+const SYNSET_ID_POS_RE = /-(\w)$/;
+
+const posOfSynsetId = (id) => {
+  const m = SYNSET_ID_POS_RE.exec(String(id ?? ""));
+  return m ? m[1] : null;
+};
+
+/** True iff `name`, stored verbatim, would lose its leading word to
+ *  normFactTerm's `/^(?:the|an?)\s+/i` strip at write time — a candidate that
+ *  reads unsafe is rejected, never stored, so "a (communication)" never
+ *  silently becomes "(communication)". */
+export function isArticleUnsafe(name) {
+  return /^(?:the|an?)\s+/i.test(String(name ?? "").trim());
+}
+
+/** Every distinct member string across every synset, mapped to the set of
+ *  synset ids that carry it anywhere in their `members` list (any position,
+ *  not just members[0]) — the population a lemma is contesting against,
+ *  whichever position it sits at. Order-independent: callers only ever ask
+ *  for `.size` or run a full min-scan over the Set, never rely on its
+ *  iteration order. */
+export function buildMemberOwners(bySynset) {
+  const owners = new Map();
+  for (const [id, synset] of bySynset) {
+    const members = Array.isArray(synset?.members) ? synset.members : [];
+    for (const raw of members) {
+      const m = String(raw ?? "").trim();
+      if (!m) continue;
+      if (!owners.has(m)) owners.set(m, new Set());
+      owners.get(m).add(id);
+    }
+  }
+  return owners;
+}
+
+/** Load the `word -> { synset -> senseIndex }` frequency order WordNet itself
+ *  encodes in `entries-<letter>.yaml`'s per-POS sense list order, flattened
+ *  to `"word synsetId" -> index`. Reads all 28 entries files once; a
+ *  maintainer-tool-scale cost (~26MB total), not something the per-synset
+ *  ladder pays for each call. */
+export async function loadSenseIndex(yamlDir) {
+  const all = await readdir(yamlDir);
+  const files = all.filter((f) => ENTRIES_FILE_RE.test(f)).sort();
+  const senseIndex = new Map();
+  for (const f of files) {
+    const parsed = await readWordnetYaml(join(yamlDir, f));
+    for (const [word, byPos] of Object.entries(parsed || {})) {
+      for (const [pos, rec] of Object.entries(byPos || {})) {
+        if (pos === "form") continue;
+        const senses = Array.isArray(rec?.sense) ? rec.sense : [];
+        senses.forEach((s, i) => {
+          if (s?.synset) senseIndex.set(`${word} ${s.synset}`, i);
+        });
+      }
+    }
+  }
+  return senseIndex;
+}
+
+/** For every member string contested by more than one synset, which single
+ *  synset id is WordNet's dominant (most frequent) sense of it — lowest
+ *  `(posRank, senseIndex, synsetId)`, a total order down to the id tiebreak
+ *  so the winner never depends on Set/Map iteration order. Returns
+ *  `member -> dominant synsetId`; uncontested members (owners.size < 2) carry
+ *  no entry, since dominance only means something once there is a rival. */
+export function buildDominantSense(memberOwners, senseIndex) {
+  const dominant = new Map();
+  for (const [member, owners] of memberOwners) {
+    if (owners.size < 2) continue;
+    let winner = null;
+    let winnerPosRank = Infinity;
+    let winnerSenseIdx = Infinity;
+    for (const id of owners) {
+      const posRank = POS_RANK[posOfSynsetId(id)] ?? Infinity;
+      const senseIdx = senseIndex.get(`${member} ${id}`) ?? Infinity;
+      const better = posRank !== winnerPosRank ? posRank < winnerPosRank
+        : senseIdx !== winnerSenseIdx ? senseIdx < winnerSenseIdx
+          : winner === null || id < winner;
+      if (better) { winner = id; winnerPosRank = posRank; winnerSenseIdx = senseIdx; }
+    }
+    dominant.set(member, winner);
+  }
+  return dominant;
+}
+
+/** The naming ladder itself. `ctx = { memberOwners, dominantBySynset, lexOf }`
+ *  is built once per run (see main()) and shared across every synset.
+ *  1. unique lemma — members[0] owned by only this synset.
+ *  2. dominant sense — this synset wins members[0]'s WordNet-frequency contest.
+ *  3. distinguishing member — the first later member no other synset owns.
+ *  4. lexname gloss — `members[0] (lexname)`, nouns/verbs only, skipped when
+ *     another same-lemma synset shares the lexfile (the gloss wouldn't
+ *     distinguish them) or the lexfile segment is a non-semantic bucket.
+ *  5. residue — bare members[0], unconditionally (today's behavior; the
+ *     final fallback has nowhere further to reject to). */
+export function senseTermFor(id, synset, ctx) {
+  const members = Array.isArray(synset?.members) ? synset.members : [];
+  const A = String(members[0] ?? "").trim();
+  if (!A) return null;
+  const ownersA = ctx.memberOwners.get(A);
+
+  if ((ownersA?.size ?? 0) <= 1 && !isArticleUnsafe(A)) return A;
+  if (ctx.dominantBySynset.get(A) === id && !isArticleUnsafe(A)) return A;
+
+  for (const raw of members.slice(1)) {
+    const m = String(raw ?? "").trim();
+    if (!m) continue;
+    const owners = ctx.memberOwners.get(m);
+    if ((owners?.size ?? 0) === 1 && !isArticleUnsafe(m)) return m;
+  }
+
+  const pos = posOfSynsetId(id);
+  if (pos === "n" || pos === "v") {
+    const lexfile = ctx.lexOf.get(id);
+    const segment = lexfile ? lexfile.split(".")[1] : null;
+    if (segment && !LEXNAME_NOT_A_GLOSS.includes(segment)) {
+      const sameLexfileElsewhere = ownersA
+        ? [...ownersA].some((otherId) => otherId !== id && ctx.lexOf.get(otherId) === lexfile)
+        : false;
+      if (!sameLexfileElsewhere) {
+        const candidate = `${A} (${segment})`;
+        if (!isArticleUnsafe(candidate)) return candidate;
+      }
+    }
+  }
+
+  return A;
+}
+
 // ---- pass 2: synset map -> deduped, sorted ConceptNet-shape rows -----------
 
 function makeRowBuilder() {
