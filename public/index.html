@@ -585,8 +585,8 @@
       <div class="demo-cli">
         This box asks a real question of a small fixture repo's code graph
         (<code>examples/mini-webapp</code>) using the exact same query engine the CLI
-        ships. It runs live, client-side. Nothing is precomputed on a server (GitLab
-        Pages doesn't have one). The same question against a real repo, from a terminal:
+        ships. It runs live, client-side. Nothing is precomputed on a server; this
+        static site has no backend to run it on. The same question against a real repo, from a terminal:
         <pre class="term-cli"></pre>
       </div>
     </div>
@@ -737,6 +737,11 @@ tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code
     reasons the rest, citing both facts it chained through:</p>
     <pre data-tmct-session="node examples/rover-infer.mjs" data-tmct-cwd="repo"><code>tmct&gt; Rover is a dog.
 noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+
+Goal (inferred): Teach/remember a new fact.
+
+Canonical: rover rdfs:subClassOf dog — fact("rover", "rdfs:subClassOf", "dog")
+
 tmct&gt; Does Rover bark?
 yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;)</code></pre>
 
@@ -795,8 +800,9 @@ await runChat({
       <a class="showcase-card" href="https://gitlab.com/polycode-projects/bedrock-meter">
         <h3>Bedrock Meter</h3>
         <span class="showcase-domain">gitlab.com/polycode-projects/bedrock-meter</span>
-        <p>An AWS Bedrock cost-metering proxy for marginalia. Planning is in progress to
-        adopt tmct as its no-LLM fallback path.</p>
+        <p>An AWS Bedrock cost-metering proxy for marginalia. It prices every call
+        pre-flight and, at a configured cap, switches marginalia onto tmct's
+        no-LLM path instead of an outage.</p>
       </a>
     </div>
   </section>
