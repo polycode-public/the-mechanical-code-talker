@@ -97,3 +97,11 @@ export const INDEX_META = {
   title: "the-mechanical-code-talker",
   description: "A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage: mechanical interpretation, OWL graph memory, honest misses.",
 };
+
+/** The receipts page's own head-tag metadata. It carries no paired about
+ *  page and sits outside DEMO_PAGES, so it gets its own entry rather than
+ *  riding DEMO_PAGE_META. */
+export const RECEIPTS_META = {
+  title: "Receipts",
+  description: "Query latency, graph and page size, and chatbench and idxbench headlines, measured and committed. Each figure on this page names the file it comes from.",
+};
