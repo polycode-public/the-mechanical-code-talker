@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isGroundedTerm } from "../../src/services/chat.mjs";
 import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
+import { appendFacts } from "../../src/adapters/memory/core.mjs";
 
 const lex = loadLexicon();
 
@@ -58,6 +59,16 @@ test("isGroundedTerm never throws when graph is an empty/malformed stand-in", as
   const dir = await mkdtemp(join(tmpdir(), "tmct-grounding-"));
   try {
     assert.equal(await isGroundedTerm("zorp", lex, dir, null, { individuals: [] }), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("isGroundedTerm still reports a corpus-only term as ungrounded — the corpus tier is isCorpusAnchoredTerm/isAnchorableTerm's territory, not this function's", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-grounding-"));
+  try {
+    await appendFacts(dir, [{ subject: "corpusonlyletter", predicate: "rdfs:subClassOf", object: "letter", provenance: "corpus:wordnet-xl /r/IsA" }]);
+    assert.equal(await isGroundedTerm("corpusonlyletter", lex, dir), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

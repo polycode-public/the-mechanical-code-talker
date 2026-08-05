@@ -252,6 +252,21 @@ test("a bare property teach on an UNKNOWN subject stores with an empty quantifie
   }
 });
 
+test("'words like cat' answers the synonym lane, never the general-verb teach frame — the fact store stays untouched", async () => {
+  const dir = await mem("words-like-synonym");
+  try {
+    const before = readFactRows(await loadMemory(dir)).length;
+    const r = await runTurn("words like cat", { config: CONFIG, memoryDir: dir, sessionId: "wl1" });
+    assert.equal(r.record.miss, true, "an empty store has no synonyms for cat — an honest miss, not a stored 'words like cat' fact");
+    assert.match(r.answer, /synonyms or related words for "cat"/);
+    assert.doesNotMatch(r.answer, /noted — remembered/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, before, "the fact store is unchanged");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- the dated teach frame: "<sentence> as of <date>" ----
 
 test("the ACE assert lane stores mgx:observedAt from a trailing 'as of <date>' suffix, and the acknowledgment echoes the date", async () => {

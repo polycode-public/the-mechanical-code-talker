@@ -3340,38 +3340,114 @@ const MINT_ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
  *  zorp is a thing"), then chain the other new term off the now-grounded one. */
 const GENERIC_ANCHOR_NOUNS = new Set(["thing", "concept", "object", "entity"]);
 
-/** Shared fact-groundedness primitive (Feature A mint-extension, point 2):
- *  true when `term` already appears as the SUBJECT or OBJECT of a previously
- *  taught isa-family fact (rdfs:subClassOf/rdf:type) in memory. A term minted
- *  by EITHER mint-fallback below (this session, or an earlier one — this
- *  reads persisted memory, not session-scoped state) is exactly as legitimate
- *  an anchor for a NEW fact as a static lexicon-core.json word — the whole
- *  point of this extension is letting new vocabulary compound turn over turn
- *  ("every cache is a store" mints "store"; "every store is a container" then
- *  needs "store" to read as known even though it's not in the static lexicon
- *  at all). Read-only, reuses memoryFacts' plain read path (existence only —
- *  no trust-ranking needed here) and normFactTerm's own normalization, so a
- *  fact-grounded term matches under the EXACT spelling teachFact itself stored
- *  it under. Failure-tolerated: no memory dir / no match → false, never a
- *  guessed "yes". */
+/** Corpus source types treated as a real anchor for the isa-tier below.
+ *  `corpus` is the band provenanceTagToSource (trust.mjs) assigns to
+ *  corpus:<bundle>/child:<pack>:<term>/world:<name>/mud:<character> — a
+ *  shipped isa row from one of those, not the operator's own words. Named
+ *  explicitly, rather than "everything except corpusWeak/reference/web/...",
+ *  so a new corpus band added later has to be added here on purpose before it
+ *  can anchor anything: corpusWeak only ever carries mgx:relatedTo (already
+ *  excluded by the predicate filter, named here too so a future corpus-weak
+ *  isa row can't anchor silently); reference/referenceLive/extracted/
+ *  optimisticExtract/web isa rows can be extraction artifacts, a wider band a
+ *  benchmark would need to earn separately; provider-sourced code symbols
+ *  already ground via isGroundedTerm's own resolveSymbol branch. */
+const CORPUS_ANCHOR_SOURCE_TYPES = new Set(["corpus"]);
+const isCorpusAnchorRow = (f) => !!f.sourceTypes?.some((t) => CORPUS_ANCHOR_SOURCE_TYPES.has(t));
+
+/** Every term that appears as the subject or object of an isa-family fact
+ *  (MINT_ISA_PREDICATES), split into the two tiers the grounding checks below
+ *  need: TAUGHT (isOperatorTaught) and CORPUS-ANCHORED (isCorpusAnchorRow). A
+ *  row that is both (an operator teach merged onto an existing corpus row,
+ *  same triple) lands in both Sets — no special case needed. Membership only:
+ *  no ordering, no first-match, no wall clock, so the same fact set fed in
+ *  any order produces identical Sets. */
+function buildIsaTermIndex(rows) {
+  const taught = new Set();
+  const corpusAnchored = new Set();
+  for (const f of rows) {
+    if (!MINT_ISA_PREDICATES.has(f.predicate)) continue;
+    const taughtRow = isOperatorTaught(f);
+    const corpusRow = isCorpusAnchorRow(f);
+    if (!taughtRow && !corpusRow) continue;
+    for (const term of [f.subject, f.object]) {
+      if (!term) continue;
+      if (taughtRow) taught.add(term);
+      if (corpusRow) corpusAnchored.add(term);
+    }
+  }
+  return { taught, corpusAnchored };
+}
+export { buildIsaTermIndex };
+
+/** buildIsaTermIndex, cached per turn — identity-keyed to the ROWS ARRAY
+ *  itself, not a plain cache flag: factRows' own cache.rows is nulled
+ *  mid-turn right after a write, so a stale index built from before that
+ *  write must never be handed back to a grounding check running after it.
+ *  Keying on the rows array's identity gets that for free — a new rows array
+ *  after a write is a different identity, so the index rebuilds. */
+async function isaTermIndex(memoryDir, cache = null) {
+  const rows = await factRows(memoryDir, cache);
+  if (cache && cache.isaTermIndex && cache.isaTermIndexRows === rows) return cache.isaTermIndex;
+  const index = buildIsaTermIndex(rows);
+  if (cache) { cache.isaTermIndex = index; cache.isaTermIndexRows = rows; }
+  return index;
+}
+
+/** Shared normalized-term lookup for the isa-tier checks below — the exact
+ *  same normFactTerm discipline isGroundedByFact always used, deliberately
+ *  never widened to factTermVariants (a fuzzy match here would anchor a term
+ *  the operator/corpus row never actually named). */
+async function normalizedFactTerm(term) {
+  const raw = String(term ?? "").trim();
+  if (!raw) return "";
+  try {
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
+    return normFactTerm(raw) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** TAUGHT tier of the isa-anchor ladder (Feature A mint-extension, point 2):
+ *  true when `term` already appears as the SUBJECT or OBJECT of an isa-family
+ *  fact (rdfs:subClassOf/rdf:type) the OPERATOR actually taught (or a prior
+ *  `tmct syllogise` entailment) — isOperatorTaught, via the shared
+ *  isaTermIndex above. A term minted by EITHER mint-fallback below (this
+ *  session, or an earlier one — this reads persisted memory, not
+ *  session-scoped state) is exactly as legitimate an anchor for a NEW fact as
+ *  a static lexicon-core.json word — the whole point of this tier is letting
+ *  new vocabulary compound turn over turn ("every cache is a store" mints
+ *  "store"; "every store is a container" then needs "store" to read as known
+ *  even though it's not in the static lexicon at all).
+ *
+ *  This is the narrowest of three isa-anchor tiers: isCorpusAnchoredTerm
+ *  (right below) anchors on a shipped corpus isa row instead of an
+ *  operator-taught one; isGroundedTerm (below that) folds in the static
+ *  lexicon and GENERIC_ANCHOR_NOUNS too. A caller that specifically needs
+ *  "the operator SAID this" — a proof chain citing its own warrant, a
+ *  cardinality check — keeps calling this function directly; a caller that
+ *  only needs "is this term known in ANY sense" goes through isGroundedTerm
+ *  or isAnchorableTerm instead. Read-only, failure-tolerated: no memory dir /
+ *  no match → false, never a guessed "yes". */
 async function isGroundedByFact(term, memoryDir, cache = null) {
   if (!memoryDir) return false;
-  const raw = String(term ?? "").trim();
-  if (!raw) return false;
-  const { normFactTerm } = await import("../adapters/memory/core.mjs");
-  const t = normFactTerm(raw);
+  const t = await normalizedFactTerm(term);
   if (!t) return false;
-  // TAUGHT-only (same discipline factReadBack's own cax-sco/scm-sco proof
-  // chase already uses, above, for the identical reason: the bulk background
-  // corpus band (ConceptNet, trust 0.7, seeded by the thousands on a fresh
-  // repo) mentions ordinary English words like "store"/"container" constantly
-  // — treating THOSE as "grounded" would silently reopen the general lexicon
-  // bypass this whole feature is deliberately narrow to avoid. Only what the
-  // OPERATOR actually taught (or a prior `tmct syllogise` entailment) anchors
-  // a term here. factRows (not memoryFacts) is used specifically because it's
-  // the one read path that carries sourceTypes for this filter.
-  const rows = await factRows(memoryDir, cache);
-  return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isOperatorTaught(f) && (f.subject === t || f.object === t));
+  return (await isaTermIndex(memoryDir, cache)).taught.has(t);
+}
+
+/** CORPUS-ANCHORED tier of the isa-anchor ladder: true when `term` is the
+ *  subject or object of an isa-family fact whose source is the corpus band
+ *  (CORPUS_ANCHOR_SOURCE_TYPES) — a shipped bundle's own claim that the term
+ *  denotes a class, not necessarily anything the operator taught. See
+ *  isAnchorableTerm, just below isGroundedTerm, for where this tier and the
+ *  taught tier combine into "anchorable in any sense". */
+async function isCorpusAnchoredTerm(term, memoryDir, cache = null) {
+  if (!memoryDir) return false;
+  const t = await normalizedFactTerm(term);
+  if (!t) return false;
+  return (await isaTermIndex(memoryDir, cache)).corpusAnchored.has(t);
 }
 
 /** A bare single alphabetic character ("a", "i", …) classify() resolves only
@@ -3409,6 +3485,19 @@ async function isGroundedTerm(term, lex, memoryDir, cache = null, graph = null) 
 }
 export { isGroundedTerm };
 
+/** "Anchorable in ANY sense" — everything isGroundedTerm already tests
+ *  (static lexicon, GENERIC_ANCHOR_NOUNS, a resolved code-graph symbol, a
+ *  prior-taught isa fact) PLUS the corpus-anchored tier (isCorpusAnchoredTerm,
+ *  above): a term a shipped corpus bundle's own isa row already names as a
+ *  class. isGroundedTerm itself stays exactly as narrow as before (it's
+ *  exported and pinned by test/services/chat-grounding.test.mjs) — every
+ *  widening onto the corpus tier goes through this function instead. */
+async function isAnchorableTerm(term, lex, memoryDir, cache = null, graph = null) {
+  if (await isGroundedTerm(term, lex, memoryDir, cache, graph)) return true;
+  return isCorpusAnchoredTerm(term, memoryDir, cache);
+}
+export { isAnchorableTerm };
+
 /** The "both sides ungrounded" grounding NUDGE: reuses teachSuggestion's own
  *  "compute a hint, APPEND it to the existing honest-miss message, never
  *  replace/silently guess" pattern (see its docblock, above, and the
@@ -3423,18 +3512,21 @@ export { isGroundedTerm };
  *  is a thing"), then chain the other off the now-grounded term. Deliberately
  *  APPENDED rather than a replacement/short-circuit: a "both sides
  *  ungrounded" is/are sentence with a KNOWN subject on one side (e.g. "module
- *  is banana") never reaches this at all (isGroundedTerm(subject) is true, so
- *  the very first return below fires) — that stays unknownObjectFallback's
- *  own mint territory, entirely unaffected here. Returns "" (message
- *  unchanged) whenever the payload doesn't fit the shape, or at least one
- *  side IS already grounded — a DIFFERENT, more specific reason it declined,
- *  where this nudge would be actively unhelpful noise. */
+ *  is banana") never reaches this at all (isAnchorableTerm(subject) is true,
+ *  so the very first return below fires) — that stays unknownObjectFallback's
+ *  own mint territory, entirely unaffected here. Anchorable (not just
+ *  lexicon-grounded) on both checks: after the corpus-anchored tier, a side
+ *  a shipped corpus bundle already names as a class is known too, so the
+ *  nudge must not claim tmct doesn't know it. Returns "" (message unchanged)
+ *  whenever the payload doesn't fit the shape, or at least one side IS
+ *  already anchored — a DIFFERENT, more specific reason it declined, where
+ *  this nudge would be actively unhelpful noise. */
 /** The subject/object NP terms ungroundedPairHint's message names, computed
  *  once and shared with the honest-miss builder's own residue clause below —
  *  so a decline never names one pair of unknown words in one sentence and a
  *  DIFFERENT pair (a wider or narrower slice of the same NPs) in the next.
  *  Null when the payload doesn't fit the shape, or at least one side IS
- *  already grounded — see ungroundedPairHint's own docblock for why. */
+ *  already anchored — see ungroundedPairHint's own docblock for why. */
 async function ungroundedPairTerms(payload, lexicon, memoryDir, cache = null, graph = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
@@ -3442,8 +3534,8 @@ async function ungroundedPairTerms(payload, lexicon, memoryDir, cache = null, gr
   const [, , subjectRaw, verb, objectRaw] = m;
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return null;
-  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return null;
+  if (await isAnchorableTerm(subjectRaw, lex, memoryDir, cache, graph)) return null;
+  if (await isAnchorableTerm(objectRaw, lex, memoryDir, cache, graph)) return null;
   // The sentences suggested here have to be the ones that actually store, so
   // both sides fold to the singular a plural surface named ("all zorps are
   // florbs" → "every zorp is a thing"). Following the plural verbatim teaches
@@ -3540,12 +3632,17 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   // plurals for the "is this a real miss" check, so singularizing only the
   // STORED value here is safe and doesn't change that check's behavior.
   const subject = /^are$/i.test(verb) ? singularizeSurface(subjectRaw) : subjectRaw;
-  // A PRIOR turn's minted term, or a GENERIC_ANCHOR_NOUNS root, grounds Y
-  // just as legitimately as a static lexicon noun — both are always treated
-  // as class-level (never property), consistent with unknownObjectFallback
-  // (below) always minting a CLASS.
+  // A PRIOR turn's minted term, a GENERIC_ANCHOR_NOUNS root, or a shipped
+  // corpus bundle's own isa row grounds Y just as legitimately as a static
+  // lexicon noun — all three are always treated as class-level (never
+  // property), consistent with unknownObjectFallback (below) always minting
+  // a CLASS. Without the corpus-anchored check, "p is a kind of consonant"
+  // (both sides corpus-anchored, neither in the static lexicon) refuses; with
+  // it, "florb is a kind of glyph" also stores, minting "florb" — one
+  // anchored side is enough, the same rule the taught tier already applies.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
-    || (await isGroundedByFact(objectRaw, memoryDir, cache))) {
+    || (await isGroundedByFact(objectRaw, memoryDir, cache))
+    || (await isCorpusAnchoredTerm(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
       subject,
       predicate: SUBCLASS_PREDICATE,
@@ -3650,8 +3747,14 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
   if (!/^(?:every|each|all|any)$/i.test((det || "").trim()) && !classIntent) return null; // class-level mint needs a universal quantifier or an explicit kind-of infix
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph);
+  // Anchorable (not just lexicon-grounded): a corpus-anchored subject earns
+  // the same mint a lexicon-grounded one does ("p is a kind of alphabet
+  // letter" — "p" anchored via a corpus isa row, "alphabet letter" minted).
+  const subjectGrounded = await isAnchorableTerm(subjectRaw, lex, memoryDir, cache, graph);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
+  // The OBJECT gate stays on isGroundedTerm, deliberately narrower than the
+  // subject gate above — an anchorable-but-not-yet-minted object here means
+  // some other lane already owns this sentence, not "mint it again".
   const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph);
   if (objectGrounded) return null; // object already known — nothing to mint
   if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
@@ -3755,11 +3858,15 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   if (/\s+(?:is|are)\s+an?\s+[\w-]+[.!?]*\s*$/i.test(String(payload).trim())) return null;
   const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
-  // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
-  // territory (already had first refusal on it) — never misread as a property.
+  // Y already a known NOUN, a fact-grounded CLASS term, or a corpus-anchored
+  // CLASS term — a genuine class-membership sentence, unknownSubjectFallback/
+  // unknownObjectFallback's own territory (already had first refusal on it)
+  // — never misread as a property. The corpus-anchored check is required
+  // here, not optional: without it a corpus-anchored object could be
+  // misread as a brand-new adjective instead of the class term it is.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
-    || (await isGroundedByFact(objectRaw, memoryDir, cache))) return null;
+    || (await isGroundedByFact(objectRaw, memoryDir, cache))
+    || (await isCorpusAnchoredTerm(objectRaw, memoryDir, cache))) return null;
   // CLASS-LEVEL adjective predication — "every snake is venomous": a universal
   // quantifier over a grounded noun class, with an adjective complement. The
   // quantifier is the same deliberate-generalization signal the article/
@@ -3770,9 +3877,13 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // holds for the whole class. The adjective is confirmed by the static lexicon
   // or wink's POS tag (the same tag unknownObjectFallback used to defer here);
   // a noun-shaped Y was already minted as a class upstream and never reaches
-  // this point.
+  // this point. Anchorable (not just lexicon-grounded) — the quantifier
+  // itself carries the safety here, so leaving this narrow would make
+  // "every p is a glyph" teach while "every p is venomous" refuses, an
+  // unpredictable asymmetry between two universally-quantified sentences
+  // over the same corpus-anchored subject.
   const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
-  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph))
+  if (universalQuantifier && (await isAnchorableTerm(subjectRaw, lex, memoryDir, cache, graph))
     && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
     const classSubject = /^are$/i.test(verb)
       ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
@@ -3788,6 +3899,13 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const bareSubject = subjectRaw.replace(/^(?:the|an?)\s+/i, "").trim() || subjectRaw;
   const hadArticle = bareSubject !== subjectRaw;
   const capitalized = /^[A-Z]/.test(bareSubject);
+  // Deliberately isGroundedByFact (taught-only), NOT isCorpusAnchoredTerm or
+  // isAnchorableTerm: this is the bare, unquantified property claim, where
+  // NOTHING else stands in for the article/capitalization/quantifier
+  // "deliberate entity" signal this function's own docblock requires. Corpus
+  // anchoring a bare subject here would reopen the pinned "module is banana"
+  // regression under a new spelling — "dog is banana" would silently mint
+  // dog mgx:hasProperty banana, since "dog" is corpus-anchored via ConceptNet.
   const factGrounded = await isGroundedByFact(bareSubject, memoryDir, cache);
   const genericAnchor = GENERIC_ANCHOR_NOUNS.has(bareSubject.toLowerCase());
   // A bare (no article, no capitalization) subject grounded ONLY via the
@@ -4177,6 +4295,16 @@ async function generalVerbTeach(payload) {
   // trailing "?" is still an unambiguous "this is a question" marker.
   if (/\?\s*$/.test(p)) return null;
   if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(p)) return null; // another frame's territory — stand down
+  // "words like cat"/"other words like cat" fits this frame's own shape
+  // (subject "words", verb "like", object "cat") just as happily as it fits
+  // the SKOS synonym-lookup lane's SKOS_SYNONYM_RE — and without this guard,
+  // whichever lane runs first in the outer dispatch wins the turn, which
+  // used to be this one, storing a junk "words mgx:like cat" fact and never
+  // giving the synonym lane a turn at all. SKOS_SYNONYM_RE is declared later
+  // in this file, but only ever read here once a real turn calls this
+  // function — long after the whole module (and the const) has finished
+  // loading — so referencing it this early in the file is safe.
+  if (SKOS_SYNONYM_RE.test(p)) return null; // the synonym/related-word lane owns this shape
   const m = p.match(GENERAL_VERB_TEACH_RE);
   if (!m) return null;
   let [, subjectRaw, verbRaw, objectRaw] = m;
@@ -6108,26 +6236,48 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       }
     } catch { /* lexicon unavailable — fall through to the generic message */ }
   }
+  // Residue is what the STATIC lexicon didn't recognize. A token the fact
+  // store anchors — taught, corpus, or a code-graph symbol — is a word tmct
+  // does know, so it must not be named here. Only a token unknown under
+  // EVERY tier is. Deliberately not isAnchorableTerm: its classify branch
+  // would drop a token the lexicon knows under the WRONG part of speech, and
+  // that token genuinely IS the problem — this loop stays word-anchor-only.
+  let unknownEverywhere = unknown;
+  if (unknown.length && memoryDir) {
+    const survivors = [];
+    for (const w of unknown) {
+      if (await isGroundedByFact(w, memoryDir, cache)) continue;
+      if (await isCorpusAnchoredTerm(w, memoryDir, cache)) continue;
+      if (graph && resolveSymbol(graph, w)?.match) continue;
+      survivors.push(w);
+    }
+    unknownEverywhere = survivors;
+  }
   // The real constraint: at least one side of a fact must already be
   // grounded (or the sentence must fit a specific relation shape) — general
   // vocabulary teaching itself is fully supported (e.g. "Paris is the capital
   // of France" stores directly).
   //
-  // Both sides ungrounded (pairTerms below) means the grounding hint fires
+  // Both sides unanchored (pairTerms below) means the grounding hint fires
   // too, naming the SAME two NPs — so this clause names them at the NP level
   // as well (residue token -> its containing NP), rather than the raw
   // per-token parse residue, which can name a narrower slice of the same
   // phrase ("alphabet" alone out of the object NP "alphabet letter"). One
-  // decline, one consistent pair of unknown terms, never two.
+  // decline, one consistent pair of unknown terms, never two. A residue whose
+  // every word IS anchored (unknownEverywhere empty, unknown not) means the
+  // problem was never vocabulary — it's the sentence SHAPE — so that gets its
+  // own clause instead of a false "I don't recognize" claim.
   const pairTerms = await ungroundedPairTerms(payload, lexicon, memoryDir, cache, graph);
-  const whyTerms = pairTerms && unknown.length ? [pairTerms.subject, pairTerms.object] : unknown;
+  const whyTerms = pairTerms && unknownEverywhere.length ? [pairTerms.subject, pairTerms.object] : unknownEverywhere;
   const why = whyTerms.length
     ? ` I don't recognize ${joinList(whyTerms.map((w) => `"${w}"`))} as ${whyTerms.length === 1 ? "a word" : "words"} I know`
       + (pairTerms
         ? "."
         : " — any vocabulary works, but at least one side of a fact needs to already be grounded to something I "
           + "know (or fit one of my specific relation shapes), not two brand-new terms at once.")
-    : "";
+    : unknown.length
+      ? " I know those words — I just couldn't read that sentence as a fact I can store."
+      : "";
   // Grounding NUDGE: APPENDED, never a replacement, exactly like "did" above
   // — see ungroundedPairTerms' own docblock for why this is scoped to the
   // "both sides ungrounded, fits the X is/are Y shape" case only.
@@ -15124,6 +15274,14 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
   // fragment happily parses "dog have tail?" as the declarative it is not,
   // which stored a Fact at teach trust over a FLOW-0 vocabulary question.
   if (/\?\s*$/.test(String(line).trim())) return null;
+  // "words like cat"/"other words like cat" fits the SKOS synonym-lookup
+  // lane's own SKOS_SYNONYM_RE just as happily as it fits the plain ACE
+  // relation pattern ("like" is a registered lexicon verb, so parseRelation
+  // reads "words like cat" as a clean subject/verb/object triple with no
+  // residue) — and since this function runs before the SKOS lane gets a
+  // turn, it used to win every time, storing a junk "words mgx:like cat"
+  // fact and never letting the synonym lane answer at all.
+  if (SKOS_SYNONYM_RE.test(String(line).trim())) return null; // the synonym/related-word lane owns this shape
   try {
     // THE DATED TEACH FRAME — "<sentence> as of <date>". A caller that
     // already resolved a date (teachLane, recursing into its own
