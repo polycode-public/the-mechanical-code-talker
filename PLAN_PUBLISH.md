@@ -341,19 +341,21 @@ status` shows changes under `infra/` only.
 
 ## Manual checklist (operator, web UIs)
 
-- **M1** — GitHub Settings → Social preview: upload `public/og/github-social.png` (T2
-  builds it, 1280x640).
+- **M1** — done, verified 2026-08-05: custom social preview live (serves from
+  repository-images.githubusercontent.com, not GitHub's auto-generated card).
 - **M2** — record the 60–90s silent mudiii capture; export MP4 (place at
   `public/media/hero-mudiii.mp4`) and a looping GIF, then add
   `<source src="media/hero-mudiii.mp4" type="video/mp4">` inside the hero
   `<video>` in `public/index.html` (the video element ships source-less and
   shows its poster until then).
-- **M3** — GitHub About panel: website `https://tmct.polycode.co.uk`; topics `symbolic-ai`,
-  `knowledge-graph`, `owl`, `rdf`, `provenance`, `no-llm`, `eliza`; description:
-  *Deterministic, no-LLM chat over an OWL-labelled JSON graph memory. Grounded answers with
-  provenance, or a refusal. Pure JS, offline, $0 to run. Read-only mirror of the GitLab
-  repo; live demos at tmct.polycode.co.uk.*
-- **M4** — put the drafted profile README on the polycode-public account and pin the repo.
+- **M3** — done, verified 2026-08-05: About panel has the website link
+  (`https://tmct.polycode.co.uk`), the drafted description verbatim, and all seven listed
+  topics (`symbolic-ai`, `knowledge-graph`, `owl`, `rdf`, `provenance`, `no-llm`, `eliza`);
+  an eighth topic, `symbolic-artificial-intelligence`, is also present but wasn't on the list.
+- **M4** — repo pin verified 2026-08-05 (the-mechanical-code-talker is pinned on
+  github.com/polycode-public), but the profile README is not live: it's committed at
+  `.github/README.md` in the `polycode-public/.github` repo, and GitHub only renders an org
+  profile README from `.github/profile/README.md`. Move the file to that path to finish M4.
 
 ## Launch sequencing
 
