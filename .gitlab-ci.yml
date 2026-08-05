@@ -801,6 +801,23 @@ e2e:deployed:mesh:
       test-e2e/p2p-disconnect-rejoin.test.mjs
       test-e2e/pages-chat-p2p-distributed-inference.test.mjs
 
+# The hero clip: about 75 seconds of the live mudiii square playing itself,
+# recorded off the deployed site and uploaded as a build artifact for a human
+# to convert and publish. It asserts nothing, so it never gates a pipeline —
+# `allow_failure` keeps a failed recording out of the way of the release, and
+# the single run stands on its own rather than eating the base's retries.
+capture:hero:
+  extends: .e2e-deployed-base
+  allow_failure: true
+  retry: 0
+  script:
+    - npm run capture:hero
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - clips/
+
 # The other half of "does what we shipped actually work": install the package
 # from the real registry, the way a consumer would, and run the CLI/TUI e2e files
 # against THAT copy's binary instead of bin/tmct.mjs in the checkout.
