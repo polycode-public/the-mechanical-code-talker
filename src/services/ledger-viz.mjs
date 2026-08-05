@@ -84,6 +84,8 @@ const PHRASES = new Map([
   ["rdf:type", "is a"],
   ["mgx:hasA", "has"],
   ["mgx:partOf", "is part of"],
+  ["mgx:memberOf", "is a member of"],
+  ["mgx:collectionOf", "is a collection of"],
   ["mgx:madeOf", "is made of"],
   ["mgx:capableOf", "can"],
   ["mgx:receivesAction", "can be"],
@@ -111,6 +113,7 @@ export function phraseFor(predicate) {
 const FAMILY_OF = new Map([
   ["rdfs:subClassOf", "is-a"], ["rdf:type", "is-a"],
   ["mgx:hasA", "has"], ["mgx:partOf", "has"], ["mgx:madeOf", "has"],
+  ["mgx:memberOf", "has"], ["mgx:collectionOf", "has"],
   ["mgx:capableOf", "can"], ["mgx:receivesAction", "can"],
   ["mgx:usedFor", "used-for"], ["mgx:mannerOf", "used-for"],
   ["mgx:ownedBy", "role"], ["mgx:createdBy", "role"], ["mgx:hasProperty", "role"],

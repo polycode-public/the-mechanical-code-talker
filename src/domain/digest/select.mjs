@@ -43,6 +43,7 @@ export const FAMILY_OF = Object.freeze({
   "mgx:atLocation": "location",
   "mgx:locatedNear": "location",
   "mgx:partOf": "partOf",
+  "mgx:memberOf": "partOf",
   "mgx:capableOf": "capableOf",
   "mgx:usedFor": "usedFor",
 });

@@ -1168,6 +1168,71 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   return renderMembers(directMembers, inheritedMembers);
 }
 
+// "list the letters in the alphabet" — a membership list RESTRICTED to a
+// container. answerMembershipList reads the "in the alphabet" tail as an
+// unanswerable restrictor and declines, so this lane takes the shape first.
+const COLLECTION_CONTENTS_LIST_RE =
+  /^(?:list|show(?:\s+me)?)\s+(?:all\s+(?:the\s+)?|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*?)\s+in\s+(?:the\s+|an?\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s*[?.!]*$/i;
+// "list what is in the alphabet" / "list the contents of the alphabet" — the
+// unrestricted twin, no member type named.
+const COLLECTION_CONTENTS_ALL_RE =
+  /^(?:list|show(?:\s+me)?)\s+(?:what(?:'s|\s+is)\s+in|the\s+contents\s+of)\s+(?:the\s+|an?\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)?)\s*[?.!]*$/i;
+
+/** "list the letters in the alphabet" / "list what is in the alphabet" — the
+ *  taught contents of a declared collection (mgx:memberOf/mgx:partOf rows),
+ *  optionally restricted to a named member type. Declines (null) when the
+ *  named container holds no containment rows at all, so answerMembershipList
+ *  keeps its own restrictor-tail refusal for an ordinary untaught noun —
+ *  this lane only ever takes over on a real container hit. A restricted ask
+ *  whose type doesn't match what's declared, or what any member's own isa
+ *  fact says, is an honest miss naming the mismatch — never the unfiltered
+ *  contents rendered as if they answered the question that wasn't asked. */
+async function answerCollectionContents(memoryDir, query, biasByBundle = {}, cache = null) {
+  if (!memoryDir) return null;
+  const q = String(query).trim();
+  // The unrestricted twin is tried first: its "what is in"/"the contents of"
+  // lead is a strict prefix the restricted pattern's own greedy member-phrase
+  // capture would otherwise swallow whole ("list what is in the alphabet"
+  // reading "what is" as the asked member type).
+  const unrestricted = q.match(COLLECTION_CONTENTS_ALL_RE);
+  const restricted = unrestricted ? null : q.match(COLLECTION_CONTENTS_LIST_RE);
+  if (!restricted && !unrestricted) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const containerRaw = restricted ? restricted[2] : unrestricted[1];
+  const rows = await factRows(memoryDir, cache);
+  const containerVariants = factTermVariants(normFactTerm, containerRaw);
+  // Sorted by content-addressed key before ranking, same discipline as
+  // taughtMembersUnder: rankByBiasThenTrust's own tiebreak is array index, so
+  // an unsorted filter would render two peers' facts in their own arrival
+  // order instead of one shared order.
+  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object)).sort(orderKeyCompare);
+  if (!members.length) return null; // no containment rows at all — answerMembershipList keeps this noun
+  const renderMembers = (list, noun) => {
+    const ranked = rankByBiasThenTrust(uniqueFacts(list), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun } } : {}) };
+  };
+  if (unrestricted) return renderMembers(members, "members");
+  const asked = singularizeSurface(restricted[1]);
+  const askedVariants = factTermVariants(normFactTerm, asked);
+  const declaredAsType = rows.some(
+    (f) => f.predicate === "mgx:collectionOf" && containerVariants.has(f.subject) && askedVariants.has(f.object),
+  );
+  if (declaredAsType) return renderMembers(members, asked);
+  const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const typed = members.filter((f) => isaRows.some((g) => g.subject === f.subject && askedVariants.has(g.object)));
+  if (typed.length) return renderMembers(typed, asked);
+  const n = new Set(members.map((f) => f.subject)).size;
+  return {
+    text: `I hold ${n} thing${n === 1 ? "" : "s"} in the ${containerRaw}, but nothing I remember says any of them is a ${asked}.`,
+    miss: true,
+  };
+}
+
 // "give me an example of a letter" / "name a letter" — the single-member
 // counterpart to the list trigger above: the same taught class, but one
 // representative rather than the whole enumeration, for a user who wants a
@@ -2890,6 +2955,12 @@ const TEACH_HAS_METHOD_RE =
  *  aunt is a sibling of a parent"). */
 const COMPOSE2_RULE_TEACH_RE =
   /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
+
+/** The relation-name slot of a composition rule never holds a partitive head:
+ *  "a wheel is a part of a car" states a part-of FACT, and the part/membership
+ *  frames above own it. Without this, a failed fact write falls through and
+ *  stores "wheel = compose2(part, car)" — a rule nobody asked for. */
+const RULE_RELATION_EXCLUDED_HEADS = new Set(["part", "member"]);
 
 /** "a <name> is a <base> who is <property>" — the PROPERTY-FILTERED
  *  composition-rule teach declarative: "a grandfather is a grandparent who
@@ -4875,6 +4946,29 @@ const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^(?:${RETRACT_LEAD_VERBS})\\s+(?:
  *  token object, articles tolerated on both. */
 const RELATED_TO_TEACH_RE = /^(?:a\s+|an\s+|the\s+)?([\w-]+)\s+(?:relates\s+to|is\s+related\s+to)\s+(?:a\s+|an\s+|the\s+)?([\w-]+(?:\s+[\w-]+)?)$/i;
 
+/** The closed PART-OF / MEMBERSHIP teach frames. "of" is never folded into a
+ *  minted predicate (PREP_SRC omits it deliberately — see its own docblock),
+ *  so each of these surfaces names ONE curated predicate instead. The subject
+ *  is the same 1–2-token noun phrase every relational frame above captures;
+ *  the copula is captured so a plural surface folds to the singular spelling
+ *  the isa facts already use. */
+const PART_OF_TEACH_RE = /^(?:the\s+|an?\s+|every\s+|each\s+|all\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+(?:an?\s+)?part\s+of\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+const MEMBER_OF_TEACH_RE = /^(?:the\s+|an?\s+|every\s+|each\s+|all\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+(?:an?\s+)?member\s+of\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+
+/** "X is in Y" is ambiguous between a placement ("the lamp is in the study")
+ *  and set membership ("p is in the alphabet"). The frame is a TRIGGER only:
+ *  it stores nothing unless the fact store already says Y is a collection —
+ *  see collectionMembershipTeach's gate. */
+const IN_COLLECTION_TEACH_RE = /^(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)\s+(is|are)\s+in\s+(?:the\s+|an?\s+)?([\w'-]+(?:\s+[\w'-]+)?)[.!?]*$/i;
+
+const COLLECTION_HEAD_SRC = "collection|set|group|family";
+const COLLECTION_DECL_TEACH_RE = new RegExp(
+  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+an?\\s+(?:${COLLECTION_HEAD_SRC})\\s+of\\s+(?:the\\s+)?([\\w'-]+)[.!?]*$`,
+  "i",
+);
+
+const CONTAINMENT_PREDICATES = Object.freeze(["mgx:memberOf", "mgx:partOf"]);
+
 /** NEGATIVE UNIVERSAL — "no X is a Y" / "no Xs are Ys": a class-level
  *  exclusion, stored as `X owl:disjointWith Y` on the RESOLVED class pair.
  *  The ACE grammar already mints exactly this triple when both words sit in
@@ -5589,6 +5683,76 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (stored) return stored;
   }
 
+  // PART-OF / MEMBERSHIP — the closed teach frames for mereological part-of,
+  // set membership, and collection declaration. Tried on the SAME ownSrc,
+  // ahead of RELATIONAL FACT / COMPOSE2 below so "a wheel is a part of a car"
+  // states a fact through here rather than falling into COMPOSE2_RULE_TEACH_RE's
+  // "a <name> is a <base1> of a <base2>" composition-rule mint. Every subject/
+  // object pair is checked against isTeachPronoun first — "it is part of that"
+  // and "this belongs to me" never land a fact, same guard
+  // matchesRelationalTeachFrame applies to the relational frames above.
+  const collectionDecl = ownSrc.match(COLLECTION_DECL_TEACH_RE);
+  if (collectionDecl && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(collectionDecl[1]) && !isTeachPronoun(collectionDecl[2])) {
+    const collection = collectionDecl[1];
+    const typedMemberSurface = collectionDecl[2];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: collection, predicate: "mgx:collectionOf", object: singularizeSurface(typedMemberSurface), observedAt, dateText,
+    });
+    if (stored) {
+      return {
+        text: `noted — remembered: ${collection} is a collection of ${typedMemberSurface}. `
+          + `Say "<x> is in the ${collection}" to add one, and "what is in the ${collection}" to read them back.`,
+        via: "assert", miss: false,
+      };
+    }
+  }
+
+  const memberOf = ownSrc.match(MEMBER_OF_TEACH_RE);
+  if (memberOf && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(memberOf[1]) && !isTeachPronoun(memberOf[3])) {
+    const subject = memberOf[2].toLowerCase() === "are" ? singularizeSurface(memberOf[1]) : memberOf[1];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject, predicate: "mgx:memberOf", object: memberOf[3], observedAt, dateText,
+    });
+    if (stored) return stored;
+  }
+
+  const partOf = ownSrc.match(PART_OF_TEACH_RE);
+  if (partOf && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(partOf[1]) && !isTeachPronoun(partOf[3])) {
+    const subject = partOf[2].toLowerCase() === "are" ? singularizeSurface(partOf[1]) : partOf[1];
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject, predicate: "mgx:partOf", object: partOf[3], observedAt, dateText,
+    });
+    if (stored) return stored;
+  }
+
+  // "X is in Y" stores ONLY when Y is already known as a collection — a
+  // COLLECTION_DECL row naming Y, or a memberOf row already naming Y as a
+  // container. Otherwise the sentence is a locative placement, not
+  // membership, and storing here would misfile it: "the lamp is in the
+  // study" must keep reading as a placement, byte for byte, since no
+  // collectionOf row for "study" will ever exist.
+  const inCollection = ownSrc.match(IN_COLLECTION_TEACH_RE);
+  if (inCollection && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !isTeachPronoun(inCollection[1]) && !isTeachPronoun(inCollection[3])) {
+    try {
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const rows = await factRows(memoryDir, cache);
+      const containerVariants = factTermVariants(normFactTerm, inCollection[3]);
+      const declared = rows.some((f) => f.predicate === "mgx:collectionOf" && containerVariants.has(f.subject))
+        || rows.some((f) => f.predicate === "mgx:memberOf" && containerVariants.has(f.object));
+      if (declared) {
+        const subject = inCollection[2].toLowerCase() === "are" ? singularizeSurface(inCollection[1]) : inCollection[1];
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject, predicate: "mgx:memberOf", object: inCollection[3], observedAt, dateText,
+        });
+        if (stored) return stored;
+      }
+    } catch { /* store unavailable — the frame declines rather than storing blind */ }
+  }
+
   // RELATIONAL FACT — "<Name> is the <role> of <Name>". Grouped with the
   // other relational/possessive teach shapes just above (both ownership
   // forms), tried on the SAME ownSrc, unconditionally
@@ -5598,7 +5762,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // to part of speech, so a role noun like "father" mints mgx:father the same
   // way a general verb would; an ordinary Fact, no new storage shape.
   const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
-  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !RULE_RELATION_EXCLUDED_HEADS.has(rel[2].toLowerCase())) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3], observedAt, dateText,
     });
@@ -5666,7 +5831,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // COMPOSE2_RULE_TEACH_RE's own docblock). The query-side hop-counted chase
   // lives in factReadBack's relational-query dispatcher.
   const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
-  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && !RULE_RELATION_EXCLUDED_HEADS.has(compose2[2].toLowerCase())) {
     try {
       const { appendRule, RULE_KIND_COMPOSE2 } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
@@ -7117,6 +7283,8 @@ const FACT_PREDICATE_PHRASES = {
   "rdf:type": "is a",
   "owl:disjointWith": "is not a",
   "mgx:partOf": "is part of",
+  "mgx:memberOf": "is a member of",
+  "mgx:collectionOf": "is a collection of",
   "mgx:hasA": "has",
   "mgx:usedFor": "is used for",
   "mgx:capableOf": "can",
@@ -7993,6 +8161,14 @@ const WHERE_DOES_FACT_RE = /^where\s+(?:does|do|did)\s+(.+?)\s+[a-z][a-z'-]*(?:\
  *  to the ordinary BARE_WHATIS_RE handling untouched. */
 const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
 
+/** "what are the parts of a car" / "what are the members of the alphabet" /
+ *  "what is the contents of the alphabet" — the explicit-noun surfaces of the
+ *  containment question, beside WHAT_IS_PREP_FACT_RE's bare "what is in X".
+ *  "parts" reads mgx:partOf ALONE: a set member is not a part, and answering
+ *  a parts question with set members would state a claim nobody taught. */
+const CONTAINMENT_NOUN_ASK_RE =
+  /^what(?:'s|\s+is|\s+are)\s+(?:the\s+)?(parts|members|contents)\s+of\s+(?:the\s+|an?\s+)?(.+?)\s*[?.!]*$/i;
+
 /** "what parameters does a person sprite take" / "what materials does a bed
  *  accept" — the object-fronted property question, where the property noun
  *  leads and the verb closes. It reads the same folded verb-plus-noun predicates
@@ -8234,9 +8410,11 @@ const REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
 // also be ASKED as a forward yes/no, instead of each one needing its own
 // hand-written lane. Excluded: the isa family and hasProperty (ISA_ASK_RE /
 // IS_ADJECTIVE_YESNO_RE territory), hasA and capableOf (their dedicated
-// readers above carry teach hints these derived ones deliberately don't —
-// no derived hint is emitted because no teach phrasing for these relations
-// is verified to round-trip).
+// readers above carry teach hints these derived ones deliberately don't).
+// Whether a MISS on one of the surviving predicates offers a teach hint is
+// now decided per-predicate by FORWARD_YESNO_TEACHABLE below, not by this
+// exclusion list — a derived reader is not automatically a verified teach
+// surface, so most of them still emit no hint at all.
 const FORWARD_YESNO_EXCLUDE = new Set([
   "rdfs:subClassOf", "rdf:type", "owl:disjointWith", "mgx:hasProperty",
   "mgx:hasA", "mgx:capableOf",
@@ -8245,6 +8423,11 @@ const FORWARD_YESNO_EXCLUDE = new Set([
   // confirm", so the derived reader must never intercept it.
   "mgx:ownedBy",
 ]);
+/** The derived forward yes/no readers emit no teach hint by default — a
+ *  derived phrase is not a verified teach surface. These two are: the part-of
+ *  and membership frames accept the rendered phrase VERBATIM, so the hint is
+ *  the phrase itself and is guaranteed to round-trip. */
+const FORWARD_YESNO_TEACHABLE = new Set(["mgx:partOf", "mgx:memberOf"]);
 const FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
   .filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate) && !WORLD_PLACEMENT_PREDICATES.has(predicate))
   .map(([predicate, phrase]) => {
@@ -8506,6 +8689,41 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const rest = lines.slice(FACT_ANSWER_CAP);
       const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
       return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (a-pre5b) "what is in the alphabet" / "what are the parts of a car" /
+  // "what are the members of the alphabet" / "what is the contents of the
+  // alphabet" — the containment question, over mgx:partOf/mgx:memberOf rows
+  // rather than the locative predicates (a-pre5) reads. Two surfaces feed the
+  // same lookup: WHAT_IS_PREP_FACT_RE's bare "what is in X" (reusing the
+  // whatIsPrepQ match above, restricted to "in"/"inside") and
+  // CONTAINMENT_NOUN_ASK_RE's explicit "parts"/"members"/"contents" noun. A
+  // "parts" ask reads mgx:partOf alone — a set member is not a part. Hit-gated
+  // like every reader in this cascade: zero hits falls through untouched, so
+  // "what is in the study" (a placement, not a collection) keeps its own
+  // answer from the adventure world.
+  {
+    const containmentNounQ = q.match(CONTAINMENT_NOUN_ASK_RE);
+    const containerRaw = containmentNounQ
+      ? containmentNounQ[2]
+      : (whatIsPrepQ && ["in", "inside"].includes(whatIsPrepQ[1].toLowerCase())) ? whatIsPrepQ[2] : null;
+    if (containerRaw != null) {
+      const predicates = containmentNounQ && containmentNounQ[1].toLowerCase() === "parts"
+        ? ["mgx:partOf"]
+        : CONTAINMENT_PREDICATES;
+      const containerVariants = factTermVariants(normFactTerm, containerRaw.replace(/^(?:an?|the)\s+/i, "").trim());
+      const hits = (await factRows(memoryDir, cache)).filter(
+        (f) => predicates.includes(f.predicate) && containerVariants.has(f.object),
+      ).sort(orderKeyCompare); // content-addressed order, not arrival order — see answerCollectionContents' own note
+      if (hits.length) {
+        const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+        const lines = ranked.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+      }
     }
   }
 
@@ -8781,18 +8999,19 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, m[2]);
     const hit = facts.find((f) => f.predicate === predicate && subj.has(f.subject) && obj.has(f.object));
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const teachHint = FORWARD_YESNO_TEACHABLE.has(predicate) ? ` If it's true, teach me: "${m[1]} ${phrase} ${m[2]}".` : "";
     const sameRelation = facts.filter((f) => f.predicate === predicate && subj.has(f.subject));
     if (sameRelation.length) {
       const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
       return {
-        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}. I do know: ${shown}.`,
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}. I do know: ${shown}.${teachHint}`,
         replace: true,
         miss: true,
       };
     }
     if (!envelope?.parsed && facts.some((f) => subj.has(f.subject))) {
       return {
-        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}.`,
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}.${teachHint}`,
         replace: true,
         miss: true,
       };
@@ -16613,6 +16832,22 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       if (!lettered.miss) turn.goal = goal;
       turn.lane = lettered.miss ? "honest-miss" : "ask-set";
       if (lettered.pending) turn.detail = { traversal: null, matches: [], pending: lettered.pending };
+      return withLast(turn, goal);
+    }
+  }
+  // "list the letters in the alphabet" — the taught contents of a declared
+  // collection, restricted or not. Ahead of answerTaughtClassCount/
+  // answerMembershipList below: those read "in the alphabet" as an
+  // unanswerable restrictor tail over a CLASS, not a container's contents.
+  if (memoryDir) {
+    const collectionContents = await answerCollectionContents(memoryDir, workingLine, biasByBundle, factRowsCache);
+    if (collectionContents != null) {
+      const goal = "list a declared collection's taught contents";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerCollectionContents — matched a container-restricted or bare containment list over mgx:memberOf/mgx:partOf rows");
+      const turn = plainTurn(workingLine, collectionContents.text, { via: collectionContents.miss ? "miss" : "fact", miss: !!collectionContents.miss, focus });
+      if (!collectionContents.miss) turn.goal = goal;
+      if (collectionContents.pending) turn.detail = { traversal: null, matches: [], pending: collectionContents.pending };
       return withLast(turn, goal);
     }
   }

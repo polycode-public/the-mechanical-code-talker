@@ -84,3 +84,7 @@ test("the family map keys the starting relation set", () => {
   assert.equal(FAMILY_OF["mgx:partOf"], "partOf");
   assert.equal(FAMILY_OF["mgx:capableOf"], "capableOf");
 });
+
+test("membership narrates through the same family as part-of, sharing its structures", () => {
+  assert.equal(FAMILY_OF["mgx:memberOf"], "partOf");
+});

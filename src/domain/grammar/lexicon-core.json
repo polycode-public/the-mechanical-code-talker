@@ -9468,7 +9468,8 @@
       "prep": "from"
     },
     "belong": {
-      "prep": "to"
+      "prep": "to",
+      "predicate": "mgx:partOf"
     },
     "point": {
       "prep": "to"

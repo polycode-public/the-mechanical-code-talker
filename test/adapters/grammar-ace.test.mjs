@@ -50,6 +50,14 @@ test("pattern 3: proper-name forms and verb+preposition ('depends on' → tmct:d
   assert.equal(parseAce("chat.mjs depends sessions.mjs"), null, "a declared preposition is required, not optional");
 });
 
+test("pattern 3: a verb entry's declared predicate override wins over the derived spelling ('belongs to' → mgx:partOf, not tmct:belongsTo)", () => {
+  const r = parseAce("a wheel belongs to a car");
+  assert.equal(r.pattern, "relation");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:wheel", predicate: "mgx:partOf", object: "tmct:car", kind: "owl:ObjectProperty" },
+  ]);
+});
+
 test("pattern 4: 'every N1 that VERBs a N2 is a N3' → someValuesFrom restriction, deterministic node names", () => {
   const r = parseAce("every module that imports a database is a service");
   assert.equal(r.pattern, "someValuesFrom");
