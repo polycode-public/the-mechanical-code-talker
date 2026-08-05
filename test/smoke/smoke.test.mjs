@@ -94,11 +94,11 @@ test("teach, recall and a two-hop proof survive a real session", async () => {
       { repoPath: dir, env: { TMCT_NO_SEED: "1" } },
       ["john is a man", "every man is mortal", "is john mortal", "is john a giraffe"],
     );
-    assert.match(turns[0].answer, /^noted — remembered: john is a kind of man/);
+    assert.match(turns[0].answer, /^noted — remembered: john is a man/);
     assert.match(turns[1].answer, /^noted — remembered: man is a kind of mortal/);
     // the two-hop proof cites both premises it chained, not just its verdict
     assert.match(turns[2].answer, /^yes —/);
-    assert.match(turns[2].answer, /john is a kind of man/);
+    assert.match(turns[2].answer, /john is a man/);
     assert.match(turns[2].answer, /man is a kind of mortal/);
     // and a fact nobody taught is not invented to fill the gap
     assert.doesNotMatch(turns[3].answer, /^yes/);

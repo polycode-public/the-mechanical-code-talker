@@ -2769,6 +2769,11 @@ const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 // "some/a few Xs are Ys" shape) stay obviously in that same family rather than
 // re-typing the CURIE string at each call site.
 const SUBCLASS_PREDICATE = "rdfs:subClassOf";
+// Individual-membership — the ACE grammar's rdf:type arm (grammar/ace.mjs's
+// parseCopula), named here for the same reason SUBCLASS_PREDICATE is: the
+// direct-write teach paths below stay in that family without re-typing the
+// CURIE string at each call site.
+const TYPE_PREDICATE = "rdf:type";
 // HAS_A_PREDICATE (imported from memory/core.mjs, the canonical home) keeps
 // generalVerbTeach's "has"/"have" special case in the same family ConceptNet's
 // /r/HasA corpus facts already use, rather than minting a redundant mgx:has.
@@ -3109,8 +3114,11 @@ async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
   if (/\?\s*$/.test(String(line).trim())) return null; // a question never writes
   const inst = line.match(INSTANCE_TYPE_TEACH_RE);
   if (inst) {
+    // The subject regex REQUIRES a hyphen (a numbered/coined instance name),
+    // so G5c always holds here — an unconditional individual read, never a
+    // class.
     return teachFact(memoryDir, sessionId, {
-      subject: inst[1], predicate: "rdfs:subClassOf", object: inst[2],
+      subject: inst[1], predicate: TYPE_PREDICATE, object: inst[2],
     });
   }
   const kindOf = line.match(BARE_KINDOF_TEACH_RE);
@@ -3669,7 +3677,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, lookupAdjective, classify, readsAsIndividualName } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // A known X's own ACE miss is a real miss — never silently reinterpreted
   // here. EXCEPT: classify() folds a trailing "-s" the same way resolveNP
@@ -3703,6 +3711,18 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   // plurals for the "is this a real miss" check, so singularizing only the
   // STORED value here is safe and doesn't change that check's behavior.
   const subject = /^are$/i.test(verb) ? singularizeSurface(subjectRaw) : subjectRaw;
+  // A bare "is" sentence with no subject determiner, an indefinite-articled
+  // complement, and a subject that spells like a named individual (rover,
+  // fido, whiskers — see readsAsIndividualName's own docblock) stores
+  // rdf:type instead of rdfs:subClassOf. "are" sentences never qualify
+  // (plural subjects are never one individual); the quantifier line above is
+  // unaffected — "every"/"each"/"all"/"any" already fail this test on their
+  // own (det is non-empty).
+  const namedIndividual = !String(det || "").trim()
+    && /^is$/i.test(verb)
+    && !/\s/.test(subjectRaw)
+    && objectCarriesArticle(payload)
+    && readsAsIndividualName(subjectRaw, lex);
   // A PRIOR turn's minted term, a GENERIC_ANCHOR_NOUNS root, or a shipped
   // corpus bundle's own isa row grounds Y just as legitimately as a static
   // lexicon noun — all three are always treated as class-level (never
@@ -3716,7 +3736,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
     || (await isCorpusAnchoredTerm(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
       subject,
-      predicate: SUBCLASS_PREDICATE,
+      predicate: namedIndividual ? TYPE_PREDICATE : SUBCLASS_PREDICATE,
       object: storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun }),
       quantifier,
       observedAt,

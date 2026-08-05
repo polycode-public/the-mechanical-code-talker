@@ -29,6 +29,7 @@
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
   predicateOf, numberOf, classify, OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
+  CODE_REF_SHAPE, readsAsIndividualName,
 } from "./lexicon.mjs";
 import { fuzzyMatchInSet } from "../interpret/fuzzy.mjs";
 
@@ -55,10 +56,6 @@ const PATTERNS = Object.freeze([
 ]);
 
 const DET = new Set(["a", "an", "the"]);
-// A token SHAPED like a code reference (a path, file, symbol or CURIE) is an
-// individual by form — a deterministic tokenizer rule, not a guess: declared
-// proper names cover words; this covers chat.mjs, src/domain/ask.mjs, Foo#bar.
-const CODE_REF = /[./\\#:@]/;
 
 /** Whitespace tokenizer: curly quotes normalized, commas/semicolons dropped,
  *  ONE trailing punctuation run stripped (so "chat.mjs." keeps its dots). */
@@ -112,7 +109,7 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     const t = tokens[0];
     const proper = lookupProperName(lexicon, t);
     if (proper) return { term: `${ns}${proper}`, individual: true, extras: [], unknown: [] };
-    if (CODE_REF.test(t)) return { term: `${ns}${t}`, individual: true, extras: [], unknown: [] };
+    if (CODE_REF_SHAPE.test(t)) return { term: `${ns}${t}`, individual: true, extras: [], unknown: [] };
     const noun = lookupNoun(lexicon, t, { singularOnly });
     // `folded` marks a match that only exists because lookupNoun's own
     // trailing-"-s" strip or irregular-plural table rewrote the surface word
@@ -500,7 +497,22 @@ function parseCopula(lexicon, toks, lower, isIdx) {
     return missOrNull(np1.individual ? PATTERN_TYPE_ASSERTION : PATTERN_SUB_CLASS_OF, [np1, np2]);
   }
   if (np2.individual) return null; // "chat.mjs is sessions.mjs" — identity is not in the fragment
-  if (np1.individual) {
+  // A bare single-token subject with no determiner of its own, wearing an
+  // indefinite-articled complement ("Rover is a dog"), reads as a named
+  // individual when the subject's own spelling says so (readsAsIndividualName
+  // — a declared proper name, a code-ref shape, a hyphenated coinage, an
+  // uppercase first letter, or a lexicon miss/plural-fold-only hit), even
+  // when resolveNP resolved it through an ordinary common-noun lexicon entry
+  // ("rover", a wanderer) rather than marking it individual itself — see
+  // lexicon.mjs's own docblock for why capitalization is trusted here and
+  // nowhere else in the grammar. "a kind of"/"a type of"/"a sort of" stays
+  // excluded: BARE_KINDOF_TEACH_RE's own territory, never a type assertion.
+  const namedIndividual = np1.individual
+    || (subjectToks.length === 1
+        && /^an?$/i.test(rest[0] || "")
+        && !/^(?:kind|type|sort)$/i.test(rest[1] || "")
+        && readsAsIndividualName(subjectToks[0], lexicon));
+  if (namedIndividual) {
     return hit(PATTERN_TYPE_ASSERTION, [np1, np2], [
       { subject: np1.term, predicate: "rdf:type", object: np2.term, kind: "rdf:type" },
     ]);

@@ -247,6 +247,40 @@ export function lookupProperName(lexicon, word) {
   return lexicon.properNames.get(String(word ?? "").toLowerCase()) ?? null;
 }
 
+/** A token SHAPED like a code reference (a path, file, symbol or CURIE) is an
+ *  individual by form — a deterministic tokenizer rule, not a guess: declared
+ *  proper names cover words; this covers chat.mjs, src/domain/ask.mjs, Foo#bar. */
+export const CODE_REF_SHAPE = /[./\\#:@]/;
+
+/** Does a bare single-token subject SPELL like a named individual rather than
+ *  a class, judged from the lexicon alone (no store lookup — the corpus-
+ *  anchored grounding tier, isAnchorableTerm, is a separate, later check over
+ *  taught/corpus facts)? Any one of, in order:
+ *   a. a declared proper name;
+ *   b. a code-reference shape (CODE_REF_SHAPE);
+ *   c. a hyphenated coinage ("groundhog-1");
+ *   d. the surface AS TYPED starts with an uppercase letter — a lexicon noun
+ *      ("rover", a wanderer) still reads as the individual "Rover" once
+ *      capitalized, since a class name is never capitalized mid-sentence;
+ *   e. the lexicon has no noun entry for the word at all;
+ *   f. the lexicon only matched it through a plural fold — the entry's own
+ *      lemma differs from the typed surface once both are lowercased
+ *      ("whiskers" folding to "whisker").
+ *  Lowercase common-noun names ("rover is a dog" typed all-lowercase, "blue
+ *  is a peg") read as classes here — the lexicon-absence rungs (e/f) can't
+ *  reach a word the lexicon already declares as an ordinary noun. */
+export function readsAsIndividualName(surface, lexicon) {
+  const s = String(surface ?? "");
+  if (!s) return false;
+  if (lookupProperName(lexicon, s)) return true;
+  if (CODE_REF_SHAPE.test(s)) return true;
+  if (/^[a-z][\w]*(?:-[\w]+)+$/i.test(s)) return true;
+  if (/^[A-Z]/.test(s)) return true;
+  const noun = lookupNoun(lexicon, s);
+  if (!noun) return true;
+  return noun.lemma.toLowerCase() !== s.toLowerCase();
+}
+
 /** Classify one word (or a two-word quantifier phrase) against the lexicon.
  *  Returns {pos, type?, …} or null for an undeclared word. Priority when a
  *  word is declared in several categories (e.g. "test" noun+verb): closed-class
