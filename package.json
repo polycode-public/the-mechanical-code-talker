@@ -182,6 +182,8 @@
     "gen:sprite-facts": "node scripts/gen-sprite-facts.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
+    "gen:wordnet": "node corpus/wordnet/generate.mjs",
+    "gen:tier2": "node corpus/tier2/generate.mjs --verify",
     "gen:prose-corpus": "node scripts/fetch-prose-corpus.mjs",
     "gen:reference-pack": "node scripts/fetch-reference-pack.mjs",
     "gen:child-corpus": "node scripts/fetch-child-corpus.mjs",

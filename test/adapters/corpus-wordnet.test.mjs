@@ -11,6 +11,8 @@ import assert from "node:assert/strict";
 import {
   RELATION_MAP, SKIPPED_RELATIONS, encodeTerm, humanize, synonymPairs,
   buildFullFacts, buildXlFacts, hypernymRefCounts, resolveYamlDir, DEFAULT_YAML_DIR,
+  POS_RANK, LEXNAME_NOT_A_GLOSS, isArticleUnsafe, buildMemberOwners, buildDominantSense, senseTermFor,
+  ALPHABET_LETTER_DEF, alphabetFamilyOf,
 } from "../../corpus/wordnet/generate.mjs";
 import { termText, loadMap } from "../../src/adapters/corpus/conceptnet.mjs";
 
@@ -63,16 +65,20 @@ test("humanize: the surfaceText-facing inverse of underscore-joining", () => {
   assert.equal(humanize("dog"), "dog");
 });
 
-test("synonymPairs: N members -> exactly N-1 pairs (chained, not the N*(N-1)/2 cross product)", () => {
-  assert.deepEqual(synonymPairs([]), []);
-  assert.deepEqual(synonymPairs(["solo"]), []);
-  assert.deepEqual(synonymPairs(["a", "b"]), [["a", "b"]]);
-  assert.deepEqual(synonymPairs(["a", "b", "c", "d"]), [["a", "b"], ["a", "c"], ["a", "d"]]);
-  // exactly N-1, always chained off the FIRST member, never the full
+test("synonymPairs: N members -> exactly N-1 pairs, chained off the CHOSEN name, never the N*(N-1)/2 cross product", () => {
+  assert.deepEqual(synonymPairs("a", []), []);
+  assert.deepEqual(synonymPairs("solo", ["solo"]), []);
+  assert.deepEqual(synonymPairs("a", ["a", "b"]), [["a", "b"]]);
+  assert.deepEqual(synonymPairs("a", ["a", "b", "c", "d"]), [["a", "b"], ["a", "c"], ["a", "d"]]);
+  // exactly N-1, always chained off the CHOSEN name, never the full
   // combinatorial cross product (which would be N*(N-1)/2 = 6 for N=4)
-  const four = synonymPairs(["a", "b", "c", "d"]);
+  const four = synonymPairs("a", ["a", "b", "c", "d"]);
   assert.equal(four.length, 3);
   assert.ok(four.every(([m0]) => m0 === "a"));
+  // a chosen name that differs from members[0] (the naming ladder overrode
+  // it) chains to every OTHER member but never back to members[0] itself —
+  // that specific edge is the lemma bridge, added separately at RelatedTo.
+  assert.deepEqual(synonymPairs("b", ["a", "b", "c"]), [["b", "c"]]);
 });
 
 // ---- a small synthetic synset universe, mirroring the REAL shape confirmed
@@ -122,8 +128,19 @@ function fixtureSynsets() {
   }));
 }
 
+/** Every member in fixtureSynsets() is globally unique, so every synset
+ *  resolves at ladder rung 1 (unique lemma) — bare members[0], the same name
+ *  the old repTerm gave it. Builds the naming ladder's ctx the way main()
+ *  does, just with an empty senseIndex (nothing here is ever contested). */
+function fixtureCtx(bySynset) {
+  const memberOwners = buildMemberOwners(bySynset);
+  const dominantBySynset = buildDominantSense(memberOwners, new Map());
+  return { memberOwners, dominantBySynset, lexOf: new Map() };
+}
+
 test("buildFullFacts: direction, flip, self-loop/dangling-target skip, entails/exemplifies never emitted", () => {
-  const facts = buildFullFacts(fixtureSynsets());
+  const synsets = fixtureSynsets();
+  const facts = buildFullFacts(synsets, fixtureCtx(synsets));
   const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
 
   assert.ok(has("/r/IsA", "/c/en/dog", "/c/en/animal"), "hypernym: dog IsA animal (direct, no flip)");
@@ -164,8 +181,9 @@ test("buildFullFacts: direction, flip, self-loop/dangling-target skip, entails/e
 
 test("buildXlFacts: budget-bounded, only IsA + Synonym rows, proportioned to the real full-corpus ratio", () => {
   const synsets = fixtureSynsets();
-  const full = buildFullFacts(synsets);
-  const xl = buildXlFacts(synsets, full, 4);
+  const ctx = fixtureCtx(synsets);
+  const full = buildFullFacts(synsets, ctx);
+  const xl = buildXlFacts(synsets, full, ctx, 4);
   assert.ok(xl.length <= 6, `stays roughly within budget (got ${xl.length})`); // a synonym chain isn't split, so a small fixture can slightly overshoot
   for (const f of xl) {
     assert.ok(f.rel === "/r/IsA" || f.rel === "/r/Synonym", `XL only ever carries the hypernym backbone + synonym chains, got ${f.rel}`);
@@ -186,4 +204,213 @@ test("resolveYamlDir: CLI arg > env var > default, pure and injectable", () => {
   assert.equal(resolveYamlDir([], { TMCT_WORDNET_YAML_DIR: "/env/path" }), "/env/path");
   assert.equal(resolveYamlDir([], {}), DEFAULT_YAML_DIR);
   assert.match(DEFAULT_YAML_DIR, /english-wordnet\/src\/yaml$/);
+});
+
+// ---- the sense-preserving naming ladder, against hand-built fixture maps —
+// mirrors the real "letter" collision (8 synsets share members[0]="letter")
+// confirmed by direct inspection of the OEWN yaml, without depending on the
+// local checkout existing. ----------------------------------------------
+
+/** A tiny synset universe plus its own senseIndex, built the way main() would
+ *  build ctx from a real dump — but by hand, from literal fixture data. */
+function senseFixture() {
+  const bySynset = new Map(Object.entries({
+    // "letter" collision: missive (dominant), alphabetic character (falls to
+    // a distinguishing member), literal interpretation (single-member,
+    // shares its lexfile with the dominant sense, so no lexname gloss either
+    // — residue, still bare "letter", matches today's collision on purpose).
+    "10001-n": { members: ["letter", "missive"] },
+    "10002-n": { members: ["letter", "letter of the alphabet", "alphabetic character"] },
+    "10003-n": { members: ["letter"] },
+    // a plain uncontested noun: nothing else in the universe owns "otter".
+    "10010-n": { members: ["otter"] },
+    // "delta": two senses, neither with a second member to fall back on —
+    // the loser needs the lexname gloss.
+    "30001-n": { members: ["delta"] },
+    "30002-n": { members: ["delta"] },
+    // "bank": tied senseIndex across pos — posRank must break the tie.
+    "40001-n": { members: ["bank"] },
+    "40002-v": { members: ["bank"] },
+    // two adjective satellites sharing "fine" — no lexname gloss for a/s.
+    "50001-a": { members: ["fine"] },
+    "50002-s": { members: ["fine"] },
+    // the Roman-letter-vs-article case: dominant "a" is safe bare, but the
+    // rival's lexname candidate "a (widget)" reads as the indefinite article
+    // and must be rejected, falling to residue (stays merged, on purpose).
+    "60001-n": { members: ["a"] },
+    "60002-n": { members: ["a"] },
+  }));
+  const lexOf = new Map([
+    ["10001-n", "noun.communication"],
+    ["10002-n", "noun.communication"],
+    ["10003-n", "noun.communication"], // same lexfile as the dominant sense
+    ["10010-n", "noun.animal"],
+    ["30001-n", "noun.quantity"],
+    ["30002-n", "noun.shape"],
+    ["40001-n", "noun.finance"],
+    ["40002-v", "verb.finance"],
+    ["60001-n", "noun.communication"],
+    ["60002-n", "noun.widget"],
+  ]);
+  const senseIndex = new Map([
+    ["letter 10001-n", 0], // dominant: the missive sense ranks first
+    ["letter 10002-n", 1],
+    ["letter 10003-n", 3],
+    ["delta 30001-n", 0], // dominant
+    ["delta 30002-n", 1],
+    ["bank 40001-n", 0],
+    ["bank 40002-v", 0], // tied senseIndex; posRank n<v must decide
+    ["fine 50001-a", 0], // dominant
+    ["fine 50002-s", 1],
+    ["a 60001-n", 0], // dominant
+    ["a 60002-n", 1],
+  ]);
+  const memberOwners = buildMemberOwners(bySynset);
+  const dominantBySynset = buildDominantSense(memberOwners, senseIndex);
+  return { bySynset, ctx: { memberOwners, dominantBySynset, lexOf } };
+}
+
+test("POS_RANK and LEXNAME_NOT_A_GLOSS are the closed sets the ladder relies on", () => {
+  assert.deepEqual(POS_RANK, { n: 0, v: 1, a: 2, s: 2, r: 3 });
+  assert.deepEqual([...LEXNAME_NOT_A_GLOSS].sort(), ["Tops", "all", "pert", "ppl"]);
+});
+
+test("isArticleUnsafe: rejects a leading the/a/an followed by whitespace, allows a bare single letter", () => {
+  assert.ok(isArticleUnsafe("a communication"));
+  assert.ok(isArticleUnsafe("a (communication)"));
+  assert.ok(isArticleUnsafe("an example"));
+  assert.ok(isArticleUnsafe("the letter"));
+  assert.ok(!isArticleUnsafe("a"), "bare 'a' has no trailing article-strip whitespace, so it round-trips through normFactTerm unchanged");
+  assert.ok(!isArticleUnsafe("letter"));
+  assert.ok(!isArticleUnsafe("apple"), "an article-prefix substring match is not an article-led candidate");
+});
+
+test("senseTermFor: unique lemma wins rung 1 bare", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("10010-n", bySynset.get("10010-n"), ctx), "otter");
+});
+
+test("senseTermFor: dominant sense wins rung 2 bare, and posRank breaks a senseIndex tie (noun beats verb)", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("10001-n", bySynset.get("10001-n"), ctx), "letter", "missive: dominant sense of the contested lemma");
+  assert.equal(senseTermFor("40001-n", bySynset.get("40001-n"), ctx), "bank", "noun sense wins the tie over the verb sense");
+});
+
+test("senseTermFor: falls to rung 3, the first later member no other synset owns", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("10002-n", bySynset.get("10002-n"), ctx), "letter of the alphabet");
+});
+
+test("senseTermFor: falls to rung 4, the lexname gloss, when no distinguishing member exists", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("30002-n", bySynset.get("30002-n"), ctx), "delta (shape)");
+});
+
+test("senseTermFor: no lexname gloss for adjective satellites — falls straight to residue", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("50001-a", bySynset.get("50001-a"), ctx), "fine", "dominant satellite: bare");
+  assert.equal(senseTermFor("50002-s", bySynset.get("50002-s"), ctx), "fine", "loser satellite: rung 4 never fires for a/s, so it collapses to residue same as today");
+});
+
+test("senseTermFor: rejects an article-led lexname candidate and falls to residue (stays merged, measured behavior)", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("60001-n", bySynset.get("60001-n"), ctx), "a", "dominant: bare 'a' is article-safe");
+  assert.equal(senseTermFor("60002-n", bySynset.get("60002-n"), ctx), "a", "'a (widget)' reads as the indefinite article, rejected, falls to residue");
+});
+
+test("senseTermFor: residue keeps the bare lemma when a same-lexfile rival blocks the lexname gloss too", () => {
+  const { bySynset, ctx } = senseFixture();
+  assert.equal(senseTermFor("10003-n", bySynset.get("10003-n"), ctx), "letter", "single-member, same lexfile as the dominant sense: no rung wins, residue is bare");
+});
+
+test("senseTermFor: same result for a synset map built in a different insertion order", () => {
+  const forward = senseFixture();
+  const reversedBySynset = new Map([...forward.bySynset.entries()].reverse());
+  const memberOwners = buildMemberOwners(reversedBySynset);
+  const senseIndex = new Map([
+    ["letter 10001-n", 0], ["letter 10002-n", 1], ["letter 10003-n", 3],
+    ["delta 30001-n", 0], ["delta 30002-n", 1],
+    ["bank 40001-n", 0], ["bank 40002-v", 0],
+    ["fine 50001-a", 0], ["fine 50002-s", 1],
+    ["a 60001-n", 0], ["a 60002-n", 1],
+  ]);
+  const dominantBySynset = buildDominantSense(memberOwners, senseIndex);
+  const ctx = { memberOwners, dominantBySynset, lexOf: forward.ctx.lexOf };
+
+  for (const id of forward.bySynset.keys()) {
+    assert.equal(
+      senseTermFor(id, reversedBySynset.get(id), ctx),
+      senseTermFor(id, forward.bySynset.get(id), forward.ctx),
+      `${id}: same name regardless of map iteration order`,
+    );
+  }
+  assert.deepEqual(buildFullFacts(reversedBySynset, ctx), buildFullFacts(forward.bySynset, forward.ctx));
+});
+
+test("buildFullFacts: synonyms chain off the CHOSEN name (never the discarded original headword), and the lemma bridge is weak-trust RelatedTo, never Synonym", () => {
+  const { bySynset, ctx } = senseFixture();
+  const facts = buildFullFacts(bySynset, ctx);
+  const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
+
+  assert.ok(has("/r/Synonym", "/c/en/letter_of_the_alphabet", "/c/en/alphabetic_character"), "chosen name chains to the other non-primary member");
+  assert.ok(!has("/r/Synonym", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "never a Synonym edge back to the discarded headword");
+  assert.ok(!has("/r/Synonym", "/c/en/letter", "/c/en/letter_of_the_alphabet"), "not in the other direction either");
+  assert.ok(has("/r/RelatedTo", "/c/en/letter_of_the_alphabet", "/c/en/letter"), "the lemma bridge: weak-trust RelatedTo carries the discarded headword");
+});
+
+// ---- alphabet families: WordNet's own definition text is the only place the
+// Greek/Hebrew/Roman grouping lives, e.g. "the 2nd letter of the Greek
+// alphabet" (confirmed by direct inspection of the OEWN yaml). --------------
+
+test("alphabetFamilyOf: reads the family straight off the definition text", () => {
+  assert.equal(alphabetFamilyOf({ definition: ["the 2nd letter of the Greek alphabet"] }), "greek letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the 22nd letter of the Hebrew alphabet"] }), "hebrew letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the 1st letter of the Roman alphabet"] }), "roman letter");
+  assert.equal(alphabetFamilyOf({ definition: ["the last (24th) letter of the Greek alphabet"] }), "greek letter", "the omega-shaped 'last (Nth)' wording matches too");
+});
+
+test("alphabetFamilyOf: a definition naming a letter without an alphabet is ignored", () => {
+  assert.equal(alphabetFamilyOf({ definition: ["the first letter of a word (especially a person's name)"] }), null, "initial: no 'of the X alphabet' clause");
+  assert.equal(alphabetFamilyOf({ definition: ["a lowercase letter that has a part extending above other lowercase letters"] }), null, "ascender: same");
+  assert.equal(alphabetFamilyOf({ definition: ["two successive letters used to represent a single sound"] }), null, "digraph: same");
+  assert.equal(alphabetFamilyOf({}), null, "no definition at all");
+  assert.equal(alphabetFamilyOf({ definition: [] }), null, "empty definition array");
+});
+
+test("ALPHABET_LETTER_DEF: the family capture group is exactly the alphabet's proper name", () => {
+  const m = ALPHABET_LETTER_DEF.exec("the 3rd letter of the Greek alphabet");
+  assert.equal(m?.[1], "Greek");
+});
+
+/** A parent synset shaped like the real alphabetic-character sense (the
+ *  contested "letter" collapsing to "letter of the alphabet" — see
+ *  senseFixture), plus three of its own members: two Greek letters and one
+ *  non-family oddment (mirrors the real "initial" member, which has no
+ *  "of the X alphabet" clause in its own definition). */
+function alphabetFamilyFixture() {
+  const bySynset = new Map(Object.entries({
+    "80001-n": { members: ["letter", "missive"] },
+    "80002-n": { members: ["letter", "letter of the alphabet", "alphabetic character"] },
+    "80003-n": { members: ["beta"], hypernym: ["80002-n"], definition: ["the 2nd letter of the Greek alphabet"] },
+    "80004-n": { members: ["gamma"], hypernym: ["80002-n"], definition: ["the 3rd letter of the Greek alphabet"] },
+    "80005-n": { members: ["initial"], hypernym: ["80002-n"], definition: ["the first letter of a word (especially a person's name)"] },
+  }));
+  const memberOwners = buildMemberOwners(bySynset);
+  const senseIndex = new Map([["letter 80001-n", 0], ["letter 80002-n", 1]]);
+  const dominantBySynset = buildDominantSense(memberOwners, senseIndex);
+  return { bySynset, ctx: { memberOwners, dominantBySynset, lexOf: new Map() } };
+}
+
+test("buildFullFacts: Greek members re-point their own IsA at the family, and the family bridges up to letter of the alphabet exactly once", () => {
+  const { bySynset, ctx } = alphabetFamilyFixture();
+  const facts = buildFullFacts(bySynset, ctx);
+  const has = (rel, start, end) => facts.some((f) => f.rel === rel && f.start === start && f.end === end);
+
+  assert.ok(has("/r/IsA", "/c/en/beta", "/c/en/greek_letter"), "beta re-points at the family, not the flat parent");
+  assert.ok(has("/r/IsA", "/c/en/gamma", "/c/en/greek_letter"));
+  assert.ok(!has("/r/IsA", "/c/en/beta", "/c/en/letter_of_the_alphabet"), "the direct edge to the flat parent is gone");
+  assert.ok(has("/r/IsA", "/c/en/greek_letter", "/c/en/letter_of_the_alphabet"), "the family itself bridges up to the flat parent");
+  assert.equal(facts.filter((f) => f.rel === "/r/IsA" && f.start === "/c/en/greek_letter").length, 1, "one family row, deduped across every member that shares it");
+
+  assert.ok(has("/r/IsA", "/c/en/initial", "/c/en/letter_of_the_alphabet"), "a member whose own definition names no alphabet keeps the flat parent");
 });

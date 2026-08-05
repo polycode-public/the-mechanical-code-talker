@@ -11,9 +11,9 @@
         "tool": "corpus/wordnet/generate.mjs"
       },
       "file": "wordnet-xl.jsonl",
-      "facts": 23805,
-      "bytes": 3035376,
-      "sha256": "4bbd7cdb0ccb7268a3e8ccfbefad3012cebb56ef3debb954eda6bf9e2006f541",
+      "facts": 23924,
+      "bytes": 3133592,
+      "sha256": "ff9db28dafe0b4715d06bbb37f9cfa165af0876f8d354a93ab67807cf58dcda8",
       "license": "CC-BY-4.0"
     },
     {
@@ -25,9 +25,9 @@
         "tool": "corpus/wordnet/generate.mjs"
       },
       "file": "wordnet-full.jsonl",
-      "facts": 192498,
-      "bytes": 25531520,
-      "sha256": "2ff54e666664087014a875cc1d91bdcc210ac6265820df94d65da54236c6e7fb",
+      "facts": 206357,
+      "bytes": 28217942,
+      "sha256": "78c0885bb98b50773f6bc04d9079346c6422d12e4214916ba0bc899c91610662",
       "license": "CC-BY-4.0"
     }
   ]

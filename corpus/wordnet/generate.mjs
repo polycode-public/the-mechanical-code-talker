@@ -112,17 +112,22 @@ export function encodeTerm(raw) {
 export const humanize = (term) => String(term ?? "").replace(/_/g, " ");
 
 // ---- synonym chaining (pure, unit-tested) ----------------------------------
-// A synset's `members` list are synonyms of each other. Chained N-1 (member
-// [0] paired with each of member[1..N-1]) rather than the full N*(N-1)/2
-// cross product — members average 1.72/synset (185,149 member-slots across
-// 107,526 synsets), and the chain already connects every member into one
-// component (a synonym-chases-synonym graph read), so the cross product would
-// roughly double the fact count for no new information the chain doesn't
-// already encode transitively.
-export function synonymPairs(members) {
-  if (!Array.isArray(members) || members.length < 2) return [];
-  const [first, ...rest] = members;
-  return rest.map((m) => [first, m]);
+// A synset's `members` list are synonyms of each other. Chained N-1 off the
+// CHOSEN name `A` (which is members[0] whenever the naming ladder resolves at
+// rung 1/2/5, but can be a later member or a synthesized gloss otherwise) —
+// paired with every OTHER member, i.e. every member except members[0] itself
+// and A itself, rather than the full N*(N-1)/2 cross product (members average
+// 1.72/synset, and the chain already connects every member into one
+// component, so the cross product would roughly double the fact count for no
+// new information the chain doesn't already encode transitively). members[0]
+// is deliberately excluded here even when A !== members[0]: that specific
+// edge is the lemma bridge (buildFullFacts/buildXlFacts add it separately, at
+// weak-trust RelatedTo, never Synonym — a Synonym edge back to the discarded
+// headword would re-merge the very senses this naming ladder exists to keep
+// apart).
+export function synonymPairs(A, members) {
+  if (!A || !Array.isArray(members) || members.length < 2) return [];
+  return members.filter((m, i) => i !== 0 && m !== A).map((m) => [A, m]);
 }
 
 // ---- pass 1: load every synset across every yaml file ----------------------
@@ -135,17 +140,194 @@ export async function loadAllSynsets(yamlDir) {
     throw new Error(`${yamlDir}: no noun./verb./adj./adv. yaml files found — wrong path?`);
   }
   const bySynset = new Map();
+  const lexOf = new Map(); // synsetId -> source filename minus ".yaml" (e.g. "noun.communication")
   for (const f of files) {
     const parsed = await readWordnetYaml(join(yamlDir, f));
-    for (const [id, rec] of Object.entries(parsed || {})) bySynset.set(id, rec);
+    const fileStem = f.replace(/\.yaml$/, "");
+    for (const [id, rec] of Object.entries(parsed || {})) {
+      bySynset.set(id, rec);
+      lexOf.set(id, fileStem);
+    }
   }
-  return { bySynset, files };
+  return { bySynset, lexOf, files };
 }
 
-const repTerm = (synset) => {
-  const m = Array.isArray(synset?.members) ? synset.members : [];
-  return m.length ? m[0] : null;
+// ---- sense-preserving naming ladder (pure, unit-tested) --------------------
+// Names a synset from its OWN members, never a sense-suffixed id: the read
+// side (src/adapters/corpus/conceptnet.mjs termText, chat.mjs factPhrase)
+// prints stored terms verbatim, so the stored string IS the sense identity.
+// One rung wins per synset, tried in order; each candidate that would
+// normalise away under src/domain/hash.mjs normFactTerm's leading-article
+// strip is rejected and the ladder moves on.
+
+export const POS_RANK = Object.freeze({ n: 0, v: 1, a: 2, s: 2, r: 3 });
+export const LEXNAME_NOT_A_GLOSS = Object.freeze(["all", "Tops", "pert", "ppl"]);
+
+const ENTRIES_FILE_RE = /^entries-[0-9a-z]\.yaml$/;
+const SYNSET_ID_POS_RE = /-(\w)$/;
+
+const posOfSynsetId = (id) => {
+  const m = SYNSET_ID_POS_RE.exec(String(id ?? ""));
+  return m ? m[1] : null;
 };
+
+/** True iff `name`, stored verbatim, would lose its leading word to
+ *  normFactTerm's `/^(?:the|an?)\s+/i` strip at write time — a candidate that
+ *  reads unsafe is rejected, never stored, so "a (communication)" never
+ *  silently becomes "(communication)". */
+export function isArticleUnsafe(name) {
+  return /^(?:the|an?)\s+/i.test(String(name ?? "").trim());
+}
+
+/** Every distinct member string across every synset, mapped to the set of
+ *  synset ids that carry it anywhere in their `members` list (any position,
+ *  not just members[0]) — the population a lemma is contesting against,
+ *  whichever position it sits at. Order-independent: callers only ever ask
+ *  for `.size` or run a full min-scan over the Set, never rely on its
+ *  iteration order. */
+export function buildMemberOwners(bySynset) {
+  const owners = new Map();
+  for (const [id, synset] of bySynset) {
+    const members = Array.isArray(synset?.members) ? synset.members : [];
+    for (const raw of members) {
+      const m = String(raw ?? "").trim();
+      if (!m) continue;
+      if (!owners.has(m)) owners.set(m, new Set());
+      owners.get(m).add(id);
+    }
+  }
+  return owners;
+}
+
+/** Load the `word -> { synset -> senseIndex }` frequency order WordNet itself
+ *  encodes in `entries-<letter>.yaml`'s per-POS sense list order, flattened
+ *  to `"word synsetId" -> index`. Reads all 28 entries files once; a
+ *  maintainer-tool-scale cost (~26MB total), not something the per-synset
+ *  ladder pays for each call. */
+export async function loadSenseIndex(yamlDir) {
+  const all = await readdir(yamlDir);
+  const files = all.filter((f) => ENTRIES_FILE_RE.test(f)).sort();
+  const senseIndex = new Map();
+  for (const f of files) {
+    const parsed = await readWordnetYaml(join(yamlDir, f));
+    for (const [word, byPos] of Object.entries(parsed || {})) {
+      for (const [pos, rec] of Object.entries(byPos || {})) {
+        if (pos === "form") continue;
+        const senses = Array.isArray(rec?.sense) ? rec.sense : [];
+        senses.forEach((s, i) => {
+          if (s?.synset) senseIndex.set(`${word} ${s.synset}`, i);
+        });
+      }
+    }
+  }
+  return senseIndex;
+}
+
+/** For every member string contested by more than one synset, which single
+ *  synset id is WordNet's dominant (most frequent) sense of it — lowest
+ *  `(posRank, senseIndex, synsetId)`, a total order down to the id tiebreak
+ *  so the winner never depends on Set/Map iteration order. Returns
+ *  `member -> dominant synsetId`; uncontested members (owners.size < 2) carry
+ *  no entry, since dominance only means something once there is a rival. */
+export function buildDominantSense(memberOwners, senseIndex) {
+  const dominant = new Map();
+  for (const [member, owners] of memberOwners) {
+    if (owners.size < 2) continue;
+    let winner = null;
+    let winnerPosRank = Infinity;
+    let winnerSenseIdx = Infinity;
+    for (const id of owners) {
+      const posRank = POS_RANK[posOfSynsetId(id)] ?? Infinity;
+      const senseIdx = senseIndex.get(`${member} ${id}`) ?? Infinity;
+      const better = posRank !== winnerPosRank ? posRank < winnerPosRank
+        : senseIdx !== winnerSenseIdx ? senseIdx < winnerSenseIdx
+          : winner === null || id < winner;
+      if (better) { winner = id; winnerPosRank = posRank; winnerSenseIdx = senseIdx; }
+    }
+    dominant.set(member, winner);
+  }
+  return dominant;
+}
+
+// ---- alphabet families (pure, unit-tested) ---------------------------------
+// WordNet's alphabetic-character members carry no structural family relation
+// (Greek/Hebrew/Roman only lives in each synset's OWN definition text, e.g.
+// "the 2nd letter of the Greek alphabet") — fixing the naming ladder alone
+// does not separate them, they'd all still resolve to "letter of the
+// alphabet" as a flat 82-member group. This regex reads the family straight
+// out of the definition WordNet already carries.
+export const ALPHABET_LETTER_DEF =
+  /^the (?:\d+(?:st|nd|rd|th)|last \(\d+(?:st|nd|rd|th)\)) letter of the ([A-Z][a-z]+) alphabet$/;
+
+/** "greek letter" | "hebrew letter" | "roman letter" | null — read off
+ *  `synset.definition[0]`, the only place WordNet records this grouping. */
+export function alphabetFamilyOf(synset) {
+  const def = String(synset?.definition?.[0] ?? "").trim();
+  const m = ALPHABET_LETTER_DEF.exec(def);
+  return m ? `${m[1].toLowerCase()} letter` : null;
+}
+
+/** The naming ladder's decision, rung included — `senseTermFor` below is the
+ *  public one-string-out wrapper; main() also calls this directly to tally
+ *  which rung fired across the whole dump for its stderr drift-visibility
+ *  line, without recomputing the ladder a second time under a second name.
+ *  `ctx = { memberOwners, dominantBySynset, lexOf }` is built once per run
+ *  (see main()) and shared across every synset.
+ *  1. unique lemma — members[0] owned by only this synset.
+ *  2. dominant sense — this synset wins members[0]'s WordNet-frequency contest.
+ *  3. distinguishing member — the first later member no other synset owns.
+ *  4. qualified gloss — `members[0] (qualifier)`, nouns/verbs only. The
+ *     qualifier is the alphabet family when the definition names one (e.g.
+ *     "beta (greek letter)" — more readable, and it's what the family
+ *     grouping in buildFullFacts/buildXlFacts re-points these synsets'
+ *     hypernym edge at anyway); otherwise the lexname, skipped when another
+ *     same-lemma synset shares the lexfile (the gloss wouldn't distinguish
+ *     them) or the lexfile segment is a non-semantic bucket.
+ *  5. residue — bare members[0], unconditionally (today's behavior; the
+ *     final fallback has nowhere further to reject to). */
+function ladderDecision(id, synset, ctx) {
+  const members = Array.isArray(synset?.members) ? synset.members : [];
+  const A = String(members[0] ?? "").trim();
+  if (!A) return { rung: null, name: null };
+  const ownersA = ctx.memberOwners.get(A);
+
+  if ((ownersA?.size ?? 0) <= 1 && !isArticleUnsafe(A)) return { rung: 1, name: A };
+  if (ctx.dominantBySynset.get(A) === id && !isArticleUnsafe(A)) return { rung: 2, name: A };
+
+  for (const raw of members.slice(1)) {
+    const m = String(raw ?? "").trim();
+    if (!m) continue;
+    const owners = ctx.memberOwners.get(m);
+    if ((owners?.size ?? 0) === 1 && !isArticleUnsafe(m)) return { rung: 3, name: m };
+  }
+
+  const pos = posOfSynsetId(id);
+  if (pos === "n" || pos === "v") {
+    const family = alphabetFamilyOf(synset);
+    if (family) {
+      const candidate = `${A} (${family})`;
+      if (!isArticleUnsafe(candidate)) return { rung: 4, name: candidate };
+    } else {
+      const lexfile = ctx.lexOf.get(id);
+      const segment = lexfile ? lexfile.split(".")[1] : null;
+      if (segment && !LEXNAME_NOT_A_GLOSS.includes(segment)) {
+        const sameLexfileElsewhere = ownersA
+          ? [...ownersA].some((otherId) => otherId !== id && ctx.lexOf.get(otherId) === lexfile)
+          : false;
+        if (!sameLexfileElsewhere) {
+          const candidate = `${A} (${segment})`;
+          if (!isArticleUnsafe(candidate)) return { rung: 4, name: candidate };
+        }
+      }
+    }
+  }
+
+  return { rung: 5, name: A };
+}
+
+export function senseTermFor(id, synset, ctx) {
+  return ladderDecision(id, synset, ctx).name;
+}
 
 // ---- pass 2: synset map -> deduped, sorted ConceptNet-shape rows -----------
 
@@ -175,21 +357,41 @@ const sortRows = (rows) => rows.slice().sort((a, b) => (
 ));
 
 /** Every structural + synonym-chain fact, deterministically sorted — the
- *  wordnet-full.jsonl content. */
-export function buildFullFacts(bySynset) {
+ *  wordnet-full.jsonl content. `ctx` is the naming ladder's context (see
+ *  senseTermFor); built once by main() and threaded through unchanged. */
+export function buildFullFacts(bySynset, ctx) {
   const { rows, add } = makeRowBuilder();
-  for (const synset of bySynset.values()) {
-    const A = repTerm(synset);
+  for (const [id, synset] of bySynset) {
+    const A = senseTermFor(id, synset, ctx);
     if (!A) continue;
     for (const [wnRel, { rel, flip }] of Object.entries(RELATION_MAP)) {
       const targets = Array.isArray(synset[wnRel]) ? synset[wnRel] : [];
       for (const targetId of targets) {
-        const B = repTerm(bySynset.get(targetId));
+        const targetSynset = bySynset.get(targetId);
+        if (!targetSynset) continue;
+        let B = senseTermFor(targetId, targetSynset, ctx);
         if (!B) continue;
+        if (wnRel === "hypernym") {
+          // an alphabet-family member (beta, aleph, A...) re-points its own
+          // hypernym edge at its family instead of the flat "letter of the
+          // alphabet" parent, and the family gets its own edge up to that
+          // parent — makeRowBuilder's dedup collapses the repeat across
+          // every member of the same family down to one row.
+          const family = alphabetFamilyOf(synset);
+          if (family) {
+            add(family, "/r/IsA", B);
+            B = family;
+          }
+        }
         if (flip) add(B, rel, A); else add(A, rel, B);
       }
     }
-    for (const [m0, mi] of synonymPairs(synset.members)) add(m0, "/r/Synonym", mi);
+    for (const [m0, mi] of synonymPairs(A, synset.members)) add(m0, "/r/Synonym", mi);
+    if (Array.isArray(synset.members) && synset.members.length && A !== synset.members[0]) {
+      // the lemma bridge: weak-trust RelatedTo, never Synonym — see
+      // synonymPairs' own header comment for why the two relations can't mix.
+      add(A, "/r/RelatedTo", synset.members[0]);
+    }
   }
   return sortRows([...rows.values()]);
 }
@@ -217,7 +419,7 @@ export function hypernymRefCounts(bySynset) {
  *  hypernym edges whose TARGET is most commonly referenced first; the
  *  synonym budget goes to the full chain of the most commonly-referenced
  *  synsets (same ranking), walked in ranked order until the budget is spent. */
-export function buildXlFacts(bySynset, full, budget = 24000) {
+export function buildXlFacts(bySynset, full, ctx, budget = 24000) {
   const refCount = hypernymRefCounts(bySynset);
 
   const hypernymTotal = full.filter((r) => r.rel === "/r/IsA").length;
@@ -243,9 +445,14 @@ export function buildXlFacts(bySynset, full, budget = 24000) {
   const { rows, add } = makeRowBuilder();
   for (const { source, target } of edges) {
     if (rows.size >= hypernymBudget) break;
-    const A = repTerm(bySynset.get(source));
-    const B = repTerm(bySynset.get(target));
+    const sourceSynset = bySynset.get(source);
+    const targetSynset = bySynset.get(target);
+    if (!sourceSynset || !targetSynset) continue;
+    const A = senseTermFor(source, sourceSynset, ctx);
+    let B = senseTermFor(target, targetSynset, ctx);
     if (!A || !B) continue;
+    const family = alphabetFamilyOf(sourceSynset);
+    if (family) { add(family, "/r/IsA", B); B = family; }
     add(A, "/r/IsA", B);
   }
 
@@ -259,9 +466,11 @@ export function buildXlFacts(bySynset, full, budget = 24000) {
     return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
   });
   let synonymCount = 0;
-  for (const [, synset] of rankedSynsets) {
+  for (const [id, synset] of rankedSynsets) {
     if (synonymCount >= synonymBudget) break;
-    const pairs = synonymPairs(synset.members);
+    const A = senseTermFor(id, synset, ctx);
+    if (!A) continue;
+    const pairs = synonymPairs(A, synset.members);
     if (!pairs.length) continue;
     for (const [m0, mi] of pairs) add(m0, "/r/Synonym", mi);
     synonymCount += pairs.length;
@@ -278,11 +487,26 @@ const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 async function main() {
   const yamlDir = resolveYamlDir();
   process.stderr.write(`corpus/wordnet/generate.mjs: reading ${yamlDir}\n`);
-  const { bySynset, files } = await loadAllSynsets(yamlDir);
+  const { bySynset, lexOf, files } = await loadAllSynsets(yamlDir);
   process.stderr.write(`  loaded ${bySynset.size} synsets across ${files.length} files\n`);
 
-  const full = buildFullFacts(bySynset);
-  const xl = buildXlFacts(bySynset, full);
+  const senseIndex = await loadSenseIndex(yamlDir);
+  const memberOwners = buildMemberOwners(bySynset);
+  const dominantBySynset = buildDominantSense(memberOwners, senseIndex);
+  const ctx = { memberOwners, dominantBySynset, lexOf };
+
+  const rungCounts = [0, 0, 0, 0, 0];
+  for (const [id, synset] of bySynset) {
+    const { rung } = ladderDecision(id, synset, ctx);
+    if (rung) rungCounts[rung - 1] += 1;
+  }
+  process.stderr.write(
+    `  naming ladder: unique=${rungCounts[0]} dominant=${rungCounts[1]} `
+    + `distinguishing=${rungCounts[2]} lexname=${rungCounts[3]} residue=${rungCounts[4]}\n`,
+  );
+
+  const full = buildFullFacts(bySynset, ctx);
+  const xl = buildXlFacts(bySynset, full, ctx);
   process.stderr.write(`  wordnet-full: ${full.length} facts\n`);
   process.stderr.write(`  wordnet-xl:   ${xl.length} facts\n`);
 

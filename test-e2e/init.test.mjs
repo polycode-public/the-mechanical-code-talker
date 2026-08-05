@@ -621,13 +621,12 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
 // string rather than the underlying mechanism). The "memory" backend keeps
 // everything in-process (no disk churn between bundles); seeded CONTENT is
 // backend-independent, so the resulting fact count matches a real disk-backed
-// `npm run init:xl`/`init:xxl` run exactly. Real totals, measured via the
-// actual npm scripts: init:xl =
-// 72,075 facts (~8m25s wall-clock, `human` + persona-size large's human-
-// medium/human-large + seon + conceptnet + aws/python/java + wordnet-xl);
-// init:xxl = same base with wordnet-full swapping in for wordnet-xl, plus
-// namenet. ±10% tolerance below — corpora drift slightly as they evolve; an
-// exact pin would bit-rot on the next refresh.
+// `npm run init:xl`/`init:xxl` run exactly. Real total, measured via this
+// same in-process seed: init:xl = 73,008 facts (`human` + persona-size
+// large's human-medium/human-large + seon + conceptnet + aws/python/java +
+// wordnet-xl); init:xxl = same base with wordnet-full swapping in for
+// wordnet-xl, plus namenet. ±10% tolerance below — corpora drift slightly as
+// they evolve; an exact pin would bit-rot on the next refresh.
 const INIT_XL_BUNDLES = {
   "human-medium": { active: true },
   "human-large": { active: true },
@@ -670,16 +669,16 @@ async function seedBundleSet(extensions) {
   }
 }
 
-test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (72,075 facts, measured via the actual npm script)", async () => {
+test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (73,008 facts)", async () => {
   const count = await seedBundleSet(INIT_XL_BUNDLES);
-  const EXPECTED = 72075;
+  const EXPECTED = 73008;
   assert.ok(
     count >= EXPECTED * 0.9 && count <= EXPECTED * 1.1,
     `init:xl's bundle set seeded ${count} facts, expected ~${EXPECTED} (±10%)`,
   );
 });
 
-// init:xxl's own real, full-scale total (wordnet-full's 192,498-row conversion
+// init:xxl's own real, full-scale total (wordnet-full's 206,357-row conversion
 // dominates) is a FOLLOW-UP measurement — a live `npm run init:xxl` run against
 // this same worktree showed corpus seeding is roughly quadratic in total
 // individuals (`syncFactSources`'s per-fact linear scans in

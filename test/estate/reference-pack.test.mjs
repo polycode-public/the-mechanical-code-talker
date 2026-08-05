@@ -3,8 +3,8 @@
 // driven here over a hand-written dump fixture so the whole
 // parse/clean/select/emit pipeline is pinned without any dump on disk. The
 // committed-pack guards at the bottom activate only where corpus/reference/
-// has actually been built (mirrored on the missing-WordNet skip in
-// generated-artifacts.test.mjs): absent pack, nothing to guard.
+// has actually been built (mirrored on child-pack.test.mjs's own missing-pack
+// skip): absent pack, nothing to guard.
 
 import test from "node:test";
 import assert from "node:assert/strict";
