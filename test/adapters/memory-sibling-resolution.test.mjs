@@ -181,3 +181,17 @@ test("a registration's losing claim is not a contradiction — the earlier claim
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("a member taught into two collections merges — belonging to both at once is not a disagreement", async () => {
+  const dir = await tmpRepo();
+  try {
+    await appendFact(dir, { subject: "p", predicate: "mgx:memberOf", object: "alphabet", provenance: "teach:chat:s1@2026-07-01T00:00:00.000Z" });
+    await appendFact(dir, { subject: "p", predicate: "mgx:memberOf", object: "roman-alphabet", provenance: "teach:chat:s2@2026-07-05T00:00:00.000Z" });
+    const m = await loadMemory(dir);
+    assert.deepEqual(findContradictions(m), [], "p belongs to both collections at once — not a contradiction");
+    const rows = readFactRows(m).filter((r) => r.subject === "p");
+    assert.equal(rows.length, 2, "both memberships are kept");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
