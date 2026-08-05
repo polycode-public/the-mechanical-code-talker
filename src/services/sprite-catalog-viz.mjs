@@ -255,16 +255,16 @@ export function catalogSections(entries, spritedClasses) {
  *  in reading order — a closed, hand-picked list in the same idiom as
  *  PERSON_ROLE_CLASSES/CATALOG_TAXONOMY_GAPFILL above, not derived from any
  *  ordering rule. Checked directly against catalogSections' real output: each
- *  name here really is a member of exactly one of this catalog's 28 current
- *  sections (the whole adventure and emoji groups, the 9 person-role
- *  clusters, the 17 physical-object clusters), one per section. A future
+ *  name here really is a member of exactly one of this catalog's 23 current
+ *  sections (the whole adventure and emoji groups, the 8 person-role
+ *  clusters, the 13 physical-object clusters), one per section. A future
  *  catalog change that drops one of these classes, or adds/removes a section,
  *  is exactly what landingExampleFor's own fallback below is for. */
 export const LANDING_EXAMPLE_CLASSES = Object.freeze([
-  "adventurer", "engineer", "king", "driver", "boss", "wife", "crowd", "worker",
-  "person", "family", "bear", "house", "tomato", "fly", "stadium", "spider",
-  "ocean", "planet", "metal", "boat", "breakfast", "town", "plant", "tiger",
-  "rain", "bedroom", "frog", "autumn",
+  "adventurer", "engineer", "king", "driver", "boss", "wife", "crowd",
+  "person", "family", "plant", "fly", "spider", "house", "stadium",
+  "ocean", "planet", "boat", "breakfast", "town", "rain", "bedroom",
+  "frog", "autumn",
 ]);
 
 /** The landing page's one example entry for a section (`sectionEntries`,
@@ -272,7 +272,7 @@ export const LANDING_EXAMPLE_CLASSES = Object.freeze([
  *  first of LANDING_EXAMPLE_CLASSES that is really a member of this section,
  *  so the operator's own curated favourite wins whenever this catalog really
  *  carries it there. Falls back to the section's own first entry (its
- *  existing catalog order) when none of the 28 named favourites is a member —
+ *  existing catalog order) when none of the named favourites is a member —
  *  an honest real example rather than nothing, for a section the curated
  *  list doesn't happen to name. Pure. */
 const LANDING_EXAMPLE_CLASS_SET = new Set(LANDING_EXAMPLE_CLASSES);
@@ -1179,7 +1179,7 @@ ${dockScripts}
  *
  *  The composer and the ask dock still answer over the WHOLE catalog from
  *  here (sceneComposerClassIndex/spriteFactRows both read every class, never
- *  just the ~28 shown), so typing "a doctor with a hat, and a cabinet"
+ *  just the couple of dozen shown), so typing "a doctor with a hat, and a cabinet"
  *  composes correctly even though none of those three classes has a card on
  *  this page. Same chrome, same styling, same scripts as every per-group
  *  page — renderSpriteCatalogPage owns all of that; this function only

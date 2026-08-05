@@ -587,10 +587,10 @@ test("renderSpriteCatalogLandingHtml shows exactly one example card per section,
   assert.equal((html.match(/class="viewall"/g) || []).length, sections.length);
   assert.match(html, new RegExp(`href="\\./sprites-person-roles\\.html#${classAnchorId("king")}"`), "the 'man' cluster's own favourite links straight to its own card on the person-roles page");
   assert.match(html, new RegExp(`href="\\./sprites-objects\\.html#${classAnchorId("frog")}"`), "the object group's trailing 'everything else' cluster links to its own favourite's card");
-  assert.doesNotMatch(html, /data-cls="doctor"/, "a class that isn't one of the 28 curated examples has no card on the landing page");
+  assert.doesNotMatch(html, /data-cls="doctor"/, "a class that isn't one of the curated examples has no card on the landing page");
 });
 
-test("the landing page's embedded composer/dock data still covers the WHOLE catalog even though only ~28 classes have cards", () => {
+test("the landing page's embedded composer/dock data still covers the WHOLE catalog even though only one class per section has a card", () => {
   const html = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true });
   assert.match(html, /"doctor"/, "doctor has no card on the landing page but still resolves through the embedded class index");
   assert.match(html, /"cabinet"/);
