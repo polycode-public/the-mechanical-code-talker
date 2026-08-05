@@ -3287,6 +3287,17 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
   return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isOperatorTaught(f) && (f.subject === t || f.object === t));
 }
 
+/** A bare single alphabetic character ("a", "i", …) classify() resolves only
+ *  as a CLOSED-CLASS word (a determiner — "a"/"an" are the only ones a
+ *  single letter can spell — or a pronoun) never actually names a class or
+ *  entity, but real teach subjects land here too ("a is a kind of alphabet
+ *  letter"). Every grounding check below treats this shape as UNCLASSIFIED,
+ *  the same as any other genuinely unknown noun, so the classify() veto
+ *  stops shadowing the one-letter word itself. */
+function isClosedClassSingleLetter(raw, classified) {
+  return /^[a-z]$/i.test(String(raw ?? "").trim()) && (classified?.pos === "determiner" || classified?.pos === "pronoun");
+}
+
 /** Shared "is this term grounded in ANY sense" aggregate — a static lexicon
  *  word (any part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, a
  *  term already anchored by a previously taught isa-family fact
@@ -3304,7 +3315,8 @@ async function isGroundedTerm(term, lex, memoryDir, cache = null, graph = null) 
   if (!raw) return false;
   if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
   const { classify } = await import("../domain/grammar/lexicon.mjs");
-  if (classify(raw, lex)) return true;
+  const classified = classify(raw, lex);
+  if (classified && !isClosedClassSingleLetter(raw, classified)) return true;
   if (graph && resolveSymbol(graph, raw)?.match) return true;
   return isGroundedByFact(raw, memoryDir, cache);
 }
@@ -3330,21 +3342,32 @@ export { isGroundedTerm };
  *  unchanged) whenever the payload doesn't fit the shape, or at least one
  *  side IS already grounded — a DIFFERENT, more specific reason it declined,
  *  where this nudge would be actively unhelpful noise. */
-async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, graph = null) {
-  if (!memoryDir) return "";
+/** The subject/object NP terms ungroundedPairHint's message names, computed
+ *  once and shared with the honest-miss builder's own residue clause below —
+ *  so a decline never names one pair of unknown words in one sentence and a
+ *  DIFFERENT pair (a wider or narrower slice of the same NPs) in the next.
+ *  Null when the payload doesn't fit the shape, or at least one side IS
+ *  already grounded — see ungroundedPairHint's own docblock for why. */
+async function ungroundedPairTerms(payload, lexicon, memoryDir, cache = null, graph = null) {
+  if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
-  if (!m) return "";
+  if (!m) return null;
   const [, , subjectRaw, verb, objectRaw] = m;
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return "";
-  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return "";
+  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return null;
+  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return null;
   // The sentences suggested here have to be the ones that actually store, so
   // both sides fold to the singular a plural surface named ("all zorps are
   // florbs" → "every zorp is a thing"). Following the plural verbatim teaches
   // a second class under a spelling nothing else uses.
   const subject = /^are$/i.test(verb) ? singularOf(subjectRaw, lex, lookupNoun) : subjectRaw;
   const object = storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun });
+  return { subject, object };
+}
+
+/** The grounding-nudge sentence for a resolved ungroundedPairTerms pair. */
+function groundingHintText({ subject, object }) {
   // Chaining the second term UNDER the first's now-grounded proper name
   // ("every man is a john") is technically accepted by the grammar (once
   // "john" is grounded, ANY term can be taught as a kind of it), but reads as
@@ -3354,6 +3377,11 @@ async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, gra
   return ` I don't know "${subject}" or "${object}" yet. Try grounding each one first, e.g. `
     + `"every ${subject} is a thing" and "every ${object} is a thing", then re-teach the`
     + ` original fact.`;
+}
+
+async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, graph = null) {
+  const terms = await ungroundedPairTerms(payload, lexicon, memoryDir, cache, graph);
+  return terms ? groundingHintText(terms) : "";
 }
 
 /** The unknown-SUBJECT direct-write fallback: tried ONLY after the real ACE
@@ -3402,11 +3430,14 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   // case is handled correctly a few lines down). Refuse only the fold's own
   // contribution here — an EXACT noun hit (no fold), or any non-noun
   // classification (a real verb/adjective/proper name/determiner), still
-  // blocks this fallback exactly as before.
+  // blocks this fallback exactly as before. A bare single letter ("a is a
+  // kind of alphabet letter") classifies as the determiner "a"/"an" itself,
+  // never a real class — isClosedClassSingleLetter exempts it the same way
+  // isGroundedTerm does, so the letter reads as an unknown noun instead.
   const subjectClass = classify(subjectRaw, lex);
   const subjectFoldedNounOnly = subjectClass?.pos === "noun" && !/^are$/i.test(verb)
     && (lookupNoun(lex, subjectRaw)?.lemma || "").toLowerCase() !== String(subjectRaw).toLowerCase();
-  if (subjectClass && !subjectFoldedNounOnly) return null;
+  if (subjectClass && !subjectFoldedNounOnly && !isClosedClassSingleLetter(subjectRaw, subjectClass)) return null;
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
   // Singularize the SUBJECT before storage, but ONLY on a genuinely PLURAL
   // phrasing ("all men ARE mortal", verb "are"). This
@@ -4641,15 +4672,22 @@ const RELATED_TO_TEACH_RE = /^(?:a\s+|an\s+|the\s+)?([\w-]+)\s+(?:relates\s+to|i
  *  a plural surface folds to the singular the ⊑ facts use. */
 const NEGATIVE_UNIVERSAL_TEACH_RE = /^no\s+([\w-]+)\s+(is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)[.!]*$/i;
 
-/** The mint (or the reflexive refusal) for a NEGATIVE_UNIVERSAL_TEACH_RE
- *  match, shared by teachLane and the ACE-path reflexive gate: null when the
- *  sentence isn't this shape. */
-async function negativeUniversalTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
-  const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_TEACH_RE);
-  if (!m || !memoryDir) return null;
-  const plural = m[2].toLowerCase() === "are";
-  const subject = plural ? singularizeSurface(m[1]) : m[1];
-  const object = plural ? singularizeSurface(m[3]) : m[3];
+/** "X is not a Y" / "X isn't a Y" — the phrasing people reach for far more
+ *  often than the canonical "no X is a Y" above, for the exact same
+ *  class-pair exclusion. Tried only from inside the retraction block below,
+ *  once a stored positive fact to disagree with (the per-instance negation,
+ *  RETRACT_NOT_A_RE's own territory) has already been ruled out — this is
+ *  the sibling reading for what's LEFT: two classes the user is telling us
+ *  are disjoint. Single-token sides only, matching
+ *  NEGATIVE_UNIVERSAL_TEACH_RE's own discipline. */
+const SINGULAR_NEGATION_TEACH_RE = /^(?:an?\s+)?([\w-]+)\s+(?:is\s+not|isn't)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+
+/** The mint (or the reflexive refusal) shared by every "no X is Y"-shaped
+ *  teach surface: null only when the store write itself fails. ackText
+ *  overrides teachFact's own acknowledgment for a caller whose surface form
+ *  isn't already the canonical "no X is a Y" restatement, so the user still
+ *  sees how the sentence actually landed. */
+async function mintNegativeUniversal(subject, object, { memoryDir, sessionId, observedAt, dateText, ackText }) {
   if (subject.toLowerCase() === object.toLowerCase()) {
     return {
       text: `I can't store "no ${subject} is a ${object}" — every ${subject} is a ${subject} by definition, so that exclusion contradicts itself. Nothing was stored.`,
@@ -4666,7 +4704,19 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId, observed
       via: "teach-miss", miss: true,
     };
   }
-  return stored;
+  return ackText ? { ...stored, text: ackText } : stored;
+}
+
+/** The mint (or the reflexive refusal) for a NEGATIVE_UNIVERSAL_TEACH_RE
+ *  match, shared by teachLane and the ACE-path reflexive gate: null when the
+ *  sentence isn't this shape. */
+async function negativeUniversalTeach(sentence, { memoryDir, sessionId, observedAt, dateText }) {
+  const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_TEACH_RE);
+  if (!m || !memoryDir) return null;
+  const plural = m[2].toLowerCase() === "are";
+  const subject = plural ? singularizeSurface(m[1]) : m[1];
+  const object = plural ? singularizeSurface(m[3]) : m[3];
+  return mintNegativeUniversal(subject, object, { memoryDir, sessionId, observedAt, dateText });
 }
 
 /** "no X can Y" — NEGATIVE_UNIVERSAL_TEACH_RE's sibling one relation over:
@@ -5059,6 +5109,23 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           };
         }
       }
+      // SINGULAR NEGATION AS CLASS EXCLUSION — "car is not a bike" states the
+      // same class-pair disjointness "no car is a bike" does. Tried here,
+      // once the per-instance disagreement above has found no positive fact
+      // to attach to, and gated on the OBJECT resolving as a known class
+      // noun, so an adjective property claim ("zeus is not mortal") keeps
+      // declining exactly as it always has — this widens which NOUN pairs
+      // read as an exclusion, never which property claims do.
+      const singularNegation = retractSrc.match(SINGULAR_NEGATION_TEACH_RE);
+      if (singularNegation && lookupNoun(loadLexicon(), singularNegation[2])) {
+        const [, negationSubject, negationObject] = singularNegation;
+        const negUniversal = await mintNegativeUniversal(negationSubject, negationObject, {
+          memoryDir, sessionId, observedAt, dateText,
+          ackText: `noted — remembered: no ${negationSubject} is a ${negationObject}`,
+        });
+        if (negUniversal) return negUniversal;
+      }
+
       // Nothing stored to disagree with. The gate above is right to refuse
       // storing a bare negative with no positive behind it — but a subject
       // the store has never heard of fell PAST every teach lane onto the
@@ -5958,15 +6025,26 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // grounded (or the sentence must fit a specific relation shape) — general
   // vocabulary teaching itself is fully supported (e.g. "Paris is the capital
   // of France" stores directly).
-  const why = unknown.length
-    ? ` I don't recognize ${joinList(unknown.map((w) => `"${w}"`))} as ${unknown.length === 1 ? "a word" : "words"} I know — `
-      + "any vocabulary works, but at least one side of a fact needs to already be grounded to something I "
-      + "know (or fit one of my specific relation shapes), not two brand-new terms at once."
+  //
+  // Both sides ungrounded (pairTerms below) means the grounding hint fires
+  // too, naming the SAME two NPs — so this clause names them at the NP level
+  // as well (residue token -> its containing NP), rather than the raw
+  // per-token parse residue, which can name a narrower slice of the same
+  // phrase ("alphabet" alone out of the object NP "alphabet letter"). One
+  // decline, one consistent pair of unknown terms, never two.
+  const pairTerms = await ungroundedPairTerms(payload, lexicon, memoryDir, cache, graph);
+  const whyTerms = pairTerms && unknown.length ? [pairTerms.subject, pairTerms.object] : unknown;
+  const why = whyTerms.length
+    ? ` I don't recognize ${joinList(whyTerms.map((w) => `"${w}"`))} as ${whyTerms.length === 1 ? "a word" : "words"} I know`
+      + (pairTerms
+        ? "."
+        : " — any vocabulary works, but at least one side of a fact needs to already be grounded to something I "
+          + "know (or fit one of my specific relation shapes), not two brand-new terms at once.")
     : "";
   // Grounding NUDGE: APPENDED, never a replacement, exactly like "did" above
-  // — see ungroundedPairHint's own docblock for why this is scoped to the
+  // — see ungroundedPairTerms' own docblock for why this is scoped to the
   // "both sides ungrounded, fits the X is/are Y shape" case only.
-  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache, graph);
+  const groundingHint = pairTerms ? groundingHintText(pairTerms) : "";
   return {
     text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
       + `words I know.${did}${groundingHint} Type /memory to see what I already remember.`,
