@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { subClassParents, ancestryChain, ancestorSet, clusterSenses } from "../../src/domain/sense-split.mjs";
+import { subClassParents, ancestryChain, ancestorSet, clusterSenses, STOP_SET } from "../../src/domain/sense-split.mjs";
 
 // A small taxonomy shared by several cases:
 //   dog  -> canine -> mammal -> animal
@@ -23,6 +23,29 @@ test("ancestryChain walks one deterministic path up to the cap", () => {
   assert.deepEqual(ancestryChain("dog", parents), ["dog", "canine", "mammal", "animal"]);
   assert.deepEqual(ancestryChain("dog", parents, { cap: 2 }), ["dog", "canine"]);
   assert.deepEqual(ancestryChain("animal", parents), ["animal"]);
+});
+
+test("ancestryChain with a stopAt set truncates before an abstraction-tier ancestor", () => {
+  const parents = subClassParents(TAXONOMY);
+  // dog -> canine -> mammal -> animal; "animal" is a hub-terms.mjs stop word,
+  // so the walk halts before climbing into it, leaving the two concrete hops.
+  assert.deepEqual(ancestryChain("dog", parents, { stopAt: STOP_SET }), ["dog", "canine", "mammal"]);
+});
+
+test("ancestryChain still renders one hop when the term's own direct parent is a stop word", () => {
+  const parents = subClassParents([["gadget", "object"], ["object", "artifact"]]);
+  // "object" is a hub-terms.mjs stop word and gadget's ONLY recorded parent —
+  // the walk shows that one direct parent (it is already the plain "gadget is
+  // a kind of object" fact) rather than truncating to an empty chain.
+  assert.deepEqual(ancestryChain("gadget", parents, { stopAt: STOP_SET }), ["gadget", "object"]);
+});
+
+test("ancestryChain with a stopAt set still stops right after a first-hop stop word even when a further, non-hub ancestor exists", () => {
+  const parents = subClassParents(TAXONOMY);
+  // scout -> person -> agent; "person" is a hub-terms.mjs stop word and
+  // scout's direct parent, so it renders but the walk does not continue on
+  // to "agent" even though "agent" is not itself a stop word.
+  assert.deepEqual(ancestryChain("scout", parents, { stopAt: STOP_SET }), ["scout", "person"]);
 });
 
 test("ancestorSet includes the term and every reachable superclass", () => {

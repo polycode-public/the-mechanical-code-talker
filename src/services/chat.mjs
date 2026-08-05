@@ -59,7 +59,7 @@ import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { subClassParents, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
+import { subClassParents, ancestryChain, clusterSenses, STOP_SET } from "../domain/sense-split.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
@@ -6968,7 +6968,7 @@ const SENSE_CITE_RE = / \(source: [^)]*\)$/;
 function renderFactLineWithChain(f, parents, subjectVariants) {
   const base = renderFactLine(f);
   if (!ISA_PREDICATES.has(f.predicate) || !subjectVariants.has(f.subject)) return base;
-  const chain = ancestryChain(f.object, parents, { cap: 6 });
+  const chain = ancestryChain(f.object, parents, { cap: 6, stopAt: STOP_SET });
   if (chain.length <= 1) return base;
   const suffix = ` → ${chain.slice(1).join(" → ")}`;
   const cite = base.match(SENSE_CITE_RE);

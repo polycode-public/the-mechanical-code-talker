@@ -43,14 +43,29 @@ test("provenanceChipFor: an entailed citation reads as entailed", () => {
   assert.equal(tier, "entailed");
 });
 
-test("provenanceChipFor: a proof chain with a mix of citations reads as taught — taught wins over entailed and corpus, mirroring provBucketFor's own precedence", () => {
+test("provenanceChipFor: a teach turn's own proof chain reads as taught even when a premise is entailed, not just corpus", () => {
   const answer = "yes — rex is a kind of dog (source: teach:chat:abc@2026-01-01T00:00:00.000Z); so rex is a mammal (source: entailed:subclass-transitivity)";
+  assert.equal(provenanceChipFor(answer, { miss: false, via: "assert" }, provBucketFor), "taught");
+});
+
+test("provenanceChipFor: a read turn citing one taught fact among otherwise-entailed premises does not get the taught chip — it falls through to entailed", () => {
+  const answer = "yes — rex is a kind of dog (source: teach:chat:abc@2026-01-01T00:00:00.000Z); so rex is a mammal (source: entailed:subclass-transitivity)";
+  assert.equal(provenanceChipFor(answer, { miss: false, via: "template" }, provBucketFor), "entailed");
+});
+
+test("provenanceChipFor: a read turn citing only taught facts still gets the taught chip", () => {
+  const answer = "rex is a kind of dog (source: teach:chat:abc@2026-01-01T00:00:00.000Z); rex is friendly (source: teach:chat:def@2026-01-01T00:00:00.000Z)";
   assert.equal(provenanceChipFor(answer, { miss: false, via: "template" }, provBucketFor), "taught");
 });
 
 test("provenanceChipFor: a chain of entailed-then-corpus citations (no taught) reads as entailed", () => {
   const answer = "x (source: entailed:rule-a); y (source: corpus:conceptnet)";
   assert.equal(provenanceChipFor(answer, { miss: false, via: "template" }, provBucketFor), "entailed");
+});
+
+test("provenanceChipFor: a read turn citing one taught fact among otherwise-corpus premises falls through to the corpus bucket, not taught", () => {
+  const answer = "beta is a kind of letter (source: teach:chat:abc@2026-01-01T00:00:00.000Z); beta is used in physics (source: corpus:conceptnet)";
+  assert.equal(provenanceChipFor(answer, { miss: false, via: "template" }, provBucketFor), "corpus");
 });
 
 test("provenanceChipFor: a teach-lane confirmation with no citation text still reads as taught, via record.via", () => {
