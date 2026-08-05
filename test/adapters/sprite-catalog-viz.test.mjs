@@ -395,7 +395,8 @@ test("the page splices in the same frame-order functions this file tests, never 
 test("the one animated cell takes the plain swatch's place, so the three separate cycles never come back as extra grid cells", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /replaceChild\(makeModeCell\(modeFrames, cls\), baseSwatch\)/, "the cell stands where the plain swatch was");
-  assert.doesNotMatch(html, /insertBefore\(makeCycleSwatch/, "no axis adds a cell of its own any more");
+  assert.equal((html.match(/swatchRow\.(insertBefore|replaceChild|appendChild)\(/g) || []).length, 1,
+    "the animated cell is the only thing the script puts in a swatch row, so no axis adds a grid cell of its own");
   assert.equal((html.match(/makeModeCell\(/g) || []).length, 2, "one cell factory, called from one place");
 });
 
@@ -515,9 +516,9 @@ test("a term with no sprite of its own carries a stand-in description written fr
 });
 
 test("ontologyNodeDescription names at most two parents and says plainly when a term tops its branch", () => {
-  assert.equal(ontologyNodeDescription("organism", []), "the widest concept this branch reaches. No sprite yet.");
-  assert.equal(ontologyNodeDescription("queen", ["insect", "woman"]), "a kind of insect and woman. No sprite yet.");
-  assert.equal(ontologyNodeDescription("fly", ["change", "hit", "insect"]), "a kind of change and hit. No sprite yet.");
+  assert.equal(ontologyNodeDescription([]), "the widest concept this branch reaches. No sprite yet.");
+  assert.equal(ontologyNodeDescription(["insect", "woman"]), "a kind of insect and woman. No sprite yet.");
+  assert.equal(ontologyNodeDescription(["change", "hit", "insect"]), "a kind of change and hit. No sprite yet.");
 });
 
 test("buildOntologyTree is a pure function of the fact set — the same facts in a different order build the same tree", () => {

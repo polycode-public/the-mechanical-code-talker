@@ -3,6 +3,8 @@
 // groups, plus each ancestor cluster within Person roles/Physical objects —
 // see sprite-catalog-viz.mjs's own catalogSections), each linking out to its
 // own class's card on the group page that actually holds the full gallery.
+// This page also holds every section's ontology tree, drawn above that
+// section, which is where the ancestry pills on every sprite page point.
 // The composer (the "there is a" lead-in) and the chat dock both still
 // answer over the WHOLE catalog from this page, even though only one class
 // per section has a card here — see test-e2e/pages-sprites-groups.test.mjs
@@ -116,6 +118,122 @@ test("every 'view all' link points to that example's own card on its group's ful
     assert.ok(links.includes("./sprites-objects.html#card-frog"), "the object group's trailing 'everything else' cluster links to its own favourite's card");
     assert.ok(links.includes("./sprites-adventure-props.html#card-adventurer"));
     assert.ok(links.includes("./sprites-emotions.html#card-autumn"));
+  } finally {
+    await context.close();
+  }
+});
+
+test("every section carries its own ontology tree, drawn above that section's example card", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    assert.equal(await page.locator(".ontology").count(), 23, "one tree per section");
+    const order = await page.locator(".landing-section").evaluateAll((els) => els.map((el) => {
+      const kids = Array.from(el.children).map((k) => k.className.split(" ")[0]);
+      return { tree: kids.indexOf("ontology"), cards: kids.indexOf("cards") };
+    }));
+    assert.equal(order.length, 23);
+    for (const { tree, cards } of order) {
+      assert.ok(tree >= 0, "the section has a tree");
+      assert.ok(tree < cards, "the tree is drawn above the card, not below it");
+    }
+    assert.deepEqual(consoleErrors, [], "drawing the trees logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("an ancestry pill is a real link to that term's own node in its section's tree", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const card = page.locator('.card[data-cls="driver"]');
+    await card.scrollIntoViewIfNeeded();
+    const hrefs = await card.locator("a.chain-link").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(hrefs, [
+      "#tree-person-worker-driver", "#tree-person-worker-worker", "#tree-person-worker-doer",
+      "#tree-person-worker-person", "#tree-person-worker-organism",
+    ]);
+
+    await card.locator('a.chain-link[href="#tree-person-worker-person"]').click();
+    await page.waitForFunction(() => window.location.hash === "#tree-person-worker-person");
+    const node = page.locator("#tree-person-worker-person");
+    assert.equal(await node.locator(".tree-term").textContent(), "person");
+    assert.equal(await node.locator(".tree-img svg").count(), 1, "a term with a template shows its own real sprite");
+    assert.equal(await node.getAttribute("data-level"), "1", "person sits one level under organism here");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a term the catalog draws no sprite for gets a placeholder slot carrying its own short description", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const node = page.locator("#tree-person-worker-doer");
+    await node.scrollIntoViewIfNeeded();
+    const placeholder = node.locator(".tree-img-placeholder");
+    assert.equal(await placeholder.count(), 1, "the empty image slot is an obvious, styled element");
+    assert.equal(await placeholder.textContent(), "a kind of person. No sprite yet.");
+    assert.equal(await placeholder.getAttribute("aria-label"), "doer: a kind of person. No sprite yet.");
+    assert.equal(await node.locator(".tree-img").count(), 0, "no sprite is faked for it");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a class on record with two parents shows both, so the tree tells the truth about the disagreement", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const queen = page.locator("#tree-person-everything-else-queen");
+    await queen.scrollIntoViewIfNeeded();
+    assert.equal(await queen.getAttribute("data-parents"), "2");
+    assert.deepEqual(await queen.locator(".tree-up a").allInnerTexts(), ["insect", "woman"]);
+    for (const parent of ["insect", "woman"]) {
+      assert.equal(await page.locator(`#tree-person-everything-else-${parent}`).count(), 1, `${parent} has its own node to point at`);
+    }
+    const fly = page.locator("#tree-object-insect-fly");
+    await fly.scrollIntoViewIfNeeded();
+    assert.ok(Number(await fly.getAttribute("data-parents")) > 2, "fly's several recorded parents all show");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the objects trees show which classes share a sub-graph and which stand apart", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const tree = page.locator(".ontology").filter({ has: page.locator("#tree-object-everything-else-airport") });
+    await tree.scrollIntoViewIfNeeded();
+    assert.ok(await tree.locator(".tree-branch:not(.tree-apart)").count() > 1, "more than one connected sub-graph");
+    assert.equal(await tree.locator(".tree-apart").count(), 1, "the classes joined to nothing else are collected on their own");
+    // textContent, not innerText: the section sits inside a content-visibility
+    // page and the block itself inside a scrolling box, so it can be real and
+    // correct while nothing of it has been laid out yet.
+    assert.match(await tree.locator(".tree-apart-head").textContent(), /on their own/i);
+
+    const shared = page.locator(".ontology").filter({ has: page.locator("#tree-object-insect-butterfly") });
+    assert.equal(await shared.locator("#tree-object-insect-ant").count(), 1);
+    assert.equal(await shared.locator("#tree-object-insect-bee").count(), 1);
+    assert.equal(await page.locator("#tree-object-insect-hymenopterous-insect").getAttribute("data-level"), "3",
+      "ant and bee really do meet under one shared parent");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a tree wider than a phone scrolls inside its own box, never widening the page", async () => {
+  const { context, page } = await openSpritesPage({ viewport: { width: 390, height: 844 } });
+  try {
+    const box = page.locator(".tree-scroll").first();
+    await box.scrollIntoViewIfNeeded();
+    const measured = await box.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+    assert.ok(measured.scrollWidth > measured.clientWidth, "the tree really is wider than a phone, or this test proves nothing");
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    assert.ok(
+      overflow.scrollWidth <= overflow.clientWidth + 1,
+      `the page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
+    );
   } finally {
     await context.close();
   }

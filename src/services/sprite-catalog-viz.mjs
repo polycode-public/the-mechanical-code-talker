@@ -316,10 +316,11 @@ export function ontologyTreeNodeId(sectionSlug, term) {
   return `tree-${sectionSlug}-${slugify(term)}`;
 }
 
-/** The stand-in text a tree node shows when the term carries no sprite of its
- *  own, written from the term's own place in the graph and nothing else. A
+/** The stand-in text a tree node shows when its term carries no sprite of its
+ *  own, written from the term's own place in the graph and nothing else. The
+ *  node prints its name alongside, so this says only what the name doesn't. A
  *  later pass swaps real art in behind it. Pure. */
-export function ontologyNodeDescription(term, parentTerms) {
+export function ontologyNodeDescription(parentTerms) {
   const parents = (parentTerms || []).slice(0, 2);
   if (!parents.length) return "the widest concept this branch reaches. No sprite yet.";
   return `a kind of ${parents.join(" and ")}. No sprite yet.`;
@@ -400,7 +401,7 @@ export function buildOntologyTree(section, { index, spritedClasses, entriesByCla
       parents: drawnParentsOf.get(term) || [],
       kind: memberTerms.has(term) ? "member" : siblingTerms.has(term) ? "sibling" : "ancestor",
       sprited,
-      description: sprited ? null : ontologyNodeDescription(term, realParents),
+      description: sprited ? null : ontologyNodeDescription(realParents),
     };
   };
 
