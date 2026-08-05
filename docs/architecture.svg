@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" font-family="Helvetica, Arial, sans-serif">
+  <title>tmct architecture: surfaces call services, services call domain, adapters sit at the seam between domain and the graph store</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333333"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="460" fill="#ffffff"/>
+  <text x="480" y="28" text-anchor="middle" font-size="20" font-weight="bold" fill="#111111">tmct architecture</text>
+
+  <!-- surfaces -->
+  <text x="10" y="63" font-size="11" fill="#555555" letter-spacing="1">SURFACES</text>
+  <g stroke="#3b5bdb" fill="#eef4ff">
+    <rect x="48" y="55" width="205" height="50" rx="8"/>
+    <rect x="268" y="55" width="205" height="50" rx="8"/>
+    <rect x="488" y="55" width="205" height="50" rx="8"/>
+    <rect x="708" y="55" width="205" height="50" rx="8"/>
+  </g>
+  <g font-size="15" fill="#111111" text-anchor="middle">
+    <text x="150" y="85">CLI</text>
+    <text x="370" y="85">HTTP</text>
+    <text x="590" y="85">TUI</text>
+    <text x="810" y="85">Web (browser)</text>
+  </g>
+
+  <line x1="480" y1="105" x2="480" y2="123" stroke="#333333" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- services -->
+  <text x="10" y="133" font-size="11" fill="#555555" letter-spacing="1">SERVICES</text>
+  <g stroke="#2f9e44" fill="#eafaf1">
+    <rect x="39" y="125" width="166" height="50" rx="8"/>
+    <rect x="218" y="125" width="166" height="50" rx="8"/>
+    <rect x="397" y="125" width="166" height="50" rx="8"/>
+    <rect x="576" y="125" width="166" height="50" rx="8"/>
+    <rect x="755" y="125" width="166" height="50" rx="8"/>
+  </g>
+  <g font-size="14" fill="#111111" text-anchor="middle">
+    <text x="122" y="155">chat</text>
+    <text x="301" y="155">plan</text>
+    <text x="480" y="155">research</text>
+    <text x="659" y="155">ledger</text>
+    <text x="838" y="155">adventure</text>
+  </g>
+
+  <line x1="480" y1="175" x2="480" y2="193" stroke="#333333" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- domain -->
+  <text x="10" y="203" font-size="11" fill="#555555" letter-spacing="1">DOMAIN</text>
+  <rect x="250" y="195" width="460" height="50" rx="8" stroke="#e8590c" fill="#fff4e6"/>
+  <text x="480" y="215" text-anchor="middle" font-size="15" font-weight="bold" fill="#111111">domain — pure logic</text>
+  <text x="480" y="233" text-anchor="middle" font-size="12" fill="#333333">router · planner · codegraph · completions</text>
+
+  <line x1="480" y1="245" x2="480" y2="263" stroke="#333333" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text x="500" y="258" font-size="11" fill="#555555">interface</text>
+
+  <!-- adapters: the seam -->
+  <text x="10" y="273" font-size="11" fill="#555555" letter-spacing="1">ADAPTERS (THE SEAM)</text>
+  <rect x="250" y="265" width="460" height="50" rx="8" stroke="#9c36b5" stroke-dasharray="6 3" fill="#f8f0fc"/>
+  <text x="480" y="285" text-anchor="middle" font-size="15" font-weight="bold" fill="#111111">adapters</text>
+  <text x="480" y="303" text-anchor="middle" font-size="12" fill="#333333">I/O · storage · providers</text>
+
+  <line x1="480" y1="315" x2="480" y2="333" stroke="#333333" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- graph store -->
+  <text x="10" y="343" font-size="11" fill="#555555" letter-spacing="1">GRAPH STORE</text>
+  <rect x="290" y="335" width="380" height="55" rx="8" stroke="#1971c2" fill="#e7f5ff"/>
+  <text x="480" y="358" text-anchor="middle" font-size="15" font-weight="bold" fill="#111111">.tmct/ graph store</text>
+  <text x="480" y="376" text-anchor="middle" font-size="12" fill="#333333">OWL-labelled graph — SQLite or in-memory backend</text>
+
+  <text x="480" y="425" text-anchor="middle" font-size="12" fill="#555555">A surface calls a service; a service runs domain logic and reads/writes through an adapter; the adapter is the only layer that touches disk or a network.</text>
+</svg>
