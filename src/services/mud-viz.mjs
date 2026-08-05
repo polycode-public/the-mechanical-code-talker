@@ -638,7 +638,12 @@ const MUD_STYLE = `
     font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
     padding: .32rem .7rem; border: 1px solid var(--soil-mid); border-radius: 3px;
     background: rgba(255,255,255,.5); color: var(--mud-ink);
+    /* A select is as wide as its longest option, and a burrow's label can run
+       long enough on its own to force the whole page to scroll sideways on a
+       phone. */
+    min-width: 0; max-width: 100%;
   }
+  #scenarioSelect { flex: 1 1 9rem; }
   .deck-select:hover { border-color: var(--burrow-glow); }
   .deck-teach { display: flex; align-items: center; gap: .3rem; font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--soil-mid); cursor: pointer; }
   .deck-teach input[type="checkbox"] { accent-color: var(--burrow-glow); }
