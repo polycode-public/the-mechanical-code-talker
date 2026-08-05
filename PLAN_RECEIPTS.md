@@ -12,11 +12,12 @@ be told rather than estimated, so the answer is recorded here: all three are mis
 plan builds the page from numbers that are real today and adds the two cheap measurements;
 the RAG comparison is future work with open design questions (see R3).
 
-What exists and is committed, usable as page sources now:
+What exists and is committed, usable as page sources now (corrected during R2: the
+chatbench/idxbench `results/raw/run-*/` dirs are gitignored, so the committed headline for
+each lives in its `reports/BENCHMARK_*.md` write-up, not in run JSON):
 
-- chatbench: versioned run results under `test-benchmarks/chatbench/results/raw/run-*/`
-  (`summary.json`, `judged.jsonl`, `timings.json`).
-- idxbench: results under `test-benchmarks/idxbench/results/`.
+- chatbench: the bolded result sentence in the latest `reports/BENCHMARK_CEFR_ENGLISH_*.md`.
+- idxbench: the headline sentence in the latest `reports/BENCHMARK_CODE_INDEX_*.md`.
 - `reports/PAGE_WEIGHTS.md` rev 3: per-page wire and raw sizes, measured 2026-08-02, with
   a documented re-measurement procedure.
 - The supply chain shipped in README: npm tarball with Sigstore provenance naming the
