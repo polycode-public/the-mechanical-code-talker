@@ -220,12 +220,16 @@ test("a bare 'X is a kind of Y' teaches an unknown object class, trailing period
   await withStore(async (dir) => {
     const first = await runTurn("dog is a kind of mammal.", { memoryDir: dir, sessionId: "s1" });
     assert.match(first.answer, /noted — remembered: dog is a kind of mammal/);
+    // "mammal" is itself lexicon-absent, so as a SUBJECT it reads as a named
+    // individual (rdf:type) — the "kind of" infix teachLane's stripKindOf
+    // normalizes away before the fallback ever sees it, same as "dog" above
+    // reads as a class only because "dog" is a declared lexicon noun.
     const second = await runTurn("mammal is a kind of animal", { memoryDir: dir, sessionId: "s1" });
-    assert.match(second.answer, /noted — remembered: mammal is a kind of animal/);
+    assert.match(second.answer, /noted — remembered: mammal is an animal/);
     const rows = await factRows(dir);
     assert.deepEqual(
       rows.map((r) => [r.subject, r.predicate, r.object]),
-      [["dog", "rdfs:subClassOf", "mammal"], ["mammal", "rdfs:subClassOf", "animal"]],
+      [["dog", "rdfs:subClassOf", "mammal"], ["mammal", "rdf:type", "animal"]],
     );
   });
 });
@@ -284,12 +288,16 @@ test("a bare single letter teaches once its class is grounded, the same free pas
   await withStore(async (dir) => {
     const groundClass = await runTurn("alphabet letter is a thing", { memoryDir: dir, sessionId: "s1" });
     assert.match(groundClass.answer, /noted — remembered/);
+    // A bare single letter is lexicon-absent (readsAsIndividualName's G5e),
+    // so it reads as a named individual — the "kind of" infix teachLane's
+    // stripKindOf normalizes away before the fallback ever sees it.
     const { answer } = await runTurn("a is a kind of alphabet letter", { memoryDir: dir, sessionId: "s1" });
-    assert.match(answer, /^noted — remembered: a is a kind of alphabet letter/);
+    assert.match(answer, /^noted — remembered: a is an alphabet letter/);
     const rows = await factRows(dir);
     const letterRow = rows.find((r) => r.subject === "a");
     assert.ok(letterRow, "the letter 'a' itself is stored as the subject, not folded into 'an' or dropped");
     assert.equal(letterRow.object, "alphabet letter");
+    assert.equal(letterRow.predicate, "rdf:type");
   });
 });
 
