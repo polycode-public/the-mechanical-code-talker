@@ -30,6 +30,7 @@ const TRACKED_SITE_FILES = [
   "screenshots",
   "og",
   "models",
+  "media",
 ];
 
 /**
