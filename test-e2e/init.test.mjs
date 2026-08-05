@@ -678,7 +678,7 @@ test("npm run init:xl's exact bundle set seeds within ±10% of the real measured
   );
 });
 
-// init:xxl's own real, full-scale total (wordnet-full's 206,352-row conversion
+// init:xxl's own real, full-scale total (wordnet-full's 206,357-row conversion
 // dominates) is a FOLLOW-UP measurement — a live `npm run init:xxl` run against
 // this same worktree showed corpus seeding is roughly quadratic in total
 // individuals (`syncFactSources`'s per-fact linear scans in
