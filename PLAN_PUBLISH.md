@@ -343,8 +343,12 @@ status` shows changes under `infra/` only.
 
 - **M1** — done, verified 2026-08-05: custom social preview live (serves from
   repository-images.githubusercontent.com, not GitHub's auto-generated card).
-- **M2** — record the 60–90s silent mudiii capture; export MP4 (place at
-  `public/media/hero-mudiii.mp4`) and a looping GIF, then add
+- **M2** — the recording itself is automated: `npm run capture:hero` writes a 75-second
+  silent 1280x640 `clips/hero-mudiii.webm` from a local build, and CI's `capture:hero`
+  job records the same clip off the deployed site and keeps it as an artifact for a week.
+  What is left by hand: convert the webm to MP4 (`ffmpeg -i clips/hero-mudiii.webm -c:v
+  libx264 -pix_fmt yuv420p -movflags +faststart -an clips/hero-mudiii.mp4`) and a looping
+  GIF, place the MP4 at `public/media/hero-mudiii.mp4`, then add
   `<source src="media/hero-mudiii.mp4" type="video/mp4">` inside the hero
   `<video>` in `public/index.html` (the video element ships source-less and
   shows its poster until then).
