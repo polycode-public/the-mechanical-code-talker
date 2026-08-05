@@ -32,6 +32,46 @@ export function subClassParents(subClassEdges) {
   return parents;
 }
 
+/** Codepoint string order. Deliberately not localeCompare: the walks below
+ *  must return the same set on any machine and any ICU version. */
+const compareStrings = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** parent term -> Set of its direct subclasses, from `[child, parent]` edges.
+ *  The mirror of subClassParents. Self-loops and blank endpoints are dropped. */
+export function subClassChildren(subClassEdges) {
+  const children = new Map();
+  for (const [child, parent] of subClassEdges || []) {
+    if (!child || !parent || child === parent) continue;
+    if (!children.has(parent)) children.set(parent, new Set());
+    children.get(parent).add(child);
+  }
+  return children;
+}
+
+/** Every class reachable BELOW `seeds` through subClassOf edges, including the
+ *  seeds themselves. `seeds` is a string or an iterable of strings.
+ *  Level-ordered BFS with a sorted frontier, so the `cap` truncation is a pure
+ *  function of the edge set rather than of the order the edges arrived in.
+ *  Cycle-safe. */
+export function descendantSet(seeds, children, { cap = 20000 } = {}) {
+  const seen = new Set();
+  let frontier = [...(typeof seeds === "string" ? [seeds] : (seeds || []))]
+    .filter(Boolean).sort(compareStrings);
+  for (const s of frontier) seen.add(s);
+  while (frontier.length && seen.size < cap) {
+    const next = [];
+    for (const node of frontier) for (const c of children.get(node) || []) if (!seen.has(c)) next.push(c);
+    next.sort(compareStrings);
+    frontier = [];
+    for (const c of next) {
+      if (seen.has(c) || seen.size >= cap) continue;
+      seen.add(c);
+      frontier.push(c);
+    }
+  }
+  return seen;
+}
+
 /** The single rendering chain above `term` — `[term, parent, grandparent, …]`
  *  — following one deterministic (lowest-sorted) parent per hop, capped at
  *  `cap` nodes, cycle-safe. A branch point still yields one readable line;
@@ -45,15 +85,24 @@ export function subClassParents(subClassEdges) {
  *  exception: it is always shown even when it is itself a hub, so a term
  *  whose only real parent is a hub still renders that one direct parent
  *  (matching the plain "term is a kind of parent" sentence already stated)
- *  rather than an empty chain — the walk then still stops right there. */
-export function ancestryChain(term, parents, { cap = 6, stopAt = null } = {}) {
+ *  rather than an empty chain — the walk then still stops right there.
+ *
+ *  `toward` steers which parent the walk follows at a branch point: among a
+ *  node's parents, one that actually reaches `toward` is preferred over the
+ *  lowest-sorted one, so a class with two parents still renders a chain that
+ *  reaches the class the reader asked about. `stopAt` and `toward` compose —
+ *  `toward` only changes which parent is picked, `stopAt` still decides where
+ *  the picked path halts. */
+export function ancestryChain(term, parents, { cap = 6, stopAt = null, toward = null } = {}) {
   const chain = [term];
   const seen = new Set([term]);
   let node = term;
   while (chain.length < cap) {
-    const ups = [...(parents.get(node) || [])].filter((p) => !seen.has(p)).sort();
+    if (toward && node === toward) break;
+    const ups = [...(parents.get(node) || [])].filter((p) => !seen.has(p)).sort(compareStrings);
     if (!ups.length) break;
-    node = ups[0];
+    const onPath = toward ? ups.filter((p) => p === toward || ancestorSet(p, parents).has(toward)) : [];
+    node = (onPath.length ? onPath : ups)[0];
     const isHub = stopAt && stopAt.has(node);
     if (isHub && chain.length > 1) break;
     seen.add(node);

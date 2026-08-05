@@ -59,7 +59,8 @@ import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { subClassParents, ancestryChain, clusterSenses, STOP_SET } from "../domain/sense-split.mjs";
+import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
+import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
@@ -966,14 +967,47 @@ async function answerMemoryClassQuery(memoryDir, query) {
 // stealing the phrasing before a member count ever runs.
 const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
+/** A fact row's deterministic identity for ordering. */
+const orderKeyOf = (f) => `${f.subject} ${f.predicate} ${f.object} ${f.provenance || ""}`;
+const orderKeyCompare = (a, b) => {
+  const ka = orderKeyOf(a); const kb = orderKeyOf(b);
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
+
+/** The store's subclass graph, both directions, built once per turn.
+ *  Keyed on the rows array identity so a rebuilt row cache rebuilds the maps. */
+function classGraphFor(rows, cache) {
+  if (cache && cache.classGraphRows === rows) return cache.classGraph;
+  const subClassEdges = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]);
+  const graph = { parents: subClassParents(subClassEdges), children: subClassChildren(subClassEdges) };
+  if (cache) { cache.classGraphRows = rows; cache.classGraph = graph; }
+  return graph;
+}
+
+/** Every taught member of the class named by `variants`, direct and inherited.
+ *  Direct = an isa row whose OBJECT is one of the asked spellings. Inherited =
+ *  an isa row whose OBJECT is a class transitively below the asked one.
+ *  Pure over (isa, children, variants) — no I/O, no clock, no arrival order. */
+function taughtMembersUnder(isa, children, variants, biasByBundle) {
+  const classes = new Set();
+  for (const v of variants) for (const d of descendantSet(v, children)) classes.add(d);
+  const isDirect = (f) => variants.has(f.object);
+  const candidates = isa.filter((f) => isDirect(f) || classes.has(f.object));
+  const keyed = uniqueFacts(candidates).slice().sort(orderKeyCompare);
+  const direct = rankByBiasThenTrust(keyed.filter(isDirect), biasByBundle);
+  const inherited = rankByBiasThenTrust(keyed.filter((f) => !isDirect(f)), biasByBundle);
+  return { direct, inherited, members: [...direct, ...inherited], classes };
+}
+
 /** The longest leading run of `nounRun`'s words that names a class something was
- *  actually taught about, as `{asked, tail, members}` — its taught members and
- *  whatever words are left over, joined onto `trailing` as the restrictor tail.
- *  A class name is a noun PHRASE, not a word ("sprite class", "body of water"),
- *  so the run is tried longest-first and the shortest reading wins only when no
- *  longer one is on record. That ordering is what keeps a single-word class
- *  carrying a restrictor ("list the animals in the graph") reading exactly as it
- *  did when only the first word was ever considered. */
+ *  actually taught about, as `{asked, tail, members, directMembers, inheritedMembers}`
+ *  — its taught members (direct AND transitively inherited through taught
+ *  subclasses) and whatever words are left over, joined onto `trailing` as the
+ *  restrictor tail. A class name is a noun PHRASE, not a word ("sprite class",
+ *  "body of water"), so the run is tried longest-first and the shortest reading
+ *  wins only when no longer one is on record. That ordering is what keeps a
+ *  single-word class carrying a restrictor ("list the animals in the graph")
+ *  reading exactly as it did when only the first word was ever considered. */
 async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundle, cache) {
   const words = String(nounRun || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return null;
@@ -982,12 +1016,31 @@ async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundl
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const rows = await factRows(memoryDir, cache);
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const { parents, children } = classGraphFor(rows, cache);
   for (let take = words.length; take >= 1; take -= 1) {
     const asked = words.slice(0, take).join(" ").toLowerCase();
     const variants = factTermVariants(normFactTerm, asked);
-    const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
-    if (!members.length) continue; // nothing taught under this reading — try a shorter one
-    return { asked, tail: [words.slice(take).join(" "), String(trailing || "")].filter(Boolean).join(" ").trim(), members };
+    // The row whose OBJECT is actually stored under one of the asked spellings
+    // — its object is the class's CANONICAL stored term, which `asked` itself
+    // is not (a plural typed by the reader, "letters", never equals the
+    // singular stored term, "letter"). `ancestryChain`'s `toward` steering
+    // compares by exact string, so it has to aim at this stored term, not the
+    // raw asked phrase.
+    const onRecord = isa.find((f) => variants.has(f.object));
+    if (!onRecord) continue; // not on record as a reading — try a shorter one
+    const found = taughtMembersUnder(isa, children, variants, biasByBundle);
+    return {
+      asked,
+      classTerm: onRecord.object,
+      tail: [words.slice(take).join(" "), String(trailing || "")].filter(Boolean).join(" ").trim(),
+      members: found.members,
+      directMembers: found.direct,
+      inheritedMembers: found.inherited,
+      variants,
+      parents,
+      classes: found.classes,
+      subjectSet: new Set(found.members.map((f) => f.subject)),
+    };
   }
   return null;
 }
@@ -1009,11 +1062,27 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
   // A member whose SUBJECT is itself a countable graph class ("every class is a
   // component") is an asserted-vocabulary cardinality, not a member enumeration —
   // countFromFacts counts the real class, so defer to it rather than tallying the
-  // one class-level fact.
-  if (hit.members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
-  const n = hit.members.length;
-  const hint = n > 0 ? ` Say "list ${hit.asked}" to see them.` : "";
-  return `${n} ${n === 1 ? hit.asked.replace(/s$/, "") : hit.asked}.${hint}`;
+  // one class-level fact. Only a DIRECT member triggers the deferral: an
+  // inherited member reached through a taught subclass is still a genuine
+  // count of this class's membership.
+  if (hit.directMembers.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
+  const n = new Set(hit.members.map((f) => String(f.subject).toLowerCase())).size;
+  const noun = n === 1 ? hit.asked.replace(/s$/, "") : hit.asked;
+  // Sense reporting: cluster the classes the members were found under,
+  // excluding the asked class itself — leaving it in would let clusterSenses'
+  // "one subsumes the other" verdict collapse every taught subclass into the
+  // asked class's own lineage and report one sense no matter how many there are.
+  const senseObjects = [...new Set(hit.members.map((f) => f.object))]
+    .filter((o) => !hit.variants.has(o))
+    .sort();
+  let senses = 1;
+  if (senseObjects.length >= 2) {
+    const rows = await factRows(memoryDir, cache);
+    const disjointEdges = rows.filter((f) => f.predicate === "owl:disjointWith").map((f) => [f.subject, f.object]);
+    senses = clusterSenses(senseObjects, { parents: hit.parents, disjointEdges }).clusters.length;
+  }
+  const senseClause = senses >= 2 ? `, in ${senses} senses` : "";
+  return `${n} ${noun}${senseClause}. Say "list ${hit.asked}" to see them.`;
 }
 
 // "list all animals" / "list the animals" — enumerate a taught class's members,
@@ -1042,14 +1111,17 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   if (!m) return null;
   const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
   if (!hit) return null;
-  const { asked, tail, members } = hit;
+  const { asked, classTerm, tail, members, directMembers, inheritedMembers, parents, subjectSet } = hit;
   const declineTail = (badTail) => ({
     text: `I can list the ${asked}, but not the "${badTail}" part of that question — `
       + `so I won't answer as if you hadn't asked it. Ask "list ${asked}" for all of them.`,
     miss: true,
   });
-  const renderMembers = (list, note) => {
-    const lines = list.map(renderFactLine);
+  const renderMembers = (directList, inheritedList, note) => {
+    const lines = [
+      ...directList.map(renderFactLine),
+      ...inheritedList.map((f) => renderFactLineWithChain(f, parents, subjectSet, { toward: classTerm })),
+    ];
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
@@ -1065,23 +1137,35 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
     }
     let normFactTerm;
     try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return declineTail(tail); }
+    // The excluded side is resolved through the same taught-subclass closure
+    // as the list itself, so a member reached only through a taught subclass
+    // of the excluded class still drops, and the excluded class's own
+    // membership row (e.g. "greek letter is a kind of letter") drops too.
     const excludedSubjects = new Set();
     for (const f of excludedHit.members) {
       for (const v of factTermVariants(normFactTerm, f.subject)) excludedSubjects.add(v);
     }
-    const kept = members.filter((f) => {
+    for (const c of excludedHit.classes) {
+      for (const v of factTermVariants(normFactTerm, c)) excludedSubjects.add(v);
+    }
+    const notExcluded = (f) => {
       for (const v of factTermVariants(normFactTerm, f.subject)) {
         if (excludedSubjects.has(v)) return false;
       }
       return true;
-    });
-    const note = kept.length === members.length
+    };
+    const directKept = directMembers.filter(notExcluded);
+    const inheritedKept = inheritedMembers.filter(notExcluded);
+    if (!directKept.length && !inheritedKept.length) {
+      return { text: `I hold no ${asked} outside the ${excludedHit.asked}.`, miss: true };
+    }
+    const note = (directKept.length + inheritedKept.length) === members.length
       ? `\n(none of the ${asked} I know are marked as ${excludedHit.asked} yet.)`
       : "";
-    return renderMembers(kept, note);
+    return renderMembers(directKept, inheritedKept, note);
   }
   if (!DYNAMIC_TAIL_OK_RE.test(tail)) return declineTail(tail);
-  return renderMembers(members);
+  return renderMembers(directMembers, inheritedMembers);
 }
 
 // "give me an example of a letter" / "name a letter" — the single-member
@@ -1101,7 +1185,7 @@ async function answerMembershipExample(memoryDir, query, biasByBundle = {}, cach
   if (!m) return null;
   const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
   if (!hit) return null;
-  const { asked, tail, members } = hit;
+  const { asked, tail, members, directMembers } = hit;
   if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
     return {
       text: `I can name a ${asked}, but not the "${tail}" part of that question — `
@@ -1110,7 +1194,10 @@ async function answerMembershipExample(memoryDir, query, biasByBundle = {}, cach
     };
   }
   const n = members.length;
-  return { text: `${renderFactLine(members[0])}\nSay "list ${asked}" for all ${n}.` };
+  // directMembers is never empty here: longestTaughtClassInRun only reads a
+  // phrase as "on record" once something is taught directly under it, and the
+  // example is always that direct member, not one only reached by closure.
+  return { text: `${renderFactLine(directMembers[0])}\nSay "list ${asked}" for all ${n}.` };
 }
 
 /** "words with the letter p in it" / "words containing p" / "which words
@@ -7101,11 +7188,15 @@ const SENSE_CITE_RE = / \(source: [^)]*\)$/;
 /** Append an is-a object's superclass chain to its rendered fact line, before
  *  the citation: "rover is a kind of dog" becomes "rover is a kind of dog →
  *  canine → mammal → animal". Only the subject-side is-a lines of the queried
- *  term get a chain; every other line renders unchanged. */
-function renderFactLineWithChain(f, parents, subjectVariants) {
+ *  term get a chain; every other line renders unchanged.
+ *
+ *  `toward` steers the chain toward a specific ancestor (the class a "list …"
+ *  question actually asked about) when the is-a object has more than one
+ *  taught parent. */
+function renderFactLineWithChain(f, parents, subjectVariants, { toward = null } = {}) {
   const base = renderFactLine(f);
   if (!ISA_PREDICATES.has(f.predicate) || !subjectVariants.has(f.subject)) return base;
-  const chain = ancestryChain(f.object, parents, { cap: 6, stopAt: STOP_SET });
+  const chain = ancestryChain(f.object, parents, { cap: 6, stopAt: ANSWER_STOP_SET, toward });
   if (chain.length <= 1) return base;
   const suffix = ` → ${chain.slice(1).join(" → ")}`;
   const cite = base.match(SENSE_CITE_RE);

@@ -4,7 +4,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { subClassParents, ancestryChain, ancestorSet, clusterSenses, STOP_SET } from "../../src/domain/sense-split.mjs";
+import {
+  subClassParents, subClassChildren, descendantSet, ancestryChain, ancestorSet, clusterSenses, STOP_SET,
+} from "../../src/domain/sense-split.mjs";
+import { ANSWER_STOP_SET } from "../../src/domain/hub-terms.mjs";
 
 // A small taxonomy shared by several cases:
 //   dog  -> canine -> mammal -> animal
@@ -48,9 +51,58 @@ test("ancestryChain with a stopAt set still stops right after a first-hop stop w
   assert.deepEqual(ancestryChain("scout", parents, { stopAt: STOP_SET }), ["scout", "person"]);
 });
 
+test("ANSWER_STOP_SET widens STOP_SET with the extra abstraction-tier hubs an answer chain needs, leaving STOP_SET itself untouched", () => {
+  for (const w of ["property", "concept", "idea", "content"]) {
+    assert.ok(ANSWER_STOP_SET.has(w));
+    assert.ok(!STOP_SET.has(w));
+  }
+  for (const w of STOP_SET) assert.ok(ANSWER_STOP_SET.has(w));
+});
+
+test("ancestryChain under the wider ANSWER_STOP_SET halts a hop earlier than the plain STOP_SET on the same chain", () => {
+  const parents = subClassParents([
+    ["letter", "character"], ["character", "property"], ["property", "concept"], ["concept", "idea"],
+  ]);
+  assert.deepEqual(ancestryChain("letter", parents, { stopAt: STOP_SET }), ["letter", "character", "property", "concept", "idea"]);
+  assert.deepEqual(ancestryChain("letter", parents, { stopAt: ANSWER_STOP_SET }), ["letter", "character"]);
+});
+
+test("ancestryChain steered toward a target picks the parent that reaches it, and stops once it does", () => {
+  // dog has two parents: "aardvark-path" (a dead end, sorts first) and
+  // "canine" (which reaches "mammal"). With no target the walk would follow
+  // the lowest-sorted parent into the dead end; steered toward "mammal" it
+  // follows canine instead, and halts the moment it arrives.
+  const parents = subClassParents([...TAXONOMY, ["dog", "aardvark-path"]]);
+  assert.deepEqual(ancestryChain("dog", parents, { toward: "mammal" }), ["dog", "canine", "mammal"]);
+});
+
 test("ancestorSet includes the term and every reachable superclass", () => {
   const parents = subClassParents(TAXONOMY);
   assert.deepEqual([...ancestorSet("dog", parents)].sort(), ["animal", "canine", "dog", "mammal"]);
+});
+
+// child -> parent edges below "animal", the mirror of the TAXONOMY above's
+// parent direction, for the descendant-walk primitives.
+const DESCENDANT_EDGES = [
+  ["dog", "canine"], ["canine", "mammal"], ["cat", "mammal"], ["mammal", "animal"],
+  ["snake", "reptile"], ["reptile", "animal"],
+];
+
+test("descendantSet returns the same set regardless of the edge array's order", () => {
+  const forward = descendantSet("animal", subClassChildren(DESCENDANT_EDGES));
+  const reversed = descendantSet("animal", subClassChildren([...DESCENDANT_EDGES].reverse()));
+  const shuffled = descendantSet("animal", subClassChildren([
+    DESCENDANT_EDGES[3], DESCENDANT_EDGES[1], DESCENDANT_EDGES[5], DESCENDANT_EDGES[0], DESCENDANT_EDGES[4], DESCENDANT_EDGES[2],
+  ]));
+  const expected = ["animal", "canine", "cat", "dog", "mammal", "reptile", "snake"];
+  assert.deepEqual([...forward].sort(), expected);
+  assert.deepEqual([...reversed].sort(), expected);
+  assert.deepEqual([...shuffled].sort(), expected);
+});
+
+test("descendantSet terminates on a cycle instead of looping forever", () => {
+  const children = subClassChildren([["a", "b"], ["b", "a"]]);
+  assert.deepEqual([...descendantSet("a", children)].sort(), ["a", "b"]);
 });
 
 test("wholly non-intersecting ancestries split into two senses", () => {

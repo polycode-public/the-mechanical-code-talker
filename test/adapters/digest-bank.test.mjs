@@ -45,6 +45,15 @@ test("chainsForObjects truncates before an abstraction-tier ancestor rather than
   assert.deepEqual(chains.mammal, ["mammal", "vertebrate"], "the walk stops before appending the stored hub word \"animal\"");
 });
 
+test("chainsForObjects treats the wider ANSWER hub set's own extra words as stop words too", () => {
+  // "property" is not a hub word for the persona-tier curator's own STOP_SET,
+  // but chainsForObjects reads the store's chains for an ANSWER, which uses
+  // the wider set — the walk halts before appending it.
+  const edges = [["letter", "character"], ["character", "property"], ["property", "concept"]];
+  const chains = chainsForObjects(edges, ["letter"]);
+  assert.deepEqual(chains.letter, ["letter", "character"], "the walk stops before appending \"property\"");
+});
+
 test("isaObjectsOf returns the isa objects in first-seen order, deduped", () => {
   const rows = [
     row("aardvark", "rdfs:subClassOf", "mammal", ["taught"]),

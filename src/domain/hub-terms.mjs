@@ -20,3 +20,10 @@ export const STOP_SET = new Set([
   "family", "meal", "season", "number", "entity", "abstraction", "physical_entity",
   "attribute", "state", "act", "communication", "cognition", "measure", "unit",
 ]);
+
+// A wider hub set for a chat ANSWER's own chain rendering, where the climb
+// walks further than the persona-tier corpus curation ever needs to: without
+// it a plain "what is a letter" chain runs on past "character" into
+// "property → concept → idea → content", each step less concrete than the
+// last. STOP_SET itself stays exactly as the persona-tier curator reads it.
+export const ANSWER_STOP_SET = new Set([...STOP_SET, "property", "concept", "idea", "content"]);
