@@ -6509,6 +6509,7 @@ export async function helpText() {
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["remember <X> is a <Y>", "teach a fact in plain English (\"every X is a Y\" and a bare \"X is a Y\" work too)"],
+    ["list <kind>", "list what you've taught under a class (\"list letters\"); \"list facts\" lists memory itself"],
     ["forget that <X> is a <Y>", "withdraw a fact you taught, and anything derived from it — the phrasing the retract lane reads"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
@@ -9057,6 +9058,13 @@ const HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i
  *  cascade/orientation nudge that already handles it. */
 const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
 const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+/** IS_ADJECTIVE_YESNO_RE's unrestricted backtracking sometimes lands the
+ *  "adjective" capture on a closed-class function word instead of a real
+ *  property — "are there words with the letter p in it" backtracks "it"
+ *  into that slot. A hit here is never a property, so any reader keyed off
+ *  the captured adjective should decline rather than restate the mangled
+ *  parse back at the user. */
+const NON_ADJECTIVE_TOKEN_RE = /^(?:it|them|this|that|in|on|of|to|at)$/i;
 /** A backtracked subject that is really a cross-turn temporal comparison —
  *  a bindable form followed by a comparison word ("that before chat.mjs
  *  was", from "was that before chat.mjs was touched"). The comparison lane
@@ -10103,7 +10111,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
       const recovery = deeperChainExists
         ? `The facts to settle it are here, but the chain is longer than I follow while answering. Run "/syllogise ${subjectWord}", then ask me again.`
-        : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`;
+        : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`;
       return {
         text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
         replace: true,
@@ -10119,7 +10127,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       .sort(byTrust)[0];
     if (converseHit) {
       return {
-        text: `I can't confirm that — what I know runs the other way: ${renderFactLine(converseHit)}. A kind doesn't reverse. If it's true, teach me: "every ${subjectWord} is a ${kindWord}".`,
+        text: `I can't confirm that — what I know runs the other way: ${renderFactLine(converseHit)}. A kind doesn't reverse. If it's true, teach me: "every ${subjectWord} is a ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`,
         replace: true,
         miss: true,
       };
@@ -10131,7 +10139,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     if (!ent && !noun && !isPronoun(subjectWord)
       && !rows.some((f) => subjCandidates.has(f.subject) || subjCandidates.has(f.object))) {
       return {
-        text: `I can't confirm that — I don't know "${subjectWord}" at all yet. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
+        text: `I can't confirm that — I don't know "${subjectWord}" at all yet. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`,
         replace: true,
         miss: true,
       };
@@ -10452,6 +10460,13 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // originally-intended case here) still gets this receipt exactly as
       // before, since envelope.parsed is null for those adjectives.
       if (rows.some(subjectMatch) && !envelope?.parsed) {
+        // An existential subject ("there words with the letter p in") or a
+        // non-adjective captured token means IS_ADJECTIVE_YESNO_RE backtracked
+        // onto the wrong words — see NON_ADJECTIVE_TOKEN_RE's own docblock.
+        // Restating that parse back ("I don't have a fact saying there words
+        // ... is it") would read as nonsense, so this declines honestly
+        // instead, the same way the empty-store guard above does.
+        if (/^there\b/i.test(subject) || NON_ADJECTIVE_TOKEN_RE.test(adjective)) return null;
         return { text: `I don't have a fact saying ${suggestibleSubjectPhrase(subject)} is ${adjective}.`, replace: true };
       }
       // Without this, "is the checkout flow

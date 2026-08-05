@@ -2439,7 +2439,7 @@ ${shareOverlayHtml({ withTape: true })}
       } catch { /* best-effort seeding only — a fresh session has none to seed */ }
     }
     renderResearchedPanel();
-    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmct.page.vocabExampleHint(false);
+    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list animals"' : window.tmct.page.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
     inputEl.focus();

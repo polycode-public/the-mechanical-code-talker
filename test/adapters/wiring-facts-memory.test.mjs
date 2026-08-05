@@ -386,7 +386,7 @@ test("a pristine store's FIRST isa question warms to the specific closer; an unk
     // bare wall still stands.
     const withMemory1 = await runTurn("is a zebra a mammal", { config: CONFIG, memoryDir: dir });
     const bare1 = await runTurn("is a zebra a mammal", { config: CONFIG });
-    assert.match(withMemory1.answer, /I can't confirm that — I don't know "zebra" at all yet\. If it's true, teach me: "zebra is a kind of mammal"\./);
+    assert.match(withMemory1.answer, /I can't confirm that — I don't know "zebra" at all yet\. If it's true, teach me: "zebra is a kind of mammal"\. If it isn't, teach me: "no zebra is a mammal"\./);
     assert.doesNotMatch(withMemory1.answer, /couldn't parse this as a graph question/);
     assert.match(bare1.answer, /couldn't parse this as a graph question/, "no store at all -> the bare wall stands");
     assert.equal(withMemory1.record.miss, true, "still an honest miss, never a guessed answer");
@@ -399,6 +399,19 @@ test("a pristine store's FIRST isa question warms to the specific closer; an unk
     assert.match(bare2.answer, /couldn't parse this as a graph question/, "no memoryDir -> no teach-offer (nowhere to store it), so the wall stands");
     assert.doesNotMatch(bare2.answer, /teach me directly/);
     assert.equal(withMemory2.record.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an unconfirmed isa question offers both the positive and the negative teach, not just the one that would confirm it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-w4-isa-both-directions-"));
+  try {
+    const r = await runTurn("is a car a bike", { config: CONFIG, memoryDir: dir });
+    assert.match(r.answer, /If it's true, teach me: "car is a kind of bike"\./, "still offers the confirming direction");
+    assert.match(r.answer, /If it isn't, teach me: "no car is a bike"\./, "also offers the disconfirming direction, so a 'no' answer isn't a dead end");
+    assert.equal(r.record.miss, true, "still an honest miss, never a guessed answer");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
