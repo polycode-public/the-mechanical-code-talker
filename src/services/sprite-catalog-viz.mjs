@@ -642,17 +642,18 @@ export function sceneComposerClassIndex(entries) {
 // (mgx:take-parameter, mgx:accept-emotion, mgx:offer-variant) are what those
 // lanes read, so the page hands the line over and renders what comes back.
 
-// ---- the animated swatches (pure) ----
+// ---- the animated cell (pure) ----
 //
-// Each card's large tier carries three animated swatches, one per axis the
-// sprite tier actually varies on: mood (mgx:feels), facing (mgx:faces) and
-// pose (mgx:pose). The page builds their frames client-side out of its own
-// already-rendered swatches (see the inline script below — the same
-// read-the-DOM posture the scene composer's class index takes), but the
+// A card's large tier varies on three axes: mood (mgx:feels), facing
+// (mgx:faces) and pose (mgx:pose). One image cell per class shows all three,
+// stepping through its display modes on click: static, moving, turning,
+// cycle-emotions, back to static. The page builds the frames client-side out
+// of its own already-rendered swatches (see the inline script below — the
+// same read-the-DOM posture the scene composer's class index takes), but the
 // frame ORDER and the tempo are real logic worth pinning on their own, so
 // they live here as pure functions the page splices in by `.toString()`.
-// One delay constant serves all three, so the three can't drift apart into
-// three tempos.
+// One delay constant serves every axis, so they can't drift into three
+// tempos.
 //
 // A `frame` is `{svg, label}`. An empty return means there is nothing worth
 // animating for that class, and the page leaves its static swatch alone.
@@ -708,6 +709,32 @@ export function movingFrameSequence(idleFrame, movingFrame) {
   return [{ svg: idleFrame.svg, label: "idle" }, { svg: movingFrame.svg, label: "moving" }];
 }
 
+/** The display modes a card's one image cell steps through, in click order.
+ *  A class only carries the modes it has real art for; static is always
+ *  first, because that is what the cell rests on. */
+export const DISPLAY_MODE_ORDER = Object.freeze(["static", "moving", "turning", "emotions"]);
+
+/** The three axis sequences above, flattened into the ONE click-through
+ *  sequence a card's single image cell walks: the static sprite, its moving
+ *  pose, the whole turntable, then every mood, and round again. Each frame
+ *  carries the mode it belongs to, so the cell can name what it is showing
+ *  and can auto-step within one mode without running off into the next.
+ *
+ *  The leading frame of `moodFrames` is dropped: moodFrameSequence puts the
+ *  plain sprite there, and that is already this sequence's static frame.
+ *  A class with nothing but its static frame gets an empty sequence and
+ *  keeps its ordinary swatch — there is nothing to cycle.
+ *
+ *  Pure; self-contained (no outer refs), `.toString()`-splice safe. */
+export function displayModeSequence(staticFrame, { movingFrame = null, turnFrames = [], moodFrames = [] } = {}) {
+  if (!staticFrame) return [];
+  const frames = [{ mode: "static", svg: staticFrame.svg, label: staticFrame.label }];
+  if (movingFrame) frames.push({ mode: "moving", svg: movingFrame.svg, label: "moving" });
+  for (const frame of turnFrames || []) frames.push({ mode: "turning", svg: frame.svg, label: frame.label });
+  for (const frame of (moodFrames || []).slice(1)) frames.push({ mode: "emotions", svg: frame.svg, label: frame.label });
+  return frames.length > 1 ? frames : [];
+}
+
 // ---- rendering ----
 
 /** The DOM id a class's own card carries on whichever full-gallery page
@@ -738,6 +765,11 @@ function chainHtml(chain, treeAnchorBase = null) {
   return `<div class="chain">${links}${more}</div>`;
 }
 
+function joinWithAnd(parts) {
+  if (parts.length < 2) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 function treeNodeHtml(node, { sectionSlug, entriesByClass, resolveNodeSprite }) {
   const art = node.sprited
     ? `<span class="tree-img" role="img" aria-label="the ${escapeHtml(node.term)} sprite">${resolveNodeSprite(node.term)}</span>`
@@ -747,8 +779,9 @@ function treeNodeHtml(node, { sectionSlug, entriesByClass, resolveNodeSprite }) 
   const name = groupPage
     ? `<a class="tree-term" href="./${groupPage}#${classAnchorId(node.term)}">${escapeHtml(node.term)}</a>`
     : `<span class="tree-term">${escapeHtml(node.term)}</span>`;
-  const up = node.parents.length
-    ? `<span class="tree-up">under ${node.parents.map((p) => `<a href="#${ontologyTreeNodeId(sectionSlug, p)}">${escapeHtml(p)}</a>`).join(" and ")}</span>`
+  const parentLinks = node.parents.map((p) => `<a href="#${ontologyTreeNodeId(sectionSlug, p)}">${escapeHtml(p)}</a>`);
+  const up = parentLinks.length
+    ? `<span class="tree-up">under ${joinWithAnd(parentLinks)}</span>`
     : "";
   const classes = ["tree-node", node.kind, node.sprited ? "sprited" : "abstract", node.parents.length > 1 ? "dual" : ""]
     .filter(Boolean).join(" ");
@@ -1277,6 +1310,7 @@ ${THEME_TOKENS_CSS}
   .swatch.cycle .swatch-img { border-color: var(--taught); cursor: pointer; display: block; }
   .swatch.cycle .swatch-img:hover { border-color: var(--corpus); }
   .swatch.cycle .swatch-caption { color: var(--taught); }
+  .swatch.cycle .swatch-mode { display: block; font-size: .54rem; letter-spacing: .05em; text-transform: uppercase; color: var(--corpus); }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--ai-edge); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, color .12s ease, opacity .12s ease; } }
 ${dockCss}</style>
@@ -1379,18 +1413,23 @@ ${spriteBundleScript}
   }
   wireSceneComposer();
 
-  // ---- the animated swatches — a card's large tier gains one moving
-  // swatch per axis its own templates actually vary on: mood (mgx:feels),
-  // facing (mgx:faces) and pose (mgx:pose). Frames are the card's own
-  // already-rendered swatches (read straight off the DOM here — unlike the
-  // composer's classIndex above, this only ever needs whatever cards THIS
-  // page actually renders, never the whole catalog), ordered by the pure
-  // *FrameSequence functions spliced in below, and one shared interval
-  // steps every cycle in sync at one shared delay. The mood cycle leads the
-  // row; the facing sweep and the pose toggle take over the static plain
-  // and happy swatches' own places rather than adding cells, so the row
-  // keeps its width. Reduced motion disables the auto-step only; each frame
-  // is a button, so a click or Enter always advances one frame by hand.
+  // ---- the animated cell — one image per class, standing where its plain
+  // swatch was, stepping through the display modes its own templates carry
+  // art for: static, moving, turning, cycle-emotions, back to static. Frames
+  // are the card's own already-rendered swatches (read straight off the DOM
+  // here — unlike the composer's classIndex above, this only ever needs
+  // whatever cards THIS page renders, never the whole catalog), ordered by
+  // the pure *FrameSequence functions spliced in below and flattened by
+  // displayModeSequence.
+  //
+  // A click always advances one frame, so every mode is reachable by hand.
+  // Inside an animated mode one shared interval steps the frames on, looping
+  // within that mode rather than running on into the next one; the static
+  // frame is the resting state and never auto-steps. Hovering the resting
+  // cell shows the moving pose while the pointer is over it.
+  //
+  // Reduced motion turns off the interval and the hover preview both. Clicks
+  // still step frame by frame, which is what keeps the walk deterministic.
   const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
   const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
   const MOOD_PROPERTY = "mgx:feels";
@@ -1399,6 +1438,8 @@ ${spriteBundleScript}
   const moodFrameSequence = ${moodFrameSequence.toString()};
   const turnFrameSequence = ${turnFrameSequence.toString()};
   const movingFrameSequence = ${movingFrameSequence.toString()};
+  const displayModeSequence = ${displayModeSequence.toString()};
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const cycleSteppers = [];
 
   function frameFromSwatch(swatch) {
@@ -1408,22 +1449,62 @@ ${spriteBundleScript}
     return { svg: img.innerHTML, label: label.textContent.trim() };
   }
 
-  function makeCycleSwatch(frames, ariaLabel, kind) {
+  function makeModeCell(frames, cls) {
     const holder = document.createElement("div");
-    holder.className = "swatch large cycle cycle-" + kind;
-    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="' + esc(ariaLabel)
-      + '"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
+    holder.className = "swatch large cycle cycle-mode";
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="step the ' + esc(cls)
+      + ' sprite through its display modes"></button>'
+      + '<div class="swatch-caption"><span class="swatch-mode"></span><span class="swatch-label"></span></div>';
     const frameImgEl = holder.querySelector(".swatch-img");
+    const frameModeEl = holder.querySelector(".swatch-mode");
     const frameLabelEl = holder.querySelector(".swatch-label");
+    const movingIndex = frames.findIndex((f) => f.mode === "moving");
     let frameIndex = 0;
+    let previewIndex = -1;
+    // Once the visitor starts clicking, the hover preview stops second-
+    // guessing them: it is the same pointer doing both, so without this the
+    // preview keeps pulling the cell back to the moving pose between clicks.
+    // Leaving the cell arms it again.
+    let previewBlocked = false;
     const showFrame = () => {
-      frameImgEl.innerHTML = frames[frameIndex].svg;
-      frameLabelEl.textContent = frames[frameIndex].label;
+      const frame = frames[previewIndex >= 0 ? previewIndex : frameIndex];
+      frameImgEl.innerHTML = frame.svg;
+      frameModeEl.textContent = frame.mode;
+      frameLabelEl.textContent = frame.label;
+      holder.dataset.mode = frame.mode;
     };
-    const stepFrame = () => { frameIndex = (frameIndex + 1) % frames.length; showFrame(); };
-    frameImgEl.addEventListener("click", stepFrame);
+    frameImgEl.addEventListener("click", () => {
+      previewIndex = -1;
+      previewBlocked = true;
+      frameIndex = (frameIndex + 1) % frames.length;
+      showFrame();
+    });
+    if (!reducedMotion && movingIndex > 0) {
+      holder.addEventListener("mouseenter", () => {
+        if (previewBlocked || previewIndex >= 0 || frames[frameIndex].mode !== "static") return;
+        previewIndex = movingIndex;
+        showFrame();
+      });
+      holder.addEventListener("mouseleave", () => {
+        previewBlocked = false;
+        if (previewIndex < 0) return;
+        previewIndex = -1;
+        showFrame();
+      });
+    }
+    // Auto-stepping stays inside the mode the visitor stopped on, so the cell
+    // animates what they asked to see instead of drifting through the rest.
+    cycleSteppers.push(() => {
+      if (previewIndex >= 0) return;
+      const mode = frames[frameIndex].mode;
+      if (mode === "static") return;
+      const inMode = [];
+      for (let i = 0; i < frames.length; i += 1) if (frames[i].mode === mode) inMode.push(i);
+      if (inMode.length < 2) return;
+      frameIndex = inMode[(inMode.indexOf(frameIndex) + 1) % inMode.length];
+      showFrame();
+    });
     showFrame();
-    cycleSteppers.push(stepFrame);
     return holder;
   }
 
@@ -1436,28 +1517,20 @@ ${spriteBundleScript}
       .filter((r) => r.frame);
     const baseSwatch = swatchRow.querySelector(".swatch.plain, .swatch.fallback");
     const baseFrame = frameFromSwatch(baseSwatch);
+    if (!baseSwatch || !baseFrame) continue;
 
     const moodRows = rows.filter((r) => r.property === MOOD_PROPERTY);
-    const moodFrames = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame));
-    if (moodFrames.length) {
-      swatchRow.insertBefore(makeCycleSwatch(moodFrames, "step through the " + cls + " expressions", "mood"), swatchRow.firstChild);
-    }
-
     const facingFrames = {};
     for (const r of rows) { if (r.property === FACING_PROPERTY) facingFrames[r.frame.label] = r.frame; }
-    const turnFrames = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
-    if (turnFrames.length && baseSwatch) {
-      swatchRow.replaceChild(makeCycleSwatch(turnFrames, "watch the " + cls + " turn through every direction", "turn"), baseSwatch);
-    }
-
     const movingRow = rows.find((r) => r.property === POSE_PROPERTY && r.frame.label === "moving");
-    const movingFrames = movingFrameSequence(baseFrame, movingRow && movingRow.frame);
-    if (movingFrames.length) {
-      const happyRow = moodRows.find((r) => r.frame.label === "happy");
-      swatchRow.replaceChild(makeCycleSwatch(movingFrames, "watch the " + cls + " move", "moving"), (happyRow || movingRow).el);
-    }
+
+    const modeFrames = displayModeSequence({ svg: baseFrame.svg, label: cls }, {
+      movingFrame: movingRow && movingRow.frame,
+      turnFrames: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
+      moodFrames: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame)),
+    });
+    if (modeFrames.length) swatchRow.replaceChild(makeModeCell(modeFrames, cls), baseSwatch);
   }
-  const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (cycleSteppers.length && !reducedMotion) {
     setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, CYCLE_FRAME_DELAY_MS);
   }

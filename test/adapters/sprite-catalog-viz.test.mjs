@@ -15,7 +15,8 @@ import {
   renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, buildSpriteCatalogEntries, groupForClass,
   paletteTreatmentFor, tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE,
   GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
-  moodFrameSequence, turnFrameSequence, movingFrameSequence, CATALOG_GROUPS, groupIsClustered,
+  moodFrameSequence, turnFrameSequence, movingFrameSequence, displayModeSequence, DISPLAY_MODE_ORDER,
+  CATALOG_GROUPS, groupIsClustered,
   catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
   loadSpriteOntologyFactRows, subClassIndex, buildOntologyTree, sectionSlugFor, ontologyTreeNodeId,
   ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT,
@@ -208,13 +209,14 @@ test("a swatch born from a property fact carries that property as a data attribu
   assert.doesNotMatch(html, /class="swatch large plain"[^>]*data-property/, "a plain swatch never claims a property");
 });
 
-test("the rendered page ships the animated-swatch machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
+test("the rendered page ships the animated-cell machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /MOOD_PROPERTY = "mgx:feels"/);
   assert.match(html, /FACING_PROPERTY = "mgx:faces"/);
   assert.match(html, /POSE_PROPERTY = "mgx:pose"/);
   assert.match(html, /prefers-reduced-motion: reduce/);
-  assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle swatch has its own styling");
+  assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle cell has its own styling");
+  assert.match(html, /\.swatch\.cycle \.swatch-mode/, "the visible mode label has its own styling");
 });
 
 // ---- the three animated swatches: mood, facing, pose ----
@@ -258,9 +260,10 @@ test("the pose toggle alternates the idle sprite with the moving one, and needs 
   assert.deepEqual(movingFrameSequence(null, svgFrame("moving")), [], "no idle sprite, no toggle");
 });
 
-/** The three frame lists sprites.html's own inline script builds for one
- *  class, selected off real tierSwatchesFor output by the same properties
- *  and labels the page selects DOM swatches by. Keeps these tests honest
+/** The frame lists sprites.html's own inline script builds for one class,
+ *  selected off real tierSwatchesFor output by the same properties and
+ *  labels the page selects DOM swatches by, then flattened into the one
+ *  click-through sequence its image cell walks. Keeps these tests honest
  *  about the real catalog rather than about a hand-built frame fixture. */
 function pageCyclesFor(cls) {
   const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
@@ -271,11 +274,19 @@ function pageCyclesFor(cls) {
   const facingFrames = {};
   for (const s of swatches) if (s.property === "mgx:faces") facingFrames[s.label] = frameOf(s);
   const movingSwatch = swatches.find((s) => s.property === "mgx:pose" && s.label === "moving");
+  const mood = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames);
+  const turn = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
+  const moving = movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch));
   return {
     swatches,
-    mood: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames),
-    turn: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
-    moving: movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch)),
+    mood,
+    turn,
+    moving,
+    modes: displayModeSequence(baseFrame && { svg: baseFrame.svg, label: cls }, {
+      movingFrame: movingSwatch && frameOf(movingSwatch),
+      turnFrames: turn,
+      moodFrames: mood,
+    }),
   };
 }
 
@@ -308,10 +319,45 @@ test("a combined facing-and-pose variant joins neither single-axis cycle, so eac
 });
 
 test("a class the catalog gives no facing or pose art animates nothing on those axes rather than faking a frame", () => {
-  const { turn, moving, mood } = pageCyclesFor("person");
+  const { turn, moving, mood, modes } = pageCyclesFor("person");
   assert.deepEqual(turn, [], "no facing sprites, no sweep");
   assert.deepEqual(moving, [], "no moving sprite, no toggle");
   assert.equal(mood.length, 7, "its moods still cycle");
+  assert.deepEqual([...new Set(modes.map((f) => f.mode))], ["static", "emotions"], "the cell offers only the modes there is art for");
+});
+
+// ---- the one image cell's display modes ----
+
+test("displayModeSequence walks static, moving, turning then emotions, and the static sprite is never repeated as a mood frame", () => {
+  const frames = displayModeSequence({ svg: "<svg id=\"plain\"/>", label: "bear" }, {
+    movingFrame: svgFrame("moving"),
+    turnFrames: [svgFrame("left"), { svg: "<svg id=\"plain\"/>", label: "centre" }, svgFrame("right")],
+    moodFrames: [{ svg: "<svg id=\"plain\"/>", label: "bear" }, svgFrame("happy"), svgFrame("sad")],
+  });
+  assert.deepEqual(frames.map((f) => f.mode), ["static", "moving", "turning", "turning", "turning", "emotions", "emotions"]);
+  assert.deepEqual(frames.map((f) => f.label), ["bear", "moving", "left", "centre", "right", "happy", "sad"]);
+  assert.deepEqual([...new Set(frames.map((f) => f.mode))], DISPLAY_MODE_ORDER, "every mode in the declared order");
+});
+
+test("displayModeSequence keeps only the modes a class has real art for, static always leading", () => {
+  const staticOnly = { svg: "<svg/>", label: "lamp" };
+  assert.deepEqual(displayModeSequence(staticOnly, {}), [], "one frame is not a cycle, so the cell never appears");
+  const moodOnly = displayModeSequence(staticOnly, { moodFrames: [staticOnly, svgFrame("happy"), svgFrame("calm")] });
+  assert.deepEqual(moodOnly.map((f) => f.mode), ["static", "emotions", "emotions"]);
+  const moveOnly = displayModeSequence(staticOnly, { movingFrame: svgFrame("moving") });
+  assert.deepEqual(moveOnly.map((f) => [f.mode, f.label]), [["static", "lamp"], ["moving", "moving"]]);
+  assert.deepEqual(displayModeSequence(null, { movingFrame: svgFrame("moving") }), [], "no resting frame, no cell");
+});
+
+test("a fully-illustrated real class offers all four display modes from one cell, its own name resting on top", () => {
+  for (const cls of ["bear", "cat", "dog", "king"]) {
+    const { modes } = pageCyclesFor(cls);
+    assert.deepEqual([...new Set(modes.map((f) => f.mode))], DISPLAY_MODE_ORDER, `${cls} carries art for every mode`);
+    assert.deepEqual(modes[0], { mode: "static", svg: modes[0].svg, label: cls }, `${cls} rests on its own plain sprite`);
+    assert.equal(modes.filter((f) => f.mode === "moving").length, 1);
+    assert.equal(modes.filter((f) => f.mode === "turning").length, 5, `${cls} sweeps the whole turntable`);
+    assert.equal(modes.filter((f) => f.mode === "emotions").length, 6, `${cls} cycles its six curated moods`);
+  }
 });
 
 test("a moving-pose template's swatch carries mgx:pose, the property the page's toggle selects it by", () => {
@@ -329,11 +375,11 @@ test("a moving-pose template's swatch carries mgx:pose, the property the page's 
   assert.notEqual(frames[0].svg, frames[1].svg);
 });
 
-test("all three animated swatches run off one delay and one interval, so their tempos can never drift apart", () => {
-  assert.equal(CYCLE_FRAME_DELAY_MS, 800, "the mood cycle's established tempo, now shared by the sweep and the toggle");
+test("every axis runs off one delay and one interval, so their tempos can never drift apart", () => {
+  assert.equal(CYCLE_FRAME_DELAY_MS, 800, "the mood cycle's established tempo, now shared by every axis");
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, new RegExp(`const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};`));
-  assert.equal((html.match(/setInterval\(/g) || []).length, 1, "one interval drives every animated swatch on the page");
+  assert.equal((html.match(/setInterval\(/g) || []).length, 1, "one interval drives every animated cell on the page");
   assert.match(html, /\}, CYCLE_FRAME_DELAY_MS\)/, "the interval is fed the shared constant, never a second hard-coded number");
 });
 
@@ -342,14 +388,22 @@ test("the page splices in the same frame-order functions this file tests, never 
   assert.ok(html.includes(moodFrameSequence.toString()), "the mood cycle's real ordering function reaches the page");
   assert.ok(html.includes(turnFrameSequence.toString()), "the facing sweep's real ordering function reaches the page");
   assert.ok(html.includes(movingFrameSequence.toString()), "the pose toggle's real ordering function reaches the page");
+  assert.ok(html.includes(displayModeSequence.toString()), "the mode order this file tests is the one the page runs");
   assert.match(html, /const FACING_TURN_ORDER = \["left","half-left",null,"half-right","right"\]/);
 });
 
-test("the facing sweep takes the plain swatch's place and the pose toggle takes happy's, so neither adds a grid cell", () => {
+test("the one animated cell takes the plain swatch's place, so the three separate cycles never come back as extra grid cells", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
-  assert.match(html, /replaceChild\(makeCycleSwatch\(turnFrames[\s\S]{0,120}baseSwatch\)/, "the sweep replaces the plain swatch");
-  assert.match(html, /replaceChild\(makeCycleSwatch\(movingFrames[\s\S]{0,120}\(happyRow \|\| movingRow\)\.el\)/, "the toggle replaces the happy swatch");
-  assert.match(html, /insertBefore\(makeCycleSwatch\(moodFrames[\s\S]{0,120}swatchRow\.firstChild\)/, "the mood cycle still leads the row");
+  assert.match(html, /replaceChild\(makeModeCell\(modeFrames, cls\), baseSwatch\)/, "the cell stands where the plain swatch was");
+  assert.doesNotMatch(html, /insertBefore\(makeCycleSwatch/, "no axis adds a cell of its own any more");
+  assert.equal((html.match(/makeModeCell\(/g) || []).length, 2, "one cell factory, called from one place");
+});
+
+test("the hover preview and the auto-step are both off under reduced motion, and a click still steps a frame", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /if \(!reducedMotion && movingIndex > 0\) \{[\s\S]{0,80}mouseenter/, "the hover preview is only wired when motion is allowed");
+  assert.match(html, /if \(cycleSteppers\.length && !reducedMotion\)/, "the interval only starts when motion is allowed");
+  assert.match(html, /frameImgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,140}frameIndex = \(frameIndex \+ 1\) % frames\.length;/, "a click advances one frame whatever the motion setting");
 });
 
 // ---- the section ontology trees ----
