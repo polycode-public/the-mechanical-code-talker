@@ -120,11 +120,15 @@ function indexHeadMeta() {
 /** Overwrites a freshly rendered demo page's own <title> line with this
  *  build's full head-metadata block. Every renderXHtml still writes its own
  *  <title> so the module renders something sensible standalone; this is
- *  where the page-list metadata wins. */
-function injectMetaHead(html, meta) {
+ *  where the page-list metadata wins. `keepOwnTitle` keeps the renderer's
+ *  title and adds only the tags after it — for pages whose titles carry live
+ *  data (the ledger's fact count) that the page contract pins. */
+function injectMetaHead(html, meta, { keepOwnTitle = false } = {}) {
   const titleLineRe = /<title>[^<]*<\/title>\n/;
   if (!titleLineRe.test(html)) throw new Error("no <title> line found to inject the head-metadata block into");
-  return html.replace(titleLineRe, `${renderMetaHeadBlock(meta)}\n`);
+  if (!keepOwnTitle) return html.replace(titleLineRe, `${renderMetaHeadBlock(meta)}\n`);
+  const tagsOnly = renderMetaHeadBlock(meta).split("\n").filter((line) => !line.startsWith("<title>")).join("\n");
+  return html.replace(titleLineRe, (titleLine) => `${titleLine}${tagsOnly}\n`);
 }
 
 // version.txt: written fresh on every build, gitignored like every other
@@ -246,7 +250,7 @@ const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle
 const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
 console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, injectMetaHead(renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }), demoPageMeta("ledger")));
+await writeF(ledgerPath, injectMetaHead(renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }), demoPageMeta("ledger"), { keepOwnTitle: true }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The code explorer: the exact page the Electron shell renders for itself
@@ -285,7 +289,7 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
     sourceName: "demo code graph",
     showDesktopLink: true,
     seedStamp,
-  }), demoPageMeta("code")));
+  }), demoPageMeta("code"), { keepOwnTitle: true }));
   console.log(`wrote ${codePath} (focus "${codeExplorerData.focus}", ${codeExplorerData.hints.length} hints)`);
 }
 
@@ -364,7 +368,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   // over the store it grows in the browser — no TOML parser ever ships.
   const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const researchPagePath = join(SITE, "research.html");
-  await writeF(researchPagePath, injectMetaHead(renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }), demoPageMeta("research")));
+  await writeF(researchPagePath, injectMetaHead(renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }), demoPageMeta("research"), { keepOwnTitle: true }));
   console.log(`wrote ${researchPagePath}`);
 }
 
