@@ -38,7 +38,7 @@ test("the page list holds 23 pages: index, 11 demo pages, 11 about pages", () =>
   assert.equal(new Set(ALL_PAGES).size, 23, "no page name repeats");
 });
 
-test("every page exists and carries exactly one canonical link, one og:image and one twitter:card", () => {
+test("every page exists and carries exactly one canonical link, one og:image and one twitter:card", { skip: siteUnbuilt }, () => {
   for (const name of ALL_PAGES) {
     const html = readPage(name);
     assert.equal(countMatches(html, /<link rel="canonical" href="[^"]+">/g), 1, `${name}: expected exactly one canonical link`);
@@ -47,14 +47,14 @@ test("every page exists and carries exactly one canonical link, one og:image and
   }
 });
 
-test("robots.txt matches the required payload exactly", () => {
+test("robots.txt matches the required payload exactly", { skip: siteUnbuilt }, () => {
   const path = join(PUBLIC_DIR, "robots.txt");
   assert.ok(existsSync(path), "public/robots.txt is missing — run `npm run demo:build` first");
   const text = readFileSync(path, "utf8");
   assert.equal(text, "User-agent: *\nAllow: /\nSitemap: https://tmct.polycode.co.uk/sitemap.xml\n");
 });
 
-test("sitemap.xml parses and holds 23 unique locs", () => {
+test("sitemap.xml parses and holds 23 unique locs", { skip: siteUnbuilt }, () => {
   const path = join(PUBLIC_DIR, "sitemap.xml");
   assert.ok(existsSync(path), "public/sitemap.xml is missing — run `npm run demo:build` first");
   const xml = readFileSync(path, "utf8");

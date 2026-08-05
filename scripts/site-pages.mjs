@@ -15,16 +15,16 @@
 
 export const DEMO_PAGES = [
   "chat",
+  "ledger",
+  "research",
   "spider-fly",
   "plan",
-  "adventure",
-  "ledger",
   "code",
   "ingest",
-  "sprites",
-  "research",
-  "mud",
   "mudiii",
+  "mud",
+  "adventure",
+  "sprites",
 ];
 
 /** The hand-authored about page beside each demo page. */

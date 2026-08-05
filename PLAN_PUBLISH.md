@@ -344,7 +344,10 @@ status` shows changes under `infra/` only.
 - **M1** — GitHub Settings → Social preview: upload `public/og/github-social.png` (T2
   builds it, 1280x640).
 - **M2** — record the 60–90s silent mudiii capture; export MP4 (place at
-  `public/media/hero-mudiii.mp4`) and a looping GIF.
+  `public/media/hero-mudiii.mp4`) and a looping GIF, then add
+  `<source src="media/hero-mudiii.mp4" type="video/mp4">` inside the hero
+  `<video>` in `public/index.html` (the video element ships source-less and
+  shows its poster until then).
 - **M3** — GitHub About panel: website `https://tmct.polycode.co.uk`; topics `symbolic-ai`,
   `knowledge-graph`, `owl`, `rdf`, `provenance`, `no-llm`, `eliza`; description:
   *Deterministic, no-LLM chat over an OWL-labelled JSON graph memory. Grounded answers with

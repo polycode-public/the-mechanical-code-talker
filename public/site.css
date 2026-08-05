@@ -535,3 +535,20 @@ table.matrix td.focus { color: var(--taught); }
 .eyebrow a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; border-radius: 2px; }
 
 .nowrap { white-space: nowrap; }
+
+/* ---- hero media: poster-first video under the lede ----------
+   A bare <video poster> paints the LCP image immediately; the clip's <source>
+   is added only when a recording ships. Reduced motion swaps the element for
+   a plain img. */
+.hero-media { max-width: 48rem; margin: 0 auto 3rem; }
+.hero-video, .hero-media-fallback {
+  display: block; width: 100%; height: auto;
+  aspect-ratio: 1200 / 630; object-fit: cover;
+  border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card);
+}
+.hero-media-fallback { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-video { display: none; }
+  .hero-media-fallback { display: block; }
+}

@@ -28,6 +28,7 @@ const TRACKED_SITE_FILES = [
   "tmct-browser.mjs",
   "engine-shims",
   "screenshots",
+  "og",
   "models",
 ];
 

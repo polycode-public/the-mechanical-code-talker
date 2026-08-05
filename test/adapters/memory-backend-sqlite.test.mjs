@@ -113,7 +113,13 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
     // differs by a millisecond or two between the sqlite and file backends. Redact it before the
     // structural attribute comparison, same reasoning as memory-core.test.mjs's GOLDEN EQUIVALENCE
     // test's `norm()`.
-    const redactUpdatedAt = (attrs) => attrs.map((a) => (a.prop === "mgx:updatedAt" ? { ...a, value: "<ts>" } : a));
+    // mgx:trustScore rides the same wall clock one layer deeper (recencyNudge),
+    // so it gets the fact rows' treatment: rounded for comparison only.
+    const redactUpdatedAt = (attrs) => attrs.map((a) => {
+      if (a.prop === "mgx:updatedAt") return { ...a, value: "<ts>" };
+      if (a.prop === "mgx:trustScore") return { ...a, value: String(Math.round(Number(a.value) * 1e4) / 1e4) };
+      return a;
+    });
     for (const name of ["grandparent", "trusted-friend"]) {
       const sRule = findRuleByName(sqliteMemory, name);
       const fRule = findRuleByName(fileMemory, name);

@@ -42,23 +42,6 @@
 </script>
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
 <link rel="stylesheet" href="./site.css">
-<style>
-/* Hero media: a bare <video poster> paints the LCP image immediately; the
-   inline script beside the video swaps in the real clip only once it
-   confirms the file exists. Reduced motion swaps the element for a plain img. */
-.hero-media { max-width: 48rem; margin: 0 auto 3rem; }
-.hero-video, .hero-media-fallback {
-  display: block; width: 100%; height: auto;
-  aspect-ratio: 1200 / 630; object-fit: cover;
-  border-radius: 14px; border: 1px solid var(--line);
-  background: var(--card);
-}
-.hero-media-fallback { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .hero-video { display: none; }
-  .hero-media-fallback { display: block; }
-}
-</style>
 </head>
 <body>
 <main>
@@ -84,14 +67,6 @@
     <img class="hero-media-fallback" src="og/index.png" fetchpriority="high"
          alt="The mudiii demo: a fox and goblins meeting in a 3D town square.">
   </div>
-  <script>
-    fetch("media/hero-mudiii.mp4", { method: "HEAD" }).then((res) => {
-      if (!res.ok) return;
-      const video = document.querySelector(".hero-video");
-      video.insertAdjacentHTML("beforeend", '<source src="media/hero-mudiii.mp4" type="video/mp4">');
-      video.load();
-    });
-  </script>
 
   <section class="claims" id="demos" aria-label="what the demo pages show">
     <div class="band-head">
