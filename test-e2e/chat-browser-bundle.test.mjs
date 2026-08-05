@@ -104,10 +104,10 @@ test("teach + syllogism: 'every dog is a mammal' / 'rex is a dog' / 'is rex a ma
   const teach1 = await turn(ctx, "every dog is a mammal");
   assert.match(teach1.answer, /^noted — remembered: dog is a kind of mammal/);
   const teach2 = await turn(ctx, "rex is a dog");
-  assert.match(teach2.answer, /^noted — remembered: rex is a kind of dog/);
+  assert.match(teach2.answer, /^noted — remembered: rex is a dog/);
   const { answer } = await turn(ctx, "is rex a mammal");
   assert.match(answer, /^yes — /);
-  assert.match(answer, /rex is a kind of dog \(source: teach:chat/);
+  assert.match(answer, /rex is a dog \(source: teach:chat/);
   assert.match(answer, /dog is a kind of mammal \(source: teach:chat/);
   assert.match(answer, /so rex is a mammal/);
 });

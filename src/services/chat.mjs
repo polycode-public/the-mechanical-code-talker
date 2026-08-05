@@ -46,7 +46,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
-import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
+import { loadLexicon, lookupNoun, readsAsIndividualName } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import {
   REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
@@ -2769,6 +2769,11 @@ const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 // "some/a few Xs are Ys" shape) stay obviously in that same family rather than
 // re-typing the CURIE string at each call site.
 const SUBCLASS_PREDICATE = "rdfs:subClassOf";
+// Individual-membership — the ACE grammar's rdf:type arm (grammar/ace.mjs's
+// parseCopula), named here for the same reason SUBCLASS_PREDICATE is: the
+// direct-write teach paths below stay in that family without re-typing the
+// CURIE string at each call site.
+const TYPE_PREDICATE = "rdf:type";
 // HAS_A_PREDICATE (imported from memory/core.mjs, the canonical home) keeps
 // generalVerbTeach's "has"/"have" special case in the same family ConceptNet's
 // /r/HasA corpus facts already use, rather than minting a redundant mgx:has.
@@ -3109,8 +3114,11 @@ async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
   if (/\?\s*$/.test(String(line).trim())) return null; // a question never writes
   const inst = line.match(INSTANCE_TYPE_TEACH_RE);
   if (inst) {
+    // The subject regex REQUIRES a hyphen (a numbered/coined instance name),
+    // so G5c always holds here — an unconditional individual read, never a
+    // class.
     return teachFact(memoryDir, sessionId, {
-      subject: inst[1], predicate: "rdfs:subClassOf", object: inst[2],
+      subject: inst[1], predicate: TYPE_PREDICATE, object: inst[2],
     });
   }
   const kindOf = line.match(BARE_KINDOF_TEACH_RE);
@@ -3669,7 +3677,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, lookupAdjective, classify, readsAsIndividualName } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // A known X's own ACE miss is a real miss — never silently reinterpreted
   // here. EXCEPT: classify() folds a trailing "-s" the same way resolveNP
@@ -3703,6 +3711,18 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
   // plurals for the "is this a real miss" check, so singularizing only the
   // STORED value here is safe and doesn't change that check's behavior.
   const subject = /^are$/i.test(verb) ? singularizeSurface(subjectRaw) : subjectRaw;
+  // A bare "is" sentence with no subject determiner, an indefinite-articled
+  // complement, and a subject that spells like a named individual (rover,
+  // fido, whiskers — see readsAsIndividualName's own docblock) stores
+  // rdf:type instead of rdfs:subClassOf. "are" sentences never qualify
+  // (plural subjects are never one individual); the quantifier line above is
+  // unaffected — "every"/"each"/"all"/"any" already fail this test on their
+  // own (det is non-empty).
+  const namedIndividual = !String(det || "").trim()
+    && /^is$/i.test(verb)
+    && !/\s/.test(subjectRaw)
+    && objectCarriesArticle(payload)
+    && readsAsIndividualName(subjectRaw, lex);
   // A PRIOR turn's minted term, a GENERIC_ANCHOR_NOUNS root, or a shipped
   // corpus bundle's own isa row grounds Y just as legitimately as a static
   // lexicon noun — all three are always treated as class-level (never
@@ -3716,7 +3736,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon, 
     || (await isCorpusAnchoredTerm(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
       subject,
-      predicate: SUBCLASS_PREDICATE,
+      predicate: namedIndividual ? TYPE_PREDICATE : SUBCLASS_PREDICATE,
       object: storedObjectTerm(objectRaw, { verb, payload, lex, lookupNoun }),
       quantifier,
       observedAt,
@@ -4063,9 +4083,12 @@ const PARTICIPLE_PREP_TEACH_RE = new RegExp(
  *  path) AND the relational half (sales mgx:related-to selling). The NP head is
  *  a single token, followed by a closed participle — which keeps this disjoint
  *  from PARTICIPLE_PREP_TEACH_RE, where the participle sits right after the
- *  copula. */
+ *  copula. The leading the/a/an is CAPTURED (group 1, empty when absent) so a
+ *  caller can tell a determined subject ("the sales…") apart from a bare one
+ *  ("Rover…") the same way unknownSubjectFallback's own `det` capture does —
+ *  the individual-vs-class predicate choice below reads it. */
 const COPULA_NP_PARTICIPLE_TEACH_RE = new RegExp(
-  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(is|are|was|were)\\s+(?:an?\\s+)?([\\w'-]+)\\s+(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
+  `^(the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(is|are|was|were)\\s+(?:an?\\s+)?([\\w'-]+)\\s+(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
   "i",
 );
 /** "A and B have/share the same <noun>" — "sales and marketing have the same
@@ -4111,7 +4134,7 @@ function matchesRelationalTeachFrame(sentence) {
   const pp = payload.match(PARTICIPLE_PREP_TEACH_RE);
   if (pp) return !isTeachPronoun(pp[1]);
   const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
-  if (np) return !isTeachPronoun(np[1]);
+  if (np) return !isTeachPronoun(np[2]);
   const same = payload.match(SAME_NOUN_TEACH_RE);
   if (same) return !isTeachPronoun(same[1]) && !isTeachPronoun(same[2]);
   return false;
@@ -4131,7 +4154,7 @@ async function relationalFrameNamesGraphEntity(sentence, graph) {
   if (pp) terms = [pp[1], participleObject(pp[4])];
   else {
     const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
-    if (np) terms = [np[1], np[3], participleObject(np[6])];
+    if (np) terms = [np[2], np[4], participleObject(np[7])];
     else {
       const same = payload.match(SAME_NOUN_TEACH_RE);
       if (same) terms = [same[1], same[2]];
@@ -5399,12 +5422,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // to disagree with, there is nothing here to record, so the sentence falls
     // through to the ordinary cascade exactly as it always has.
     if (retractNotMatch) {
-      const { SUBCLASS_PREDICATE } = await import("../domain/syllogise.mjs");
       const { loadMemory: loadMemForNeg, normFactTerm: normTermForNeg, readFactRows: readRowsForNeg } = await import("../adapters/memory/core.mjs");
       const negSubject = normTermForNeg(retractSubject);
       const negObject = normTermForNeg(retractObject);
       const priorRows = readRowsForNeg(await loadMemForNeg(memoryDir));
-      const positive = priorRows.find((r) => r.subject === negSubject && r.predicate === SUBCLASS_PREDICATE && r.object === negObject);
+      // Either isa predicate counts as "the positive" — a stored rdf:type
+      // (an individual reading) disagrees with a bare negative exactly as a
+      // stored rdfs:subClassOf does. mgxneg:subClassOf stays the single
+      // negative isa predicate either way (no mgxneg:type — spec's own §8).
+      const positive = priorRows.find((r) => r.subject === negSubject && ISA_PREDICATES.has(r.predicate) && r.object === negObject);
       if (positive) {
         const stored = await teachFact(memoryDir, sessionId, {
           subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject, observedAt, dateText,
@@ -5412,7 +5438,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         if (stored) {
           return {
             ...stored,
-            text: `${stored.text} — you told me earlier that ${negSubject} is a kind of ${negObject}, so both are now stored `
+            text: `${stored.text} — you told me earlier that ${negSubject} ${predicatePhrase(positive.predicate)} ${negObject}, so both are now stored `
               + `and I'll report the disagreement rather than pick one. `
               + `To drop the earlier fact instead, say "forget that ${negSubject} is ${indefiniteArticleFor(negObject)} ${negObject}".`,
           };
@@ -5476,13 +5502,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     //   - found:true, stillStands:false → this session held the only record;
     //     the fact and its dependency-directed cascade are both gone.
     if (retractForgetMatch) {
-      const { retractSubClassOf } = await import("../domain/syllogise.mjs");
+      const {
+        retractSubClassOf, SUBCLASS_PREDICATE: RETRACT_SC_PREDICATE, TYPE_PREDICATE: RETRACT_TYPE_PREDICATE,
+      } = await import("../domain/syllogise.mjs");
       const { provenanceTag: aceProvenanceTag } = await import("../domain/grammar/assert.mjs");
       const {
         loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
         appendFacts: appendFactsForRetract, factRecordIdForTag,
       } = await import("../adapters/memory/core.mjs");
-      const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+      const retractStoreOpts = {
         // A session's own positive assertion of subject⊑object can have
         // landed under either lane: the free-form teach lane (teachFact) or
         // the ACE-parsed assert lane (assertSentence) — both tags name here.
@@ -5491,16 +5519,29 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
           appendFacts: appendFactsForRetract, factRecordIdForTag,
         },
-      });
+      };
+      // "forget that X is a Y" names no predicate itself — the class-level
+      // edge is tried first, then the individual one, first found wins (this
+      // is also the old-store migration path: a fact taught before this
+      // predicate split still retracts under its original rdfs:subClassOf).
+      let result = await retractSubClassOf(memoryDir, retractSubject, retractObject, retractStoreOpts);
+      let retractedPredicate = RETRACT_SC_PREDICATE;
+      if (!result.found) {
+        result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+          ...retractStoreOpts, predicate: RETRACT_TYPE_PREDICATE,
+        });
+        retractedPredicate = RETRACT_TYPE_PREDICATE;
+      }
+      const retractedPhrase = predicatePhrase(retractedPredicate);
       if (result.found && !result.ownRecord) {
         return {
-          text: `"${retractSubject} is a kind of ${retractObject}" isn't something you taught me — it's on record from elsewhere, so there's nothing of yours to forget.`,
+          text: `"${retractSubject} ${retractedPhrase} ${retractObject}" isn't something you taught me — it's on record from elsewhere, so there's nothing of yours to forget.`,
           via: "retract", miss: false,
         };
       }
       if (result.found && result.stillStands) {
         return {
-          text: `noted — forgotten your own record of "${retractSubject} is a kind of ${retractObject}", `
+          text: `noted — forgotten your own record of "${retractSubject} ${retractedPhrase} ${retractObject}", `
             + "but it's still stored, told to me by someone else.",
           via: "retract", miss: false,
         };
@@ -5508,7 +5549,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       if (result.found) {
         const extra = result.count - 1; // beyond the target fact itself
         return {
-          text: `noted — forgotten: "${retractSubject} is a kind of ${retractObject}" is no longer stored`
+          text: `noted — forgotten: "${retractSubject} ${retractedPhrase} ${retractObject}" is no longer stored`
             + (extra > 0 ? ` (${extra} entailed fact${extra === 1 ? "" : "s"} that depended on it went too)` : "")
             + (result.truncated ? " — this cascade may not be complete (a lot depended on it); ask again if something still looks stale" : "")
             + ".",
@@ -5516,7 +5557,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
       return {
-        text: `"${retractSubject} is a kind of ${retractObject}" isn't stored, so there's nothing to forget.`,
+        text: `"${retractSubject} ${retractedPhrase} ${retractObject}" isn't stored, so there's nothing to forget.`,
         via: "retract", miss: true,
       };
     }
@@ -6272,14 +6313,27 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // stand on its own if the other's write fails.
       const np = posPayload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
       if (np) {
-        const subject = np[1].trim();
-        const relPred = `mgx:${np[4].toLowerCase()}-${np[5].toLowerCase()}`;
+        const npDet = np[1];
+        const subject = np[2].trim();
+        const npCopula = np[3];
+        const relPred = `mgx:${np[5].toLowerCase()}-${np[6].toLowerCase()}`;
+        // Same individual-vs-class read as unknownSubjectFallback's own
+        // namedIndividual (chat.mjs:3.4): no subject determiner, an "is"
+        // copula (never are/was/were — those are never one individual), an
+        // indefinite-articled complement, and a subject that spells like a
+        // named individual.
+        const npLex = lexicon || loadLexicon();
+        const namedIndividual = !npDet
+          && /^is$/i.test(npCopula)
+          && !/\s/.test(subject)
+          && objectCarriesArticle(posPayload)
+          && readsAsIndividualName(subject, npLex);
         const isaStored = await teachFact(memoryDir, sessionId, {
-          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]), observedAt, dateText,
+          subject, predicate: namedIndividual ? TYPE_PREDICATE : SUBCLASS_PREDICATE, object: singularizeSurface(np[4]), observedAt, dateText,
         });
         const relStored = await teachFact(memoryDir, sessionId, {
           subject, predicate: negated ? negatedPredicate(relPred) : relPred,
-          object: participleObject(np[6]), observedAt, dateText,
+          object: participleObject(np[7]), observedAt, dateText,
         });
         const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
         if (isaStored && relStored) return { text: `noted — remembered both: ${stripNoted(isaStored.text)}; and ${stripNoted(relStored.text)}`, via: "assert", miss: false };
@@ -16170,7 +16224,13 @@ function rewriteUsesAsBaseFrame(text) {
   if (m) return `is ${m[1].trim()} a kind of ${m[2].trim()}`;
   if (/\?\s*$/.test(t)) return null; // an unrecognized question shape — never guessed as a teach
   m = t.match(USES_AS_BASE_TEACH_RE);
-  if (m) return `${m[1].trim()} is a kind of ${m[2].trim()}`;
+  // "every" leads the rewritten declarative (not a bare copula) so the class
+  // relationship this frame always means (X inherits from Y) stays class-
+  // level no matter how the taught subject spells — a bare copula would let
+  // an undeclared/capitalized subject (readsAsIndividualName) read as one
+  // named individual instead, and "TaskController uses Base as its base"
+  // means a subclass relationship, never an instance.
+  if (m) return `every ${m[1].trim()} is a ${m[2].trim()}`;
   return null;
 }
 

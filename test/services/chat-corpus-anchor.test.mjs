@@ -73,10 +73,13 @@ test("a corpus-anchored object anchors a brand-new subject", async () => {
   await withCorpusStore(
     [{ subject: "b", predicate: "rdfs:subClassOf", object: "consonant", provenance: CORPUS_ISA }],
     async (dir) => {
+      // "florb" is lexicon-absent and single-token, so it reads as a named
+      // individual (readsAsIndividualName) — the anchored object still grounds
+      // the sentence, but the stored predicate is rdf:type, not rdfs:subClassOf.
       const taught = await runTurn("florb is a kind of consonant", { memoryDir: dir, sessionId: "t4" });
       assert.equal(taught.record.miss, false);
       const stored = await rows(dir);
-      assert.ok(stored.some((f) => f.subject === "florb" && f.predicate === "rdfs:subClassOf" && f.object === "consonant"));
+      assert.ok(stored.some((f) => f.subject === "florb" && f.predicate === "rdf:type" && f.object === "consonant"));
     },
   );
 });
@@ -88,10 +91,12 @@ test("a sentence whose two terms are both corpus-anchored stores rather than hit
       { subject: "b", predicate: "rdfs:subClassOf", object: "consonant", provenance: CORPUS_ISA },
     ],
     async (dir) => {
+      // "p" is lexicon-absent and single-token, so it reads as a named
+      // individual the same way "florb" does above.
       const taught = await runTurn("p is a kind of consonant", { memoryDir: dir, sessionId: "t5" });
       assert.equal(taught.record.miss, false);
       const stored = await rows(dir);
-      assert.ok(stored.some((f) => f.subject === "p" && f.predicate === "rdfs:subClassOf" && f.object === "consonant"));
+      assert.ok(stored.some((f) => f.subject === "p" && f.predicate === "rdf:type" && f.object === "consonant"));
     },
   );
 });
@@ -158,18 +163,24 @@ test("a refusal whose every unrecognized word is anchored reports a shape proble
   );
 });
 
-test("teaching the triple a corpus row already holds unions the sources and keeps the corpus provenance", async () => {
+test("teaching an individual-shaped subject over a corpus class row adds a second fact rather than merging", async () => {
   await withCorpusStore(
     [{ subject: "p", predicate: "rdfs:subClassOf", object: "letter", provenance: CORPUS_ISA }],
     async (dir) => {
+      // "p" is lexicon-absent and single-token, so "p is a letter" reads as a
+      // named individual (rdf:type) — a DIFFERENT triple from the corpus row's
+      // class-membership claim (rdfs:subClassOf), so the two stand side by
+      // side rather than one upserting onto the other (spec's migration note:
+      // re-teaching converges to two merged facts, no contradiction, no dedupe).
       const taught = await runTurn("p is a letter", { memoryDir: dir, sessionId: "t11" });
       assert.equal(taught.record.miss, false);
       const stored = await rows(dir);
-      assert.equal(stored.length, 1, "the taught claim upserts onto the existing corpus row, not a second row");
-      const [row] = stored;
-      assert.ok(row.sourceTypes.includes("corpus"));
-      assert.ok(row.sourceTypes.includes("teach"));
-      assert.match(row.provenance, /corpus:wordnet-xl/);
+      assert.equal(stored.length, 2, "the individual reading is a distinct predicate, not an upsert onto the class row");
+      const corpusRow = stored.find((f) => f.predicate === "rdfs:subClassOf");
+      const taughtRow = stored.find((f) => f.predicate === "rdf:type");
+      assert.ok(corpusRow && corpusRow.sourceTypes.includes("corpus") && !corpusRow.sourceTypes.includes("teach"));
+      assert.match(corpusRow.provenance, /corpus:wordnet-xl/);
+      assert.ok(taughtRow && taughtRow.sourceTypes.includes("teach"));
     },
   );
 });
