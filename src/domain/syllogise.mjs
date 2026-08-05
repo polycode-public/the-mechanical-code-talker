@@ -1545,9 +1545,15 @@ function bestEnvironmentTrustOpts(provenance, environments, trustOfId) {
  * when another source's record keeps the triple asserted after this one's
  * record is gone — in which case nothing entailed from it is cascaded,
  * because its premise never actually stopped holding).
+ *
+ * `predicate` (default SUBCLASS_PREDICATE) picks which isa edge the target
+ * triple is retracted under — TYPE_PREDICATE retracts an individual's
+ * rdf:type fact the same way, name unchanged since every existing caller
+ * retracts a class-level triple and the default keeps them untouched.
  */
 export async function retractSubClassOf(repoDir, subject, object, {
   budget = 50, depth = 32, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store, sourceTags = [],
+  predicate = SUBCLASS_PREDICATE,
 } = {}) {
   const { loadMemory, readFactRows, removeFacts } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
   const appendFactsFn = typeof store?.appendFacts === "function" ? store.appendFacts : null;
@@ -1558,7 +1564,7 @@ export async function retractSubClassOf(repoDir, subject, object, {
   }
   const s = normFactTerm(subject);
   const o = normFactTerm(object);
-  const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
+  const targetId = factIdForTriple(s, predicate, o);
   const memory = await loadMemory(repoDir);
   const rows = readFactRows(memory);
   const byId = new Map(rows.map((r) => [r.id, r]));

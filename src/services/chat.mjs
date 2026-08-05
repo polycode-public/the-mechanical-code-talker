@@ -5502,13 +5502,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     //   - found:true, stillStands:false → this session held the only record;
     //     the fact and its dependency-directed cascade are both gone.
     if (retractForgetMatch) {
-      const { retractSubClassOf } = await import("../domain/syllogise.mjs");
+      const {
+        retractSubClassOf, SUBCLASS_PREDICATE: RETRACT_SC_PREDICATE, TYPE_PREDICATE: RETRACT_TYPE_PREDICATE,
+      } = await import("../domain/syllogise.mjs");
       const { provenanceTag: aceProvenanceTag } = await import("../domain/grammar/assert.mjs");
       const {
         loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
         appendFacts: appendFactsForRetract, factRecordIdForTag,
       } = await import("../adapters/memory/core.mjs");
-      const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+      const retractStoreOpts = {
         // A session's own positive assertion of subject⊑object can have
         // landed under either lane: the free-form teach lane (teachFact) or
         // the ACE-parsed assert lane (assertSentence) — both tags name here.
@@ -5517,16 +5519,29 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts,
           appendFacts: appendFactsForRetract, factRecordIdForTag,
         },
-      });
+      };
+      // "forget that X is a Y" names no predicate itself — the class-level
+      // edge is tried first, then the individual one, first found wins (this
+      // is also the old-store migration path: a fact taught before this
+      // predicate split still retracts under its original rdfs:subClassOf).
+      let result = await retractSubClassOf(memoryDir, retractSubject, retractObject, retractStoreOpts);
+      let retractedPredicate = RETRACT_SC_PREDICATE;
+      if (!result.found) {
+        result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+          ...retractStoreOpts, predicate: RETRACT_TYPE_PREDICATE,
+        });
+        retractedPredicate = RETRACT_TYPE_PREDICATE;
+      }
+      const retractedPhrase = predicatePhrase(retractedPredicate);
       if (result.found && !result.ownRecord) {
         return {
-          text: `"${retractSubject} is a kind of ${retractObject}" isn't something you taught me — it's on record from elsewhere, so there's nothing of yours to forget.`,
+          text: `"${retractSubject} ${retractedPhrase} ${retractObject}" isn't something you taught me — it's on record from elsewhere, so there's nothing of yours to forget.`,
           via: "retract", miss: false,
         };
       }
       if (result.found && result.stillStands) {
         return {
-          text: `noted — forgotten your own record of "${retractSubject} is a kind of ${retractObject}", `
+          text: `noted — forgotten your own record of "${retractSubject} ${retractedPhrase} ${retractObject}", `
             + "but it's still stored, told to me by someone else.",
           via: "retract", miss: false,
         };
@@ -5534,7 +5549,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       if (result.found) {
         const extra = result.count - 1; // beyond the target fact itself
         return {
-          text: `noted — forgotten: "${retractSubject} is a kind of ${retractObject}" is no longer stored`
+          text: `noted — forgotten: "${retractSubject} ${retractedPhrase} ${retractObject}" is no longer stored`
             + (extra > 0 ? ` (${extra} entailed fact${extra === 1 ? "" : "s"} that depended on it went too)` : "")
             + (result.truncated ? " — this cascade may not be complete (a lot depended on it); ask again if something still looks stale" : "")
             + ".",
@@ -5542,7 +5557,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
       return {
-        text: `"${retractSubject} is a kind of ${retractObject}" isn't stored, so there's nothing to forget.`,
+        text: `"${retractSubject} ${retractedPhrase} ${retractObject}" isn't stored, so there's nothing to forget.`,
         via: "retract", miss: true,
       };
     }
