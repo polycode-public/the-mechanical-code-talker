@@ -98,7 +98,7 @@ test("the ingest page serves every asset it asks for and logs no error of its ow
   try {
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "the page loads without logging an error");
-    assert.match(await page.title(), /ingest/);
+    assert.match(await page.title(), /refuse what it can't ground — tmct$/);
     assert.equal(await page.locator("#ingestBtn").isDisabled(), true, "ingest stays disabled until there is text");
   } finally {
     await context.close();
