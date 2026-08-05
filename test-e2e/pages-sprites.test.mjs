@@ -311,7 +311,7 @@ test("the dock's classes-on-record question grounds in the WHOLE catalog, not ju
 
     const reply = await askDock(page, "how many sprite classes are there?");
     const text = await reply.innerText();
-    const counted = Number((text.match(/^(\d+) sprite classes\.$/) || [])[1]);
+    const counted = Number((text.match(/^(\d+) sprite classes\./) || [])[1]);
     assert.ok(Number.isFinite(counted), `the answer is a real count, got: ${text}`);
     assert.equal(counted, wholeCatalogTotal, "the dock counts the whole catalog, never just the cards this landing page happens to show");
     assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");

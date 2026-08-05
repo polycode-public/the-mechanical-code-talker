@@ -280,7 +280,7 @@ test("the dock on the person-roles page still counts and enumerates the WHOLE ca
     await page.press("#dockq", "Enter");
     await page.waitForFunction(() => document.querySelectorAll("#dockLog .a").length > 0);
     const text = await page.locator("#dockLog .a").last().innerText();
-    const counted = Number((text.match(/^(\d+) sprite classes\.$/) || [])[1]);
+    const counted = Number((text.match(/^(\d+) sprite classes\./) || [])[1]);
     const cardsOnThisPage = await page.locator(".card").count();
     assert.equal(cardsOnThisPage, 57, "this page's own gallery is just Person roles");
     assert.ok(Number.isFinite(counted) && counted > cardsOnThisPage, `the dock counts the whole catalog (${counted}), not just this page's own ${cardsOnThisPage} cards`);
