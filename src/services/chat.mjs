@@ -1044,6 +1044,65 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   return { text: shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun: asked } } : {}) };
 }
 
+/** "words with the letter p in it" / "words containing p" / "which words
+ *  contain p" — a closed set of phrasings, one capture each, and a SINGLE
+ *  letter only. The politeness/give-me lead is stripped by the same shared
+ *  prefix before these are tried, so each pattern only carries the question
+ *  itself. */
+const WORDS_WITH_LETTER_LEAD_RE =
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:(?:give|show|tell|find)\s+me\s+|list\s+)?(?:some\s+|the\s+|any\s+|all\s+(?:of\s+)?(?:the\s+)?)?/i;
+const WORDS_WITH_LETTER_PATTERNS = [
+  /^words\s+(?:that\s+|which\s+)?contain(?:s|ing)?\s+(?:the\s+letter\s+)?([a-z])$/i,
+  /^words\s+with\s+(?:the\s+letter\s+)?([a-z])(?:\s+in\s+(?:it|them))?$/i,
+  /^(?:what|which)\s+words\s+(?:contain|have|include)\s+(?:the\s+letter\s+)?([a-z])$/i,
+];
+
+/** The letter a words-containing question asks about, or null when the line
+ *  isn't one. */
+function wordsWithLetterOf(query) {
+  const q = String(query || "").trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ")
+    .replace(WORDS_WITH_LETTER_LEAD_RE, "");
+  for (const re of WORDS_WITH_LETTER_PATTERNS) {
+    const m = q.match(re);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+/** A stored term counts as a WORD this lane may list when it is a single run
+ *  of letters, so a multi-word phrase, a path, a number or a predicate name
+ *  never reaches the list. Hyphens and apostrophes stay in, since "t-shirt"
+ *  and "o'clock" are words people mean. */
+const LISTABLE_WORD_RE = /^[a-z][a-z'-]*$/;
+
+/** Answer "which words contain p" from the store's own vocabulary: every
+ *  distinct single-word term standing as the subject or object of a remembered
+ *  fact, filtered to those carrying the letter. Sorted alphabetically, so the
+ *  answer is a pure function of the fact set and never of the order rows
+ *  arrived in. Nothing matching is the ordinary honest miss. */
+async function answerWordsWithLetter(memoryDir, query, cache = null) {
+  if (!memoryDir) return null;
+  const letter = wordsWithLetterOf(query);
+  if (!letter) return null;
+  const words = new Set();
+  for (const f of await factRows(memoryDir, cache)) {
+    if (WORLD_INTERNAL_PREDICATES.has(f.predicate)) continue;
+    for (const side of [f.subject, f.object]) {
+      const w = String(side || "").toLowerCase();
+      if (LISTABLE_WORD_RE.test(w) && w.includes(letter)) words.add(w);
+    }
+  }
+  if (!words.size) {
+    return { text: `none of the words I know contain "${letter}".`, miss: true };
+  }
+  const sorted = [...words].sort();
+  const shown = sorted.slice(0, FACT_ANSWER_CAP);
+  const rest = sorted.slice(FACT_ANSWER_CAP);
+  const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+  const text = `Among the words I know, ${sorted.length} contain "${letter}": ${shown.join(", ")}.${extra}`;
+  return { text, ...(rest.length ? { pending: { items: rest, noun: "words" } } : {}) };
+}
+
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
  *  (predicate) counts, and module/package totals — read straight off the header. */
 export function renderStats(graph) {
@@ -7471,6 +7530,31 @@ const KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+i
 /** How many facts a single answer lists before the remainder is paged with "more". */
 const FACT_ANSWER_CAP = 32;
 
+/** The thing named by an APPOSITION: "the letter p" and "letter p" both name
+ *  p, because the store already holds "p is a letter". Read as one literal
+ *  term instead, the whole phrase matches nothing, so a store that answers
+ *  "what is p" walls on "what is the letter p".
+ *
+ *  A closed rule, not a grammar: the split only stands when a remembered
+ *  isa-fact pairs exactly this class word with exactly this thing, so an
+ *  ordinary multi-word term ("body of water", "task controller") never
+ *  splits. Splits are tried shortest-class-word first and the first confirmed
+ *  one wins, so the answer is a pure function of the fact set rather than of
+ *  row order. Returns the classified term, or null. */
+function apposedFactTerm(term, rows, normFactTerm) {
+  const words = String(term || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return null;
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  if (!isa.length) return null;
+  for (let take = 1; take < words.length; take += 1) {
+    const kinds = factTermVariants(normFactTerm, words.slice(0, take).join(" "));
+    const thing = words.slice(take).join(" ");
+    const things = factTermVariants(normFactTerm, thing);
+    if (isa.some((f) => things.has(f.subject) && kinds.has(f.object))) return thing;
+  }
+  return null;
+}
+
 /** Five sibling readers closing the gap left
  *  by ISA_ASK_RE's own family: forward yes/no and reverse-by-object shapes for
  *  `mgx:capableOf`, `mgx:hasA`, and the ISA-family predicates. None of these
@@ -8153,7 +8237,19 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       subject = focusLabel;
       focusSubstituted = true;
     }
-    const variants = factTermVariants(normFactTerm, subject);
+    let variants = factTermVariants(normFactTerm, subject);
+    // "what is the letter p" names p, not a term spelled "letter p" — see
+    // apposedFactTerm. Tried only where the phrase itself names nothing on
+    // either side of any remembered fact, so a term that already answers keeps
+    // its own answer.
+    const knownRows = await factRows(memoryDir, cache);
+    if (!knownRows.some((f) => variants.has(f.subject) || variants.has(f.object))) {
+      const apposed = apposedFactTerm(subject, knownRows, normFactTerm);
+      if (apposed) {
+        subject = apposed;
+        variants = factTermVariants(normFactTerm, subject);
+      }
+    }
     // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
     // bias-weighted ranking below needs each hit's sourceIds to resolve which
     // bundle it came from (memory/bias.mjs's biasForRow). A live world's secret
@@ -11520,7 +11616,23 @@ async function describeGrainRescue(graph, term) {
   return null;
 }
 
-async function describeWrapperAnswer(query, { config, source, focus, graph, tel = null }) {
+/** apposedFactTerm for the describe lane: the same closed apposition rule,
+ *  plus the two gates a describe target needs. It declines when the phrase
+ *  resolves to a code-map entity of its own, and when memory already holds a
+ *  fact naming the phrase on either side — either way the phrase means itself
+ *  and reading past it would answer a different question. */
+async function apposedDescribeTerm(term, { graph, memoryDir, cache }) {
+  if (!memoryDir || !/\s/.test(String(term || ""))) return null;
+  if (await resolveEntity(graph, term)) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir, cache);
+  const variants = factTermVariants(normFactTerm, term);
+  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  return apposedFactTerm(term, rows, normFactTerm);
+}
+
+async function describeWrapperAnswer(query, { config, source, focus, graph, memoryDir = null, cache = null, tel = null }) {
   // The detailed-summary/overview phrasings belong to the completions rescue
   // (4e, tried right after this lane) — applyPreambleFrames' show/give-me
   // bridge would otherwise rewrite them into a describe this lane claims
@@ -11563,6 +11675,10 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
       // — resolveSymbol (codegraph.mjs) has no component/overlap tier at all,
       // so a leading "the"/"a"/"an" is pure noise here, safe to strip.
       term = term.replace(/^(?:the|a|an)\s+/i, "");
+      // "tell me about the letter p" describes p — see apposedFactTerm. Tried
+      // only where the phrase names nothing itself, in the code map or in
+      // memory, so a real symbol or a taught multi-word term keeps its answer.
+      term = (await apposedDescribeTerm(term, { graph, memoryDir, cache })) || term;
       // The stale-modifier residue guard, carried into this lane — the last
       // of the 1.4 family without it: "describe the old Task class" must not
       // return the Task card with "old" silently swallowed. The resolver's
@@ -13890,7 +14006,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // richer answer unmolested. A last-resort rescue, never a competing route:
   // it only claims the turn if /describe actually resolves the captured term.
   if (miss && recordMiss && via === "composed") {
-    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, tel });
+    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, memoryDir, cache, tel });
     if (described) {
       answer = described.text; via = described.miss ? "miss" : "describe"; recordMiss = !!described.miss;
       // The composed engine's failed parse above (`via` was still "composed"
@@ -15680,7 +15796,16 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // layer, so a forgiving shell answers "stats" the way it answers "/stats" instead
   // of falling through to the generic orientation.
   const bareCmd = asBareCommand(workingLine);
-  if (bareCmd) return withLast(await runCommand(bareCmd, ctx), "use a specific tool/command directly");
+  if (bareCmd) {
+    // "describe the letter p" routes straight to /describe with the whole
+    // phrase as its symbol, so it never reaches the describe-wrapper rescue's
+    // own apposition read. Same rule and the same gates, applied here too.
+    const describeArg = bareCmd.match(/^\/describe\s+(.+)$/i)?.[1];
+    const apposed = describeArg
+      ? await apposedDescribeTerm(describeArg, { graph, memoryDir, cache: factRowsCache })
+      : null;
+    return withLast(await runCommand(apposed ? `/describe ${apposed}` : bareCmd, ctx), "use a specific tool/command directly");
+  }
 
   // GUESS-THE-NUMBER — opening moves, and (with a game standing) the
   // closed-set continuation replies. Checked before the conversational layer
@@ -16058,6 +16183,22 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       // trailer. answerMemoryClassQuery serves both shapes through one lane.
       if (!memClass.miss && memClass.kind !== "count") turn.goal = goal;
       if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
+      return withLast(turn, goal);
+    }
+  }
+  // "words with the letter p in it" — the store's own vocabulary, filtered by a
+  // letter. Ahead of the count/list lanes: "show me words with the letter p"
+  // otherwise reads as a membership list over a taught class called "words".
+  if (memoryDir) {
+    const lettered = await answerWordsWithLetter(memoryDir, workingLine, factRowsCache);
+    if (lettered) {
+      const goal = "list the words I know that contain a given letter";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerWordsWithLetter — matched a closed words-containing-a-letter phrasing over the store's own subject/object terms");
+      const turn = plainTurn(workingLine, lettered.text, { via: lettered.miss ? "miss" : "fact", miss: !!lettered.miss, focus });
+      if (!lettered.miss) turn.goal = goal;
+      turn.lane = lettered.miss ? "honest-miss" : "ask-set";
+      if (lettered.pending) turn.detail = { traversal: null, matches: [], pending: lettered.pending };
       return withLast(turn, goal);
     }
   }
