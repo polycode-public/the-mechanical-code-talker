@@ -4049,6 +4049,16 @@ async function generalVerbTeach(payload) {
   // trailing "?" is still an unambiguous "this is a question" marker.
   if (/\?\s*$/.test(p)) return null;
   if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(p)) return null; // another frame's territory — stand down
+  // "words like cat"/"other words like cat" fits this frame's own shape
+  // (subject "words", verb "like", object "cat") just as happily as it fits
+  // the SKOS synonym-lookup lane's SKOS_SYNONYM_RE — and without this guard,
+  // whichever lane runs first in the outer dispatch wins the turn, which
+  // used to be this one, storing a junk "words mgx:like cat" fact and never
+  // giving the synonym lane a turn at all. SKOS_SYNONYM_RE is declared later
+  // in this file, but only ever read here once a real turn calls this
+  // function — long after the whole module (and the const) has finished
+  // loading — so referencing it this early in the file is safe.
+  if (SKOS_SYNONYM_RE.test(p)) return null; // the synonym/related-word lane owns this shape
   const m = p.match(GENERAL_VERB_TEACH_RE);
   if (!m) return null;
   let [, subjectRaw, verbRaw, objectRaw] = m;
@@ -14895,6 +14905,14 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
   // fragment happily parses "dog have tail?" as the declarative it is not,
   // which stored a Fact at teach trust over a FLOW-0 vocabulary question.
   if (/\?\s*$/.test(String(line).trim())) return null;
+  // "words like cat"/"other words like cat" fits the SKOS synonym-lookup
+  // lane's own SKOS_SYNONYM_RE just as happily as it fits the plain ACE
+  // relation pattern ("like" is a registered lexicon verb, so parseRelation
+  // reads "words like cat" as a clean subject/verb/object triple with no
+  // residue) — and since this function runs before the SKOS lane gets a
+  // turn, it used to win every time, storing a junk "words mgx:like cat"
+  // fact and never letting the synonym lane answer at all.
+  if (SKOS_SYNONYM_RE.test(String(line).trim())) return null; // the synonym/related-word lane owns this shape
   try {
     // THE DATED TEACH FRAME — "<sentence> as of <date>". A caller that
     // already resolved a date (teachLane, recursing into its own
