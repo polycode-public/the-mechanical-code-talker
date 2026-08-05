@@ -17,7 +17,11 @@ import { buildDemoSiteSnapshot, repoRoot } from "../test-e2e/helpers/demo-site.m
 import { serveDirectory } from "../test-e2e/helpers/static-server.mjs";
 
 // The hero video element and the OG poster behind it are both 2:1, so the
-// capture is shot at that shape rather than cropped to it afterwards.
+// capture is shot at that shape rather than cropped to it afterwards. The
+// window is the same shape one size up: the deck, the map panel and the whole
+// 3D stage only fit together in a taller window, and playwright scales the
+// page down to the recorded size with no letterboxing while the shape matches.
+const WINDOW = { width: 1600, height: 800 };
 const FRAME = { width: 1280, height: 640 };
 const CLIP_PATH = path.join(repoRoot, "clips", "hero-mudiii.webm");
 
@@ -32,9 +36,9 @@ const ACTION_TIMEOUT_MS = 20_000;
 const CLIP_END_MS = 75_000;
 const BEATS = [
   { at: 12_000, note: "look down on the whole square", run: pickCamera("overhead") },
-  { at: 26_000, note: "ride along at eye level", run: pickCamera("pov") },
-  { at: 38_000, note: "follow a fox instead of its prey", run: followAPredator },
-  { at: 50_000, note: "drop food on the square", run: placeFood },
+  { at: 26_000, note: "follow a fox instead of its prey", run: followAPredator },
+  { at: 38_000, note: "ride along at eye level", run: pickCamera("pov") },
+  { at: 46_000, note: "drop food on the square", run: placeFood },
   { at: 58_000, note: "tell a fox where the goblin is", run: teachASighting },
   { at: 64_000, note: "move to another square", run: switchSquare },
 ];
@@ -96,10 +100,12 @@ async function followAPredator(page) {
   await resumeBoard(page);
 }
 
-/** Arm the food pill and drop a morsel on the square. The pill disarms itself
+/** Arm the food pill and drop a morsel on the square, seen from above so the
+ *  morsel and whoever goes for it are both in frame. The pill disarms itself
  *  once a morsel actually lands, so a cell the board refuses (a building, an
  *  occupied square) leaves it armed and the next cell is tried. */
 async function placeFood(page) {
+  await pickCamera("overhead")(page);
   for (const cell of ["cell-5-5", "cell-6-6", "cell-4-6", "cell-7-4"]) {
     if ((await attribute(page, "#foodPill", "aria-pressed")) !== "true") await press(page, "#foodPill");
     await page.evaluate((target) => window.mudiiiHandleSceneClick?.(target), cell);
@@ -143,12 +149,17 @@ async function switchSquare(page) {
   await pickCamera("overhead")(page);
 }
 
-/** Put the 3D stage in the middle of the window. The deck alone fills a
- *  640px-tall window, so without this the clip is a film of some sliders.
- *  Re-applied after every beat: a control that reboots the square can leave
- *  the page scrolled somewhere else. */
+/** Frame the square. When the deck and the whole 3D stage fit in the window
+ *  together, the top of the page is the shot: controls, the map panel and the
+ *  square, all at once. When they do not, the stage alone is worth the frame.
+ *  Re-applied after every beat, because a control that reboots the square can
+ *  leave the page scrolled somewhere else. */
 const frameTheSquare = (page) => page.evaluate(() => {
-  document.querySelector("#sceneStage")?.scrollIntoView({ block: "center" });
+  const stage = document.querySelector("#sceneStage");
+  if (!stage) return;
+  const bottom = stage.getBoundingClientRect().bottom + window.scrollY;
+  if (bottom <= window.innerHeight) window.scrollTo(0, 0);
+  else stage.scrollIntoView({ block: "center" });
 });
 
 /** Wait until the square is drawn, its cast is on the HUD and the board is
@@ -189,7 +200,7 @@ async function main() {
   // has no GPU — without these flags the canvas records as a black square.
   const browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--use-gl=swiftshader"] });
   const context = await browser.newContext({
-    viewport: FRAME,
+    viewport: WINDOW,
     recordVideo: { dir: videoDir, size: FRAME },
   });
   const page = await context.newPage();
