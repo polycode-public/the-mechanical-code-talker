@@ -31,6 +31,33 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
+## In flight (claims + neutrality delivery, coordinator session 2026-08-06)
+
+Live background sub-agents and their worktrees under `.claude/worktrees/`; each merges to
+`main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
+merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
+
+- [ ] **claim:cite rescope** (PLAN_CLAIMS T2, decision 13) — worktree
+  `agent-adb126115561425b3`. Includes the first-ask reference-pack citation gap
+  (citation emitted before the fact persists; resolvable only on the second ask) —
+  fix in the reference answer-and-persist path if small, else reported here as this
+  item's remainder.
+- [ ] **claim:planner envelope** (PLAN_CLAIMS T10) — worktree `agent-a1b2c7ecdd5d90df1`;
+  long benchmark running as its own background process.
+- [ ] **claim:ground-gate / commonsense / lexicon** (PLAN_CLAIMS T11–T13) — worktree
+  `agent-a5447d1c8ec222100`.
+- [ ] **Neutrality wave 2** (PLAN_GRAPH_NEUTRALITY T4–T6 + the `corpus/domains/code/`
+  relocation) — worktree `agent-acc00322cd9301ca1`.
+- [ ] **Queued, not yet dispatched:** PLAN_CLAIMS T14 (claims page; needs cite,
+  ground-gate and planner JSON committed first) and T15 (CI proposal); neutrality wave 3
+  (T7 docs, T8 tier2 packs, T9 /capabilities domain listing). Coordinator end-game:
+  re-run every claim rig after the neutrality merges, full suite, push batches, pipeline
+  watch.
+- [ ] **T9 remainder (research adapters):** `wikidata-live.mjs` duplicates
+  `wikipedia-live.mjs`'s throttle/cool-off/cache machinery (consolidation pass), and the
+  chat research lane still has a single provider slot so Wikidata is registered but not
+  lane-wired — wiring it is a product decision recorded here, not taken silently.
+
 ## Open items
 
 - [ ] **Politeness wrapper + known memory term still walls.** `please tell me what you know
