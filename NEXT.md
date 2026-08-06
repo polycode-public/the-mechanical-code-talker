@@ -37,15 +37,9 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **Research-adapter courtesy consolidation** — `wikidata-live.mjs` duplicates
-  `wikipedia-live.mjs`'s throttle/cool-off/cache machinery; extract it into one shared
-  module with both adapters' behavior unchanged (contract test + adapter test files are
-  the gate). In flight — worktree recorded on dispatch. The related lane-wiring
-  question (single provider slot) is recorded as an operator question in
-  `PLAN_GRAPH_NEUTRALITY.md`'s delivery status.
-- [ ] **Coordinator end-game** — after the consolidation merges: re-run every claim
-  rig against the settled engine and commit drift, full suite, roll the version, push
-  batch 2, watch the pipeline to green.
+- [ ] **Coordinator end-game** — the courtesy consolidation is merged (2a4df9e1);
+  remaining: the claim-rig re-run against the settled engine (running) and its drift
+  commit, full suite, version roll, push batch 2, pipeline watch to green.
 
 ## Open items
 
