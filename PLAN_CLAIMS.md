@@ -531,8 +531,11 @@ Updated as waves merge to local main (2026-08-06):
   fallback misreads as facts — queued in NEXT.md as an engine fix), commonsense
   before 0 / after 0 / delta 0, lexicon OOV 50.6% → 35.0% (delta −15.6) with counts
   matching ground truth.
-- T2 cite — in flight under decision 13's rescope.
-- T10 planner — in flight.
+- T10 planner — landed (ebe45661): three envelope columns (hanoi 7 disks under 1s /
+  first over 10s at 30, with 9–22 honest misses past the 300-move search cap;
+  blocksworld 9/16; gripper 7/12), per-run child-process isolation after an in-process
+  OOM, `solvePlannerInstance` exported for the page's benchmark button.
+- T2 cite — in flight under decisions 13 and 14.
 - T14 page, T15 CI proposal — queued on the above.
 
 **Open question for the operator (proceeding without an answer, per the overnight
