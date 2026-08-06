@@ -1,0 +1,190 @@
+{
+  "comment": "code-domain lexicon extension fixture for claim:lexicon — modern software/infra terms not in lexicon-core.json (kubernetes, containers, distributed-systems, observability, build-tooling). Shape matches src/services/extensions.mjs mergedLexiconExtra / loadLexicon(extra).",
+  "nouns": {
+    "kubernetes": {},
+    "container": {},
+    "docker": {},
+    "microservice": {},
+    "middleware": {},
+    "throughput": {},
+    "kafka": {},
+    "webhook": {},
+    "provisioning": {},
+    "terraform": {},
+    "registry": {},
+    "namespace": {},
+    "ingress": {},
+    "autoscaling": {},
+    "serverless": {},
+    "sharding": {},
+    "checksum": {},
+    "encryption": {},
+    "credential": {},
+    "subnet": {},
+    "gateway": {},
+    "telemetry": {},
+    "observability": {},
+    "dashboard": {},
+    "rollback": {},
+    "sandbox": {},
+    "monorepo": {},
+    "changelog": {},
+    "linting": {},
+    "boilerplate": {},
+    "vulnerability": {},
+    "hotfix": {},
+    "handshake": {},
+    "payload": {},
+    "firmware": {},
+    "bytecode": {},
+    "linker": {},
+    "sourcemap": {},
+    "transpiler": {},
+    "polyfill": {},
+    "shim": {},
+    "bundler": {},
+    "minifier": {},
+    "webpack": {},
+    "pnpm": {},
+    "monolith": {},
+    "shard": {},
+    "throttling": {},
+    "backpressure": {},
+    "timeout": {},
+    "replica": {},
+    "checkpoint": {},
+    "jitter": {},
+    "retry": {},
+    "backoff": {},
+    "quorum": {},
+    "consensus": {},
+    "rollout": {},
+    "percentile": {},
+    "histogram": {},
+    "cardinality": {},
+    "aggregation": {},
+    "denormalization": {},
+    "normalization": {},
+    "partitioning": {},
+    "consistency": {},
+    "availability": {},
+    "durability": {},
+    "idempotency": {},
+    "statelessness": {},
+    "breakpoint": {},
+    "watchpoint": {},
+    "profiler": {},
+    "coroutine": {},
+    "mixin": {},
+    "decorator": {},
+    "annotation": {},
+    "encapsulation": {},
+    "polymorphism": {},
+    "stacktrace": {}
+  },
+  "verbs": {
+    "containerize": {},
+    "orchestrate": {},
+    "provision": {},
+    "scaffold": {},
+    "instrument": {},
+    "replicate": {},
+    "serialize": {},
+    "deserialize": {},
+    "hash": {},
+    "encrypt": {},
+    "decrypt": {},
+    "authenticate": {},
+    "authorize": {},
+    "paginate": {},
+    "debounce": {},
+    "memoize": {},
+    "normalize": {},
+    "denormalize": {},
+    "sanitize": {},
+    "tokenize": {},
+    "transpile": {},
+    "minify": {},
+    "bundle": {},
+    "lint": {},
+    "stub": {},
+    "fuzz": {}
+  },
+  "adjectives": {
+    "idempotent": {
+      "type": "subclass"
+    },
+    "stateless": {
+      "type": "subclass"
+    },
+    "ephemeral": {
+      "type": "subclass"
+    },
+    "asynchronous": {
+      "type": "subclass"
+    },
+    "synchronous": {
+      "type": "subclass"
+    },
+    "distributed": {
+      "type": "subclass"
+    },
+    "concurrent": {
+      "type": "subclass"
+    },
+    "mutable": {
+      "type": "subclass"
+    },
+    "scalable": {
+      "type": "subclass"
+    },
+    "atomic": {
+      "type": "subclass"
+    },
+    "transactional": {
+      "type": "subclass"
+    },
+    "declarative": {
+      "type": "subclass"
+    },
+    "imperative": {
+      "type": "subclass"
+    },
+    "reentrant": {
+      "type": "subclass"
+    },
+    "lossy": {
+      "type": "subclass"
+    },
+    "lossless": {
+      "type": "subclass"
+    },
+    "eventual": {
+      "type": "subclass"
+    },
+    "durable": {
+      "type": "subclass"
+    },
+    "immutable": {
+      "type": "subclass"
+    },
+    "thread-safe": {
+      "type": "subclass"
+    }
+  },
+  "properNames": [
+    "Kubernetes",
+    "Terraform",
+    "Kafka",
+    "Webpack",
+    "Prometheus",
+    "Grafana",
+    "Redis",
+    "PostgreSQL",
+    "MongoDB",
+    "Nginx",
+    "Jenkins",
+    "CircleCI",
+    "Datadog"
+  ]
+}
