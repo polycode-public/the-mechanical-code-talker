@@ -28,15 +28,16 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
   const dir = await mkdtemp(join(tmpdir(), "tmct-bare-"));
   try {
     // `tmct` with piped stdin = the --plain readline shell in an empty dir: honest
-    // empty-graph banner, a greeting turn, clean exit 0, .tmct/ created.
+    // domain-neutral banner, a greeting turn, clean exit 0, .tmct/ created.
     // (TMCT_NO_SEED: the W3 seeded-bootstrap path has its own suite — wiring-seed.test.mjs)
     const bare = spawnSync(process.execPath, [BIN], {
       encoding: "utf8", input: "hi\n/exit\n", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
     });
     assert.equal(bare.status, 0, bare.stderr);
-    assert.match(bare.stdout, /no code graph loaded — starting empty/); // #3: 0-module orientation
-    assert.match(bare.stdout, /Hi\. I'm tmct/, "the greeting leads with identity + a working capability, not an apology"); // #3
-    assert.doesNotMatch(bare.stdout, /Ask me about this codebase/, "still doesn't over-promise structure-query capability"); // #3
+    assert.match(bare.stdout, /Run `tmct init` to seed a starter vocabulary, or teach me directly/);
+    assert.match(bare.stdout, /Hi\. I'm tmct/, "the greeting leads with identity + a working capability, not an apology");
+    assert.doesNotMatch(bare.stdout, /Ask me about this codebase/, "still doesn't over-promise structure-query capability");
+    assert.doesNotMatch(bare.stdout, /code graph|code index|no code graph loaded/, "a bare install never hints at the code domain");
     const names = await readdir(join(dir, ".tmct"));
     assert.ok(names.some((n) => /^session-.*\.md$/.test(n)), "the bare invocation wrote its session log");
   } finally {
