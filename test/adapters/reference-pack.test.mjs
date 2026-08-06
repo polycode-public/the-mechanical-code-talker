@@ -239,6 +239,20 @@ test("isaOf: an of-chain reads through classifier heads only — a partitive con
   assert.equal(isaOf("Chess is a game of skill.", lex), "game");
 });
 
+test("isaOf: an of-chain also reads through partitive and collective heads to the real class", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("Birds are a group of animals with backbones.", lex), "animal");
+  assert.equal(isaOf("An atom is a piece of matter.", lex), "matter");
+  assert.equal(isaOf("A bouquet is a bunch of flowers.", lex), "flower");
+  assert.equal(
+    isaOf("An otter is a member of the weasel family.", lex),
+    null,
+    "member stays excluded — composition, not classification",
+  );
+});
+
 test("isaOf: a mid-sentence parenthetical aside is skipped, and an of-chain reads through a quantifier to the real classifier chain", async () => {
   const { isaOf } = await import("../../src/domain/reference-pack.mjs");
   const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");

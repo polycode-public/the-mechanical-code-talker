@@ -197,9 +197,22 @@ const ISA_ARTICLES = new Set(["a", "an", "the"]);
 // The classifier heads an of-chain reads THROUGH to the real class ("a kind
 // of dog" → dog). Any other head before "of" keeps the outer phrase: "a body
 // of ice" states composition, and "a game of skill" is a game — neither
-// makes the of-object the class.
+// makes the of-object the class. Partitive, collective and measure heads
+// ("a group of animals", "a piece of matter", "an accumulation of vegetation")
+// read through the same way — the of-object names the class, the head names
+// only how much of it or how it is packaged. "member" and "body" are the
+// deliberate exceptions: "a member of the cat family" and "a body of water"
+// name membership or composition, not what the thing is, so they stay off
+// this set and fall through to ISA_GENERIC_HEADS' null instead.
 const ISA_OF_READ_THROUGH = new Set([
   "type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus",
+  "group", "part", "parts", "piece", "bunch", "bit", "name", "set", "way", "unit", "family",
+  "ability", "color", "series", "mammal", "practice", "list", "amount", "mass",
+  "reworking", "blockage", "goddess", "aura", "development", "consisting",
+  "announcement", "messengers", "subset", "carrying", "photograph", "adding",
+  "use", "science", "songbird", "symptom", "accumulation", "number", "suborder",
+  "falling", "management", "evaluation", "superorder", "activity", "interlacing",
+  "introduction",
 ]);
 // A quantifier naming a share of a set ("either of two species", "one of
 // several kinds") is never itself the class — it has no noun reading at all
@@ -214,6 +227,16 @@ const ISA_OF_QUANTIFIER = new Set(["either", "one", "each", "both", "any"]);
  *  predicate counts only when the head is an inflected plural the lexicon
  *  folds ("are animals that…" → animal, but "is light" stays null); a
  *  generic classifier head is no isa at all. */
+// A classifier/quantifier/generic-head word can appear inflected ("kinds of
+// dog", "sets of threads") — the sets above hold singular forms, so every
+// membership check folds the word through the lexicon to its lemma first.
+// An unresolvable word (the quantifiers are not nouns at all) falls back to
+// itself unchanged, so the raw-string check still applies.
+function classifierKeyFor(word, lexicon) {
+  const entry = lookupNoun(lexicon, word);
+  return entry ? normFactTerm(entry.lemma) : word;
+}
+
 export function isaOf(plain, lexicon) {
   const m = withoutParentheticals(String(plain ?? "")).match(ISA_RE);
   if (!m) return null;
@@ -227,14 +250,17 @@ export function isaOf(plain, lexicon) {
   let headWords = window;
   for (let ofIdx = headWords.indexOf("of"); ofIdx > 0; ofIdx = headWords.indexOf("of")) {
     const outer = headWords[ofIdx - 1]?.split("-").pop();
-    if (outer && (ISA_OF_READ_THROUGH.has(outer) || ISA_OF_QUANTIFIER.has(outer))) { headWords = headWords.slice(ofIdx + 1); continue; }
+    const outerKey = outer && classifierKeyFor(outer, lexicon);
+    if (outerKey && (ISA_OF_READ_THROUGH.has(outerKey) || ISA_OF_QUANTIFIER.has(outerKey))) { headWords = headWords.slice(ofIdx + 1); continue; }
     headWords = headWords.slice(0, ofIdx);
     break;
   }
   while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
   if (!headWords.length) return null;
   const headToken = headWords[headWords.length - 1].split("-").pop();
-  if (!headToken || ISA_GENERIC_HEADS.has(headToken)) return null;
+  if (!headToken) return null;
+  const headKey = classifierKeyFor(headToken, lexicon);
+  if (ISA_GENERIC_HEADS.has(headToken) || ISA_GENERIC_HEADS.has(headKey)) return null;
   const entry = lookupNoun(lexicon, headToken);
   if (!entry) return null;
   const lemma = normFactTerm(entry.lemma);
