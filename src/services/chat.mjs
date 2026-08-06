@@ -14588,20 +14588,31 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
     // Raw query first (the long-standing contract), then ONE retry with the
-    // normalized form — gated to the no-envelope bootstrap ONLY: on the FIRST
-    // turn of a graph-less session the ask engine throws before its own
-    // normalize pass runs, so a politeness-wrapped vocabulary question
-    // ("could you tell me what a dog is") reaches this lane still wearing the
-    // wrapper no reader matches. From turn 2 on (envelope present) the
-    // pipeline unwraps it upstream, and an unrestricted retry would let
-    // normalization-mangled text reach readers whose guards were written for
-    // the raw surface (the pronoun-subject identity family).
-    const normalizedForFacts = envelope ? null : normalizeQuery(String(query));
+    // courtesy wrapper peeled off. A politeness-wrapped vocabulary question
+    // ("could you tell me what a dog is", "please tell me what you know about
+    // dog") reaches this lane still wearing a wrapper no reader matches, so
+    // without the retry it walls while its bare form answers.
+    //
+    // The peel is applyPreambleFrames, not the full normalizeQuery. Only the
+    // closed wrapper frames are wanted here; normalizeQuery goes on to strip
+    // filler words, and one of those is the pronoun in "what do you know
+    // about X" — the very word that shape's reader anchors on. Peeling
+    // rebuilt the question and the filler strip took it straight back apart,
+    // which is why a courtesy-wrapped memory question about a term this
+    // session KNOWS used to wall. It is also why the retry no longer has to
+    // be held to the no-envelope bootstrap turn: what made an unrestricted
+    // retry unsafe was normalization-mangled text reaching readers whose
+    // guards were written for the raw surface, and the closed frames do not
+    // mangle — they either match a whole wrapper or leave the string alone.
+    //
+    // The retry can only run when the raw read already returned nothing, so
+    // it turns a wall into an answer and never overrides one.
+    const peeledForFacts = applyPreambleFrames(String(query));
     const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
-      ?? (normalizedForFacts && normalizedForFacts !== String(query).trim()
-        ? (await factAnswer(memoryDir, normalizedForFacts, envelope, miss, biasByBundle, cache, newFocus?.label))
-          ?? (await factReadBack(memoryDir, normalizedForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
+      ?? (peeledForFacts && peeledForFacts !== String(query).trim()
+        ? (await factAnswer(memoryDir, peeledForFacts, envelope, miss, biasByBundle, cache, newFocus?.label))
+          ?? (await factReadBack(memoryDir, peeledForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
         : null);
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;

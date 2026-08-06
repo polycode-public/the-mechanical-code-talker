@@ -87,17 +87,7 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
 
 ## Open items
 
-- [ ] **Politeness wrapper + known memory term still walls.** `please tell me what you know
-  about dog` returns the code-question decline while bare `what do you know about dog`
-  answers. The unknown-term siblings are fixed (`2a96481a`: the teach-offer block now peels
-  wrappers as a fallback), so this is that fix's remainder. Mechanism, verified: the fact
-  lane's only unwrap path is the `!envelope` bootstrap retry in `src/services/chat.mjs`
-  (near the raw-query-first contract comment), which uses `normalizeQuery`, and
-  `normalizeQuery` strips the pronoun ("what do you know about dog" becomes "what do know
-  about dog"), which `KNOW_ABOUT_RE` no longer matches. A fix either switches that retry to
-  `applyPreambleFrames` or changes `normalizeQuery`'s stopword handling; both touch the
-  deliberately narrow raw-first/one-retry contract, so it needs its own careful pass with
-  the full templates+grammar corpus lanes as the regression gate.
+None open.
 
 ### Questions blocking work
 
