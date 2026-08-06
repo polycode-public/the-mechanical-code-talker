@@ -526,9 +526,10 @@ Updated as waves merge to local main (2026-08-06):
   median 0 days.
 - T9 research sources + Wikidata — landed (b799facf, adf65d46): contract 23/23, rig
   names 2 sources.
-- T11–T13 — landed (8cfca414..d557fd78): ground-gate matrix 3.0% accepted-wrong
-  (threshold max 5; the three cases are narrative/gibberish prose the general-verb
-  fallback misreads as facts — queued in NEXT.md as an engine fix), commonsense
+- T11–T13 — landed (8cfca414..d557fd78): ground-gate matrix 3.0% accepted-wrong at
+  landing — the three cases were narrative/gibberish prose the general-verb fallback
+  misread as facts, fixed in cbe13245, and the re-run against the settled engine
+  (ce31be77) reads 0% accepted-wrong — commonsense
   before 0 / after 0 / delta 0, lexicon OOV 50.6% → 35.0% (delta −15.6) with counts
   matching ground truth.
 - T10 planner — landed (ebe45661): three envelope columns (hanoi 7 disks under 1s /
