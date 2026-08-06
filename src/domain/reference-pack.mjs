@@ -157,7 +157,26 @@ export function sentencesUpTo(text, cap) {
   return out || String(text ?? "").slice(0, cap);
 }
 
-const ISA_RE = /^[A-Z][^.!?]{0,80}? (?:is|are) (?:(a|an|the) )?([a-z][a-z -]{1,60})/;
+// The preamble before the copula is bounded only by the sentence itself
+// (no "is"/"are" can cross a ".", "!" or "?"), not by a fixed character
+// count — an appositive list ("also called cougars, mountain lions, …")
+// can push the real copula well past what a short cap would reach.
+const ISA_RE = /^[A-Z][^.!?]*? (?:is|are) (?:(a|an|the) )?([a-z][a-z -]{1,60})/;
+
+// A "(…)" aside breaks the plain-lowercase word class ISA_RE's capture group
+// matches against, and can itself push the real copula past any fixed cap —
+// so every parenthetical is dropped before matching, not just accounted for
+// in the cap. Applied to the whole string: a later sentence's own aside
+// never reaches back to move the first sentence's boundary.
+function withoutParentheticals(text) {
+  let out = text;
+  let prior;
+  do {
+    prior = out;
+    out = out.replace(/\s*\([^()]*\)/g, "");
+  } while (out !== prior);
+  return out;
+}
 
 // Words that end the noun phrase: a relative clause or a trailing modifier
 // carries detail, not the category ("a place where ships shelter" → place).
@@ -182,14 +201,21 @@ const ISA_ARTICLES = new Set(["a", "an", "the"]);
 const ISA_OF_READ_THROUGH = new Set([
   "type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus",
 ]);
+// A quantifier naming a share of a set ("either of two species", "one of
+// several kinds") is never itself the class — it has no noun reading at all
+// — so the of-chain reads through it the same way it reads through a
+// classifier head, on to whatever the rest of the chain names.
+const ISA_OF_QUANTIFIER = new Set(["either", "one", "each", "both", "any"]);
 
 /** The isa lemma of a lead's first sentence, or null. The copula must sit in
- *  the first sentence; an of-chain resolves to its final noun ("a kind of
- *  dog" → dog); a bare-plural predicate counts only when the head is an
- *  inflected plural the lexicon folds ("are animals that…" → animal, but
- *  "is light" stays null); a generic classifier head is no isa at all. */
+ *  the first sentence; a parenthetical aside is skipped, not read as part of
+ *  the class; an of-chain resolves to its final noun ("a kind of dog" →
+ *  dog; "either of two species (…) of rodents" → rodent); a bare-plural
+ *  predicate counts only when the head is an inflected plural the lexicon
+ *  folds ("are animals that…" → animal, but "is light" stays null); a
+ *  generic classifier head is no isa at all. */
 export function isaOf(plain, lexicon) {
-  const m = String(plain ?? "").match(ISA_RE);
+  const m = withoutParentheticals(String(plain ?? "")).match(ISA_RE);
   if (!m) return null;
   const bare = !m[1];
   const window = [];
@@ -201,7 +227,7 @@ export function isaOf(plain, lexicon) {
   let headWords = window;
   for (let ofIdx = headWords.indexOf("of"); ofIdx > 0; ofIdx = headWords.indexOf("of")) {
     const outer = headWords[ofIdx - 1]?.split("-").pop();
-    if (outer && ISA_OF_READ_THROUGH.has(outer)) { headWords = headWords.slice(ofIdx + 1); continue; }
+    if (outer && (ISA_OF_READ_THROUGH.has(outer) || ISA_OF_QUANTIFIER.has(outer))) { headWords = headWords.slice(ofIdx + 1); continue; }
     headWords = headWords.slice(0, ofIdx);
     break;
   }

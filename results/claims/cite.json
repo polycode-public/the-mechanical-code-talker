@@ -1,13 +1,13 @@
 {
   "name": "cite",
-  "generatedAt": "2026-08-06T01:29:26.650Z",
-  "commit": "40747f476a0847e97ade9a18e892ded273f7d85e",
+  "generatedAt": "2026-08-06T01:49:01.706Z",
+  "commit": "599c655da7a1c70efaf658132c5a8db244b8e9e9",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "answers",
   "threshold": {
     "direction": "min",
-    "value": 44
+    "value": 48
   },
   "sources": [
     "test-benchmarks/claims/cite-set.jsonl",
@@ -15,9 +15,9 @@
   ],
   "value": 44,
   "detail": {
-    "total": 44,
+    "total": 48,
     "refusals": 0,
-    "runtimeMs": 20194,
+    "runtimeMs": 42961,
     "byKind": {
       "seed": {
         "total": 13,
@@ -30,7 +30,7 @@
         "refusals": 0
       },
       "reference-pack": {
-        "total": 8,
+        "total": 12,
         "resolved": 8,
         "refusals": 0
       },
@@ -43,9 +43,31 @@
     "poolCoverage": {
       "citedAnswers": 5,
       "totalNonRefusal": 222,
-      "runtimeMs": 17999,
+      "runtimeMs": 30973,
       "pool": "test-benchmarks/chatbench/graded-pool.jsonl"
     },
-    "laneNote": "the pool's tags/construction fields are case-level and mix citing with non-citing turns (e.g. honesty-miss covers both a disjointness proof and a number-guessing game); no existing pool field isolates a citing-answer lane, so this claim measures a hand-authored fixture instead of a pool filter"
+    "laneNote": "the pool's tags/construction fields are case-level and mix citing with non-citing turns (e.g. honesty-miss covers both a disjointness proof and a number-guessing game); no existing pool field isolates a citing-answer lane, so this claim measures a hand-authored fixture instead of a pool filter",
+    "failures": [
+      {
+        "caseId": "ref-chinchilla",
+        "turn": 1,
+        "why": "unresolvable citation(s): reference article \"Chinchilla\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Chinchilla?oldid=10906181"
+      },
+      {
+        "caseId": "ref-chinchilla",
+        "turn": 2,
+        "why": "unresolvable citation(s): reference article \"Chinchilla\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Chinchilla?oldid=10906181"
+      },
+      {
+        "caseId": "ref-puma",
+        "turn": 1,
+        "why": "unresolvable citation(s): reference article \"Puma\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Puma?oldid=10641053"
+      },
+      {
+        "caseId": "ref-puma",
+        "turn": 2,
+        "why": "unresolvable citation(s): reference article \"Puma\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Puma?oldid=10641053"
+      }
+    ]
   }
 }
