@@ -1,0 +1,40 @@
+{"id": "seed-dog", "kind": "seed", "turns": [{"say": "what is a dog"}]}
+{"id": "seed-cat", "kind": "seed", "turns": [{"say": "what is a cat"}]}
+{"id": "seed-bird", "kind": "seed", "turns": [{"say": "what is a bird"}]}
+{"id": "seed-fish", "kind": "seed", "turns": [{"say": "what is a fish"}]}
+{"id": "seed-horse", "kind": "seed", "turns": [{"say": "what is a horse"}]}
+{"id": "seed-lion", "kind": "seed", "turns": [{"say": "what is a lion"}]}
+{"id": "seed-river", "kind": "seed", "turns": [{"say": "what is a river"}]}
+{"id": "seed-boat", "kind": "seed", "turns": [{"say": "what is a boat"}]}
+{"id": "seed-chair", "kind": "seed", "turns": [{"say": "what is a chair"}]}
+{"id": "seed-book", "kind": "seed", "turns": [{"say": "what is a book"}]}
+{"id": "seed-flower", "kind": "seed", "turns": [{"say": "what is a flower"}]}
+{"id": "seed-spider", "kind": "seed", "turns": [{"say": "what is a spider"}]}
+{"id": "seed-table", "kind": "seed", "turns": [{"say": "what is a table"}]}
+{"id": "teach-hammer-tool", "kind": "teach-recall", "turns": [{"say": "every hammer is a tool", "checkCitation": false}, {"say": "what is a hammer"}]}
+{"id": "teach-guitar-instrument", "kind": "teach-recall", "turns": [{"say": "every guitar is an instrument", "checkCitation": false}, {"say": "what is a guitar"}]}
+{"id": "teach-violin-instrument", "kind": "teach-recall", "turns": [{"say": "every violin is an instrument", "checkCitation": false}, {"say": "what is a violin"}]}
+{"id": "teach-wrench-tool", "kind": "teach-recall", "turns": [{"say": "remember that a wrench is a kind of tool", "checkCitation": false}, {"say": "what is a wrench"}]}
+{"id": "teach-screwdriver-tool", "kind": "teach-recall", "turns": [{"say": "every screwdriver is a tool", "checkCitation": false}, {"say": "what is a screwdriver"}]}
+{"id": "teach-trumpet-instrument", "kind": "teach-recall", "turns": [{"say": "every trumpet is an instrument", "checkCitation": false}, {"say": "what is a trumpet"}]}
+{"id": "teach-max-individual", "kind": "teach-recall", "turns": [{"say": "max is a dog", "checkCitation": false}, {"say": "what is max"}]}
+{"id": "teach-bella-individual", "kind": "teach-recall", "turns": [{"say": "bella is a cat", "checkCitation": false}, {"say": "what is bella"}]}
+{"id": "teach-bird-fish-disjoint", "kind": "teach-recall", "turns": [{"say": "no bird is a fish", "checkCitation": false}, {"say": "is a bird a fish"}]}
+{"id": "teach-lion-bird-disjoint", "kind": "teach-recall", "turns": [{"say": "no lion is a bird", "checkCitation": false}, {"say": "is a lion a bird"}]}
+{"id": "ref-otter", "kind": "reference-pack", "turns": [{"say": "what is an otter"}, {"say": "what is an otter"}]}
+{"id": "ref-mussel", "kind": "reference-pack", "turns": [{"say": "what is a mussel"}, {"say": "what is a mussel"}]}
+{"id": "ref-barnacle", "kind": "reference-pack", "turns": [{"say": "what is a barnacle"}, {"say": "what is a barnacle"}]}
+{"id": "ref-shrew", "kind": "reference-pack", "turns": [{"say": "what is a shrew"}, {"say": "what is a shrew"}]}
+{"id": "proof-dog-animal", "kind": "proof-chain", "turns": [{"say": "is a dog an animal"}]}
+{"id": "proof-lion-animal", "kind": "proof-chain", "turns": [{"say": "is a lion an animal"}]}
+{"id": "proof-school-place", "kind": "proof-chain", "turns": [{"say": "is a school a place"}]}
+{"id": "proof-doctor-person", "kind": "proof-chain", "turns": [{"say": "is a doctor a person"}]}
+{"id": "proof-house-place", "kind": "proof-chain", "turns": [{"say": "is a house a place"}]}
+{"id": "proof-train-vehicle", "kind": "proof-chain", "turns": [{"say": "is a train a vehicle"}]}
+{"id": "proof-car-vehicle", "kind": "proof-chain", "turns": [{"say": "is a car a vehicle"}]}
+{"id": "proof-gold-metal", "kind": "proof-chain", "turns": [{"say": "is gold a metal"}]}
+{"id": "proof-iron-metal", "kind": "proof-chain", "turns": [{"say": "is iron a metal"}]}
+{"id": "proof-flower-plant", "kind": "proof-chain", "turns": [{"say": "is a flower a plant"}]}
+{"id": "proof-tree-plant", "kind": "proof-chain", "turns": [{"say": "is a tree a plant"}]}
+{"id": "proof-farmer-person", "kind": "proof-chain", "turns": [{"say": "is a farmer a person"}]}
+{"id": "proof-boat-vehicle", "kind": "proof-chain", "turns": [{"say": "is a boat a vehicle"}]}
