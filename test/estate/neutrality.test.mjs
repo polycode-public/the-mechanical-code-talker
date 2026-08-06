@@ -50,11 +50,14 @@ test("a bare session's banner, greeting, counts, code-shaped questions, help, or
         "/help",
         "what can you do",
         "/stats",
+        "/capabilities",
       ];
       for (const line of probes) {
         const { answer } = await session.turn(line);
         assertNoCodeDomainVocabulary(answer, `the "${line}" turn`);
       }
+      const { answer: capabilities } = await session.turn("/capabilities");
+      assert.ok(!capabilities.includes("loaded domains"), `a bare session's /capabilities names a domain:\n${capabilities}`);
     } finally {
       await session.close();
     }

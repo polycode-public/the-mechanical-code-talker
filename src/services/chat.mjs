@@ -15231,7 +15231,23 @@ const GOAL_BY_COMMAND = {
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk. Also carries a `goal` field mirroring runAsk's own, so
  *  withGoalLine's "Goal (inferred): …" line fires for command dispatches too. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null }) {
+/** One loaded domain as /capabilities renders it: the pack's name, the
+ *  grounding channel it declares, and what its lane vocabulary adds. A pack
+ *  that declares no grounding channel gets no grounding clause — the listing
+ *  never fills that gap in for it. */
+function domainPackLine({ name, groundingKind, groundingAdapter, commandCount, countNounCount }) {
+  const parts = [];
+  if (groundingKind === "extraction" && groundingAdapter) parts.push(`grounded by extraction through ${groundingAdapter}`);
+  else if (groundingKind === "extraction") parts.push("grounded by extraction");
+  else if (groundingKind === "taught-only") parts.push("grounded by the teach lane only");
+  const adds = [];
+  if (commandCount) adds.push(`${commandCount} command${commandCount === 1 ? "" : "s"}`);
+  if (countNounCount) adds.push(`${countNounCount} count noun${countNounCount === 1 ? "" : "s"}`);
+  if (adds.length) parts.push(`adds ${adds.join(" and ")}`);
+  return parts.length ? `${name} — ${parts.join("; ")}` : String(name);
+}
+
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -15314,9 +15330,14 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   }
 
   // /capabilities — everything a /plan request can plan over: the built-in
-  // read-only graph-query tools, plus the taught action families read straight
+  // read-only graph-query tools, the taught action families read straight
   // from this store (they only live in the registry inside a /plan request,
-  // so listing them means reading the rules, not the registry).
+  // so listing them means reading the rules, not the registry), and this
+  // session's loaded domain packs. Each domain line restates that pack's own
+  // declaration — its grounding channel and what its vocabulary adds — so the
+  // surface reports what the pack says about itself rather than a second,
+  // drifting description of it. A session with no pack active lists no
+  // domains and says nothing about them.
   if (name === "capabilities") {
     note(trace, "goal: see what /plan can plan over — built-in query tools and taught actions");
     const { declaredCapabilityNames } = await import("../domain/router/drive.mjs");
@@ -15340,6 +15361,11 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
           .join(", ");
         lines.push(`  taught:${familyName} — ${sig}`);
       }
+    }
+    const packs = Array.isArray(domainPacks) ? domainPacks : [];
+    if (packs.length) {
+      lines.push("loaded domains:");
+      for (const pack of packs) lines.push(`  ${domainPackLine(pack)}`);
     }
     return mk(lines.join("\n"));
   }
@@ -16485,7 +16511,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -16508,6 +16534,12 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   const laneVocabValue = laneVocab ?? (domainActive
     ? await (await import("./extensions.mjs")).defaultCodeLaneVocab()
     : { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" });
+  // The packs behind that vocabulary, each read from its own declaration —
+  // the same caller-first-then-"a real graph is enough" rule as the
+  // vocabulary. An inactive domain lists no packs at all.
+  const domainPacksValue = domainPacks ?? (domainActive
+    ? await (await import("./extensions.mjs")).defaultCodeDomainPacks()
+    : []);
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -16571,7 +16603,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
