@@ -71,10 +71,13 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
   poison case; fix in `chat.mjs`'s bare-verb fallback after neutrality wave 2 releases
   the file. Regression gate: claim:ground-gate re-run (matrix must not lose groundable
   acceptances) plus the teach corpus lanes.
-- [ ] **Neutrality wave 3 + estate re-pin + chat fixes** — dispatching now: a docs/tier2
-  agent (T7+T8), a chat-engine agent (T9 `/capabilities` listing + the ground-gate
-  over-acceptance fix + the politeness-wrapper item), and the full-estate re-pin sweep.
-  Worktree paths recorded here once the dispatches return.
+- [ ] **Neutrality wave 3 docs + tier2 packs** (T7+T8) — in flight, worktree
+  `agent-a7cb95c37993e1134`.
+- [ ] **Chat-engine trio** — in flight, worktree `agent-a3db755e98dc29e0c`: neutrality
+  T9 `/capabilities` domain listing, the ground-gate over-acceptance fix, and the
+  politeness-wrapper open item (that agent deletes the item's block on landing it).
+- [ ] **Full-estate re-pin sweep** — in flight, worktree `agent-a224cd24887ff2fae`;
+  the one agent authorized to run the full suite; push batch 1 gates on its green.
 - [ ] **Queued, not yet dispatched:** PLAN_CLAIMS T14 (claims page; needs cite,
   ground-gate and planner JSON committed first) and T15 (CI proposal); neutrality wave 3
   (T7 docs, T8 tier2 packs, T9 /capabilities domain listing). Coordinator end-game:
