@@ -599,9 +599,19 @@ const RESTRICTOR_VERB_RE = new RegExp(
  *
  *  `uiContext` picks the empty-graph remedy: only a terminal session can run
  *  the index/--repo commands, so a page names what it can actually offer
- *  instead (see vocabExampleHint's own split). */
-export function answerCount(graph, query, { uiContext = "cli" } = {}) {
+ *  instead (see vocabExampleHint's own split).
+ *
+ *  `codeDomainActive` (the session-level predicate, see below) gates the
+ *  whole lane: with no code domain active, this returns null unconditionally
+ *  so a bare "how many classes are there" falls through to the taught-class
+ *  count and the ordinary miss instead of a code-graph-flavored decline (or,
+ *  worse, "0 classes." for a class nothing here actually holds). Omitted
+ *  (null), it derives from the graph alone — every existing caller that
+ *  passes a real code graph keeps its answer unchanged. */
+export function answerCount(graph, query, { uiContext = "cli", codeDomainActive = null } = {}) {
   if (!graph) return null;
+  const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
+  if (!domainActive) return null;
   // ANAPHORIC counts ("how many of those are tested", "count them", "how many of
   // them") count the PREVIOUS answer's set, not a graph kind — decline so the turn
   // falls through to the ask engine's anaphora node (which threads `prev`). Without
@@ -724,9 +734,15 @@ function extractEdgeCountEntity(tail, metric) {
  *  named entity in the tail) declines here and keeps answerCount's existing
  *  "I can't count 'tests'" honest miss — what a GLOBAL edge count would even
  *  mean (every test edge in the graph? distinct test modules? distinct tested
- *  modules?) is a genuine, undecided design question. */
-async function answerEdgeCount(graph, query) {
+ *  modules?) is a genuine, undecided design question.
+ *
+ *  `codeDomainActive`: same gate as answerCount's own — with no code domain
+ *  active, this declines unconditionally rather than reading an edge kind off
+ *  a graph nothing here actually indexed. */
+async function answerEdgeCount(graph, query, { codeDomainActive = null } = {}) {
   if (!graph) return null;
+  const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
+  if (!domainActive) return null;
   const q = String(query);
   if (ANAPHORA_COUNT_RE.test(q) || IMPLICIT_ANAPHORA_COUNT_RE.test(q.trim())) return null;
   const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
@@ -1880,12 +1896,21 @@ const T_GREETING_EMPTY = "conversational-greeting-empty";
 const T_GREETING_EMPTY_BROWSER = "conversational-greeting-empty-browser";
 const T_ORIENTATION_EMPTY = "orientation-empty";
 const T_ORIENTATION_EMPTY_BROWSER = "orientation-empty-browser";
-/** IDENTITY answers — self-description and the "no LLM" clarification. Neither
- *  varies with graph state (empty vs. populated); identity-self DOES vary with
- *  uiContext (its `--repo <path>` clause is CLI-only), so it alone carries a
- *  `_BROWSER` twin. */
+/** No-code-domain siblings of the two CLI ids just above, read only when
+ *  codeDomainActive is false: the browser twins already name no code
+ *  vocabulary (a page never had a `--repo`/`tmct index` remedy to offer), so
+ *  they serve both domain states unchanged — only the CLI wording needed a
+ *  second, domain-gated version. */
+const T_GREETING_EMPTY_NEUTRAL = "conversational-greeting-empty-neutral";
+const T_ORIENTATION_EMPTY_NEUTRAL = "orientation-empty-neutral";
+/** IDENTITY answers — self-description and the "no LLM" clarification.
+ *  identity-self DOES vary with uiContext (its `--repo <path>` clause is
+ *  CLI-only) and now with codeDomainActive too: identity-self-neutral drops
+ *  the code-graph clause outright and serves both ui contexts, since neither
+ *  had anything left to differ on once that clause is gone. */
 const T_IDENTITY_SELF = "identity-self";
 const T_IDENTITY_SELF_BROWSER = "identity-self-browser";
+const T_IDENTITY_SELF_NEUTRAL = "identity-self-neutral";
 const T_IDENTITY_NOT_LLM = "identity-not-an-llm";
 const T_IDENTITY_NO_FEELINGS = "identity-no-feelings";
 /** Confirms the honest-miss promise itself when a user asks about it directly
@@ -2280,6 +2305,20 @@ export function renderVerbose(last) {
  *  apply to hand-written prose, applied here to which DATA row gets rendered. */
 const uiTemplateId = (uiContext, id, browserId) => (uiContext === "browser" ? browserId : id);
 
+/** Picks among an empty-graph surface's three template ids: the browser id
+ *  (already free of code vocabulary, so it serves both domain states), or —
+ *  on the CLI — the domain-active id (today's wording, verbatim) versus the
+ *  neutral one when codeDomainActive is false. */
+const emptyGraphTemplateId = (uiContext, codeDomainActive, activeId, neutralId, browserId) =>
+  (uiContext === "browser" ? browserId : (codeDomainActive ? activeId : neutralId));
+
+/** identity-self doesn't vary with graph state, only with uiContext (CLI vs
+ *  browser) and codeDomainActive (whether its code-graph clause applies at
+ *  all) — the neutral id serves both ui contexts, since dropping that clause
+ *  leaves nothing left for them to differ on. */
+const identitySelfTemplateId = (uiContext, codeDomainActive) =>
+  (codeDomainActive ? uiTemplateId(uiContext, T_IDENTITY_SELF, T_IDENTITY_SELF_BROWSER) : T_IDENTITY_SELF_NEUTRAL);
+
 /** The "here's what you CAN ask" tail on a decline that names no term of its own
  *  (the SQL-statement and arithmetic shapes below). `ctx.vocabHint` already
  *  carries the session-gated vocabulary/teach pointer, so only the CODE-graph
@@ -2375,7 +2414,7 @@ function conversationalTurn(line, ctx) {
       // over-promising "ask me about this codebase". Phrase-specific variants (good
       // morning, hello there) keep their wording; only the default greeting swaps.
       const id = (!T_GREETING_BY_PHRASE[greetHit] && noCodeGraph(ctx.graph))
-        ? uiTemplateId(ctx.uiContext, T_GREETING_EMPTY, T_GREETING_EMPTY_BROWSER)
+        ? emptyGraphTemplateId(ctx.uiContext, ctx.codeDomainActive, T_GREETING_EMPTY, T_GREETING_EMPTY_NEUTRAL, T_GREETING_EMPTY_BROWSER)
         : (T_GREETING_BY_PHRASE[greetHit] || T_GREETING);
       note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
       return mk(t(id, { vocabHint: ctx.vocabHint }), { lane: "greeting" });
@@ -2435,7 +2474,7 @@ function conversationalTurn(line, ctx) {
   if (identityPhraseMatch(raw)) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
-    return mk(t(uiTemplateId(ctx.uiContext, T_IDENTITY_SELF, T_IDENTITY_SELF_BROWSER), { vocabHint: ctx.vocabHint }), { lane: "help" });
+    return mk(t(identitySelfTemplateId(ctx.uiContext, ctx.codeDomainActive), { vocabHint: ctx.vocabHint }), { lane: "help" });
   }
   {
     const metaHit = META_COMMAND_ANSWERS.find(([re]) => re.test(raw));
@@ -2455,7 +2494,7 @@ function conversationalTurn(line, ctx) {
     || CAPABILITY_PHRASES.some((re) => re.test(applyPreambleFrames(raw))) || ORIENT_OPENERS.has(q)) {
     note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
     note(ctx.trace, "lane: conversational — help/orientation (CAPABILITY_PHRASES/ORIENT_OPENERS / bare help / ?)");
-    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext), { lane: "help" });
+    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext, ctx.codeDomainActive), { lane: "help" });
   }
   // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
   // try a bounded edit-distance match against the flattened conversational phrase
@@ -2472,9 +2511,9 @@ function conversationalTurn(line, ctx) {
       if (bucket === "bye") return mk(t(T_FAREWELL), { end: true });
       if (bucket === "thanks") return mk(t(T_THANKS), { lane: "thanks" });
       if (bucket === "identity") {
-        return mk(t(uiTemplateId(ctx.uiContext, T_IDENTITY_SELF, T_IDENTITY_SELF_BROWSER), { vocabHint: ctx.vocabHint }), { lane: "help" });
+        return mk(t(identitySelfTemplateId(ctx.uiContext, ctx.codeDomainActive), { vocabHint: ctx.vocabHint }), { lane: "help" });
       }
-      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext), { lane: "help" });
+      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint, ctx.uiContext, ctx.codeDomainActive), { lane: "help" });
       const id = (!T_GREETING_BY_PHRASE[fuzzyHit] && noCodeGraph(ctx.graph))
         ? uiTemplateId(ctx.uiContext, T_GREETING_EMPTY, T_GREETING_EMPTY_BROWSER)
         : (T_GREETING_BY_PHRASE[fuzzyHit] || T_GREETING);
@@ -2495,6 +2534,18 @@ export { moduleCountOf };
  *  (a bare runTurn that wasn't handed one) is "unknown", NOT empty — the empty
  *  orientation/greeting only fires when we actually hold an empty graph. */
 export const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
+
+/** Whether THIS session's loaded graph or active bundles carry any code-domain
+ *  content: a graph with at least one Module individual, or the seon
+ *  code-domain corpus active in this session's extensions. Computed once per
+ *  session (chat-session.mjs) and threaded through runTurn's ctx so a lane
+ *  that would otherwise speak code vocabulary with nothing here to ground it
+ *  — a count, a banner clause, a code-shaped miss, a help row — reads this
+ *  instead of asking the graph directly. A null/absent graph and no active
+ *  seon bundle reads as inactive (the safe default: no evidence, no domain). */
+export function codeDomainActive({ graph, seonActive = false } = {}) {
+  return (!!graph && moduleCountOf(graph) > 0) || !!seonActive;
+}
 
 /** LIVE orientation examples: the example queries on the orientation card name
  *  entities from the LOADED graph — the sorted-first Module label and the
@@ -2534,10 +2585,11 @@ function orientationExamples(graph) {
 /** The orientation surface, module-aware: the empty variant (→ the provably-correct
  *  vocabulary hint + --repo/tmct init, or its browser twin) when there's no code
  *  graph, the standard one (with live {example1}/{example2} query examples from
- *  the loaded graph) otherwise. */
-function orientationAnswer(templates, graph, vocabHint, uiContext = "cli") {
+ *  the loaded graph) otherwise. `codeDomainActive` picks the empty variant's own
+ *  wording: today's code-structure clause when true, a neutral one when false. */
+function orientationAnswer(templates, graph, vocabHint, uiContext = "cli", codeDomainActive = false) {
   if (noCodeGraph(graph)) {
-    const id = uiTemplateId(uiContext, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_BROWSER);
+    const id = emptyGraphTemplateId(uiContext, codeDomainActive, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_NEUTRAL, T_ORIENTATION_EMPTY_BROWSER);
     return tRender(templates, id, { vocabHint }) ?? TEMPLATES_UNAVAILABLE;
   }
   return tRender(templates, T_ORIENTATION, orientationExamples(graph)) ?? TEMPLATES_UNAVAILABLE;
@@ -2558,15 +2610,18 @@ const ORIENTATION_EMPTY_FALLBACK_BROWSER = "I'm tmct — a deterministic, offlin
  *  through the SAME template (T_ORIENTATION_EMPTY/T_ORIENTATION_EMPTY_BROWSER)
  *  conversationalTurn's orientation branch uses, so there is exactly one copy of
  *  that wording to keep in sync, not two hand-duplicated strings. */
-function orientationText(graph, templates, vocabHint, uiContext = "cli") {
+function orientationText(graph, templates, vocabHint, uiContext = "cli", codeDomainActive = false) {
   // A null (never-loaded) graph reads as "unknown, not empty" to noCodeGraph,
   // which is the right call for the greeting/orientation CARD — but there is no
   // entity count to render from one either, so the empty wording is the only
   // truthful thing left to say. Without this the entity tally below threw on a
   // graph-less runTurn.
   if (!graph || noCodeGraph(graph)) {
-    const id = uiTemplateId(uiContext, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_BROWSER);
-    const fallback = uiContext === "browser" ? ORIENTATION_EMPTY_FALLBACK_BROWSER : ORIENTATION_EMPTY_FALLBACK;
+    const id = emptyGraphTemplateId(uiContext, codeDomainActive, T_ORIENTATION_EMPTY, T_ORIENTATION_EMPTY_NEUTRAL, T_ORIENTATION_EMPTY_BROWSER);
+    // ORIENTATION_EMPTY_FALLBACK_BROWSER already carries no code vocabulary,
+    // so it doubles as the neutral CLI fallback too — only the domain-active
+    // CLI branch needs its own (code-pointer-carrying) fallback text.
+    const fallback = (uiContext === "browser" || !codeDomainActive) ? ORIENTATION_EMPTY_FALLBACK_BROWSER : ORIENTATION_EMPTY_FALLBACK;
     return tRender(templates, id, { vocabHint }) ?? fallback;
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
@@ -6647,9 +6702,16 @@ const MODULE_ORIENT_POLITENESS_RE = /^(?:(?:please|kindly)\s+)*(?:explain\s+(?:t
  *  resolution via resolveEntity, else null — never a guess. Pronoun/self
  *  subjects ("what does it/this do", "what's it for") are META_ORIENT_RE's/
  *  isConversational's territory, not this lane's — declined here so they
- *  fall through unchanged. */
-async function moduleOrientLane(query, { graph }) {
+ *  fall through unchanged.
+ *
+ *  Declines outright with no code domain active: every resolution below
+ *  requires a real graph entity, so an inactive domain (no modules, no seon
+ *  bundle) can never actually reach a hit here — this just makes that decline
+ *  explicit rather than incidental. */
+async function moduleOrientLane(query, { graph, codeDomainActive = null }) {
   if (!graph) return null;
+  const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
+  if (!domainActive) return null;
   let q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   // This lane reads the ORIGINAL (case-preserving) query text, so it needs its
   // own normalization: correctMisspellings for a typo'd anchor word ("waht
@@ -6741,7 +6803,7 @@ async function moduleOrientLane(query, { graph }) {
   return null;
 }
 
-async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null, uiContext = "cli" }) {
+async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null, uiContext = "cli", codeDomainActive = false }) {
   // Preamble-peeled twin of `q`: a self-intro/greeting lead ("I'm new here,
   // what should I read first") wraps exactly the orientation questions this
   // lane owns, and the anchored META_ORIENT_RE can't see past it. Peeling
@@ -6752,7 +6814,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
     return { text: await memorySummary(memoryDir, graph, uiContext), via: "meta" };
   }
   if (peeled !== q && META_ORIENT_RE.test(peeled)) {
-    const text = orientationText(graph, templates, vocabHint, uiContext);
+    const text = orientationText(graph, templates, vocabHint, uiContext, codeDomainActive);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   if (META_ORIENT_RE.test(q)) {
@@ -6762,7 +6824,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
     // reprints orientationText(graph) verbatim on every repeat, never
     // collapsing. Mirrors ORIENTATION_REPEAT_ONELINER's identity-check
     // pattern exactly, with its own distinct oneliner text.
-    const text = orientationText(graph, templates, vocabHint, uiContext);
+    const text = orientationText(graph, templates, vocabHint, uiContext, codeDomainActive);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   // A bare "what is in here" with NO standing focus — see
@@ -6777,7 +6839,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
   if (!focus?.label) {
     const stripped = normalizeQuery(String(query)).trim().replace(/[?.!]+$/, "").trim();
     if (NO_FOCUS_WHATS_IN_HERE_RE.test(stripped)) {
-      const text = orientationText(graph, templates, vocabHint, uiContext);
+      const text = orientationText(graph, templates, vocabHint, uiContext, codeDomainActive);
       return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
     }
   }
@@ -6785,7 +6847,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
   // list didn't claim — try the module-grain overview before falling through to
   // the author-sha check below (disjoint triggers; order doesn't matter, but
   // this reads MORE of the query shape space, so it goes first).
-  const moduleOrient = await moduleOrientLane(query, { graph });
+  const moduleOrient = await moduleOrientLane(query, { graph, codeDomainActive });
   if (moduleOrient) return moduleOrient;
   // The sha-authorship form ("who authored a1b2c3d") can be as short as
   // THREE words, which the conversational-orientation branch (step 2) would grab
@@ -7118,8 +7180,13 @@ function gameOwnWord(query, planHolder) {
 const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every query shape.";
 /** The graph-less bootstrap wall's opening line — shared with the teach-offer
  *  collapse below, which treats this wall (like the shortened generic wall)
- *  as text a term-specific offer REPLACES rather than stacks under. */
+ *  as text a term-specific offer REPLACES rather than stacks under. Rendered
+ *  only when the code domain is active; NEUTRAL_BOOTSTRAP_WALL_LEAD stands in
+ *  for it otherwise. */
 const NO_GRAPH_BOOTSTRAP_WALL_LEAD = "I can't answer that as a code question — no code graph is loaded in this session.";
+/** The no-code-domain sibling of the lead above: same role (the bootstrap
+ *  wall's opening line), no code vocabulary. */
+const NEUTRAL_BOOTSTRAP_WALL_LEAD = "I couldn't ground that in anything I know.";
 
 /** The orientation-repeat one-liner. The conversational
  *  orientation branch sits OUTSIDE the composed-only wall-shortening gate (it
@@ -7158,8 +7225,11 @@ async function resolveEntity(graph, term) {
 
 /** The `/help` body: the bare-question default + every command (from COMMANDS, so
  *  it can't drift) + the tmct_ask question shapes, pulled from the engine's own
- *  rephraseHint() so the shapes are exactly the ones the grammar supports. */
-export async function helpText() {
+ *  rephraseHint() so the shapes are exactly the ones the grammar supports.
+ *  `codeDomainActive` gates the trailing counts row: it names the code-graph
+ *  count vocabulary (classes/functions/modules/…), so it renders only when a
+ *  code domain is actually active this session. */
+export async function helpText(codeDomainActive = false) {
   const rows = [
     ["<question>", "ask the graph in plain English (the default for any non-slash line)"],
     ...Object.entries(COMMANDS).map(([name, s]) => [`/${name}${s.arg ? (s.optional ? ` [${s.arg}]` : ` <${s.arg}>`) : ""}`, s.help]),
@@ -7194,7 +7264,7 @@ export async function helpText() {
   return [
     "commands:", ...lines, "",
     "question shapes for a bare line (tmct_ask):", `  ${shapes}`,
-    'plus counts: "how many <classes|functions|modules|methods|commits> are there".',
+    ...(codeDomainActive ? ['plus counts: "how many <classes|functions|modules|methods|commits> are there".'] : []),
   ].join("\n");
 }
 
@@ -13412,7 +13482,7 @@ const ARCH_OVERVIEW_PHRASES = [
   new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
 ];
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
   // the honest-miss tail below points a browser/adventure miss at the teach
@@ -13803,8 +13873,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
       // A browser session has no `tmct init in a repo` to reach for, so its
       // fallback drops that CLI-only remedy and keeps just the teach pointer.
-      ? `${NO_GRAPH_BOOTSTRAP_WALL_LEAD} ${vocabHint
-        || (browser
+      // No code domain active: the lead drops the code-question framing, and
+      // the CLI-only "index one" remedy drops too — there is nothing to index
+      // toward without a code domain.
+      ? `${codeDomainActive ? NO_GRAPH_BOOTSTRAP_WALL_LEAD : NEUTRAL_BOOTSTRAP_WALL_LEAD} ${vocabHint
+        || (browser || !codeDomainActive
           ? "I can still remember and answer taught facts (try \"every bug is an issue\")."
           : "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one.")}`
       : thrown;
@@ -13875,7 +13948,17 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
-  const askMiss = envelope ? !!envelope.miss : true;
+  // The ask engine carries its OWN aggregate/count grammar (parseAggregate,
+  // ask.mjs), independent of answerCount's own gate earlier in dispatchTurn —
+  // it answers a code-graph class count (parsed.node "count") straight off
+  // the graph regardless of what's actually loaded. With no code domain
+  // active this session has no code-graph vocabulary to answer such a count
+  // from, so treat it as a miss here too: the honest-empty-polish pass below
+  // reads this exact shape (a code-shaped, structurally-worded answer) and
+  // declines it to the ordinary wall, the same outcome answerCount's own gate
+  // produces for the phrasing it owns.
+  const codeCountWithNoDomain = envelope?.parsed?.node === "count" && !codeDomainActive;
+  const askMiss = codeCountWithNoDomain || (envelope ? !!envelope.miss : true);
   // GRAPH-FACT-VS-TAUGHT-FACT PRECEDENCE: a plain declarative "X is a kind of
   // Y" sentence whose SUBJECT already names a real graph entity could get
   // silently "answered" by the ask engine's own relaxation cascade instead of
@@ -13992,7 +14075,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (!handled && miss) {
-    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus, uiContext });
+    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus, uiContext, codeDomainActive });
     if (meta) {
       // A lane may answer with a better-worded decline (the module-orient
       // residue guard) — still a miss in the turn record, like the isa
@@ -14410,7 +14493,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // 3 words with no STRUCT_WORDS token, so without this guard
     // isConversational would discard a correct, already-composed answer for
     // the generic orientation wall.
-    const orientation = orientationAnswer(templates, graph, vocabHint, uiContext);
+    const orientation = orientationAnswer(templates, graph, vocabHint, uiContext, codeDomainActive);
     const repeat = last?.answer === orientation;
     answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;
     via = "template"; handled = true;
@@ -14929,8 +15012,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
     } else if (looksCodeish(String(query), String(query).toLowerCase())) {
-      answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
-      note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
+      if (codeDomainActive) {
+        answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
+        note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
+      } else {
+        // No code domain active this session: a code-shaped miss here would
+        // otherwise repeat the engine's own code-graph vocabulary. Decline to
+        // the same neutral wall a genuinely unparsed line gets — as if this
+        // lane's grammar had never matched — rather than pointing at a
+        // command that has nothing here to index.
+        answer = vocabHint
+          ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
+          : shortMissHint(query);
+        via = "miss";
+        genericWallMiss = true;
+        note(trace, "intermediate: HONEST-EMPTY POLISH — no code domain active, so the code-shaped miss declined to the ordinary wall instead of a code-graph pointer");
+      }
     } else {
       // Nothing in the question is code-shaped, so indexing a repo would not
       // help. "who won the 2031 world cup" used to carry the pointer anyway,
@@ -14944,7 +15041,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // names no term, so keeping it above the offer stacks two messages
     // where one carries everything. A receipt-bearing specific miss keeps
     // the offer appended beneath it, unchanged.
-    const genericWall = genericWallMiss || answer.startsWith(NO_GRAPH_BOOTSTRAP_WALL_LEAD);
+    const genericWall = genericWallMiss || answer.startsWith(NO_GRAPH_BOOTSTRAP_WALL_LEAD) || answer.startsWith(NEUTRAL_BOOTSTRAP_WALL_LEAD);
     answer = genericWall ? teachOffer : `${answer}\n${teachOffer}`;
     note(trace, `intermediate: TEACH-OFFER — the term is unknown to both the graph and memory, so the miss ${genericWall ? "collapsed to the offer to learn" : "got an offer to learn appended"}`);
   }
@@ -15108,7 +15205,7 @@ const GOAL_BY_COMMAND = {
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk. Also carries a `goal` field mirroring runAsk's own, so
  *  withGoalLine's "Goal (inferred): …" line fires for command dispatches too. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -15123,9 +15220,16 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
   });
 
-  if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText()); }
+  if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText(codeDomainActive)); }
   if (name === "stats") {
     note(trace, "goal: get a one-screen overview of the loaded graph");
+    if (!codeDomainActive) {
+      // No code domain active: renderStats' own module/package counts would
+      // be code vocabulary with nothing here to ground it. Report the
+      // session's actual, neutral shape instead.
+      const factCount = memoryDir ? (await factRows(memoryDir, cache)).length : 0;
+      return mk(`no graph loaded — this session holds ${factCount} fact${factCount === 1 ? "" : "s"}. Teach me directly, or /memory to inspect what's stored.`, { miss: true });
+    }
     return graph ? mk(renderStats(graph)) : mk("no graph loaded — /stats needs an index.", { miss: true });
   }
 
@@ -16355,13 +16459,19 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player" } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
   // wins outright; direct/library callers that omit it get the shipped
   // defaults, byte-identical to before this seam existed.
   const resolvedGameConfig = gameConfig ?? DEFAULT_GAME_CONFIG;
+  // chat-session.mjs computes this ONCE per session (a loaded graph with
+  // modules, or the seon bundle active) and passes it through; a direct/
+  // library caller that omits it gets the graph-only signal — correct for
+  // every existing caller that hands runTurn a real code graph, and
+  // correctly inactive for a graph-less or empty one.
+  const domainActive = codeDomainActive ?? (!!graph && moduleCountOf(graph) > 0);
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -16425,7 +16535,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -16969,7 +17079,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // short-circuit straight to "I can't count 'tests'" before this lane ever
   // got a turn. Declines (null) for anything answerCount should own, or a bare
   // global count with no named entity — see answerEdgeCount's own docblock.
-  const edgeCount = await answerEdgeCount(graph, workingLine);
+  const edgeCount = await answerEdgeCount(graph, workingLine, { codeDomainActive: domainActive });
   if (edgeCount != null) {
     note(trace, 'goal: get a per-entity count of an edge-nominalized kind ("how many tests cover X", "how many callers does X have")');
     note(trace, "lane: answerEdgeCount — matched an EDGE_NOUN_TO_METRIC noun with a resolvable named entity, answered via the same degreeMetric the superlative lane uses");
@@ -16977,7 +17087,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
-  const count = answerCount(graph, workingLine, { uiContext });
+  const count = answerCount(graph, workingLine, { uiContext, codeDomainActive: domainActive });
   if (count != null) {
     // An "I can't count <noun>" from a bare kind may still be answerable from an
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the

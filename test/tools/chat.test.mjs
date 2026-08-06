@@ -104,7 +104,8 @@ test("runTurn: a structural query over a MISSING graph is an honest miss (bootst
   const { answer, record } = await runTurn("which modules import a.mjs", {
     config: { graphFile: "/nonexistent/.tmct/graph.json" },
   });
-  assert.match(answer, /I can't answer that as a code question — no code graph is loaded in this session/);
+  assert.match(answer, /I couldn't ground that in anything I know/);
+  assert.doesNotMatch(answer, /code question|code graph/i, "no code domain active here — declines without code vocabulary");
   assert.match(answer, /tmct init/, "names the recovery");
   assert.doesNotMatch(answer, /the graph at .* is empty/, "the loader's internal error is never the answer");
   assert.doesNotMatch(answer, /\n\s+at /, "message only — never a stack trace");
@@ -250,7 +251,7 @@ test("runTurn: a bad symbol prints the tool's clean error, never a stack; miss r
 
 test("runTurn: /help lists the commands (from COMMANDS) and the ask question shapes", async () => {
   const { answer } = await runTurn("/help", { config: CONFIG, graph: await graph() });
-  const direct = await helpText();
+  const direct = await helpText(true);
   // Bug F point 5: /help isn't worth a bespoke GOAL_BY_COMMAND entry — it gets
   // the short generic fallback goal line, same as /stats/memory/focus.
   assert.equal(answer, `${direct}\n\nGoal (inferred): Use a specific tool/command directly.`);
@@ -487,13 +488,23 @@ test("runTurn: the superlative lane ('which module has the most tests') is unaff
   assert.match(answer, /app\/lib\/b\.mjs|app\/functions\/d\/handler\.mjs/);
 });
 
+// With no code domain active (the default: no explicit codeDomainActive, and
+// this graph carries no modules), the whole lane declines — the taught-class
+// count or the ordinary miss stands instead of a code-graph-flavored decline.
+test("answerCount: with no code domain active, an unrecognized or unknown kind declines silently (null)", () => {
+  const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
+  assert.equal(answerCount(empty, "count soup"), null);
+  assert.equal(answerCount(empty, "how many moons does Pluto have?"), null);
+});
+
 // "count soup" against a graph carrying no countable individuals once rendered
 // the grammatically-broken "I count: ." (a dangling empty list) and suggested
 // "how many classes are there", which would ALSO fail. The decline names the
-// kinds the counter answers to instead.
-test("answerCount: an unknown kind over a graph with no countable individuals names what it counts, with no dangling list", () => {
+// kinds the counter answers to instead. Only reachable with the code domain
+// active (e.g. the seon bundle active before an index has run).
+test("answerCount: with the code domain active, an unknown kind over a graph with no countable individuals names what it counts, with no dangling list", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
-  const r = answerCount(empty, "count soup");
+  const r = answerCount(empty, "count soup", { codeDomainActive: true });
   assert.match(r, /^I can't count "soup" — I count the kinds a code graph holds: classes, functions, modules/);
   assert.doesNotMatch(r, /I count: \./, "never the dangling-empty-list phrasing");
   assert.doesNotMatch(r, /how many classes are there/, "never a suggested example that would ALSO fail on this graph");
@@ -503,9 +514,10 @@ test("answerCount: an unknown kind over a graph with no countable individuals na
 // noun — nothing counts moons, and indexing would not change that — so the
 // empty graph is no longer offered as the cause. The remedy is about the
 // session, and a terminal can act on it, so it survives as its own clause.
-test("answerCount: the empty-graph remedy is a separate clause, never the reason the noun can't be counted", () => {
+// Only reachable with the code domain active.
+test("answerCount: with the code domain active, the empty-graph remedy is a separate clause, never the reason the noun can't be counted", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
-  const r = answerCount(empty, "how many moons does Pluto have?");
+  const r = answerCount(empty, "how many moons does Pluto have?", { codeDomainActive: true });
   assert.match(r, /^I can't count "moons" — I count the kinds a code graph holds:/);
   assert.doesNotMatch(r, /no code graph is loaded yet, so there's nothing to count/,
     "the missing graph is not why moons can't be counted");
@@ -908,11 +920,15 @@ test("runChat: missing graph bootstraps clean — honest empty banner, conversat
     // test about the bootstrap banner/turn/fold contract (and fast).
     const { turns } = await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.equal(turns, 2);
-    // the banner is honest about the empty start — and never an error before the prompt
-    assert.match(text(), /no code graph loaded — starting empty/); // #3: 0-module orientation
+    // the banner is honest about the empty start — and never an error before the prompt.
+    // No code domain active (default persona, no --with-persona code, nothing
+    // indexed): the banner carries no code-graph vocabulary at all.
+    assert.doesNotMatch(text(), /code graph/i);
     assert.match(text(), /remembered to .*graph\.json/);
-    // a structural query over the empty graph answers with the engine's honest miss, no stack
-    assert.match(text(), /no symbol matching "a\.mjs" found in the index\./);
+    // a structural query over the empty graph declines to the ordinary miss — no code
+    // domain active, so the decline never repeats the engine's code-graph vocabulary
+    assert.match(text(), /I couldn't read that as a question I can answer\./);
+    assert.doesNotMatch(text(), /no symbol matching|no module matching|no code index/i);
     assert.doesNotMatch(text(), /\n\s+at /);
     // the conversation itself became the first graph write: a Session individual exists
     const g = JSON.parse(await readFile(join(dir, ".tmct", "graph.json"), "utf8"));
@@ -944,7 +960,9 @@ test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo
       encoding: "utf8", input: "hi\n/exit\n", env: { ...process.env, TMCT_NO_SEED: "1" },
     });
     assert.equal(bad.status, 0, bad.stderr);
-    assert.match(bad.stdout, /no code graph loaded — starting empty/); // #3
+    // No code domain active on a bare install: the banner carries no code-graph vocabulary.
+    assert.match(bad.stdout, /tmct chat — .* — the conversation is remembered to/);
+    assert.doesNotMatch(bad.stdout, /code graph/i);
     const bareGraph = JSON.parse(await readFile(join(bare, ".tmct", "graph.json"), "utf8"));
     assert.ok(bareGraph.individuals.some((i) => i.class === "Session"), "bootstrap session folded into a new graph.json");
   } finally {
