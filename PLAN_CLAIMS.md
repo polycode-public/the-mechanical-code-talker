@@ -558,3 +558,26 @@ grammar-shape gap. The question: keep OpenBookQA as E1's set (an honest hard num
 re-shape E1 around a definitional QA set the grammar can express ("what is X"-shaped),
 which would show the corpus delta the block was designed to show? Both stay honest; the
 second changes what E1 claims.
+
+## CI wiring proposal
+
+**Per-push tier candidates.** Five rigs run cheap enough for every push. Measured local
+runtimes: latency and index-fabrication sub-second reads; freshness ~3s; paraphrase ~5s;
+cite ~15–20s; determinism ~27s. Total serial time roughly one minute. These could
+parallelize alongside existing jobs in the `test` and `e2e` stages.
+
+**Scheduled/heavy tier.** Six rigs belong in a nightly or on-demand schedule. Teach and
+ground-gate drive the engine for minutes. Prose-band runs ~15–140s depending on the
+backend. Offline costs ~1–2 min (Playwright plus site build) and belongs beside the
+existing e2e tier. Commonsense takes ~8 min (wordnet-xl imported twice). Planner sweeps
+~10–11 min. Research-sources fetches live from Wikipedia and Wikidata; scheduled only,
+never per-push. Its offline failure mode is a nonzero exit, not a faked number.
+
+**Threshold gating.** Every rig exits nonzero when its value crosses the committed
+threshold. The JSON on disk is only rewritten locally and committed by hand or
+coordinator. CI runs compare against the committed threshold without committing anything,
+so each push-time invocation reads the previous JSON and fails the job if regression
+appears.
+
+**Out of scope.** This proposal names the rigs and their tiers. Pipeline edits come
+separately; the operator approves the wiring shape before changes land in `.gitlab-ci.yml`.
