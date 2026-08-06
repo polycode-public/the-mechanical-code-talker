@@ -145,7 +145,7 @@ test("the real binary in an empty dir seeds memory, greets and exits 0", async (
     const r = spawnSync(process.execPath, [BIN], { encoding: "utf8", input: "hi\n/exit\n", cwd: dir });
     const elapsed = Date.now() - t0;
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /no code graph loaded — starting empty/);
+    assert.doesNotMatch(r.stdout, /code graph|code index/, "a bare install never hints at the code domain");
     const banner = r.stdout.split("\n").map(parseSeedBanner).find(Boolean);
     assert.ok(banner, `the seed banner is present: ${JSON.stringify(r.stdout)}`);
     const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
