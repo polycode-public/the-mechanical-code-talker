@@ -292,4 +292,17 @@ Updated as waves merge to local main (2026-08-06):
 - Wave 3: T7 docs + T8 tier2 packs — landed (337067a4, cbd24fb9): README documents
   domain packs, tier2-python/java/aws are pack-kind entries with an empty vocab file
   and taught-only grounding, import behavior byte-identical (30/31/39 facts). T9
-  `/capabilities` domain listing — in flight in the chat-engine fixes agent.
+  `/capabilities` domain listing — landed (2c0ceb92): active packs listed with their
+  own grounding declaration restated; a bare install prints the pre-existing output
+  with no domain section.
+
+Every task in this plan is delivered. Finish-line criteria: (a) the neutrality tier
+(corpus rows + estate guard) holds the bare install domain-silent; (b) the code pack
+restores today's behavior byte-identically, verified against pre-edit captures and the
+code-index test surfaces (a fresh full IDXBENCH skill run remains available to the
+operator as an independent re-measure).
+
+**Operator question, recorded for later (delivery proceeded without it):** the chat
+research lane still has a single provider slot, so the Wikidata adapter is registered
+and contract-tested but not lane-wired — wiring it (multi-provider, or a config choice
+of provider) changes live chat behavior and is yours to call.

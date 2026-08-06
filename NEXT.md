@@ -37,17 +37,15 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **Chat-engine trio** — in flight, worktree `agent-a3db755e98dc29e0c`: neutrality
-  T9 `/capabilities` domain listing, the ground-gate over-acceptance fix (three
-  ungroundable items the general-verb fallback wrongly stores as garbled facts —
-  regression gates: claim:ground-gate re-run and the teach lanes), and the
-  politeness-wrapper open item below (that agent deletes the item's block on landing
-  it). Coordinator end-game after it merges: re-run every claim rig, full suite, push
-  batches, pipeline watch.
-- [ ] **T9 remainder (research adapters):** `wikidata-live.mjs` duplicates
-  `wikipedia-live.mjs`'s throttle/cool-off/cache machinery (consolidation pass), and the
-  chat research lane still has a single provider slot so Wikidata is registered but not
-  lane-wired — wiring it is a product decision recorded here, not taken silently.
+- [ ] **Research-adapter courtesy consolidation** — `wikidata-live.mjs` duplicates
+  `wikipedia-live.mjs`'s throttle/cool-off/cache machinery; extract it into one shared
+  module with both adapters' behavior unchanged (contract test + adapter test files are
+  the gate). In flight — worktree recorded on dispatch. The related lane-wiring
+  question (single provider slot) is recorded as an operator question in
+  `PLAN_GRAPH_NEUTRALITY.md`'s delivery status.
+- [ ] **Coordinator end-game** — after the consolidation merges: re-run every claim
+  rig against the settled engine and commit drift, full suite, roll the version, push
+  batch 2, watch the pipeline to green.
 
 ## Open items
 
