@@ -1,0 +1,41 @@
+{
+  "name": "ground-gate",
+  "generatedAt": "2026-08-06T01:03:30.592Z",
+  "commit": "8cfca4142b376565b2eaf71b45824dfa0a4cd7aa",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "percent",
+  "threshold": {
+    "direction": "max",
+    "value": 5
+  },
+  "sources": [
+    "test-benchmarks/claims/ground-gate.jsonl",
+    "scripts/claims/claim-ground-gate.mjs",
+    "src/services/extract-facts.mjs"
+  ],
+  "value": 3,
+  "detail": {
+    "totalGroundable": 100,
+    "totalUngroundable": 100,
+    "acceptedGroundable": 100,
+    "acceptedUngroundable": 3,
+    "refusedGroundable": 0,
+    "refusedUngroundable": 97,
+    "acceptedWrongExamples": [
+      "asdkjhaskjdh qpwoe zzxx.",
+      "The old bridge creaked under the weight of the truck.",
+      "The children played in the park until sunset."
+    ],
+    "refusedGroundablePercent": 0,
+    "limits": {
+      "refusedGroundablePercent": {
+        "headroom": 2,
+        "threshold": {
+          "direction": "max",
+          "value": 2
+        }
+      }
+    }
+  }
+}

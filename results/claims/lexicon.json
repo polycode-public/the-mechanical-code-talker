@@ -1,0 +1,34 @@
+{
+  "name": "lexicon",
+  "generatedAt": "2026-08-06T00:58:26.796Z",
+  "commit": "8cfca4142b376565b2eaf71b45824dfa0a4cd7aa",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "percent",
+  "threshold": {
+    "direction": "max",
+    "value": -13.556701030927833
+  },
+  "sources": [
+    "src/domain/grammar/lexicon-core.json",
+    "test-benchmarks/claims/frequency-top5000.txt",
+    "test-benchmarks/claims/frequency-top5000.LICENSE",
+    "test-benchmarks/claims/code-terms-lexicon.json",
+    "scripts/claims/claim-lexicon.mjs"
+  ],
+  "before": 50.55670103092783,
+  "after": 35,
+  "delta": -15.556701030927833,
+  "detail": {
+    "counts": {
+      "nouns": 9321,
+      "verbs": 93,
+      "adjectives": 65,
+      "properNames": 22
+    },
+    "command": "tmct import --lexicon test-benchmarks/claims/code-terms-lexicon.json",
+    "frequencySampleSize": 5000,
+    "domainSentenceCount": 51,
+    "domainContentTokenCount": 340
+  }
+}
