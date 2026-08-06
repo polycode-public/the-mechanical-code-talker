@@ -42,11 +42,16 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     assert.equal(human.active, true, "human is the new default active bundle");
     assert.equal(human.corpusPath, join(TIER2_DIR, "human.jsonl"));
     assert.equal(human.provenancePrefix, "corpus:human");
-    // the four tier-2 bundles ship but stay inactive
-    for (const id of ["tier2-aws", "tier2-python", "tier2-java", "tier2-general"]) {
-      assert.equal(entries.get(id).kind, "corpus");
+    // tier2-aws, tier2-python, tier2-java are now pack-kind entries (with empty
+    // vocab, taught-only grounding): bundles the corpus + lane vocab for domain.
+    for (const id of ["tier2-aws", "tier2-python", "tier2-java"]) {
+      assert.equal(entries.get(id).kind, "pack", `${id} is a pack-kind entry`);
       assert.equal(entries.get(id).active, false, `${id} ships inactive`);
+      assert.equal(entries.get(id).groundingKind, "taught-only");
     }
+    // tier2-general remains a corpus-kind entry (no pack wrapper yet)
+    assert.equal(entries.get("tier2-general").kind, "corpus");
+    assert.equal(entries.get("tier2-general").active, false, "tier2-general ships inactive");
     // human-medium/human-large: SIZE tiers of the SAME
     // `human` bundle, ship but stay inactive — Small is the default.
     for (const id of ["human-medium", "human-large"]) {
@@ -67,6 +72,14 @@ test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for e
   assert.equal(BUILTIN_EXTENSIONS.code.provenancePrefix, "corpus:seon", "the code pack keeps seon's own provenance prefix");
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
   assert.equal(BUILTIN_EXTENSIONS.human.active, true);
+  // tier2 language-domain packs: pack-kind entries with empty vocab, taught-only
+  // grounding (no extraction adapters yet for aws/python/java domains)
+  for (const id of ["tier2-aws", "tier2-python", "tier2-java"]) {
+    assert.equal(BUILTIN_EXTENSIONS[id].kind, "pack", `${id} is pack-kind`);
+    assert.equal(BUILTIN_EXTENSIONS[id].active, false, `${id} ships inactive`);
+    assert.equal(BUILTIN_EXTENSIONS[id].groundingKind, "taught-only", `${id} grounding is taught-only`);
+    assert.ok(BUILTIN_EXTENSIONS[id].vocabPath, `${id} has vocabPath`);
+  }
   assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
   assert.equal(BUILTIN_EXTENSIONS["wordnet-xl"].active, false, "wordnet-xl ships inactive");
   assert.equal(BUILTIN_EXTENSIONS["wordnet-full"].active, false, "wordnet-full ships inactive");

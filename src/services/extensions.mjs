@@ -40,6 +40,12 @@ const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "c
 // of chat.mjs so a bare install carries none of it (see mergedLaneVocab).
 const CODE_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "domains", "code", "vocab.json");
 
+// Empty vocabulary file for tier2 packs: they are authored corpora with no
+// extraction adapter, so they need no lane-specific vocabulary, help rows, or
+// miss-recovery pointers. A pack entry can have an empty vocab (counts as having
+// one declared, but contributes nothing to the merged lane vocabulary).
+const TIER2_EMPTY_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "tier2", "vocab-empty.json");
+
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
 // The definitional-band-first predicate order for the ConceptNet seed (re-declared,
@@ -104,23 +110,34 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "human-large.jsonl"),
       provenancePrefix: "corpus:human-large",
     },
+    // Tier2 packs: authored language-domain bundles (AWS, Python, Java) without
+    // extraction adapters (no tmct index for these domains yet). Each bundles
+    // its corpus unchanged and an empty lane vocabulary, so a bare install stays
+    // domain-neutral (no AWS/Python/Java vocabulary reaches banners or help text
+    // without explicit activation).
     "tier2-aws": {
-      kind: "corpus",
+      kind: "pack",
       active: false,
       corpusPath: join(TIER2_DIR, "aws.jsonl"),
       provenancePrefix: "corpus:tier2-aws",
+      vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      groundingKind: "taught-only",
     },
     "tier2-python": {
-      kind: "corpus",
+      kind: "pack",
       active: false,
       corpusPath: join(TIER2_DIR, "python.jsonl"),
       provenancePrefix: "corpus:tier2-python",
+      vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      groundingKind: "taught-only",
     },
     "tier2-java": {
-      kind: "corpus",
+      kind: "pack",
       active: false,
       corpusPath: join(TIER2_DIR, "java.jsonl"),
       provenancePrefix: "corpus:tier2-java",
+      vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      groundingKind: "taught-only",
     },
     "tier2-general": {
       kind: "corpus",
