@@ -14,22 +14,25 @@ import { validateExtensionPack } from "../../src/services/extensions.mjs";
 const BIN = fileURLToPath(new URL("../../bin/tmct.mjs", import.meta.url));
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-extend-"));
 
-test("validateExtensionPack: a well-formed fixture pack (corpus + lexicon + namespaced templates) passes every resource", async () => {
+test("validateExtensionPack: a well-formed fixture pack (corpus + lexicon + namespaced templates + vocab + grounding) passes every resource", async () => {
   const dir = await tmp();
   try {
     await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
     await writeFile(join(dir, "lexicon.json"), JSON.stringify({ nouns: { widget: {} } }));
     await writeFile(join(dir, "templates.jsonl"), '{"id":"mypack:greet","class":"describe","template":"hi.","register":"terse"}\n');
+    await writeFile(join(dir, "vocab.json"), JSON.stringify({ countNouns: { widget: "Widget" }, helpRows: [["/widgets", "list widgets"]] }));
     const candidate = {
       kind: "pack",
       corpusPath: join(dir, "corpus.jsonl"),
       lexiconPath: join(dir, "lexicon.json"),
       templatesPath: join(dir, "templates.jsonl"),
+      vocabPath: join(dir, "vocab.json"),
       provenancePrefix: "corpus:mypack",
+      groundingKind: "taught-only",
     };
     const { ok, results } = await validateExtensionPack(dir, candidate);
     assert.equal(ok, true);
-    assert.equal(results.length, 3);
+    assert.equal(results.length, 5);
     assert.ok(results.every((r) => r.ok));
     const corpus = results.find((r) => r.kind === "corpus");
     assert.deepEqual(corpus.counts, { assertions: 1, facts: 1 });
@@ -37,6 +40,10 @@ test("validateExtensionPack: a well-formed fixture pack (corpus + lexicon + name
     assert.ok(lex.counts.nouns > 0);
     const tpl = results.find((r) => r.kind === "templates");
     assert.deepEqual(tpl.counts, { templates: 1 });
+    const vocab = results.find((r) => r.kind === "vocab");
+    assert.deepEqual(vocab.counts, { countNouns: 1, classLabels: 0, helpRows: 1 });
+    const grounding = results.find((r) => r.kind === "grounding");
+    assert.deepEqual(grounding.counts, { channel: "taught-only" });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -126,10 +133,70 @@ test("validateExtensionPack: results report per-resource, so a mixed pack shows 
     await writeFile(join(dir, "templates.jsonl"), '{"id":"bare","class":"describe","template":"hi.","register":"terse"}\n');
     const { ok, results } = await validateExtensionPack(dir, {
       kind: "pack", corpusPath: join(dir, "corpus.jsonl"), templatesPath: join(dir, "templates.jsonl"),
+      groundingKind: "taught-only",
     });
     assert.equal(ok, false);
     assert.equal(results.find((r) => r.kind === "corpus").ok, true);
     assert.equal(results.find((r) => r.kind === "templates").ok, false);
+    assert.equal(results.find((r) => r.kind === "grounding").ok, true, "grounding was declared, so it passes on its own");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the grounding-channel declaration (required on a "pack" candidate) ---
+
+test("validateExtensionPack: a pack declaring neither grounding channel fails, naming what's missing", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
+    const { ok, results } = await validateExtensionPack(dir, { kind: "pack", corpusPath: join(dir, "corpus.jsonl") });
+    assert.equal(ok, false);
+    const grounding = results.find((r) => r.kind === "grounding");
+    assert.equal(grounding.ok, false);
+    assert.match(grounding.error, /grounding_kind.*extraction.*taught-only/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validateExtensionPack: an extraction channel with no named adapter fails", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
+    const { ok, results } = await validateExtensionPack(dir, {
+      kind: "pack", corpusPath: join(dir, "corpus.jsonl"), groundingKind: "extraction",
+    });
+    assert.equal(ok, false);
+    const grounding = results.find((r) => r.kind === "grounding");
+    assert.equal(grounding.ok, false);
+    assert.match(grounding.error, /grounding_adapter/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validateExtensionPack: a taught-only pack needs no adapter", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
+    const { ok, results } = await validateExtensionPack(dir, {
+      kind: "pack", corpusPath: join(dir, "corpus.jsonl"), groundingKind: "taught-only",
+    });
+    assert.equal(ok, true);
+    assert.equal(results.find((r) => r.kind === "grounding").ok, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("validateExtensionPack: a non-pack candidate (plain corpus) declares no grounding at all — the requirement is pack-only", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
+    const { ok, results } = await validateExtensionPack(dir, { kind: "corpus", corpusPath: join(dir, "corpus.jsonl") });
+    assert.equal(ok, true);
+    assert.equal(results.length, 1, "no grounding result entry for a non-pack candidate");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -145,13 +212,30 @@ test("CLI: `tmct extend --validate <dir>` on a well-formed pack prints a PASS re
     await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
     await writeFile(join(dir, "templates.jsonl"), '{"id":"mypack:greet","class":"describe","template":"hi.","register":"terse"}\n');
     await writeFile(join(dir, "tmct.toml"),
-      '[extensions.mypack]\nkind = "pack"\nactive = true\ncorpus_path = "corpus.jsonl"\ntemplates_path = "templates.jsonl"\n');
+      '[extensions.mypack]\nkind = "pack"\nactive = true\ncorpus_path = "corpus.jsonl"\ntemplates_path = "templates.jsonl"\n'
+      + 'grounding_kind = "taught-only"\n');
     const r = runCli(["extend", "--validate", dir]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /mypack \(pack\):/);
     assert.match(r.stdout, /\[PASS\] corpus:/);
     assert.match(r.stdout, /\[PASS\] templates:/);
+    assert.match(r.stdout, /\[PASS\] grounding:/);
     assert.match(r.stdout, /all resources passed/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: a pack with no grounding declaration prints a FAIL report and exits 1", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "corpus.jsonl"), JSON.stringify({ start: "/c/en/widget", rel: "/r/IsA", end: "/c/en/thing", weight: 1 }) + "\n");
+    await writeFile(join(dir, "tmct.toml"), '[extensions.mypack]\nkind = "pack"\nactive = true\ncorpus_path = "corpus.jsonl"\n');
+    const r = runCli(["extend", "--validate", dir]);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /\[FAIL\] grounding:/);
+    assert.match(r.stdout, /grounding_kind/);
+    assert.match(r.stdout, /one or more resources FAILED/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

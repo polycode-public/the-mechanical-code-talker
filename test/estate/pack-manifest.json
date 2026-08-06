@@ -47,6 +47,7 @@
   "corpus/conceptnet/filter-dump.mjs",
   "corpus/conceptnet/quality-filter.mjs",
   "corpus/conceptnet/slice.jsonl",
+  "corpus/domains/code/vocab.json",
   "corpus/generated/README.md",
   "corpus/generated/ace-surface-variants.jsonl",
   "corpus/generated/manifest.json",

@@ -25,7 +25,7 @@ import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "../adapters/source.mjs";
-import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
+import { resolveExtensions, mergedLexiconExtra, mergedLaneVocab, defaultCodeLaneVocab } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint, codeDomainActive as codeDomainActiveOf } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
@@ -281,13 +281,29 @@ export async function createSession({
   try { ({ entries: extEntries, biasByBundle } = await resolveExtensions(repo)); }
   catch { extEntries = null; biasByBundle = {}; }
 
-  // The code-domain predicate (chat.mjs): a loaded graph with modules, or the
-  // seon code-domain bundle active in this repo's tmct.toml/persona — computed
-  // ONCE per session and threaded into every turn, so every code-vocabulary
-  // surface (counts, misses, banner, greeting, orientation, help) reads the
-  // same answer all session long.
-  const seonActive = Boolean(extEntries?.get("seon")?.active);
-  const domainActive = codeDomainActiveOf({ graph, seonActive });
+  // The code-domain predicate (chat.mjs): a loaded graph with modules, or a
+  // code-domain bundle active in this repo's tmct.toml/persona (the `code`
+  // pack, or a direct `seon` activation predating it) — computed ONCE per
+  // session and threaded into every turn, so every code-vocabulary surface
+  // (counts, misses, banner, greeting, orientation, help) reads the same
+  // answer all session long.
+  const codePackActive = Boolean(extEntries?.get("seon")?.active || extEntries?.get("code")?.active);
+  const domainActive = codeDomainActiveOf({ graph, seonActive: codePackActive });
+
+  // This session's merged lane vocabulary (count nouns/class labels/help rows/
+  // the miss-recovery pointer) — extensions.mjs's mergedLaneVocab over every
+  // active pack. A real code graph with no pack formally active (a fixture, a
+  // provider-supplied graph, a repo indexed before this pack existed) still
+  // needs the code vocabulary to render today's answers, so it falls back to
+  // the shipped code pack's own vocabulary — the same "a real graph is
+  // enough" rule domainActive itself applies, just above. Empty when the
+  // domain is inactive: a bare session imports nothing and carries none of it.
+  let laneVocab = extEntries
+    ? await mergedLaneVocab(extEntries, biasByBundle)
+    : { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" };
+  if (domainActive && !Object.keys(laneVocab.countNouns).length) {
+    laneVocab = await defaultCodeLaneVocab();
+  }
 
   // Load this handle's lexicon once, MERGED with any active lexicon/pack
   // extension entries (ascending-bias merge order so a higher-bias bundle's
@@ -430,9 +446,11 @@ export async function createSession({
     // never a hardcoded example that might not have been seeded. tmct can index a
     // repo itself (`tmct index`) or read a graph any other producer wrote. With no
     // code domain active, the code-structure pointer has nothing to point at, so
-    // this line carries just the teach/vocabulary hint.
+    // this line carries just the teach/vocabulary hint. The pointer text itself
+    // is the active code pack's own miss-recovery clause (laneVocab, above) —
+    // never a chat-session.mjs literal, so a host pack can carry its own.
     ...(noCodeGraph ? [domainActive
-      ? `for code structure, index this repo with \`tmct index\`, or point me at a .tmct/graph.json with --repo <path> (or try \`npm run example:mini\`). ${vocabHint}`
+      ? `${laneVocab.missRecoveryPointer} ${vocabHint}`
       : vocabHint] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
@@ -479,7 +497,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

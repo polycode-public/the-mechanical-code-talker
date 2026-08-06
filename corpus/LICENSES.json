@@ -17,6 +17,13 @@
       "notice": "corpus/seon/LICENSE-NOTICE"
     },
     {
+      "path": "corpus/domains/code/vocab.json",
+      "upstream": "first-party (hand-authored lane vocabulary for the code domain pack — count nouns, help rows, the miss-recovery pointer; src/services/extensions.mjs)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/seon/LICENSE-NOTICE"
+    },
+    {
       "path": "corpus/wordnet/",
       "upstream": "Open English WordNet (globalwordnet/english-wordnet, a continuation of Princeton WordNet)",
       "license": "CC-BY-4.0",

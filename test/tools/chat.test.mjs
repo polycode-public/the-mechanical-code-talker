@@ -21,6 +21,14 @@ import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
 import { CANONICAL_LINE_RE } from "../helpers/session.mjs";
+import { defaultCodeLaneVocab } from "../../src/services/extensions.mjs";
+
+// answerCount reads its count-noun/class-label table from the session's own
+// merged lane vocabulary (empty by default) rather than a chat.mjs literal —
+// these direct calls exercise it standalone, so they thread the shipped code
+// pack's own vocabulary the same way a real active-domain session would.
+const CODE_VOCAB = await defaultCodeLaneVocab();
+const countVocabOpts = (extra = {}) => ({ countNouns: CODE_VOCAB.countNouns, classLabels: CODE_VOCAB.classLabels, ...extra });
 
 // bin/tmct.mjs: a spawned child has non-TTY stdio, so `chat` takes the --plain
 // readline path.
@@ -406,19 +414,19 @@ test("runTurn: a bare-ask hit sets the focus so the next 'it' has something to b
 test("answerCount: plurals and singulars map to the right class; count is live off individuals", async () => {
   const g = await graph();
   // fixture: Class:3 (Base/Widget/Button), Function:1 (fnAlpha), Module:8, Method:1
-  assert.equal(answerCount(g, "how many classes are there"), "3 classes.");
-  assert.equal(answerCount(g, "how many class"), "3 classes.");
-  assert.equal(answerCount(g, "count the functions"), "1 function.", "singular when n===1");
-  assert.equal(answerCount(g, "number of modules"), "8 modules.");
-  assert.equal(answerCount(g, "how many methods"), "1 method.");
+  assert.equal(answerCount(g, "how many classes are there", countVocabOpts()), "3 classes.");
+  assert.equal(answerCount(g, "how many class", countVocabOpts()), "3 classes.");
+  assert.equal(answerCount(g, "count the functions", countVocabOpts()), "1 function.", "singular when n===1");
+  assert.equal(answerCount(g, "number of modules", countVocabOpts()), "8 modules.");
+  assert.equal(answerCount(g, "how many methods", countVocabOpts()), "1 method.");
 });
 
 test("answerCount: an unknown kind lists what it CAN count, and a non-count line is null (→ ask)", async () => {
   const g = await graph();
-  const unknown = answerCount(g, "how many bananas are there");
+  const unknown = answerCount(g, "how many bananas are there", countVocabOpts());
   assert.match(unknown, /can't count "bananas"/);
   assert.match(unknown, /classes/);
-  assert.equal(answerCount(g, "which modules import a.mjs"), null, "not a count query → falls through to ask");
+  assert.equal(answerCount(g, "which modules import a.mjs", countVocabOpts()), null, "not a count query → falls through to ask");
 });
 
 // ---- answerEdgeCount: bare "how many X" for EDGE-NOMINALIZED nouns
@@ -504,7 +512,7 @@ test("answerCount: with no code domain active, an unrecognized or unknown kind d
 // active (e.g. the seon bundle active before an index has run).
 test("answerCount: with the code domain active, an unknown kind over a graph with no countable individuals names what it counts, with no dangling list", () => {
   const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
-  const r = answerCount(empty, "count soup", { codeDomainActive: true });
+  const r = answerCount(empty, "count soup", countVocabOpts({ codeDomainActive: true }));
   assert.match(r, /^I can't count "soup" — I count the kinds a code graph holds: classes, functions, modules/);
   assert.doesNotMatch(r, /I count: \./, "never the dangling-empty-list phrasing");
   assert.doesNotMatch(r, /how many classes are there/, "never a suggested example that would ALSO fail on this graph");

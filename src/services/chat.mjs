@@ -461,28 +461,11 @@ export function asBareCommand(line) {
 // header (individuals grouped by class, relation groups by predicate), not by
 // dispatching to the ask engine. Deterministic, fully in-ethos. ----
 
-/** singular+plural nouns a user might count → the individual `class` they map to. */
-const COUNT_NOUNS = {
-  class: "Class", classes: "Class",
-  function: "Function", functions: "Function", func: "Function", funcs: "Function",
-  module: "Module", modules: "Module", file: "Module", files: "Module",
-  package: "Package", packages: "Package",
-  method: "Method", methods: "Method",
-  attribute: "Attribute", attributes: "Attribute",
-  variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
-  commit: "Commit", commits: "Commit",
-  session: "Session", sessions: "Session",
-};
-
-/** class → [singular, plural] display noun, for echoing a count back in English. */
-const CLASS_LABELS = {
-  Class: ["class", "classes"], Function: ["function", "functions"],
-  Module: ["module", "modules"], Package: ["package", "packages"],
-  Method: ["method", "methods"],
-  Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
-  Commit: ["commit", "commits"], Session: ["session", "sessions"],
-};
-const classNoun = (cls, n) => { const [s, p] = CLASS_LABELS[cls] || [cls, `${cls}s`]; return n === 1 ? s : p; };
+/** class → [singular, plural] display noun, for echoing a count back in English.
+ *  `classLabels` comes from the active session's merged lane vocabulary (empty
+ *  by default — see resolveLaneVocab/mergedLaneVocab, extensions.mjs); a
+ *  session with no code pack active never falls back to a hardcoded table. */
+const classNoun = (cls, n, classLabels) => { const [s, p] = classLabels[cls] || [cls, `${cls}s`]; return n === 1 ? s : p; };
 
 /** Count individuals of a class in the loaded graph (live, not the header field).
  *  No individual is ever stored with class "Package" — packages are the
@@ -494,14 +477,29 @@ const countClass = (graph, cls) => (cls === "Package"
 
 /** Every kind the counter answers to, as a human list — what it can count once a
  *  graph is loaded, as opposed to countableKinds, which is what THIS graph holds. */
-const COUNTABLE_KIND_WORDS = [...new Set(Object.values(COUNT_NOUNS))]
-  .map((cls) => CLASS_LABELS[cls]?.[1] ?? `${cls}s`);
+const countableKindWords = (countNouns, classLabels) => [...new Set(Object.values(countNouns))]
+  .map((cls) => classLabels[cls]?.[1] ?? `${cls}s`);
 
 /** The classes this graph can actually count, as a human list ("classes, functions, …"). */
-function countableKinds(graph) {
+function countableKinds(graph, classLabels) {
   const present = new Set(graph.individuals.map((i) => i.class).filter(Boolean));
   if (present.has("Module")) present.add("Package");
-  return Object.keys(CLASS_LABELS).filter((c) => present.has(c)).map((c) => CLASS_LABELS[c][1]);
+  return Object.keys(classLabels).filter((c) => present.has(c)).map((c) => classLabels[c][1]);
+}
+
+/** The shipped code pack's own count-noun table (extensions.mjs's
+ *  defaultCodeLaneVocab, memoized), loaded unconditionally — the PRECEDENCE
+ *  guard a handful of taught-fact lanes use to defer to the graph-count lanes
+ *  for a word like "class"/"function" ("answerCount owns this noun, don't
+ *  answer it as a taught fact instead"). Every caller of this guard already
+ *  runs only once the code domain is active (either directly gated, or
+ *  reached only after answerCount itself returned a real count), so reading
+ *  the shipped default here — rather than threading the session's own merge
+ *  through each one — reproduces today's precedence exactly, with the noun
+ *  table itself no longer duplicated as a chat.mjs literal. */
+async function codeCountNouns() {
+  const { defaultCodeLaneVocab } = await import("./extensions.mjs");
+  return (await defaultCodeLaneVocab()).countNouns;
 }
 
 /** A discourse-anaphoric count/list head — "how many [of] those/them/these",
@@ -607,8 +605,13 @@ const RESTRICTOR_VERB_RE = new RegExp(
  *  count and the ordinary miss instead of a code-graph-flavored decline (or,
  *  worse, "0 classes." for a class nothing here actually holds). Omitted
  *  (null), it derives from the graph alone — every existing caller that
- *  passes a real code graph keeps its answer unchanged. */
-export function answerCount(graph, query, { uiContext = "cli", codeDomainActive = null } = {}) {
+ *  passes a real code graph keeps its answer unchanged.
+ *
+ *  `countNouns`/`classLabels` are this session's merged lane vocabulary
+ *  (chat-session.mjs's resolveLaneVocab, threaded via ctx.laneVocab) — empty
+ *  by default, so a caller that omits them alongside an inactive domain never
+ *  sees code-graph vocabulary. */
+export function answerCount(graph, query, { uiContext = "cli", codeDomainActive = null, countNouns = {}, classLabels = {} } = {}) {
   if (!graph) return null;
   const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
   if (!domainActive) return null;
@@ -625,14 +628,14 @@ export function answerCount(graph, query, { uiContext = "cli", codeDomainActive 
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
   const noun = m[1].toLowerCase();
-  const cls = COUNT_NOUNS[noun];
+  const cls = countNouns[noun];
   if (cls) {
     const tail = String(query).slice(m.index + m[0].length);
     if (RESTRICTOR_VERB_RE.test(tail)) return null;
     if (countTailIsUnhandledRestrictor(tail)) return null;
   }
   if (!cls) {
-    const kinds = countableKinds(graph);
+    const kinds = countableKinds(graph, classLabels);
     // When no code graph is loaded, countableKinds(graph) is genuinely
     // empty — an honest, non-dangling message pointing at how to load one.
     if (!kinds.length) {
@@ -645,7 +648,7 @@ export function answerCount(graph, query, { uiContext = "cli", codeDomainActive 
       // promise that indexing would let it count moons. The REMEDY is about the
       // session, and a terminal can act on it, so it stays — worded as its own
       // fact rather than as the answer to what was asked.
-      return `I can't count "${noun}" — I count the kinds a code graph holds: ${COUNTABLE_KIND_WORDS.join(", ")}. `
+      return `I can't count "${noun}" — I count the kinds a code graph holds: ${countableKindWords(countNouns, classLabels).join(", ")}. `
         + `This session has no code graph loaded either — index this repo with "tmct index", `
         + `point me at another with --repo, or run "npm run example:mini".`;
     }
@@ -653,15 +656,15 @@ export function answerCount(graph, query, { uiContext = "cli", codeDomainActive 
       `Try "how many classes are there".`;
   }
   const n = countClass(graph, cls);
-  return `${n} ${classNoun(cls, n)}.`;
+  return `${n} ${classNoun(cls, n, classLabels)}.`;
 }
 
 /** singular+plural display forms for the edge-nominalized nouns answerEdgeCount
  *  (below) actually answers — a small subset of EDGE_NOUN_TO_METRIC's keys, the
  *  ones that read as a real countable noun ("3 callers.") rather than a
  *  participle only natural in a superlative ("most USED", not "how many used").
- *  A key with no entry here echoes the user's own word unchanged (safe default,
- *  same fallback CLASS_LABELS/classNoun use above). */
+ *  A key with no entry here echoes the user's own word unchanged (the same
+ *  safe-default shape classNoun's own fallback uses above). */
 const EDGE_NOUN_LABELS = {
   test: ["test", "tests"], tests: ["test", "tests"],
   importers: ["importer", "importers"], dependents: ["dependent", "dependents"],
@@ -712,8 +715,8 @@ function extractEdgeCountEntity(tail, metric) {
 
 /** Bare "how many <edge-noun> <verb> <entity>" / "how many <edge-noun> does
  *  <entity> have" — "how many tests cover X", "how many importers does X
- *  have", "how many callers does X have". answerCount's own COUNT_NOUNS
- *  table only maps a counted noun to a graph INDIVIDUAL CLASS (Module/Class/…);
+ *  have", "how many callers does X have". answerCount's own count-noun table
+ *  only maps a counted noun to a graph INDIVIDUAL CLASS (Module/Class/…);
  *  an edge-nominalized noun like "tests"/"importers"/"callers" names an EDGE
  *  KIND instead — ask-vocab.mjs's EDGE_NOUN_TO_METRIC, the SAME table the
  *  superlative lane ("which module has the most tests") reads. This reuses
@@ -724,8 +727,8 @@ function extractEdgeCountEntity(tail, metric) {
  *
  *  Checked BEFORE answerCount in runTurn so it gets first look; declines
  *  (returns null, letting answerCount's existing message stand) whenever:
- *    - the noun isn't edge-nominalized at all (a COUNT_NOUNS class, or truly
- *      unknown), or
+ *    - the noun isn't edge-nominalized at all (a real graph-countable class, or
+ *      truly unknown), or
  *    - no entity term could be extracted from the tail
  *      (extractEdgeCountEntity), or
  *    - the extracted term doesn't resolve to exactly one graph entity.
@@ -738,8 +741,10 @@ function extractEdgeCountEntity(tail, metric) {
  *
  *  `codeDomainActive`: same gate as answerCount's own — with no code domain
  *  active, this declines unconditionally rather than reading an edge kind off
- *  a graph nothing here actually indexed. */
-async function answerEdgeCount(graph, query, { codeDomainActive = null } = {}) {
+ *  a graph nothing here actually indexed. `countNouns` is the session's merged
+ *  lane vocabulary (see answerCount's own docblock) — the same table, so this
+ *  lane defers to answerCount for exactly the nouns answerCount owns. */
+async function answerEdgeCount(graph, query, { codeDomainActive = null, countNouns = {} } = {}) {
   if (!graph) return null;
   const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
   if (!domainActive) return null;
@@ -748,7 +753,7 @@ async function answerEdgeCount(graph, query, { codeDomainActive = null } = {}) {
   const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
   const noun = m[1].toLowerCase();
-  if (COUNT_NOUNS[noun]) return null; // a real graph class — answerCount owns it
+  if (countNouns[noun]) return null; // a real graph class — answerCount owns it
   const metric = EDGE_NOUN_TO_METRIC[noun];
   if (!metric) return null; // not edge-nominalized either — answerCount's "I can't count" stands
   const term = extractEdgeCountEntity(q.slice(m.index + m[0].length), metric);
@@ -774,7 +779,8 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache 
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
   const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph kind — answerCount owns it
+  const countNouns = await codeCountNouns();
+  if (countNouns[asked]) return null; // a real graph kind — answerCount owns it
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const objVariants = factTermVariants(normFactTerm, asked);
@@ -784,7 +790,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache 
   // countable graph class (rankByBiasThenTrust: bias-tied/unconfigured degrades
   // to the same trust-desc scan this always ran).
   for (const f of rankByBiasThenTrust(isa, biasByBundle)) {
-    const cls = COUNT_NOUNS[String(f.subject).toLowerCase()];
+    const cls = countNouns[String(f.subject).toLowerCase()];
     if (cls) { const n = countClass(graph, cls); return `${n} ${asked}.`; }
   }
   return null;
@@ -794,7 +800,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache 
 // few"/"every"), NEVER real cardinality counting. Dispatched ahead of
 // answerCount in runTurn (else its noun-scan regex would short-circuit to an
 // "I can't count 'Xs'" miss first). Claims authority only when the subject
-// isn't a real graph-countable class (COUNT_NOUNS) AND tmct has some
+// isn't a real graph-countable class (codeCountNouns) AND tmct has some
 // isa-family fact about it — otherwise falls through to answerCount untouched.
 const HOW_MANY_ARE_RE = /^how\s+many\s+([\w-]+)\s+(?:are|is)\s+(.+?)[?.!\s]*$/i;
 async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}, cache = null) {
@@ -802,7 +808,7 @@ async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}, cache
   const m = String(query).trim().match(HOW_MANY_ARE_RE);
   if (!m) return null;
   const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
+  if ((await codeCountNouns())[asked]) return null; // a real graph-countable class — answerCount owns it
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const subjVariants = factTermVariants(normFactTerm, asked);
@@ -1027,7 +1033,7 @@ function taughtMembersUnder(isa, children, variants, biasByBundle) {
 async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundle, cache) {
   const words = String(nounRun || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return null;
-  if (COUNT_NOUNS[words[0].toLowerCase()]) return null; // a real graph-countable class — the code lanes own it
+  if ((await codeCountNouns())[words[0].toLowerCase()]) return null; // a real graph-countable class — the code lanes own it
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const rows = await factRows(memoryDir, cache);
@@ -1081,7 +1087,8 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
   // one class-level fact. Only a DIRECT member triggers the deferral: an
   // inherited member reached through a taught subclass is still a genuine
   // count of this class's membership.
-  if (hit.directMembers.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
+  const countNouns = await codeCountNouns();
+  if (hit.directMembers.some((f) => countNouns[String(f.subject).toLowerCase()])) return null;
   const n = new Set(hit.members.map((f) => String(f.subject).toLowerCase())).size;
   const noun = n === 1 ? hit.asked.replace(/s$/, "") : hit.asked;
   // Sense reporting: cluster the classes the members were found under,
@@ -9948,12 +9955,19 @@ const WHOLE_RECALL_RE = /^(?:what\s+(?:did|have)\s+(?:i|we)\s+(?:told?|tell|said
 /** The singular class-noun of the graph entity a term names ("app/lib/a.mjs" →
  *  "module", "Widget" → "class"), via the ask engine's own resolver + the loaded
  *  graph's class map — or null on a miss/ambiguity/no-graph. Lets forward
- *  membership answer over a graph INSTANCE, not just a bare class word. */
+ *  membership answer over a graph INSTANCE, not just a bare class word. A
+ *  resolved `cls` only ever happens over a real code graph, so reading the
+ *  shipped code pack's own class labels here (codeCountNouns' sibling, same
+ *  "runs only when the domain is already active" reasoning) is safe
+ *  regardless of whether the pack extension itself is formally active. */
 async function entityClassNoun(graph, term) {
   const ent = await resolveEntity(graph, term);
   if (!ent) return null;
   const cls = (graph?.byId?.get?.(ent.id) || (graph?.individuals || []).find((i) => i?.id === ent.id))?.class;
-  return cls && CLASS_LABELS[cls] ? CLASS_LABELS[cls][0] : null;
+  if (!cls) return null;
+  const { defaultCodeLaneVocab } = await import("./extensions.mjs");
+  const { classLabels } = await defaultCodeLaneVocab();
+  return classLabels[cls] ? classLabels[cls][0] : null;
 }
 
 /** A relation group that carries class-inheritance edges — the same token family
@@ -16459,7 +16473,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -16472,6 +16486,16 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // every existing caller that hands runTurn a real code graph, and
   // correctly inactive for a graph-less or empty one.
   const domainActive = codeDomainActive ?? (!!graph && moduleCountOf(graph) > 0);
+  // This turn's lane vocabulary (count nouns/class labels/help rows/the
+  // miss-recovery pointer): the caller's own — chat-session.mjs threads the
+  // real per-session merge (extensions.mjs's mergedLaneVocab) — or, for a
+  // direct/library caller that hands this a real code graph but no merge,
+  // the shipped code pack's own vocabulary (the same "a real graph is
+  // enough" fallback domainActive itself applies, above). An inactive
+  // domain never sees an import, and never sees code-domain vocabulary.
+  const laneVocabValue = laneVocab ?? (domainActive
+    ? await (await import("./extensions.mjs")).defaultCodeLaneVocab()
+    : { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" });
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -16535,7 +16559,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -17079,7 +17103,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // short-circuit straight to "I can't count 'tests'" before this lane ever
   // got a turn. Declines (null) for anything answerCount should own, or a bare
   // global count with no named entity — see answerEdgeCount's own docblock.
-  const edgeCount = await answerEdgeCount(graph, workingLine, { codeDomainActive: domainActive });
+  const edgeCount = await answerEdgeCount(graph, workingLine, { codeDomainActive: domainActive, countNouns: laneVocabValue.countNouns });
   if (edgeCount != null) {
     note(trace, 'goal: get a per-entity count of an edge-nominalized kind ("how many tests cover X", "how many callers does X have")');
     note(trace, "lane: answerEdgeCount — matched an EDGE_NOUN_TO_METRIC noun with a resolvable named entity, answered via the same degreeMetric the superlative lane uses");
@@ -17087,7 +17111,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
-  const count = answerCount(graph, workingLine, { uiContext, codeDomainActive: domainActive });
+  const count = answerCount(graph, workingLine, { uiContext, codeDomainActive: domainActive, countNouns: laneVocabValue.countNouns, classLabels: laneVocabValue.classLabels });
   if (count != null) {
     // An "I can't count <noun>" from a bare kind may still be answerable from an
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
