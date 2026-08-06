@@ -1,0 +1,20 @@
+{
+  "name": "determinism",
+  "generatedAt": "2026-08-06T00:20:15.130Z",
+  "commit": "015fc685814ed0c86059282c7344b0eae460bfee",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "cases",
+  "threshold": {
+    "direction": "min",
+    "value": 139
+  },
+  "sources": [
+    "test-benchmarks/chatbench/graded-pool.jsonl"
+  ],
+  "value": 139,
+  "detail": {
+    "total": 139,
+    "runtimeMs": 27034
+  }
+}
