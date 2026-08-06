@@ -1,0 +1,111 @@
+LICENSE NOTICE — test-benchmarks/claims/simplewiki-sentences.txt
+==================================================================
+
+The 520 sentences in simplewiki-sentences.txt are unedited extracts from
+71 Simple English Wikipedia articles, drawn from this repository's own
+committed reference pack (corpus/reference/, REFERENCE_PACK_NAME =
+"simplewiki" in src/domain/reference-pack.mjs). They are licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International License
+(CC BY-SA 4.0), NOT under this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by-sa/4.0/deed.en
+
+Attribution
+-----------
+
+This text is from Simple English Wikipedia, written by Wikipedia contributors
+and available under CC BY-SA 4.0. A Wikipedia article has no single author:
+the authoritative author list is its revision history, and per Wikipedia's own
+reuse guidance linking to the article satisfies attribution. Every article used
+here is listed below with its source URL and the exact revision id its text
+was cut from (inherited from corpus/reference/manifest.json, the pinned
+simplewiki dump both this pack and claim:prose-band's sentences trace back to).
+
+Source and reproduction
+------------------------
+
+Sentences are extracted verbatim (no wording changes) from the article `text`
+field already shipped in corpus/reference/shards/, itself built by
+scripts/fetch-reference-pack.mjs from the pinned pages-articles dump recorded
+in corpus/reference/manifest.json.
+
+Share-alike — read this before reusing
+---------------------------------------
+
+CC BY-SA 4.0's share-alike condition is viral. If you redistribute this file,
+modified or not, you must do so under CC BY-SA 4.0 with this attribution.
+
+Articles used (71, alphabetical by title)
+------------------------------
+
+Abacus — https://simple.wikipedia.org/wiki/Abacus (revid 10820589)
+Absinthe — https://simple.wikipedia.org/wiki/Absinthe (revid 10867885)
+Adjustment — https://simple.wikipedia.org/wiki/Adjustment (revid 9204287)
+Agar — https://simple.wikipedia.org/wiki/Agar (revid 10377151)
+AIDS — https://simple.wikipedia.org/wiki/AIDS (revid 10629339)
+Aroma compound — https://simple.wikipedia.org/wiki/Aroma_compound (revid 10515343)
+Banner — https://simple.wikipedia.org/wiki/Banner (revid 8702565)
+Basal — https://simple.wikipedia.org/wiki/Basal (revid 10373102)
+Booby — https://simple.wikipedia.org/wiki/Booby (revid 10898851)
+Book — https://simple.wikipedia.org/wiki/Book (revid 10861998)
+Burgh — https://simple.wikipedia.org/wiki/Burgh (revid 7479291)
+Cement — https://simple.wikipedia.org/wiki/Cement (revid 10855380)
+Chinook — https://simple.wikipedia.org/wiki/Chinook (revid 9767232)
+Chub — https://simple.wikipedia.org/wiki/Chub (revid 5383292)
+CITES — https://simple.wikipedia.org/wiki/CITES (revid 10311319)
+Comparison of Internet Relay Chat clients — https://simple.wikipedia.org/wiki/Comparison_of_Internet_Relay_Chat_clients (revid 10334204)
+Corium (nuclear reactor) — https://simple.wikipedia.org/wiki/Corium_(nuclear_reactor) (revid 9931456)
+Cuckoo — https://simple.wikipedia.org/wiki/Cuckoo (revid 8186451)
+Dagger — https://simple.wikipedia.org/wiki/Dagger (revid 10470941)
+Dalit — https://simple.wikipedia.org/wiki/Dalit (revid 10794982)
+Dock — https://simple.wikipedia.org/wiki/Dock (revid 9974355)
+Dominoes — https://simple.wikipedia.org/wiki/Dominoes (revid 6887047)
+East — https://simple.wikipedia.org/wiki/East (revid 10213356)
+Farmer — https://simple.wikipedia.org/wiki/Farmer (revid 10882087)
+Fee — https://simple.wikipedia.org/wiki/Fee (revid 9581117)
+Fever — https://simple.wikipedia.org/wiki/Fever (revid 10517716)
+Foam — https://simple.wikipedia.org/wiki/Foam (revid 8991731)
+Form — https://simple.wikipedia.org/wiki/Form (revid 8430283)
+Frustration — https://simple.wikipedia.org/wiki/Frustration (revid 8145868)
+Gossip — https://simple.wikipedia.org/wiki/Gossip (revid 10900183)
+Halibut — https://simple.wikipedia.org/wiki/Halibut (revid 8034378)
+Harmonic — https://simple.wikipedia.org/wiki/Harmonic (revid 10643989)
+Hostility — https://simple.wikipedia.org/wiki/Hostility (revid 7727101)
+Humanism — https://simple.wikipedia.org/wiki/Humanism (revid 10689600)
+Hypnotic — https://simple.wikipedia.org/wiki/Hypnotic (revid 9566864)
+Interiors — https://simple.wikipedia.org/wiki/Interiors (revid 7019005)
+Iodine — https://simple.wikipedia.org/wiki/Iodine (revid 10895163)
+Jargon — https://simple.wikipedia.org/wiki/Jargon (revid 8796848)
+Jewellery — https://simple.wikipedia.org/wiki/Jewellery (revid 10454610)
+Kea — https://simple.wikipedia.org/wiki/Kea (revid 10510111)
+Ladder — https://simple.wikipedia.org/wiki/Ladder (revid 10817583)
+Lit — https://simple.wikipedia.org/wiki/Lit (revid 7112100)
+Loganberry — https://simple.wikipedia.org/wiki/Loganberry (revid 9556454)
+Los Angeles Dodgers — https://simple.wikipedia.org/wiki/Los_Angeles_Dodgers (revid 10876590)
+Magnet — https://simple.wikipedia.org/wiki/Magnet (revid 10896383)
+Mistletoe — https://simple.wikipedia.org/wiki/Mistletoe (revid 10720022)
+Patient — https://simple.wikipedia.org/wiki/Patient (revid 10754985)
+Pickled cucumber — https://simple.wikipedia.org/wiki/Pickled_cucumber (revid 10783822)
+Pomelo — https://simple.wikipedia.org/wiki/Pomelo (revid 10862576)
+Pony — https://simple.wikipedia.org/wiki/Pony (revid 9839566)
+Prohibition in the United States — https://simple.wikipedia.org/wiki/Prohibition_in_the_United_States (revid 10872402)
+Rat — https://simple.wikipedia.org/wiki/Rat (revid 10887256)
+Red — https://simple.wikipedia.org/wiki/Red (revid 10896006)
+Resin — https://simple.wikipedia.org/wiki/Resin (revid 10406040)
+Sea eagle — https://simple.wikipedia.org/wiki/Sea_eagle (revid 9421362)
+Server — https://simple.wikipedia.org/wiki/Server (revid 10722288)
+Shuttlecock — https://simple.wikipedia.org/wiki/Shuttlecock (revid 10857872)
+Spiraea — https://simple.wikipedia.org/wiki/Spiraea (revid 8826773)
+Student — https://simple.wikipedia.org/wiki/Student (revid 10394412)
+Suggestion — https://simple.wikipedia.org/wiki/Suggestion (revid 9529233)
+Sundae — https://simple.wikipedia.org/wiki/Sundae (revid 8698226)
+Swarm — https://simple.wikipedia.org/wiki/Swarm (revid 4614937)
+Tahini — https://simple.wikipedia.org/wiki/Tahini (revid 9213791)
+Tarragon — https://simple.wikipedia.org/wiki/Tarragon (revid 8551618)
+Texas Instruments — https://simple.wikipedia.org/wiki/Texas_Instruments (revid 7582472)
+The Giver — https://simple.wikipedia.org/wiki/The_Giver (revid 10811381)
+Theology — https://simple.wikipedia.org/wiki/Theology (revid 8449437)
+Tickling — https://simple.wikipedia.org/wiki/Tickling (revid 8676142)
+Transpose — https://simple.wikipedia.org/wiki/Transpose (revid 9041002)
+Tubular bells — https://simple.wikipedia.org/wiki/Tubular_bells (revid 9848699)
+Vein — https://simple.wikipedia.org/wiki/Vein (revid 10153365)
