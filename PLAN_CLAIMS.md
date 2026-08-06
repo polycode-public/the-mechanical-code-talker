@@ -518,6 +518,21 @@ Updated as waves merge to local main (2026-08-06):
   median 0 days.
 - T9 research sources + Wikidata — landed (b799facf, adf65d46): contract 23/23, rig
   names 2 sources.
+- T11–T13 — landed (8cfca414..d557fd78): ground-gate matrix 3.0% accepted-wrong
+  (threshold max 5; the three cases are narrative/gibberish prose the general-verb
+  fallback misreads as facts — queued in NEXT.md as an engine fix), commonsense
+  before 0 / after 0 / delta 0, lexicon OOV 50.6% → 35.0% (delta −15.6) with counts
+  matching ground truth.
 - T2 cite — in flight under decision 13's rescope.
-- T10 planner, T11–T13 — in flight.
+- T10 planner — in flight.
 - T14 page, T15 CI proposal — queued on the above.
+
+**Open question for the operator (proceeding without an answer, per the overnight
+directive):** E1's measured delta is zero — OpenBookQA's causal/effect phrasing ("what
+happens when…") sits outside the ask grammar's supported shapes, so loading wordnet-xl
+buys vocabulary (T13 measures that gain) but no QA-score motion on this set. This pass
+ships the block with the zero stated flat and a what-this-does-not-mean line naming the
+grammar-shape gap. The question: keep OpenBookQA as E1's set (an honest hard number), or
+re-shape E1 around a definitional QA set the grammar can express ("what is X"-shaped),
+which would show the corpus delta the block was designed to show? Both stay honest; the
+second changes what E1 claims.
