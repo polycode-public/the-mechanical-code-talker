@@ -428,6 +428,60 @@ export function defaultCodeLaneVocab() {
   return cachedDefaultCodeLaneVocab;
 }
 
+/** Read one pack entry's own declaration into the shape a capability listing
+ *  renders: the pack's name, the grounding channel it declares
+ *  (grounding_kind/grounding_adapter) and how much its `vocab_path` file adds
+ *  to the lane merge. A pack whose vocab file is missing or malformed still
+ *  names itself and its grounding channel, with nothing counted — the listing
+ *  reports what the pack declares, and never invents a contribution. */
+async function declaredPackSummary(name, entry) {
+  const summary = {
+    name,
+    groundingKind: entry.groundingKind || "",
+    groundingAdapter: entry.groundingAdapter || "",
+    commandCount: 0,
+    countNounCount: 0,
+  };
+  if (!entry.vocabPath) return summary;
+  try {
+    const raw = JSON.parse(await readFile(entry.vocabPath, "utf8"));
+    summary.commandCount = Array.isArray(raw.helpRows) ? raw.helpRows.length : 0;
+    summary.countNounCount = Object.keys(raw.countNouns || {}).length;
+  } catch { /* an unreadable vocab file lists as a pack that adds nothing */ }
+  return summary;
+}
+
+/** Every ACTIVE `pack`-kind entry, summarized from its own declaration, in
+ *  ascending bias order (name breaks a tie, so the listing is stable). The
+ *  read-side companion to mergedLaneVocab: that merges what packs contribute,
+ *  this says which packs contributed it. No active pack → an empty list, and
+ *  a listing that names no domain at all. */
+export async function activeDomainPacks(entries, biasByBundle = {}) {
+  const candidates = [];
+  for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
+    if (!entry.active) continue;
+    if (entry.kind !== "pack") continue;
+    candidates.push({ name, entry, bias: biasByBundle[name] ?? 1 });
+  }
+  candidates.sort((a, b) => a.bias - b.bias || a.name.localeCompare(b.name));
+  const summaries = [];
+  for (const c of candidates) summaries.push(await declaredPackSummary(c.name, c.entry));
+  return summaries;
+}
+
+let cachedDefaultCodeDomainPacks = null;
+/** The shipped code pack's OWN declaration as a one-entry listing — the same
+ *  "a real graph is enough" fallback defaultCodeLaneVocab serves, for the
+ *  caller that holds a real code graph without the `code` pack formally
+ *  active in tmct.toml. Never consulted when the domain is inactive. */
+export function defaultCodeDomainPacks() {
+  if (!cachedDefaultCodeDomainPacks) {
+    const code = { ...builtinExtensions().code, active: true };
+    cachedDefaultCodeDomainPacks = activeDomainPacks(new Map([["code", code]]), {});
+  }
+  return cachedDefaultCodeDomainPacks;
+}
+
 // ---- Part 4: `tmct extend --validate <dir>` ---------------------------------
 
 /** Validate one CANDIDATE extension pack entry against a directory, reusing the existing

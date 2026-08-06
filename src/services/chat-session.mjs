@@ -25,7 +25,7 @@ import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "../adapters/source.mjs";
-import { resolveExtensions, mergedLexiconExtra, mergedLaneVocab, defaultCodeLaneVocab } from "./extensions.mjs";
+import { resolveExtensions, mergedLexiconExtra, mergedLaneVocab, defaultCodeLaneVocab, activeDomainPacks, defaultCodeDomainPacks } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint, codeDomainActive as codeDomainActiveOf } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
@@ -305,6 +305,12 @@ export async function createSession({
     laneVocab = await defaultCodeLaneVocab();
   }
 
+  // Which packs supplied that vocabulary, read from each pack's own
+  // declaration — what /capabilities names as this session's loaded domains.
+  // Same "a real graph is enough" fallback as the vocabulary itself.
+  let domainPacks = extEntries ? await activeDomainPacks(extEntries, biasByBundle) : [];
+  if (domainActive && !domainPacks.length) domainPacks = await defaultCodeDomainPacks();
+
   // Load this handle's lexicon once, MERGED with any active lexicon/pack
   // extension entries (ascending-bias merge order so a higher-bias bundle's
   // same-lemma entry wins deterministically). Failure-tolerated — a broken
@@ -497,7 +503,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

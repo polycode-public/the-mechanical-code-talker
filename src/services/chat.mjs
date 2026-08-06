@@ -46,7 +46,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
-import { loadLexicon, lookupNoun, readsAsIndividualName } from "../domain/grammar/lexicon.mjs";
+import { loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, readsAsIndividualName } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import {
   REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
@@ -4510,14 +4510,69 @@ async function generalVerbTeach(payload) {
   // polarity prefix swap. Negating first would hand the fold an mgxneg: CURIE
   // its /^mgx:[a-z]+$/ guard rejects, stranding "on water" inside the object of
   // "a penguin cannot rest on water" — the very bug the fold exists to prevent.
-  const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
+  const mintedPredicate = await generalVerbPredicate(verb);
+  const folded = foldPrepositionIntoPredicate(mintedPredicate, objectRaw);
   // "the" strips alongside "a"/"an": the read-back side already strips a
   // leading determiner off the queried term, so leaving it on here stores an
   // object no question can match.
   const object = folded.object.replace(/^(?:an?|the)\s+/i, "").trim();
   if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
   if (PLACE_ADVERB_OBJECT_RE.test(object)) return null; // a place adverb is never a real object
+  if (await readsAsNarratedEvent(verb, folded.predicate !== mintedPredicate)) return null;
+  if (await readsAsUnknownEverywhere(subject, verb, object)) return null;
   return { subject, predicate: negated ? negatedPredicate(folded.predicate) : folded.predicate, object };
+}
+
+/** Does this word read as a WORD at all — the committed lexicon knows it as a
+ *  noun/verb/adjective/proper name, or wink's lemmatizer folds it onto a
+ *  different base form, which it only does for a word in its own dictionary.
+ *  Gibberish satisfies neither: "qpwoe" is in no lexicon and lemmatizes to
+ *  itself. A base-form real word ("rest") lemmatizes to itself too, which is
+ *  why this is only ever asked of a whole sentence at once, never one slot. */
+function readsAsKnownWord(word, lemma) {
+  const w = String(word || "").toLowerCase();
+  if (!w) return false;
+  const lex = loadLexicon();
+  if (lookupNoun(lex, w) || lookupVerb(lex, w) || lookupAdjective(lex, w) || lookupProperName(lex, w)) return true;
+  return Boolean(lemma && lemma(w) !== w);
+}
+
+/** A past-tense verb whose object opens with a preposition is narration of
+ *  something that happened, not a relation anyone can ask back: "the old
+ *  bridge creaked under the weight of the truck" would mint mgx:creak-under
+ *  over "weight of the truck", a fact no question this build can ask will
+ *  ever match. Decline instead of storing the garble.
+ *
+ *  The tense test is the closed "-ed" strip confirmed by wink's lemma, the
+ *  same pair matchRelationalVerbTeach uses — so the present-tense teaches this
+ *  frame exists for ("disk-1 rests on peg-a", "wolf-1 stands on bank-east")
+ *  never reach it, and neither does a past tense with no prepositional tail,
+ *  which the frames above already own. */
+async function readsAsNarratedEvent(verb, prepositionFolded) {
+  if (!prepositionFolded) return false;
+  const v = String(verb || "").toLowerCase();
+  if (!pastVerbBase(v)) return false;
+  try {
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
+    const lemma = proseLemma();
+    if (lemma && lemma(v) === v) return false; // wink says this is a base form, not a past
+  } catch { /* no lemmatizer — the closed strip stands on its own */ }
+  return true;
+}
+
+/** A sentence in which NOTHING is a word — no slot is in the lexicon and none
+ *  lemmatizes, so "asdkjhaskjdh qpwoe zzxx" would mint mgx:qpwoe over two
+ *  more non-words. One recognized word anywhere is enough for the frame to
+ *  stand, which is what keeps a teach about names nothing has heard of
+ *  ("grace mentors alan") storing normally. */
+async function readsAsUnknownEverywhere(subject, verb, object) {
+  let lemma = null;
+  try {
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
+    lemma = proseLemma();
+  } catch { /* no lemmatizer — the lexicon answers alone */ }
+  const words = `${subject} ${verb} ${object}`.split(/[\s-]+/).filter(Boolean);
+  return !words.some((w) => readsAsKnownWord(w, lemma));
 }
 
 /** Is `word` a genuine NOUN/PROPN, per wink-nlp's optional POS tagger
@@ -14533,20 +14588,31 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
     // Raw query first (the long-standing contract), then ONE retry with the
-    // normalized form — gated to the no-envelope bootstrap ONLY: on the FIRST
-    // turn of a graph-less session the ask engine throws before its own
-    // normalize pass runs, so a politeness-wrapped vocabulary question
-    // ("could you tell me what a dog is") reaches this lane still wearing the
-    // wrapper no reader matches. From turn 2 on (envelope present) the
-    // pipeline unwraps it upstream, and an unrestricted retry would let
-    // normalization-mangled text reach readers whose guards were written for
-    // the raw surface (the pronoun-subject identity family).
-    const normalizedForFacts = envelope ? null : normalizeQuery(String(query));
+    // courtesy wrapper peeled off. A politeness-wrapped vocabulary question
+    // ("could you tell me what a dog is", "please tell me what you know about
+    // dog") reaches this lane still wearing a wrapper no reader matches, so
+    // without the retry it walls while its bare form answers.
+    //
+    // The peel is applyPreambleFrames, not the full normalizeQuery. Only the
+    // closed wrapper frames are wanted here; normalizeQuery goes on to strip
+    // filler words, and one of those is the pronoun in "what do you know
+    // about X" — the very word that shape's reader anchors on. Peeling
+    // rebuilt the question and the filler strip took it straight back apart,
+    // which is why a courtesy-wrapped memory question about a term this
+    // session KNOWS used to wall. It is also why the retry no longer has to
+    // be held to the no-envelope bootstrap turn: what made an unrestricted
+    // retry unsafe was normalization-mangled text reaching readers whose
+    // guards were written for the raw surface, and the closed frames do not
+    // mangle — they either match a whole wrapper or leave the string alone.
+    //
+    // The retry can only run when the raw read already returned nothing, so
+    // it turns a wall into an answer and never overrides one.
+    const peeledForFacts = applyPreambleFrames(String(query));
     const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
-      ?? (normalizedForFacts && normalizedForFacts !== String(query).trim()
-        ? (await factAnswer(memoryDir, normalizedForFacts, envelope, miss, biasByBundle, cache, newFocus?.label))
-          ?? (await factReadBack(memoryDir, normalizedForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
+      ?? (peeledForFacts && peeledForFacts !== String(query).trim()
+        ? (await factAnswer(memoryDir, peeledForFacts, envelope, miss, biasByBundle, cache, newFocus?.label))
+          ?? (await factReadBack(memoryDir, peeledForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
         : null);
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
@@ -15231,7 +15297,23 @@ const GOAL_BY_COMMAND = {
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk. Also carries a `goal` field mirroring runAsk's own, so
  *  withGoalLine's "Goal (inferred): …" line fires for command dispatches too. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null }) {
+/** One loaded domain as /capabilities renders it: the pack's name, the
+ *  grounding channel it declares, and what its lane vocabulary adds. A pack
+ *  that declares no grounding channel gets no grounding clause — the listing
+ *  never fills that gap in for it. */
+function domainPackLine({ name, groundingKind, groundingAdapter, commandCount, countNounCount }) {
+  const parts = [];
+  if (groundingKind === "extraction" && groundingAdapter) parts.push(`grounded by extraction through ${groundingAdapter}`);
+  else if (groundingKind === "extraction") parts.push("grounded by extraction");
+  else if (groundingKind === "taught-only") parts.push("grounded by the teach lane only");
+  const adds = [];
+  if (commandCount) adds.push(`${commandCount} command${commandCount === 1 ? "" : "s"}`);
+  if (countNounCount) adds.push(`${countNounCount} count noun${countNounCount === 1 ? "" : "s"}`);
+  if (adds.length) parts.push(`adds ${adds.join(" and ")}`);
+  return parts.length ? `${name} — ${parts.join("; ")}` : String(name);
+}
+
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -15314,9 +15396,14 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   }
 
   // /capabilities — everything a /plan request can plan over: the built-in
-  // read-only graph-query tools, plus the taught action families read straight
+  // read-only graph-query tools, the taught action families read straight
   // from this store (they only live in the registry inside a /plan request,
-  // so listing them means reading the rules, not the registry).
+  // so listing them means reading the rules, not the registry), and this
+  // session's loaded domain packs. Each domain line restates that pack's own
+  // declaration — its grounding channel and what its vocabulary adds — so the
+  // surface reports what the pack says about itself rather than a second,
+  // drifting description of it. A session with no pack active lists no
+  // domains and says nothing about them.
   if (name === "capabilities") {
     note(trace, "goal: see what /plan can plan over — built-in query tools and taught actions");
     const { declaredCapabilityNames } = await import("../domain/router/drive.mjs");
@@ -15340,6 +15427,11 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
           .join(", ");
         lines.push(`  taught:${familyName} — ${sig}`);
       }
+    }
+    const packs = Array.isArray(domainPacks) ? domainPacks : [];
+    if (packs.length) {
+      lines.push("loaded domains:");
+      for (const pack of packs) lines.push(`  ${domainPackLine(pack)}`);
     }
     return mk(lines.join("\n"));
   }
@@ -16485,7 +16577,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -16508,6 +16600,12 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   const laneVocabValue = laneVocab ?? (domainActive
     ? await (await import("./extensions.mjs")).defaultCodeLaneVocab()
     : { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" });
+  // The packs behind that vocabulary, each read from its own declaration —
+  // the same caller-first-then-"a real graph is enough" rule as the
+  // vocabulary. An inactive domain lists no packs at all.
+  const domainPacksValue = domainPacks ?? (domainActive
+    ? await (await import("./extensions.mjs")).defaultCodeDomainPacks()
+    : []);
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -16571,7 +16669,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
