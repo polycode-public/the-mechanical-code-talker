@@ -1,0 +1,37 @@
+{
+  "name": "freshness",
+  "generatedAt": "2026-08-06T00:56:35.739Z",
+  "commit": "216e7afc5ac6ac8df472f378285391a28b448232",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "days",
+  "threshold": {
+    "direction": "max",
+    "value": 3650
+  },
+  "sources": [
+    "scripts/claims/claim-freshness.mjs",
+    "test-benchmarks/claims/teach-set.jsonl",
+    "src/services/init.mjs",
+    "src/adapters/memory/core.mjs",
+    "src/domain/memory/trust.mjs",
+    "src/services/chat.mjs"
+  ],
+  "value": 0,
+  "detail": {
+    "totalFactRows": 714,
+    "taughtResearched": {
+      "count": 26,
+      "oldestDays": 0,
+      "newestDays": 0,
+      "medianDays": 0
+    },
+    "regenerable": {
+      "count": 688,
+      "oldestDays": 0,
+      "newestDays": 0,
+      "medianDays": 0
+    },
+    "unclassifiedCount": 0
+  }
+}

@@ -1,0 +1,987 @@
+{
+  "name": "paraphrase",
+  "generatedAt": "2026-08-06T00:56:25.391Z",
+  "commit": "216e7afc5ac6ac8df472f378285391a28b448232",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "percent",
+  "threshold": {
+    "direction": "min",
+    "value": 59.6
+  },
+  "sources": [
+    "scripts/claims/claim-paraphrase.mjs",
+    "test-benchmarks/claims/paraphrase-set.jsonl",
+    "test-benchmarks/chatbench/run.mjs",
+    "test-benchmarks/chatbench/graded-pool.jsonl"
+  ],
+  "value": 61.6,
+  "detail": {
+    "questionCount": 50,
+    "paraphrasesPerQuestion": 5,
+    "totalParaphrases": 250,
+    "equivalentParaphrases": 154,
+    "questionsWithFailures": 35,
+    "failures": [
+      {
+        "id": "g-a1-naming-1",
+        "canonical": "what does defines mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "schema:predicate:seon:declaresMethod"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of defines",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please explain the term defines",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define defines",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what's the definition of defines",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-2",
+        "canonical": "what does Module mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs",
+          "mod:app/lib/b.mjs",
+          "mod:app/lib/c.mjs",
+          "mod:app/functions/d/handler.mjs",
+          "mod:app/lib/e.mjs",
+          "mod:app/lib/f.mjs",
+          "mod:scripts/g.mjs",
+          "mod:app/unit-tests/b.test.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of Module",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what's a Module supposed to mean",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define the term Module",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-3",
+        "canonical": "what is a Function",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "fn-alpha"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "how would you describe a Function",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-4",
+        "canonical": "what is a Module",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs",
+          "mod:app/lib/b.mjs",
+          "mod:app/lib/c.mjs",
+          "mod:app/functions/d/handler.mjs",
+          "mod:app/lib/e.mjs",
+          "mod:app/lib/f.mjs",
+          "mod:scripts/g.mjs",
+          "mod:app/unit-tests/b.test.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "how would you describe a Module",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-5",
+        "canonical": "what is a GlobalVariable",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "schema:class:GlobalVariable"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "please define GlobalVariable",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how would you describe a GlobalVariable",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-6",
+        "canonical": "what is a Class",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "cls-base",
+          "cls-widget",
+          "cls-button"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "how would you describe a Class",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-7",
+        "canonical": "what is a Commit",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "how would you describe a Commit",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-8",
+        "canonical": "what does tests mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "schema:predicate:mgx:testsCoverage"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of tests",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define tests",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what's the definition of tests",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define tests",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-9",
+        "canonical": "what does imports mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of imports",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define imports",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what's the definition of imports",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define imports",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a1-naming-10",
+        "canonical": "what is an Attribute",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "a-name"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "how would you describe an Attribute",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a2-naming-1",
+        "canonical": "what does register mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "g-register"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of register",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define register",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/b.mjs"
+            ]
+          },
+          {
+            "paraphrase": "what's the definition of register",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define register",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/b.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "g-a2-naming-2",
+        "canonical": "what is Widget",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "cls-widget"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "can you explain what Widget is",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define Widget",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/b.mjs"
+            ]
+          },
+          {
+            "paraphrase": "how would you describe Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-a2-naming-6",
+        "canonical": "what does fnAlpha mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "fn-alpha"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please explain fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define fnAlpha",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/a.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "g-a2-naming-8",
+        "canonical": "what does Widget mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "cls-widget"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define Widget",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/b.mjs"
+            ]
+          },
+          {
+            "paraphrase": "what's the definition of Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define Widget",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/b.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "g-a2-naming-9",
+        "canonical": "what does Base mean",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "cls-base"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what is the meaning of Base",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "please define Base",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what's the definition of Base",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "how do you define Base",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-b2-passive-2",
+        "canonical": "which modules are imported by the module that defines register",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what does the module that defines register import",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "the module defining register imports which modules",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "which modules does the module defining register import",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what modules get imported by the module where register is defined",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "tell me which modules the module that defines register imports",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-b2-passive-3",
+        "canonical": "what is imported by the module that imports app/lib/f.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs",
+          "mod:app/lib/f.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "which modules does the module that imports app/lib/f.mjs import",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "the module importing app/lib/f.mjs imports which modules",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what does the module that imports app/lib/f.mjs import",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "tell me what the module importing app/lib/f.mjs imports",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/e.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "g-b2-passive-5",
+        "canonical": "register is defined by which module",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/b.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "register is defined in which module",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-b2-passive-9",
+        "canonical": "what is imported by the module that tests app/lib/b.mjs",
+        "canonicalMiss": true,
+        "canonicalAnsweredIds": [],
+        "divergent": [
+          {
+            "paraphrase": "which modules does the module that tests app/lib/b.mjs import",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what does the module that tests app/lib/b.mjs import",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "tell me what the module testing app/lib/b.mjs imports",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/a.mjs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "g-c1-temp-2",
+        "canonical": "when was scripts/g.mjs last changed",
+        "canonicalMiss": true,
+        "canonicalAnsweredIds": [],
+        "divergent": [
+          {
+            "paraphrase": "when did scripts/g.mjs last get changed",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c1-temp-4",
+        "canonical": "when was app/lib/a.mjs last changed",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "when was app/lib/a.mjs most recently changed",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "when did app/lib/a.mjs last get changed",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c1-temp-6",
+        "canonical": "when was app/lib/f.mjs last changed",
+        "canonicalMiss": true,
+        "canonicalAnsweredIds": [],
+        "divergent": [
+          {
+            "paraphrase": "when did app/lib/f.mjs last get changed",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c1-temp-9",
+        "canonical": "when did the module that defines fnAlpha change",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what was the last time the module that defines fnAlpha changed",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "tell me when the module that defines fnAlpha changed",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "when did the module defining fnAlpha last change",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c1-temp-10",
+        "canonical": "what is the newest commit",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "what's the most recent commit",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "what is the latest commit",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "which commit is the most recent",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-3",
+        "canonical": "app/lib/e.mjs can't be removed before app/lib/f.mjs because it still imports app/lib/f.mjs — which of them still imports app/lib/f.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/e.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/lib/e.mjs can't be removed before app/lib/f.mjs since it still imports app/lib/f.mjs — which one still imports app/lib/f.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it still imports app/lib/f.mjs, app/lib/e.mjs can't be removed before app/lib/f.mjs — which of the two still imports app/lib/f.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-5",
+        "canonical": "app/functions/d/handler.mjs imports app/lib/b.mjs because it defines Widget — which of them defines Widget",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/b.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/functions/d/handler.mjs imports app/lib/b.mjs since it defines Widget — which one defines Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it defines Widget, app/functions/d/handler.mjs imports app/lib/b.mjs — which of the two defines Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/functions/d/handler.mjs imports app/lib/b.mjs, it defining Widget — which of them is the one that defines Widget",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/functions/d/handler.mjs imports app/lib/b.mjs because it is where Widget is defined — which of them is where Widget is defined",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-6",
+        "canonical": "app/unit-tests/b.test.mjs must not be deleted because it covers app/functions/d/handler.mjs — which of them covers app/functions/d/handler.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/unit-tests/b.test.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted since it covers app/functions/d/handler.mjs — which one covers app/functions/d/handler.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it covers app/functions/d/handler.mjs, app/unit-tests/b.test.mjs must not be deleted — which of the two covers app/functions/d/handler.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted, it covering app/functions/d/handler.mjs — which of them is the one that covers app/functions/d/handler.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted because it provides coverage for app/functions/d/handler.mjs — which of them provides coverage for app/functions/d/handler.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "since it covers app/functions/d/handler.mjs, app/unit-tests/b.test.mjs must not be deleted — which of them covers app/functions/d/handler.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-7",
+        "canonical": "app/lib/e.mjs imports app/lib/a.mjs because it defines fnAlpha — which of them defines fnAlpha",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/lib/e.mjs imports app/lib/a.mjs since it defines fnAlpha — which one defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it defines fnAlpha, app/lib/e.mjs imports app/lib/a.mjs — which of the two defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/lib/e.mjs imports app/lib/a.mjs, it defining fnAlpha — which of them is the one that defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/lib/e.mjs imports app/lib/a.mjs because it is where fnAlpha is defined — which of them is where fnAlpha is defined",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-8",
+        "canonical": "app/lib/b.mjs can't be removed before app/lib/a.mjs because it still imports app/lib/a.mjs — which of them still imports app/lib/a.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/b.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/lib/b.mjs can't be removed before app/lib/a.mjs since it still imports app/lib/a.mjs — which one still imports app/lib/a.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it still imports app/lib/a.mjs, app/lib/b.mjs can't be removed before app/lib/a.mjs — which of the two still imports app/lib/a.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-9",
+        "canonical": "app/unit-tests/b.test.mjs must not be deleted because it covers app/lib/b.mjs — which of them covers app/lib/b.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/unit-tests/b.test.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted since it covers app/lib/b.mjs — which one covers app/lib/b.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it covers app/lib/b.mjs, app/unit-tests/b.test.mjs must not be deleted — which of the two covers app/lib/b.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted, it covering app/lib/b.mjs — which of them is the one that covers app/lib/b.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/unit-tests/b.test.mjs must not be deleted because it provides coverage for app/lib/b.mjs — which of them provides coverage for app/lib/b.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "since it covers app/lib/b.mjs, app/unit-tests/b.test.mjs must not be deleted — which of them covers app/lib/b.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "g-c2-pron-10",
+        "canonical": "app/lib/c.mjs imports app/lib/a.mjs because it defines fnAlpha — which of them defines fnAlpha",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/a.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "app/lib/c.mjs imports app/lib/a.mjs since it defines fnAlpha — which one defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "because it defines fnAlpha, app/lib/c.mjs imports app/lib/a.mjs — which of the two defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/lib/c.mjs imports app/lib/a.mjs, it defining fnAlpha — which of them is the one that defines fnAlpha",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "app/lib/c.mjs imports app/lib/a.mjs because it is where fnAlpha is defined — which of them is where fnAlpha is defined",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "gq-imports-of-a",
+        "canonical": "which modules import a.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "mod:app/lib/b.mjs",
+          "mod:app/lib/c.mjs",
+          "mod:app/lib/e.mjs"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "which modules bring in a.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "gq-who-touched-a",
+        "canonical": "who touched a.mjs",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "which author touched a.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          },
+          {
+            "paraphrase": "who worked on a.mjs",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "gq-when-changed-a",
+        "canonical": "when did a.mjs change",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "commit-abc"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "when did a.mjs get changed",
+            "equivalent": false,
+            "miss": true,
+            "answeredIds": []
+          }
+        ]
+      },
+      {
+        "id": "gq-where-defined-fnalpha",
+        "canonical": "where is fnAlpha defined",
+        "canonicalMiss": false,
+        "canonicalAnsweredIds": [
+          "fn-alpha"
+        ],
+        "divergent": [
+          {
+            "paraphrase": "which module defines fnAlpha",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/a.mjs"
+            ]
+          },
+          {
+            "paraphrase": "what module is fnAlpha defined in",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/a.mjs"
+            ]
+          },
+          {
+            "paraphrase": "in which module is fnAlpha defined",
+            "equivalent": false,
+            "miss": false,
+            "answeredIds": [
+              "mod:app/lib/a.mjs"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
