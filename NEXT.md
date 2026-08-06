@@ -37,14 +37,18 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **Reference-pack persistence gap** (claim:cite's remainder, found while authoring
-  the cite-set fixture) — `isaOf()` in `src/domain/reference-pack.mjs` only extracts a
-  storable is-a fact when the article's opening matches a short "X is/are (a/an) Y"
-  clause inside its 80-char window. Articles that escape it (chinchilla's parenthetical
-  species list; puma's copula past the cap) are never persisted at all, so a repeat ask
-  re-fetches and re-composes the first-ask prose forever instead of reaching recall.
-  `isaOf` also backs live-Wikipedia and research lookups, so a fix needs the research
-  and reference lanes as its regression gate.
+- [ ] **Reference-pack persistence gap** (claim:cite's remainder) — `isaOf()` in
+  `src/domain/reference-pack.mjs` misses openings with parentheticals (chinchilla) or a
+  copula past its 80-char window (puma), so those articles never persist and repeat asks
+  never reach recall. Fix in flight — worktree `agent-ae7128b6c527126fc`, regression
+  gates: reference/research/wikipedia-live lanes plus a claim:cite re-run with the two
+  terms restored to the fixture.
+- [ ] **Claims page** (PLAN_CLAIMS T14) — in flight, worktree `agent-a6fc44e49b2ab102b`:
+  claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
+  index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
+  passages are re-authored (notes file gone) and flagged for operator review.
+- [ ] **CI wiring proposal** (PLAN_CLAIMS T15) — in flight, worktree
+  `agent-a050f85393a1cf7f9`, docs-only append to PLAN_CLAIMS.md.
 - [ ] **Full-estate re-pin sweep after neutrality wave 2** — the first full-suite run
   after neutrality wave 1 merged shows ~1044 failures, all (sampled) old bare-install
   string pins against the new neutral surfaces (e.g.
