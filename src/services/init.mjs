@@ -52,11 +52,12 @@ export function defaultConfig() {
 
 /** `tmct init --with-persona <name>` presets: a named bundle of `extensions`/`bias`
  *  overrides written into tmct.toml. `human` makes the implicit default explicit; `code`
- *  re-activates the software-domain `seon`+`conceptnet` bundles; `empty` deactivates
- *  `human`, leaving a repo genuinely empty of corpus facts. */
+ *  activates the `code` domain pack (the seon ontology plus its lane vocabulary — count
+ *  nouns, help rows, the miss-recovery pointer) alongside `conceptnet`; `empty`
+ *  deactivates `human`, leaving a repo genuinely empty of corpus facts. */
 export const PERSONA_PRESETS = Object.freeze({
   human: { extensions: {}, bias: { human: 1.0 } },
-  code: { extensions: { seon: { active: true }, conceptnet: { active: true } }, bias: { seon: 1.0, conceptnet: 1.0 } },
+  code: { extensions: { code: { active: true }, conceptnet: { active: true } }, bias: { code: 1.0, conceptnet: 1.0 } },
   empty: { extensions: { human: { active: false } }, bias: {} },
 });
 
@@ -151,7 +152,7 @@ backend = ${JSON.stringify(config.memory.backend)}
   if (!Object.keys(extras).length) return out;
   return `${out}
 # Extension packs + bias (src/services/extensions.mjs) — written by \`tmct init --with-persona\`
-# or a manual edit. Recognized names (human, seon, conceptnet, tier2-aws,
+# or a manual edit. Recognized names (human, seon, code, conceptnet, tier2-aws,
 # tier2-python, tier2-java, tier2-general) override the shipped defaults; any
 # other name declares a new host-supplied bundle (needs its own "kind").
 # [bias] is a flat bundle-name -> weight table consumed by

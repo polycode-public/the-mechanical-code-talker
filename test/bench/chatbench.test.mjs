@@ -329,12 +329,14 @@ test("runTurnsCase: threads focus/last turn-to-turn and stops on end, like runCh
 test("runSessionCase: drives full runChat in a temp dir, reads answers + records back, evaluates tier-1", async () => {
   const caseDef = {
     id: "stub-session", tags: ["bootstrap-empty"], mode: "session", graph: "empty",
-    // Plumbing-only (greeting + a literal module count on an empty repo) — none
-    // of it depends on the corpus seed, so opt out of paying that tax.
+    // Plumbing-only (greeting + a second turn that threads focus/last across
+    // the session) — none of it depends on the corpus seed, so opt out of
+    // paying that tax. No code domain is active over a bare temp repo, so the
+    // second turn's count is the ordinary honest miss, not a code-graph count.
     env: { TMCT_NO_SEED: "1" },
     turns: [
       { say: "hi", session: 1, expect: { miss: false, answerMatch: ["^Hi\\."] } },
-      { say: "how many modules are there", session: 1, expect: { miss: false, answerMatch: ["^0 modules\\.$"] } },
+      { say: "how many modules are there", session: 1, expect: { miss: true, answerMatch: ["couldn't read that"] } },
     ],
   };
   const { transcript, turnEvals } = await runSessionCase(caseDef, {
@@ -342,7 +344,7 @@ test("runSessionCase: drives full runChat in a temp dir, reads answers + records
   });
   assert.equal(transcript.length, 2);
   assert.match(transcript[0].answer, /^Hi\./);
-  assert.equal(transcript[1].answer, "0 modules.");
+  assert.match(transcript[1].answer, /couldn't read that as a question/);
   assert.equal(transcript[0].miss, false);
   const tier1 = summarizeTier1(turnEvals);
   assert.equal(tier1.pass, true, JSON.stringify(tier1.failing));

@@ -1119,6 +1119,22 @@ async function main() {
         `indexed ${stats.modules} modules (${stats.symbols} symbols) — code questions now work in \`tmct chat\`: `
         + `try "which modules import <path>" or "what does <module> do".\n`,
       );
+      // Indexing is an explicit code-domain act: activate the `code` pack in
+      // this repo's tmct.toml (creating one if none exists yet) so the next
+      // session's count/help/miss-recovery vocabulary is there without a
+      // separate --with-persona code step. Activation only — it doesn't seed
+      // the seon corpus into memory; that stays `tmct init --with-persona
+      // code`'s job (or a later `tmct import --corpus seon`). Best-effort: a
+      // config write failure degrades to an indexed-but-unactivated repo,
+      // never a failed index.
+      try {
+        const { cfg } = await readConfigForRewrite(repoRoot);
+        const existingCode = cfg.extensions?.code || {};
+        cfg.extensions = { ...(cfg.extensions || {}), code: { ...existingCode, active: true } };
+        await writeConfig(repoRoot, cfg);
+      } catch (e) {
+        process.stderr.write(`tmct index: WARNING could not activate the code pack in tmct.toml — ${e?.message || e}\n`);
+      }
     }
     if (stats.failures?.length) {
       process.stderr.write(`tmct index: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);

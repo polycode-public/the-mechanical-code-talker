@@ -456,10 +456,17 @@ test("renderTestsFor / renderUntested read the test-coverage relation", () => {
 });
 
 test("renderUntested declines when the graph carries no source modules to survey", () => {
-  const noModules = renderUntested(parseEntities({ individuals: [] }));
+  const noModules = renderUntested(parseEntities({ individuals: [] }), { codeDomainActive: true });
   assert.doesNotMatch(noModules, /every source module/, "an empty index must never claim full coverage");
   assert.match(noModules, /no modules to check for test coverage in this index/);
   assert.match(noModules, /holds no code index/);
+  // with no code domain active (this command's own graph-derived default, or
+  // an explicit false on a bare chat session) the empty survey names no
+  // "code index" — a slash command's own non-miss surface, not covered by
+  // the chat layer's miss-text swap.
+  const neutral = renderUntested(parseEntities({ individuals: [] }));
+  assert.doesNotMatch(neutral, /code index|code graph/i);
+  assert.match(neutral, /this session holds no graph to check test coverage against/);
   // a vocabulary-only store (a chat session's own graph) is the same nothing-to-survey case
   const vocabOnly = renderUntested(parseEntities({
     individuals: [{ id: "cls:Animal", class: "SchemaClass", label: "Animal" }],

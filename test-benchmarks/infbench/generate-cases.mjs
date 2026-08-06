@@ -17,7 +17,7 @@
 //
 // CORPUS-CONTAMINATION GUARD (found during authoring, not in the plan): tmct
 // ships a small pre-seeded software/general-knowledge corpus
-// (corpus/seon/concepts.jsonl, corpus/conceptnet/slice.jsonl) that the chat
+// (corpus/domains/code/concepts.jsonl, corpus/conceptnet/slice.jsonl) that the chat
 // engine consults for "is X a Y" vocabulary questions INDEPENDENTLY of
 // anything taught in a session — e.g. "is a controller a component" answers
 // "yes" from `corpus:seon /r/IsA` even with NOTHING taught. Left unguarded,
@@ -132,7 +132,7 @@ const VERB_LEMMAS_NO_PREP = Object.keys(RAW_LEXICON.verbs).filter((v) => !RAW_LE
 function loadIsaDenylist() {
   const denylist = new Set();
   const nounSet = new Set(CLASS_NOUNS);
-  for (const rel of ["corpus/conceptnet/slice.jsonl", "corpus/seon/concepts.jsonl"]) {
+  for (const rel of ["corpus/conceptnet/slice.jsonl", "corpus/domains/code/concepts.jsonl"]) {
     let text;
     try { text = readFileSync(join(ROOT, rel), "utf8"); } catch { continue; }
     for (const line of text.split("\n")) {

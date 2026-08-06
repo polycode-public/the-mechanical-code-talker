@@ -7230,16 +7230,28 @@ async function resolveEntity(graph, term) {
   return null;
 }
 
-/** The `/help` body: the bare-question default + every command (from COMMANDS, so
- *  it can't drift) + the tmct_ask question shapes, pulled from the engine's own
- *  rephraseHint() so the shapes are exactly the ones the grammar supports.
+/** The `/help` body: the bare-question default + the code-domain command rows
+ *  + the tmct_ask question shapes, pulled from the engine's own rephraseHint()
+ *  so the shapes are exactly the ones the grammar supports.
  *  `codeDomainActive` gates the trailing counts row: it names the code-graph
  *  count vocabulary (classes/functions/modules/…), so it renders only when a
- *  code domain is actually active this session. */
-export async function helpText(codeDomainActive = false) {
+ *  code domain is actually active this session.
+ *
+ *  `helpRows` is the code-domain command rows to render — the session's own
+ *  merged lane vocabulary (ctx.laneVocab.helpRows, empty when the domain is
+ *  inactive: see resolveLaneVocab). COMMANDS itself stays the dispatch source
+ *  of truth (every /command's tool/arg wiring, unconditionally); this is only
+ *  what /help DISPLAYS. Omitted (undefined, not an explicit `[]`) — the shape
+ *  a bare/library `helpText(true)` call takes — falls back to COMMANDS'
+ *  own rows, gated the same way, so a caller outside the session seam still
+ *  sees every command with none of chat-session.mjs's plumbing. */
+export async function helpText(codeDomainActive = false, helpRows = undefined) {
+  const codeRows = helpRows !== undefined
+    ? helpRows
+    : (codeDomainActive ? Object.entries(COMMANDS).map(([name, s]) => [`/${name}${s.arg ? (s.optional ? ` [${s.arg}]` : ` <${s.arg}>`) : ""}`, s.help]) : []);
   const rows = [
     ["<question>", "ask the graph in plain English (the default for any non-slash line)"],
-    ...Object.entries(COMMANDS).map(([name, s]) => [`/${name}${s.arg ? (s.optional ? ` [${s.arg}]` : ` <${s.arg}>`) : ""}`, s.help]),
+    ...codeRows,
     ["/stats", "a one-screen overview: entity counts, relationship counts, packages"],
     ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
@@ -11818,13 +11830,13 @@ function reverseCleftRewrite(query) {
   return m ? `${m[1].toLowerCase()} ${m[2].trim()}` : null;
 }
 
-// ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
+// ---- curated SEON definitions (corpus/domains/code/definitions.jsonl) ----
 // A "what is a <term>" for a LEXICON term prefers the curated one-sentence
 // definition, cited via:"corpus/seon" — but only when this repo carries the
 // SEON concept seed, and a fact the USER personally asserted still wins.
 
 let seonDefsPromise = null;
-/** Load corpus/seon/definitions.jsonl once → Map(normFactTerm(term) → definition).
+/** Load corpus/domains/code/definitions.jsonl once → Map(normFactTerm(term) → definition).
  *  Lazy + failure-tolerated (chat.mjs ethos): any failure degrades to an empty map. */
 function seonDefinitions() {
   if (!seonDefsPromise) {
@@ -11849,8 +11861,8 @@ function seonDefinitions() {
 }
 
 let seonRelsPromise = null;
-/** Load corpus/seon/relations.jsonl once → Map(relationTerm → definition), keyed on
- *  the concept key ("imports","calls",…). Sits beside definitions.jsonl (same seon
+/** Load corpus/domains/code/relations.jsonl once → Map(relationTerm → definition), keyed on
+ *  the concept key ("imports","calls",…). Sits beside definitions.jsonl (same
  *  dir), loaded the same lazy + failure-tolerated way — any failure degrades to an
  *  empty map, so the relation force simply declines rather than throwing. */
 function relationDefinitions() {
@@ -12647,7 +12659,7 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
  *  definition + real example EDGES + pre-validated follow-ups) for a vague touch on a
  *  relation/edge kind ("what about imports", "tell me about contains"), or null
  *  when it isn't one. Loads the definition from the shipped
- *  corpus/seon/relations.jsonl, so it works without per-repo memory seeding.
+ *  corpus/domains/code/relations.jsonl, so it works without per-repo memory seeding.
  *  Returns { text, pending, kind } — `kind` is the resolved RELATION_TERM
  *  canonical kind, the SAME vocabulary GOAL_BY_KIND keys on. */
 async function relationForceAnswer(query, envelope, { graph, config, source, templates }) {
@@ -15219,7 +15231,7 @@ const GOAL_BY_COMMAND = {
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk. Also carries a `goal` field mirroring runAsk's own, so
  *  withGoalLine's "Goal (inferred): …" line fires for command dispatches too. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -15234,7 +15246,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
   });
 
-  if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText(codeDomainActive)); }
+  if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText(codeDomainActive, codeDomainActive ? laneVocab?.helpRows : [])); }
   if (name === "stats") {
     note(trace, "goal: get a one-screen overview of the loaded graph");
     if (!codeDomainActive) {
@@ -15549,7 +15561,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
 
   let answer;
   try {
-    answer = await dispatchTool(spec.tool, spec.arg ? { [spec.arg]: value } : {}, { config, source, tel });
+    answer = await dispatchTool(spec.tool, spec.arg ? { [spec.arg]: value } : {}, { config, source, tel, codeDomainActive });
   } catch (e) {
     note(trace, `intermediate: dispatchTool("${spec.tool}") threw — ${String(e?.message || e)}`);
     return mk(String(e?.message || e), { miss: true }); // the tool's own clean error, never a stack

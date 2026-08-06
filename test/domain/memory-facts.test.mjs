@@ -114,7 +114,11 @@ for (const [label, open] of [["chat", createChatSession], ["ledger", createLedge
     assert.equal(miss, false);
     assert.match(answer, /blue and red/);
 
+    // No code domain is active on a bare page session, so the turn engine's
+    // count lane declines to the ordinary honest miss rather than naming a
+    // code-graph kind ("0 modules.") this page carries no evidence for.
     const counted = await session.turn("how many modules are there");
-    assert.match(counted.answer, /0 modules/, "the turn engine still reads the known-empty code index");
+    assert.doesNotMatch(counted.answer, /\d+ modules?\./);
+    assert.match(counted.answer, /couldn't ground that|teach me directly/i);
   });
 }

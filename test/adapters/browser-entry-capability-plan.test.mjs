@@ -129,8 +129,13 @@ test("the page keeps its known-empty-graph answers: the planner reads the memory
   const claim = await createChatSession({}).turn("is a dog a mammal");
   assert.match(claim.answer, /you can teach me/, "the teach pointer an empty index earns stays on the answer");
 
+  // No code domain is active on a bare browser session (no seedPayload), so a
+  // count over its empty graph is the ordinary honest miss — never "0
+  // modules." (that would name a code-graph kind this page carries no
+  // evidence for having ever seen).
   const count = await createChatSession({}).turn("how many modules are there");
-  assert.match(count.answer, /0 modules/, "an empty index counts zero rather than declining as unknown");
+  assert.doesNotMatch(count.answer, /\d+ modules?\./);
+  assert.match(count.answer, /couldn't ground that|teach me directly/i);
 });
 
 test("a session holding a real code graph still plans as a code graph, memory store or not", async () => {

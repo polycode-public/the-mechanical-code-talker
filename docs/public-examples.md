@@ -112,7 +112,7 @@ const — every name, and the version — beside the schema it already held ther
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `corpus/conceptnet/README.md` | 44,947 rows | `slice.jsonl` | `test/estate/corpus-schema.test.mjs`, `corpus-licences.test.mjs` | estate |
-| `corpus/seon/README.md` | 399 facts, 288 definitions, 9 relations | `concepts/definitions/relations.jsonl` | `test/estate/corpus-schema.test.mjs` | estate |
+| `corpus/domains/code/README.md` | 399 facts, 288 definitions, 9 relations | `concepts/definitions/relations.jsonl` | `test/estate/corpus-schema.test.mjs` | estate |
 | `corpus/wordnet/README.md` | 107,526 upstream synsets; 192,498 facts | `manifest.json` | `test/estate/corpus-schema.test.mjs` | estate |
 
 The row counts are not asserted as numbers, so a regrow that forgets the README

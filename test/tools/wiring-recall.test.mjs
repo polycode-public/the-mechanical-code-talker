@@ -50,7 +50,10 @@ test("recall: a relevant recalled block answers the miss — framed, cited, hint
   const dir = await repoWithBlock();
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") }; // no artifact → empty graph → miss
-    const { answer, record } = await runTurn("which modules import a.mjs", { config, memoryDir: dir });
+    // codeDomainActive: true — this test pins the CODE-domain wall's own wording
+    // kept below a recall; the neutrality tier (test/estate) pins the inactive
+    // (neutral) wording separately.
+    const { answer, record } = await runTurn("which modules import a.mjs", { config, memoryDir: dir, codeDomainActive: true });
     assert.match(answer, /^you asked about this before \(session 0189aaaa, \d{4}-\d{2}-\d{2}\):/,
       "framed + cited with the session short-id and date");
     assert.ok(answer.includes(BLOCK_DAY), "the date is the uuidv7-decoded day");
