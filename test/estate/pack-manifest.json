@@ -301,6 +301,7 @@
   "src/adapters/corpus/conceptnet-map.toml",
   "src/adapters/corpus/conceptnet.mjs",
   "src/adapters/corpus/construction-banks.mjs",
+  "src/adapters/corpus/courtesy.mjs",
   "src/adapters/corpus/digest-bank.mjs",
   "src/adapters/corpus/reference-pack.mjs",
   "src/adapters/corpus/research-source.mjs",

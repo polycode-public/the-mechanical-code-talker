@@ -26,6 +26,7 @@ import { normFactTerm } from "../../domain/hash.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { isReferenceArticleRow, sentencesUpTo, isaOf, SUMMARY_CHAR_CAP } from "../../domain/reference-pack.mjs";
 import { registerResearchSource, researchSourceTag } from "./research-source.mjs";
+import { createCourtesyGate, DEFAULT_TIMEOUT_MS, DEFAULT_MIN_INTERVAL_MS, MAXLAG_SECONDS } from "./courtesy.mjs";
 
 export const WIKIPEDIA_LIVE_ORIGIN = "https://en.wikipedia.org";
 export const SIMPLE_WIKIPEDIA_ORIGIN = "https://simple.wikipedia.org";
@@ -42,14 +43,6 @@ export const SIMPLE_WIKIPEDIA_SOURCE_NAME = "simple-wikipedia";
  *  Api-User-Agent header carries the same string there; under Node both are
  *  sent. */
 export const WIKIMEDIA_USER_AGENT = "the-mechanical-code-talker (+https://tmct.polycode.co.uk/)";
-
-const DEFAULT_TIMEOUT_MS = 4000;
-const DEFAULT_MIN_INTERVAL_MS = 2000;
-const RETRY_AFTER_FLOOR_MS = 5000;
-// Action-API requests carry maxlag so an overloaded replica set answers with
-// an error we back off from instead of adding to its load (Wikimedia's own
-// recommended default for non-interactive clients).
-const MAXLAG_SECONDS = 5;
 
 /**
  * A live-lookup provider: { lookup(normTerm) -> article row | null }, plus
@@ -83,75 +76,7 @@ export function createWikipediaLiveProvider({
   waitForSlot = false,
   sourceName = WIKIPEDIA_LIVE_SOURCE_NAME,
 } = {}) {
-  const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
-  const cache = new Map(); // key -> row | null (hits AND settled misses)
-  let lastLookupAt = 0;
-  let coolOffUntil = 0;
-  let inFlight = false;
-
-  const identifyingHeaders = () => {
-    if (!userAgent) return null;
-    const headers = { "Api-User-Agent": userAgent };
-    // A browser strips User-Agent as a forbidden header; only set it where
-    // no DOM says we are one (Node ships a global `navigator` these days, so
-    // `document` is the discriminating global).
-    if (typeof document === "undefined") headers["User-Agent"] = userAgent;
-    return headers;
-  };
-
-  function openCoolOff(retryAfterSeconds) {
-    const retryAfterMs = Number(retryAfterSeconds) * 1000;
-    coolOffUntil = Date.now() + Math.max(retryAfterMs || 0, RETRY_AFTER_FLOOR_MS);
-  }
-
-  async function fetchJson(url) {
-    const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    try {
-      const opts = {};
-      if (controller) opts.signal = controller.signal;
-      const headers = identifyingHeaders();
-      if (headers) opts.headers = headers;
-      const res = await doFetch(url, opts);
-      if (res.status === 429) {
-        openCoolOff(res.headers?.get?.("retry-after"));
-        return null;
-      }
-      if (!res.ok) return null;
-      const body = await res.json();
-      // A maxlag rejection arrives as HTTP 200 with an error body (and a
-      // Retry-After header) — back off exactly as a 429 asks.
-      if (body?.error?.code === "maxlag") {
-        openCoolOff(res.headers?.get?.("retry-after"));
-        return null;
-      }
-      return body;
-    } catch {
-      return null;
-    } finally {
-      if (timer !== null) clearTimeout(timer);
-    }
-  }
-
-  /** When the next network slot opens: past the cool-off, past the minimum
-   *  interval since the last taken slot. */
-  const slotOpensAt = () => Math.max(coolOffUntil, lastLookupAt + minIntervalMs);
-
-  /** Take the one network slot, or report it unavailable. Default posture
-   *  returns false immediately (the clean-miss hook's "null, never block");
-   *  `waitForSlot` sleeps until the slot opens instead. */
-  async function takeSlot() {
-    for (;;) {
-      const now = Date.now();
-      if (!inFlight && now >= slotOpensAt()) {
-        lastLookupAt = now;
-        inFlight = true;
-        return true;
-      }
-      if (!waitForSlot) return false;
-      await new Promise((resolve) => setTimeout(resolve, Math.max(slotOpensAt() - now, 25)));
-    }
-  }
+  const gate = createCourtesyGate({ fetchImpl, timeoutMs, minIntervalMs, userAgent, waitForSlot });
 
   /** The opensearch title whose normFactTerm fold equals or extends the key —
    *  the topic-drift guard: "quasar" may resolve to "Quasar" or "Quasars",
@@ -166,7 +91,7 @@ export function createWikipediaLiveProvider({
   }
 
   async function summaryRow(key, title) {
-    const summary = await fetchJson(
+    const summary = await gate.fetchJson(
       `${origin}/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`,
     );
     if (!summary) return null;
@@ -188,30 +113,12 @@ export function createWikipediaLiveProvider({
   }
 
   async function roundTrips(key) {
-    const search = await fetchJson(
+    const search = await gate.fetchJson(
       `${origin}/w/api.php?action=opensearch&format=json&origin=*&maxlag=${MAXLAG_SECONDS}&search=${encodeURIComponent(key)}&limit=3`,
     );
     const title = search ? matchingTitle(key, search) : null;
     if (!title) return null;
     return summaryRow(key, title);
-  }
-
-  /** One slot-gated, cached operation: cache first (a settled hit or miss is
-   *  never refetched), then the slot, then `work()`, with every failure
-   *  cached as null so it never costs a second round trip. */
-  async function cachedFetch(cacheKey, work) {
-    if (cache.has(cacheKey)) return cache.get(cacheKey);
-    if (!(await takeSlot())) return null;
-    let value = null;
-    try {
-      value = await work();
-    } catch {
-      value = null;
-    } finally {
-      inFlight = false;
-    }
-    cache.set(cacheKey, value);
-    return value;
   }
 
   return {
@@ -228,7 +135,7 @@ export function createWikipediaLiveProvider({
     async lookup(normTerm) {
       const key = String(normTerm ?? "");
       if (!key) return null;
-      return cachedFetch(key, () => roundTrips(key));
+      return gate.cachedFetch(key, () => roundTrips(key));
     },
 
     /** The summary for an EXACT title — one round trip, no opensearch. The
@@ -237,7 +144,7 @@ export function createWikipediaLiveProvider({
     async pageByTitle(title) {
       const t = String(title ?? "").trim();
       if (!t) return null;
-      return cachedFetch(`title\0${normFactTerm(t)}`, () => summaryRow(normFactTerm(t), t));
+      return gate.cachedFetch(`title\0${normFactTerm(t)}`, () => summaryRow(normFactTerm(t), t));
     },
 
     /** The namespace-0 articles the page's LEAD section links to, in document
@@ -249,8 +156,8 @@ export function createWikipediaLiveProvider({
     async linkedTitles(title, { limit = 25 } = {}) {
       const t = String(title ?? "").trim();
       if (!t) return null;
-      const listed = await cachedFetch(`links\0${normFactTerm(t)}`, async () => {
-        const parsed = await fetchJson(
+      const listed = await gate.cachedFetch(`links\0${normFactTerm(t)}`, async () => {
+        const parsed = await gate.fetchJson(
           `${origin}/w/api.php?action=parse&format=json&formatversion=2&origin=*&maxlag=${MAXLAG_SECONDS}&prop=links&redirects=1&page=${encodeURIComponent(t)}&section=0`,
         );
         const links = parsed?.parse?.links;
