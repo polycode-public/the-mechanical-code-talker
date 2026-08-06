@@ -47,8 +47,6 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
   claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
   index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
   passages are re-authored (notes file gone) and flagged for operator review.
-- [ ] **CI wiring proposal** (PLAN_CLAIMS T15) — in flight, worktree
-  `agent-a050f85393a1cf7f9`, docs-only append to PLAN_CLAIMS.md.
 - [ ] **Full-estate re-pin sweep after neutrality wave 2** — the first full-suite run
   after neutrality wave 1 merged shows ~1044 failures, all (sampled) old bare-install
   string pins against the new neutral surfaces (e.g.
