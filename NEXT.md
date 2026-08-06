@@ -33,28 +33,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-None open.
-
-### Questions blocking work
-
-Nothing is blocked. Three decisions await the operator, none holding up other work:
-
-- **E1's QA set** (`archive/PLAN_CLAIMS.md`, decisions section): the measured corpus delta is zero
-  because OpenBookQA's causal phrasing sits outside the ask grammar's supported shapes. Keep
-  OpenBookQA as the set (a hard number, stated flat), or re-shape E1 around a definitional
-  ("what is X") set that would show the delta the block was designed to show?
-- **claims.html's two narrative passages** (`archive/PLAN_CLAIMS.md`, T14 note): `claims-notes.txt`
-  no longer existed on disk, so the Cyc lead-in and the extensibilities intro were
-  re-authored fresh rather than carried verbatim — review them on the built page.
-- **Wikidata lane wiring** (`archive/PLAN_GRAPH_NEUTRALITY.md`, closing question): the adapter is
-  registered and contract-tested but not wired into the chat research lane, which has a
-  single provider slot; wiring it (multi-provider, or a config choice) changes live chat
-  behaviour.
-
-The mudiii pill-append and ground-click decisions live in
-`PLAN_MUD_MUDIII.md`'s "The decisions that still bind"; the retraction decision lives in
-`src/domain/memory/retraction.mjs`'s own header comment and `docs/references/papers/crdt.md`'s
-"Where 'latest wins' happens".
+- [ ] **E1 becomes a definitional QA set; the OpenBookQA zero moves to limits.** Author a
+  committed definitional ("what is X"-shaped) question fixture, and point E1's extensibility
+  motion at it: score out of the box, load wordnet-xl, score again, publish the delta. The
+  OpenBookQA sample and its zero move to the claims page's limits section as a
+  grammar-shape limit with its own what-this-does-not-mean line naming the unsupported
+  causal phrasing.
+- [ ] **The research provider becomes config-selected, settable three ways.** The chat
+  research lane reads its provider (wikipedia or wikidata; default wikipedia) from
+  `tmct.toml`. An init CLI option writes the choice into `tmct.toml`; a chat-invocation
+  option sets it for that session; in chat, `/wiki` selects wikipedia and `/wikidata`
+  selects wikidata for the rest of the session. Both adapters already pass the source
+  contract test; this item is the wiring and the three setters.
 
 ## Discipline
 

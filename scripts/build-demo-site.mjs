@@ -1129,7 +1129,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <p class="eyebrow">claims</p>
       <h1>Claims, extensibilities and limits</h1>
       <p class="lede">Every claim below ships with the file it was measured against, the command that reproduces it, and, where one exists, a page where you can watch it happen.</p>
-      <p>The field&rsquo;s flagship knowledge base, Cyc, ran for about four decades and roughly 2,000 person-years (Lenat and Marcus, 2023) without publishing per-domain grounding rates, refusal matrices, or a citation invariant. This page is the counter-move: a claim ships with its number, or it does not ship.</p>
+      <p><a href="https://en.wikipedia.org/wiki/Cyc">Cyc</a> spent four decades hand-curating commonsense so that symbolic reasoning could work in the open world, and met the walls every such project meets: the knowledge-acquisition bottleneck, brittleness at the edges of its rules, and an ambiguity load that grows faster than the knowledge that would resolve it. Every new term brings more senses, contexts and exceptions than it repays. tmct takes the opposite bet. Ambiguity is a function of domain breadth: keep the domain closed and the lexicon bounded, and disambiguation stays resolvable, inference stays tractable, and every fact answer stays citable. The claims below are what that bet buys; the limits are what it costs.</p>
     </header>
 
     <section class="about-section" id="claims">
@@ -1141,7 +1141,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
 
     <section class="about-section" id="extensibilities">
       <h2>Measured extensibilities</h2>
-      <p>What changes when tmct loads more: a corpus, a lexicon, a taught fact, a source adapter. Each block below shows a before, an after, and the one command that reproduces the change.</p>
+      <p>These ship working and are built to be extended into a chosen domain, never toward everything at once. That direction is the design: domain specialisation is where a bounded lexicon and a grounded ontology keep producing useful reasoning, and open-ended growth is where Cyc-class systems drowned in their own ambiguity. Each entry shows the same test before and after one documented extension; E4 shows the seam those extensions plug into.</p>
       <div class="claim-block-grid">${e1}${e2}${e3}${e4}
       </div>
     </section>
