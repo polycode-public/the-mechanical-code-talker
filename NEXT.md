@@ -71,8 +71,6 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
   poison case; fix in `chat.mjs`'s bare-verb fallback after neutrality wave 2 releases
   the file. Regression gate: claim:ground-gate re-run (matrix must not lose groundable
   acceptances) plus the teach corpus lanes.
-- [ ] **Neutrality wave 3 docs + tier2 packs** (T7+T8) — in flight, worktree
-  `agent-a7cb95c37993e1134`.
 - [ ] **Chat-engine trio** — in flight, worktree `agent-a3db755e98dc29e0c`: neutrality
   T9 `/capabilities` domain listing, the ground-gate over-acceptance fix, and the
   politeness-wrapper open item (that agent deletes the item's block on landing it).

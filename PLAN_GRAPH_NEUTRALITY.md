@@ -289,5 +289,7 @@ Updated as waves merge to local main (2026-08-06):
   deviation, kept: the banner/orientation clauses stay inline behind
   `codeDomainActive` rather than moving into the vocab file — wave 1's gating was
   already byte-identical and tested, and the move was pure duplication-shuffling.
-- Wave 3 (T7–T9) — dispatching: T7 docs + T8 tier2 packs (one agent), T9
-  `/capabilities` domain listing folded into the chat-engine fixes agent.
+- Wave 3: T7 docs + T8 tier2 packs — landed (337067a4, cbd24fb9): README documents
+  domain packs, tier2-python/java/aws are pack-kind entries with an empty vocab file
+  and taught-only grounding, import behavior byte-identical (30/31/39 facts). T9
+  `/capabilities` domain listing — in flight in the chat-engine fixes agent.
