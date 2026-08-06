@@ -7,12 +7,21 @@
 // into a fact is a miss, not a bug — this rig reports the resulting rate
 // as-is, however low, because the whole point of the measurement is to know
 // the real number.
+//
+// The default memory backend is sqlite (openMemoryBackend's empty/"default"
+// token), not the retired flat-file store — so the seeded store has to be
+// opened as a BACKEND HANDLE and that handle passed as ingestText's
+// `memoryDir`, never a bare directory string. A bare string there would
+// silently read/write the retired flat-file backend instead, leaving the
+// corpus seed invisible and this rig grounding against an empty store
+// without ever failing loudly.
 import { readFile } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { initRepo, MEMORY_DIR_REL } from "../../src/services/init.mjs";
+import { initRepo } from "../../src/services/init.mjs";
+import { openMemoryBackend } from "../../src/adapters/memory/core.mjs";
 import { ingestText } from "../../src/services/extract-facts.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { writeClaim, defaultHardware } from "./lib.mjs";
@@ -31,20 +40,24 @@ async function measure() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-claim-prose-band-"));
   try {
     await initRepo(dir);
-    const memoryDir = join(dir, MEMORY_DIR_REL);
+    const { dir: memoryHandle, close: closeMemoryStore } = await openMemoryBackend(dir, "");
 
     let sentenceCount = 0;
     let recognizedCount = 0;
     let optimisticCount = 0;
     const ungroundedTerms = new Map();
-    for (const sentence of sentences) {
-      const result = await ingestText(sentence, { memoryDir, sourceTag: "claim-prose-band" });
-      sentenceCount += result.sentences;
-      recognizedCount += result.recognized;
-      optimisticCount += result.optimistic.length;
-      for (const term of result.ungroundedTerms) {
-        ungroundedTerms.set(term, (ungroundedTerms.get(term) ?? 0) + 1);
+    try {
+      for (const sentence of sentences) {
+        const result = await ingestText(sentence, { memoryDir: memoryHandle, sourceTag: "claim-prose-band" });
+        sentenceCount += result.sentences;
+        recognizedCount += result.recognized;
+        optimisticCount += result.optimistic.length;
+        for (const term of result.ungroundedTerms) {
+          ungroundedTerms.set(term, (ungroundedTerms.get(term) ?? 0) + 1);
+        }
       }
+    } finally {
+      await closeMemoryStore();
     }
     const topUngrounded = [...ungroundedTerms.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -74,6 +87,7 @@ async function main() {
       "test-benchmarks/claims/simplewiki-sentences.LICENSE",
       "src/services/extract-facts.mjs",
       "src/services/init.mjs",
+      "src/adapters/memory/core.mjs",
     ],
     detail: {
       sentenceCount,
