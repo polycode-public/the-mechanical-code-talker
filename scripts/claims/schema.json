@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "required": ["name", "generatedAt", "commit", "hardware", "pack", "unit", "threshold", "sources"],
+  "properties": {
+    "name": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "commit": { "type": "string" },
+    "hardware": { "type": "string" },
+    "pack": { "type": "string" },
+    "value": { "type": "number" },
+    "before": { "type": "number" },
+    "after": { "type": "number" },
+    "delta": { "type": "number" },
+    "unit": { "type": "string" },
+    "threshold": {
+      "type": "object",
+      "required": ["direction", "value"],
+      "properties": {
+        "direction": { "type": "string", "enum": ["max", "min"] },
+        "value": { "type": "number" }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "detail": { "type": "object" }
+  },
+  "oneOf": [
+    { "required": ["value"] },
+    { "required": ["before", "after", "delta"] }
+  ]
+}
