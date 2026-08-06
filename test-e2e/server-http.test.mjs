@@ -392,7 +392,7 @@ test("serve: a graph rewritten under a running server is re-read, not answered f
       return (await res.json()).content[0].text;
     };
 
-    assert.match(await ask(), /0 module\(s\)/, "the empty artifact reads as empty");
+    assert.match(await ask(), /no graph loaded — this session holds 0 facts/, "the empty artifact reads as empty, in the neutral voice");
 
     // What `tmct index` does to a repo while a server is up.
     await copyFile(FIXTURE, graphFile);
