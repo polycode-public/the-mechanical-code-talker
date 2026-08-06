@@ -1,7 +1,7 @@
 {
   "name": "cite",
-  "generatedAt": "2026-08-06T01:49:01.706Z",
-  "commit": "599c655da7a1c70efaf658132c5a8db244b8e9e9",
+  "generatedAt": "2026-08-06T02:26:59.760Z",
+  "commit": "3a0505c23c51d9a11460f2524c0d5fd743588a12",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "answers",
@@ -13,11 +13,11 @@
     "test-benchmarks/claims/cite-set.jsonl",
     "test-benchmarks/chatbench/graded-pool.jsonl"
   ],
-  "value": 44,
+  "value": 48,
   "detail": {
     "total": 48,
     "refusals": 0,
-    "runtimeMs": 42961,
+    "runtimeMs": 35730,
     "byKind": {
       "seed": {
         "total": 13,
@@ -31,7 +31,7 @@
       },
       "reference-pack": {
         "total": 12,
-        "resolved": 8,
+        "resolved": 12,
         "refusals": 0
       },
       "proof-chain": {
@@ -43,31 +43,9 @@
     "poolCoverage": {
       "citedAnswers": 5,
       "totalNonRefusal": 222,
-      "runtimeMs": 30973,
+      "runtimeMs": 35122,
       "pool": "test-benchmarks/chatbench/graded-pool.jsonl"
     },
-    "laneNote": "the pool's tags/construction fields are case-level and mix citing with non-citing turns (e.g. honesty-miss covers both a disjointness proof and a number-guessing game); no existing pool field isolates a citing-answer lane, so this claim measures a hand-authored fixture instead of a pool filter",
-    "failures": [
-      {
-        "caseId": "ref-chinchilla",
-        "turn": 1,
-        "why": "unresolvable citation(s): reference article \"Chinchilla\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Chinchilla?oldid=10906181"
-      },
-      {
-        "caseId": "ref-chinchilla",
-        "turn": 2,
-        "why": "unresolvable citation(s): reference article \"Chinchilla\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Chinchilla?oldid=10906181"
-      },
-      {
-        "caseId": "ref-puma",
-        "turn": 1,
-        "why": "unresolvable citation(s): reference article \"Puma\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Puma?oldid=10641053"
-      },
-      {
-        "caseId": "ref-puma",
-        "turn": 2,
-        "why": "unresolvable citation(s): reference article \"Puma\", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Puma?oldid=10641053"
-      }
-    ]
+    "laneNote": "the pool's tags/construction fields are case-level and mix citing with non-citing turns (e.g. honesty-miss covers both a disjointness proof and a number-guessing game); no existing pool field isolates a citing-answer lane, so this claim measures a hand-authored fixture instead of a pool filter"
   }
 }

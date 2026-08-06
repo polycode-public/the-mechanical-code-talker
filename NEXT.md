@@ -37,14 +37,6 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **Reference-pack persistence gap** (claim:cite's remainder) — the `isaOf()`
-  extraction fix landed (735c7e6f: parenthetical stripping, sentence-bounded window,
-  quantifier-of chains, plus the missing `rodent` lexicon row). Remainder: the shipped
-  `corpus/reference` shards carry precomputed `isa` fields from before the fix, and
-  `ingestReferenceArticle` reads only the stored field, so cite is honestly red at
-  44/48 until the shards' isa fields are recomputed from their own committed text.
-  Recompute in flight — worktree `agent-adafb6765f8784d40`, no network, revids
-  untouched, cite must return to 48/48.
 - [ ] **Claims page** (PLAN_CLAIMS T14) — in flight, worktree `agent-a6fc44e49b2ab102b`:
   claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
   index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
