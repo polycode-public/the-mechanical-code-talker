@@ -31,16 +31,6 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In flight (claims + neutrality delivery, coordinator session 2026-08-06)
-
-Live background sub-agents and their worktrees under `.claude/worktrees/`; each merges to
-`main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
-merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
-
-- [ ] **Coordinator end-game** — the courtesy consolidation is merged (2a4df9e1);
-  remaining: the claim-rig re-run against the settled engine (running) and its drift
-  commit, full suite, version roll, push batch 2, pipeline watch to green.
-
 ## Open items
 
 None open.
