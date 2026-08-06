@@ -112,7 +112,7 @@ test("`tmct init`'s zero-flag (default) seed: the human persona only; seon/conce
   try {
     const res = await initRepo(dir, { seed: true });
     assert.ok(res.seedResult.perBundle.human?.appended > 0, "the default human bundle landed");
-    assert.equal(res.seedResult.seon, 0, "seon is opt-in now, not seeded by default");
+    assert.equal(res.seedResult.code, 0, "the code pack is opt-in now, not seeded by default");
     assert.equal(res.seedResult.conceptnet, 0, "conceptnet is opt-in now, not seeded by default");
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -283,10 +283,10 @@ capture_unknown_context = true
 // default, now something a repo must opt back
 // INTO (seon/conceptnet ship inactive; `human` is the new implicit default —
 // see the `human`/`empty` presets below).
-test("PERSONA_PRESETS.code: re-activates seon+conceptnet (now shipped inactive), explicit neutral bias", () => {
+test("PERSONA_PRESETS.code: activates the code pack plus conceptnet (both shipped inactive), explicit neutral bias", () => {
   assert.deepEqual(PERSONA_PRESETS.code, {
-    extensions: { seon: { active: true }, conceptnet: { active: true } },
-    bias: { seon: 1.0, conceptnet: 1.0 },
+    extensions: { code: { active: true }, conceptnet: { active: true } },
+    bias: { code: 1.0, conceptnet: 1.0 },
   });
 });
 
@@ -304,19 +304,19 @@ test("initRepo({persona: PERSONA_PRESETS.code}): tmct.toml carries an EXPLICIT [
     const res = await initRepo(dir, { seed: false, persona: PERSONA_PRESETS.code });
     const text = await readFile(join(dir, CONFIG_FILE), "utf8");
     assert.match(text, /\[bias\]/);
-    assert.match(text, /seon = 1/);
+    assert.match(text, /code = 1/);
     assert.match(text, /conceptnet = 1/);
-    assert.match(text, /\[extensions\.seon\]/, "code's extensions override re-activates seon");
+    assert.match(text, /\[extensions\.code\]/, "code's extensions override activates the code pack");
     assert.match(text, /\[extensions\.conceptnet\]/, "code's extensions override re-activates conceptnet");
     // round-trips through the config loader
     const raw = await loadTomlConfig(dir);
-    assert.deepEqual(raw.bias, { seon: 1, conceptnet: 1 });
-    assert.deepEqual(raw.extensions, { seon: { active: true }, conceptnet: { active: true } });
+    assert.deepEqual(raw.bias, { code: 1, conceptnet: 1 });
+    assert.deepEqual(raw.extensions, { code: { active: true }, conceptnet: { active: true } });
     // re-init (read-back path) reflects it in res.config too
-    assert.deepEqual(res.config.bias, { seon: 1.0, conceptnet: 1.0 });
+    assert.deepEqual(res.config.bias, { code: 1.0, conceptnet: 1.0 });
     const res2 = await initRepo(dir, { seed: false }); // no persona passed — file already exists, preserved
-    assert.deepEqual(res2.config.bias, { seon: 1.0, conceptnet: 1.0 }, "the written [bias] section is read back on a plain re-init");
-    assert.deepEqual(res2.config.extensions, { seon: { active: true }, conceptnet: { active: true } });
+    assert.deepEqual(res2.config.bias, { code: 1.0, conceptnet: 1.0 }, "the written [bias] section is read back on a plain re-init");
+    assert.deepEqual(res2.config.extensions, { code: { active: true }, conceptnet: { active: true } });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -360,7 +360,7 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
     assert.equal(r.status, 0, r.stderr);
     const text = await readFile(join(dir, CONFIG_FILE), "utf8");
     assert.match(text, /\[bias\]/);
-    assert.match(text, /seon = 1/);
+    assert.match(text, /code = 1/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

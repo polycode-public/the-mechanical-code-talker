@@ -20,6 +20,7 @@
 import { isAbsolute, join, resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { CODE_VOCAB_DATA, EMPTY_VOCAB_DATA as TIER2_EMPTY_VOCAB_DATA } from "./lane-vocab-data.mjs";
 import { loadTomlConfig } from "../adapters/toml-config.mjs";
 import {
   SEON_CONCEPTS_FILE,
@@ -76,6 +77,7 @@ function builtinExtensions() {
       corpusPath: SEON_CONCEPTS_FILE,
       provenancePrefix: "corpus:seon",
       vocabPath: CODE_VOCAB_FILE,
+      vocabData: CODE_VOCAB_DATA,
       groundingKind: "extraction",
       groundingAdapter: "tmct index (the graphPaths provider seam)",
     },
@@ -121,6 +123,7 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "aws.jsonl"),
       provenancePrefix: "corpus:tier2-aws",
       vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      vocabData: TIER2_EMPTY_VOCAB_DATA,
       groundingKind: "taught-only",
     },
     "tier2-python": {
@@ -129,6 +132,7 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "python.jsonl"),
       provenancePrefix: "corpus:tier2-python",
       vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      vocabData: TIER2_EMPTY_VOCAB_DATA,
       groundingKind: "taught-only",
     },
     "tier2-java": {
@@ -137,6 +141,7 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "java.jsonl"),
       provenancePrefix: "corpus:tier2-java",
       vocabPath: TIER2_EMPTY_VOCAB_FILE,
+      vocabData: TIER2_EMPTY_VOCAB_DATA,
       groundingKind: "taught-only",
     },
     "tier2-general": {
@@ -392,18 +397,22 @@ export async function mergedLaneVocab(entries, biasByBundle = {}) {
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
     if (!entry.active) continue;
     if (entry.kind !== "pack") continue;
-    if (!entry.vocabPath) continue;
-    candidates.push({ name, path: entry.vocabPath, bias: biasByBundle[name] ?? 1 });
+    if (!entry.vocabPath && !entry.vocabData) continue;
+    candidates.push({ name, path: entry.vocabPath, data: entry.vocabData, bias: biasByBundle[name] ?? 1 });
   }
   const merged = { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" };
   if (!candidates.length) return merged;
   candidates.sort((a, b) => a.bias - b.bias);
   for (const c of candidates) {
     let raw;
-    try {
-      raw = JSON.parse(await readFile(c.path, "utf8"));
-    } catch (e) {
-      throw new Error(`extension "${c.name}": vocab file ${c.path} — ${e && e.message ? e.message : e}`);
+    if (c.data) {
+      raw = c.data;
+    } else {
+      try {
+        raw = JSON.parse(await readFile(c.path, "utf8"));
+      } catch (e) {
+        throw new Error(`extension "${c.name}": vocab file ${c.path} — ${e && e.message ? e.message : e}`);
+      }
     }
     Object.assign(merged.countNouns, raw.countNouns || {});
     Object.assign(merged.classLabels, raw.classLabels || {});

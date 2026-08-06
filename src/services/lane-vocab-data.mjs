@@ -1,0 +1,56 @@
+// The built-in packs' lane vocabulary, carried as code so it travels inside
+// browser bundles (no filesystem there). Third-party packs still load their
+// vocab_path files through mergedLaneVocab's readFile path, which only runs in
+// Node. Each object must stay deep-equal to its pack's on-disk vocab file —
+// a test pins the sync in both directions.
+
+export const CODE_VOCAB_DATA = Object.freeze({
+  countNouns: {
+    class: "Class", classes: "Class",
+    function: "Function", functions: "Function", func: "Function", funcs: "Function",
+    module: "Module", modules: "Module", file: "Module", files: "Module",
+    package: "Package", packages: "Package",
+    method: "Method", methods: "Method",
+    attribute: "Attribute", attributes: "Attribute",
+    variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
+    commit: "Commit", commits: "Commit",
+    session: "Session", sessions: "Session",
+  },
+  classLabels: {
+    Class: ["class", "classes"],
+    Function: ["function", "functions"],
+    Module: ["module", "modules"],
+    Package: ["package", "packages"],
+    Method: ["method", "methods"],
+    Attribute: ["attribute", "attributes"],
+    GlobalVariable: ["variable", "variables"],
+    Commit: ["commit", "commits"],
+    Session: ["session", "sessions"],
+  },
+  helpRows: [
+    ["/find <query>", "lexical search across the graph"],
+    ["/search <query>", "alias of /find"],
+    ["/context <symbol>", "the sized edit bundle for a symbol (start here to change code)"],
+    ["/snippet <symbol>", "exact source of one function/class/method"],
+    ["/describe <symbol>", "a symbol's definition, kind and relations"],
+    ["/signature <symbol>", "a symbol's signature only"],
+    ["/members <class>", "the methods/attributes of a class"],
+    ["/subclasses <class>", "the subclasses of a class"],
+    ["/impact <module>", "what a change to this module or symbol reaches (impact closure)"],
+    ["/callers <symbol>", "functions that call this symbol"],
+    ["/callees <symbol>", "functions this symbol calls"],
+    ["/tests <symbol>", "the tests covering this symbol"],
+    ["/untested", "symbols with no covering test"],
+    ["/history <symbol>", "the commit history of this symbol"],
+    ["/exports <module>", "a module's public exports"],
+    ["/arch [package]", "the architecture overview (optional package filter)"],
+  ],
+  missRecoveryPointer: "for code structure, index this repo with `tmct index`, or point me at a .tmct/graph.json with --repo <path> (or try `npm run example:mini`).",
+});
+
+export const EMPTY_VOCAB_DATA = Object.freeze({
+  countNouns: {},
+  classLabels: {},
+  helpRows: [],
+  missRecoveryPointer: "",
+});

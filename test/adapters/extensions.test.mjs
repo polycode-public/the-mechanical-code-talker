@@ -9,7 +9,7 @@
 // [bias] table both fail loudly, naming the bad key.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -307,4 +307,13 @@ test("defaultCodeLaneVocab: the shipped code pack's own vocabulary, loaded regar
   const vocab = await defaultCodeLaneVocab();
   assert.equal(vocab.countNouns.class, "Class");
   assert.deepEqual(vocab.classLabels.Module, ["module", "modules"]);
+});
+
+test("the built-in packs' in-code vocab stays deep-equal to their on-disk vocab files", async () => {
+  const { CODE_VOCAB_DATA, EMPTY_VOCAB_DATA } = await import("../../src/services/lane-vocab-data.mjs");
+  const root = new URL("../..", import.meta.url);
+  const codeFile = JSON.parse(await readFile(new URL("corpus/domains/code/vocab.json", root), "utf8"));
+  const emptyFile = JSON.parse(await readFile(new URL("corpus/tier2/vocab-empty.json", root), "utf8"));
+  assert.deepEqual(CODE_VOCAB_DATA, codeFile, "code pack vocab drifted between src and corpus");
+  assert.deepEqual(EMPTY_VOCAB_DATA, emptyFile, "tier2 empty vocab drifted between src and corpus");
 });

@@ -465,6 +465,7 @@
   "src/services/index.mjs",
   "src/services/ingest-viz.mjs",
   "src/services/init.mjs",
+  "src/services/lane-vocab-data.mjs",
   "src/services/ledger-viz.mjs",
   "src/services/memory-panel-viz.mjs",
   "src/services/mud-editor.mjs",

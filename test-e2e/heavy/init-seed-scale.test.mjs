@@ -17,9 +17,9 @@ test("the `code` persona's seed lands SEON and ConceptNet together, matching cha
   const dir = await tmp();
   try {
     const res = await initRepo(dir, { seed: true, persona: PERSONA_PRESETS.code });
-    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed");
+    assert.ok(res.seedResult.code > 0, "the code pack's curated ontology landed");
     assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
-    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
+    assert.equal(res.seedResult.perBundle.code.appended, res.seedResult.code);
     assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
     // the `code` persona's own extensions override doesn't touch `human` (still
     // shipped active:true), so the total also includes it — internal

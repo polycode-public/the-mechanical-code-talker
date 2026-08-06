@@ -318,7 +318,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
         if (allFailed) throw new Error(perBundle[bundleNames[0]].error);
         seedResult = {
           appended, skipped, total, perBundle,
-          seon: perBundle.seon?.appended || 0,
+          code: perBundle.code?.appended || 0,
           conceptnet: perBundle.conceptnet?.appended || 0,
         };
         const markerNew = !(await exists(paths.marker));
