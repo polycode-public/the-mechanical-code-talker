@@ -39,14 +39,14 @@ None open.
 
 Nothing is blocked. Three decisions await the operator, none holding up other work:
 
-- **E1's QA set** (`PLAN_CLAIMS.md`, decisions section): the measured corpus delta is zero
+- **E1's QA set** (`archive/PLAN_CLAIMS.md`, decisions section): the measured corpus delta is zero
   because OpenBookQA's causal phrasing sits outside the ask grammar's supported shapes. Keep
   OpenBookQA as the set (a hard number, stated flat), or re-shape E1 around a definitional
   ("what is X") set that would show the delta the block was designed to show?
-- **claims.html's two narrative passages** (`PLAN_CLAIMS.md`, T14 note): `claims-notes.txt`
+- **claims.html's two narrative passages** (`archive/PLAN_CLAIMS.md`, T14 note): `claims-notes.txt`
   no longer existed on disk, so the Cyc lead-in and the extensibilities intro were
   re-authored fresh rather than carried verbatim — review them on the built page.
-- **Wikidata lane wiring** (`PLAN_GRAPH_NEUTRALITY.md`, closing question): the adapter is
+- **Wikidata lane wiring** (`archive/PLAN_GRAPH_NEUTRALITY.md`, closing question): the adapter is
   registered and contract-tested but not wired into the chat research lane, which has a
   single provider slot; wiring it (multi-provider, or a config choice) changes live chat
   behaviour.
