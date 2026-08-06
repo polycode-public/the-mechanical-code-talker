@@ -1,0 +1,224 @@
+{
+  "name": "planner",
+  "generatedAt": "2026-08-06T01:16:44.443Z",
+  "commit": "5581d2a6a536c43704aaaa51a4841244966186c0",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "disks",
+  "threshold": {
+    "direction": "min",
+    "value": 7
+  },
+  "sources": [
+    "test-benchmarks/claims/blocksworld-rules.txt",
+    "test-benchmarks/claims/gripper-rules.txt"
+  ],
+  "value": 7,
+  "detail": {
+    "hardwareNote": "measured on the machine that ran this claim; the receipts machine's numbers (test-benchmarks/receipts/receipts.json) are canonical wherever they exist for a shared metric",
+    "repBudgetMs": 120000,
+    "runTimeoutMs": 15000,
+    "domains": {
+      "hanoi": {
+        "unit": "disks",
+        "sizes": [
+          {
+            "size": 3,
+            "medianMs": 301.46,
+            "reps": 20,
+            "solved": true,
+            "moves": 7,
+            "over": false
+          },
+          {
+            "size": 4,
+            "medianMs": 305.13,
+            "reps": 20,
+            "solved": true,
+            "moves": 15,
+            "over": false
+          },
+          {
+            "size": 5,
+            "medianMs": 323.59,
+            "reps": 20,
+            "solved": true,
+            "moves": 31,
+            "over": false
+          },
+          {
+            "size": 7,
+            "medianMs": 700.44,
+            "reps": 20,
+            "solved": true,
+            "moves": 127,
+            "over": false
+          },
+          {
+            "size": 9,
+            "medianMs": 1727.42,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 12,
+            "medianMs": 1404.75,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 16,
+            "medianMs": 2199.43,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 22,
+            "medianMs": 5454.32,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 30,
+            "medianMs": 15000,
+            "reps": 1,
+            "solved": false,
+            "moves": null,
+            "over": true,
+            "cause": "killed (SIGTERM)"
+          }
+        ],
+        "largestUnder1s": 7,
+        "firstOver10s": 30
+      },
+      "blocksworld": {
+        "unit": "blocks",
+        "sizes": [
+          {
+            "size": 3,
+            "medianMs": 272.17,
+            "reps": 20,
+            "solved": true,
+            "moves": 3,
+            "over": false
+          },
+          {
+            "size": 4,
+            "medianMs": 269.73,
+            "reps": 20,
+            "solved": true,
+            "moves": 4,
+            "over": false
+          },
+          {
+            "size": 5,
+            "medianMs": 265.48,
+            "reps": 20,
+            "solved": true,
+            "moves": 5,
+            "over": false
+          },
+          {
+            "size": 7,
+            "medianMs": 294.64,
+            "reps": 20,
+            "solved": true,
+            "moves": 7,
+            "over": false
+          },
+          {
+            "size": 9,
+            "medianMs": 473.57,
+            "reps": 20,
+            "solved": true,
+            "moves": 9,
+            "over": false
+          },
+          {
+            "size": 12,
+            "medianMs": 6657.94,
+            "reps": 19,
+            "solved": true,
+            "moves": 12,
+            "over": false
+          },
+          {
+            "size": 16,
+            "medianMs": 15000,
+            "reps": 1,
+            "solved": false,
+            "moves": null,
+            "over": true,
+            "cause": "killed (SIGTERM)"
+          }
+        ],
+        "largestUnder1s": 9,
+        "firstOver10s": 16
+      },
+      "gripper": {
+        "unit": "balls",
+        "sizes": [
+          {
+            "size": 3,
+            "medianMs": 247.54,
+            "reps": 20,
+            "solved": true,
+            "moves": 3,
+            "over": false
+          },
+          {
+            "size": 4,
+            "medianMs": 253.45,
+            "reps": 20,
+            "solved": true,
+            "moves": 4,
+            "over": false
+          },
+          {
+            "size": 5,
+            "medianMs": 285.78,
+            "reps": 20,
+            "solved": true,
+            "moves": 5,
+            "over": false
+          },
+          {
+            "size": 7,
+            "medianMs": 395.04,
+            "reps": 20,
+            "solved": true,
+            "moves": 7,
+            "over": false
+          },
+          {
+            "size": 9,
+            "medianMs": 1901.26,
+            "reps": 20,
+            "solved": true,
+            "moves": 9,
+            "over": false
+          },
+          {
+            "size": 12,
+            "medianMs": 15000,
+            "reps": 1,
+            "solved": false,
+            "moves": null,
+            "over": true,
+            "cause": "killed (SIGTERM)"
+          }
+        ],
+        "largestUnder1s": 7,
+        "firstOver10s": 12
+      }
+    }
+  }
+}

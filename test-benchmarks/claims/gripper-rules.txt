@@ -1,0 +1,31 @@
+# gripper — a taught ball-transport game, in the same closed frames as
+# data/games/hanoi-3.txt, with no clearing precondition at all: a room holds
+# any number of balls, so carrying one there is unconditional. Lines starting
+# with # are skipped by import.
+#
+# After `tmct import --file gripper-rules.txt`, try this in `tmct chat`
+# (or via --prompt):
+#
+#   ball-1 rests inside room-a. ball-2 rests inside room-a.
+#   ball-3 rests inside room-a. the goal is that every ball rests inside room-c.
+#   solve it.
+#
+# The optimum is 3 moves — one carry per ball, direct to room-c; nothing
+# blocks a ball from joining another already there.
+#
+# Other things to try:
+#   scale      — first teach: "ball-4 is a ball." then "ball-4 rests inside
+#                room-a." — same goal, 4 moves.
+#   any start  — ball-1 rests inside room-b. ball-2 rests inside room-c.
+#                ball-3 rests inside room-a. the goal is that every ball
+#                rests inside room-c. solve it. (ball-2 is already there —
+#                2 moves.)
+#   legality   — "what moves are legal now?"  (one ply, no plan)
+#   read-back  — "what rests inside room-a?"
+a ball is a kind of game piece.
+a room is a kind of place.
+ball-1 is a ball. ball-2 is a ball. ball-3 is a ball.
+room-a is a room. room-b is a room. room-c is a room.
+you can carry a ball inside a room.
+carrying a ball inside a room makes the ball rest inside the target.
+a ball renders as a sphere. a room renders as a chamber.
