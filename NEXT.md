@@ -54,16 +54,6 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
   claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
   index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
   passages are re-authored (notes file gone) and flagged for operator review.
-- [ ] **Full-estate re-pin sweep after neutrality wave 2** — the first full-suite run
-  after neutrality wave 1 merged shows ~1044 failures, all (sampled) old bare-install
-  string pins against the new neutral surfaces (e.g.
-  `test/adapters/session-banner.test.mjs` expects "no code graph loaded — starting
-  empty"; session-transcript corpus rows embed the old greeting). Expected fallout of
-  the neutrality contract, not an engine break. Sweep dispatches once wave 2 merges so
-  pins move once; bare-install pins re-pin to neutral strings, active-domain pins stay
-  byte-identical. Full log:
-  the coordinator session's scratchpad `full-suite-batch1.log`. Push batch 1 is gated
-  on this sweep going green.
 - [ ] **Ground-gate over-acceptance fix** (T11's remainder) — three ungroundable items
   accepted by the general-verb-frame fallback (gibberish "asdkjhaskjdh qpwoe zzxx",
   narrative "the old bridge creaked under the weight of the truck" → `mgx:creak-under`,
@@ -76,8 +66,6 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
 - [ ] **Chat-engine trio** — in flight, worktree `agent-a3db755e98dc29e0c`: neutrality
   T9 `/capabilities` domain listing, the ground-gate over-acceptance fix, and the
   politeness-wrapper open item (that agent deletes the item's block on landing it).
-- [ ] **Full-estate re-pin sweep** — in flight, worktree `agent-a224cd24887ff2fae`;
-  the one agent authorized to run the full suite; push batch 1 gates on its green.
 - [ ] **Queued, not yet dispatched:** PLAN_CLAIMS T14 (claims page; needs cite,
   ground-gate and planner JSON committed first) and T15 (CI proposal); neutrality wave 3
   (T7 docs, T8 tier2 packs, T9 /capabilities domain listing). Coordinator end-game:
