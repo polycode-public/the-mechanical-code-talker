@@ -1,0 +1,20 @@
+{
+  "name": "index-fabrication",
+  "generatedAt": "2026-08-06T00:08:44.516Z",
+  "commit": "015fc685814ed0c86059282c7344b0eae460bfee",
+  "hardware": "ci",
+  "pack": "shipped",
+  "unit": "cases",
+  "threshold": {
+    "direction": "min",
+    "value": 25
+  },
+  "sources": [
+    "reports/BENCHMARK_CODE_INDEX_3.0.3.md"
+  ],
+  "value": 25,
+  "detail": {
+    "total": 25,
+    "fabricationSurfaces": 21
+  }
+}

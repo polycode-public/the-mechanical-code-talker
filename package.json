@@ -157,6 +157,8 @@
     "audit:fix": "npm audit fix",
     "demo:build": "node scripts/build-demo-site.mjs",
     "bench:receipts": "node scripts/bench-receipts.mjs",
+    "claim:index-fabrication": "node scripts/claims/claim-index-fabrication.mjs",
+    "claim:latency": "node scripts/claims/claim-latency.mjs",
     "claims": "node scripts/claims/run-all.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
