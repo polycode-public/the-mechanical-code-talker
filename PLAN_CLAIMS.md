@@ -209,6 +209,14 @@ the final scope, so an implementing agent reads its task, never this list.
     narrowness is visible. Conversational turns, teach confirmations, and graph-query
     answers do not use the citation convention by design. T14's C1 copy states the
     claim in this rescoped form.
+14. **C1's measurement base** (coordinator decision under the overnight directive,
+    2026-08-06, after the rescoped rig found the graded pool has no per-turn
+    citation marker and only three genuine fact/proof answers) — C1 measures a new
+    committed fact-question fixture, `test-benchmarks/claims/cite-set.jsonl`:
+    hand-authored fact lookups, teach-then-ask pairs, reference-pack lookups, and
+    proof-chain questions, every non-refusal answer required to carry a resolvable
+    citation. The pool-wide coverage number (5/222 at authoring) publishes under the
+    JSON's detail. The graded pool itself stays untouched.
 
 ## Waves
 
