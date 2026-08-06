@@ -143,7 +143,7 @@ matching no longer do:
 
 - "11 edge kinds" — `EDGE_KINDS` has 13.
 - SEON's "9 relations" — `relations.jsonl` has 11 rows. The drift is in
-  `corpus/seon/README.md`, which this table was echoing.
+  `corpus/domains/code/README.md`, which this table was echoing.
 - chatbench's "138 cases" — `graded-pool.jsonl` has 139, and its own README says
   138 in three places and 139 in a fourth.
 
@@ -219,7 +219,7 @@ uncertainty by disagreeing.
 **Drift in files this pass does not own.** Recorded here so it is not
 rediscovered:
 
-- `corpus/seon/README.md` says 9 relations; `relations.jsonl` has 11.
+- `corpus/domains/code/README.md` says 9 relations; `relations.jsonl` has 11.
 - `test-benchmarks/chatbench/README.md` says 138 cases in three places and 139 in
   a fourth; the pool has 139.
 - `scripts/build-demo-pack.mjs`'s comment says "today's 3,887-article
