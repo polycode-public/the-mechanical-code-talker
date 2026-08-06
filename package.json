@@ -177,6 +177,7 @@
     "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
     "build:spider-fly-bundle": "node scripts/build-spider-fly-bundle.mjs",
     "build:plan-bundle": "node scripts/build-plan-bundle.mjs",
+    "build:claims-bundle": "node scripts/build-claims-bundle.mjs",
     "build:ledger-bundle": "node scripts/build-ledger-bundle.mjs",
     "build:ingest-bundle": "node scripts/build-ingest-bundle.mjs",
     "build:research-bundle": "node scripts/build-research-bundle.mjs",

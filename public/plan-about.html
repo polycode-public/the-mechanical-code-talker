@@ -111,7 +111,7 @@ no action rules taught yet — teach the game first</pre>
         <li>disk-3  mgx:rest-on   peg-a</li>
         <li>disk-1  mgx:smaller-than  disk-2</li>
       </ul>
-      <p><strong>The moves.</strong> Successors come from grounding the taught action rules against the current state. That grounding has its own budget. Past it, the engine raises a budget error rather than searching without bound.</p>
+      <p><strong>The moves.</strong> Successors come from grounding the taught action rules against the current state. That grounding has its own budget. Past it, the engine raises a budget error rather than searching without bound. A taught rule inherits the STRIPS assumption: whatever its effect does not mention, the plan assumes stays unchanged.</p>
       <p><strong>The goal.</strong> A goal spec compiles into a predicate over states. Universally quantified goals work, which is why &ldquo;every disk rests on peg-c&rdquo; is a goal rather than three goals.</p>
       <p><strong>The PDDL.</strong> Each action's precondition and effect are a mechanical diff between two consecutive snapshots of the plan. Nothing is inferred beyond what actually changed between them:</p>
       <pre>(:action move-onto-step1
