@@ -44,7 +44,12 @@ merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery s
   `ingestReferenceArticle` reads only the stored field, so cite is honestly red at
   44/48 until the shards' isa fields are recomputed from their own committed text.
   Recompute in flight — worktree `agent-adafb6765f8784d40`, no network, revids
-  untouched, cite must return to 48/48.
+  untouched, cite must return to 48/48. Its dry-run caught that the first widening
+  dropped 212 shipped isa facts (partitive heads like "group of animals" stopped
+  reading through), so the coordinator set the bar (overnight directive, operator to
+  review): the recompute must be loss-free — partitive/collective heads (`group`,
+  `set`, `part`, `piece`, `bunch`, `family`, empirically extended from the loss list)
+  read through the of-chain; `member`/`body` keep their pinned composition semantics.
 - [ ] **Claims page** (PLAN_CLAIMS T14) — in flight, worktree `agent-a6fc44e49b2ab102b`:
   claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
   index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
