@@ -26,7 +26,7 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
-import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
+import { runTurn, hasSeededVocabulary, vocabExampleHint, codeDomainActive as codeDomainActiveOf } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
 import { resolveResearchConfig } from "./research.mjs";
@@ -281,6 +281,14 @@ export async function createSession({
   try { ({ entries: extEntries, biasByBundle } = await resolveExtensions(repo)); }
   catch { extEntries = null; biasByBundle = {}; }
 
+  // The code-domain predicate (chat.mjs): a loaded graph with modules, or the
+  // seon code-domain bundle active in this repo's tmct.toml/persona — computed
+  // ONCE per session and threaded into every turn, so every code-vocabulary
+  // surface (counts, misses, banner, greeting, orientation, help) reads the
+  // same answer all session long.
+  const seonActive = Boolean(extEntries?.get("seon")?.active);
+  const domainActive = codeDomainActiveOf({ graph, seonActive });
+
   // Load this handle's lexicon once, MERGED with any active lexicon/pack
   // extension entries (ascending-bias merge order so a higher-bias bundle's
   // same-lemma entry wins deterministically). Failure-tolerated — a broken
@@ -403,8 +411,13 @@ export async function createSession({
   const bannerLines = [
     noCodeGraph
       // No code graph: honest, orienting messaging — never an error before the prompt.
-      ? `tmct chat — ${readRepo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
-        `${whereItGoes}`
+      // domainActive here means the seon bundle is active without an index yet
+      // (e.g. --with-persona code, before `tmct index` runs) — same code-graph
+      // framing as today. With no code domain at all, naming "no code graph" would
+      // itself be a code-domain leak, so a bare install gets a neutral line instead.
+      ? (domainActive
+        ? `tmct chat — ${readRepo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ${whereItGoes}`
+        : `tmct chat — ${readRepo} — ${whereItGoes}`)
       : `tmct chat — ${readRepo} — ${moduleCount} module(s) — `
         + (discardsWrites ? `${whereItGoes}` : `log ${logFile}`),
     // the honest seed line appears ONLY on the run that actually seeded — the count
@@ -415,8 +428,12 @@ export async function createSession({
     // example), and at what IS answerable now — `vocabHint` is only ever a term
     // confirmed to resolve in THIS session's actual seed state (see vocabExampleHint),
     // never a hardcoded example that might not have been seeded. tmct can index a
-    // repo itself (`tmct index`) or read a graph any other producer wrote.
-    ...(noCodeGraph ? [`for code structure, index this repo with \`tmct index\`, or point me at a .tmct/graph.json with --repo <path> (or try \`npm run example:mini\`). ${vocabHint}`] : []),
+    // repo itself (`tmct index`) or read a graph any other producer wrote. With no
+    // code domain active, the code-structure pointer has nothing to point at, so
+    // this line carries just the teach/vocabulary hint.
+    ...(noCodeGraph ? [domainActive
+      ? `for code structure, index this repo with \`tmct index\`, or point me at a .tmct/graph.json with --repo <path> (or try \`npm run example:mini\`). ${vocabHint}`
+      : vocabHint] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];
@@ -462,7 +479,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
