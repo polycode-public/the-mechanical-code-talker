@@ -37,25 +37,13 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **Claims page** (PLAN_CLAIMS T14) — in flight, worktree `agent-a6fc44e49b2ab102b`:
-  claims.html rendered from `results/claims/*.json`, block manifest + estate guard,
-  index teaser, plan-about STRIPS line, benchmark-this-device button. The two narrative
-  passages are re-authored (notes file gone) and flagged for operator review.
-- [ ] **Ground-gate over-acceptance fix** (T11's remainder) — three ungroundable items
-  accepted by the general-verb-frame fallback (gibberish "asdkjhaskjdh qpwoe zzxx",
-  narrative "the old bridge creaked under the weight of the truck" → `mgx:creak-under`,
-  "the children played in the park until sunset" → `mgx:play-in`). Silent garble is the
-  poison case; fix in `chat.mjs`'s bare-verb fallback after neutrality wave 2 releases
-  the file. Regression gate: claim:ground-gate re-run (matrix must not lose groundable
-  acceptances) plus the teach corpus lanes.
 - [ ] **Chat-engine trio** — in flight, worktree `agent-a3db755e98dc29e0c`: neutrality
-  T9 `/capabilities` domain listing, the ground-gate over-acceptance fix, and the
-  politeness-wrapper open item (that agent deletes the item's block on landing it).
-- [ ] **Queued, not yet dispatched:** PLAN_CLAIMS T14 (claims page; needs cite,
-  ground-gate and planner JSON committed first) and T15 (CI proposal); neutrality wave 3
-  (T7 docs, T8 tier2 packs, T9 /capabilities domain listing). Coordinator end-game:
-  re-run every claim rig after the neutrality merges, full suite, push batches, pipeline
-  watch.
+  T9 `/capabilities` domain listing, the ground-gate over-acceptance fix (three
+  ungroundable items the general-verb fallback wrongly stores as garbled facts —
+  regression gates: claim:ground-gate re-run and the teach lanes), and the
+  politeness-wrapper open item below (that agent deletes the item's block on landing
+  it). Coordinator end-game after it merges: re-run every claim rig, full suite, push
+  batches, pipeline watch.
 - [ ] **T9 remainder (research adapters):** `wikidata-live.mjs` duplicates
   `wikipedia-live.mjs`'s throttle/cool-off/cache machinery (consolidation pass), and the
   chat research lane still has a single provider slot so Wikidata is registered but not

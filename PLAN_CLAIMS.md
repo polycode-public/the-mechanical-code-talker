@@ -535,13 +535,24 @@ Updated as waves merge to local main (2026-08-06):
   first over 10s at 30, with 9–22 honest misses past the 300-move search cap;
   blocksworld 9/16; gripper 7/12), per-run child-process isolation after an in-process
   OOM, `solvePlannerInstance` exported for the page's benchmark button.
-- T2 cite — landed (9ade1433) under decisions 13 and 14: 44/44 fact answers cite a
-  resolvable fact row over the committed cite-set fixture (13 seed, 10 teach-recall,
-  8 reference-pack, 13 proof-chain), pool-wide coverage 5/222 published in the JSON's
-  detail. Found in passing: reference-pack articles whose opening sentence escapes
-  `isaOf`'s extraction window never persist, so repeat asks never reach recall —
-  queued in NEXT.md.
-- T14 page, T15 CI proposal — queued on the above.
+- T2 cite — landed (9ade1433) under decisions 13 and 14, then raised to 48/48 by the
+  reference-pack fix pair (735c7e6f the `isaOf` widening; 3a0505c2 + 200387ac the
+  partitive read-through and the shipped-shard isa recompute — 232 rows gained an isa,
+  34 residual losses each allowlisted and traced to the partitive-composition design
+  decision, all other shard bytes identical). Pool-wide coverage 5/222 stays published
+  in the JSON's detail. Two small extraction-quality gaps observed and left recorded
+  here, not fixed: `anchovy → "schooling"` (the fixed 6-word window truncates before
+  the true head after a read-through hop) and `envy` (a reduced relative clause with
+  no relative pronoun escapes the clause heuristic).
+- T14 page — landed (fb780dac): claims.html renders all 13 rig JSONs from the
+  `CLAIMS_PAGE_BLOCKS` manifest (ground-gate declared under both C2 and L2 — one run,
+  two headlines), build fails on a missing or schema-stale block, index teaser card,
+  the STRIPS sentence on plan-about, the microtheories and scoreboard lines, and the
+  benchmark-this-device button solving hanoi size 7 in-browser (honest "could not run
+  on this device" on failure). The two narrative passages are re-authored — review
+  them on the built page. Pairing is cross-reference links, not grid adjacency (the
+  sections are sequential).
+- T15 CI proposal — landed (46362535): the section at this doc's end.
 
 **Note for the operator (proceeded without input, per the overnight directive):**
 `claims-notes.txt` was untracked and no longer exists on disk, so T14's two "carried
