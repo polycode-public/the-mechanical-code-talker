@@ -278,5 +278,16 @@ Updated as waves merge to local main (2026-08-06):
   probes show zero code vocabulary; active-domain output byte-matches the pre-edit
   capture. Two flagged leftovers moved into wave 2's scope: `helpText()`'s code-command
   roster, and the `NO_CODE_INDEX_NOTE` family gated at source in `src/domain`.
-- Wave 2 (T4–T6) — in flight, carrying the relocation per decision 1.
-- Wave 3 (T7–T9) — queued on wave 2.
+- Wave 2 (T4–T6) — landed (d9e75f5e, 8810b830, ddc9aa1c): `vocab_path` +
+  grounding-channel declaration on pack entries (`grounding_kind` /
+  `grounding_adapter`, enforced by `tmct extend --validate` for pack candidates),
+  `mergedLaneVocab` with the code pack's vocab at `corpus/domains/code/vocab.json`,
+  the seon corpus relocated to `corpus/domains/code/` with zero provenance-layer
+  changes (the `corpus:seon` prefix is a literal in extensions.mjs, not path-derived),
+  the neutrality test tier (corpus rows + estate guard), and both wave-1 leftovers
+  (helpText rows from the pack, `/untested` neutral when inactive). One scoped
+  deviation, kept: the banner/orientation clauses stay inline behind
+  `codeDomainActive` rather than moving into the vocab file — wave 1's gating was
+  already byte-identical and tested, and the move was pure duplication-shuffling.
+- Wave 3 (T7–T9) — dispatching: T7 docs + T8 tier2 packs (one agent), T9
+  `/capabilities` domain listing folded into the chat-engine fixes agent.
