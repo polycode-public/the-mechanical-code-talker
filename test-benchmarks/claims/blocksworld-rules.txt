@@ -1,0 +1,35 @@
+# blocksworld — a taught block-stacking game, in the same closed frames as
+# data/games/hanoi-3.txt, minus hanoi's "smaller than" comparative: real
+# Blocksworld blocks are uniform, so any clear block may stack on any other
+# clear block or spot. Lines starting with # are skipped by import.
+#
+# After `tmct import --file blocksworld-rules.txt`, try this in `tmct chat`
+# (or via --prompt):
+#
+#   block-1 rests on block-2. block-2 rests on block-3. block-3 rests on spot-a.
+#   the goal is that every block rests on spot-c. solve it.
+#
+# The optimum is 3 moves — with no size constraint, the whole stack moves
+# across in its own order: block-1 (the clear top) onto spot-c, then block-2
+# onto block-1, then block-3 onto block-2, rebuilding the same stack at the
+# new spot.
+#
+# Other things to try:
+#   scale      — first teach: "block-4 is a block." then "block-1 rests on
+#                block-2. block-2 rests on block-3. block-3 rests on block-4.
+#                block-4 rests on spot-a." — same goal, 4 moves.
+#   any start  — block-1 rests on spot-b. block-2 rests on spot-c.
+#                block-3 rests on spot-a. the goal is that every block rests
+#                on spot-c. solve it.
+#   legality   — "what moves are legal now?"  (one ply, no plan)
+#   read-back  — "what rests on block-2?" / "is block-1 clear?"
+a block is a kind of game piece.
+a spot is a kind of place.
+block-1 is a block. block-2 is a block. block-3 is a block.
+spot-a is a spot. spot-b is a spot. spot-c is a spot.
+you can stack a block onto a spot.
+you can stack a block onto a block.
+to stack a block onto a target, nothing may rest on the block.
+to stack a block onto a target, nothing may rest on the target.
+stacking a block onto a target makes the block rest on the target.
+a block renders as a cube. a spot renders as a mat.
