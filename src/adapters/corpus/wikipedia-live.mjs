@@ -25,9 +25,16 @@
 import { normFactTerm } from "../../domain/hash.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { isReferenceArticleRow, sentencesUpTo, isaOf, SUMMARY_CHAR_CAP } from "../../domain/reference-pack.mjs";
+import { registerResearchSource, researchSourceTag } from "./research-source.mjs";
 
 export const WIKIPEDIA_LIVE_ORIGIN = "https://en.wikipedia.org";
 export const SIMPLE_WIKIPEDIA_ORIGIN = "https://simple.wikipedia.org";
+
+/** The names these two providers go by as research SOURCES
+ *  (research-source.mjs): the name segment of every provenance tag their facts
+ *  carry, and the key each registers under. */
+export const WIKIPEDIA_LIVE_SOURCE_NAME = "wikipedia-live";
+export const SIMPLE_WIKIPEDIA_SOURCE_NAME = "simple-wikipedia";
 
 /** The identification string Wikimedia's robot policy asks API clients to
  *  carry, pointing at this project's public site as the contact. Browsers
@@ -49,12 +56,15 @@ const MAXLAG_SECONDS = 5;
  * the research fan-out surface: pageByTitle(title) fetches an exact title's
  * summary in ONE round trip (no opensearch — a linked title is already
  * exact), and linkedTitles(title) lists the namespace-0 articles the page's
- * LEAD section links to, in document order.
+ * LEAD section links to, in document order. It also carries the research
+ * source contract (research-source.mjs): `name`, `origin` and
+ * `provenanceTag(term)`.
  *
  * `fetchImpl` defaults to the global fetch; `origin` to en.wikipedia.org;
- * `lexicon` (optional) feeds the isa extraction. The row shape is the shipped
- * pack's own ({ term, title, text, summary, url, revid, isa? }), validated by
- * isReferenceArticleRow before it is ever returned.
+ * `sourceName` to the en.wikipedia source name; `lexicon` (optional) feeds the
+ * isa extraction. The row shape is the shipped pack's own ({ term, title,
+ * text, summary, url, revid, isa? }), validated by isReferenceArticleRow
+ * before it is ever returned.
  *
  * Throttle posture: every public method takes one "slot" gated by the
  * minimum interval, the single-flight guard and any open cool-off. By
@@ -71,6 +81,7 @@ export function createWikipediaLiveProvider({
   lexicon = null,
   userAgent = WIKIMEDIA_USER_AGENT,
   waitForSlot = false,
+  sourceName = WIKIPEDIA_LIVE_SOURCE_NAME,
 } = {}) {
   const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
   const cache = new Map(); // key -> row | null (hits AND settled misses)
@@ -204,6 +215,16 @@ export function createWikipediaLiveProvider({
   }
 
   return {
+    name: sourceName,
+    origin,
+
+    /** The tag a fact gained through the research source contract carries. The
+     *  research lane stamps its own `research:<topic>@<depth>` tag instead when
+     *  it ingests, because only the lane knows how far its fan-out reached. */
+    provenanceTag(term) {
+      return researchSourceTag(sourceName, term);
+    },
+
     async lookup(normTerm) {
       const key = String(normTerm ?? "");
       if (!key) return null;
@@ -291,11 +312,27 @@ export function registerResearchProvider(provider) {
 export function getResearchProvider({ minIntervalMs } = {}) {
   if (registeredResearchProvider) return registeredResearchProvider;
   if (!defaultResearchProvider) {
-    defaultResearchProvider = createWikipediaLiveProvider({
-      origin: SIMPLE_WIKIPEDIA_ORIGIN,
-      waitForSlot: true,
+    defaultResearchProvider = createSimpleWikipediaResearchSource({
       minIntervalMs: Math.max(DEFAULT_MIN_INTERVAL_MS, Number(minIntervalMs) || 0),
     });
   }
   return defaultResearchProvider;
 }
+
+/** The Simple English Wikipedia research source: the same provider, named and
+ *  origin-pinned for the research-source registry, with `waitForSlot` on. Every
+ *  option the caller passes wins, so a test can hand it a stub transport and a
+ *  zero interval. */
+export function createSimpleWikipediaResearchSource(options = {}) {
+  return createWikipediaLiveProvider({
+    origin: SIMPLE_WIKIPEDIA_ORIGIN,
+    sourceName: SIMPLE_WIKIPEDIA_SOURCE_NAME,
+    waitForSlot: true,
+    ...options,
+  });
+}
+
+registerResearchSource({
+  name: SIMPLE_WIKIPEDIA_SOURCE_NAME,
+  create: createSimpleWikipediaResearchSource,
+});

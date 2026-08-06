@@ -1,0 +1,63 @@
+{
+  "name": "research-sources",
+  "generatedAt": "2026-08-06T00:41:57.672Z",
+  "commit": "b799facfaa037b6e7857ac36e3b35fbb786505bf",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "sources",
+  "threshold": {
+    "direction": "min",
+    "value": 2
+  },
+  "sources": [
+    "src/adapters/corpus/research-source.mjs",
+    "src/adapters/corpus/wikipedia-live.mjs",
+    "src/adapters/corpus/wikidata-live.mjs",
+    "test/adapters/research-source-contract.test.mjs",
+    "scripts/claims/claim-research-sources.mjs"
+  ],
+  "value": 2,
+  "detail": {
+    "probeTerms": [
+      "quasar",
+      "volcano"
+    ],
+    "ungroundableTerm": "zorblattian",
+    "registered": [
+      "simple-wikipedia",
+      "wikidata"
+    ],
+    "perSource": {
+      "simple-wikipedia": {
+        "origin": "https://simple.wikipedia.org",
+        "provenanceTag": "research:simple-wikipedia:quasar",
+        "grounded": [
+          "quasar",
+          "volcano"
+        ],
+        "factsGained": 1,
+        "relations": {
+          "rdfs:subClassOf": 1
+        },
+        "failures": []
+      },
+      "wikidata": {
+        "origin": "https://www.wikidata.org",
+        "provenanceTag": "research:wikidata:quasar",
+        "grounded": [
+          "quasar",
+          "volcano"
+        ],
+        "factsGained": 13,
+        "relations": {
+          "rdf:type": 1,
+          "rdfs:subClassOf": 4,
+          "mgx:partOf": 1,
+          "mgx:hasA": 4,
+          "mgx:madeOf": 3
+        },
+        "failures": []
+      }
+    }
+  }
+}
