@@ -1,7 +1,7 @@
 {
   "name": "prose-band",
-  "generatedAt": "2026-08-06T00:58:10.410Z",
-  "commit": "216e7afc5ac6ac8df472f378285391a28b448232",
+  "generatedAt": "2026-08-06T03:00:46.963Z",
+  "commit": "e0efe37417414ab11892227ec2cef648fba50ed6",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "percent",
@@ -17,11 +17,11 @@
     "src/services/init.mjs",
     "src/adapters/memory/core.mjs"
   ],
-  "value": 19.23,
+  "value": 18.65,
   "detail": {
     "sentenceCount": 520,
-    "recognizedCount": 100,
-    "skippedCount": 420,
+    "recognizedCount": 97,
+    "skippedCount": 423,
     "optimisticCount": 0,
     "topUngroundedTerms": [
       {

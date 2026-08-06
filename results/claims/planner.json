@@ -1,19 +1,19 @@
 {
   "name": "planner",
-  "generatedAt": "2026-08-06T01:16:44.443Z",
-  "commit": "5581d2a6a536c43704aaaa51a4841244966186c0",
+  "generatedAt": "2026-08-06T02:59:50.414Z",
+  "commit": "e0efe37417414ab11892227ec2cef648fba50ed6",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "disks",
   "threshold": {
     "direction": "min",
-    "value": 7
+    "value": 9
   },
   "sources": [
     "test-benchmarks/claims/blocksworld-rules.txt",
     "test-benchmarks/claims/gripper-rules.txt"
   ],
-  "value": 7,
+  "value": 9,
   "detail": {
     "hardwareNote": "measured on the machine that ran this claim; the receipts machine's numbers (test-benchmarks/receipts/receipts.json) are canonical wherever they exist for a shared metric",
     "repBudgetMs": 120000,
@@ -24,7 +24,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 301.46,
+            "medianMs": 252.79,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -32,7 +32,7 @@
           },
           {
             "size": 4,
-            "medianMs": 305.13,
+            "medianMs": 264.98,
             "reps": 20,
             "solved": true,
             "moves": 15,
@@ -40,7 +40,7 @@
           },
           {
             "size": 5,
-            "medianMs": 323.59,
+            "medianMs": 284,
             "reps": 20,
             "solved": true,
             "moves": 31,
@@ -48,7 +48,7 @@
           },
           {
             "size": 7,
-            "medianMs": 700.44,
+            "medianMs": 390.44,
             "reps": 20,
             "solved": true,
             "moves": 127,
@@ -56,7 +56,7 @@
           },
           {
             "size": 9,
-            "medianMs": 1727.42,
+            "medianMs": 721.32,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -64,7 +64,7 @@
           },
           {
             "size": 12,
-            "medianMs": 1404.75,
+            "medianMs": 1128.21,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -72,7 +72,7 @@
           },
           {
             "size": 16,
-            "medianMs": 2199.43,
+            "medianMs": 2119.79,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -80,7 +80,7 @@
           },
           {
             "size": 22,
-            "medianMs": 5454.32,
+            "medianMs": 5415.68,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -96,7 +96,7 @@
             "cause": "killed (SIGTERM)"
           }
         ],
-        "largestUnder1s": 7,
+        "largestUnder1s": 9,
         "firstOver10s": 30
       },
       "blocksworld": {
@@ -104,7 +104,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 272.17,
+            "medianMs": 234.89,
             "reps": 20,
             "solved": true,
             "moves": 3,
@@ -112,7 +112,7 @@
           },
           {
             "size": 4,
-            "medianMs": 269.73,
+            "medianMs": 245.83,
             "reps": 20,
             "solved": true,
             "moves": 4,
@@ -120,7 +120,7 @@
           },
           {
             "size": 5,
-            "medianMs": 265.48,
+            "medianMs": 246.69,
             "reps": 20,
             "solved": true,
             "moves": 5,
@@ -128,7 +128,7 @@
           },
           {
             "size": 7,
-            "medianMs": 294.64,
+            "medianMs": 271.14,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -136,7 +136,7 @@
           },
           {
             "size": 9,
-            "medianMs": 473.57,
+            "medianMs": 420.4,
             "reps": 20,
             "solved": true,
             "moves": 9,
@@ -144,8 +144,8 @@
           },
           {
             "size": 12,
-            "medianMs": 6657.94,
-            "reps": 19,
+            "medianMs": 5740.34,
+            "reps": 20,
             "solved": true,
             "moves": 12,
             "over": false
@@ -168,7 +168,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 247.54,
+            "medianMs": 231.02,
             "reps": 20,
             "solved": true,
             "moves": 3,
@@ -176,7 +176,7 @@
           },
           {
             "size": 4,
-            "medianMs": 253.45,
+            "medianMs": 238.38,
             "reps": 20,
             "solved": true,
             "moves": 4,
@@ -184,7 +184,7 @@
           },
           {
             "size": 5,
-            "medianMs": 285.78,
+            "medianMs": 249.43,
             "reps": 20,
             "solved": true,
             "moves": 5,
@@ -192,7 +192,7 @@
           },
           {
             "size": 7,
-            "medianMs": 395.04,
+            "medianMs": 372.4,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -200,7 +200,7 @@
           },
           {
             "size": 9,
-            "medianMs": 1901.26,
+            "medianMs": 1801.85,
             "reps": 20,
             "solved": true,
             "moves": 9,

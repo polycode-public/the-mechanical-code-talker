@@ -1,7 +1,7 @@
 {
   "name": "latency",
-  "generatedAt": "2026-08-06T00:08:40.501Z",
-  "commit": "015fc685814ed0c86059282c7344b0eae460bfee",
+  "generatedAt": "2026-08-06T02:49:50.934Z",
+  "commit": "737d53c2baab3b92b92de1088e0ecc271105f7d2",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16",
   "pack": "shipped",
   "unit": "ms",

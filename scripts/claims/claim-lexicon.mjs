@@ -22,7 +22,7 @@ const FREQUENCY_SAMPLE_PATH = join(ROOT, "test-benchmarks", "claims", "frequency
 const DOMAIN_LEXICON_PATH = join(ROOT, "test-benchmarks", "claims", "code-terms-lexicon.json");
 const LOAD_COMMAND = "tmct import --lexicon test-benchmarks/claims/code-terms-lexicon.json";
 
-const EXPECTED_COUNTS = { nouns: 9321, verbs: 93, adjectives: 65, properNames: 22 };
+const EXPECTED_COUNTS = { nouns: 9322, verbs: 93, adjectives: 65, properNames: 22 };
 
 // General-prose function words: articles, pronouns, prepositions, conjunctions,
 // auxiliaries and the copula. Closed-class — this lexicon never declares any of

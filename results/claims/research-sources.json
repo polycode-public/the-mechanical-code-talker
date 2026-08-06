@@ -1,7 +1,7 @@
 {
   "name": "research-sources",
-  "generatedAt": "2026-08-06T00:41:57.672Z",
-  "commit": "b799facfaa037b6e7857ac36e3b35fbb786505bf",
+  "generatedAt": "2026-08-06T03:00:55.553Z",
+  "commit": "e0efe37417414ab11892227ec2cef648fba50ed6",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "sources",

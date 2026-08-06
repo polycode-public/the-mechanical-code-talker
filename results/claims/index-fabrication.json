@@ -1,7 +1,7 @@
 {
   "name": "index-fabrication",
-  "generatedAt": "2026-08-06T00:08:44.516Z",
-  "commit": "015fc685814ed0c86059282c7344b0eae460bfee",
+  "generatedAt": "2026-08-06T02:49:50.645Z",
+  "commit": "737d53c2baab3b92b92de1088e0ecc271105f7d2",
   "hardware": "ci",
   "pack": "shipped",
   "unit": "cases",

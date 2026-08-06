@@ -1,7 +1,7 @@
 {
   "name": "lexicon",
-  "generatedAt": "2026-08-06T00:58:26.796Z",
-  "commit": "8cfca4142b376565b2eaf71b45824dfa0a4cd7aa",
+  "generatedAt": "2026-08-06T03:01:27.617Z",
+  "commit": "e0efe37417414ab11892227ec2cef648fba50ed6",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "percent",
@@ -21,7 +21,7 @@
   "delta": -15.556701030927833,
   "detail": {
     "counts": {
-      "nouns": 9321,
+      "nouns": 9322,
       "verbs": 93,
       "adjectives": 65,
       "properNames": 22

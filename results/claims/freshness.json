@@ -1,7 +1,7 @@
 {
   "name": "freshness",
-  "generatedAt": "2026-08-06T00:56:35.739Z",
-  "commit": "216e7afc5ac6ac8df472f378285391a28b448232",
+  "generatedAt": "2026-08-06T02:49:25.883Z",
+  "commit": "737d53c2baab3b92b92de1088e0ecc271105f7d2",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "days",

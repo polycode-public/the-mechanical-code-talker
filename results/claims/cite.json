@@ -1,7 +1,7 @@
 {
   "name": "cite",
-  "generatedAt": "2026-08-06T02:26:59.760Z",
-  "commit": "3a0505c23c51d9a11460f2524c0d5fd743588a12",
+  "generatedAt": "2026-08-06T02:45:23.072Z",
+  "commit": "737d53c2baab3b92b92de1088e0ecc271105f7d2",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "answers",
@@ -17,7 +17,7 @@
   "detail": {
     "total": 48,
     "refusals": 0,
-    "runtimeMs": 35730,
+    "runtimeMs": 15962,
     "byKind": {
       "seed": {
         "total": 13,
@@ -43,7 +43,7 @@
     "poolCoverage": {
       "citedAnswers": 5,
       "totalNonRefusal": 222,
-      "runtimeMs": 35122,
+      "runtimeMs": 12194,
       "pool": "test-benchmarks/chatbench/graded-pool.jsonl"
     },
     "laneNote": "the pool's tags/construction fields are case-level and mix citing with non-citing turns (e.g. honesty-miss covers both a disjointness proof and a number-guessing game); no existing pool field isolates a citing-answer lane, so this claim measures a hand-authored fixture instead of a pool filter"
