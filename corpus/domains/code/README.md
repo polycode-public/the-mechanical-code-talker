@@ -1,8 +1,14 @@
-# corpus/seon — tmct's curated tier-1 software-engineering ontology
+# corpus/domains/code — tmct's code domain pack
 
-A hand-authored, **language-neutral** ontology of the software-engineering concepts
-tmct's grammar lexicon knows about. Its purpose, in the operator's words: *"the chat
-knows about what it knows about."* Every lexicon concept gets
+The code domain pack: a hand-authored, **language-neutral** ontology of the
+software-engineering concepts tmct's grammar lexicon knows about, plus the
+pack's own lane vocabulary (count nouns, help rows, the miss-recovery pointer).
+Registered as the `code` pack extension entry (`src/services/extensions.mjs`);
+`--with-persona code` and `tmct index` both activate it. The ontology's own
+bundle name is `seon` and its provenance prefix is `corpus:seon` — unchanged
+by this directory's location (see `LICENSE-NOTICE`). Its purpose, in the
+operator's words: *"the chat knows about what it knows about."* Every lexicon
+concept gets
 
 1. an **English definition** — what it IS (`definitions.jsonl`), and
 2. **relation facts** — how it RELATES to other concepts (`concepts.jsonl`),
@@ -21,6 +27,7 @@ CC-BY-SA like the ConceptNet slice.
 | `concepts.jsonl`    | relation facts, byte-identical shape to `corpus/conceptnet/slice.jsonl` | 399 facts |
 | `definitions.jsonl` | `{ "term", "definition", "sense": "software" }`, one per line             | 288 definitions |
 | `relations.jsonl`   | `{ "relation", "definition", "sense": "software" }`, one per line — what each edge kind means, so "what does imports mean" answers without per-repo seeding | 9 relations |
+| `vocab.json`         | the pack's lane vocabulary: `countNouns`, `classLabels`, `helpRows`, `missRecoveryPointer` — merged in by `mergedLaneVocab` (`src/services/extensions.mjs`) | — |
 | `LICENSE-NOTICE`    | MPL-2.0 provenance for this directory | — |
 
 ### `concepts.jsonl` — same shape as the ConceptNet slice
@@ -94,25 +101,16 @@ A handful of facts and definitions give meta-questions real ground to stand on:
 `memory graph usedFor storing facts`; `seon isa ontology` — plus definitions for
 `tmct`, `code graph`, `memory graph`, and `seon`.
 
-## How the coordinator should seed this (Wave-2 chat.mjs work — NOT wired here)
+## How this seeds
 
-This directory is **data only**; wiring it into seeding is the coordinator's
-`chat.mjs` / `init.mjs` change. Recommended:
-
-1. **Seed `corpus/seon` FIRST, ahead of the ConceptNet slice**, and **exempt it from
-   the 500-fact cap** (`SEED_LIMIT`). It is small (399 lines → 380 emitted facts) and
-   fully curated, so the whole tier belongs in memory before any capped ConceptNet
-   fill. Concretely: call `seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE })` with
-   **no `limit`**, then run the existing capped ConceptNet seed after it. The
-   idempotent, content-hashed `appendFact` ids mean a term appearing in both tiers
-   converges to one fact.
-2. Keep the existing `SEED_PREFER` order
-   (`rdfs:subClassOf`, `rdf:type`, `mgx:usedFor`, `mgx:partOf`, `mgx:capableOf`) — it
-   already front-loads exactly this file's dominant predicates, though with no cap on
-   the seon tier the ordering only affects the ConceptNet tail.
-3. **Provenance caveat:** `toFacts` currently hard-codes the provenance string
-   `corpus:conceptnet <rel>`. If the coordinator wants seon facts tagged as their own
-   source (`corpus:seon`), that is a one-line parametrisation of `toFacts`
+`seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" })`
+seeds this ontology whole, uncapped, ahead of the capped ConceptNet band — the
+`code` (or `seon`) extension entry's own activation drives it
+(`src/services/extensions.mjs`'s `seedActiveCorpusEntries`). The idempotent,
+content-hashed `appendFact` ids mean a term appearing in both tiers converges
+to one fact. `SEED_PREFER`'s order
+(`rdfs:subClassOf`, `rdf:type`, `mgx:usedFor`, `mgx:partOf`, `mgx:capableOf`)
+front-loads this file's dominant predicates.
 
 ## Regenerating / extending
 

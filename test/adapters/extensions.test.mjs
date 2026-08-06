@@ -13,7 +13,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  resolveExtensions, validateExtensionEntry, BUILTIN_EXTENSIONS, EXTENSION_KINDS,
+  resolveExtensions, validateExtensionEntry, BUILTIN_EXTENSIONS, EXTENSION_KINDS, mergedLaneVocab, defaultCodeLaneVocab,
 } from "../../src/services/extensions.mjs";
 import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE, TIER2_DIR } from "../../src/adapters/corpus/conceptnet.mjs";
 
@@ -25,7 +25,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "namenet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "code", "human", "human-large", "human-medium", "namenet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
     assert.equal(seon.active, false, "seon ships inactive now — opt-in via --with-persona code");
@@ -60,8 +60,11 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "human-large", "human-medium", "namenet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["code", "conceptnet", "human", "human-large", "human-medium", "namenet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
   assert.equal(BUILTIN_EXTENSIONS.seon.active, false);
+  assert.equal(BUILTIN_EXTENSIONS.code.active, false, "the code domain pack ships inactive — opt-in via --with-persona code or `tmct index`");
+  assert.equal(BUILTIN_EXTENSIONS.code.kind, "pack");
+  assert.equal(BUILTIN_EXTENSIONS.code.provenancePrefix, "corpus:seon", "the code pack keeps seon's own provenance prefix");
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
   assert.equal(BUILTIN_EXTENSIONS.human.active, true);
   assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
@@ -97,7 +100,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "namenet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "code", "human", "human-large", "human-medium", "namenet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -218,4 +221,77 @@ test("[extensions] table-of-tables is DISTINCT from [bias] — bias never lives 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- vocab_path + the grounding-channel declaration (pack entries) --------
+
+test("the code pack declares vocab_path and an extraction grounding channel", () => {
+  const code = BUILTIN_EXTENSIONS.code;
+  assert.equal(code.kind, "pack");
+  assert.ok(code.vocabPath.endsWith("vocab.json"));
+  assert.equal(code.groundingKind, "extraction");
+  assert.ok(code.groundingAdapter && code.groundingAdapter.length > 0);
+});
+
+test("a tmct.toml pack entry can declare vocab_path/grounding_kind/grounding_adapter", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "vocab.json"), JSON.stringify({ countNouns: { widget: "Widget" } }));
+    await writeFile(join(dir, "tmct.toml"),
+      '[extensions.mypack]\nkind = "pack"\nactive = true\ncorpus_path = "corpus.jsonl"\nvocab_path = "vocab.json"\n'
+      + 'grounding_kind = "taught-only"\n');
+    await writeFile(join(dir, "corpus.jsonl"), "");
+    const { entries } = await resolveExtensions(dir);
+    const e = entries.get("mypack");
+    assert.equal(e.vocabPath, join(dir, "vocab.json"));
+    assert.equal(e.groundingKind, "taught-only");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- mergedLaneVocab (Part 3b) --------------------------------------------
+
+test("mergedLaneVocab: a bare session (no active pack) merges to an empty vocabulary", async () => {
+  const { entries } = await resolveExtensions(await tmp());
+  const vocab = await mergedLaneVocab(entries, {});
+  assert.deepEqual(vocab, { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" });
+});
+
+test("mergedLaneVocab: the active code pack's vocabulary merges in", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[extensions.code]\nactive = true\n');
+    const { entries, biasByBundle } = await resolveExtensions(dir);
+    const vocab = await mergedLaneVocab(entries, biasByBundle);
+    assert.equal(vocab.countNouns.class, "Class");
+    assert.deepEqual(vocab.classLabels.Class, ["class", "classes"]);
+    assert.ok(vocab.helpRows.some(([name]) => name.startsWith("/callers")));
+    assert.match(vocab.missRecoveryPointer, /tmct index/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mergedLaneVocab: bias order resolves a countNouns collision the same way mergedLexiconExtra does — higher bias wins", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "low.json"), JSON.stringify({ countNouns: { thing: "Low" } }));
+    await writeFile(join(dir, "high.json"), JSON.stringify({ countNouns: { thing: "High" } }));
+    await writeFile(join(dir, "tmct.toml"),
+      '[extensions.lowpack]\nkind = "pack"\nactive = true\ncorpus_path = "low.json"\nvocab_path = "low.json"\n'
+      + '[extensions.highpack]\nkind = "pack"\nactive = true\ncorpus_path = "high.json"\nvocab_path = "high.json"\n'
+      + "[bias]\nlowpack = 0.5\nhighpack = 2.0\n");
+    const { entries, biasByBundle } = await resolveExtensions(dir);
+    const vocab = await mergedLaneVocab(entries, biasByBundle);
+    assert.equal(vocab.countNouns.thing, "High", "the higher-bias pack's entry wins the collision");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("defaultCodeLaneVocab: the shipped code pack's own vocabulary, loaded regardless of activation", async () => {
+  const vocab = await defaultCodeLaneVocab();
+  assert.equal(vocab.countNouns.class, "Class");
+  assert.deepEqual(vocab.classLabels.Module, ["module", "modules"]);
 });

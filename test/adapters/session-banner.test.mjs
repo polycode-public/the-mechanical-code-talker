@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession } from "../../src/services/chat.mjs";
@@ -83,10 +83,15 @@ test("the unseeded banner offers the concrete, verified teach pair, never a seed
   }
 });
 
-test("an empty-graph unseeded banner orients toward --repo/tmct init and reports the empty start honestly", async () => {
+test("an empty-graph unseeded banner orients toward --repo/tmct init and reports the empty start honestly — with the code domain active (persona code, before an index runs)", async () => {
   clearCache();
   const dir = await mkdtemp(join(tmpdir(), "tmct-banner-empty-"));
   try {
+    // The code-domain-flavored banner only renders once the domain is
+    // active — the exact "persona code activated, no `tmct index` run yet"
+    // shape this test pins. A bare/inactive session's own empty banner is
+    // pinned separately (test/estate's neutrality tier).
+    await writeFile(join(dir, "tmct.toml"), '[extensions.code]\nactive = true\n');
     const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
     assert.equal(s.moduleCount, 0);
     const banner = s.bannerLines.join("\n");

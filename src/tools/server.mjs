@@ -51,7 +51,7 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null, factLookup = null, graph: suppliedGraph = null } = {}) {
+async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null, factLookup = null, graph: suppliedGraph = null, codeDomainActive = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
@@ -64,8 +64,13 @@ async function runHandler(name, args, { config, source = defaultSource, tel = nu
   // handle (e.g. a session's own `memoryDir`) — a handler that reads the
   // conversational memory store (tmct_export) prefers it over re-deriving a
   // backend from config when one is supplied; every other caller leaves it null
-  // and gets today's re-derive-from-config behaviour unchanged.
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, graph: suppliedGraph });
+  // and gets today's re-derive-from-config behaviour unchanged. `codeDomainActive`
+  // is the same kind of seam again — the service layer's own session-level
+  // predicate, threaded down only so a handler whose empty-graph wording is
+  // code-domain-flavored (tmct_untested) can decline that wording on a bare
+  // install; a caller that omits it (a cold `cli <tool>` invocation, most
+  // dispatchTool tests) gets the handler's own graph-derived fallback.
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, graph: suppliedGraph, codeDomainActive });
   // `graph` is the third seam of the same kind: a caller that ALREADY holds a
   // parsed graph hands it over instead of making the tool layer load one. A
   // browser session is the case that needs it — its graph is built in memory
@@ -79,7 +84,7 @@ async function runHandler(name, args, { config, source = defaultSource, tel = nu
   // isn't there.
   const repoRoot = config?.graphFile ? dirname(dirname(config.graphFile)) : null;
   const svc = createGraphService(graph, { sourceAccess: Boolean(repoRoot), repoRoot, readFile, tel, ask });
-  const out = handle(args, { graph, svc, config, repoRoot, memoryBackend });
+  const out = handle(args, { graph, svc, config, repoRoot, memoryBackend, codeDomainActive });
   return name === "tmct_ask" ? askWithMemoryFallback(out, args, factLookup) : out;
 }
 

@@ -34,10 +34,12 @@ test("a membership question with a broken article gets the article hint, not the
 });
 
 test("orientation examples degrade: an empty graph keeps the identity-led empty orientation, a null graph keeps the generic pair", async () => {
-  const empty = await runTurn("what can you do", { config: CONFIG, graph: { individuals: [], relations: [], byId: new Map() } });
+  // codeDomainActive: true — this pins the ACTIVE-domain --repo/example wording;
+  // the neutrality tier (test/estate) pins the inactive (neutral) orientation.
+  const empty = await runTurn("what can you do", { config: CONFIG, graph: { individuals: [], relations: [], byId: new Map() }, codeDomainActive: true });
   assert.match(empty.answer, /I'm tmct/i, "an empty graph's orientation leads with identity, not an apology");
   assert.match(empty.answer, /--repo <path>/, "and still carries the --repo exit");
-  const nul = await runTurn("what can you do", { config: CONFIG, graph: null });
+  const nul = await runTurn("what can you do", { config: CONFIG, graph: null, codeDomainActive: true });
   assert.match(nul.answer, /which modules import walk\.mjs/, "a null (unknown) graph keeps the generic example1");
   assert.match(nul.answer, /what calls buildContextBundle/, "and the generic example2");
 });

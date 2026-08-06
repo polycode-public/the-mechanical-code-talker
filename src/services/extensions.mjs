@@ -35,6 +35,11 @@ import {
 // corpus/namenet/generate.mjs's output — a single small top-up bundle.
 const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "namenet");
 
+// The code domain pack's lane vocabulary — count nouns/class labels, help rows
+// and the miss-recovery pointer today's code-graph surfaces render, moved out
+// of chat.mjs so a bare install carries none of it (see mergedLaneVocab).
+const CODE_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "domains", "code", "vocab.json");
+
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
 // The definitional-band-first predicate order for the ConceptNet seed (re-declared,
@@ -51,6 +56,22 @@ function builtinExtensions() {
       active: false,
       corpusPath: SEON_CONCEPTS_FILE,
       provenancePrefix: "corpus:seon",
+    },
+    // The code DOMAIN PACK: the seon corpus plus the lane vocabulary (count
+    // nouns, help rows, the miss-recovery pointer) a code-graph session needs
+    // — see mergedLaneVocab. Keeps seon's own provenance prefix (the curated-
+    // definitions gate keys on "corpus:seon" rows regardless of which entry
+    // seeded them). Its grounding channel is an extraction adapter: `tmct
+    // index` (and the graphPaths provider seam) is the deterministic path
+    // from a repo's own source to the facts this pack's vocabulary describes.
+    code: {
+      kind: "pack",
+      active: false,
+      corpusPath: SEON_CONCEPTS_FILE,
+      provenancePrefix: "corpus:seon",
+      vocabPath: CODE_VOCAB_FILE,
+      groundingKind: "extraction",
+      groundingAdapter: "tmct index (the graphPaths provider seam)",
     },
     // Opt-in too: the committed slice is tech-domain-filtered, equally biased.
     conceptnet: {
@@ -193,6 +214,7 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
     ["templates_path", "templatesPath"],
     ["phrasebook_path", "phrasebookPath"],
     ["map_path", "mapPath"],
+    ["vocab_path", "vocabPath"],
   ];
   for (const [rawKey, key] of paths) {
     if (override[rawKey] !== undefined) entry[key] = resolvePathMaybe(repoRoot, override[rawKey]);
@@ -205,6 +227,13 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
   else if (builtin?.limit !== undefined) entry.limit = builtin.limit;
   if (override.prefer !== undefined) entry.prefer = override.prefer;
   else if (builtin?.prefer !== undefined) entry.prefer = builtin.prefer;
+  // The grounding-channel declaration (validateExtensionPack requires it on a
+  // "pack" candidate): "extraction" names an adapter (grounding_adapter);
+  // "taught-only" says the pack's facts grow solely through the teach lane.
+  if (override.grounding_kind !== undefined) entry.groundingKind = String(override.grounding_kind);
+  else if (builtin?.groundingKind !== undefined) entry.groundingKind = builtin.groundingKind;
+  if (override.grounding_adapter !== undefined) entry.groundingAdapter = String(override.grounding_adapter);
+  else if (builtin?.groundingAdapter !== undefined) entry.groundingAdapter = builtin.groundingAdapter;
   return entry;
 }
 
@@ -329,6 +358,59 @@ export async function mergedLexiconExtra(entries, biasByBundle = {}) {
   return merged;
 }
 
+// ---- Part 3b: lane-vocabulary merge (vocab_path) -----------------------------
+
+/** Merge every ACTIVE `pack`-kind entry's declared `vocab_path` file into one
+ *  lane-vocabulary object: `countNouns`/`classLabels` (the count lane's noun
+ *  table), `helpRows` (the command rows a code-domain pack contributes to
+ *  `/help`) and `missRecoveryPointer` (the remedy line an empty session's
+ *  banner offers). Bundles merge in ascending bias order, same rule as
+ *  mergedLexiconExtra: a higher-bias bundle's same-key entry wins.
+ *  `helpRows` and `countNouns`/`classLabels` are additive across bundles;
+ *  `missRecoveryPointer` is single-valued, so the highest-bias bundle to
+ *  declare one wins outright. No active pack with a vocab_path → every field
+ *  comes back empty — a bare session carries no code-domain vocabulary. */
+export async function mergedLaneVocab(entries, biasByBundle = {}) {
+  const candidates = [];
+  for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
+    if (!entry.active) continue;
+    if (entry.kind !== "pack") continue;
+    if (!entry.vocabPath) continue;
+    candidates.push({ name, path: entry.vocabPath, bias: biasByBundle[name] ?? 1 });
+  }
+  const merged = { countNouns: {}, classLabels: {}, helpRows: [], missRecoveryPointer: "" };
+  if (!candidates.length) return merged;
+  candidates.sort((a, b) => a.bias - b.bias);
+  for (const c of candidates) {
+    let raw;
+    try {
+      raw = JSON.parse(await readFile(c.path, "utf8"));
+    } catch (e) {
+      throw new Error(`extension "${c.name}": vocab file ${c.path} — ${e && e.message ? e.message : e}`);
+    }
+    Object.assign(merged.countNouns, raw.countNouns || {});
+    Object.assign(merged.classLabels, raw.classLabels || {});
+    if (Array.isArray(raw.helpRows)) merged.helpRows.push(...raw.helpRows);
+    if (raw.missRecoveryPointer) merged.missRecoveryPointer = raw.missRecoveryPointer;
+  }
+  return merged;
+}
+
+let cachedDefaultCodeLaneVocab = null;
+/** The shipped code pack's OWN lane vocabulary, loaded unconditionally
+ *  (memoized — the file never changes mid-process). The safety net a caller
+ *  holding a real code graph falls back to when the `code` pack itself isn't
+ *  formally active in tmct.toml — the same "a real graph is enough" rule
+ *  chat.mjs's own codeDomainActive already applies to the domain-active
+ *  predicate. Never consulted when the domain is inactive. */
+export function defaultCodeLaneVocab() {
+  if (!cachedDefaultCodeLaneVocab) {
+    const code = { ...builtinExtensions().code, active: true };
+    cachedDefaultCodeLaneVocab = mergedLaneVocab(new Map([["code", code]]), {});
+  }
+  return cachedDefaultCodeLaneVocab;
+}
+
 // ---- Part 4: `tmct extend --validate <dir>` ---------------------------------
 
 /** Validate one CANDIDATE extension pack entry against a directory, reusing the existing
@@ -378,6 +460,44 @@ export async function validateExtensionPack(dir, candidate) {
       results.push({ kind: "templates", path, ok: true, counts: { templates: templates.size } });
     } catch (e) {
       results.push({ kind: "templates", path, ok: false, error: e && e.message ? e.message : String(e) });
+    }
+  }
+
+  if (candidate.vocabPath) {
+    const path = abs(candidate.vocabPath);
+    try {
+      const raw = JSON.parse(await readFile(path, "utf8"));
+      const countNouns = raw.countNouns && typeof raw.countNouns === "object" ? Object.keys(raw.countNouns).length : 0;
+      const classLabels = raw.classLabels && typeof raw.classLabels === "object" ? Object.keys(raw.classLabels).length : 0;
+      const helpRows = Array.isArray(raw.helpRows) ? raw.helpRows.length : 0;
+      results.push({ kind: "vocab", path, ok: true, counts: { countNouns, classLabels, helpRows } });
+    } catch (e) {
+      results.push({ kind: "vocab", path, ok: false, error: e && e.message ? e.message : String(e) });
+    }
+  }
+
+  // The grounding-channel declaration — required on a "pack" candidate only
+  // (a plain corpus/lexicon/templates/ontology entry declares no grounding):
+  // exactly one of an extraction adapter (named) or explicit taught-only
+  // mode. A pack declaring neither is symbols defined in symbols, with no
+  // route from a domain's own artifacts back to the facts it describes.
+  if (candidate.kind === "pack") {
+    const gk = candidate.groundingKind;
+    if (gk !== "extraction" && gk !== "taught-only") {
+      results.push({
+        kind: "grounding", path: "(pack manifest)", ok: false,
+        error: `a "pack" entry needs "grounding_kind" of "extraction" or "taught-only" (got ${JSON.stringify(gk ?? null)})`,
+      });
+    } else if (gk === "extraction" && !candidate.groundingAdapter) {
+      results.push({
+        kind: "grounding", path: "(pack manifest)", ok: false,
+        error: 'grounding_kind "extraction" needs "grounding_adapter" naming the adapter',
+      });
+    } else {
+      results.push({
+        kind: "grounding", path: "(pack manifest)", ok: true,
+        counts: gk === "extraction" ? { channel: gk, adapter: candidate.groundingAdapter } : { channel: gk },
+      });
     }
   }
 

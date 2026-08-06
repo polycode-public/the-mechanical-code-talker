@@ -10,11 +10,11 @@
       "notice": "corpus/conceptnet/LICENSE-NOTICE"
     },
     {
-      "path": "corpus/seon/",
-      "upstream": "first-party (hand-authored for tmct; named in homage to SEON, no SEON content copied)",
+      "path": "corpus/domains/code/",
+      "upstream": "first-party (hand-authored for tmct; named in homage to SEON, no SEON content copied — the seon bundle's own concepts/definitions/relations, plus the code domain pack's lane vocabulary, src/services/extensions.mjs)",
       "license": "MPL-2.0",
       "shareAlike": false,
-      "notice": "corpus/seon/LICENSE-NOTICE"
+      "notice": "corpus/domains/code/LICENSE-NOTICE"
     },
     {
       "path": "corpus/wordnet/",

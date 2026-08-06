@@ -1370,8 +1370,15 @@ export function renderTestsFor(graph, ind) {
  *  statements, so the empty survey has to say which one it means: with no
  *  source module recorded there is no coverage claim to make at all, and the
  *  full-coverage sentence would be an assertion about a repo this store has
- *  never seen. */
-export function renderUntested(graph) {
+ *  never seen.
+ *
+ *  `codeDomainActive` (the session-level predicate; omitted derives from the
+ *  graph alone, same fallback the chat layer's own gate uses) — with no code
+ *  domain active, the empty survey says nothing about a "code index" at all:
+ *  this is a slash command, not a miss the chat layer's own text-swap covers,
+ *  so the neutral wording has to live here. */
+export function renderUntested(graph, { codeDomainActive = null } = {}) {
+  const domainActive = codeDomainActive ?? (moduleCountOf(graph) > 0);
   const covered = new Set();
   const testModules = new Set();
   for (const e of edgesOfKind(graph, "tests")) {
@@ -1384,6 +1391,7 @@ export function renderUntested(graph) {
       && !isTestPath(String(i.label).toLowerCase()),
   );
   if (!sourceModules.length) {
+    if (!domainActive) return "this session holds no graph to check test coverage against.";
     return moduleCountOf(graph) === 0
       ? `no modules to check for test coverage in this index. ${NO_CODE_INDEX_NOTE}`
       : "no source modules to check for test coverage in this index — only test modules are recorded.";

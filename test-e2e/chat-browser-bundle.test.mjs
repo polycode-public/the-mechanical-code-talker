@@ -120,11 +120,12 @@ test("an unknown term gets the honest miss, never a fabricated answer", async ()
   assert.equal(record?.miss, true, "the turn records itself as a miss");
 });
 
-test("a code-structure question hits the no-code-graph wall — the session's graph is known-empty, not absent", async () => {
+test("a code-structure question over a bare (no code domain active) session is the plain honest miss, never code vocabulary", async () => {
   const ctx = browserContext();
   await seededSession(ctx);
   const { answer } = await turn(ctx, "which modules import src/core/store.mjs?");
-  assert.match(answer, /no code graph is loaded in this session/);
+  assert.doesNotMatch(answer, /code graph|code question|code index/i);
+  assert.match(answer, /couldn't ground that/i);
 });
 
 test("the guessing game runs in the browser context: bisection guesses land and the win names the number", async () => {

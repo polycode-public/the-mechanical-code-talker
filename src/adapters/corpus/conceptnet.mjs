@@ -25,9 +25,13 @@ export const MAP_FILE = join(PKG_ROOT, "src", "adapters", "corpus", "conceptnet-
 // The tier-1 curated Software-Engineering ontology (SEON): concepts.jsonl shares
 // ConceptNet's slice shape and loads through the same loadSlice/loadMap/toFacts path.
 // definitions.jsonl is a separate {term, definition, sense} list for lexicon lookups.
-// Tier-2 corpuses (aws/python/java) share the slice shape too.
-export const SEON_CONCEPTS_FILE = join(PKG_ROOT, "corpus", "seon", "concepts.jsonl");
-export const SEON_DEFINITIONS_FILE = join(PKG_ROOT, "corpus", "seon", "definitions.jsonl");
+// Tier-2 corpuses (aws/python/java) share the slice shape too. The data lives under
+// corpus/domains/code/ (the code domain pack's own directory); the bundle name
+// "seon" and its "corpus:seon" provenance prefix are unchanged by the move —
+// both are declared literally in src/services/extensions.mjs, not derived from
+// this path.
+export const SEON_CONCEPTS_FILE = join(PKG_ROOT, "corpus", "domains", "code", "concepts.jsonl");
+export const SEON_DEFINITIONS_FILE = join(PKG_ROOT, "corpus", "domains", "code", "definitions.jsonl");
 export const TIER2_DIR = join(PKG_ROOT, "corpus", "tier2");
 export const TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
 
