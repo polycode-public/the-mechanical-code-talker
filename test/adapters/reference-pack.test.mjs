@@ -238,3 +238,37 @@ test("isaOf: an of-chain reads through classifier heads only — a partitive con
   assert.equal(isaOf("A poodle is a kind of dog.", lex), "dog");
   assert.equal(isaOf("Chess is a game of skill.", lex), "game");
 });
+
+test("isaOf: a mid-sentence parenthetical aside is skipped, and an of-chain reads through a quantifier to the real classifier chain", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(
+    isaOf("Chinchillas are either of two species (Chinchilla chinchilla and Chinchilla lanigera) of rodents.", lex),
+    "rodent",
+  );
+});
+
+test("isaOf: the copula is reachable anywhere in a long first sentence, not just its first 80 characters", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(
+    isaOf("Pumas (Puma concolor), also called cougars, mountain lions, catamounts, or brown panthers, are large wild cats.", lex),
+    "cat",
+  );
+});
+
+test("isaOf: a parenthetical aside with no copula in the sentence stays null", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("Rome (also known as the Eternal City) has many famous monuments.", lex), null);
+});
+
+test("isaOf: an opening with no is-a statement at all stays null", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("Paris has many famous museums.", lex), null);
+});

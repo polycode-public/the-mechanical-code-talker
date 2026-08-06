@@ -25,6 +25,8 @@
 {"id": "ref-mussel", "kind": "reference-pack", "turns": [{"say": "what is a mussel"}, {"say": "what is a mussel"}]}
 {"id": "ref-barnacle", "kind": "reference-pack", "turns": [{"say": "what is a barnacle"}, {"say": "what is a barnacle"}]}
 {"id": "ref-shrew", "kind": "reference-pack", "turns": [{"say": "what is a shrew"}, {"say": "what is a shrew"}]}
+{"id": "ref-chinchilla", "kind": "reference-pack", "turns": [{"say": "what is a chinchilla"}, {"say": "what is a chinchilla"}]}
+{"id": "ref-puma", "kind": "reference-pack", "turns": [{"say": "what is a puma"}, {"say": "what is a puma"}]}
 {"id": "proof-dog-animal", "kind": "proof-chain", "turns": [{"say": "is a dog an animal"}]}
 {"id": "proof-lion-animal", "kind": "proof-chain", "turns": [{"say": "is a lion an animal"}]}
 {"id": "proof-school-place", "kind": "proof-chain", "turns": [{"say": "is a school a place"}]}
