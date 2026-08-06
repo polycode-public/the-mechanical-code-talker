@@ -105,3 +105,28 @@ export const RECEIPTS_META = {
   title: "Receipts",
   description: "Query latency, graph and page size, and chatbench and idxbench headlines, measured and committed. Each figure on this page names the file it comes from.",
 };
+
+/** The claims page's own head-tag metadata. Same posture as RECEIPTS_META:
+ *  no paired about page, sits outside DEMO_PAGES. */
+export const CLAIMS_META = {
+  title: "Claims, extensibilities and limits",
+  description: "Every claim tmct makes about itself, measured against a committed source and rendered from that source at build time, including the ones that don't flatter it.",
+};
+
+/** The claims page's block manifest: which results/claims/<name>.json file
+ *  each of the page's three sections renders, and in what order. This is
+ *  the ONLY thing declared here — the prose, the figure a block renders,
+ *  and which facet of a JSON's detail it reads live in build-demo-site.mjs's
+ *  renderClaimsHtml, next to the copy they support. test/estate/claims.test.mjs
+ *  reads this list and asserts every name here resolves to a JSON file that
+ *  exists, parses, matches scripts/claims/schema.json, and cites sources that
+ *  exist in the repo — the same three checks that test already runs over
+ *  every JSON file present, now also pinned to what the page promises to
+ *  show. "ground-gate" appears in both claims and limits: one measurement
+ *  run, two headlines (an ungroundable statement wrongly accepted, and a
+ *  groundable statement wrongly refused) — see the JSON's own detail. */
+export const CLAIMS_PAGE_BLOCKS = {
+  claims: ["cite", "ground-gate", "latency", "determinism", "offline", "index-fabrication", "planner"],
+  extensibilities: ["commonsense", "lexicon", "teach", "research-sources"],
+  limits: ["prose-band", "ground-gate", "freshness"],
+};
