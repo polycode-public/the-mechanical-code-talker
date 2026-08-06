@@ -543,6 +543,12 @@ Updated as waves merge to local main (2026-08-06):
   queued in NEXT.md.
 - T14 page, T15 CI proposal — queued on the above.
 
+**Note for the operator (proceeded without input, per the overnight directive):**
+`claims-notes.txt` was untracked and no longer exists on disk, so T14's two "carried
+verbatim" passages (the Cyc lead-in and the extensibilities intro) could not be carried.
+They were re-authored fresh from the frontiers section's material, plain-prose, flagged
+here for your review on the built page.
+
 **Open question for the operator (proceeding without an answer, per the overnight
 directive):** E1's measured delta is zero — OpenBookQA's causal/effect phrasing ("what
 happens when…") sits outside the ask grammar's supported shapes, so loading wordnet-xl
