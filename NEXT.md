@@ -37,13 +37,14 @@ Live background sub-agents and their worktrees under `.claude/worktrees/`; each 
 `main` via its branch (`worktree-agent-<id>`) and the coordinator removes the worktree at
 merge. `PLAN_CLAIMS.md` and `PLAN_GRAPH_NEUTRALITY.md` carry per-wave delivery status.
 
-- [ ] **claim:cite rescope** (PLAN_CLAIMS T2, decision 13) — worktree
-  `agent-adb126115561425b3`. Includes the first-ask reference-pack citation gap
-  (citation emitted before the fact persists; resolvable only on the second ask) —
-  fix in the reference answer-and-persist path if small, else reported here as this
-  item's remainder.
-- [ ] **claim:planner envelope** (PLAN_CLAIMS T10) — worktree `agent-a1b2c7ecdd5d90df1`;
-  long benchmark running as its own background process.
+- [ ] **Reference-pack persistence gap** (claim:cite's remainder, found while authoring
+  the cite-set fixture) — `isaOf()` in `src/domain/reference-pack.mjs` only extracts a
+  storable is-a fact when the article's opening matches a short "X is/are (a/an) Y"
+  clause inside its 80-char window. Articles that escape it (chinchilla's parenthetical
+  species list; puma's copula past the cap) are never persisted at all, so a repeat ask
+  re-fetches and re-composes the first-ask prose forever instead of reaching recall.
+  `isaOf` also backs live-Wikipedia and research lookups, so a fix needs the research
+  and reference lanes as its regression gate.
 - [ ] **Full-estate re-pin sweep after neutrality wave 2** — the first full-suite run
   after neutrality wave 1 merged shows ~1044 failures, all (sampled) old bare-install
   string pins against the new neutral surfaces (e.g.

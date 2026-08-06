@@ -535,7 +535,12 @@ Updated as waves merge to local main (2026-08-06):
   first over 10s at 30, with 9–22 honest misses past the 300-move search cap;
   blocksworld 9/16; gripper 7/12), per-run child-process isolation after an in-process
   OOM, `solvePlannerInstance` exported for the page's benchmark button.
-- T2 cite — in flight under decisions 13 and 14.
+- T2 cite — landed (9ade1433) under decisions 13 and 14: 44/44 fact answers cite a
+  resolvable fact row over the committed cite-set fixture (13 seed, 10 teach-recall,
+  8 reference-pack, 13 proof-chain), pool-wide coverage 5/222 published in the JSON's
+  detail. Found in passing: reference-pack articles whose opening sentence escapes
+  `isaOf`'s extraction window never persist, so repeat asks never reach recall —
+  queued in NEXT.md.
 - T14 page, T15 CI proposal — queued on the above.
 
 **Open question for the operator (proceeding without an answer, per the overnight
