@@ -30,6 +30,7 @@
 import { normFactTerm } from "../../domain/hash.mjs";
 import { sentencesUpTo, SUMMARY_CHAR_CAP } from "../../domain/reference-pack.mjs";
 import { isResearchSourceRow, registerResearchSource, researchSourceTag } from "./research-source.mjs";
+import { createCourtesyGate, DEFAULT_TIMEOUT_MS, DEFAULT_MIN_INTERVAL_MS, MAXLAG_SECONDS } from "./courtesy.mjs";
 
 export const WIKIDATA_LIVE_ORIGIN = "https://www.wikidata.org";
 export const WIKIDATA_SOURCE_NAME = "wikidata";
@@ -70,11 +71,6 @@ export const WIKIDATA_PROPERTY_RELATIONS = Object.freeze({
 // row.isa reads off, so the chat ingest path stores the same subClassOf edge
 // it would store from a prose lead sentence.
 const ISA_PROPERTIES = ["P279", "P31"];
-
-const DEFAULT_TIMEOUT_MS = 4000;
-const DEFAULT_MIN_INTERVAL_MS = 2000;
-const RETRY_AFTER_FLOOR_MS = 5000;
-const MAXLAG_SECONDS = 5;
 
 // How much of one item a single lookup reads: at most this many object values
 // per property, and this many facts in total. A busy item like "human" carries
@@ -158,69 +154,7 @@ export function createWikidataLiveProvider({
   waitForSlot = false,
   sourceName = WIKIDATA_SOURCE_NAME,
 } = {}) {
-  const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
-  const cache = new Map(); // term -> row | null (hits AND settled misses)
-  let lastLookupAt = 0;
-  let coolOffUntil = 0;
-  let inFlight = false;
-
-  const identifyingHeaders = () => {
-    if (!userAgent) return null;
-    const headers = { "Api-User-Agent": userAgent };
-    // A browser strips User-Agent as a forbidden header; only set it where no
-    // DOM says we are one.
-    if (typeof document === "undefined") headers["User-Agent"] = userAgent;
-    return headers;
-  };
-
-  function openCoolOff(retryAfterSeconds) {
-    const retryAfterMs = Number(retryAfterSeconds) * 1000;
-    coolOffUntil = Date.now() + Math.max(retryAfterMs || 0, RETRY_AFTER_FLOOR_MS);
-  }
-
-  async function fetchJson(url) {
-    const controller = typeof AbortController === "function" ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    try {
-      const opts = {};
-      if (controller) opts.signal = controller.signal;
-      const headers = identifyingHeaders();
-      if (headers) opts.headers = headers;
-      const res = await doFetch(url, opts);
-      if (res.status === 429) {
-        openCoolOff(res.headers?.get?.("retry-after"));
-        return null;
-      }
-      if (!res.ok) return null;
-      const body = await res.json();
-      // A maxlag rejection arrives as HTTP 200 with an error body and a
-      // Retry-After header — back off exactly as a 429 asks.
-      if (body?.error?.code === "maxlag") {
-        openCoolOff(res.headers?.get?.("retry-after"));
-        return null;
-      }
-      return body;
-    } catch {
-      return null;
-    } finally {
-      if (timer !== null) clearTimeout(timer);
-    }
-  }
-
-  const slotOpensAt = () => Math.max(coolOffUntil, lastLookupAt + minIntervalMs);
-
-  async function takeSlot() {
-    for (;;) {
-      const now = Date.now();
-      if (!inFlight && now >= slotOpensAt()) {
-        lastLookupAt = now;
-        inFlight = true;
-        return true;
-      }
-      if (!waitForSlot) return false;
-      await new Promise((resolve) => setTimeout(resolve, Math.max(slotOpensAt() - now, 25)));
-    }
-  }
+  const gate = createCourtesyGate({ fetchImpl, timeoutMs, minIntervalMs, userAgent, waitForSlot });
 
   const actionUrl = (params) =>
     `${origin}/w/api.php?${new URLSearchParams({ format: "json", origin: "*", maxlag: String(MAXLAG_SECONDS), ...params })}`;
@@ -231,7 +165,7 @@ export function createWikidataLiveProvider({
   async function termsForIds(ids) {
     const termById = new Map();
     if (!ids.length) return termById;
-    const body = await fetchJson(actionUrl({
+    const body = await gate.fetchJson(actionUrl({
       action: "wbgetentities",
       languages: "en",
       props: "labels",
@@ -245,7 +179,7 @@ export function createWikidataLiveProvider({
   }
 
   async function roundTrips(key) {
-    const search = await fetchJson(actionUrl({
+    const search = await gate.fetchJson(actionUrl({
       action: "wbsearchentities",
       language: "en",
       uselang: "en",
@@ -256,7 +190,7 @@ export function createWikidataLiveProvider({
     const id = search ? matchingItemId(key, search) : null;
     if (!id) return null;
 
-    const read = await fetchJson(actionUrl({
+    const read = await gate.fetchJson(actionUrl({
       action: "wbgetentities",
       languages: "en",
       props: "labels|descriptions|claims|info",
@@ -309,18 +243,7 @@ export function createWikidataLiveProvider({
     async lookup(term) {
       const key = normFactTerm(term ?? "");
       if (!key) return null;
-      if (cache.has(key)) return cache.get(key);
-      if (!(await takeSlot())) return null;
-      let row = null;
-      try {
-        row = await roundTrips(key);
-      } catch {
-        row = null;
-      } finally {
-        inFlight = false;
-      }
-      cache.set(key, row);
-      return row;
+      return gate.cachedFetch(key, () => roundTrips(key));
     },
   };
 }
