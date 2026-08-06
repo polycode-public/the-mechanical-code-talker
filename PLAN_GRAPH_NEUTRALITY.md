@@ -99,8 +99,10 @@ misses (the lanes decline silently when the domain is inactive, and the general 
 stands); the honest-empty polish (the `tmct index` pointer renders only when the code
 domain is active); `/stats` and sibling slash-command errors.
 
-Parsing stays wide: phrasings like "what's in this repo" keep matching their lanes. The
-contract governs what tmct says, never what it understands.
+Parsing is gated too (operator decision, 2026-08-06, reversing the draft's
+recommendation): when the code domain is inactive, code-shaped lanes decline silently
+and the ordinary general miss stands. A bare install gives no neutral in-lane answer to
+a code-shaped phrasing; slash commands still answer, neutrally.
 
 ## The domain-pack contract
 
@@ -217,25 +219,20 @@ Anchors are symbols, not line numbers — the file moves daily.
 - **T9 — domain listing (Sonnet).** `/capabilities` names the loaded domains and what
   each adds, from the packs' own metadata.
 
-## Open questions for the operator
+## Decisions (the open questions, answered 2026-08-06)
 
-1. **Where the code domain lives.** Keep `seon` as the corpus and add a `code` pack
-   entry that bundles it with the new vocab file (recommended: no data moves, provenance
-   stays `corpus:seon`), or physically relocate into `corpus/domains/code/`?
-2. **Should `tmct index` auto-activate the code domain** in that repo's `tmct.toml`?
-   Recommended: yes — indexing is an explicit code-domain act, and it keeps today's
-   post-index experience identical with zero extra steps.
-3. **Bare count-noun semantics.** Unrecognized count noun falls through to the
-   taught-class count and ordinary miss (recommended, no new template), or an explicit
-   "I don't count <noun> here" decline?
-4. **Gate parsing too?** Recommended: no — keep matching "what's in this repo" and
-   answer neutrally; gating parses would change which lanes fire and widen the diff.
-5. **Scope of `.tmct/graph.json` naming.** Recommended: out of scope (session store,
-   not domain vocabulary).
-6. **When tier2 bundles become domains.** Recommended: wave 3 (T8), mechanical, no
-   urgency.
-7. **The journal-ingest pack.** Greenlight scoping it into its own plan once this
-   plan's seam ships (see the ideas below)?
+1. **Where the code domain lives** — physically relocate the data into
+   `corpus/domains/code/`. The bundle name `seon` and the `corpus:seon` provenance
+   prefix stay stable so existing stores and the curated-definitions gate keep
+   working; only the on-disk location and path references move.
+2. **`tmct index` auto-activates** the code domain in that repo's `tmct.toml`.
+3. **Bare count-noun semantics** — fall through to the taught-class count and the
+   ordinary miss. No new template.
+4. **Parsing is gated too** — code-shaped lanes decline silently when the domain is
+   inactive; the general miss stands (see the contract section).
+5. **`.tmct/graph.json` keeps its name.**
+6. **tier2 bundles become domain packs in wave 3 (T8), this pass.**
+7. **The journal-ingest pack** stays at idea level; no separate plan doc now.
 
 ## Other shippable domain packs (idea level only)
 
@@ -272,3 +269,14 @@ of application code and make the contract testable; wave 3 is polish. Until a wa
 lands, its surface keeps today's behavior — nothing here degrades the code experience at
 any point, and the honest-miss invariant holds throughout: a bare install refuses
 plainly; it never guesses, and never pitches a domain it isn't carrying.
+
+## Delivery status
+
+Updated as waves merge to local main (2026-08-06):
+
+- Wave 1 (T1–T3) — landed (07a375cf), with parses gated per decision 4. Bare-install
+  probes show zero code vocabulary; active-domain output byte-matches the pre-edit
+  capture. Two flagged leftovers moved into wave 2's scope: `helpText()`'s code-command
+  roster, and the `NO_CODE_INDEX_NOTE` family gated at source in `src/domain`.
+- Wave 2 (T4–T6) — in flight, carrying the relocation per decision 1.
+- Wave 3 (T7–T9) — queued on wave 2.

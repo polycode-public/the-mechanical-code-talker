@@ -202,6 +202,13 @@ the final scope, so an implementing agent reads its task, never this list.
     plan-about.html, the microtheories line, and the scoreboard line.
 12. **Per-pack runs** — every results JSON carries a `pack` field from day one; this
     pass measures the shipped build as the implicit first pack.
+13. **C1's scope** (answered 2026-08-06, mid-delivery, after the cite rig measured the
+    original wording red) — the claim is "every fact answer carries a resolvable
+    citation", measured strictly over the citation-bearing lanes; overall citation
+    coverage across all non-refusal answers publishes in the JSON's detail so the
+    narrowness is visible. Conversational turns, teach confirmations, and graph-query
+    answers do not use the citation convention by design. T14's C1 copy states the
+    claim in this rescoped form.
 
 ## Waves
 
@@ -497,3 +504,20 @@ passes.
    number is not committed. T15 rides any wave-3 dispatch.
 6. Launch tie-in: PLAN_PUBLISH.md's sequencing names the claims surface as launch-day
    material; this page is what those links point at.
+
+## Delivery status
+
+Updated as waves merge to local main (2026-08-06):
+
+- T1 harness — landed (82f2a338).
+- T3 latency + index-fabrication re-emits — landed (441b1f4d): 9.195ms p50, 25/25.
+- T4 determinism — landed (13fd1586): 139/139 byte-identical.
+- T5 offline — landed (1e1874b3): 0 requests while answering.
+- T6/T7/T8/T16 — landed (083b16ba..47259702): teach 26 stored / 26 round-trip,
+  prose-band 19.23% (520 sentences), paraphrase 61.6% (250 paraphrases), freshness
+  median 0 days.
+- T9 research sources + Wikidata — landed (b799facf, adf65d46): contract 23/23, rig
+  names 2 sources.
+- T2 cite — in flight under decision 13's rescope.
+- T10 planner, T11–T13 — in flight.
+- T14 page, T15 CI proposal — queued on the above.
