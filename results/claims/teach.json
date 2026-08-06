@@ -1,0 +1,542 @@
+{
+  "name": "teach",
+  "generatedAt": "2026-08-06T00:36:21.231Z",
+  "commit": "5581d2a6a536c43704aaaa51a4841244966186c0",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "answers",
+  "threshold": {
+    "direction": "min",
+    "value": 24
+  },
+  "sources": [
+    "scripts/claims/claim-teach.mjs",
+    "test-benchmarks/claims/teach-set.jsonl",
+    "src/services/chat.mjs"
+  ],
+  "before": 0,
+  "after": 26,
+  "delta": 26,
+  "detail": {
+    "fixtureRows": 51,
+    "wellFormedOffered": 36,
+    "stored": 26,
+    "acceptanceRatePercent": 72.2,
+    "roundTripEligible": 26,
+    "roundTripSuccess": 26,
+    "roundTripRatePercent": 100,
+    "mismatches": [
+      {
+        "statement": "dragon has scales",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "robot has circuits",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "owl has talons",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "laptop has keyboard",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "camel has humps",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "zebra has stripes",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "giraffe has spots",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "penguin has flippers",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "octopus has tentacles",
+        "expectTeach": true,
+        "stored": false
+      },
+      {
+        "statement": "dolphin has fins",
+        "expectTeach": true,
+        "stored": false
+      }
+    ],
+    "rows": [
+      {
+        "statement": "cat has whiskers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "bird has feathers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "fish has wings",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "dragon has scales",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "robot has circuits",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "spider has legs",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "snake has fangs",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "owl has talons",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "elephant has tusks",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "bee has wings",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "car has wheels",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "laptop has keyboard",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "shark has teeth",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "camel has humps",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "peacock has feathers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "dog has a tail",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "horse has a mane",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "lion has a mane",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "zebra has stripes",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "giraffe has spots",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "kangaroo has a pouch",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "penguin has flippers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "crab has claws",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "octopus has tentacles",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "bat has wings",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "whale has a blowhole",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "tiger has stripes",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "rabbit has ears",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "mouse has whiskers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "duck has a bill",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "frog has legs",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "bear has claws",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "wolf has fur",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "dolphin has fins",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "eagle has feathers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "hen has feathers",
+        "wellFormed": true,
+        "expectTeach": true,
+        "stored": true,
+        "beforeAnswered": false,
+        "afterAnswered": true,
+        "citesProvenance": true
+      },
+      {
+        "statement": "the build failed",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "john failed spectacularly",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "who fathered john",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "every module is a component as at 2019",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "every module is a component back in 2019",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "flonk is zorpish",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "flonk is zorpish as of 2019",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "what is a module as of 2019?",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "a descendant is a parent, or a parent of a robot",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "does cat have whiskers",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "please help me with this",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "asdkj qwoie zjxnv",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "   ",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      },
+      {
+        "statement": "12345 67890",
+        "wellFormed": false,
+        "expectTeach": false,
+        "stored": false,
+        "beforeAnswered": false,
+        "afterAnswered": false,
+        "citesProvenance": false
+      }
+    ]
+  }
+}
