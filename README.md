@@ -801,10 +801,18 @@ committed vocabulary so it knows what it's talking about from turn one: an
 everyday **human-world** persona covering people, places, objects, nature,
 time and events, body and food, and mind vocabulary. It's hand-curated from
 Open English WordNet and bridged to Schema.org's top-level classes, so "what
-is a dog?" answers offline, from disk, on turn one. A code-domain persona (a curated **SEON**
-software ontology plus the whole filtered **ConceptNet slice**, CC-BY-SA 4.0)
-is available opt-in: `tmct init --with-persona code`. `--ephemeral` (used by
+is a dog?" answers offline, from disk, on turn one. `--ephemeral` (used by
 the shipped `npm run example:*` demos) reads a graph but writes nothing back.
+
+A bare install stays domain-neutral. No code vocabulary reaches any banner,
+greeting, count, miss, help, or orientation text.
+
+A **domain pack** bundles a corpus of facts, a lane vocabulary for that domain,
+optional templates, and a declared grounding channel. The **code pack** is the
+first shipped pack: a curated software ontology (SEON), the full filtered
+ConceptNet slice (CC-BY-SA 4.0), and code-domain lane vocabulary. Activate it
+with `tmct init --with-persona code` or automatically by running `tmct index`
+inside a real codebase.
 
 The default persona also comes in three sizes: Small (~664 facts, the
 default), Medium (~1,608, `tmct init --persona-size medium`) and Large
