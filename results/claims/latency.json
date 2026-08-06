@@ -1,0 +1,21 @@
+{
+  "name": "latency",
+  "generatedAt": "2026-08-06T00:08:40.501Z",
+  "commit": "015fc685814ed0c86059282c7344b0eae460bfee",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16",
+  "pack": "shipped",
+  "unit": "ms",
+  "threshold": {
+    "direction": "max",
+    "value": 11.034354000000258
+  },
+  "sources": [
+    "test-benchmarks/receipts/receipts.json"
+  ],
+  "value": 9.195295000000215,
+  "detail": {
+    "p90": 58.01559999999972,
+    "p99": 72.7686020000001,
+    "n": 100
+  }
+}
