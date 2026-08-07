@@ -114,21 +114,15 @@ export const CLAIMS_META = {
 };
 
 /** The claims page's block manifest: which results/claims/<name>.json file
- *  each of the page's two sections renders, and in what order. This is
- *  the ONLY thing declared here — the prose, the figure a block renders,
- *  and which facet of a JSON's detail it reads live in build-demo-site.mjs's
+ *  the page renders, one block per name, in this order. This is the ONLY
+ *  thing declared here — the prose, the figure a block renders, and which
+ *  facet of a JSON's detail it reads live in build-demo-site.mjs's
  *  renderClaimsHtml, next to the copy they support. test/estate/claims.test.mjs
  *  reads this list and asserts every name here resolves to a JSON file that
  *  exists, parses, matches scripts/claims/schema.json, and cites sources that
  *  exist in the repo — the same three checks that test already runs over
  *  every JSON file present, now also pinned to what the page promises to
- *  show. Every other results/claims/<name>.json file (cite, ground-gate,
- *  index-fabrication, lexicon, teach, research-sources, freshness,
- *  paraphrase, definitions) still exists, still regenerates through its own
- *  `claim:*` script, and still runs under `npm run claims` — it just has no
- *  block on the page while its measurement gets reworked or, for
- *  definitions, until its fixture is sampled from outside the repo. */
-export const CLAIMS_PAGE_BLOCKS = {
-  claims: ["latency", "determinism", "offline", "planner"],
-  limits: ["prose-band", "openbookqa"],
-};
+ *  show. `paraphrase` and `definitions` are the only other rigs under
+ *  results/claims/; neither publishes a block here — definitions until its
+ *  fixture is sampled from outside the repo. */
+export const CLAIMS_PAGE_BLOCKS = ["planner", "prose-band", "openbookqa"];

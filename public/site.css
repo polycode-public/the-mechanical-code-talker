@@ -524,13 +524,12 @@ table.matrix td.focus { color: var(--taught); }
 .claim-block {
   background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 1.15rem 1.25rem; display: flex; flex-direction: column; gap: 0.55rem;
+  scroll-margin-top: 1.5rem;
 }
 .claim-block-kicker {
   font: 0.72rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted); display: flex; justify-content: space-between; gap: 0.5rem;
 }
-.claim-block-kicker .paired a { color: var(--taught); text-decoration: none; }
-.claim-block-kicker .paired a:hover { text-decoration: underline; }
 .claim-block-sentence { font-size: 1rem; margin: 0; }
 .claim-block-figure {
   font-family: var(--font-display); font-weight: 600; font-size: 2.1rem; line-height: 1;
@@ -548,7 +547,6 @@ table.matrix td.focus { color: var(--taught); }
 .claim-block .not-mean strong { color: var(--ink); }
 .claim-block .claim-block-standard { font-size: 0.8rem; color: var(--muted); margin: 0; }
 .claim-block .claim-block-standard strong { color: var(--ink); }
-.claim-block .extension-cmd { font-size: 0.85rem; color: var(--muted); margin: 0; }
 .claim-block table { border-collapse: collapse; width: 100%; margin: 0.2rem 0; font-size: 0.86rem; }
 .claim-block th, .claim-block td { text-align: left; padding: 0.3em 0.6em 0.3em 0; border-bottom: 1px solid var(--line); }
 .claim-block th { color: var(--muted); font-weight: 500; }
