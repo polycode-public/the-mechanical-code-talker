@@ -134,8 +134,8 @@ Every cycle MUST satisfy:
   "parse this surface" but "infer what was meant" and "compose across what was already answered":
   **`pragmatic-implicature`** (indirect speech acts, negative-polarity asks, presupposition — Grice
   1975, Searle; `PLAN_DIALOGUE_ACTS.md`) and **`cross-turn-composition`** (a query whose meaning is
-  complete only when several prior ANSWERS are composed — Grosz/Joshi/Weinstein centering, the axis
-  CONVERSATION measures qualitatively but CEFR never had). This is a NEW AXIS, **not** a super-C2
+  complete only when several prior ANSWERS are composed — Grosz/Joshi/Weinstein centering, an axis
+  CEFR never had). This is a NEW AXIS, **not** a super-C2
   grade: the CEFR letters still only vocabulary-grade construction difficulty. The cases live in the
   go-to `graded-pool.jsonl` on the `HORIZON_CELLS` (`test-benchmarks/chatbench/graded.mjs`: `C1:pragmatic-implicature`,
   `C2:cross-turn-composition`) — graded as a named horizon, deliberately NOT sized into
@@ -161,8 +161,8 @@ tmct's own terms:
 Both are staged in the horizon docs and, until their capability lands, sit at the honest-miss floor
 exactly as the P-axis cells do — a judged miss, not a fabricated answer. Naming them keeps the
 scale's top calibrated against the horizon rather than implying C2 is the end.
-`.claude/skills/benchmark-agi-scales/SKILL.md` maps the same two absences (its open-discourse-record and other-minds
-items) at the classic-capability level.
+`scripts/agi-scales-aggregate.mjs`'s SCALES table maps the same two absences (its open-discourse-record
+and other-minds items) at the classic-capability level.
 
 ## 2. The loop (one cycle; repeats without pausing)
 
