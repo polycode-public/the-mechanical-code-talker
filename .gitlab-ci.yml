@@ -636,11 +636,12 @@ smoke:post-deploy:
 # node's default (all files at once, bounded only by the runner's own core
 # count). At 44 files in one job (grown from 3 by this same restructure) a live
 # pipeline (2717061891) failed all three `retry: 2` attempts, each on a
-# DIFFERENT file — a real speech-bubble assertion race in pages-mud (fixed
-# below, in the same commit as this split: it was picking up either half of a
-# two-character exchange as "the asker's own bubble" and only one half is
-# narration) and, reproduced locally under the same concurrent-file load, an
-# intermittent dropped Playwright/CDP promise in pages-research. Neither file
+# DIFFERENT file — a real speech-bubble assertion race in pages-mud (since
+# removed; fixed below, in the same commit as this split: it was picking up
+# either half of a two-character exchange as "the asker's own bubble" and
+# only one half is narration) and, reproduced locally under the same
+# concurrent-file load, an intermittent dropped Playwright/CDP promise in
+# pages-research (since removed). Neither file
 # is slow or wrong on its own; both surfaced only when several real Chromium
 # instances ran at once against the live site. Splitting means a retry only
 # re-runs its own slice, not the whole matrix, and the concurrency cap bounds
@@ -719,14 +720,15 @@ e2e:deployed:shell:
 # Every page the site ships, plus the engine-level and CLI files that shared a
 # channel with them. The largest slice by file count — capped so at most 4 of
 # these run their own real Chromium instance at once, regardless of how many
-# cores the runner has. pages-mud (one of the pipeline-2717061891 failures)
-# lives here; the other three files that failed under contention across
-# pipelines 2717061891 and 2717201943 moved to `e2e:deployed:pages-timing`
-# below, since none of them were actually pages-research.test.mjs (that file
-# has never failed either pipeline) — every failure was in
-# pages-chat-research.test.mjs, pages-chat-live-toggle.test.mjs, or
-# pages-chat-persistence.test.mjs. pages-ingest.test.mjs and
-# pages-chat-export.test.mjs joined them after pipeline 2721958621: both
+# cores the runner has. pages-mud (one of the pipeline-2717061891 failures,
+# since removed) used to live here; the other three files that failed under
+# contention across pipelines 2717061891 and 2717201943 moved to
+# `e2e:deployed:pages-timing` below, since none of them were actually
+# pages-research.test.mjs (since removed; that file had never failed either
+# pipeline) — every failure was in pages-chat-research.test.mjs,
+# pages-chat-live-toggle.test.mjs, or pages-chat-persistence.test.mjs.
+# pages-ingest.test.mjs (since removed) and pages-chat-export.test.mjs
+# joined them after pipeline 2721958621: both
 # reproduced 0/13 and 0/3 locally (single file, no concurrency) but failed
 # 3/3 retries here under real 4x contention — a Playwright click/waitFor
 # timing out, not a code defect.
@@ -740,15 +742,13 @@ e2e:deployed:pages:
       test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
       test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
       test-e2e/pages-chat-taught-capability-chain.test.mjs
-      test-e2e/web-chat-memory.test.mjs test-e2e/pages-research.test.mjs
+      test-e2e/web-chat-memory.test.mjs
       test-e2e/pages-ledger.test.mjs
       test-e2e/pages-ledger-teach.test.mjs test-e2e/pages-ledger-research.test.mjs
       test-e2e/ledger-viz-cli.test.mjs test-e2e/ledger-viz.test.mjs
-      test-e2e/pages-code.test.mjs test-e2e/pages-spider-fly.test.mjs
       test-e2e/pages-plan.test.mjs test-e2e/plan-cli.test.mjs
       test-e2e/plan-browser-entry.test.mjs test-e2e/pages-adventure.test.mjs
       test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
-      test-e2e/pages-mud.test.mjs test-e2e/pages-mud-scenarios.test.mjs
       test-e2e/pages-mudiii.test.mjs
       test-e2e/pages-screenshot-sweep.test.mjs
 
@@ -761,7 +761,8 @@ e2e:deployed:pages:
 # --test-concurrency=4 30-file run (two copies at once, to load the box the
 # way a 2-vCPU runner is loaded by 4 real concurrent Chromium instances)
 # reliably reproduced the exact pipeline-2717201943 failures in these three
-# files and only these three, never in pages-research.test.mjs. Alone, at
+# files and only these three, never in pages-research.test.mjs (since
+# removed). Alone, at
 # concurrency 1, none of the three have anything left to contend with.
 e2e:deployed:pages-timing:
   extends: .e2e-deployed-base
@@ -771,7 +772,6 @@ e2e:deployed:pages-timing:
       test-e2e/pages-chat-persistence.test.mjs
       test-e2e/pages-chat-research.test.mjs
       test-e2e/pages-chat-live-toggle.test.mjs
-      test-e2e/pages-ingest.test.mjs
       test-e2e/pages-chat-export.test.mjs
       test-e2e/pages-service-worker.test.mjs
 
@@ -783,21 +783,18 @@ e2e:deployed:pages-timing:
 # the test carries the SDP blob from one to the other by hand.
 e2e:deployed:mesh:
   extends: .e2e-deployed-base
-  # --test-concurrency dropped from 2 to 1: this job's own mud-p2p files used
-  # to fail fast here (the deployed site had no worlds pack to load mud-garden
-  # from, see the deploy:website fix above), so they never reached their real
-  # multi-browser WebRTC handshakes. Now that they do, this file's own two
-  # heaviest files (three real browser contexts each) plus the concurrency-2
-  # scheduling pushed p2p-disconnect-rejoin (a genuine 300s scenario) and
-  # pages-chat-p2p over their own timeouts under the added real contention —
-  # both passed standalone, both failed only here, alongside the mud-p2p files
-  # now finally running their full scenario. Same contention shape the
-  # pages/pages-timing split already documents for a different job.
+  # --test-concurrency dropped from 2 to 1: this job's own two heaviest files
+  # (three real browser contexts each) pushed p2p-disconnect-rejoin (a
+  # genuine 300s scenario) and pages-chat-p2p over their own timeouts under
+  # concurrency-2 scheduling — both passed standalone, both failed only here,
+  # under real contention from several live Chromium instances at once. Same
+  # contention shape the pages/pages-timing split already documents for a
+  # different job.
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test --test-concurrency=1
-      test-e2e/pages-chat-p2p.test.mjs test-e2e/pages-mud-p2p.test.mjs
-      test-e2e/p2p-mesh-three-peers.test.mjs test-e2e/pages-mud-p2p-mesh.test.mjs
+      test-e2e/pages-chat-p2p.test.mjs
+      test-e2e/p2p-mesh-three-peers.test.mjs
       test-e2e/p2p-disconnect-rejoin.test.mjs
       test-e2e/pages-chat-p2p-distributed-inference.test.mjs
 
