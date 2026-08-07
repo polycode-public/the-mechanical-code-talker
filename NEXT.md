@@ -38,6 +38,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - **Research-provider config track** — covers the provider-selection item below. Status: spec
   agent running (Opus, read-only); implementation dispatches to a worktree agent when the spec
   lands.
+- **Claims-page reduction track** — covers the five-block reduction item below. Fully specified
+  by the operator's prompt, no spec agent needed. Status: started (Sonnet, worktree).
+
+Sequencing note: the claims-page source belongs to the reduction track for this batch. The E1
+track's implementation is re-scoped to the rig side (fixture, scoring, delta, committed results);
+its page-facing parts (the reworked E1 block, the OpenBookQA limits block) are its recorded
+remainder, pending the reduced page's admission standard.
 
 The two tracks own disjoint files (benchmark fixture + claims page source vs. toml/CLI/chat
 wiring); the coordinator owns this file and the merges.
@@ -50,6 +57,19 @@ wiring); the coordinator owns this file and the merges.
   OpenBookQA sample and its zero move to the claims page's limits section as a
   grammar-shape limit with its own what-this-does-not-mean line naming the unsupported
   causal phrasing.
+- [ ] **claims.html reduces to the five blocks whose measurements hold up.** The page renders
+  exactly C3 (latency), C4 (determinism), C5 (offline), C7 (planner envelope), L1 (prose
+  grounding), keeping their anchor IDs. The "Measured extensibilities" section goes; the TOC
+  covers the two remaining sections; retired pairing cross-references (C1↔L1, C2↔L2, C2↔E3) go;
+  the intro rewords for two sections, keeps the Cyc passage and the "A claim ships with its
+  number, or it does not ship" close, and states the admission standard (input from outside the
+  repo, sampled beyond the author's choosing, or reader-checkable on own hardware), with a
+  one-line tag under each surviving block naming which it satisfies. Retired rigs, fixtures and
+  results JSON all stay in the repo and in `npm run claims` as regression checks. The homepage's
+  "Every fact it gives you names where it came from" overclaims (C1 measured 5 of 222) and gets
+  replaced with wording backed by the surviving blocks; no universal-citation claim anywhere on
+  the site until the reworked C1 lands. Stale anchor links in public/ sources and the READMEs get
+  updated or removed.
 - [ ] **The research provider becomes config-selected, settable three ways.** The chat
   research lane reads its provider (wikipedia or wikidata; default wikipedia) from
   `tmct.toml`. An init CLI option writes the choice into `tmct.toml`; a chat-invocation
