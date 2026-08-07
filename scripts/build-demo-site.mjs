@@ -899,17 +899,15 @@ function loadClaimBlock(name) {
 const claimCommand = (name) => `npm run claim:${name}`;
 const q = (s) => `&ldquo;${escapeHtml(s)}&rdquo;`;
 
-/** The shared shell every block in the claims/limits sections renders
- *  through: a kicker (block id, plus an optional link to its pair), a flat
- *  sentence, a figure, a "what this does not mean" line, a one-line note on
- *  which admission standard the block meets, and a footer naming the source
- *  file, the command that regenerates it, and links out. */
-function claimFigureBlock({ id, kicker, pairId, pairLabel, sentence, figureHtml, notMean, standard, jsonName, demoHref, demoLabel }) {
-  const paired = pairId ? ` <span class="paired">paired with <a href="#${pairId}">${pairLabel}</a></span>` : "";
+/** The shared shell every claim block renders through: a kicker (block id),
+ *  a flat sentence, a figure, a "what this does not mean" line, a one-line
+ *  note on which admission standard the block meets, and a footer naming
+ *  the source file, the command that regenerates it, and links out. */
+function claimFigureBlock({ id, kicker, sentence, figureHtml, notMean, standard, jsonName, demoHref }) {
   const demo = demoHref ? ` &middot; <a href="./${demoHref}">try it in ${demoHref}</a>` : "";
   return `
       <article class="claim-block" id="${id}" data-source="results/claims/${jsonName}.json">
-        <p class="claim-block-kicker"><span>${kicker}</span>${paired}</p>
+        <p class="claim-block-kicker"><span>${kicker}</span></p>
         <p class="claim-block-sentence">${sentence}</p>
         ${figureHtml}
         <p class="not-mean"><strong>What this does not mean:</strong> ${notMean}</p>
@@ -921,45 +919,14 @@ function claimFigureBlock({ id, kicker, pairId, pairLabel, sentence, figureHtml,
       </article>`;
 }
 
-/** claims.html: two sections (measured claims, measured limits), every
- *  figure read from `blocks` — one loadClaimBlock() result per name
- *  CLAIMS_PAGE_BLOCKS declares — at build time. No number in this function's
- *  own source is a claim figure; every one below is read off `blocks` or
- *  `plannerButton`. */
+/** claims.html: one block per name CLAIMS_PAGE_BLOCKS declares, every
+ *  figure read from `blocks` — one loadClaimBlock() result per name — at
+ *  build time. No number in this function's own source is a claim figure;
+ *  every one below is read off `blocks` or `plannerButton`. */
 function renderClaimsHtml({ blocks, plannerButton }) {
-  const latency = blocks.latency;
-  const determinism = blocks.determinism;
-  const offline = blocks.offline;
   const planner = blocks.planner;
   const proseBand = blocks["prose-band"];
   const openbookqa = blocks.openbookqa;
-
-  const c3 = claimFigureBlock({
-    id: "c3-latency", kicker: "C3",
-    sentence: "Answering a question over the demo graph takes this long, at the midpoint.",
-    figureHtml: `<p class="claim-block-figure" data-source="results/claims/latency.json#value">${fmtMs(latency.value)}<span class="unit">ms, p50 of ${fmtInt(latency.detail.n)} queries</span></p>`,
-    notMean: `This is not every answer&rsquo;s speed: across the same ${fmtInt(latency.detail.n)} queries, p90 is <span data-source="results/claims/latency.json#detail.p90">${fmtMs(latency.detail.p90)}</span> ms and p99 is <span data-source="results/claims/latency.json#detail.p99">${fmtMs(latency.detail.p99)}</span> ms.`,
-    standard: "reader-checkable hardware timing. Time it yourself on chat.html and compare.",
-    jsonName: "latency", demoHref: "chat.html",
-  });
-
-  const c4 = claimFigureBlock({
-    id: "c4-determinism", kicker: "C4",
-    sentence: "Running the graded pool twice from a fresh seed each time reproduces the same transcript.",
-    figureHtml: `<p class="claim-block-figure" data-source="results/claims/determinism.json#value">${fmtInt(determinism.value)}<span class="unit">of ${fmtInt(determinism.detail.total)} cases identical</span></p>`,
-    notMean: `Wall-clock timing is excluded from the comparison on purpose. Everything else in each case&rsquo;s transcript matches byte for byte across both runs.`,
-    standard: "the property holds for any input, not a sample tmct&rsquo;s author picked to flatter it.",
-    jsonName: "determinism",
-  });
-
-  const c5 = claimFigureBlock({
-    id: "c5-offline", kicker: "C5",
-    sentence: "Answering ten scripted questions on the deployed chat page reaches the network this many times.",
-    figureHtml: `<p class="claim-block-figure" data-source="results/claims/offline.json#value">${fmtInt(offline.value)}<span class="unit">requests, ${fmtInt(offline.detail.cases.length)} questions asked</span></p>`,
-    notMean: `This does not mean tmct can never reach the network. The research lane can look a term up over Simple Wikipedia and Wikidata and ships off by default; this rig never turns it on.`,
-    standard: "reader-checkable in the browser&rsquo;s own network tab, on the deployed chat page.",
-    jsonName: "offline", demoHref: "chat.html",
-  });
 
   const plannerRows = Object.entries(planner.detail.domains).map(([domainName, d]) => `
           <tr>
@@ -1021,12 +988,13 @@ function renderClaimsHtml({ blocks, plannerButton }) {
 <body>
 <a class="skip-link" href="#claims-main">Skip to the page</a>
 <div class="about-shell">
-  <nav class="about-nav" aria-label="Sections of this page">
+  <nav class="about-nav" aria-label="Blocks on this page">
     <a class="about-back" href="./index.html">&larr; tmct home</a>
     <p class="eyebrow">On this page</p>
     <ol class="about-crumbs">
-      <li><a href="#claims">Measured claims</a></li>
-      <li><a href="#limits">Measured limits</a></li>
+      <li><a href="#c7-planner">Hanoi planner</a></li>
+      <li><a href="#l1-prose-band">Prose grounding</a></li>
+      <li><a href="#l2-openbookqa">OpenBookQA</a></li>
     </ol>
   </nav>
 
@@ -1034,28 +1002,14 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     <header class="about-head">
       <p class="eyebrow">claims</p>
       <h1>Claims and limits</h1>
-      <p class="lede">Every claim below ships with the file it was measured against, the command that reproduces it, and, where one exists, a page where you can watch it happen.</p>
-      <p>A number appears here only if its input came from outside this repository, was sampled beyond its author&rsquo;s choosing, or can be rechecked by the reader on their own hardware.</p>
       <p><a href="https://en.wikipedia.org/wiki/Cyc">Cyc</a> spent four decades hand-curating commonsense so that symbolic reasoning could work in the open world, and met the walls every such project meets: the knowledge-acquisition bottleneck, brittleness at the edges of its rules, and an ambiguity load that grows faster than the knowledge that would resolve it. Every new term brings more senses, contexts and exceptions than it repays. tmct takes the opposite bet. Ambiguity is a function of domain breadth: keep the domain closed and the lexicon bounded, and disambiguation stays resolvable, inference stays tractable, and every fact answer stays checkable against the graph it came from. The claims below are what that bet buys; the limits are what it costs.</p>
     </header>
 
-    <section class="about-section" id="claims">
-      <h2>Measured claims</h2>
-      <div class="claim-block-grid">${c3}${c4}${c5}${c7}
-      </div>
-      ${bench}
-    </section>
-
-    <section class="about-section" id="limits">
-      <h2>Measured limits</h2>
-      <p>The cost of the claims above: this is where the open world pushes back.</p>
-      <p>Scoping an answer to a source is a choice, not an inference: which sources count as a microtheory for a given question is set by you, the person asking, not worked out from the graph.</p>
-      <div class="claim-block-grid">${l1}${l2}
-      </div>
-    </section>
+    <div class="claim-block-grid">${c7}${l1}${l2}
+    </div>
+    ${bench}
 
     <footer>
-      <p>A claim ships with its number, or it does not ship.</p>
       <p>MPL-2.0 &middot;
         <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
         &middot;
@@ -1119,7 +1073,7 @@ runBtn.addEventListener("click", function () {
   const { outPath: claimsBundlePath, size: claimsBundleBytes } = await buildClaimsBundle(SITE);
   console.log(`wrote ${claimsBundlePath} (${(claimsBundleBytes / 1024).toFixed(0)} KB)`);
 
-  const claimBlockNames = [...new Set(Object.values(CLAIMS_PAGE_BLOCKS).flat())];
+  const claimBlockNames = [...new Set(CLAIMS_PAGE_BLOCKS)];
   const blocks = Object.fromEntries(claimBlockNames.map((name) => [name, loadClaimBlock(name)]));
 
   const hanoi = blocks.planner.detail.domains.hanoi;

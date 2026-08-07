@@ -24,7 +24,7 @@ function claimFiles() {
 }
 
 function declaredBlockNames() {
-  return [...new Set(Object.values(CLAIMS_PAGE_BLOCKS).flat())].sort();
+  return [...new Set(CLAIMS_PAGE_BLOCKS)].sort();
 }
 
 function assertValidClaim(name, path) {
