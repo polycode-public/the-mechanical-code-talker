@@ -518,7 +518,7 @@ table.matrix td.focus { color: var(--taught); }
 }
 /* ---- claims page: one block per results/claims/<name>.json figure --------------- */
 .claim-block-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  display: grid; grid-template-columns: 1fr;
   gap: 1rem; margin: 1rem 0 1.6rem;
 }
 .claim-block {
