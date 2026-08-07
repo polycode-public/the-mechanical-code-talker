@@ -123,10 +123,11 @@ export const CLAIMS_META = {
  *  exist in the repo — the same three checks that test already runs over
  *  every JSON file present, now also pinned to what the page promises to
  *  show. Every other results/claims/<name>.json file (cite, ground-gate,
- *  index-fabrication, commonsense, lexicon, teach, research-sources,
- *  freshness) still exists, still regenerates through its own `claim:*`
- *  script, and still runs under `npm run claims` — it just has no block on
- *  the page while its measurement gets reworked. */
+ *  index-fabrication, lexicon, teach, research-sources, freshness,
+ *  paraphrase, definitions) still exists, still regenerates through its own
+ *  `claim:*` script, and still runs under `npm run claims` — it just has no
+ *  block on the page while its measurement gets reworked or, for
+ *  definitions, until its fixture is sampled from outside the repo. */
 export const CLAIMS_PAGE_BLOCKS = {
   claims: ["latency", "determinism", "offline", "planner"],
   limits: ["prose-band", "openbookqa"],
