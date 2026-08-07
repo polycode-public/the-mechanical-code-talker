@@ -19,19 +19,6 @@
       "sha256": "8205cffc90155880cf6838a70f17626743062f9dce28bbbbe11fcfa04718dd94"
     },
     {
-      "page": "spider-fly",
-      "file": "spider-fly.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "8a2f2cbb82cc4b7742183820f746d17f8ff90b3dd79fe2f5945c4066c70f9d53"
-    },
-    {
       "page": "plan",
       "file": "plan.png",
       "viewport": {
@@ -71,32 +58,6 @@
       "sha256": "591b403bfb673d1d02adc584ec8edbb40d00782a18dc9eff02240de4e4b3f136"
     },
     {
-      "page": "code",
-      "file": "code.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "7f1ee13bbb18fadb560226043c7cd0ff49615602b48968481849984e94dd03f0"
-    },
-    {
-      "page": "ingest",
-      "file": "ingest.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "e106fa4bc651d6826437b30d330a9706dd41c67f2f15a8a8e33a721cf8beff05"
-    },
-    {
       "page": "sprites",
       "file": "sprites.png",
       "viewport": {
@@ -108,32 +69,6 @@
         "height": 600
       },
       "sha256": "6ef268692ece5f082f76f807896581c9747eb1bb8d1ad8706481aa6f0c8549c9"
-    },
-    {
-      "page": "research",
-      "file": "research.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "7d6b7f62f26ed720558690e4213cd84680c35b1dff970d240a533f08c29e1ca3"
-    },
-    {
-      "page": "mud",
-      "file": "mud.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "724d7ec279d9e7a5d7263414ebcbfa5d4607201c591c29efc244eed7898db2f4"
     },
     {
       "page": "mudiii",
