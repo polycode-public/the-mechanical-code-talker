@@ -145,10 +145,9 @@ score when a query is mostly `[UNK]`.
   prover's" — with 50 of those greens graded against declared ceilings.
 - CHATBENCH: blind to 14 of 23 construction shapes, run at N=1.
 
-The only instrument currently discriminating on the meaning axis is the CONVERSATION persona sweep,
-which is qualitative. **A lever you cannot measure is a lever you cannot defend.** A scale for
-paraphrase misses has to exist before an embedding can be judged against the table entry that
-competes with it.
+The meaning axis has no instrument today. **A lever you cannot measure is a lever you cannot
+defend.** A scale for paraphrase misses has to exist before an embedding can be judged against
+the table entry that competes with it.
 
 ## What safetensors does and does not open
 
