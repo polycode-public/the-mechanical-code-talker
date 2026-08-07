@@ -1,4 +1,4 @@
-// idxbench/run.mjs — the IDXBENCH runner (.claude/skills/benchmark-code-index/SKILL.md).
+// idxbench/run.mjs — the IDXBENCH runner.
 //
 // Indexes committed fixture repos through the REAL producer
 // (src/index/index-repo.mjs's extractRepo/assembleEntities/indexRepository —

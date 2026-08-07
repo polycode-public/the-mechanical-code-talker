@@ -1,12 +1,11 @@
 // idxbench/conformance-runner.mjs — the conformance-kit gate IDXBENCH runs
-// against every produced graph before scoring it (.claude/skills/benchmark-code-index/SKILL.md
-// §1: "a producer whose graph does not pass runConformance cannot be scored at
-// all"). runConformance() (src/tools/conformance.mjs) registers node:test
-// tests at IMPORT time, so it needs a real test-runner context — idxbench/run.mjs
-// loads this file through node:test's programmatic run() (see checkConformance
-// there), pointing it at one produced graph via two env vars set just before
-// the call. Not a case file itself: this only exists to give runConformance
-// somewhere to run.
+// against every produced graph before scoring it: a producer whose graph does
+// not pass runConformance cannot be scored at all. runConformance()
+// (src/tools/conformance.mjs) registers node:test tests at IMPORT time, so it
+// needs a real test-runner context — idxbench/run.mjs loads this file through
+// node:test's programmatic run() (see checkConformance there), pointing it at
+// one produced graph via two env vars set just before the call. Not a case
+// file itself: this only exists to give runConformance somewhere to run.
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
