@@ -31,23 +31,15 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In flight (2026-08-07, third batch)
-
-- **Demo-deletion train, benchmark-skill retirement, quiet-feed swap** — ALL LANDED and
-  verified on main; push pending the full suite. The Electron track dispatches after that
-  push (its worktree needs the pushed base).
-
 ## Open items
 
-- [ ] **Electron goes, and the code-explorer render/bundle pieces retire with it.** Delete:
-  the electron/ directory, scripts/build-electron-app.mjs, the electron devDependency and its
-  three package.json scripts, README's desktop-shell section, plus the pieces Electron was the
-  last consumer of — renderCodeExplorerHtml (src/services/code-explorer-viz.mjs),
-  scripts/build-code-explorer-bundle.mjs, src/surfaces/web/code-explorer-browser-entry.mjs —
-  and their tests. Boundary: src/domain/code-explorer-hints.mjs and anything else with a
-  surviving importer (tmct chat --repo, the homepage live-demo box, demo-graph machinery)
-  stays — verify importers before deleting anything beyond the named list; the pack manifest
-  needs regenerating for the removed shipped files. Dispatches after the third-batch push.
+- [ ] **Decide code-explorer-hints' fate.** Electron and the code-explorer render/bundle
+  pieces are deleted and merged (importer-verified; pack manifest regenerated to 554; the
+  lockfile lost the electron dependency, which also ends the dead ~100MB download on every
+  CI install). The one finding needing a call: with the shell gone,
+  `src/domain/code-explorer-hints.mjs` is imported only by its own test — it still ships in
+  the npm pack, so it is either a deliberate library surface (keep, maybe say so in its
+  header) or the next retirement. Operator's call.
 
 *(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
 intro says "every fact answer stays checkable against the graph it came from" where
