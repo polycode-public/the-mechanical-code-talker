@@ -1,0 +1,35 @@
+definitions-set.jsonl — provenance and licence
+
+This fixture is this repository's own work: 100 "what is X" questions,
+authored in-repo, licensed under this repository's own MPL-2.0. It is not a
+redistribution of any external question set.
+
+Each question's gold answer was checked against the Open English WordNet's
+own hypernym labels (CC-BY-4.0; see corpus/wordnet/LICENSE-NOTICE for the
+full attribution). Checking gold labels against WordNet's data does not make
+this file a WordNet derivative — no WordNet text is copied into it — but a
+reader should know where the "is this term answerable" boundary comes from:
+the corpus band's gold phrase is the corpus's own label for that term, so the
+delta this fixture measures is how much of the corpus's own knowledge the ask
+grammar can already reach, not independent world knowledge held outside it.
+
+Selection rule (three bands, 100 questions, follow this when adding rows):
+
+  - seed (20 rows): the term already carries a clean, single /r/IsA row in
+    corpus/tier2/human.jsonl, so the question is answerable before AND after
+    the wordnet-xl import. This keeps the "before" score honestly nonzero
+    instead of measuring a fixture that starts at zero by construction.
+  - corpus (70 rows): the term is absent from corpus/tier2/human.jsonl but
+    carries a single, clean /r/IsA row in corpus/wordnet/wordnet-xl.jsonl.
+    This is the band the delta actually measures. Selected from wordnet-xl's
+    own IsA rows where both sides are a single token and the subject is a
+    word a general reader recognises; nouns preferred. A term whose subject
+    also carries a verb-sense hypernym in wordnet-xl (trumpet -> utter,
+    taxi -> locomote, oak -> wood are three found this way) is rejected even
+    if a noun-sense row is the more natural read, because the ask grammar has
+    no way to prefer one sense over another.
+  - neither (10 rows): the term is absent from every corpus this rig can
+    reach, so the question stays a miss before and after the import. This
+    band is the visible ceiling: a fixture tuned only to the delta would
+    score 100 after the load, which would hide the fact that most of the
+    world stays outside what any shipped corpus can ground.
