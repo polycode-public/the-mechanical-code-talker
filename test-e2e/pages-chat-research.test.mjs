@@ -216,17 +216,33 @@ test("the researched-this-session panel lists each topic's own passage, its sour
  *  race. The button also starts out hidden before a run has even begun
  *  (nothing queued yet), so "hidden" only means "the run finished before we
  *  ever caught it" once it has been seen visible at least once — otherwise
- *  this resolves `false` too early, before the run had even started. When it
- *  genuinely does finish first, this resolves `false` instead of clicking,
- *  so the caller can retry on a fresh ticker rather than clicking a dead
- *  button. */
+ *  this resolves `false` too early, before the run had even started.
+ *
+ *  A driver process can't atomically observe a browser-paced ticker from
+ *  outside: a queue small and fast enough can start AND finish before this
+ *  function's own evaluate() call is even scheduled, so the very first check
+ *  ever run here would find the button already hidden with nothing to
+ *  observe transitioning — indistinguishable, by the button's own attributes
+ *  alone, from "no run has started yet". `window.tmct.page.researchTicker`
+ *  breaks that tie: the ticker is provably idle (not playing, not mid-tick)
+ *  and the queue status line has already reached its terminal "complete"
+ *  text, so this fails fast with a precise reason instead of waiting out the
+ *  full timeout on a mutation that will never come. When it genuinely does
+ *  finish first, this resolves `false` instead of clicking, so the caller
+ *  can retry on a fresh ticker rather than clicking a dead button. */
 async function clickResearchPlayOncePlaying(page, timeoutMs) {
   return page.evaluate((timeout) => new Promise((resolve, reject) => {
     const button = document.getElementById("researchPlay");
+    const statusEl = document.getElementById("researchQueueStatus");
+    const ticker = window.tmct.page.researchTicker;
     let everVisible = false;
+    const alreadyDone = () => {
+      const state = ticker.getState();
+      return !state.playing && !state.animating && statusEl.textContent.includes("complete");
+    };
     const settle = () => {
       if (!button.hidden) everVisible = true;
-      if (everVisible && button.hidden) { resolve(false); return true; }
+      if ((everVisible && button.hidden) || (button.hidden && alreadyDone())) { resolve(false); return true; }
       if (button.getAttribute("aria-pressed") === "true") { button.click(); resolve(true); return true; }
       return false;
     };
