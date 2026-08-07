@@ -1002,7 +1002,6 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     <header class="about-head">
       <p class="eyebrow">claims</p>
       <h1>Claims and limits</h1>
-      <p><a href="https://en.wikipedia.org/wiki/Cyc">Cyc</a> spent four decades hand-curating commonsense so that symbolic reasoning could work in the open world, and met the walls every such project meets: the knowledge-acquisition bottleneck, brittleness at the edges of its rules, and an ambiguity load that grows faster than the knowledge that would resolve it. Every new term brings more senses, contexts and exceptions than it repays. tmct takes the opposite bet. Ambiguity is a function of domain breadth: keep the domain closed and the lexicon bounded, and disambiguation stays resolvable, inference stays tractable, and every fact answer stays checkable against the graph it came from. The claims below are what that bet buys; the limits are what it costs.</p>
     </header>
 
     <div class="claim-block-grid">${c7}${l1}${l2}

@@ -45,13 +45,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **claims.html cuts to three blocks and the Cyc passage; the removed sections' rigs
-  purge from the repo.** The page keeps only: the C7 planner block ("tmct solves a taught
-  Hanoi puzzle in under a second up to this many disks."), the L1 prose-band block, the L2
-  OpenBookQA block, and the intro's Cyc passage. Everything else on the page goes — the lede,
-  the admission-standard sentence, both section headings and their intro paragraphs, and the
-  closing line. The left "on this page" nav lists a short title per remaining block instead
-  of the two section names. The rigs that captured removed sections (both this cut and the
+- [ ] **claims.html cuts to three blocks; the removed sections' rigs purge from the repo.**
+  The page keeps only: the C7 planner block ("tmct solves a taught Hanoi puzzle in under a
+  second up to this many disks."), the L1 prose-band block, the L2 OpenBookQA block, and C7's
+  device-bench box. Everything else on the page goes — the lede, the admission-standard
+  sentence, the Cyc passage (operator removed it after the first cut landed), both section
+  headings and their intro paragraphs, and the closing line. The left "on this page" nav
+  lists a short title per remaining block instead of the two section names. The rigs that captured removed sections (both this cut and the
   earlier five-block reduction) are deleted outright — scripts, results JSONs, npm hooks, and
   fixtures used only by them; this supersedes the earlier keep-as-regression-checks stance.
   Rigs that never had a page section (definitions, paraphrase) stay.
