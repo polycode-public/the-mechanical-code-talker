@@ -22,20 +22,12 @@ const READY_TIMEOUT_MS = 30_000;
 // for it, just insurance against a transition still mid-frame.
 const SETTLE_MS = 250;
 
-// mud.html is the one page whose plate needs to look busy rather than just
-// loaded (both animals mid-simulation, not two idle panes at boot), so its own
-// ready check drives the simulation forward before the shot fires. The turn
-// count is a floor chosen so the shot always shows multiple turns in both
-// panes; the timeout budgets for that floor at the page's default 650ms
-// auto-play delay, spread across two characters ticking independently rather
-// than one at a time.
-const MUD_BUSY_TURN_THRESHOLD = 12;
-const MUD_BUSY_TIMEOUT_MS = 30_000;
-
-// mudiii.html carries the same busy-plate requirement as mud, on top of a
-// heavier boot: an 800 KB three.js bundle and 1.1 MB of models load before
-// the scene's own ready() signal ever fires, so both of its timeouts get
-// real headroom rather than reusing READY_TIMEOUT_MS/MUD_BUSY_TIMEOUT_MS.
+// mudiii.html is the one page whose plate needs to look busy rather than
+// just loaded (the cast mid-simulation, not resting at boot), so its own
+// ready check drives the simulation forward before the shot fires, on top
+// of a heavier boot: an 800 KB three.js bundle and 1.1 MB of models load
+// before the scene's own ready() signal ever fires, so both of its timeouts
+// get real headroom rather than reusing READY_TIMEOUT_MS.
 const MUDIII_BUSY_TURN_THRESHOLD = 12;
 // One tween's worth after scrolling, so the shot lands on settled meshes
 // rather than mid-step: the scene eases a one-cell move over 250ms.
@@ -43,8 +35,9 @@ const SCENE_SETTLE_MS = 1_200;
 const MUDIII_READY_TIMEOUT_MS = 60_000;
 const MUDIII_BUSY_TIMEOUT_MS = 60_000;
 
-// Same order the home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research", "mud", "mudiii"];
+// Same order as DEMO_PAGES in site-pages.mjs, which is also the order the
+// home page lists its claim blocks and feature plates in.
+const PAGE_ORDER = ["chat", "ledger", "plan", "mudiii", "adventure", "sprites"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -54,11 +47,6 @@ const READY_CHECKS = {
     const input = document.querySelector("#composerInput");
     return input && !input.disabled;
   }, null, { timeout: READY_TIMEOUT_MS }),
-  "spider-fly": (page) => page.waitForFunction(
-    () => !document.querySelector("#chatq")?.disabled,
-    null,
-    { timeout: READY_TIMEOUT_MS },
-  ),
   plan: (page) => page.locator("#board .block").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   adventure: (page) => page.waitForFunction(
     () => document.querySelector("#chatq") && !document.querySelector("#chatq").disabled,
@@ -66,78 +54,14 @@ const READY_CHECKS = {
     { timeout: READY_TIMEOUT_MS },
   ),
   ledger: (page) => page.locator(".dash").waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
-  code: (page) => page.locator("#ledger .row").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
-  ingest: async (page) => {
-    await page.waitForFunction(() => window.tmctIngestReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
-    await page.evaluate(() => window.tmctIngestReady);
-  },
   sprites: (page) => page.locator(".card").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
-  research: async (page) => {
-    await page.waitForFunction(() => window.tmctResearchReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
-    await page.evaluate(() => window.tmctResearchReady);
-  },
-  // Every other ready check above only waits for boot. This one also drives
-  // the simulation itself: relying on auto-play's own turn-by-turn rolls to
-  // eventually open a second room before the shot fires would make the wait
-  // unbounded, so it digs one by hand first, then starts both panes playing
-  // and waits for a real busy state. Which two animals are cast is drawn live
-  // on every load, so the dig goes through the room's own compass ring (which
-  // offers only what this room actually allows) rather than a typed command
-  // that would depend on who happens to be standing where.
-  mud: async (page) => {
-    await page.waitForFunction(
-      () => !document.querySelector("#window-a-chatq")?.disabled,
-      null,
-      { timeout: READY_TIMEOUT_MS },
-    );
-
-    // A real page.click() scrolls the control it targets into view, which can
-    // leave the panes and the survey above it out of the eventual screenshot
-    // — dispatching the click straight to the DOM fires the same listener
-    // without moving the page.
-    const clickFirst = (selector) => page.evaluate((sel) => {
-      const node = document.querySelector(sel);
-      if (node) node.click();
-      return Boolean(node);
-    }, selector);
-
-    // Above ground the only way on is the shaft, so walk down before digging
-    // when the ring offers no dig at all.
-    if (!await clickFirst(".dir-pill.dig")) {
-      if (await clickFirst('.dir-pill[aria-label="go down"]')) {
-        await page.waitForFunction(() => document.querySelectorAll(".dir-pill.dig").length > 0, null, { timeout: READY_TIMEOUT_MS });
-        await clickFirst(".dir-pill.dig");
-      }
-    }
-    await page.waitForFunction(
-      () => document.querySelectorAll("#worldMapBoard .room").length > 2,
-      null,
-      { timeout: READY_TIMEOUT_MS },
-    );
-
-    await clickFirst("#autoToggle");
-
-    await page.waitForFunction(
-      (threshold) => {
-        const turnText = document.querySelector("#globalTurnCount")?.textContent ?? "";
-        return Number((turnText.match(/\d+/) ?? ["0"])[0]) >= threshold;
-      },
-      MUD_BUSY_TURN_THRESHOLD,
-      { timeout: MUD_BUSY_TIMEOUT_MS },
-    );
-    // Auto-play stays running into the capture on purpose — this plate is
-    // meant to show the simulation mid-motion, not paused for the shot. The
-    // scroll position, on the other hand, needs pinning: the typed commands
-    // above can leave the page scrolled to wherever the chat input sits.
-    await page.evaluate(() => window.scrollTo(0, 0));
-  },
-  // mudiii.html runs a live three.js animation loop from the moment it boots,
-  // so "networkidle" (used by every ready check above via the default in
-  // capturePage) would never resolve — same reason ingest and research use
-  // "load" instead, see GOTO_WAIT_UNTIL below. The scene exposes its own
-  // readiness signal (window.mudiiiScene.ready()) rather than a DOM element,
-  // because the composer input is enabled well before the 3D scene has
-  // finished loading its models and placed its cast.
+  // mudiii.html runs a live three.js animation loop and keeps fetching models
+  // from the moment it boots, so "networkidle" (used by every ready check
+  // above via the default in capturePage) would never resolve — see
+  // GOTO_WAIT_UNTIL below, which loads it with "load" instead. The scene
+  // exposes its own readiness signal (window.mudiiiScene.ready()) rather than
+  // a DOM element, because the composer input is enabled well before the 3D
+  // scene has finished loading its models and placed its cast.
   mudiii: async (page) => {
     await page.waitForFunction(() => window.mudiiiScene?.ready() === true, null, { timeout: MUDIII_READY_TIMEOUT_MS });
 
@@ -185,12 +109,11 @@ const READY_CHECKS = {
   },
 };
 
-// ingest.html's own e2e file loads with "load" rather than "networkidle" —
-// every other page uses "networkidle" in its own file, so each page keeps the
-// wait style its own test already trusts. mudiii.html joins them for the same
-// reason: its live animation loop and rolling model fetches mean the network
-// never truly goes idle.
-const GOTO_WAIT_UNTIL = { ingest: "load", research: "load", mudiii: "load" };
+// mudiii.html loads with "load" rather than "networkidle" — every other page
+// uses "networkidle" in its own file, so it alone keeps the wait style its
+// own test already trusts, because its live animation loop and rolling model
+// fetches mean the network never truly goes idle.
+const GOTO_WAIT_UNTIL = { mudiii: "load" };
 
 /** Read a PNG's pixel dimensions straight out of its IHDR chunk (bytes 16-23,
  *  big-endian width then height) — the only two fields this file needs, so
