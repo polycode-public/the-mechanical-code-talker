@@ -1,13 +1,12 @@
-// The deployed home page and its eleven about pages, in a real browser: they
+// The deployed home page and its six about pages, in a real browser: they
 // load clean, the claim cards link to the demo pages and offer an info link
 // and a share sheet, the capability table scrolls in its own box, the feature
 // sections show each page's screenshot as a framed plate rather than a live
 // embed, the showcase links to the sibling Polycode projects, and all of it
 // survives a phone-sized viewport. Nothing else drives these pages end to end
-// (the chat.html/plan.html/adventure.html/ledger.html/sprites.html/
-// spider-fly.html/code.html pages' own content is each page's own test file's
-// job — this file only checks index.html links to them and shows what it says
-// it shows).
+// (the chat.html/plan.html/adventure.html/ledger.html/sprites.html pages'
+// own content is each page's own test file's job — this file only checks
+// index.html links to them and shows what it says it shows).
 //
 // Third-party hosts are blocked for every run, and the block must cost the
 // page nothing: every asset — the wink lemma/POS tier included, via the

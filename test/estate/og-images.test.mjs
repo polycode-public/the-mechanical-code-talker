@@ -18,7 +18,7 @@ const SOCIAL_SIZE = { width: 1280, height: 640 };
 
 const expectedFiles = [...DEMO_PAGES.map((slug) => `${slug}.png`), "index.png", "github-social.png"];
 
-test("public/og/ ships exactly the 13 expected images", () => {
+test("public/og/ ships exactly the 8 expected images", () => {
   for (const file of expectedFiles) {
     assert.doesNotThrow(
       () => readFileSync(new URL(`./${file}`, `file://${OG_DIR}`)),

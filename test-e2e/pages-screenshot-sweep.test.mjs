@@ -159,57 +159,6 @@ const PAGES = [
     ],
   },
   {
-    page: "spider-fly",
-    path: "spider-fly.html",
-    ready: async (page) => {
-      await page.waitForFunction(() => document.querySelector("#chatq") && !document.querySelector("#chatq").disabled, null, { timeout: READY_TIMEOUT_MS });
-    },
-    states: [
-      { label: "idle", act: async () => {} },
-      {
-        label: "pill-addressed",
-        act: async (page) => {
-          await page.locator('#chatpills button[data-addressee="spider"]').click();
-        },
-      },
-      {
-        label: "stepped",
-        act: async (page) => {
-          await page.locator("#stepBtn").click();
-          await page.waitForFunction(() => (document.querySelector("#turnLabel")?.textContent ?? "").trim() === "turn: 1", null, { timeout: READY_TIMEOUT_MS });
-          await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: READY_TIMEOUT_MS });
-        },
-      },
-      {
-        label: "mid-play",
-        act: async (page) => {
-          await page.locator("#playBtn").click();
-          await page.waitForFunction(() => {
-            const m = (document.querySelector("#turnLabel")?.textContent ?? "").match(/turn:\s*(\d+)/);
-            return m && Number(m[1]) >= 6;
-          }, null, { timeout: READY_TIMEOUT_MS }).catch(() => {});
-        },
-      },
-      {
-        label: "paused",
-        act: async (page) => {
-          if (/pause/.test((await page.locator("#playBtn").textContent()) ?? "")) await page.locator("#playBtn").click();
-          await page.waitForFunction(() => /play/.test(document.querySelector("#playBtn")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
-          await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: READY_TIMEOUT_MS });
-        },
-      },
-      {
-        label: "retuned",
-        act: async (page) => {
-          await page.locator("#ctlSpiderVision").evaluate((input) => {
-            input.value = "8";
-            input.dispatchEvent(new Event("input"));
-          });
-        },
-      },
-    ],
-  },
-  {
     page: "plan",
     path: "plan.html",
     ready: async (page) => {
@@ -392,52 +341,6 @@ const PAGES = [
           await page.fill("#dockq", "who painted the mona lisa?");
           await page.press("#dockq", "Enter");
           await page.waitForFunction(() => document.querySelectorAll("#dockLog .a.miss").length >= 1, null, { timeout: READY_TIMEOUT_MS });
-        },
-      },
-    ],
-  },
-  {
-    page: "code",
-    path: "code.html",
-    ready: async (page) => {
-      await page.locator("#ledger .row").first().waitFor({ state: "visible" });
-    },
-    states: [
-      { label: "idle", act: async () => {} },
-      {
-        label: "focus-changed",
-        act: async (page) => {
-          await page.locator("#ledger .term").first().click();
-        },
-      },
-      {
-        label: "hint-answered",
-        act: async (page) => {
-          await page.locator(".hint").first().click();
-          await page.waitForFunction(() => document.querySelectorAll("#chat-log .turn-tmct").length >= 1, null, { timeout: READY_TIMEOUT_MS });
-        },
-      },
-    ],
-  },
-  {
-    page: "ingest",
-    path: "ingest.html",
-    ready: async (page) => {
-      await page.waitForFunction(() => window.tmctIngestReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
-      await page.evaluate(() => window.tmctIngestReady);
-    },
-    states: [
-      { label: "idle", act: async () => {} },
-      {
-        label: "ingested",
-        act: async (page) => {
-          // Invented terms, not "a dog is a kind of animal": the page seeds
-          // with the full starter memory by default, and a sentence already
-          // in that seed grounds as a duplicate rather than a new fact, which
-          // never reaches the count this waits for.
-          await page.fill("#source", "A wozzle is a kind of dog. A florp is a kind of animal.");
-          await page.locator("#ingestBtn").click();
-          await page.waitForFunction(() => document.querySelectorAll("#facts .fact").length >= 2, null, { timeout: READY_TIMEOUT_MS });
         },
       },
     ],

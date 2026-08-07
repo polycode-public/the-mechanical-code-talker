@@ -1,5 +1,5 @@
 // The hand-authored pages of the site, checked as text: the home page
-// (public/index.html) and the eleven about pages beside it, all git-tracked and
+// (public/index.html) and the six about pages beside it, all git-tracked and
 // all sharing public/site.css.
 //
 // The home page reads as a hero, a grid of claim cards that each link to their
@@ -56,13 +56,13 @@ test("each demo page gets a feature section whose plate shows that page's screen
   }
 });
 
-test("the feature sections repeat the claims in claim-grid order, plates numbered I to XI", async () => {
+test("the feature sections repeat the claims in claim-grid order, plates numbered I to VI", async () => {
   const html = await readFile(INDEX, "utf8");
   const positions = PAGE_ORDER.map((page) => html.indexOf(`id="feature-${page}"`));
   assert.ok(positions.every((i) => i !== -1));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches claim order");
   const numerals = [...html.matchAll(/<span class="plate-no">Plate ([IVX]+)<\/span>/g)].map((m) => m[1]);
-  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"]);
+  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI"]);
 });
 
 test("the page carries one live demo box and no live page embeds", async () => {

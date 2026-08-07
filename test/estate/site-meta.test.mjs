@@ -1,8 +1,8 @@
-// After `npm run demo:build`, every one of the site's 25 pages (index, the
-// 11 demo pages, the 11 about pages, receipts, claims) carries exactly one
+// After `npm run demo:build`, every one of the site's 15 pages (index, the
+// 6 demo pages, the 6 about pages, receipts, claims) carries exactly one
 // canonical link, one og:image tag and one twitter:card tag, robots.txt
 // matches the payload the deploy needs to stop search engines treating the
-// whole site as blocked, and sitemap.xml parses with all 25 locs. This reads
+// whole site as blocked, and sitemap.xml parses with all 15 locs. This reads
 // public/ directly, the same build output a deploy ships, so `npm run
 // demo:build` must run first — it does not assert that the og:image files
 // themselves exist on disk, since generating those PNGs is a separate build
@@ -34,9 +34,9 @@ function countMatches(html, re) {
   return [...html.matchAll(re)].length;
 }
 
-test("the page list holds 25 pages: index, receipts, claims, 11 demo pages, 11 about pages", () => {
-  assert.equal(ALL_PAGES.length, 25);
-  assert.equal(new Set(ALL_PAGES).size, 25, "no page name repeats");
+test("the page list holds 15 pages: index, receipts, claims, 6 demo pages, 6 about pages", () => {
+  assert.equal(ALL_PAGES.length, 15);
+  assert.equal(new Set(ALL_PAGES).size, 15, "no page name repeats");
 });
 
 test("every page exists and carries exactly one canonical link, one og:image and one twitter:card", { skip: siteUnbuilt }, () => {
@@ -55,13 +55,13 @@ test("robots.txt matches the required payload exactly", { skip: siteUnbuilt }, (
   assert.equal(text, "User-agent: *\nAllow: /\nSitemap: https://tmct.polycode.co.uk/sitemap.xml\n");
 });
 
-test("sitemap.xml parses and holds 25 unique locs", { skip: siteUnbuilt }, () => {
+test("sitemap.xml parses and holds 15 unique locs", { skip: siteUnbuilt }, () => {
   const path = join(PUBLIC_DIR, "sitemap.xml");
   assert.ok(existsSync(path), "public/sitemap.xml is missing — run `npm run demo:build` first");
   const xml = readFileSync(path, "utf8");
   assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  assert.equal(locs.length, 25, "sitemap.xml should hold 25 <url><loc> entries");
-  assert.equal(new Set(locs).size, 25, "every loc in sitemap.xml should be unique");
+  assert.equal(locs.length, 15, "sitemap.xml should hold 15 <url><loc> entries");
+  assert.equal(new Set(locs).size, 15, "every loc in sitemap.xml should be unique");
   assert.ok(locs.includes("https://tmct.polycode.co.uk/"), "sitemap.xml should include the home page");
 });
