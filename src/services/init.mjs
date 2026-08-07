@@ -145,6 +145,19 @@ backend = ${JSON.stringify(config.memory.backend)}
 `;
   }
 
+  // [research] source — only emitted when a caller actually supplies it.
+  if (config.research && config.research.source !== undefined) {
+    out += `
+[research]
+# Which source "research <topic>" fetches from.
+# Precedence: /wikipedia|/wikidata in chat > --research-source flag >
+# this file > "wikipedia" (the built-in default).
+#   "wikipedia" — Simple English Wikipedia prose articles, CC BY-SA 4.0.
+#   "wikidata"  — Wikidata's structured claims, CC0 1.0.
+source = ${JSON.stringify(config.research.source)}
+`;
+  }
+
   // Extension-pack / bias sections — only emitted when a caller supplies them.
   const extras = {};
   if (config.extensions !== undefined) extras.extensions = config.extensions;
@@ -184,13 +197,16 @@ function seedRequested({ optSeed, configEnabled, env }) {
  * @param {string}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged into a
  *   FRESH config's `[memory] backend`, and selects which backend the corpus seed writes
  *   into (via src/adapters/memory/core.mjs's openMemoryBackend).
+ * @param {string}  [opts.researchSource]  "wikipedia" | "wikidata" — merged into a
+ *   FRESH config's `[research] source`, the tmct.toml tier of the research lane's
+ *   source precedence (src/services/chat-session.mjs createSession).
  * @returns {Promise<{
  *   created: string[], config: object, seeded: boolean,
  *   alreadyInitialized: boolean, seedResult: (object|null), message: string
  * }>} `created` lists the absolute paths this call brought into being. Never throws on
  *   a benign re-init or a corpus failure.
  */
-export async function initRepo(dir, { force = false, seed, env = process.env, persona = null, memoryBackend = null } = {}) {
+export async function initRepo(dir, { force = false, seed, env = process.env, persona = null, memoryBackend = null, researchSource = null } = {}) {
   const root = resolve(dir);
   const created = [];
   const paths = {
@@ -265,6 +281,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (persona.bias && Object.keys(persona.bias).length) config.bias = persona.bias;
   }
   if (memoryBackend) config.memory = { ...(config.memory || {}), backend: memoryBackend };
+  if (researchSource) config.research = { ...(config.research || {}), source: researchSource };
   const tomlPresent = await exists(paths.toml);
   if (!tomlPresent || force) {
     await writeFile(paths.toml, renderTomlConfig(config));
@@ -390,6 +407,9 @@ async function readWrittenConfig(tomlPath, base) {
     if (raw.bias !== undefined) cfg.bias = raw.bias;
     if (raw.memory && raw.memory.backend !== undefined) {
       cfg.memory = { ...cfg.memory, backend: raw.memory.backend };
+    }
+    if (raw.research && raw.research.source !== undefined) {
+      cfg.research = { ...cfg.research, source: raw.research.source };
     }
     return cfg;
   } catch {

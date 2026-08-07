@@ -110,6 +110,13 @@ test("resolveResearchConfig ships defaults, clamps the fan-out and depth, caps t
   assert.equal(resolveResearchConfig({ research: { max_depth: 2 } }).maxDepth, 2, "max_depth is read as the depth knob");
 });
 
+test("resolveResearchConfig's source: wikidata reads through, an unrecognized or absent value reads as wikipedia", () => {
+  assert.equal(resolveResearchConfig({ research: { source: "wikidata" } }).source, "wikidata");
+  assert.equal(resolveResearchConfig({ research: { source: "bogus" } }).source, "wikipedia");
+  assert.equal(resolveResearchConfig(null).source, "wikipedia");
+  assert.deepEqual(resolveResearchConfig(null), { ...RESEARCH_DEFAULTS });
+});
+
 test("clampResearchConfig folds a camelCase partial onto defaults and clamps every knob to its range", () => {
   assert.deepEqual(clampResearchConfig({}), { ...RESEARCH_DEFAULTS });
   const cfg = clampResearchConfig({ maxDepth: 9, maxTopics: 0, fanoutLimit: -3 });
@@ -203,6 +210,21 @@ test("a failed depth-1 fetch skips that topic plainly and the queue moves on", a
   const recovered = await researchTurn("research next", ctx);
   assert.match(recovered.text, /^night —/, "the next queued topic still grounds");
   assert.match(recovered.text, /1 skipped/);
+});
+
+test("the two miss lines and the run's goal name Wikidata when config.source is wikidata", async () => {
+  const wikidataConfig = resolveResearchConfig({ research: { source: "wikidata" } });
+  const missProvider = cannedProvider({});
+  const missCtx = ctxFor(missProvider, ingestRecorder(), { config: wikidataConfig });
+  const miss = await researchTurn("research owl", missCtx);
+  assert.match(miss.text, /couldn't ground "owl" from Wikidata .* Nothing was stored\./);
+  assert.match(miss.goal, /Wikidata/);
+
+  const stepProvider = cannedProvider({ articles: { owl: ROW("Owl") }, links: { Owl: ["Bird"] } });
+  const stepCtx = ctxFor(stepProvider, ingestRecorder(1), { config: wikidataConfig });
+  await researchTurn("research owl", stepCtx);
+  const skipped = await researchTurn("research next", stepCtx);
+  assert.match(skipped.text, /couldn't fetch "Bird" from Wikidata — skipped/);
 });
 
 test("a throwing ingest degrades to zero stored facts, never a crash", async () => {
@@ -337,6 +359,18 @@ test("the provenance tag and the cited line render the documented shapes", () =>
   assert.equal(
     renderResearchAnswer("owl", ROW("Owl", "An owl is a bird.")),
     'owl — An owl is a bird. (source: research article "Owl", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Owl?oldid=42)',
+  );
+});
+
+test("renderResearchAnswer on a Wikidata row cites Wikidata/CC0 with a bare URL, no ?oldid= query", () => {
+  const row = {
+    term: "owl", title: "Owl", text: "a bird of prey", summary: "a bird of prey",
+    url: "https://www.wikidata.org/wiki/Q39825", revid: 99,
+    source: "Wikidata", licence: "CC0 1.0",
+  };
+  assert.equal(
+    renderResearchAnswer("owl", row),
+    'owl — a bird of prey (source: research article "Owl", Wikidata, CC0 1.0 — https://www.wikidata.org/wiki/Q39825)',
   );
 });
 

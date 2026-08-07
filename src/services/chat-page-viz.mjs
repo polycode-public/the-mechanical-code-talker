@@ -392,18 +392,21 @@ export function loadProgressLine(parts) {
  * The "researched this session" panel's own reading of a settled research
  * turn's answer — the passage it read and where it read it, straight off
  * research.mjs's own `renderResearchAnswer` shape (`term — summary (source:
- * research article "title", Simple English Wikipedia, CC BY-SA 4.0 — url)`),
- * never a second fetch: the citation text is already the retrieved passage,
- * this just pulls its pieces apart for display. Returns null on anything
- * else (a miss, a status/stop reply, or text that doesn't open this way) —
- * an honest "nothing to show" rather than a guessed passage.
+ * research article "title", <source>, <licence> — url)`, e.g. "Simple
+ * English Wikipedia, CC BY-SA 4.0" or "Wikidata, CC0 1.0"), never a second
+ * fetch: the citation text is already the retrieved passage, this just pulls
+ * its pieces apart for display. The source/licence segment itself is not
+ * pinned to one source, so a Wikidata-sourced research turn still parses.
+ * Returns null on anything else (a miss, a status/stop reply, or text that
+ * doesn't open this way) — an honest "nothing to show" rather than a
+ * guessed passage.
  *
  * Self-contained, `.toString()`-splice safe — the same discipline every
  * other pure export in this module holds.
  */
 export function parseResearchAnswer(answer) {
   const text = String(answer || "");
-  const m = /^(.*?) — ([\s\S]*?) \(source: research article "([^"]+)", Simple English Wikipedia, CC BY-SA 4\.0 — (\S+)\)/.exec(text);
+  const m = /^(.*?) — ([\s\S]*?) \(source: research article "([^"]+)", [^,]+, [^—]+? — (\S+)\)/.exec(text);
   if (!m) return null;
   return { term: m[1], passage: m[2], title: m[3], url: m[4] };
 }

@@ -54,7 +54,10 @@ import {
 } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpus/wikipedia-live.mjs";
-import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest } from "./research.mjs";
+// Imported for its research-source registration side effect only, so
+// getResearchProvider({ source: "wikidata" }) can find an entry to build.
+import "../adapters/corpus/wikidata-live.mjs";
+import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest, researchSourceLabel } from "./research.mjs";
 import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue-store.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
@@ -7320,7 +7323,8 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["forget that <X> is a <Y>", "withdraw a fact you taught, and anything derived from it — the phrasing the retract lane reads"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
-    ["research <topic> [limit N] [depth D]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
+    ["/wikipedia | /wikidata", "which source \"research <topic>\" fetches from for the rest of the session: Simple English Wikipedia's prose (the default) or Wikidata's structured claims. tmct.toml's [research] source sets the starting value; tmct chat --research-source overrides it per invocation"],
+    ["research <topic> [limit N] [depth D]", "fetch the topic from the session's research source (Simple English Wikipedia by default — /wikidata switches it) (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -12187,6 +12191,9 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
     if (subject && object && subject !== object && !seen.has(id)) { seen.add(id); facts.push({ subject, predicate, object, provenance }); }
   };
   if (article.isa) add(key, "rdfs:subClassOf", article.isa);
+  if (Array.isArray(article.facts)) {
+    for (const f of article.facts) add(f.subject, f.predicate, f.object);
+  }
   try {
     const { optimisticTriples } = await import("./extract-facts.mjs");
     for (const sentence of splitSentences(article.summary || article.text || "")) {
@@ -15289,6 +15296,8 @@ const GOAL_BY_COMMAND = {
   capabilities: "see what /plan can plan over — built-in query tools and taught actions",
   syllogise: "materialize the entailed facts that follow from what's remembered about one term",
   wiki: "toggle the live Wikipedia supplement for questions nothing local can answer",
+  wikipedia: "choose which source the research lane fetches from",
+  wikidata: "choose which source the research lane fetches from",
   export: "write the memory store to a file, in the standard JSONL shape",
   ingest: "read a local text file and store every fact the recognizer grounds from it",
 };
@@ -15313,12 +15322,12 @@ function domainPackLine({ name, groundingKind, groundingAdapter, commandCount, c
   return parts.length ? `${name} — ${parts.join("; ")}` : String(name);
 }
 
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
   const argText = (sp === -1 ? "" : line.slice(sp + 1)).trim();
-  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext } = {}) => ({
+  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext, researchSourceNext } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
@@ -15326,6 +15335,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     goal: GOAL_BY_COMMAND[name] || "use a specific tool/command directly",
     ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
     ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
+    ...(researchSourceNext !== undefined ? { researchSource: researchSourceNext } : {}),
   });
 
   if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText(codeDomainActive, codeDomainActive ? laneVocab?.helpRows : [])); }
@@ -15364,13 +15374,32 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     const arg = argText.toLowerCase();
     const stateWord = (v) => (v === "always" ? "always" : v === "supplement" ? "supplement" : v ? "on" : "off");
     if (arg !== "on" && arg !== "off" && arg !== "supplement" && arg !== "always") {
+      const activeResearchSource = researchSourceLabel(researchSource);
       return mk(`live Wikipedia supplement is ${stateWord(liveReference)} — /wiki on, /wiki off, /wiki supplement, or /wiki always. `
         + "When on, a question I can't answer also tries en.wikipedia.org (network); "
         + "supplement adds a cited Wikipedia read-out under every grounded vocabulary answer too; "
-        + "always widens that to every grounded answer.");
+        + "always widens that to every grounded answer. "
+        + `Research fetches currently go to ${activeResearchSource} — /wikipedia or /wikidata switches them.`);
     }
     const next = arg === "always" ? "always" : arg === "supplement" ? "supplement" : arg === "on";
     return mk(`live Wikipedia supplement ${stateWord(next)}.`, { liveReferenceNext: next });
+  }
+
+  // /wikipedia and /wikidata — which source the research lane fetches from for
+  // the rest of the session (session-scoped, the /narrate and /wiki pattern:
+  // the new state rides the turn RESULT as `researchSource`). tmct.toml's
+  // [research] source sets the session's starting value; `tmct chat
+  // --research-source` overrides that; these two override both, per session.
+  // Neither name is slash-optional and neither goes in COMMANDS/COMMAND_WORDS
+  // — a bare "wikipedia" or "wikidata" stays an ordinary question, exactly
+  // like /wiki and /narrate.
+  if (name === "wikipedia" || name === "wikidata") {
+    return mk(
+      name === "wikipedia"
+        ? "research fetches go to Simple English Wikipedia (prose articles, CC BY-SA 4.0) for the rest of this session — /wikidata switches them to Wikidata."
+        : "research fetches go to Wikidata (structured claims, CC0 1.0) for the rest of this session — /wikipedia switches them back to Simple English Wikipedia.",
+      { researchSourceNext: name },
+    );
   }
 
   // /memory [verbose] — what tmct remembers, as text (the same renderer
@@ -16577,7 +16606,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -16669,7 +16698,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -16867,12 +16896,13 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     }
     const researchHolder = { state: priorResearchState };
     const resolvedResearchConfig = researchConfig ?? RESEARCH_DEFAULTS;
+    const effectiveResearchSource = researchSource ?? resolvedResearchConfig.source;
     const rTurn = await researchTurn(workingLine, {
       holder: researchHolder,
       memoryDir,
       lexicon,
-      provider: getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs }),
-      config: resolvedResearchConfig,
+      provider: getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs, source: effectiveResearchSource }),
+      config: { ...resolvedResearchConfig, source: effectiveResearchSource },
       planActive: Boolean(planHolder.state && !planHolder.state.done),
       pagerActive: Boolean(Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length),
       notify: onLiveLookup,

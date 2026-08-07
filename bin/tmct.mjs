@@ -68,6 +68,10 @@ flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > sqlite (the built-
 default, .tmct/memory/graph.sqlite); "memory" keeps the store in-process only. Set it
 once with \`tmct init --memory-backend <...>\` and every later \`tmct chat\` in that
 repo picks it up with no flag needed.
+
+Research-source precedence (chat; see src/services/chat-session.mjs createSession):
+/wikipedia|/wikidata in chat > --research-source flag > tmct.toml [research] source >
+wikipedia.
 `;
 
 const argv = process.argv.slice(2);
@@ -342,6 +346,7 @@ async function readConfigForRewrite(repoRoot) {
   if (raw?.extensions !== undefined) cfg.extensions = raw.extensions;
   if (raw?.bias !== undefined) cfg.bias = raw.bias;
   if (raw?.memory?.backend !== undefined) cfg.memory = { ...cfg.memory, backend: raw.memory.backend };
+  if (raw?.research !== undefined) cfg.research = raw.research;
   return { raw, cfg };
 }
 
@@ -700,8 +705,14 @@ async function main() {
     // shared precedence order, resolved inside createSession itself). Omitted
     // when absent so the lower tiers still apply unchanged.
     let memoryBackend;
+    let researchSource;
     try {
       memoryBackend = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
+      // `--research-source <wikipedia|wikidata>`: the CLI's flag tier of the
+      // research lane's source precedence (below /wikipedia|/wikidata in chat,
+      // above tmct.toml's [research] source). Omitted when absent so the
+      // lower tiers still apply unchanged.
+      researchSource = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata"]);
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);
       process.exit(2);
@@ -710,6 +721,7 @@ async function main() {
     if (graphPaths.length) extra.graphPaths = graphPaths;
     if (configPath) extra.configPath = configPath;
     if (memoryBackend) extra.memoryBackend = memoryBackend;
+    if (researchSource) extra.researchSource = researchSource;
     // `--prompt "<text>"` — one-shot mode: each sentence of the prompt runs as
     // its own turn (state teaches first, the goal/solve trigger last), the
     // FINAL turn's answer prints to stdout, and the process exits. Piped stdin
@@ -874,6 +886,18 @@ async function main() {
       process.stderr.write(`tmct init: ${e?.message || e}\n`);
       process.exit(2);
     }
+
+    // `--research-source <wikipedia|wikidata>`: written into tmct.toml's
+    // `[research] source` (src/services/init.mjs's renderTomlConfig), the same
+    // flag name `tmct chat` reads at its own precedence tier — a repo set up
+    // once here needs no flag on a later `tmct chat` in it.
+    let researchSourceVal;
+    try {
+      researchSourceVal = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata"]);
+    } catch (e) {
+      process.stderr.write(`tmct init: ${e?.message || e}\n`);
+      process.exit(2);
+    }
     // `init` takes no positional argument at all, so a bare "sqlite"/"memory"/
     // "default" here almost always means `npm run init --memory-backend X`
     // was typed without the `--` separator npm needs — npm silently drops its
@@ -966,18 +990,19 @@ async function main() {
     //     before initRepo/activation run, so this repo's re-seed (if any) and
     //     any --corpus/--ontology/--lexicon activation below see it.
     const forceFlag = rest.includes("--force");
-    if (memoryBackendVal) {
+    if (memoryBackendVal || researchSourceVal) {
       const { access } = await import("node:fs/promises");
       const tomlPath = resolvePath(repoRoot, "tmct.toml");
       const tomlAlreadyExists = await access(tomlPath).then(() => true, () => false);
       if (tomlAlreadyExists && !forceFlag) {
         const { cfg } = await readConfigForRewrite(repoRoot);
-        cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+        if (memoryBackendVal) cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+        if (researchSourceVal) cfg.research = { ...(cfg.research || {}), source: researchSourceVal };
         await writeConfig(repoRoot, cfg);
       }
     }
 
-    const res = await initRepo(repoRoot, { force: forceFlag, persona: personaPreset, memoryBackend: memoryBackendVal });
+    const res = await initRepo(repoRoot, { force: forceFlag, persona: personaPreset, memoryBackend: memoryBackendVal, researchSource: researchSourceVal });
     process.stdout.write(res.message + "\n");
 
     // The cold tools carry no resident schema, so the initialized repo gets the catalog
@@ -1062,6 +1087,14 @@ async function main() {
     // (a fresh write, `memoryBackend` opt) — this just reports it.
     if (memoryBackendVal) {
       process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
+      anyActivation = true;
+    }
+
+    // `--research-source <wikipedia|wikidata>`: already WRITTEN by now — either
+    // just above (pre-existing tmct.toml) or inside initRepo() itself (a fresh
+    // write, `researchSource` opt) — this just reports it.
+    if (researchSourceVal) {
+      process.stdout.write(`research source set in tmct.toml: ${researchSourceVal}\n`);
       anyActivation = true;
     }
 

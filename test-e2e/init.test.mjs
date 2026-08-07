@@ -451,6 +451,69 @@ test("bin/tmct.mjs: `tmct init --memory-backend <unknown>` exits loudly, naming 
   }
 });
 
+// ---- research-source CLI seam: `tmct init --research-source
+// <wikipedia|wikidata>` writes tmct.toml's `[research] source`, the same
+// flag name `tmct chat` reads at its own precedence tier — the write side of
+// the same pattern the memory-backend tests above cover. ------------------
+
+test("bin/tmct.mjs: `tmct init --research-source wikidata` writes [research] source = \"wikidata\" into tmct.toml", async () => {
+  const { spawnSync } = await import("node:child_process");
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--research-source", "wikidata"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /research source set in tmct\.toml: wikidata/);
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[research\]/);
+    assert.match(text, /source = "wikidata"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: a second `tmct init --research-source wikipedia` against an existing repo (no --force) rewrites just that key and preserves graph_file/[seed]", async () => {
+  const { spawnSync } = await import("node:child_process");
+
+  const dir = await tmp();
+  try {
+    const first = spawnSync(process.execPath, [BIN, "init", "--research-source", "wikidata"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
+    assert.equal(first.status, 0, first.stderr);
+    const second = spawnSync(process.execPath, [BIN, "init", "--research-source", "wikipedia"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
+    assert.equal(second.status, 0, second.stderr);
+    assert.match(second.stdout, /research source set in tmct\.toml: wikipedia/);
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[research\]/);
+    assert.match(text, /source = "wikipedia"/);
+    assert.match(text, /graph_file = /, "graph_file survives the read-merge-rewrite");
+    assert.match(text, /\[seed\]/, "[seed] survives the read-merge-rewrite");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: `tmct init --research-source <unknown>` exits loudly, naming the valid choices, and touches nothing", async () => {
+  const { spawnSync } = await import("node:child_process");
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--research-source", "bogus"], { encoding: "utf8", cwd: dir });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /invalid --research-source "bogus"/);
+    assert.match(r.stderr, /Choices: wikipedia, wikidata/);
+    assert.equal(await exists(join(dir, ".tmct")), false, "an unknown --research-source value never scaffolds anything");
+    assert.equal(await exists(join(dir, CONFIG_FILE)), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initialized repo updates tmct.toml without a re-init", async () => {
   const { spawnSync } = await import("node:child_process");
 

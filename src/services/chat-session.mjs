@@ -30,6 +30,7 @@ import { runTurn, hasSeededVocabulary, vocabExampleHint, codeDomainActive as cod
 import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
 import { resolveResearchConfig } from "./research.mjs";
+import { normalizeResearchChoice } from "../adapters/corpus/research-source.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
 /** Where session logs live, relative to the target repo. `.tmct/` is the repo's
@@ -126,6 +127,12 @@ export async function createSession({
   ephemeral = false,
   narrate = false,
   liveReference = false,
+  // Which research source "research <topic>" fetches from: this session's
+  // starting value. Precedence — /wikipedia|/wikidata in chat (mutable,
+  // applied to session state by `turn()` below) > this param (`tmct chat
+  // --research-source`) > tmct.toml's [research] source > "wikipedia".
+  // Omitted (null) defers entirely to the toml/default tier.
+  researchSource = null,
   // The storage-backend seam: the default (empty or "default") resolves to
   // Backend C — the sqlite store at .tmct/memory/graph.sqlite, a live
   // node:sqlite connection lazily imported on open. The flat-file Backend A is
@@ -247,6 +254,11 @@ export async function createSession({
   // resolved once per session from the same tmct.toml, defaults filling
   // every unset key exactly as resolveGameConfig does above.
   const researchConfig = resolveResearchConfig(toml);
+  // This session's starting research source: the flag tier (`researchSource`,
+  // e.g. `tmct chat --research-source`) over the toml tier over the shipped
+  // default — /wikipedia|/wikidata in chat mutate this turn-to-turn below,
+  // exactly like narrateOn/liveReferenceOn.
+  let researchSourceOn = normalizeResearchChoice(researchSource || researchConfig.source);
 
   // tmct.toml's corpus tier3 opts the session into the live supplement too —
   // the flag/env tiers above stay authoritative when set.
@@ -493,6 +505,7 @@ export async function createSession({
     get turns() { return turns; },
     get narrate() { return narrateOn; },
     get liveReference() { return liveReferenceOn; },
+    get researchSource() { return researchSourceOn; },
     promptFor: () => promptFor(focus),
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
@@ -503,7 +516,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -514,7 +527,7 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference, researchSource: nextResearchSource } = result;
       // "noted — remembered" reports a durable write. In a session that keeps
       // nothing it is the last word on a fact that dies with the process, so
       // say where the fact actually went.
@@ -534,6 +547,7 @@ export async function createSession({
       // append a cited read-out under every grounded vocabulary answer), or
       // "always" (widen that to every grounded answer).
       if (typeof nextLiveReference === "boolean" || nextLiveReference === "supplement" || nextLiveReference === "always") liveReferenceOn = nextLiveReference;
+      if (typeof nextResearchSource === "string") researchSourceOn = nextResearchSource;
       await writeLog(sessionLogTurnMarkdown({ startedAt: record.ts, turnNumber: turns + 1, query: line, answer }));
       await writeSidecar(record);
       turnRecords.push(record);
@@ -589,6 +603,7 @@ export async function runChat({
   ephemeral = false,
   narrate = false,
   liveReference = false,
+  researchSource = null,
   memoryBackend = null,
   toolNamePrefix,
   actingSubject,
@@ -596,7 +611,7 @@ export async function runChat({
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend, toolNamePrefix, actingSubject });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, researchSource, memoryBackend, toolNamePrefix, actingSubject });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");

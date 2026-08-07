@@ -25,7 +25,13 @@
 import { normFactTerm } from "../../domain/hash.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { isReferenceArticleRow, sentencesUpTo, isaOf, SUMMARY_CHAR_CAP } from "../../domain/reference-pack.mjs";
-import { registerResearchSource, researchSourceTag } from "./research-source.mjs";
+import {
+  registerResearchSource,
+  researchSourceTag,
+  researchSources,
+  researchSourceNameFor,
+  normalizeResearchChoice,
+} from "./research-source.mjs";
 import { createCourtesyGate, DEFAULT_TIMEOUT_MS, DEFAULT_MIN_INTERVAL_MS, MAXLAG_SECONDS } from "./courtesy.mjs";
 
 export const WIKIPEDIA_LIVE_ORIGIN = "https://en.wikipedia.org";
@@ -210,20 +216,37 @@ export function registerResearchProvider(provider) {
   registeredResearchProvider = provider && typeof provider.lookup === "function" ? provider : null;
 }
 
-/** The research lane's active provider — the registered one, else one lazily
- *  created singleton against simple.wikipedia.org with `waitForSlot` on: the
- *  queue is paced turn-by-turn, so a throttled step WAITS for its polite slot
- *  rather than reporting a false miss. `minIntervalMs` (first call only —
- *  the singleton keeps its throttle clock) can only ever RAISE the interval;
- *  the shipped minimum stays the floor. */
-export function getResearchProvider({ minIntervalMs } = {}) {
-  if (registeredResearchProvider) return registeredResearchProvider;
+const researchProvidersByChoice = new Map();
+
+function defaultSimpleWikipediaProvider(minIntervalMs) {
   if (!defaultResearchProvider) {
     defaultResearchProvider = createSimpleWikipediaResearchSource({
       minIntervalMs: Math.max(DEFAULT_MIN_INTERVAL_MS, Number(minIntervalMs) || 0),
     });
   }
   return defaultResearchProvider;
+}
+
+/** The research lane's active provider — the registered one, else the source
+ *  the config `source` choice names, each a lazily created singleton against
+ *  its own origin with `waitForSlot` on: the queue is paced turn-by-turn, so a
+ *  throttled step WAITS for its polite slot rather than reporting a false
+ *  miss. `minIntervalMs` (first call only — the singleton keeps its throttle
+ *  clock) can only ever RAISE the interval; the shipped minimum stays the
+ *  floor. A registered provider (registerResearchProvider) wins outright,
+ *  before any source resolution — every existing caller that never passes
+ *  `source` keeps today's simple.wikipedia.org default unchanged. */
+export function getResearchProvider({ minIntervalMs, source } = {}) {
+  if (registeredResearchProvider) return registeredResearchProvider;
+  const choice = normalizeResearchChoice(source);
+  if (choice === "wikipedia") return defaultSimpleWikipediaProvider(minIntervalMs);
+  if (researchProvidersByChoice.has(choice)) return researchProvidersByChoice.get(choice);
+  const entry = researchSources().find((e) => e.name === researchSourceNameFor(choice));
+  const provider = entry
+    ? entry.create({ minIntervalMs: Math.max(DEFAULT_MIN_INTERVAL_MS, Number(minIntervalMs) || 0) })
+    : defaultSimpleWikipediaProvider(minIntervalMs);
+  researchProvidersByChoice.set(choice, provider);
+  return provider;
 }
 
 /** The Simple English Wikipedia research source: the same provider, named and
