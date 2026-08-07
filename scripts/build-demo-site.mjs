@@ -932,6 +932,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
   const offline = blocks.offline;
   const planner = blocks.planner;
   const proseBand = blocks["prose-band"];
+  const openbookqa = blocks.openbookqa;
 
   const c3 = claimFigureBlock({
     id: "c3-latency", kicker: "C3",
@@ -996,6 +997,15 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     jsonName: "prose-band", demoHref: "ingest.html",
   });
 
+  const l2 = claimFigureBlock({
+    id: "l2-openbookqa", kicker: "L2",
+    sentence: "With wordnet-xl already loaded, this many OpenBookQA questions get a grounded answer matching the gold choice.",
+    figureHtml: `<p class="claim-block-figure" data-source="results/claims/openbookqa.json#value">${fmtInt(openbookqa.value)}<span class="unit">of ${fmtInt(openbookqa.detail.sampleSize)} questions, wordnet-xl loaded</span></p>`,
+    notMean: `This is not a vocabulary gap. wordnet-xl is the largest corpus tmct ships, and it was already loaded before the first question was asked. The ask grammar answers questions shaped like &ldquo;what is X&rdquo;; a stem that asks for a cause or an effect has no matching shape to route to, so a bigger corpus does not move this number. Three of the stems it missed: ${openbookqa.detail.exampleStems.map((s) => q(s)).join(", ")}.`,
+    standard: "external input: the OpenBookQA sample, committed with a deterministic selection rule, not authored in this repository.",
+    jsonName: "openbookqa",
+  });
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -1040,7 +1050,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <h2>Measured limits</h2>
       <p>The cost of the claims above: this is where the open world pushes back.</p>
       <p>Scoping an answer to a source is a choice, not an inference: which sources count as a microtheory for a given question is set by you, the person asking, not worked out from the graph.</p>
-      <div class="claim-block-grid">${l1}
+      <div class="claim-block-grid">${l1}${l2}
       </div>
     </section>
 
