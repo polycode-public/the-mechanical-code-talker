@@ -35,12 +35,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 None open.
 
-*(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
-intro says "every fact answer stays checkable against the graph it came from" where
-claims-notes.txt says "stays citable" — restore the notes' wording only if the rework
-re-earns it; and `claim:definitions` publishes no page block until its fixture is sampled
-from outside the repo, per the page's admission standard.)*
-
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split (including
