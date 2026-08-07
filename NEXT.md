@@ -43,13 +43,23 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (gaps are truthful; no external deep links exist); dead pairing CSS goes, delta CSS stays
   (definitions may earn a block back).
 
-- **Benchmark-pins tracks (from the operator-requested assessment)** — three running
-  concurrently (Sonnet worktrees, foreground-only): idxbench path fix + full-ladder pin;
-  four deterministic ladder pins (agentbench goal TOOL-8, infbench kernel INF-5,
-  researchbench RES-6, ingestbench ING-7) + chatbench B1 promotion; fresh RESEARCHBENCH and
-  INGESTBENCH reports of record + four stale skill descriptions.
+- **Benchmark-pins tracks** — ALL LANDED (idxbench fix + ladder pin; four pins + B1
+  promotion; reports + skill descriptions). 79/79 on the five bench files on merged main.
+- **Demo-deletion spec agent (Opus, read-only)** — mapping the removal of the five demo
+  pages before implementation dispatches.
 
 ## Open items
+
+- [ ] **Five demo pages delete; their features and JS/chat/CLI surfaces stay.** research.html,
+  spider-fly.html, code.html, ingest.html and mud.html (and their paired about pages) leave
+  the site: page list, builders, homepage grid cards and any other homepage links (operator
+  flagged these explicitly), sitemap/head metadata, screenshots/og images, service-worker
+  precache, and their page-level e2e/estate tests all go. NOT touched: the underlying
+  engines and lanes (research lane in chat, spider-fly, code domain, ingest, mud) and their
+  unit/corpus tests, the chat/CLI/JS consumer surfaces, mudiii (a different page), and
+  pages-chat-research e2e (tests the chat page, not research.html). Cross-page links into
+  the five (e.g. the claims page L1 block's "try it in ingest.html") get removed or
+  repointed.
 
 - [ ] **claims.html cuts to three blocks; the removed sections' rigs purge from the repo.**
   The page keeps only: the C7 planner block ("tmct solves a taught Hanoi puzzle in under a
