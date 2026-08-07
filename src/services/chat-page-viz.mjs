@@ -1499,6 +1499,9 @@ ${shareOverlayHtml({ withTape: true })}
     onRender: renderResearchControls,
     waitMs: RESEARCH_TICK_MS,
   });
+  // A driver process can't atomically observe a browser-paced ticker from
+  // outside, so tests read its state through here rather than racing it.
+  window.tmct.page.researchTicker = researchTicker;
 
   function renderResearchControls(tickState) {
     const state = tickState || researchTicker.getState();
