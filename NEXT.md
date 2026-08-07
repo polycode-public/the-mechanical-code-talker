@@ -31,9 +31,25 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
+## In flight (2026-08-07 second batch)
+
+- **Spec agent (Opus, read-only)** — mapping every touchpoint of the purged rigs before
+  implementation dispatches.
+- Implementation tracks follow: page track (build-demo-site.mjs + site-pages.mjs) and purge
+  track (scripts/claims/, results/claims/, fixtures, package.json), disjoint ownership.
+
 ## Open items
 
-None open.
+- [ ] **claims.html cuts to three blocks and the Cyc passage; the removed sections' rigs
+  purge from the repo.** The page keeps only: the C7 planner block ("tmct solves a taught
+  Hanoi puzzle in under a second up to this many disks."), the L1 prose-band block, the L2
+  OpenBookQA block, and the intro's Cyc passage. Everything else on the page goes — the lede,
+  the admission-standard sentence, both section headings and their intro paragraphs, and the
+  closing line. The left "on this page" nav lists a short title per remaining block instead
+  of the two section names. The rigs that captured removed sections (both this cut and the
+  earlier five-block reduction) are deleted outright — scripts, results JSONs, npm hooks, and
+  fixtures used only by them; this supersedes the earlier keep-as-regression-checks stance.
+  Rigs that never had a page section (definitions, paraphrase) stay.
 
 *(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
 intro says "every fact answer stays checkable against the graph it came from" where
