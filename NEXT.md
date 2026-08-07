@@ -48,6 +48,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   open: the card's description is the placeholder "A Polycode project." — no sibling
   checkout exists and the GitLab repo returns 403 to unauthenticated fetches, so the real
   one-line description needs the operator (or a readable README).
+- [ ] **Electron goes, and the code-explorer render/bundle pieces retire with it.** Delete:
+  the electron/ directory, scripts/build-electron-app.mjs, the electron devDependency and its
+  three package.json scripts, README's desktop-shell section, plus the pieces Electron was the
+  last consumer of — renderCodeExplorerHtml (src/services/code-explorer-viz.mjs),
+  scripts/build-code-explorer-bundle.mjs, src/surfaces/web/code-explorer-browser-entry.mjs —
+  and their tests. Boundary: src/domain/code-explorer-hints.mjs and anything else with a
+  surviving importer (tmct chat --repo, the homepage live-demo box, demo-graph machinery)
+  stays — verify importers before deleting anything beyond the named list; the pack manifest
+  needs regenerating for the removed shipped files. Queued behind demo Track A (shared base
+  in build-demo-site.mjs and .gitignore).
 - [ ] **Eight benchmark skills retire in favour of npm-test pins; only benchmark-cefr-english
   survives.** benchmark-agent, -inference, -code-index, -ingest, -research, -conversation,
   -agi-scales and -code-synthesis: their skill directories, root symlinks, skill-only
