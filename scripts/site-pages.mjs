@@ -16,13 +16,8 @@
 export const DEMO_PAGES = [
   "chat",
   "ledger",
-  "research",
-  "spider-fly",
   "plan",
-  "code",
-  "ingest",
   "mudiii",
-  "mud",
   "adventure",
   "sprites",
 ];
@@ -48,10 +43,6 @@ export const DEMO_PAGE_META = {
     title: "Ask it anything, check every answer",
     description: "How tmct reads a plain English question and answers it from a graph, deterministically and offline, in your browser.",
   },
-  "spider-fly": {
-    title: "A spider hunts a fly, each planning blind",
-    description: "How a spider and a fly each plan their own moves over one graph, acting on what each believes rather than on the true board.",
-  },
   plan: {
     title: "Watch it solve a puzzle it was taught",
     description: "How tmct solves the Tower of Hanoi with a bounded breadth-first search and shows the plan as PDDL and OWL triples.",
@@ -64,25 +55,9 @@ export const DEMO_PAGE_META = {
     title: "Every fact, its source, and how far to trust it",
     description: "How tmct stores memory as RDF triples with OWL labels, and shows where every fact came from and how far to trust it.",
   },
-  code: {
-    title: "Ask a codebase what calls what",
-    description: "How tmct answers questions about a codebase from a graph of imports, calls and members, and carries a pronoun across turns.",
-  },
-  ingest: {
-    title: "Paste text, watch it refuse what it can't ground",
-    description: "How tmct turns pasted prose into checkable triples, and refuses the sentences it cannot ground.",
-  },
   sprites: {
     title: "A poodle draws as a dog, because it is one",
     description: "How tmct picks a shape for a word by walking the class hierarchy until it finds one it has.",
-  },
-  research: {
-    title: "Teach it, feed it, or let it look things up",
-    description: "How tmct grows one graph by research, teaching and ingest, then answers a question scoped to only the sources you trust.",
-  },
-  mud: {
-    title: "Four burrowers, one world, four partial maps",
-    description: "How four burrowing animals share one dug-out world while each knows only what it has personally found out.",
   },
   mudiii: {
     title: "A fox and goblins in a 3D town square",

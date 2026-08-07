@@ -11,9 +11,6 @@
 //   plan.html         the solved hanoi-3 replay plus a live re-solve session
 //                     (disk-count/max-depth controls, a chat-assert dock, a
 //                     PDDL+OWL/RDF plan panel) over its own browser bundle
-//   code.html         the code explorer over the demo code graph, the same
-//                     page the Electron desktop shell renders for itself
-//                     (see build-electron-app.mjs), over its own browser bundle
 //
 // It also stamps index.html's version from package.json, so the number the page
 // documents follows a version bump on its own.
@@ -235,7 +232,7 @@ execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "
 // The ledger hero: build the memory payload through the real teach paths, then
 // render public/ledger.html (memory-ask bundle inlined, exactly as `tmct viz`
 // writes it) plus this page's own dedicated browser bundle (the full turn
-// engine, same posture as the plan/spider-fly/adventure bundles below —
+// engine, same posture as the plan/adventure bundles below —
 // generated fresh per build, never committed) so the deployed page's chat
 // dock can teach new facts, not just answer them. ledgerBundleAvailable:true
 // is what makes renderLedgerHtml link the sibling bundle at all — bin/tmct.mjs's
@@ -280,13 +277,6 @@ const ledgerPath = join(SITE, "ledger.html");
 await writeF(ledgerPath, injectMetaHead(renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }), demoPageMeta("ledger"), { keepOwnTitle: true }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
-// The code explorer: the exact page the Electron shell renders for itself
-// (renderCodeExplorerHtml, src/services/code-explorer-viz.mjs), seeded here
-// with the demo code graph built above, plus its own dedicated browser
-// bundle — generated fresh per build, never committed, same posture as the
-// ledger bundle above. showDesktopLink:true is the one option that differs
-// from the Electron build (scripts/build-electron-app.mjs), which renders
-// the identical page for the desktop shell and has nothing to point at.
 // chat.html's starter-memory seed, generated (never committed) so every page
 // that fetches it serves what src/ builds today. Built here, ahead of the four
 // pages that fetch it, because each of them embeds the seed's own content hash
@@ -298,27 +288,6 @@ const { main: buildChatSeed } = await import(join(here, "build-chat-seed.mjs"));
 const seed = await buildChatSeed(join(SITE, "chat-seed.json"));
 const seedStamp = contentHash(seed.outPath);
 console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).toFixed(0)} KB, content ${seedStamp})`);
-
-// The page also fetches ./chat-seed.json at runtime for its chat's
-// general-knowledge bands — nothing to embed here, and a build without the
-// seed leaves the page graph-only.
-{
-  const { computeCodeExplorerData, renderCodeExplorerHtml, VENDOR_WINK_LOADER_JS } = await import(join(ROOT, "src", "services/code-explorer-viz.mjs"));
-  const { main: buildCodeExplorerBundle } = await import(join(here, "build-code-explorer-bundle.mjs"));
-  const { outPath: codeExplorerBundlePath, size: codeExplorerBundleBytes } = await buildCodeExplorerBundle(SITE);
-  console.log(`wrote ${codeExplorerBundlePath} (${(codeExplorerBundleBytes / 1024).toFixed(0)} KB)`);
-  const codeGraphPayload = JSON.parse(await readF(join(SITE, "demo-graph.json"), "utf8"));
-  const codeExplorerData = computeCodeExplorerData(codeGraphPayload, { title: "demo code graph" });
-  const codePath = join(SITE, "code.html");
-  await writeF(codePath, injectMetaHead(renderCodeExplorerHtml(codeExplorerData, {
-    bundleAvailable: true,
-    winkLoaderInline: VENDOR_WINK_LOADER_JS,
-    sourceName: "demo code graph",
-    showDesktopLink: true,
-    seedStamp,
-  }), demoPageMeta("code"), { keepOwnTitle: true }));
-  console.log(`wrote ${codePath} (focus "${codeExplorerData.focus}", ${codeExplorerData.hints.length} hints)`);
-}
 
 // chat.html's full engine: the browser bundle, generated (never committed) so
 // the page always serves what src/ builds today. Its starter-memory seed is
@@ -354,49 +323,14 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
 {
   const { renderChatHtml } = await import(join(ROOT, "src", "services", "chat-page-viz.mjs"));
   // The digest sentence-structure bank, read once here (node-side, where the
-  // TOML is) and embedded in the page, same as research.html's own call just
-  // below — chat.html's answer flow feeds these rows to the chat bundle's
-  // live digest-bank twin (chat-browser-entry.mjs) so a long answer leads
-  // with a composed digest instead of always falling back to the flat list.
+  // TOML is) and embedded in the page — chat.html's answer flow feeds these
+  // rows to the chat bundle's live digest-bank twin (chat-browser-entry.mjs)
+  // so a long answer leads with a composed digest instead of always falling
+  // back to the flat list.
   const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const chatPagePath = join(SITE, "chat.html");
   await writeF(chatPagePath, injectMetaHead(renderChatHtml({ digestStructures: readDigestStructures(), seedStamp, seedBytes: seed.bytes }), demoPageMeta("chat")));
   console.log(`wrote ${chatPagePath}`);
-}
-
-// The ingest page: paste or drop text, keep only the facts the deterministic
-// recognizer can ground. Its own dedicated browser bundle (the full turn
-// engine's teach recognizer, same posture as the chat/ledger bundles above —
-// generated fresh per build, never committed), then the self-contained page.
-{
-  const { main: buildIngestBundle } = await import(join(here, "build-ingest-bundle.mjs"));
-  const { outPath: ingestBundlePath, size: ingestBundleBytes } = await buildIngestBundle(SITE);
-  console.log(`wrote ${ingestBundlePath} (${(ingestBundleBytes / 1024).toFixed(0)} KB)`);
-  const { renderIngestHtml } = await import(join(ROOT, "src", "services", "ingest-viz.mjs"));
-  const ingestPagePath = join(SITE, "ingest.html");
-  await writeF(ingestPagePath, injectMetaHead(renderIngestHtml({ seedStamp, seedBytes: seed.bytes }), demoPageMeta("ingest")));
-  console.log(`wrote ${ingestPagePath}`);
-}
-
-// The research page: grow one in-memory graph three ways (research a term over
-// Simple English Wikipedia, teach by telling, ingest documents) and ask it a
-// question scoped by source. Its own dedicated browser bundle (the full turn
-// engine plus the ingest recognizer, same posture as the chat/ingest bundles
-// above — generated fresh per build, never committed), then the self-contained
-// page. It reuses ./chat-seed.json (built above) for its seed corpus bands and
-// ./reference-pack/ (built above) at runtime, so nothing new to embed here.
-{
-  const { main: buildResearchBundle } = await import(join(here, "build-research-bundle.mjs"));
-  const { outPath: researchBundlePath, size: researchBundleBytes } = await buildResearchBundle(SITE);
-  console.log(`wrote ${researchBundlePath} (${(researchBundleBytes / 1024).toFixed(0)} KB)`);
-  const { renderResearchHtml } = await import(join(ROOT, "src", "services", "research-viz.mjs"));
-  // The digest sentence-structure bank, read once here (node-side, where the
-  // TOML is), embedded in the page so the research digest composes client-side
-  // over the store it grows in the browser — no TOML parser ever ships.
-  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
-  const researchPagePath = join(SITE, "research.html");
-  await writeF(researchPagePath, injectMetaHead(renderResearchHtml({ digestStructures: readDigestStructures(), seedStamp }), demoPageMeta("research"), { keepOwnTitle: true }));
-  console.log(`wrote ${researchPagePath}`);
 }
 
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
@@ -426,8 +360,8 @@ let largeSpriteManifest = null;
 // resolveSpriteAsset/classAncestorChain (never hand-simulated) — see
 // sprite-catalog-viz.mjs's own header for the real ontology-fact sources
 // (the spider-fly world's SEED_TAXONOMY plus corpus/wordnet/wordnet-xl.jsonl)
-// this step loads once, in Node, the same posture the ledger/adventure/
-// spider-fly build steps above already take with their own build-time data.
+// this step loads once, in Node, the same posture the ledger/adventure
+// build steps above already take with their own build-time data.
 //
 // One page per CATALOG_GROUPS entry carries that group's own full gallery
 // (sprites-adventure-props.html/sprites-person-roles.html/sprites-objects.html/
@@ -471,8 +405,8 @@ let largeSpriteManifest = null;
 // and a visitor's own disk-count control run through the identical code
 // path (no separate "how the site builds it" vs "how a live re-solve works"
 // to keep in sync). Also builds this game's own dedicated browser bundle
-// (the full turn engine, same posture as the spider-fly/adventure bundles
-// above — generated fresh per build, never committed) so the deployed
+// (the full turn engine, same posture as the adventure bundle above —
+// generated fresh per build, never committed) so the deployed
 // page's live re-solve controls and chat-assert dock actually work.
 {
   const { main: buildPlanBundle } = await import(join(here, "build-plan-bundle.mjs"));
@@ -489,36 +423,6 @@ let largeSpriteManifest = null;
   console.log(`wrote ${planPath} (${plan.actions.length} moves, ${plan.states.length} snapshots)`);
 }
 
-// The spider-and-fly hero: the world pack (built already, from
-// scripts/gen-spider-fly-world.mjs; confirmed current below, never rebuilt
-// here) plus this game's own dedicated browser bundle (the full turn engine,
-// same posture as the chat bundle above — generated fresh per build, never
-// committed), then the self-contained page itself. Unlike ledger.html, the
-// page embeds almost no build-time data — the whole game is live client-side
-// state — so there is no payload to load here, only the sibling bundle.
-{
-  const { worldsPackDir } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
-  const shardPath = join(worldsPackDir(), "shards", "spider-fly.jsonl.gz");
-  if (!existsSync(shardPath)) {
-    console.log(`spider-fly world pack shard not found at ${shardPath} — run \`npm run gen:worlds-pack\` first; the hero's session bootstraps its own board client-side regardless, so this is a heads-up, not a build failure`);
-  }
-  const { main: buildSpiderFlyBundle } = await import(join(here, "build-spider-fly-bundle.mjs"));
-  const { outPath: spiderFlyBundlePath, size: spiderFlyBundleBytes } = await buildSpiderFlyBundle(SITE);
-  console.log(`wrote ${spiderFlyBundlePath} (${(spiderFlyBundleBytes / 1024).toFixed(0)} KB)`);
-  const { renderSpiderFlyHtml } = await import(join(ROOT, "src", "services", "spider-fly-viz.mjs"));
-  const spiderFlyPath = join(SITE, "spider-fly.html");
-  // The large tier (data/sprites-large/*.toml), not the small icon tier
-  // every other embedder above reads: the icon tier carries no face/eye/
-  // mouth geometry at all, so it's the only tier `spider-with-emotion.toml`/
-  // `fly-with-emotion.toml` actually exist in — the live mgx:feels wiring
-  // above has nothing to resolve against without it. Read directly here
-  // (not shared with the sprites.html block's own spriteLargeTemplates)
-  // so this step stays self-contained regardless of build-step ordering.
-  const spiderFlySpriteTemplates = readSpriteLargeTemplateFiles();
-  await writeF(spiderFlyPath, injectMetaHead(renderSpiderFlyHtml({ spriteTemplates: spiderFlySpriteTemplates }), demoPageMeta("spider-fly")));
-  console.log(`wrote ${spiderFlyPath}`);
-}
-
 // What each scenario's dropdown entry says. The label names the difference
 // that made the world worth shipping — how big it is, and what it is that
 // makes it harder or easier — so picking one is a choice rather than a guess
@@ -528,12 +432,6 @@ const ADVENTURE_SCENARIO_LABELS = {
   "lantern-cottage": "lantern cottage (3 rooms, no locks)",
   "greyvale-museum": "greyvale museum (9 rooms, 3 locks)",
 };
-const MUD_SCENARIO_LABELS = {
-  "mud-garden": "mud garden (4 rooms, 1 fox)",
-  "mud-hollow": "mud hollow (3 rooms, nothing hunting)",
-  "mud-warren": "mud warren (8 rooms, fox and owl)",
-};
-
 // Each label names the difference that made the layout worth shipping, not
 // just its size: what the board does to the chase is the reason to switch to
 // it. None state a cast count — the page's own sliders pick that at play
@@ -599,49 +497,6 @@ async function loadScenarioWorlds(names) {
       largeSpriteTemplates: largeSpriteManifest ? largeSpriteManifest.templates : [],
     }), demoPageMeta("adventure")));
     console.log(`wrote ${adventurePath}`);
-  }
-}
-
-// The mud demo: mud-garden plus the two alternates its scenario dropdown
-// offers, a three-room hollow with nothing hunting in it and an eight-room
-// warren with two predators and thin food. mud-garden stays first, so the
-// page opens on the burrow it always has. The large-tier sprite set is read
-// again here (not shared with spider-fly's own spriteLargeTemplates above) so
-// this block stays self-contained regardless of build-step ordering, matching
-// the spider-fly block's own posture.
-{
-  const worlds = await loadScenarioWorlds(["mud-garden", "mud-hollow", "mud-warren"]);
-  if (!worlds.length) {
-    console.log("no mud worlds found in the worlds pack — the mud demo has no world to embed, so this is a heads-up, not a build failure");
-  } else {
-    const { main: buildMudBundle } = await import(join(here, "build-mud-bundle.mjs"));
-    const { outPath: mudBundlePath, size: mudBundleBytes } = await buildMudBundle(SITE);
-    console.log(`wrote ${mudBundlePath} (${(mudBundleBytes / 1024).toFixed(0)} KB)`);
-    const { renderMudHtml } = await import(join(ROOT, "src", "services", "mud-viz.mjs"));
-    const { mudSpeciesOf } = await import(join(ROOT, "src", "domain", "game-config.mjs"));
-    // The roster each burrow may cast from, read off the burrow's own
-    // adventurers in the order its source file places them — never a list
-    // typed out here, which would go stale the moment a world's cast changed
-    // and would have nothing to say about a world this file never saw. The
-    // page's players slider decides how many of them play, and pickMudRoster
-    // decides which.
-    const rosterOf = (worldPayload) => worldPayload.facts
-      .filter((f) => f.predicate === "rdf:type" && f.object === "adventurer")
-      .map((f) => ({ id: f.subject, species: mudSpeciesOf(f.subject) }));
-    const scenarios = worlds.map((worldPayload) => ({
-      label: MUD_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
-      worldPayload,
-      characters: rosterOf(worldPayload),
-    }));
-    const mudSpriteTemplates = readSpriteLargeTemplateFiles();
-    const mudPath = join(SITE, "mud.html");
-    await writeF(mudPath, injectMetaHead(renderMudHtml({
-      worldPayload: scenarios[0].worldPayload,
-      characters: scenarios[0].characters,
-      scenarios,
-      spriteTemplates: mudSpriteTemplates,
-    }), demoPageMeta("mud")));
-    console.log(`wrote ${mudPath}`);
   }
 }
 
@@ -961,7 +816,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     figureHtml: `<p class="claim-block-figure" data-source="results/claims/prose-band.json#value">${proseBand.value}<span class="unit">% of ${fmtInt(proseBand.detail.sentenceCount)} sentences</span></p>`,
     notMean: `This is raw, unedited prose pulled in unfiltered, not the corpus tmct ships with. ${fmtInt(proseBand.detail.skippedCount)} of ${fmtInt(proseBand.detail.sentenceCount)} sentences were skipped, most for an ungrounded content word such as ${proseBand.detail.topUngroundedTerms.map((t) => q(t.term)).join(" or ")}.`,
     standard: "external input, unedited Simple Wikipedia prose tmct&rsquo;s author did not write or curate.",
-    jsonName: "prose-band", demoHref: "ingest.html",
+    jsonName: "prose-band", demoHref: "chat.html",
   });
 
   const l2 = claimFigureBlock({
@@ -1159,8 +1014,6 @@ const DEPLOY_TRACKING = [
   "./index.html",
   "./og/index.png",
   "./chat.html",
-  "./ingest.html",
-  "./research.html",
 ${ABOUT_PAGES.map((p) => `  ${JSON.stringify(`./${p}`)},`).join("\n")}
   ${JSON.stringify(`./${SHARED_STYLESHEET}`)},
   "./chat-browser.bundle.js",
@@ -1245,7 +1098,7 @@ self.addEventListener("fetch", (event) => {
   // any precached asset's bytes move — the seed hash is reused rather than
   // recomputed over its 90-odd MB a second time.
   const hashedAssets = [
-    ["index.html", null], ["chat.html", null], ["ingest.html", null], ["research.html", null],
+    ["index.html", null], ["chat.html", null],
     ...ABOUT_PAGES.map((p) => [p, null]), [SHARED_STYLESHEET, null],
     ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
     ["vendor/wink.js", null], ["vendor/p2p.js", null], ["vendor/three.js", null],
