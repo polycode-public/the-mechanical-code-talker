@@ -26,7 +26,7 @@
 <a class="skip-link" href="#about-main">Skip to the page</a>
 <div class="about-shell">
   <nav class="about-nav" aria-label="Sections of this page">
-    <a class="about-back" href="./index.html">&larr; all eleven demos</a>
+    <a class="about-back" href="./index.html">&larr; all six demos</a>
     <p class="eyebrow">On this page</p>
     <ol class="about-crumbs">
         <li><a href="#what">What it demonstrates</a></li>
@@ -105,7 +105,7 @@ told the goblin-1 the crumb-9 is at cell-6-7</pre>
 
     <section class="about-section" id="build">
       <h2>How it is built</h2>
-      <p><code>src/services/predator-prey.mjs</code> is the tick engine, shared with the <a href="./spider-fly-about.html">spider and fly</a>. It is written against roles, so fox is the predator role and goblin is the prey role.</p>
+      <p><code>src/services/predator-prey.mjs</code> is the tick engine. It is written against roles, so fox is the predator role and goblin is the prey role.</p>
       <p><code>src/domain/agent-belief.mjs</code> holds belief. It imports nothing, so a belief is a pure function of the fact set and the observer.</p>
       <p><code>src/domain/town-square-world.mjs</code> holds the board: cell naming, distance, direction deltas and the prop vocabulary.</p>
       <p><code>src/services/mudiii-viz.mjs</code> builds the page shell and <code>src/services/mudiii-scene.mjs</code> holds the three-dimensional scene: model loading, the camera update, the render loop and click handling. The models are listed in <code>data/mudiii-assets.json</code>.</p>
@@ -134,12 +134,10 @@ told the goblin-1 the crumb-9 is at cell-6-7</pre>
       <ul class="refs">
         <li><code>public/models/CREDITS.md</code>, the credits for every three-dimensional model on the square.</li>
         <li>three.js, bundled first party as <code>vendor/three.js</code> and loaded only by this page.</li>
-        <li><a href="./spider-fly-about.html">Competitive multi-agent system</a>, the same tick engine on a flat board with the belief model set out in full.</li>
-        <li><a href="./mud-about.html">The burrow</a>, for partial knowledge about facts rather than positions.</li>
         <li><a href="./plan-about.html">Classical AI planning</a>, for the search every character calls each tick.</li>
         <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
       </ul>
-      <a class="next-link" href="./mud-about.html"><span class="next-label">Next demo</span> Competitive multi-agent system with Fact based visualisation (MUD) <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <a class="next-link" href="./adventure-about.html"><span class="next-label">Next demo</span> Fact based world visualisation <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
     <footer>

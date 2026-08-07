@@ -18,15 +18,10 @@
 
 const SCREENSHOT = {
   chat: "chat.png",
-  "spider-fly": "spider-fly.png",
   plan: "plan.png",
   adventure: "adventure.png",
   ledger: "ledger.png",
-  code: "code.png",
-  ingest: "ingest.png",
   sprites: "sprites.png",
-  research: "research.png",
-  mud: "mud.png",
   mudiii: "mudiii.png",
 };
 
@@ -46,21 +41,6 @@ const POSTS = {
         text: "No server, no API key, no model. One bundle, one seed file of about 63,000 facts, and wink-nlp for lemmas. Here is the whole stack." },
       { angle: "try a question", to: "index.html?q=what%20calls%20Task",
         text: "The box on this page runs the real engine on a real code graph, live in your browser, primed with a question. Type your own over the top of it." },
-    ],
-  },
-  "spider-fly": {
-    title: "Competitive multi-agent system",
-    posts: [
-      { angle: "what it is", to: "spider-fly.html",
-        text: "A spider and a fly on one board, each planning its own next move, each seeing only part of it. Neither is yours to play." },
-      { angle: "you can lie to it", to: "spider-fly-about.html#play",
-        text: "Tell the spider the fly is east and it will act on that, whether or not it is true. What an agent was told is stored as a fact, and it can be a wrong one." },
-      { angle: "how belief works", to: "spider-fly-about.html#inference",
-        text: "Each agent's view of the other is one function with four rungs: known if in range, otherwise the newest thing it was told, otherwise nothing. No line of sight test, on purpose." },
-      { angle: "the reading behind it", to: "spider-fly-about.html#papers",
-        text: "Belief, desire, intention, from Rao and Georgeff in 1995. This page sets out which parts of that the demo actually implements and which it does not." },
-      { angle: "how it is put together", to: "spider-fly-about.html#build",
-        text: "The tick engine is written against roles rather than species, so the same code runs the spider and the town square fox. Here is the module layout." },
     ],
   },
   plan: {
@@ -110,36 +90,6 @@ const POSTS = {
         text: "One pure function from a memory payload to rows, terms, edges and contradictions, and one renderer. The command line writes the same page." },
     ],
   },
-  code: {
-    title: "Code Index for RAG",
-    posts: [
-      { angle: "what it is", to: "code.html",
-        text: "Ask about a codebase in English and get an answer off a graph of imports, calls and members. No embeddings anywhere in it." },
-      { angle: "it holds a thread", to: "code-about.html#play",
-        text: "Ask what talks to a module, then ask what calls it, without naming anything. The pronoun binds to the last resolved answer. Cold, it says the pronoun resolved to nothing." },
-      { angle: "what the graph carries", to: "code-about.html#inference",
-        text: "Typed edges, not text similarity: imports, calls, defines, tests, touches, contains, inherits. A transitive question walks a reverse closure over them." },
-      { angle: "the vocabulary", to: "code-about.html#papers",
-        text: "The classes come from SEON's code ontology, published in 2012, rather than a schema invented for this. Here is the reference list." },
-      { angle: "how it is put together", to: "code-about.html#build",
-        text: "One question grammar, shared with every other ask box on the site, over a graph built from a real committed fixture app. The tool layer runs 125 assertions in 0.4 seconds." },
-    ],
-  },
-  ingest: {
-    title: "Synthesise Facts from free text",
-    posts: [
-      { angle: "what it is", to: "ingest.html",
-        text: "Paste a paragraph. Each sentence it recognises becomes a triple you can export. Each one it does not is skipped and counted." },
-      { angle: "the skip count is the point", to: "ingest-about.html#play",
-        text: "Four sentences in, two out. A question is not a fact and a citation marker is not part of one. A tool that grounded all four would be making things up." },
-      { angle: "how the recognizer works", to: "ingest-about.html#inference",
-        text: "Three attempts per sentence: the whole thing, then clause by clause, then one pronoun substitution. No scoring pass keeps the best guess. It matches or it does not." },
-      { angle: "the reading behind it", to: "ingest-about.html#papers",
-        text: "Attempto Controlled English for the subset it reads, Chow's reject option for the skip count. Extraction that declines is the same idea as answering that declines." },
-      { angle: "how it is put together", to: "ingest-about.html#build",
-        text: "The browser recognizer and the command line's extract command are the same function. Output is canonical JSONL, one object per line." },
-    ],
-  },
   sprites: {
     title: "The sprite library",
     posts: [
@@ -153,36 +103,6 @@ const POSTS = {
         text: "The walk is a syllogism. All poodles are dogs, all dogs are animals, so all poodles are animals. Aristotle got there first; OWL 2 says what it licenses." },
       { angle: "how it is put together", to: "sprites-about.html#build",
         text: "Two tiers of plain TOML, one resolver, and a catalog that resolves every card through the real resolver so it cannot disagree with what a game page draws." },
-    ],
-  },
-  research: {
-    title: "Search backed knowledge base",
-    posts: [
-      { angle: "what it is", to: "research.html",
-        text: "One graph, grown three ways. Research a term over Simple English Wikipedia, teach a fact, or paste a document. Then ask a question scoped to the sources you trust." },
-      { angle: "turn a source off", to: "research-about.html#play",
-        text: "Ask something, get an answer, untick where it came from, ask again, and watch it decline. The scoped miss is a real miss over a smaller graph." },
-      { angle: "how scoping works", to: "research-about.html#inference",
-        text: "Unchecking a source does not filter the answer. It removes those facts from a copy of the store and asks the real question against what is left." },
-      { angle: "the reading behind it", to: "research-about.html#papers",
-        text: "Provenance semirings for which answers survive when a source is removed, PROV-O for the model, Reiter for why the result is a miss rather than a denial." },
-      { angle: "how it is put together", to: "research-about.html#build",
-        text: "Three real engine paths growing one store, not three copies of one. A research run reports which of its three bounds stopped it." },
-    ],
-  },
-  mud: {
-    title: "Competitive multi-agent system with Fact based visualisation",
-    posts: [
-      { angle: "what it is", to: "mud.html",
-        text: "Four burrowing animals dig, eat and explore one shared muddy world. Each only knows what it has personally found out." },
-      { angle: "knowledge is a fact", to: "mud-about.html#inference",
-        text: "What a character knows is a row in the graph, tagged with who said it and on which turn. Two characters can be in one world and disagree about it." },
-      { angle: "firsthand beats hearsay", to: "mud-about.html#what",
-        text: "When two claims about the same thing compete, a fresh look beats a stale rumour. The ranking is newest epoch, then seen over told, then later turn." },
-      { angle: "a real exchange", to: "mud-about.html#play",
-        text: "One character greets another and hears nothing new about food, because the other genuinely knows nothing. The honest miss written as behaviour rather than as a sentence." },
-      { angle: "the reading behind it", to: "mud-about.html#papers",
-        text: "Belief, desire, intention for the characters, PROV-O for the testimony tags, and the 2011 CRDT work for why ranking competing claims never depends on arrival order." },
     ],
   },
   mudiii: {
