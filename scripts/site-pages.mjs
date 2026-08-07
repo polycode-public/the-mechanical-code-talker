@@ -46,7 +46,7 @@ export const SHARED_STYLESHEET = "site.css";
 export const DEMO_PAGE_META = {
   chat: {
     title: "Ask it anything, check every answer",
-    description: "How tmct reads a plain English question, answers it from a graph, and names the source of every fact it uses.",
+    description: "How tmct reads a plain English question and answers it from a graph, deterministically and offline, in your browser.",
   },
   "spider-fly": {
     title: "A spider hunts a fly, each planning blind",
@@ -109,12 +109,12 @@ export const RECEIPTS_META = {
 /** The claims page's own head-tag metadata. Same posture as RECEIPTS_META:
  *  no paired about page, sits outside DEMO_PAGES. */
 export const CLAIMS_META = {
-  title: "Claims, extensibilities and limits",
+  title: "Claims and limits",
   description: "Every claim tmct makes about itself, measured against a committed source and rendered from that source at build time, including the ones that don't flatter it.",
 };
 
 /** The claims page's block manifest: which results/claims/<name>.json file
- *  each of the page's three sections renders, and in what order. This is
+ *  each of the page's two sections renders, and in what order. This is
  *  the ONLY thing declared here — the prose, the figure a block renders,
  *  and which facet of a JSON's detail it reads live in build-demo-site.mjs's
  *  renderClaimsHtml, next to the copy they support. test/estate/claims.test.mjs
@@ -122,11 +122,12 @@ export const CLAIMS_META = {
  *  exists, parses, matches scripts/claims/schema.json, and cites sources that
  *  exist in the repo — the same three checks that test already runs over
  *  every JSON file present, now also pinned to what the page promises to
- *  show. "ground-gate" appears in both claims and limits: one measurement
- *  run, two headlines (an ungroundable statement wrongly accepted, and a
- *  groundable statement wrongly refused) — see the JSON's own detail. */
+ *  show. Every other results/claims/<name>.json file (cite, ground-gate,
+ *  index-fabrication, commonsense, lexicon, teach, research-sources,
+ *  freshness) still exists, still regenerates through its own `claim:*`
+ *  script, and still runs under `npm run claims` — it just has no block on
+ *  the page while its measurement gets reworked. */
 export const CLAIMS_PAGE_BLOCKS = {
-  claims: ["cite", "ground-gate", "latency", "determinism", "offline", "index-fabrication", "planner"],
-  extensibilities: ["commonsense", "lexicon", "teach", "research-sources"],
-  limits: ["prose-band", "ground-gate", "freshness"],
+  claims: ["latency", "determinism", "offline", "planner"],
+  limits: ["prose-band"],
 };

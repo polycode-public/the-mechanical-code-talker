@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- meta:begin -->
 <title>Ask it anything, check every answer — tmct</title>
-<meta name="description" content="How tmct reads a plain English question, answers it from a graph, and names the source of every fact it uses.">
+<meta name="description" content="How tmct reads a plain English question and answers it from a graph, deterministically and offline, in your browser.">
 <link rel="canonical" href="https://tmct.polycode.co.uk/chat-about.html">
 <meta property="og:title" content="Ask it anything, check every answer">
-<meta property="og:description" content="How tmct reads a plain English question, answers it from a graph, and names the source of every fact it uses.">
+<meta property="og:description" content="How tmct reads a plain English question and answers it from a graph, deterministically and offline, in your browser.">
 <meta property="og:image" content="https://tmct.polycode.co.uk/og/chat.png">
 <meta property="og:url" content="https://tmct.polycode.co.uk/chat-about.html">
 <meta property="og:type" content="website">
@@ -50,7 +50,7 @@
     <section class="about-section" id="what">
       <h2>What it demonstrates</h2>
       <p>Open <code>chat.html</code> and you get a full chat surface with no server behind it. The page ships the engine as a JavaScript bundle and loads a starter memory of about 63,000 facts. Everything after that happens on your machine.</p>
-      <p>Three things are worth watching in a demonstration. The engine reads ordinary sentences, not a query language. Every answer carries a citation showing where the fact came from. And a question it cannot ground gets a refusal instead of a plausible sentence.</p>
+      <p>Three things are worth watching in a demonstration. The engine reads ordinary sentences, not a query language. A fact answer carries a citation showing where the fact came from. And a question it cannot ground gets a refusal instead of a plausible sentence.</p>
       <p>That last one is the point of the whole project. The literature calls it abstention. tmct abstains because nothing in the store matched, not because a score fell under a threshold.</p>
       <ul>
         <li>Teach it something in a sentence and it repeats back the triple it stored.</li>
