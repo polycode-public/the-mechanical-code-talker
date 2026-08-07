@@ -218,13 +218,13 @@ test("the showcase links to the Polycode family projects", async () => {
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, [
       "https://seonix.polycode.co.uk/",
-      "https://marginalia.polycode.co.uk/",
       "https://gitlab.com/polycode-projects/bedrock-meter",
+      "https://gitlab.com/polycode-projects/the-quiet-feed",
     ]);
     const text = await page.locator("section.showcase:not(#claims-teaser)").innerText();
     assert.match(text, /Seonix/);
-    assert.match(text, /Marginalia/);
     assert.match(text, /Bedrock Meter/);
+    assert.match(text, /The Quiet Feed/);
   } finally {
     await context.close();
   }
