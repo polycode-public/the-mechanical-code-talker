@@ -340,7 +340,6 @@
   "src/domain/ask.mjs",
   "src/domain/child-pack.mjs",
   "src/domain/cli-verbs.mjs",
-  "src/domain/code-explorer-hints.mjs",
   "src/domain/codegraph.mjs",
   "src/domain/codeplan/graph-delta.mjs",
   "src/domain/codeplan/graph-predicates.mjs",
