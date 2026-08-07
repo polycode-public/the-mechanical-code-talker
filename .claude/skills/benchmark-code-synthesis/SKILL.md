@@ -1,6 +1,6 @@
 ---
 name: benchmark-code-synthesis
-description: Runs the SYNTHBENCH-CODE cycle that grades tmct's deterministic code synthesis and transformation on the SYN-0 through SYN-8 ladder and decides whether to ship or build the next track capability; invoke when the operator asks to run a SYNTHBENCH-CODE cycle or advance the code-synthesis ladder. The harness is specified but not yet built.
+description: Runs the SYNTHBENCH-CODE cycle that grades tmct's deterministic code synthesis and transformation on the SYN-0 through SYN-8 ladder and decides whether to ship or build the next track capability; invoke when the operator asks to run a SYNTHBENCH-CODE cycle or advance the code-synthesis ladder.
 ---
 
 # benchmark-code-synthesis — the SYNTHBENCH-CODE measure-then-build cycle (regenerate, run, gate, write up)

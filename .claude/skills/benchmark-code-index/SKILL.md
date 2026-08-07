@@ -1,6 +1,6 @@
 ---
 name: benchmark-code-index
-description: Runs the IDXBENCH cycle that grades how faithfully tmct's code-index producer restates source as a graph on the IDX-0 through IDX-10 fidelity ladder; invoke when the operator asks to run an IDXBENCH cycle or advance the code-index fidelity ladder. The harness is specified but not yet built.
+description: Runs the IDXBENCH cycle that grades how faithfully tmct's code-index producer restates source as a graph on the IDX-0 through IDX-10 fidelity ladder; invoke when the operator asks to run an IDXBENCH cycle or advance the code-index fidelity ladder.
 ---
 
 # benchmark-code-index — the IDXBENCH restate-the-source cycle (rung-gated, deterministic, no judge)
@@ -11,8 +11,8 @@ canonical question/answer pairs, decide ship-or-build, and if building, add the 
 resolver capability, regression-test, and re-measure. IDXBENCH is `test-benchmarks/idxbench/`'s harness; this skill
 is the loop a session RUNS every time it wants to advance the ladder.
 
-> **Build status: the harness is specified here, not yet built.** `test-benchmarks/idxbench/` does not exist yet.
-> This document is the design a later session implements; nothing in `test-benchmarks/idxbench/` is live code.
+> **Build status: the harness is built.** `test-benchmarks/idxbench/` holds the cases, fixtures, and
+> runner this document describes; a cycle runs it directly rather than building it first.
 
 **What it grades: does the produced graph RESTATE the source?** This is the code sibling of the
 Ingest restatement check. Ingest reads prose and restates it as canonical graph statements you can
@@ -254,4 +254,4 @@ keep `npm test` green, and re-run to confirm the gate passes. Write up as
 `BENCHMARK_CODE_INDEX_<version>.md` (headline delta, per-rung metric table, per-language comparison,
 best-examples pick, what's new, any kept red, the discipline checklist, a decision), snapshotting raw
 grader output to `test-benchmarks/idxbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open
-into `NEXT.md`. The harness is specified here, not yet built.
+into `NEXT.md`.

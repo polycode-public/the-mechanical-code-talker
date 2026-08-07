@@ -1,6 +1,6 @@
 ---
 name: benchmark-ingest
-description: Runs the INGESTBENCH cycle that grades how faithfully tmct's text-to-facts extraction turns a document into stored facts on the ING-0 through ING-9 fidelity ladder; invoke when the operator asks to run an INGESTBENCH cycle or advance the fact-extraction fidelity ladder. The harness is specified but not yet built.
+description: Runs the INGESTBENCH cycle that grades how faithfully tmct's text-to-facts extraction turns a document into stored facts on the ING-0 through ING-9 fidelity ladder; invoke when the operator asks to run an INGESTBENCH cycle or advance the fact-extraction fidelity ladder.
 ---
 
 # benchmark-ingest — the INGESTBENCH measure-then-build cycle (rung-gated fact-extraction fidelity)
@@ -13,12 +13,10 @@ from a single grounded term up to a full-fidelity restatement of an arbitrary do
 statements, with nothing lost and nothing added. The harness is `test-benchmarks/ingestbench/`; this skill is the
 loop a session runs every time it wants to advance the ladder.
 
-**Status (2026-07-23): this document specifies the harness. The `test-benchmarks/ingestbench/` build is later
-work.** The ladder, the case shape, the grading modes, the scoring, and the measurement contract
-below are the specification a build follows. The extraction machinery the bench measures already
-ships (`ingestText`, `optimisticTriples`, `clauseCandidates`, the pronoun carry in
-`src/services/extract-facts.mjs`; `ingestReferenceArticle` and `synthesiseAroundTerm` in
-`src/services/chat.mjs`); the graded cases and the runner do not exist yet.
+**Status: the harness is built.** `test-benchmarks/ingestbench/` holds the cases, the runner, and the
+judge this document describes, run over the shipped extraction machinery (`ingestText`,
+`optimisticTriples`, `clauseCandidates`, the pronoun carry in `src/services/extract-facts.mjs`;
+`ingestReferenceArticle` and `synthesiseAroundTerm` in `src/services/chat.mjs`).
 
 **The INGEST ladder (`ING-0…ING-9`) is its own scale, drawn from this bench's own domain.**
 INGESTBENCH grades **fact-extraction fidelity** — does the document's meaning arrive in the store

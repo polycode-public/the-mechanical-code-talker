@@ -1,6 +1,6 @@
 ---
 name: benchmark-research
-description: Runs the RESEARCHBENCH cycle that grades tmct's research-lane link traversal (ordering, hub avoidance, recall@budget) against a frozen stub wiki graph on the RES-0 through RES-8 ladder; invoke when the operator asks to run a RESEARCHBENCH cycle or advance the crawl-quality ladder. The harness is specified but not yet built.
+description: Runs the RESEARCHBENCH cycle that grades tmct's research-lane link traversal (ordering, hub avoidance, recall@budget) against a frozen stub wiki graph on the RES-0 through RES-8 ladder; invoke when the operator asks to run a RESEARCHBENCH cycle or advance the crawl-quality ladder.
 ---
 
 # benchmark-research — the RESEARCHBENCH measure-then-build cycle (traversal-graded, deterministic, no judge)
@@ -11,8 +11,8 @@ and if building, implement the next queue/ordering/stopping capability, regressi
 re-measure. RESEARCHBENCH is `test-benchmarks/researchbench/`'s harness; this skill is the loop a session runs each
 time it wants to advance the ladder.
 
-**Status: this skill specifies the harness; `test-benchmarks/researchbench/` does not exist yet — the first cycle
-builds it from this spec, then measures against it.**
+**Status: the harness is built.** `test-benchmarks/researchbench/` holds the fixture, the runner, and
+the grader this document describes; a cycle runs it directly rather than building it first.
 
 **What this bench grades: the TRAVERSAL, not the per-article facts.** The research lane
 (`src/services/research.mjs`) fetches a seed topic, queues the topics its lead section links to, and
