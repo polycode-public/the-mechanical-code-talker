@@ -50,6 +50,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **Eight benchmark skills retire in favour of npm-test pins; only benchmark-cefr-english
+  survives.** benchmark-agent, -inference, -code-index, -ingest, -research, -conversation,
+  -agi-scales and -code-synthesis: their skill directories, root symlinks, skill-only
+  supporting scripts, and mentions in .md files, site sources and data all delete. Kept: the
+  underlying features and engines, the JS/chat/CLI surfaces, all previous results
+  (reports/BENCHMARK_*, envelopes), and the test-benchmarks harnesses/graders/fixtures the
+  suite pins now import. New test work before the deletion: a deterministic, quick,
+  non-ceiling-graded slice of INFBENCH's chat arm gets pinned (the rest of that skill still
+  goes). Spec agent running (Opus); implementation waits for the demo-deletion train (README
+  and receipts.json ownership overlap).
+
 - [ ] **Five demo pages delete; their features and JS/chat/CLI surfaces stay.** research.html,
   spider-fly.html, code.html, ingest.html and mud.html (and their paired about pages) leave
   the site: page list, builders, homepage grid cards and any other homepage links (operator
