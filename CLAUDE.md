@@ -273,6 +273,16 @@ checks, is a candidate for deletion, not a rename.
 
 Check for new drift before running a full repo-wide sweep; don't assume one is needed.
 
+## No decision residue in live docs
+
+NEXT.md sentences serve open items only. Settled decisions are recorded nowhere but the commit
+message. No "worth knowing", "for the record", or "when X starts" notes in any live doc — a note
+serving a hypothetical future item is performative diligence in a new costume, and the instinct
+behind it (leaving a trace of a made choice so the operator shares responsibility for it) finds
+a new outlet each time one is banned. The test for any flag, caveat, status line, or footnote,
+in a reply or a committed doc: could the operator act differently because of this sentence, on
+work that actually exists? If not, delete it.
+
 ## Don't narrow scope on your own judgment
 
 When investigating one reported bug turns up a second, adjacent one, fold it into the current fix
