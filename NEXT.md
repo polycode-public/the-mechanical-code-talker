@@ -31,6 +31,17 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
+## In flight (2026-08-07 batch)
+
+- **E1 definitional QA track** — covers the E1/OpenBookQA item below. Status: spec agent running
+  (Opus, read-only); implementation dispatches to a worktree agent when the spec lands.
+- **Research-provider config track** — covers the provider-selection item below. Status: spec
+  agent running (Opus, read-only); implementation dispatches to a worktree agent when the spec
+  lands.
+
+The two tracks own disjoint files (benchmark fixture + claims page source vs. toml/CLI/chat
+wiring); the coordinator owns this file and the merges.
+
 ## Open items
 
 - [ ] **E1 becomes a definitional QA set; the OpenBookQA zero moves to limits.** Author a
