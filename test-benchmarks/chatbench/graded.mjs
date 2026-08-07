@@ -86,19 +86,18 @@ export const GRADED_MATRIX = [
   { grade: "A2", construction: "pronoun-binding", slug: "pron", size: 25 },
   { grade: "A2", construction: "negation", slug: "neg", size: 25 },
   { grade: "A2", construction: "noise+svo-query", slug: "noise-svo", size: 25 },
-  // B1 pronoun-binding + B1 temporal (and C1 temporal below) grown to a 50-item
-  // pool that is FULLY sampled every run (cycle-4 pool growth, archive/PLAN_CYCLE_4.md):
-  // these cells were dual-draw UNDER-COVERED at n=5 — irreducibly heterogeneous
-  // (a scattered mix of passing + frontier items), so NO partial sample makes the
-  // two independent draws reliably agree (empirically verified across 500 seeds).
-  // `sample` = pool size makes each draw a full CENSUS, so |Δ green-rate| = 0 for
-  // every seed and the cell re-enters the PASS/FAIL stat. Like promotion, this
-  // trades sampling-independence for full coverage; the judged-cost note in
-  // GRADED.md flags that a census cell need only be JUDGED once (draw A).
-  { grade: "B1", construction: "pronoun-binding", slug: "pron", size: 50, sample: 50 },
+  // B1 pronoun-binding and B1 temporal were grown to a 50-item pool and
+  // carried a `sample` census override (cycle-4 pool growth,
+  // archive/PLAN_CYCLE_4.md): dual-draw UNDER-COVERED at n=5, so only a full
+  // per-run census made the two independent draws reliably agree. B1's
+  // promotion (0 frontier across the grade) replaced that need — a promoted
+  // cell already draws its full fixed non-frontier subset every run — so
+  // these two carry `size` alone now; C1 temporal below is not promoted and
+  // keeps its own census `sample` override for the same original reason.
+  { grade: "B1", construction: "pronoun-binding", slug: "pron", size: 50 },
   { grade: "B1", construction: "negation", slug: "neg", size: 25 },
   { grade: "B1", construction: "reversible-passive", slug: "passive", size: 25 },
-  { grade: "B1", construction: "temporal", slug: "temp", size: 50, sample: 50 },
+  { grade: "B1", construction: "temporal", slug: "temp", size: 50 },
   { grade: "B1", construction: "discourse-reference", slug: "disc", size: 25 },
   { grade: "B1", construction: "pronoun-binding+negation", slug: "pron-neg", size: 25 },
   { grade: "B1", construction: "discourse-reference+quantifier-counting", slug: "disc-count", size: 25 },
@@ -162,7 +161,7 @@ export const HORIZON_CELLS = ["C1:pragmatic-implicature", "C2:cross-turn-composi
  *  promoted subsets run as always-run deterministic unit tests
  *  (test/bench/chatbench-graded.test.mjs) and are FIXED in every sample (never
  *  sampled out). Promoting a future grade = appending its band name here. */
-export const PROMOTED_GRADES = ["A1", "A2"];
+export const PROMOTED_GRADES = ["A1", "A2", "B1"];
 
 /** Per-run sample floor per populated cell — keeps per-area performance
  *  statistically readable (operator spec). */

@@ -1,10 +1,11 @@
-// ingestbench tests — the measurement HARNESS only, never the measurements: the
-// case lint over the committed file's schema, the fidelity classifier's rules,
-// the ING-7 deterministic equivalence check, the rung rollup + ladder gate math,
-// the judge's pure prompt/parse helpers, and one smoke run of the runner over its
-// smallest rung. The full ladder runs via `node test-benchmarks/ingestbench/run.mjs --ladder`
-// (fast + free on the deterministic rungs) — deliberately NOT in `npm test`, so
-// the suite gates the instrument while the bench measures the product.
+// ingestbench tests — the measurement harness, plus one always-run pin of the
+// deterministic rungs: the case lint over the committed file's schema, the
+// fidelity classifier's rules, the ING-7 deterministic equivalence check, the
+// rung rollup + ladder gate math, the judge's pure prompt/parse helpers, a
+// smoke run of the runner over its smallest rung, and every deterministic-
+// grade case (ING-0..ING-7) clearing its gate. The judged rungs (ING-8/ING-9)
+// stay out of `npm test` and run only via
+// `node test-benchmarks/ingestbench/run.mjs --ladder`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -251,5 +252,26 @@ test("main writes a well-formed product.jsonl for the smallest rung", async () =
     }
   } finally {
     await rm(out, { recursive: true, force: true });
+  }
+});
+
+// ---- the deterministic-grade ladder (ING-0..ING-7) — the whole committed set, always run ----
+
+test("every deterministic-grade case (ING-0..ING-7) clears its rung's gate through the real extractor, judged cases held out entirely", async () => {
+  const { cases } = parseCases(await readFile(new URL("../../test-benchmarks/ingestbench/cases.jsonl", import.meta.url), "utf8"));
+  const deterministic = cases.filter((c) => c.grade === "deterministic");
+  assert.ok(deterministic.length > 0, "the committed set carries deterministic cases");
+  assert.ok(deterministic.every((c) => c.rung !== "ING-8" && c.rung !== "ING-9"), "a deterministic case never carries a judged rung");
+
+  const { rows, rolled } = await runIngestbench(deterministic);
+  assert.ok(rows.every((r) => r.grade !== "judged"), "no judged case reached the deterministic assertions");
+
+  for (const rung of RUNGS) {
+    if (rung === "ING-8" || rung === "ING-9") { assert.ok(!rolled.byRung[rung], `${rung}: judged rung must not appear`); continue; }
+    const cell = rolled.byRung[rung];
+    assert.ok(cell, `${rung}: no rows reached this rung`);
+    assert.equal(cell.wrong, 0, `${rung}: no wrong fact`);
+    assert.equal(cell.recall, 1, `${rung}: full recall`);
+    assert.equal(cell.gatePass, true, `${rung}: gate must pass`);
   }
 });
