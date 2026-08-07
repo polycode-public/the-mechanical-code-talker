@@ -129,5 +129,5 @@ export const CLAIMS_META = {
  *  the page while its measurement gets reworked. */
 export const CLAIMS_PAGE_BLOCKS = {
   claims: ["latency", "determinism", "offline", "planner"],
-  limits: ["prose-band"],
+  limits: ["prose-band", "openbookqa"],
 };
