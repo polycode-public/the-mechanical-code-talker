@@ -61,6 +61,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `claim:commonsense` rig and `results/claims/commonsense.json` still exist alongside the new
   pair; deleting them was blocked by the session's permission layer and needs the operator
   (two `git rm` paths plus one package.json line).
+*(In flight: a Sonnet worktree agent is on the ticker-hook item, foreground-only.)*
+
 - [ ] **A test hook for the research ticker.** The hardened pause test still simulates a DOM
   click; the residual race (the whole queue finishing before the first observation) closes for
   good if `src/services/chat-page-viz.mjs` exposes the ticker after `createTicker(...)` (around
