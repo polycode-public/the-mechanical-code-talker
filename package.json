@@ -172,12 +172,8 @@
     "build:ledger-bundle": "node scripts/build-ledger-bundle.mjs",
     "build:ingest-bundle": "node scripts/build-ingest-bundle.mjs",
     "build:research-bundle": "node scripts/build-research-bundle.mjs",
-    "build:code-explorer-bundle": "node scripts/build-code-explorer-bundle.mjs",
     "build:mud-bundle": "node scripts/build-mud-bundle.mjs",
     "build:mudiii-bundle": "node scripts/build-mudiii-bundle.mjs",
-    "build:electron": "node scripts/build-electron-app.mjs",
-    "electron": "electron electron/main.mjs",
-    "test:electron": "node --test electron/smoke.test.mjs",
     "build:sprites-bundle": "node scripts/build-sprites-bundle.mjs",
     "build:wink-vendor": "node scripts/build-wink-vendor.mjs",
     "build:three-vendor": "node scripts/build-three-vendor.mjs",
@@ -201,7 +197,6 @@
     "extract:facts": "node --disable-warning=ExperimentalWarning bin/tmct.mjs extract"
   },
   "devDependencies": {
-    "electron": "^43.2.0",
     "esbuild": "0.28.1",
     "ink-testing-library": "4.0.0",
     "playwright": "1.61.1",
