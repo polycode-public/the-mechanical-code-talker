@@ -42,10 +42,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **The homepage's Polycode projects section swaps marginalia for the-quiet-feed.** Add
-  https://gitlab.com/polycode-projects/the-quiet-feed (description drawn from its own README —
-  the sibling checkout under ~/projects/polycode-projects may hold it) and remove the
-  marginalia entry. Queued behind the demo-deletion content track, which owns index.html.
+- [ ] **The homepage's Polycode projects section swaps marginalia for the-quiet-feed.**
+  Landed and merged: marginalia's card is gone (the bedrock-meter card's copy reworded to
+  stop naming it), The Quiet Feed card links to the GitLab repo. Remainder, why this stays
+  open: the card's description is the placeholder "A Polycode project." — no sibling
+  checkout exists and the GitLab repo returns 403 to unauthenticated fetches, so the real
+  one-line description needs the operator (or a readable README).
 - [ ] **Eight benchmark skills retire in favour of npm-test pins; only benchmark-cefr-english
   survives.** benchmark-agent, -inference, -code-index, -ingest, -research, -conversation,
   -agi-scales and -code-synthesis: their skill directories, root symlinks, skill-only
