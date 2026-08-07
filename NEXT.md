@@ -33,10 +33,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In flight (2026-08-07 second batch)
 
-- **Spec agent (Opus, read-only)** — mapping every touchpoint of the purged rigs before
-  implementation dispatches.
-- Implementation tracks follow: page track (build-demo-site.mjs + site-pages.mjs) and purge
-  track (scripts/claims/, results/claims/, fixtures, package.json), disjoint ownership.
+- **Page track** — running (Sonnet, worktree): three blocks + Cyc passage + per-block nav;
+  owns site-pages.mjs, build-demo-site.mjs, site.css, test/estate/claims.test.mjs.
+- **Purge track** — queued BEHIND the page track (hard order: a declared block whose JSON is
+  deleted fails demo:build and the estate test, so the manifest must shrink first). Mechanical
+  deletion of 26 files + 10 package.json claim:* lines; keeps planner, prose-band, openbookqa,
+  definitions, paraphrase and all shared claims helpers.
+- Editorial calls settled by the spec, adoptable without re-litigating: kickers stay C7/L1/L2
+  (gaps are truthful; no external deep links exist); dead pairing CSS goes, delta CSS stays
+  (definitions may earn a block back).
 
 ## Open items
 
