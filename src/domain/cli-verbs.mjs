@@ -37,6 +37,7 @@ export const CLI_VERBS = [
       { flag: "[--live-wikipedia]", prose: ["start with the live Wikipedia supplement on — a question", "nothing local can answer also tries en.wikipedia.org,", "cited (network; also TMCT_LIVE_WIKIPEDIA=1 or tmct.toml", "corpus tier3; toggle mid-session with /wiki on|off)"] },
       { flag: "[--plain]", prose: ["force the plain readline shell (the default when", "stdin/stdout is not a terminal)"] },
       { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["storage backend for taught facts this", "session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's", "[memory] backend > sqlite, .tmct/memory/graph.sqlite)"] },
+      { flag: "[--research-source <wikipedia|wikidata>]", prose: ["where \"research <topic>\" fetches from this session", "(/wikipedia|/wikidata in chat > this flag > tmct.toml's", "[research] source > wikipedia)"] },
     ],
   },
   {
@@ -66,6 +67,7 @@ export const CLI_VERBS = [
       { flag: "[--with-persona <name>]", prose: ["write an explicit [extensions]/[bias] preset into tmct.toml", "(\"code\" — today's implicit default, made explicit)"] },
       { flag: "[--persona-size <medium|large>]", prose: ["grow the default \"human\" persona's fact count", "beyond Small (the default): \"medium\" activates", "human-medium.jsonl (~1,608 facts total), \"large\" also", "activates human-large.jsonl (~13,600 facts total,", "with genuine multi-hop hypernym chains) — additive", "size tiers of the SAME bundle, not separate personas"] },
       { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["write tmct.toml's [memory] backend", "(same flag name as `tmct chat`) — a later `tmct chat`", "in this repo picks it up with no flag needed"] },
+      { flag: "[--research-source <wikipedia|wikidata>]", prose: ["write tmct.toml's [research] source", "(same flag name as `tmct chat`) — a later `tmct chat`", "in this repo picks it up with no flag needed"] },
     ],
   },
   {

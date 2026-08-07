@@ -71,6 +71,13 @@ test("a left column past the prose column pushes its prose two spaces clear of i
   assert.equal(row.indexOf(long.prose[0]), 7 + long.flag.length + 2);
 });
 
+test("both chat and init carry a --research-source flag, the shared knob with --memory-backend", () => {
+  for (const mode of ["chat", "init"]) {
+    const flags = CLI_VERBS.find((v) => v.mode === mode).flags;
+    assert.ok(flags.some((f) => f.flag.startsWith("[--research-source")), `${mode} lists --research-source`);
+  }
+});
+
 test("a --repo path that does not exist is refused, and nothing is created under it", () => {
   const base = mkdtempSync(path.join(tmpdir(), "tmct-repo-gate-"));
   const missing = path.join(base, "typo-repo");

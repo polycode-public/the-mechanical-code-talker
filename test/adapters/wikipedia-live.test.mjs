@@ -18,6 +18,9 @@ import {
   WIKIMEDIA_USER_AGENT,
 } from "../../src/adapters/corpus/wikipedia-live.mjs";
 import { isReferenceArticleRow } from "../../src/domain/reference-pack.mjs";
+// Side-effect import: registers the "wikidata" research source so
+// getResearchProvider({ source: "wikidata" }) has an entry to build.
+import "../../src/adapters/corpus/wikidata-live.mjs";
 
 const QUASAR_EXTRACT = "A quasar is a very bright object in space. It is powered by a black hole. "
   + "Quasars are among the most distant objects known.";
@@ -265,6 +268,27 @@ test("registerResearchProvider swaps the research provider; the default targets 
   assert.equal(typeof restored.pageByTitle, "function");
   assert.equal(typeof restored.linkedTitles, "function");
   assert.ok(SIMPLE_WIKIPEDIA_ORIGIN.includes("simple.wikipedia.org"));
+});
+
+test("getResearchProvider({source}) picks the config-selected research source, caching one singleton per choice; a registered provider still wins over both", async () => {
+  const wikidata = getResearchProvider({ source: "wikidata" });
+  assert.equal(wikidata.name, "wikidata");
+  assert.equal(wikidata.origin, "https://www.wikidata.org");
+
+  const wikipediaExplicit = getResearchProvider({ source: "wikipedia" });
+  const wikipediaDefault = getResearchProvider();
+  assert.equal(wikipediaExplicit.name, "simple-wikipedia");
+  assert.equal(wikipediaExplicit, wikipediaDefault, "the wikipedia choice and the no-argument call share the same default singleton");
+
+  assert.equal(getResearchProvider({ source: "wikidata" }), wikidata, "the same choice returns the same cached instance");
+
+  const stub = { lookup: async () => null };
+  try {
+    registerResearchProvider(stub);
+    assert.equal(getResearchProvider({ source: "wikidata" }), stub, "a registered provider wins outright, before any source resolution");
+  } finally {
+    registerResearchProvider(null);
+  }
 });
 
 test("registerLiveReferenceProvider swaps the active provider, and null restores the default", async () => {

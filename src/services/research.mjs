@@ -26,6 +26,7 @@
 import { normFactTerm } from "../domain/hash.mjs";
 import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { defaultNlp } from "../domain/interpret/nlp-registry.mjs";
+import { normalizeResearchChoice } from "../adapters/corpus/research-source.mjs";
 
 /** The search key a topic folds to: normFactTerm, then the lexicon lemma
  *  when the noun is known ("owls" → "owl") — the same fold the live
@@ -63,17 +64,19 @@ export const RESEARCH_DEFAULTS = Object.freeze({
   maxDepth: 1,
   maxTopics: 12,
   minIntervalMs: 2000,
+  source: "wikipedia",
 });
 
 const clampInt = (n, lo, hi) => Math.min(hi, Math.max(lo, Math.floor(n)));
 
-/** A partial `{ fanoutLimit?, maxDepth?, maxTopics?, minIntervalMs? }` (camelCase,
- *  as the page and CLI supply it) folded onto the shipped defaults and clamped
- *  to the engineered ranges: fan-out at RESEARCH_FANOUT_MAX, depth at
- *  RESEARCH_MAX_DEPTH, the node budget at [1, RESEARCH_MAX_TOPICS], and the
- *  polite interval only ever RAISED above its floor, never lowered. Every
- *  non-finite field falls back to its default, so a corrupt/absent value is
- *  the shipped knob, never a crash. */
+/** A partial `{ fanoutLimit?, maxDepth?, maxTopics?, minIntervalMs?, source? }`
+ *  (camelCase, as the page and CLI supply it) folded onto the shipped defaults
+ *  and clamped to the engineered ranges: fan-out at RESEARCH_FANOUT_MAX, depth
+ *  at RESEARCH_MAX_DEPTH, the node budget at [1, RESEARCH_MAX_TOPICS], the
+ *  polite interval only ever RAISED above its floor, never lowered, and
+ *  `source` folded through normalizeResearchChoice — an unrecognized or
+ *  corrupt value is the shipped default, never a crash. Every non-finite
+ *  field falls back to its default too. */
 export function clampResearchConfig(partial = {}) {
   const cfg = { ...RESEARCH_DEFAULTS };
   const fanout = Number(partial.fanoutLimit);
@@ -84,6 +87,7 @@ export function clampResearchConfig(partial = {}) {
   if (Number.isFinite(topics)) cfg.maxTopics = clampInt(topics, 1, RESEARCH_MAX_TOPICS);
   const interval = Number(partial.minIntervalMs);
   if (Number.isFinite(interval)) cfg.minIntervalMs = Math.max(RESEARCH_DEFAULTS.minIntervalMs, interval);
+  cfg.source = normalizeResearchChoice(partial.source);
   return cfg;
 }
 
@@ -92,7 +96,10 @@ export function clampResearchConfig(partial = {}) {
  *  takes with `[games.*]`). `fanout_limit` caps at RESEARCH_FANOUT_MAX;
  *  `depth_limit`/`max_depth` set how deep the fan-out follows (0 means no
  *  fan-out); `max_topics` sets the total node budget; `min_interval_ms` may
- *  only RAISE the polite floor between round trips, never lower it. */
+ *  only RAISE the polite floor between round trips, never lower it; `source`
+ *  picks which research source the lane fetches from ("wikipedia" or
+ *  "wikidata"), the flag/slash-command tiers above it in
+ *  chat-session.mjs taking precedence over this one. */
 export function resolveResearchConfig(toml = null) {
   const raw = toml?.research || {};
   return clampResearchConfig({
@@ -100,6 +107,7 @@ export function resolveResearchConfig(toml = null) {
     maxDepth: raw.max_depth ?? raw.depth_limit,
     maxTopics: raw.max_topics,
     minIntervalMs: raw.min_interval_ms,
+    source: raw.source,
   });
 }
 
@@ -158,11 +166,25 @@ export function researchProvenanceTag(topicKey, depth) {
   return `research:${topicKey}@${depth}`;
 }
 
+/** The human-facing name of the active research source, read off the resolved
+ *  config's `source` choice — what a miss line or the lane's `goal` names. */
+export function researchSourceLabel(source) {
+  return source === "wikidata" ? "Wikidata" : "Simple English Wikipedia";
+}
+
 /** The cited per-topic report — the same title/licence/revision-pinned-URL
- *  discipline renderLiveReferenceAnswer holds, naming this lane's source. */
+ *  discipline renderLiveReferenceAnswer/renderReferenceAnswer hold, naming
+ *  this lane's source. Reads the row's own `source`/`licence` when present
+ *  (a Wikidata row carries "Wikidata"/"CC0 1.0"), falling back to the
+ *  Wikipedia defaults otherwise — every wikipedia row renders byte-identically
+ *  to before this existed. The revision-pinned `?oldid=` query is a Wikipedia
+ *  convention alone, so a non-Wikipedia row's own `url` is shown bare. */
 export function renderResearchAnswer(term, article) {
+  const source = article.source ?? "Simple English Wikipedia";
+  const licence = article.licence ?? "CC BY-SA 4.0";
+  const url = source === "Simple English Wikipedia" ? `${article.url}?oldid=${article.revid}` : article.url;
   return `${term} — ${article.summary} (source: research article "${article.title}", `
-    + `Simple English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+    + `${source}, ${licence} — ${url})`;
 }
 
 /** The queue as plain data for a UI: pending titles, per-topic fact counts,
@@ -348,7 +370,7 @@ async function startRun({ topic, limit, depth }, { holder, provider, ingest, con
   if (!article) {
     holder.state = null;
     return {
-      text: `I couldn't ground "${topic}" from Simple English Wikipedia just now — no matching article, or the network didn't answer. Nothing was stored.`,
+      text: `I couldn't ground "${topic}" from ${researchSourceLabel(config.source)} just now — no matching article, or the network didn't answer. Nothing was stored.`,
       miss: true,
     };
   }
@@ -377,7 +399,7 @@ async function startRun({ topic, limit, depth }, { holder, provider, ingest, con
   };
 }
 
-async function stepRun({ holder, provider, ingest, notify }) {
+async function stepRun({ holder, provider, ingest, notify, config }) {
   const state = holder.state;
   const title = state.pending[0];
   const depth = pendingDepth(state, title);
@@ -389,7 +411,7 @@ async function stepRun({ holder, provider, ingest, notify }) {
   if (!article) {
     state.skipped = [...state.skipped, title];
     return {
-      text: `I couldn't fetch "${title}" from Simple English Wikipedia — skipped, nothing stored. ${progressLine(state)}`,
+      text: `I couldn't fetch "${title}" from ${researchSourceLabel(config.source)} — skipped, nothing stored. ${progressLine(state)}`,
       miss: true,
     };
   }
@@ -423,7 +445,7 @@ export async function researchTurn(line, ctx) {
   // A bare "next" belongs to an active plan first, then to paging — this
   // lane only claims it when a research queue is the one thing running.
   if (req.kind === "bareNext" && (!pendingRun || planActive || pagerActive)) return null;
-  const goal = "research a topic on Simple English Wikipedia and remember what it grounds";
+  const goal = `research a topic on ${researchSourceLabel(ctx.config?.source)} and remember what it grounds`;
   const wrap = (r, note) => ({ ...r, goal, note });
   if (req.kind === "status") {
     if (!holder.state) return wrap({ text: 'no research is running — "research <topic>" starts one.', miss: true }, "RESEARCH — status with no run standing");

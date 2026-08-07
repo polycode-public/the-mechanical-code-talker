@@ -403,6 +403,17 @@ test("parseResearchAnswer: pulls the passage, article title and source url out o
   });
 });
 
+test("parseResearchAnswer: also parses a Wikidata-sourced research answer", () => {
+  const answer = 'owl — a bird of prey (source: research article "Owl", Wikidata, CC0 1.0 — https://www.wikidata.org/wiki/Q39825)\nstored 3 facts from "Owl". queued 2 linked topics.';
+  const parsed = parseResearchAnswer(answer);
+  assert.deepEqual(parsed, {
+    term: "owl",
+    passage: "a bird of prey",
+    title: "Owl",
+    url: "https://www.wikidata.org/wiki/Q39825",
+  });
+});
+
 test("parseResearchAnswer: a miss, a status line, or any text that isn't this citation shape reads as null, never a guessed passage", () => {
   assert.equal(parseResearchAnswer('I couldn\'t ground "zorblatt" from Simple English Wikipedia just now — no matching article. Nothing was stored.'), null);
   assert.equal(parseResearchAnswer('research on "owls" is complete — 3 topics grounded, 5 facts stored.'), null);

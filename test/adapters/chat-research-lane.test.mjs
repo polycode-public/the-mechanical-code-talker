@@ -132,6 +132,33 @@ test("a failed research fetch reports the miss plainly and stores nothing", asyn
   }
 });
 
+test("a research row carrying structured facts (a Wikidata-shaped row) stores every mapped claim, not just its isa", async () => {
+  const dir = await freshRepo();
+  const row = {
+    ...ROW("Owl", "An owl is a bird of prey."),
+    source: "Wikidata",
+    licence: "CC0 1.0",
+    isa: "bird",
+    facts: [
+      { subject: "owl", predicate: "rdf:type", object: "bird" },
+      { subject: "owl", predicate: "mgx:capableOf", object: "flying" },
+    ],
+  };
+  registerResearchProvider({ lookup: async () => row });
+  try {
+    const r = await turn("research owl, limit 0", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /\(source: research article "Owl", Wikidata, CC0 1\.0/);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((f) => f.subject === "owl" && f.predicate === "rdf:type" && f.object === "bird"), "the mapped rdf:type claim landed");
+    assert.ok(rows.some((f) => f.subject === "owl" && f.predicate === "mgx:capableOf" && f.object === "flying"), "the mapped capableOf claim landed");
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("research status and research stop manage the queue through the lane", async () => {
   const dir = await freshRepo();
   registerResearchProvider(owlProvider());

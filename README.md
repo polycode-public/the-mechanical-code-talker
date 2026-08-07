@@ -1325,6 +1325,7 @@ fanout_limit = 8            # links followed per page
 max_depth = 3               # hops from the starting topic
 max_topics = 40             # topics visited in one crawl
 min_interval_ms = 1000      # politeness delay between fetches
+source = "wikipedia"        # wikipedia | wikidata — where "research <topic>" fetches from
 
 # Discourse record (src/domain/discourse.mjs).
 [discourse]
