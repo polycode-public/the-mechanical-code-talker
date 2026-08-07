@@ -31,23 +31,14 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In flight (2026-08-07, after the 5.0.19 push)
+## In flight (2026-08-07, third batch)
 
-- **Demo-deletion train** — four tracks; lands as one train, then full gates + push. Track A
-  build machinery: running. Track B site content (owns index.html): running. Track C tests+CI:
-  running. Track D docs+receipts: LANDED (merged).
-- **Benchmark-skill-retirement spec agent** (Opus, read-only): running; implementation queued
-  behind the demo train (README/receipts ownership overlap).
-- **Quiet-feed homepage swap**: queued behind Track B (same file).
+- **Demo-deletion train, benchmark-skill retirement, quiet-feed swap** — ALL LANDED and
+  verified on main; push pending the full suite. The Electron track dispatches after that
+  push (its worktree needs the pushed base).
 
 ## Open items
 
-- [ ] **The homepage's Polycode projects section swaps marginalia for the-quiet-feed.**
-  Landed and merged: marginalia's card is gone (the bedrock-meter card's copy reworded to
-  stop naming it), The Quiet Feed card links to the GitLab repo. Remainder, why this stays
-  open: the card's description is the placeholder "A Polycode project." — no sibling
-  checkout exists and the GitLab repo returns 403 to unauthenticated fetches, so the real
-  one-line description needs the operator (or a readable README).
 - [ ] **Electron goes, and the code-explorer render/bundle pieces retire with it.** Delete:
   the electron/ directory, scripts/build-electron-app.mjs, the electron devDependency and its
   three package.json scripts, README's desktop-shell section, plus the pieces Electron was the
@@ -56,29 +47,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   and their tests. Boundary: src/domain/code-explorer-hints.mjs and anything else with a
   surviving importer (tmct chat --repo, the homepage live-demo box, demo-graph machinery)
   stays — verify importers before deleting anything beyond the named list; the pack manifest
-  needs regenerating for the removed shipped files. Queued behind demo Track A (shared base
-  in build-demo-site.mjs and .gitignore).
-- [ ] **Eight benchmark skills retire in favour of npm-test pins; only benchmark-cefr-english
-  survives.** benchmark-agent, -inference, -code-index, -ingest, -research, -conversation,
-  -agi-scales and -code-synthesis: their skill directories, root symlinks, skill-only
-  supporting scripts, and mentions in .md files, site sources and data all delete. Kept: the
-  underlying features and engines, the JS/chat/CLI surfaces, all previous results
-  (reports/BENCHMARK_*, envelopes), and the test-benchmarks harnesses/graders/fixtures the
-  suite pins now import. New test work before the deletion: a deterministic, quick,
-  non-ceiling-graded slice of INFBENCH's chat arm gets pinned (the rest of that skill still
-  goes). Spec agent running (Opus); implementation waits for the demo-deletion train (README
-  and receipts.json ownership overlap).
-
-- [ ] **Five demo pages delete; their features and JS/chat/CLI surfaces stay.** research.html,
-  spider-fly.html, code.html, ingest.html and mud.html (and their paired about pages) leave
-  the site: page list, builders, homepage grid cards and any other homepage links (operator
-  flagged these explicitly), sitemap/head metadata, screenshots/og images, service-worker
-  precache, and their page-level e2e/estate tests all go. NOT touched: the underlying
-  engines and lanes (research lane in chat, spider-fly, code domain, ingest, mud) and their
-  unit/corpus tests, the chat/CLI/JS consumer surfaces, mudiii (a different page), and
-  pages-chat-research e2e (tests the chat page, not research.html). Cross-page links into
-  the five (e.g. the claims page L1 block's "try it in ingest.html") get removed or
-  repointed.
+  needs regenerating for the removed shipped files. Dispatches after the third-batch push.
 
 *(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
 intro says "every fact answer stays checkable against the graph it came from" where
