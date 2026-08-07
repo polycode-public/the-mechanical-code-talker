@@ -1,10 +1,11 @@
-// researchbench tests — the measurement harness only, never a scored
-// measurement: the committed case set lints clean, the runner drives its
+// researchbench tests — the measurement harness plus one always-run pin of
+// the full ladder: the committed case set lints clean, the runner drives its
 // smallest rung through the REAL lane (src/services/research.mjs) against the
-// fixture provider and writes a well-formed row, and the pure grader's hub
-// signal and invented-traversal check hold on hand-built inputs. The full
-// ladder runs via `node test-benchmarks/researchbench/run.mjs --ladder` — deliberately not the
-// whole case set here, so `npm test` gates the instrument.
+// fixture provider and writes a well-formed row, the pure grader's hub signal
+// and invented-traversal check hold on hand-built inputs, and every committed
+// rung clears its gate over the frozen fixture graph — cheap and
+// deterministic, so it runs here rather than only via
+// `node test-benchmarks/researchbench/run.mjs --ladder`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -77,4 +78,23 @@ test("gradeWalk's invented-traversal check catches a grounded title outside the 
   const final = { done: [{ title: "Volcano" }, { title: "A Made-Up Article" }], skipped: [] };
   const graded = gradeWalk(caseDef, { afterStart, final, graph });
   assert.equal(graded.invented, true, "a grounded title the fixture never linked is an invented edge");
+});
+
+test("the full committed ladder clears its gate through RES-6, with RES-7/RES-8 standing as declared ceiling markers", async () => {
+  const text = await readFile(DEFAULT_CASES, "utf8");
+  const { cases } = parseCases(text);
+  const { rows, rolled } = await runResearchbench(cases);
+
+  for (const rung of ["RES-0", "RES-1", "RES-2", "RES-3", "RES-4", "RES-5", "RES-6"]) {
+    assert.equal(rolled.byRung[rung]?.gatePass, true, `${rung}: gate must pass`);
+  }
+  for (const row of rows) {
+    if (row.rung === "RES-7" || row.rung === "RES-8") continue;
+    assert.equal(row.invented, false, `${row.id}: no traversal may leave the fixture's own reachability closure`);
+  }
+  for (const rung of ["RES-7", "RES-8"]) {
+    const row = rows.find((r) => r.rung === rung);
+    assert.equal(row.ceiling, true, `${rung}: still a declared ceiling marker`);
+    assert.equal(row.measured, false, `${rung}: never reaches the lane`);
+  }
 });
