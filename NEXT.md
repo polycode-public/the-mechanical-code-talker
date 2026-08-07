@@ -41,8 +41,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   commit 8586765a (the claims-notes Cyc passage); resolved by keeping the notes' passage with
   "stays citable" softened to "stays checkable against the graph it came from" per the
   no-universal-citation rule. Push pending the full suite.
-- **Research-page flake-hardening track** — covers the pause-ticking flake sub-clause. Status:
-  running (Sonnet, worktree, foreground-only after one stall correction).
+- **Research-page flake-hardening track** — LANDED: atomic in-browser observe-and-click plus a
+  fixture response delay that widens the playing window; 12/12 consecutive green runs under
+  load in the worktree, re-verified on merged main. This closed the research-provider item's
+  last remainder, so that item is done and removed; the optional ticker test hook it
+  recommended is a new item below (different file, page code, not provider wiring).
 
 ## Open items
 
@@ -58,17 +61,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `claim:commonsense` rig and `results/claims/commonsense.json` still exist alongside the new
   pair; deleting them was blocked by the session's permission layer and needs the operator
   (two `git rm` paths plus one package.json line).
-- [ ] **The research provider becomes config-selected, settable three ways.** Delivered and
-  merged: `tmct.toml [research] source`, `--research-source` on init and chat, and in-chat
-  `/wikipedia` and `/wikidata` (`/wiki` was already the live-reference toggle with a pinned
-  non-mutating bare form, so the selectors got their own names and bare `/wiki` now reports the
-  active source), plus the adjacent fixes the track folded in: research ingest now stores a
-  Wikidata row's structured `facts`, and citations/miss lines name the active source instead of
-  hard-coding Wikipedia. Remainder, the reason this stays open: the track's e2e runs hit a
-  pre-existing flake three times — `test-e2e/pages-chat-research.test.mjs` "pause really stops
-  the ticking", a CDP click timeout on `#researchPlay` whose in-test 3-attempt retry doesn't
-  cover the browser-ticker-vs-driver race it documents. Harden that test; the item closes when
-  it holds under repetition.
+- [ ] **A test hook for the research ticker.** The hardened pause test still simulates a DOM
+  click; the residual race (the whole queue finishing before the first observation) closes for
+  good if `src/services/chat-page-viz.mjs` exposes the ticker after `createTicker(...)` (around
+  line 1498), e.g. `window.tmct.page.researchTicker = researchTicker;`, letting the test drive
+  `pause()` against the engine's own state machine. Small, test-only surface; recommended by the
+  hardening pass that measured the race.
 
 ## Discipline
 
