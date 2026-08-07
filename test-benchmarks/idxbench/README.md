@@ -1,7 +1,7 @@
 # idxbench — the tmct CODE-INDEX measurement harness
 
-The sibling of `agentbench`/`infbench`, on the code-index axis. Full design in
-`.claude/skills/benchmark-code-index/SKILL.md` — this file is the mechanics.
+The sibling of `agentbench`/`infbench`, on the code-index axis. This file is
+the design record and the mechanics.
 
 **What it grades: does the produced graph RESTATE the source?** IDXBENCH indexes
 committed fixture repos through the real producer
@@ -16,23 +16,24 @@ byte-identical `product.jsonl`.
 ## The ladder
 
 `IDX-0` through `IDX-9` are measured against real fixture cases (`test-benchmarks/idxbench/cases.jsonl`).
-`IDX-10` (round-trip refactor fidelity, `PLAN_CODE.md` Track 5) has no cases yet —
-it needs that track's own predicted-vs-actual ledger as a runnable primitive, so
-it is absent from the ladder table rather than gated: nothing to measure yet,
-not a wall.
+`IDX-10` (`PLAN_CODE.md` Track 5) has no cases yet — it needs that track's own
+predicted-vs-actual ledger as a runnable primitive first, so it carries a rung
+name and a definition below but no measured status yet: nothing to measure
+yet, not a wall.
 
-| rung | what this harness measures |
-| ---- | --------------------------- |
-| IDX-0 | one module's own defines (entities + `defines` edges), scoped to that module |
-| IDX-1 | cross-module `imports` edges |
-| IDX-2 | symbol-granular `callsSymbol` edges, including a multi-call-site symbol |
-| IDX-3 | a module's own export set, plus a genuine cross-module re-export chain (`test-benchmarks/idxbench/fixtures/reexport-py`) |
-| IDX-4 | canonical Q&A — "where is X defined" (path + line span, body re-derived from the real file via `sliceSpan`) and "who calls X" |
-| IDX-5 | the same Q&A shape run against both registered languages (JS/TS, Python); a third, unregistered language (`csharp`) reports `measured:false` — absent, never wrong |
-| IDX-6 | deterministic re-index: `indexRepository` run twice over a throwaway temp copy of each fixture, byte-compared |
-| IDX-7 | git history edges (`touches`, `touchesSymbol`) over a synthetic two-commit repo built at run time from the case's own pinned commit script, plus the `--no-history` control |
-| IDX-8 | zero-fabrication under an ambiguous call: two modules define the same top-level name, so the caller's `callsSymbol` edge must stay absent — never a guessed target |
-| IDX-9 | self-index: indexes `src/index/` itself and checks its own `imports` edges |
+| rung | name | what this harness measures |
+| ---- | ---- | --------------------------- |
+| IDX-0 | Single-file defines | one module's own defines (entities + `defines` edges), scoped to that module |
+| IDX-1 | Cross-module imports | cross-module `imports` edges |
+| IDX-2 | Direct call edges | symbol-granular `callsSymbol` edges, including a multi-call-site symbol |
+| IDX-3 | Exports & re-exports | a module's own export set, plus a genuine cross-module re-export chain (`test-benchmarks/idxbench/fixtures/reexport-py`) |
+| IDX-4 | Restatement fidelity | canonical Q&A — "where is X defined" (path + line span, body re-derived from the real file via `sliceSpan`) and "who calls X" |
+| IDX-5 | Multi-language parity | the same Q&A shape run against both registered languages (JS/TS, Python); a third, unregistered language (`csharp`) reports `measured:false` — absent, never wrong |
+| IDX-6 | Deterministic re-index | `indexRepository` run twice over a throwaway temp copy of each fixture, byte-compared |
+| IDX-7 | Temporal / history edges | git history edges (`touches`, `touchesSymbol`) over a synthetic two-commit repo built at run time from the case's own pinned commit script, plus the `--no-history` control |
+| IDX-8 | Semantic-depth resolution | zero-fabrication under an ambiguous call: two modules define the same top-level name, so the caller's `callsSymbol` edge must stay absent — never a guessed target |
+| IDX-9 | Self-index | self-index: indexes `src/index/` itself and checks its own `imports` edges |
+| IDX-10 | Round-trip refactor fidelity | a refactor step's declared graph delta matches the observed delta after re-index, and "where is X defined" reflects the move — no cases yet (see above) |
 
 ## Fixtures
 

@@ -1,14 +1,14 @@
 # researchbench — the tmct RESEARCH-TRAVERSAL measurement harness
 
 The sibling of `idxbench`/`agentbench`/`infbench`, on the focused-crawling axis.
-Full design in `.claude/skills/benchmark-research/SKILL.md` — this file is the mechanics.
+This file is the design record and the mechanics.
 
 **What it grades: the TRAVERSAL, not the per-article facts.** RESEARCHBENCH
 replays `research <seed>` + `research next` through the REAL lane
 (`src/services/research.mjs`'s `researchTurn`/`researchSnapshot`) and grades
 which links get followed, in what order, and when the run stops. It never
 grades whether the triples a fetched article yields are correct — that is
-`.claude/skills/benchmark-ingest/SKILL.md`'s job; this harness's own `ingest` callback is a
+INGESTBENCH's job; this harness's own `ingest` callback is a
 deliberate no-op (`async () => 0`), so no memory store is ever written by a
 graded run.
 
@@ -21,17 +21,17 @@ stamp produce byte-identical `product.jsonl`.
 
 ## The ladder
 
-| rung | what this harness measures | today |
-| ---- | --------------------------- | ----- |
-| RES-0 | fetch and stop at depth 0 | PASS |
-| RES-1 | the lead-section links queue in document order | PASS |
-| RES-2 | the kin rank ahead of the hubs in that queue | gates (today's lane doesn't reorder) |
-| RES-3 | a tight budget skips the hubs entirely | skipped-with-a-receipt (gated by RES-2) |
-| RES-4 | every useful term reachable in `k` hops is reached | skipped-with-a-receipt |
-| RES-5 | the useful terms are reached WITHIN a tight budget | skipped-with-a-receipt |
-| RES-6 | a promising branch gets more depth than a thin one | skipped-with-a-receipt |
-| RES-7 | need-directed research (a question ends the run) | ceiling marker — no lane capability |
-| RES-8 | self-assessed coverage (the run stops on its own judgement) | ceiling marker — no lane capability |
+| rung | name | what this harness measures | today |
+| ---- | ---- | --------------------------- | ----- |
+| RES-0 | Fetch and stop | one seed topic, no queue: ground depth 0, fan out nothing | PASS |
+| RES-1 | Queue the lead links | the lead-section links queue in document order | PASS |
+| RES-2 | Relevance ordering | the topic's own kin rank ahead of the hubs | gates (today's lane doesn't reorder) |
+| RES-3 | Hub avoidance | a tight budget skips the hubs entirely | skipped-with-a-receipt (gated by RES-2) |
+| RES-4 | Completeness | every useful term reachable in `k` hops is reached | skipped-with-a-receipt |
+| RES-5 | Budget discipline | the useful terms are reached WITHIN a tight budget | skipped-with-a-receipt |
+| RES-6 | Adaptive depth | a promising branch gets more depth than a thin one | skipped-with-a-receipt |
+| RES-7 | Need-directed research | research runs until a named question becomes answerable, then stops | ceiling marker — no lane capability |
+| RES-8 | Self-assessed coverage | the run stops on its own judgement that its map is complete | ceiling marker — no lane capability |
 
 RES-2 gating RES-3 onward is the honest, expected shape of a fresh
 measure-then-build cycle: today's fan-out is plain document order with no

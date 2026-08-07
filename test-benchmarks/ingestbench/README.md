@@ -1,8 +1,23 @@
 # ingestbench — text-to-facts fidelity, one extraction capability at a time
 
 INGESTBENCH grades how faithfully `ingestText` (`src/services/extract-facts.mjs`)
-turns a document into stored facts, on the `ING-0…ING-9` ladder. It is the
-harness `.claude/skills/benchmark-ingest/SKILL.md` specifies. Dev-only, never shipped.
+turns a document into stored facts, on the `ING-0…ING-9` ladder. This file is
+the design record and the mechanics. Dev-only, never shipped.
+
+## The ladder
+
+| rung | name | what it measures | status |
+| ---- | ---- | ----------------- | ------ |
+| ING-0 | Single grounded term | one declarative sentence yields at least one correct stored entity — the floor | measured |
+| ING-1 | One clean isa | a clean copula frame stores exactly the right class fact and nothing else | measured |
+| ING-2 | Isa under span and clause pressure | the correct isa (or a correct abstention) survives compound modifiers, partitive chains, and cross-clause bleed | measured |
+| ING-3 | Relation coverage beyond isa | a known relation verb flanked by two entities stores its predicate, with subject-side partitive discipline | measured |
+| ING-4 | Multiple facts per sentence | one sentence contributes every fact it grounds, not just the copula | measured |
+| ING-5 | Cross-sentence pronoun carry | a pronoun-led sentence grounds against the paragraph's last subject, never bridging a topic break | measured |
+| ING-6 | Discourse-level ingest | a typed discourse record threads entities and relations across turns — definite descriptions, ordinal and temporal links | measured |
+| ING-7 | Paraphrase-equivalence, deterministic | each stored triple restated as a canonical statement, with a deterministic equivalence check confirming the same triple | measured |
+| ING-8 | Meaning-preservation, judged | the whole input restated in canonical statements, meaning preserved both ways, scored by the offline judge | judge-graded, not run in CI |
+| ING-9 | Full-fidelity restatement | an arbitrary document restated with nothing lost and nothing added — the top of the scale, graded for headroom, never claimed | judge-graded, not run in CI |
 
 Run the ladder:
 
