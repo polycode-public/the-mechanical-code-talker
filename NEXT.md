@@ -33,11 +33,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In flight (2026-08-07 batch)
 
-- **E1 definitional QA track** — covers the E1/OpenBookQA item below. Status: spec agent running
-  (Opus, read-only); implementation dispatches to a worktree agent when the spec lands.
-- **Research-provider config track** — covers the provider-selection item below. Status: spec
-  agent running (Opus, read-only); implementation dispatches to a worktree agent when the spec
-  lands.
+- **E1 definitional QA track** — covers the E1/OpenBookQA item below, rig side only (fixture,
+  two new rigs, committed results). Status: spec landed; implementation running (Sonnet,
+  worktree). Merges AFTER the reduction track; the coordinator then retires claim:commonsense
+  and its results JSON.
+- **Research-provider config track** — covers the provider-selection item below, plus the
+  adjacent ingestReferenceArticle row.facts gap and the citation-truthfulness edits the spec
+  surfaced. Selector commands are /wikipedia and /wikidata (NEXT.md's literal /wiki is already
+  the live-reference toggle, whose bare form is pinned as non-mutating). Status: spec landed;
+  implementation running (Sonnet, worktree).
 - **Claims-page reduction track** — covers the five-block reduction item below. Fully specified
   by the operator's prompt, no spec agent needed. Status: started (Sonnet, worktree).
 
