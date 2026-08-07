@@ -52,14 +52,16 @@ rollups and the agreement table always separate single from combo cells.
 | --- | --- | --- |
 | A1 | naming-vocabulary (25), svo-query (50), quantifier-counting (25) | — |
 | A2 | naming-vocabulary (25), svo-query (50), quantifier-counting (25), pronoun-binding (25), negation (25) | noise+svo-query (25) |
-| B1 | pronoun-binding (50†), negation (25), reversible-passive (25), temporal (50†), discourse-reference (25) | pronoun-binding+negation (25), discourse-reference+quantifier-counting (25) |
+| B1 | pronoun-binding (50), negation (25), reversible-passive (25), temporal (50), discourse-reference (25) | pronoun-binding+negation (25), discourse-reference+quantifier-counting (25) |
 | B2 | reversible-passive (25), relative-embedded (50), coordination-compositional (50), discourse-reference (25), assert-recall (25) | quantifier-counting+temporal (25), noise+pronoun-binding (25) |
 | C1 | temporal (50†), relative-embedded (25), coordination-compositional (25), assert-recall (25), subordination (25), conditional (25), ellipsis (25), discourse-deixis (25), presupposition (25) | negation+relative-embedded (25) |
 | C2 | pronoun-binding (25 — Winograd-style), relative-embedded (25), garden-path (25) | — |
 
-36 cells, 1075 pool cases. († = **census cells**: B1 pronoun-binding, B1 temporal
-and C1 temporal were grown 25→50 and are drawn in FULL every run — cycle-4 pool
-growth, see "Sampling" below.) Why these cells: each construction is populated at
+36 cells, 1075 pool cases. († = **census cell**: C1 temporal was grown 25→50 and
+is drawn in FULL every run — cycle-4 pool growth, see "Sampling" below. B1
+pronoun-binding and B1 temporal were grown and drawn the same way until B1's
+promotion; a promoted cell draws its fixed subset instead, so their census
+override was dropped.) Why these cells: each construction is populated at
 the band where it first meaningfully exists in the code-chat domain (per the
 band descriptors) and **overlaps into the adjacent band** with harder
 surfaces of the same construction — svo/naming/counting A1→A2,
@@ -136,8 +138,10 @@ these numbers move as levers land. Re-run the generator to refresh them.
 
 Cycle-4 pool growth (archive/PLAN_CYCLE_4.md): the pool went **850 → 925 cases** — the
 three dual-draw UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal)
-were each grown 25 → 50 and are now **census cells** (sampled in full every run,
-see "Sampling"), restoring all three to the PASS/FAIL statistic.
+were each grown 25 → 50 and became **census cells** (sampled in full every run,
+see "Sampling"), restoring all three to the PASS/FAIL statistic. The two B1
+cells later reverted to ordinary cells at B1's promotion — a promoted cell
+draws its fixed subset instead of a census.
 
 PLAN_ADVANCED_GRAMMAR.md §3 stage 0 pool growth (2026-07-07): the pool went
 **925 → 1075 cases** across **30 → 36 cells** (the five new C1 cells + the one
