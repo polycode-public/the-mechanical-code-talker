@@ -37,11 +37,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   two new rigs, committed results). Status: spec landed; implementation running (Sonnet,
   worktree). Merges AFTER the reduction track; the coordinator then retires claim:commonsense
   and its results JSON.
-- **Research-provider config track** — covers the provider-selection item below, plus the
-  adjacent ingestReferenceArticle row.facts gap and the citation-truthfulness edits the spec
-  surfaced. Selector commands are /wikipedia and /wikidata (NEXT.md's literal /wiki is already
-  the live-reference toggle, whose bare form is pinned as non-mutating). Status: spec landed;
-  implementation running (Sonnet, worktree).
+- **Research-provider config track** — LANDED (merged to main, blast radius 248 + test:fast 220
+  green on the merge; push pending the full suite now running). Worktree and branch removed.
+- **Research-page flake-hardening track** — covers the pause-ticking flake sub-clause below.
+  Status: started (Sonnet, worktree).
 - **Claims-page reduction track** — covers the five-block reduction item below. Fully specified
   by the operator's prompt, no spec agent needed. Status: started (Sonnet, worktree).
 
@@ -74,12 +73,17 @@ wiring); the coordinator owns this file and the merges.
   replaced with wording backed by the surviving blocks; no universal-citation claim anywhere on
   the site until the reworked C1 lands. Stale anchor links in public/ sources and the READMEs get
   updated or removed.
-- [ ] **The research provider becomes config-selected, settable three ways.** The chat
-  research lane reads its provider (wikipedia or wikidata; default wikipedia) from
-  `tmct.toml`. An init CLI option writes the choice into `tmct.toml`; a chat-invocation
-  option sets it for that session; in chat, `/wiki` selects wikipedia and `/wikidata`
-  selects wikidata for the rest of the session. Both adapters already pass the source
-  contract test; this item is the wiring and the three setters.
+- [ ] **The research provider becomes config-selected, settable three ways.** Delivered and
+  merged: `tmct.toml [research] source`, `--research-source` on init and chat, and in-chat
+  `/wikipedia` and `/wikidata` (`/wiki` was already the live-reference toggle with a pinned
+  non-mutating bare form, so the selectors got their own names and bare `/wiki` now reports the
+  active source), plus the adjacent fixes the track folded in: research ingest now stores a
+  Wikidata row's structured `facts`, and citations/miss lines name the active source instead of
+  hard-coding Wikipedia. Remainder, the reason this stays open: the track's e2e runs hit a
+  pre-existing flake three times — `test-e2e/pages-chat-research.test.mjs` "pause really stops
+  the ticking", a CDP click timeout on `#researchPlay` whose in-test 3-attempt retry doesn't
+  cover the browser-ticker-vs-driver race it documents. Harden that test; the item closes when
+  it holds under repetition.
 
 ## Discipline
 
