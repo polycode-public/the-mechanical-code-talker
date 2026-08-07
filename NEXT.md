@@ -31,22 +31,14 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
-## In flight (2026-08-07 second batch)
+## In flight (2026-08-07, after the 5.0.19 push)
 
-- **Page track** — running (Sonnet, worktree): three blocks + Cyc passage + per-block nav;
-  owns site-pages.mjs, build-demo-site.mjs, site.css, test/estate/claims.test.mjs.
-- **Purge track** — queued BEHIND the page track (hard order: a declared block whose JSON is
-  deleted fails demo:build and the estate test, so the manifest must shrink first). Mechanical
-  deletion of 26 files + 10 package.json claim:* lines; keeps planner, prose-band, openbookqa,
-  definitions, paraphrase and all shared claims helpers.
-- Editorial calls settled by the spec, adoptable without re-litigating: kickers stay C7/L1/L2
-  (gaps are truthful; no external deep links exist); dead pairing CSS goes, delta CSS stays
-  (definitions may earn a block back).
-
-- **Benchmark-pins tracks** — ALL LANDED (idxbench fix + ladder pin; four pins + B1
-  promotion; reports + skill descriptions). 79/79 on the five bench files on merged main.
-- **Demo-deletion spec agent (Opus, read-only)** — mapping the removal of the five demo
-  pages before implementation dispatches.
+- **Demo-deletion train** — four tracks; lands as one train, then full gates + push. Track A
+  build machinery: running. Track B site content (owns index.html): running. Track C tests+CI:
+  running. Track D docs+receipts: LANDED (merged).
+- **Benchmark-skill-retirement spec agent** (Opus, read-only): running; implementation queued
+  behind the demo train (README/receipts ownership overlap).
+- **Quiet-feed homepage swap**: queued behind Track B (same file).
 
 ## Open items
 
@@ -75,17 +67,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   pages-chat-research e2e (tests the chat page, not research.html). Cross-page links into
   the five (e.g. the claims page L1 block's "try it in ingest.html") get removed or
   repointed.
-
-- [ ] **claims.html cuts to three blocks; the removed sections' rigs purge from the repo.**
-  The page keeps only: the C7 planner block ("tmct solves a taught Hanoi puzzle in under a
-  second up to this many disks."), the L1 prose-band block, the L2 OpenBookQA block, and C7's
-  device-bench box. Everything else on the page goes — the lede, the admission-standard
-  sentence, the Cyc passage (operator removed it after the first cut landed), both section
-  headings and their intro paragraphs, and the closing line. The left "on this page" nav
-  lists a short title per remaining block instead of the two section names. The rigs that captured removed sections (both this cut and the
-  earlier five-block reduction) are deleted outright — scripts, results JSONs, npm hooks, and
-  fixtures used only by them; this supersedes the earlier keep-as-regression-checks stance.
-  Rigs that never had a page section (definitions, paraphrase) stay.
 
 *(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
 intro says "every fact answer stays checkable against the graph it came from" where
