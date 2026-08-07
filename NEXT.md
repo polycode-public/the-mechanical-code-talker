@@ -43,6 +43,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (gaps are truthful; no external deep links exist); dead pairing CSS goes, delta CSS stays
   (definitions may earn a block back).
 
+- **Benchmark-pins tracks (from the operator-requested assessment)** — three running
+  concurrently (Sonnet worktrees, foreground-only): idxbench path fix + full-ladder pin;
+  four deterministic ladder pins (agentbench goal TOOL-8, infbench kernel INF-5,
+  researchbench RES-6, ingestbench ING-7) + chatbench B1 promotion; fresh RESEARCHBENCH and
+  INGESTBENCH reports of record + four stale skill descriptions.
+
 ## Open items
 
 - [ ] **claims.html cuts to three blocks; the removed sections' rigs purge from the repo.**
