@@ -33,22 +33,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **E1 becomes a definitional QA set; the OpenBookQA zero moves to limits.** Rig side
-  delivered and merged: `claim:definitions` (100-question committed fixture, 20 seed / 70
-  corpus / 10 neither; 22→90 after wordnet-xl, delta +68, committed floor 66) and
-  `claim:openbookqa` (single-arm limit, 0/100 with wordnet-xl loaded, three causal stems
-  recorded for quoting). Remainder, why this stays open: (1) the page-facing blocks — the
-  reworked E1 delta block and the OpenBookQA limits block with its what-this-does-not-mean
-  line — are unpublished while the reduced claims page holds at its five admitted blocks;
-  putting either back is an admission-standard call (the fixture is self-authored, so E1
-  qualifies only under the reader-recheckable arm, if at all). Related wording call for the
-  same moment: the claims intro's Cyc passage now says "every fact answer stays checkable
-  against the graph it came from" where claims-notes.txt says "stays citable" — softened under
-  the no-universal-citation rule; restore the notes' wording if C1's rework re-earns it.
-  (2) the superseded
-  `claim:commonsense` rig and `results/claims/commonsense.json` still exist alongside the new
-  pair; deleting them was blocked by the session's permission layer and needs the operator
-  (two `git rm` paths plus one package.json line).
+None open.
+
+*(Two settled wording/scope decisions worth knowing when C1's rework starts: the claims
+intro says "every fact answer stays checkable against the graph it came from" where
+claims-notes.txt says "stays citable" — restore the notes' wording only if the rework
+re-earns it; and `claim:definitions` publishes no page block until its fixture is sampled
+from outside the repo, per the page's admission standard.)*
 
 ## Discipline
 
