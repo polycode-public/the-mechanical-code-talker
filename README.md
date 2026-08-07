@@ -124,7 +124,7 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 | `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
 | `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
 | `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
-| `public/` | the demo site: the hand-written home page, the eleven about pages, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
+| `public/` | the demo site: the hand-written home page, the six about pages, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
 
 `node_modules/` (dependencies) and dotfiles/hidden tooling directories are omitted above.
 
@@ -412,21 +412,16 @@ tmct> /exit
 
 **[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
-page answers codebase questions live, and eleven more pages each ground their
+page answers codebase questions live, and six more pages each ground their
 own domain: a full chat seeded with 63,470 facts (the same nine bands as
 `npm run init:xl`), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
-terms inside), and the **code explorer** (the same ledger UI refocused on a
-code graph, with a hint rail of suggested next questions). An **ingest
-page** turns pasted or dropped text into grounded facts and downloads them
-as canonical JSONL, and a **research page** walks a stub wiki graph link by
-link. The rest are a Towers-of-Hanoi plan replayed move by move, the
-spider-and-fly and text-adventure games, a sprite gallery whose chat dock
-answers from 1,480 generated sprite facts, and two multi-agent worlds: a
-burrow that shares one world across browsers over WebRTC, and a Three.js
-town square where a wolf hunts goblins. The chat page and
-the ledger take the same paste-or-drop text in place; every page that holds
-a fact store exports it as JSONL.
+terms inside), and a Towers-of-Hanoi **plan** replayed move by move. A 3D
+**town square** has a fox and goblins each plan their own move from what
+they've personally seen. The rest are the text-adventure game and a
+**sprite gallery** whose chat dock answers from 1,480 generated sprite
+facts. The chat page and the ledger take the same paste-or-drop text in
+place; every page that holds a fact store exports it as JSONL.
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
 and a service worker precaches the big ones, so a second visit works
 offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
@@ -465,12 +460,6 @@ reads a `graph.json` (or a repo's `.tmct/` folder), shows every import, call and
 over the same graph. A hint rail suggests the next question from what the graph
 actually holds: "what does X import", "which functions call Y", "list
 functions". Every suggestion resolves to a real answer.
-
-The identical page also runs as a plain hosted page over the demo code
-graph, with nothing to install:
-**[try it live →](https://tmct.polycode.co.uk/code.html)**.
-The desktop build below is for exploring your own repo or graph: a browser page
-gets no filesystem access, so the hosted page reads the demo graph it ships with.
 
 Electron is a dev-only dependency and never ships in the npm package. Because
 `.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime

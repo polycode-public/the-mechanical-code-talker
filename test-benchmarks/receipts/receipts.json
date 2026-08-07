@@ -36,29 +36,9 @@
       "bytesWire": 35387
     },
     {
-      "slug": "code-about",
-      "bytesRaw": 14195,
-      "bytesWire": 3563
-    },
-    {
-      "slug": "code",
-      "bytesRaw": 103968,
-      "bytesWire": 15796
-    },
-    {
       "slug": "index",
       "bytesRaw": 85579,
       "bytesWire": 8214
-    },
-    {
-      "slug": "ingest-about",
-      "bytesRaw": 13695,
-      "bytesWire": 3534
-    },
-    {
-      "slug": "ingest",
-      "bytesRaw": 50264,
-      "bytesWire": 12299
     },
     {
       "slug": "ledger-about",
@@ -69,16 +49,6 @@
       "slug": "ledger",
       "bytesRaw": 160059,
       "bytesWire": 25325
-    },
-    {
-      "slug": "mud-about",
-      "bytesRaw": 14425,
-      "bytesWire": 3783
-    },
-    {
-      "slug": "mud",
-      "bytesRaw": 4854671,
-      "bytesWire": 131682
     },
     {
       "slug": "mudiii-about",
@@ -99,26 +69,6 @@
       "slug": "plan",
       "bytesRaw": 48369,
       "bytesWire": 10559
-    },
-    {
-      "slug": "research-about",
-      "bytesRaw": 15038,
-      "bytesWire": 3872
-    },
-    {
-      "slug": "research",
-      "bytesRaw": 58090,
-      "bytesWire": 12895
-    },
-    {
-      "slug": "spider-fly-about",
-      "bytesRaw": 14395,
-      "bytesWire": 3747
-    },
-    {
-      "slug": "spider-fly",
-      "bytesRaw": 4684149,
-      "bytesWire": 100092
     },
     {
       "slug": "sprites-about",
