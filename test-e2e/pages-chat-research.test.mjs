@@ -77,9 +77,15 @@ const SUMMARIES = {
 };
 
 /** Answer opensearch, the lead-section links parse, and the per-title REST
- *  summaries from fixtures, with the CORS header a cross-origin fetch needs. */
-async function routeSimpleWikipedia(page) {
-  await page.route("https://simple.wikipedia.org/**", (route) => {
+ *  summaries from fixtures, with the CORS header a cross-origin fetch needs.
+ *  `delayMs` (default 0) holds each response for that long before fulfilling
+ *  — the pause/resume test passes one, since the auto-play ticker's own
+ *  pacing runs entirely on these responses landing, and stretching them out
+ *  is what actually buys this driver process room to observe "still
+ *  playing" against a queue small enough to finish in a few seconds flat. */
+async function routeSimpleWikipedia(page, { delayMs = 0 } = {}) {
+  await page.route("https://simple.wikipedia.org/**", async (route) => {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
     const url = route.request().url();
     let body;
     if (url.includes("action=opensearch")) {
@@ -196,9 +202,52 @@ test("the researched-this-session panel lists each topic's own passage, its sour
   }
 });
 
+/** Wait for #researchPlay to report "playing" (aria-pressed="true") and click
+ *  it the instant that's true, entirely inside the browser's own event loop.
+ *  A Playwright-level `waitForFunction(...)` followed by a separate
+ *  `locator.click()` is two round trips through the driver process, and the
+ *  ~2.4s auto-play ticker can advance (even finish the whole queue) in the
+ *  gap between them under driver-process load — the queued click then lands
+ *  on a button that already went hidden, and Playwright reports that as a
+ *  click actionability timeout even though the page itself is healthy. A
+ *  MutationObserver watching the button's own attributes lets the "wait for
+ *  playing" and the "click" happen back to back in the same synchronous
+ *  browser callback, with no driver round trip in between for the ticker to
+ *  race. The button also starts out hidden before a run has even begun
+ *  (nothing queued yet), so "hidden" only means "the run finished before we
+ *  ever caught it" once it has been seen visible at least once — otherwise
+ *  this resolves `false` too early, before the run had even started. When it
+ *  genuinely does finish first, this resolves `false` instead of clicking,
+ *  so the caller can retry on a fresh ticker rather than clicking a dead
+ *  button. */
+async function clickResearchPlayOncePlaying(page, timeoutMs) {
+  return page.evaluate((timeout) => new Promise((resolve, reject) => {
+    const button = document.getElementById("researchPlay");
+    let everVisible = false;
+    const settle = () => {
+      if (!button.hidden) everVisible = true;
+      if (everVisible && button.hidden) { resolve(false); return true; }
+      if (button.getAttribute("aria-pressed") === "true") { button.click(); resolve(true); return true; }
+      return false;
+    };
+    if (settle()) return;
+    const observer = new MutationObserver(() => { if (settle()) observer.disconnect(); });
+    observer.observe(button, { attributes: true, attributeFilter: ["aria-pressed", "hidden"] });
+    setTimeout(() => {
+      observer.disconnect();
+      reject(new Error("researchPlay reported neither playing nor complete before the wait ran out"));
+    }, timeout);
+  }), timeoutMs);
+}
+
+// Slows each fixture response so the 3-topic run can't finish faster than
+// this driver process can realistically observe it mid-play — see
+// routeSimpleWikipedia's own comment for why that's the actual lever here.
+const PAUSE_TEST_FIXTURE_DELAY_MS = 1500;
+
 /** One attempt at the play/pause flow, on a caller-supplied fresh page. */
 async function assertPauseReallyStopsTheTicker(page) {
-  await routeSimpleWikipedia(page);
+  await routeSimpleWikipedia(page, { delayMs: PAUSE_TEST_FIXTURE_DELAY_MS });
   await page.fill("#researchTopic", "owls");
   await page.click("#researchGo");
   await page.waitForFunction(
@@ -206,15 +255,10 @@ async function assertPauseReallyStopsTheTicker(page) {
     null,
     { timeout: ANSWER_TIMEOUT_MS },
   );
-  const playBtn = page.locator("#researchPlay");
-  await playBtn.waitFor({ state: "visible", timeout: ANSWER_TIMEOUT_MS });
-  await page.waitForFunction(
-    () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "true",
-    null,
-    { timeout: ANSWER_TIMEOUT_MS },
-  );
 
-  await playBtn.click({ timeout: 5000 }); // pause
+  const caughtItPlaying = await clickResearchPlayOncePlaying(page, ANSWER_TIMEOUT_MS); // pause
+  if (!caughtItPlaying) throw new Error("the queue finished before the pause click ever caught it mid-play");
+
   // Let any in-flight step settle, then prove the transcript stops growing.
   await page.waitForFunction(
     () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "false"
@@ -226,7 +270,7 @@ async function assertPauseReallyStopsTheTicker(page) {
   await page.waitForTimeout(3500);
   assert.equal((await userBubbleTexts(page)).length, pausedCount, "paused means no further step is asked");
 
-  await playBtn.click(); // resume
+  await page.locator("#researchPlay").click(); // resume — paused state is stable, nothing races this
   await page.waitForFunction(
     (n) => document.querySelectorAll("#messages .msg-row.user .bubble").length > n,
     pausedCount,
@@ -238,9 +282,11 @@ test("the research row's own entry submits the request, and pause really stops t
   // The auto-play ticker's own 2.4s pacing gap runs entirely inside the
   // browser process, independent of this test's driver process; under
   // contention the driver can stall long enough that the whole queue (here,
-  // 3 topics) finishes before the pause click's CDP round trip lands,
-  // leaving nothing to pause and no #researchPlay button to click. A fresh
-  // page gives each attempt its own independent race against that stall.
+  // 3 topics) finishes before this test ever manages to catch the button
+  // mid-play. clickResearchPlayOncePlaying reports that as a clean `false`
+  // rather than an actionability timeout, but there is still nothing left
+  // to pause once it happens — a fresh page gives each attempt its own
+  // independent race against that stall.
   const ATTEMPTS = 3;
   let lastError = null;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
