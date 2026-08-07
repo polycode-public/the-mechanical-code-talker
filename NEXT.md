@@ -33,47 +33,31 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In flight (2026-08-07 batch)
 
-- **E1 definitional QA track** — covers the E1/OpenBookQA item below, rig side only. Status:
-  COMMITTED in its worktree (coordinator finished it after the agent stalled twice): fixture
-  verified 20/70/10 bands, definitions rig measured 22→90 (delta +68, floor 66, reproduced
-  across two independent runs), openbookqa limit 0/100 with wordnet-xl loaded. Merges AFTER
-  the reduction track; the coordinator then retires claim:commonsense and its results JSON.
-- **Research-provider config track** — LANDED (merged to main, blast radius 248 + test:fast 220
-  green on the merge; push pending the full suite now running). Worktree and branch removed.
-- **Research-page flake-hardening track** — covers the pause-ticking flake sub-clause below.
-  Status: started (Sonnet, worktree).
-- **Claims-page reduction track** — covers the five-block reduction item below. Fully specified
-  by the operator's prompt, no spec agent needed. Status: started (Sonnet, worktree).
-
-Sequencing note: the claims-page source belongs to the reduction track for this batch. The E1
-track's implementation is re-scoped to the rig side (fixture, scoring, delta, committed results);
-its page-facing parts (the reworked E1 block, the OpenBookQA limits block) are its recorded
-remainder, pending the reduced page's admission standard.
-
-The two tracks own disjoint files (benchmark fixture + claims page source vs. toml/CLI/chat
-wiring); the coordinator owns this file and the merges.
+- **Research-provider config track** — LANDED and pushed (58f178bf, full suite 6359 green).
+- **E1 definitional QA track (rig side)** — LANDED (merged after the reduction). The old
+  claim:commonsense rig was NOT retired: the deletion was blocked by the session's permission
+  layer, so rig and results JSON remain alongside the new pair; see the E1 item's remainder.
+- **Claims-page reduction track** — LANDED (merge b40eed2d). The merge conflicted with local
+  commit 8586765a (the claims-notes Cyc passage); resolved by keeping the notes' passage with
+  "stays citable" softened to "stays checkable against the graph it came from" per the
+  no-universal-citation rule. Push pending the full suite.
+- **Research-page flake-hardening track** — covers the pause-ticking flake sub-clause. Status:
+  running (Sonnet, worktree, foreground-only after one stall correction).
 
 ## Open items
 
-- [ ] **E1 becomes a definitional QA set; the OpenBookQA zero moves to limits.** Author a
-  committed definitional ("what is X"-shaped) question fixture, and point E1's extensibility
-  motion at it: score out of the box, load wordnet-xl, score again, publish the delta. The
-  OpenBookQA sample and its zero move to the claims page's limits section as a
-  grammar-shape limit with its own what-this-does-not-mean line naming the unsupported
-  causal phrasing.
-- [ ] **claims.html reduces to the five blocks whose measurements hold up.** The page renders
-  exactly C3 (latency), C4 (determinism), C5 (offline), C7 (planner envelope), L1 (prose
-  grounding), keeping their anchor IDs. The "Measured extensibilities" section goes; the TOC
-  covers the two remaining sections; retired pairing cross-references (C1↔L1, C2↔L2, C2↔E3) go;
-  the intro rewords for two sections, keeps the Cyc passage and the "A claim ships with its
-  number, or it does not ship" close, and states the admission standard (input from outside the
-  repo, sampled beyond the author's choosing, or reader-checkable on own hardware), with a
-  one-line tag under each surviving block naming which it satisfies. Retired rigs, fixtures and
-  results JSON all stay in the repo and in `npm run claims` as regression checks. The homepage's
-  "Every fact it gives you names where it came from" overclaims (C1 measured 5 of 222) and gets
-  replaced with wording backed by the surviving blocks; no universal-citation claim anywhere on
-  the site until the reworked C1 lands. Stale anchor links in public/ sources and the READMEs get
-  updated or removed.
+- [ ] **E1 becomes a definitional QA set; the OpenBookQA zero moves to limits.** Rig side
+  delivered and merged: `claim:definitions` (100-question committed fixture, 20 seed / 70
+  corpus / 10 neither; 22→90 after wordnet-xl, delta +68, committed floor 66) and
+  `claim:openbookqa` (single-arm limit, 0/100 with wordnet-xl loaded, three causal stems
+  recorded for quoting). Remainder, why this stays open: (1) the page-facing blocks — the
+  reworked E1 delta block and the OpenBookQA limits block with its what-this-does-not-mean
+  line — are unpublished while the reduced claims page holds at its five admitted blocks;
+  putting either back is an admission-standard call (the fixture is self-authored, so E1
+  qualifies only under the reader-recheckable arm, if at all). (2) the superseded
+  `claim:commonsense` rig and `results/claims/commonsense.json` still exist alongside the new
+  pair; deleting them was blocked by the session's permission layer and needs the operator
+  (two `git rm` paths plus one package.json line).
 - [ ] **The research provider becomes config-selected, settable three ways.** Delivered and
   merged: `tmct.toml [research] source`, `--research-source` on init and chat, and in-chat
   `/wikipedia` and `/wikidata` (`/wiki` was already the live-reference toggle with a pinned
