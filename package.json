@@ -169,7 +169,6 @@
     "claim:paraphrase": "node scripts/claims/claim-paraphrase.mjs",
     "claim:freshness": "node scripts/claims/claim-freshness.mjs",
     "claim:ground-gate": "node scripts/claims/claim-ground-gate.mjs",
-    "claim:commonsense": "node scripts/claims/claim-commonsense.mjs",
     "claim:definitions": "node scripts/claims/claim-definitions.mjs",
     "claim:openbookqa": "node scripts/claims/claim-openbookqa.mjs",
     "claim:lexicon": "node scripts/claims/claim-lexicon.mjs",
