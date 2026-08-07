@@ -33,10 +33,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## In flight (2026-08-07 batch)
 
-- **E1 definitional QA track** — covers the E1/OpenBookQA item below, rig side only (fixture,
-  two new rigs, committed results). Status: spec landed; implementation running (Sonnet,
-  worktree). Merges AFTER the reduction track; the coordinator then retires claim:commonsense
-  and its results JSON.
+- **E1 definitional QA track** — covers the E1/OpenBookQA item below, rig side only. Status:
+  COMMITTED in its worktree (coordinator finished it after the agent stalled twice): fixture
+  verified 20/70/10 bands, definitions rig measured 22→90 (delta +68, floor 66, reproduced
+  across two independent runs), openbookqa limit 0/100 with wordnet-xl loaded. Merges AFTER
+  the reduction track; the coordinator then retires claim:commonsense and its results JSON.
 - **Research-provider config track** — LANDED (merged to main, blast radius 248 + test:fast 220
   green on the merge; push pending the full suite now running). Worktree and branch removed.
 - **Research-page flake-hardening track** — covers the pause-ticking flake sub-clause below.
