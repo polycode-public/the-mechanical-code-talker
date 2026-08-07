@@ -50,6 +50,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **The homepage's Polycode projects section swaps marginalia for the-quiet-feed.** Add
+  https://gitlab.com/polycode-projects/the-quiet-feed (description drawn from its own README —
+  the sibling checkout under ~/projects/polycode-projects may hold it) and remove the
+  marginalia entry. Queued behind the demo-deletion content track, which owns index.html.
 - [ ] **Eight benchmark skills retire in favour of npm-test pins; only benchmark-cefr-english
   survives.** benchmark-agent, -inference, -code-index, -ingest, -research, -conversation,
   -agi-scales and -code-synthesis: their skill directories, root symlinks, skill-only
