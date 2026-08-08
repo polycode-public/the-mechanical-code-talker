@@ -347,6 +347,24 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
   console.log(`wrote ${chatPagePath}`);
 }
 
+// news.html: the news dashboard, over the SAME chat seed built just above —
+// section 1 of PLAN_NEWS_FEED.md is explicit that news.html reuses
+// chat-seed.json as-is rather than earning a second seed builder. Its own
+// browser bundle and fixture set are built here too, the same posture as
+// buildChatBundle above, so a plain `npm run demo:build` leaves nothing for
+// the page to 404 on.
+{
+  const { renderNewsHtml } = await import(join(ROOT, "src", "services", "news-viz.mjs"));
+  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+  const { main: buildNewsBundle } = await import(join(here, "build-news-bundle.mjs"));
+  const { outPath: newsBundlePath, size: newsBundleBytes, fixturesPath: newsFixturesPath, fixturesSize: newsFixturesBytes } = await buildNewsBundle(SITE);
+  console.log(`wrote ${newsBundlePath} (${(newsBundleBytes / 1024).toFixed(0)} KB)`);
+  console.log(`wrote ${newsFixturesPath} (${(newsFixturesBytes / 1024).toFixed(0)} KB)`);
+  const newsPagePath = join(SITE, "news.html");
+  await writeF(newsPagePath, injectMetaHead(renderNewsHtml({ digestStructures: readDigestStructures(), seedStamp, seedBytes: seed.bytes }), demoPageMeta("news")));
+  console.log(`wrote ${newsPagePath}`);
+}
+
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
 // material shading, data/sprites-large/*.toml): excluded from the npm
 // package entirely (package.json's own "!data/sprites-large/"), so only
