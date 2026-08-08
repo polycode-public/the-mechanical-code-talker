@@ -36,17 +36,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Batch cadence for this stretch (operator, 2026-08-08): sub-agents commit often; the coordinator
 merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch.
 
-- [ ] **Filler + counterfactuals** (`archive/PLAN_FILLER_AND_COUNTERFACTUALS.md`, both sections
-  BUILT, plan archived) — CODE-COMPLETE on `main`, riding the next batch push. Open remainder
-  from §1's fix: the locative-teach grammar cannot parse a quantifier-prefixed subject ("one
-  more disk rests on peg-a", "every disk rests on peg-a") — previously the ack-preamble arm
-  silently dropped the quantifier and stored a wrong fact; now it misses honestly. Parsing
-  those subjects is real, separate grammar work, still open.
-- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 shipped and
-  CI-verified. IN FLIGHT: A0 (Part A prose correction + the one remaining silent-pick guard in
-  `runAsk`'s prev fallback). Queued: B2 (`/goals` + `tmct plan --goals`), B3 (containment +
-  reject + TOOL-9, atomic with grader and envelope), B4 (autoplay re-base), B5 (recognition
-  surfaces). A0/B2 serialize on `chat.mjs`; briefs in the session scratchpad.
+- [ ] **Locative teach with a quantified subject** — the locative-teach grammar cannot parse a
+  quantifier-prefixed subject ("one more disk rests on peg-a", "every disk rests on peg-a").
+  Surfaced by the filler work (now shipped and CI-verified, plan archived): the ack-preamble
+  arm used to silently drop the quantifier and store a wrong fact; it misses honestly now.
+  Parsing those subjects is real, separate grammar work.
+- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 and A0 shipped and
+  CI-verified; B2 (`/goals` + `tmct plan --goals`) CODE-COMPLETE on `main`, riding the next
+  batch. IN FLIGHT: B3 (containment + reject + TOOL-9, atomic with grader and envelope; owns
+  `recognize.mjs` + agentbench) and B4 (autoplay re-base; owns `adventure-autoplay.mjs`), in
+  parallel. Queued: B5 (recognition surfaces), after both. Briefs in the session scratchpad.
 - [ ] **Sprites redesign** (operator, 2026-08-08: ontology-section design, hover/turn/emotion
   animation rules on every sprite tile, per-group focus modes, random scene with rooms, full-wall
   room backdrop, walking cat; machinery in core `src/` for adventure.html) — IN FLIGHT: Fable
