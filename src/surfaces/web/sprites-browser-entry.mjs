@@ -29,7 +29,12 @@
 // published `ask` route both call it first, mirroring spider-fly's exact
 // wiring points.
 import { createInMemoryStore, appendFacts, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
-import { extractSceneItems } from "../../domain/scene-compose.mjs";
+import { extractSceneItems, splitSceneBackdrop } from "../../domain/scene-compose.mjs";
+import { randomSceneSentence, sceneVocabulary } from "../../domain/scene-random.mjs";
+import {
+  isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
+  focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+} from "../../domain/sprite-animation.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { SPRITE_FACTS_PROVENANCE, spriteFactGraphPayload } from "../../domain/sprite-facts.mjs";
@@ -91,5 +96,15 @@ publishTmctSurface({
     return graphAsk(request, options, session);
   },
   plan: enginePlan,
-  page: { registerWinkModel, normFactTerm, extractSceneItems },
+  page: {
+    registerWinkModel, normFactTerm, extractSceneItems, splitSceneBackdrop,
+    randomSceneSentence, sceneVocabulary,
+    // The shared animation state machine (sprite-animation.mjs) — the same
+    // functions the page splices as text, published here for any caller that
+    // reaches the machinery through the bundle instead.
+    spriteAnimation: {
+      isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
+      focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+    },
+  },
 });

@@ -23,7 +23,7 @@ import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
-import { loadSpriteOntologyFactRows, renderSpriteCatalogLandingHtml } from "../src/services/sprite-catalog-viz.mjs";
+import { loadSpriteOntologyFactRows, loadAdventureSceneRoomClasses, renderSpriteCatalogLandingHtml } from "../src/services/sprite-catalog-viz.mjs";
 
 let siteDir;
 let server;
@@ -45,6 +45,7 @@ before(async () => {
     largeTemplates: readSpriteLargeTemplateFiles(),
     factRows: await loadSpriteOntologyFactRows(),
     spritesBundleAvailable: true,
+    adventureRoomClasses: await loadAdventureSceneRoomClasses(),
   }));
   server = await serveDirectory(siteDir);
   browser = await chromium.launch();
@@ -366,6 +367,73 @@ test("a pill click appends its real phrase to the input and composes it into the
     await page.waitForFunction(() => document.querySelectorAll("#sceneRow .scene-card").length >= 2);
     const labels = await page.locator("#sceneRow .scene-label").allInnerTexts();
     assert.deepEqual(labels, ["doctor", "wood cabinet"]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a named room takes the whole scene wall, with the entities standing in front of it", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    await page.fill("#composeq", "a doctor in the library");
+    await page.waitForFunction(() => document.getElementById("sceneFrame")?.classList.contains("has-backdrop"));
+    assert.equal(await page.locator("#sceneBackdrop svg").count(), 1, "the room's own sprite fills the backdrop layer");
+    assert.equal(await page.locator("#sceneBackdrop .scene-room-name").textContent(), "library");
+    assert.deepEqual(await page.locator("#sceneRow .scene-label").allInnerTexts(), ["doctor"], "the room is the wall, never a standing tile");
+    const widths = await page.evaluate(() => ({
+      frame: document.getElementById("sceneFrame").getBoundingClientRect().width,
+      backdrop: document.getElementById("sceneBackdrop").getBoundingClientRect().width,
+    }));
+    assert.ok(widths.backdrop >= widths.frame - 1, "the backdrop spans the frame edge to edge");
+    assert.deepEqual(consoleErrors, [], "a room scene renders without a console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a 'moving' entity walks: its sprite alternates frames and oscillates while the scene stays put", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    await page.fill("#composeq", "a moving cat and a hat");
+    await page.waitForFunction(() => document.querySelectorAll("#sceneRow .scene-card").length >= 2);
+    assert.deepEqual(await page.locator("#sceneRow .scene-label").allInnerTexts(), ["moving cat", "hat"]);
+    assert.equal(await page.locator("#sceneRow .scene-walker").count(), 1, "only the moving entity walks");
+    const sample = async () => page.locator(".scene-walker .scene-sprite").evaluate((el) => ({ t: el.style.transform, svg: el.innerHTML }));
+    const seenTransforms = new Set();
+    const seenFrames = new Set();
+    for (let i = 0; i < 5; i += 1) {
+      const s = await sample();
+      seenTransforms.add(s.t);
+      seenFrames.add(s.svg);
+      await page.waitForTimeout(850);
+    }
+    assert.ok(seenTransforms.size >= 2, `the walker really moves, saw ${seenTransforms.size} position(s)`);
+    assert.ok(seenFrames.size >= 2, `the walker really changes drawings, saw ${seenFrames.size} frame(s)`);
+    assert.deepEqual(consoleErrors, [], "the walk logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the random-scene button writes a sentence into the composer and runs it through the same pipeline as typed input", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    await page.click("#composeRandom");
+    const sentence = await page.locator("#composeq").inputValue();
+    assert.ok(sentence.length > 0, "the button really writes a sentence");
+    assert.match(sentence, /in the /, "the sentence names one of the adventure worlds' own rooms");
+    await page.waitForFunction(() => document.querySelectorAll("#sceneRow .scene-card").length >= 1);
+    assert.equal(await page.evaluate(() => document.getElementById("sceneFrame").classList.contains("has-backdrop")), true,
+      "the named room really renders as the wall");
+
+    // The typed pipeline is the same one: retyping the exact sentence
+    // composes the exact same scene.
+    const randomLabels = await page.locator("#sceneRow .scene-label").allInnerTexts();
+    await page.fill("#composeq", "");
+    await page.fill("#composeq", sentence);
+    await page.waitForFunction((n) => document.querySelectorAll("#sceneRow .scene-card").length === n, randomLabels.length);
+    assert.deepEqual(await page.locator("#sceneRow .scene-label").allInnerTexts(), randomLabels);
+    assert.deepEqual(consoleErrors, [], "a random scene composes without a console error");
   } finally {
     await context.close();
   }

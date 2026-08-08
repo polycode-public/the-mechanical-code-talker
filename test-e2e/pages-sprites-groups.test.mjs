@@ -3,13 +3,14 @@
 // sprites-person-roles.html, sprites-objects.html, sprites-emotions.html —
 // one per src/services/sprite-catalog-viz.mjs's own CATALOG_GROUPS entry.
 // Each renders that ONE group's full card gallery: same styling, same
-// swatches, and one animated cell per class that clicks through its display
-// modes. The section ontology trees are not repeated here — a card's
-// ancestry pills link across to the landing page's tree instead, which is
-// what several tests below follow. The composer and the ask dock still
-// answer over the WHOLE catalog from any one of these pages, never just
-// this group's own classes — test-e2e/pages-sprites.test.mjs covers the
-// lighter landing page these link out from.
+// pose-first hover tiles, and one focused animated cell per card grid
+// (turning by default, emotions after a click). The section ontology trees
+// are not repeated here — a card's ancestry pills link across to the
+// landing page's tree instead, which is what several tests below follow.
+// The composer and the ask dock still answer over the WHOLE catalog from
+// any one of these pages, never just this group's own classes —
+// test-e2e/pages-sprites.test.mjs covers the lighter landing page these
+// link out from.
 //
 // Third-party hosts are blocked for every run, exactly as in pages-home/
 // pages-spider-fly: the whole page ships with itself, so nothing here needs
@@ -135,78 +136,109 @@ test("the person-roles page's person card renders all six curated emotion varian
   }
 });
 
-test("the objects page's bear card carries one image cell that clicks through every display mode and wraps back to static", async () => {
-  // reducedMotion pins the page's auto-step off, so every frame change below
-  // is the test's own click and the walk is fully deterministic.
-  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
-  try {
-    const card = page.locator('.card[data-cls="bear"]');
-    await card.waitFor({ state: "visible" });
-    const cell = card.locator(".swatch.cycle-mode");
-    assert.equal(await cell.count(), 1, "one animated cell for the whole class");
-    assert.equal(await card.locator(".swatch.cycle").count(), 1, "no separate cell per axis any more");
-    const cellButton = cell.locator(".swatch-img");
-    // The card sits far down a content-visibility:auto page — bring it on
-    // screen before reading, so the first frame's text is really rendered.
-    await cellButton.scrollIntoViewIfNeeded();
-    const walk = [];
-    const markups = new Set();
-    // bear's cell is the static sprite + its moving pose + five turntable
-    // angles + six moods = 13 frames; the fourteenth read proves the wrap.
-    for (let i = 0; i < 14; i += 1) {
-      walk.push({
-        mode: await cell.locator(".swatch-mode").textContent(),
-        label: await cell.locator(".swatch-label").textContent(),
-      });
-      markups.add(await cellButton.innerHTML());
-      await cellButton.click();
-    }
-    assert.deepEqual([...new Set(walk.map((f) => f.mode))], ["static", "moving", "turning", "emotions"],
-      `the clicks walk every mode in order (saw: ${walk.map((f) => f.mode).join(", ")})`);
-    assert.deepEqual(walk[0], { mode: "static", label: "bear" }, "the cell rests on the class's own plain sprite");
-    assert.deepEqual(walk[13], walk[0], "the fourteenth frame wraps back to where it started");
-    for (const expected of ["moving", "left", "centre", "right", "happy", "calm"]) {
-      assert.ok(walk.some((f) => f.label === expected), `the walk names its ${expected} frame`);
-    }
-    // 12 distinct drawings for 13 frames: the turntable's centre angle is the
-    // class's own plain sprite, the same one the cell rests on.
-    assert.equal(markups.size, 12, `each frame is its own real drawing, got ${markups.size}`);
-    assert.deepEqual(consoleErrors, [], "cycling logs no console error");
-  } finally {
-    await context.close();
-  }
-});
-
-test("with reduced motion the cell only ever moves when clicked, and hovering it does nothing", async () => {
-  const { context, page } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
-  try {
-    const cell = page.locator('.card[data-cls="bear"] .swatch.cycle-mode');
-    await cell.scrollIntoViewIfNeeded();
-    await cell.hover();
-    assert.equal(await cell.getAttribute("data-mode"), "static", "hovering never previews under reduced motion");
-
-    await cell.locator(".swatch-img").click();
-    const parked = { mode: await cell.getAttribute("data-mode"), svg: await cell.locator(".swatch-img").innerHTML() };
-    assert.equal(parked.mode, "moving", "the click is what moved it");
-    await page.waitForTimeout(2000);
-    assert.equal(await cell.getAttribute("data-mode"), parked.mode, "nothing steps the cell on by itself");
-    assert.equal(await cell.locator(".swatch-img").innerHTML(), parked.svg);
-  } finally {
-    await context.close();
-  }
-});
-
-test("with motion allowed the resting cell previews the moving pose while the pointer is over it, and lets go on mouse-out", async () => {
+test("each card grid keeps exactly one focused cell, and it rotates through its turning positions on its own", async () => {
   const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html");
   try {
-    const cell = page.locator('.card[data-cls="bear"] .swatch.cycle-mode');
-    await cell.scrollIntoViewIfNeeded();
-    assert.equal(await cell.getAttribute("data-mode"), "static", "the static frame is the resting state and never auto-steps");
-    await cell.hover();
-    await page.waitForFunction(() => document.querySelector('.card[data-cls="bear"] .swatch.cycle-mode')?.dataset.mode === "moving");
+    const bear = page.locator('.card[data-cls="bear"]');
+    await bear.scrollIntoViewIfNeeded();
+    const grid = page.locator(".cards", { has: bear }).first();
+    const focused = grid.locator(".swatch.cycle.focused");
+    assert.equal(await focused.count(), 1, "one focused sprite per grid");
+    assert.equal(await focused.getAttribute("data-mode"), "turning", "position-rotating is the default animation");
+    const seen = new Set();
+    for (let i = 0; i < 4; i += 1) {
+      seen.add(await focused.locator(".swatch-img").innerHTML());
+      await page.waitForTimeout(850);
+    }
+    assert.ok(seen.size >= 3, `the focused cell really rotates, saw ${seen.size} frame(s)`);
+    assert.deepEqual(consoleErrors, [], "the rotation logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking the focused cell swaps it to emotion cycling, and the grid keeps that choice when focus moves to another card", async () => {
+  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
+  try {
+    const bear = page.locator('.card[data-cls="bear"]');
+    await bear.scrollIntoViewIfNeeded();
+    const grid = page.locator(".cards", { has: bear }).first();
+    const focused = () => grid.locator(".swatch.cycle.focused").first();
+    await focused().locator(".swatch-img").click();
+    assert.equal(await focused().getAttribute("data-mode"), "emotions", "the click swaps position-rotating for emotion-cycling");
+
+    // Click a different card's cell: focus moves there, the grid's chosen
+    // mode rides along.
+    const other = grid.locator(".swatch.cycle:not(.focused)").first();
+    const otherCard = await other.evaluate((el) => el.closest(".card").dataset.cls);
+    await other.locator(".swatch-img").click();
+    assert.equal(await grid.locator(".swatch.cycle.focused").count(), 1, "still exactly one focused sprite");
+    const nowFocusedCard = await focused().evaluate((el) => el.closest(".card").dataset.cls);
+    assert.equal(nowFocusedCard, otherCard, "focus moved to the clicked sprite");
+    assert.equal(await focused().getAttribute("data-mode"), "emotions", "the grid remembered its chosen mode");
+
+    await focused().locator(".swatch-img").click();
+    assert.equal(await focused().getAttribute("data-mode"), "turning", "clicking the focused cell toggles back");
+    assert.deepEqual(consoleErrors, [], "focus clicks log no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("with reduced motion nothing steps on its own, and hovering never swaps the drawing — only the caption's pose flips", async () => {
+  const { context, page } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
+  try {
+    const bear = page.locator('.card[data-cls="bear"]');
+    await bear.scrollIntoViewIfNeeded();
+    const tile = bear.locator('.swatch[data-property="mgx:faces"]').first();
+    const before = await tile.locator(".swatch-img").innerHTML();
+    await tile.hover();
+    await page.waitForTimeout(300);
+    assert.equal(await tile.locator(".swatch-pose").textContent(), "moving", "the caption still names the moving form");
+    assert.equal(await tile.locator(".swatch-img").innerHTML(), before, "the drawing itself never swaps under reduced motion");
+
+    const grid = page.locator(".cards", { has: bear }).first();
+    const focused = grid.locator(".swatch.cycle.focused").first();
+    const parked = await focused.locator(".swatch-img").innerHTML();
+    await page.waitForTimeout(1800);
+    assert.equal(await focused.locator(".swatch-img").innerHTML(), parked, "nothing steps the focused cell on by itself");
+  } finally {
+    await context.close();
+  }
+});
+
+test("hovering a resting tile flips its caption to the moving form and flip-books the drawing where a moving frame exists", async () => {
+  const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html");
+  try {
+    const bear = page.locator('.card[data-cls="bear"]');
+    await bear.scrollIntoViewIfNeeded();
+    assert.equal(await bear.locator('.swatch[data-pose="moving"]:not(.cycle)').count(), 0,
+      "the server-rendered moving frames folded into their resting tiles");
+    const tile = bear.locator('.swatch[data-property="mgx:faces"]').first();
+    const rest = await tile.locator(".swatch-img").innerHTML();
+    assert.equal(await tile.locator(".swatch-pose").textContent(), "static");
+    await tile.hover();
+    const seen = new Set();
+    for (let i = 0; i < 5; i += 1) {
+      seen.add(await tile.locator(".swatch-img").innerHTML());
+      await page.waitForTimeout(450);
+    }
+    assert.equal(await tile.locator(".swatch-pose").textContent(), "moving", "the caption reads the moving form while hovered");
+    assert.ok(seen.size >= 2, "the drawing alternates its static and moving frames");
+    assert.ok([...seen].some((svg) => svg !== rest), "one of the frames is the real moving art");
     await page.mouse.move(0, 0);
-    await page.waitForFunction(() => document.querySelector('.card[data-cls="bear"] .swatch.cycle-mode')?.dataset.mode === "static");
-    assert.deepEqual(consoleErrors, [], "the hover preview logs no console error");
+    await page.waitForTimeout(300);
+    assert.equal(await tile.locator(".swatch-pose").textContent(), "static", "mouse-out restores the resting caption");
+    assert.equal(await tile.locator(".swatch-img").innerHTML(), rest, "mouse-out restores the resting drawing");
+
+    // A tile with no moving frame of its own still flips its caption.
+    const mood = bear.locator('.swatch[data-property="mgx:feels"]').first();
+    const moodRest = await mood.locator(".swatch-img").innerHTML();
+    await mood.hover();
+    await page.waitForTimeout(300);
+    assert.equal(await mood.locator(".swatch-pose").textContent(), "moving");
+    assert.equal(await mood.locator(".swatch-img").innerHTML(), moodRest, "no moving art, no fake flip");
+    assert.deepEqual(consoleErrors, [], "hovering logs no console error");
   } finally {
     await context.close();
   }

@@ -28,6 +28,13 @@ export function tokenizeSceneText(text) {
   return tokens;
 }
 
+/** The words that end one item's run of preceding modifiers — the articles,
+ *  joins and placement words the scene sentences themselves are built from.
+ *  "a moving black cat" walks back past the unrecognized "black" to find the
+ *  real "moving"; "a cabinet and a moving cat" stops at "and", so a modifier
+ *  can never jump across to a different item's noun. */
+const MODIFIER_RUN_BREAKERS = new Set(["a", "an", "the", "and", "or", "with", "on", "in", "at", "of", "then", "there", "is", "are"]);
+
 const sceneClassGraphCache = new WeakMap();
 
 /** The `classIndex`'s own class names as a resolvable graph, one individual per
@@ -81,15 +88,18 @@ function resolveSpanToClass(graph, classIndex, tokens, used, start, longestClass
 
 /** Every real catalog class the free-typed `text` names, in the order each first
  *  appears, paired with the real material label (one of that SAME class's own
- *  swatch labels — never another class's, never a fabricated one) immediately
- *  preceding it, or `null`. `classIndex` is `{className: {materials}}` with
- *  `materials` keyed by lowercase label (sprite-catalog-viz.mjs's own
- *  `sceneComposerClassIndex` output, or an equivalent test fixture) — a class name
- *  absent from `classIndex` can never match, and a modifier word that isn't one
- *  of ITS matched class's own material labels is silently dropped rather than
- *  guessed at, the same honest-miss posture an unrecognized class name gets (an
- *  unmatched word, e.g. "red" before a lamp with no red material, is never an
- *  error, just silently not drawn). Pure. */
+ *  swatch labels — never another class's, never a fabricated one) among the words
+ *  immediately preceding it, or `null`, plus `moving: true` when a preceding
+ *  "moving" names a moving frame that class really has. Modifiers stack ("a
+ *  moving black cat" reads both words), each consumed at most once, walking
+ *  back only through still-unclaimed words. `classIndex` is `{className:
+ *  {materials}}` with `materials` keyed by lowercase label
+ *  (sprite-catalog-viz.mjs's own `sceneComposerClassIndex` output, or an
+ *  equivalent test fixture) — a class name absent from `classIndex` can never
+ *  match, and a modifier word that isn't one of ITS matched class's own labels
+ *  is silently dropped rather than guessed at, the same honest-miss posture an
+ *  unrecognized class name gets (an unmatched word, e.g. "red" before a lamp
+ *  with no red material, is never an error, just silently not drawn). Pure. */
 export function extractSceneItems(text, classIndex) {
   const index = classIndex || {};
   const { graph, longestClassWordCount } = sceneClassGraph(index);
@@ -101,17 +111,45 @@ export function extractSceneItems(text, classIndex) {
     if (used[i]) continue;
     const hit = resolveSpanToClass(graph, index, tokens, used, i, longestClassWordCount);
     if (!hit) continue;
+    const materials = index[hit.className]?.materials || {};
     let materialLabel = null;
-    if (i > 0 && !used[i - 1]) {
-      const materials = index[hit.className]?.materials || {};
-      const prevWord = tokens[i - 1].word;
-      if (Object.prototype.hasOwnProperty.call(materials, prevWord)) {
-        materialLabel = prevWord;
-        used[i - 1] = true;
+    let moving = false;
+    for (let j = i - 1; j >= 0 && !used[j]; j -= 1) {
+      const word = tokens[j].word;
+      if (!moving && word === "moving" && Object.prototype.hasOwnProperty.call(materials, "moving")) {
+        moving = true;
+        used[j] = true;
+        continue;
       }
+      if (!materialLabel && word !== "moving" && Object.prototype.hasOwnProperty.call(materials, word)) {
+        materialLabel = word;
+        used[j] = true;
+        continue;
+      }
+      // A structure word ends this item's modifier run; anything else ("black"
+      // before a cat with no black swatch) is an unrecognized modifier — read
+      // past it, never consumed, never guessed at.
+      if (MODIFIER_RUN_BREAKERS.has(word)) break;
     }
     for (let k = 0; k < hit.wordCount; k += 1) used[i + k] = true;
-    items.push({ className: hit.className, materialLabel });
+    items.push({ className: hit.className, materialLabel, moving });
   }
   return items;
+}
+
+/** Split a composed scene into the one room that backs it and the entities
+ *  standing in it. The LAST room named wins the wall — a sentence naming two
+ *  rooms is read the way a stage direction would be, the latest setting
+ *  standing. `roomClasses` is the caller's real room vocabulary (an adventure
+ *  world's own rdf:type room subjects); with none, nothing is a backdrop.
+ *  Pure. */
+export function splitSceneBackdrop(items, roomClasses) {
+  const rooms = new Set(roomClasses || []);
+  let backdrop = null;
+  const rest = [];
+  for (const item of items || []) {
+    if (rooms.has(item.className)) backdrop = item;
+    else rest.push(item);
+  }
+  return { backdrop, rest };
 }

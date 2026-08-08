@@ -603,13 +603,14 @@ async function writeStandaloneViewPage(archetype, rest) {
     const engineBundleJs = await buildEngineBundleJs("build-sprites-bundle.mjs");
     const { readSpriteTemplateFiles } = await import("../src/adapters/corpus/sprite-template-files.mjs");
     const { readSpriteLargeTemplateFiles } = await import("../src/adapters/corpus/sprite-large-template-files.mjs");
-    const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import("../src/services/sprite-catalog-viz.mjs");
+    const { loadSpriteOntologyFactRows, loadAdventureSceneRoomClasses, renderSpriteCatalogHtml } = await import("../src/services/sprite-catalog-viz.mjs");
     html = renderSpriteCatalogHtml({
       iconTemplates: readSpriteTemplateFiles(),
       largeTemplates: readSpriteLargeTemplateFiles(),
       factRows: await loadSpriteOntologyFactRows(),
       spritesBundleAvailable: true,
       engineBundleJs,
+      adventureRoomClasses: await loadAdventureSceneRoomClasses(),
     });
   } else if (archetype === "spider-fly") {
     const engineBundleJs = await buildEngineBundleJs("build-spider-fly-bundle.mjs");

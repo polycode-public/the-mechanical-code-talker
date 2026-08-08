@@ -15,12 +15,17 @@ import {
   renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, buildSpriteCatalogEntries, groupForClass,
   paletteTreatmentFor, tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE,
   GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
-  moodFrameSequence, turnFrameSequence, movingFrameSequence, displayModeSequence, DISPLAY_MODE_ORDER,
+  moodFrameSequence, turnFrameSequence, movingFrameSequence, swatchDisplayParts,
   CATALOG_GROUPS, groupIsClustered,
   catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
   loadSpriteOntologyFactRows, subClassIndex, buildOntologyTree, sectionSlugFor, ontologyTreeNodeId,
   ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT,
 } from "../../src/services/sprite-catalog-viz.mjs";
+import {
+  nextFocusMode, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+} from "../../src/domain/sprite-animation.mjs";
+import { splitSceneBackdrop } from "../../src/domain/scene-compose.mjs";
+import { randomSceneSentence } from "../../src/domain/scene-random.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
 import { classAncestorChain, SPRITE_REGISTRY } from "../../src/domain/sprite-map.mjs";
@@ -209,14 +214,32 @@ test("a swatch born from a property fact carries that property as a data attribu
   assert.doesNotMatch(html, /class="swatch large plain"[^>]*data-property/, "a plain swatch never claims a property");
 });
 
-test("the rendered page ships the animated-cell machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
+test("the rendered page ships the animated-cell machinery: one property per axis, the shared clock, and the reduced-motion guard", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /MOOD_PROPERTY = "mgx:feels"/);
   assert.match(html, /FACING_PROPERTY = "mgx:faces"/);
-  assert.match(html, /POSE_PROPERTY = "mgx:pose"/);
   assert.match(html, /prefers-reduced-motion: reduce/);
   assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle cell has its own styling");
   assert.match(html, /\.swatch\.cycle \.swatch-mode/, "the visible mode label has its own styling");
+  assert.match(html, /\.swatch\.cycle\.focused \.swatch-img/, "the focused cell's outline has its own styling");
+});
+
+test("every swatch caption is pose-first: the variant name, then the pose, and a moving frame reads as its variant already moving", () => {
+  assert.deepEqual(swatchDisplayParts({ kind: "plain", label: "plain" }), { variant: "default", pose: "static" });
+  assert.deepEqual(swatchDisplayParts({ kind: "variant", label: "left" }), { variant: "left", pose: "static" });
+  assert.deepEqual(swatchDisplayParts({ kind: "material", label: "happy" }), { variant: "happy", pose: "static" });
+  assert.deepEqual(swatchDisplayParts({ kind: "variant", label: "moving" }), { variant: "default", pose: "moving" });
+  assert.deepEqual(swatchDisplayParts({ kind: "variant", label: "left + moving" }), { variant: "left", pose: "moving" });
+  assert.deepEqual(swatchDisplayParts({ kind: "fallback", label: "no material taught" }), { variant: "no material taught", pose: "static" });
+});
+
+test("every rendered swatch carries its pose as a caption span and a data attribute the page's hover flip reads", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /class="swatch large variant"[^>]*data-pose="static"/);
+  assert.match(html, /data-pose="moving"/, "the moving frames declare their pose for the page to fold on");
+  assert.match(html, /<span class="swatch-pose">static<\/span>/);
+  assert.doesNotMatch(html, /<span class="swatch-label">plain<\/span>/, "the plain swatch reads 'default', never 'plain'");
+  assert.match(html, /<span class="swatch-label">default<\/span>/);
 });
 
 // ---- the three animated swatches: mood, facing, pose ----
@@ -261,33 +284,23 @@ test("the pose toggle alternates the idle sprite with the moving one, and needs 
 });
 
 /** The frame lists sprites.html's own inline script builds for one class,
- *  selected off real tierSwatchesFor output by the same properties and
- *  labels the page selects DOM swatches by, then flattened into the one
- *  click-through sequence its image cell walks. Keeps these tests honest
+ *  selected off real tierSwatchesFor output by the same properties, labels
+ *  and poses the page selects DOM swatches by. Keeps these tests honest
  *  about the real catalog rather than about a hand-built frame fixture. */
 function pageCyclesFor(cls) {
   const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
   const frameOf = (s) => ({ svg: s.svg, label: s.label });
   const base = swatches.find((s) => s.kind === "plain" || s.kind === "fallback");
   const baseFrame = base ? frameOf(base) : null;
-  const moodFrames = swatches.filter((s) => s.property === "mgx:feels").map(frameOf);
+  const single = (s) => !String(s.label).includes(" + ");
+  const moodFrames = swatches.filter((s) => s.property === "mgx:feels" && single(s)).map(frameOf);
   const facingFrames = {};
-  for (const s of swatches) if (s.property === "mgx:faces") facingFrames[s.label] = frameOf(s);
+  for (const s of swatches) if (s.property === "mgx:faces" && single(s)) facingFrames[s.label] = frameOf(s);
   const movingSwatch = swatches.find((s) => s.property === "mgx:pose" && s.label === "moving");
   const mood = moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames);
   const turn = turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames);
   const moving = movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch));
-  return {
-    swatches,
-    mood,
-    turn,
-    moving,
-    modes: displayModeSequence(baseFrame && { svg: baseFrame.svg, label: cls }, {
-      movingFrame: movingSwatch && frameOf(movingSwatch),
-      turnFrames: turn,
-      moodFrames: mood,
-    }),
-  };
+  return { swatches, mood, turn, moving };
 }
 
 test("a fully-turned real class sweeps all five turntable angles, the undirected sprite sitting centre", () => {
@@ -319,44 +332,25 @@ test("a combined facing-and-pose variant joins neither single-axis cycle, so eac
 });
 
 test("a class the catalog gives no facing or pose art animates nothing on those axes rather than faking a frame", () => {
-  const { turn, moving, mood, modes } = pageCyclesFor("person");
+  const { turn, moving, mood } = pageCyclesFor("person");
   assert.deepEqual(turn, [], "no facing sprites, no sweep");
   assert.deepEqual(moving, [], "no moving sprite, no toggle");
   assert.equal(mood.length, 7, "its moods still cycle");
-  assert.deepEqual([...new Set(modes.map((f) => f.mode))], ["static", "emotions"], "the cell offers only the modes there is art for");
+  assert.deepEqual(focusModeFrames("turning", { turnFrames: turn, moodFrames: mood, movingFrames: moving }), mood,
+    "the focused cell falls back to the one axis there is art for");
 });
 
-// ---- the one image cell's display modes ----
+// ---- the focused cell's two animation modes ----
 
-test("displayModeSequence walks static, moving, turning then emotions, and the static sprite is never repeated as a mood frame", () => {
-  const frames = displayModeSequence({ svg: "<svg id=\"plain\"/>", label: "bear" }, {
-    movingFrame: svgFrame("moving"),
-    turnFrames: [svgFrame("left"), { svg: "<svg id=\"plain\"/>", label: "centre" }, svgFrame("right")],
-    moodFrames: [{ svg: "<svg id=\"plain\"/>", label: "bear" }, svgFrame("happy"), svgFrame("sad")],
-  });
-  assert.deepEqual(frames.map((f) => f.mode), ["static", "moving", "turning", "turning", "turning", "emotions", "emotions"]);
-  assert.deepEqual(frames.map((f) => f.label), ["bear", "moving", "left", "centre", "right", "happy", "sad"]);
-  assert.deepEqual([...new Set(frames.map((f) => f.mode))], DISPLAY_MODE_ORDER, "every mode in the declared order");
-});
-
-test("displayModeSequence keeps only the modes a class has real art for, static always leading", () => {
-  const staticOnly = { svg: "<svg/>", label: "lamp" };
-  assert.deepEqual(displayModeSequence(staticOnly, {}), [], "one frame is not a cycle, so the cell never appears");
-  const moodOnly = displayModeSequence(staticOnly, { moodFrames: [staticOnly, svgFrame("happy"), svgFrame("calm")] });
-  assert.deepEqual(moodOnly.map((f) => f.mode), ["static", "emotions", "emotions"]);
-  const moveOnly = displayModeSequence(staticOnly, { movingFrame: svgFrame("moving") });
-  assert.deepEqual(moveOnly.map((f) => [f.mode, f.label]), [["static", "lamp"], ["moving", "moving"]]);
-  assert.deepEqual(displayModeSequence(null, { movingFrame: svgFrame("moving") }), [], "no resting frame, no cell");
-});
-
-test("a fully-illustrated real class offers all four display modes from one cell, its own name resting on top", () => {
+test("a fully-illustrated real class turns through the whole turntable when focused, and cycles its moods once clicked", () => {
   for (const cls of ["bear", "cat", "dog", "king"]) {
-    const { modes } = pageCyclesFor(cls);
-    assert.deepEqual([...new Set(modes.map((f) => f.mode))], DISPLAY_MODE_ORDER, `${cls} carries art for every mode`);
-    assert.deepEqual(modes[0], { mode: "static", svg: modes[0].svg, label: cls }, `${cls} rests on its own plain sprite`);
-    assert.equal(modes.filter((f) => f.mode === "moving").length, 1);
-    assert.equal(modes.filter((f) => f.mode === "turning").length, 5, `${cls} sweeps the whole turntable`);
-    assert.equal(modes.filter((f) => f.mode === "emotions").length, 6, `${cls} cycles its six curated moods`);
+    const { turn, mood, moving } = pageCyclesFor(cls);
+    const frames = { turnFrames: turn, moodFrames: mood, movingFrames: moving };
+    assert.deepEqual(focusModeFrames("turning", frames).map((f) => f.label),
+      ["left", "half-left", "centre", "half-right", "right"], `${cls} rotates its turning positions while focused`);
+    assert.deepEqual(focusModeFrames(nextFocusMode("turning"), frames).map((f) => f.label),
+      [cls, "happy", "sad", "angry", "scared", "surprised", "calm"], `${cls} cycles its six curated moods after a click`);
+    assert.equal(frameAtTick(focusModeFrames("turning", frames), 5).label, "left", "the cycle wraps");
   }
 });
 
@@ -383,28 +377,34 @@ test("every axis runs off one delay and one interval, so their tempos can never 
   assert.match(html, /\}, CYCLE_FRAME_DELAY_MS\)/, "the interval is fed the shared constant, never a second hard-coded number");
 });
 
-test("the page splices in the same frame-order functions this file tests, never a second copy written inline", () => {
+test("the page splices in the same pure machinery this suite tests, never a second copy written inline", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.ok(html.includes(moodFrameSequence.toString()), "the mood cycle's real ordering function reaches the page");
   assert.ok(html.includes(turnFrameSequence.toString()), "the facing sweep's real ordering function reaches the page");
   assert.ok(html.includes(movingFrameSequence.toString()), "the pose toggle's real ordering function reaches the page");
-  assert.ok(html.includes(displayModeSequence.toString()), "the mode order this file tests is the one the page runs");
+  assert.ok(html.includes(nextFocusMode.toString()), "the focus-mode toggle is the tested one");
+  assert.ok(html.includes(frameAtTick.toString()), "the tick-to-frame walk is the tested one");
+  assert.ok(html.includes(focusModeFrames.toString()), "the focused cell's frame pick is the tested one");
+  assert.ok(html.includes(oscillateWalkStep.toString()), "the scene walk's step function is the tested one");
+  assert.ok(html.includes(walkFrameLabelCandidates.toString()), "the walk's frame lookup order is the tested one");
+  assert.ok(html.includes(splitSceneBackdrop.toString()), "the room-backdrop split is the tested one");
+  assert.ok(html.includes(randomSceneSentence.toString()), "the random-scene sentence builder is the tested one");
   assert.match(html, /const FACING_TURN_ORDER = \["left","half-left",null,"half-right","right"\]/);
 });
 
-test("the one animated cell takes the plain swatch's place, so the three separate cycles never come back as extra grid cells", () => {
+test("the one animated cell takes the plain swatch's place, so the axes never come back as extra grid cells", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
-  assert.match(html, /replaceChild\(makeModeCell\(modeFrames, cls\), baseSwatch\)/, "the cell stands where the plain swatch was");
+  assert.match(html, /swatchRow\.replaceChild\(holder, base\.el\)/, "the cell stands where the plain swatch was");
   assert.equal((html.match(/swatchRow\.(insertBefore|replaceChild|appendChild)\(/g) || []).length, 1,
     "the animated cell is the only thing the script puts in a swatch row, so no axis adds a grid cell of its own");
-  assert.equal((html.match(/makeModeCell\(/g) || []).length, 2, "one cell factory, called from one place");
 });
 
-test("the hover preview and the auto-step are both off under reduced motion, and a click still steps a frame", () => {
+test("the hover flip-book and the shared clock are both off under reduced motion, and a click still moves focus or mode", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
-  assert.match(html, /if \(!reducedMotion && movingIndex > 0\) \{[\s\S]{0,80}mouseenter/, "the hover preview is only wired when motion is allowed");
-  assert.match(html, /if \(cycleSteppers\.length && !reducedMotion\)/, "the interval only starts when motion is allowed");
-  assert.match(html, /frameImgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,140}frameIndex = \(frameIndex \+ 1\) % frames\.length;/, "a click advances one frame whatever the motion setting");
+  assert.match(html, /if \(flip && !reducedMotion\)/, "the hover image flip only runs when motion is allowed");
+  assert.match(html, /if \(!reducedMotion\) \{\s*setInterval/, "the one clock only starts when motion is allowed");
+  assert.match(html, /cell\.imgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,160}nextFocusMode\(state\.mode\)/,
+    "clicking the focused cell toggles its group's mode whatever the motion setting");
 });
 
 // ---- the section ontology trees ----
@@ -648,9 +648,9 @@ test("extractSceneItems finds every real class named in a sentence, in the order
   const classIndex = realClassIndexFor(["doctor", "hat", "cabinet"]);
   const items = extractSceneItems("a doctor with a hat, and a cabinet", classIndex);
   assert.deepEqual(items, [
-    { className: "doctor", materialLabel: null },
-    { className: "hat", materialLabel: null },
-    { className: "cabinet", materialLabel: null },
+    { className: "doctor", materialLabel: null, moving: false },
+    { className: "hat", materialLabel: null, moving: false },
+    { className: "cabinet", materialLabel: null, moving: false },
   ]);
 });
 
@@ -658,13 +658,21 @@ test("extractSceneItems honestly drops an unrecognized modifier word rather than
   const classIndex = realClassIndexFor(["lamp"]);
   assert.ok(!("red" in classIndex.lamp.materials), "the fixture's own real lamp materials never include 'red', or this test would prove nothing");
   const items = extractSceneItems("red lamp", classIndex);
-  assert.deepEqual(items, [{ className: "lamp", materialLabel: null }]);
+  assert.deepEqual(items, [{ className: "lamp", materialLabel: null, moving: false }]);
 });
 
 test("extractSceneItems matches a real taught-material word immediately before its class, keyed to that class's own real labels", () => {
   const classIndex = realClassIndexFor(["cabinet", "lamp"]);
-  assert.deepEqual(extractSceneItems("wood cabinet", classIndex), [{ className: "cabinet", materialLabel: "wood" }]);
-  assert.deepEqual(extractSceneItems("glass lamp", classIndex), [{ className: "lamp", materialLabel: "glass" }]);
+  assert.deepEqual(extractSceneItems("wood cabinet", classIndex), [{ className: "cabinet", materialLabel: "wood", moving: false }]);
+  assert.deepEqual(extractSceneItems("glass lamp", classIndex), [{ className: "lamp", materialLabel: "glass", moving: false }]);
+});
+
+test("extractSceneItems reads 'a moving black cat' off the cat's own real labels: the real moving frame, the made-up colour dropped", () => {
+  const classIndex = realClassIndexFor(["cat"]);
+  assert.ok("moving" in classIndex.cat.materials, "the real cat templates carry a moving frame, or this test proves nothing");
+  assert.ok(!("black" in classIndex.cat.materials), "the real cat templates carry no black colour today — so the word must drop, not invent");
+  assert.deepEqual(extractSceneItems("a moving black cat", classIndex), [{ className: "cat", materialLabel: null, moving: true }]);
+  assert.deepEqual(extractSceneItems("a moving cat", classIndex), [{ className: "cat", materialLabel: null, moving: true }]);
 });
 
 test("extractSceneItems never lets a material word valid for one class leak onto a different class", () => {
@@ -673,7 +681,33 @@ test("extractSceneItems never lets a material word valid for one class leak onto
   const classIndex = realClassIndexFor(["cabinet", "lamp"]);
   assert.ok(!("wood" in classIndex.lamp.materials));
   const items = extractSceneItems("wood lamp", classIndex);
-  assert.deepEqual(items, [{ className: "lamp", materialLabel: null }]);
+  assert.deepEqual(items, [{ className: "lamp", materialLabel: null, moving: false }]);
+});
+
+test("a page built with the adventure rooms embeds them in the scene vocabulary; one built without embeds none", () => {
+  const withRooms = renderSpriteCatalogHtml({
+    iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true,
+    adventureRoomClasses: ["library", "kitchen", "garden", "drawing-room", "no-such-room"],
+  });
+  const vocab = JSON.parse((withRooms.match(/const SPRITE_SCENE_VOCAB = (.+);/) || [])[1]);
+  assert.deepEqual(vocab.rooms, ["garden", "kitchen", "library"],
+    "only speakable rooms the catalog can draw survive: drawing-room's hyphen and a made-up room both drop");
+  assert.ok(vocab.emotions.includes("happy"), "the emotion words come off the sprite facts' own rows");
+  assert.ok(vocab.classes.length > 100, "the entity pool is the real catalog");
+  assert.ok(!vocab.classes.some((c) => c.name === "library"), "a room is a backdrop, never a standing entity");
+
+  const without = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true });
+  const bare = JSON.parse((without.match(/const SPRITE_SCENE_VOCAB = (.+);/) || [])[1]);
+  assert.deepEqual(bare.rooms, []);
+});
+
+test("a bundle-backed page carries the random-scene button and the backdrop layer; a catalog-only page carries neither", () => {
+  const withDock = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS, spritesBundleAvailable: true });
+  assert.match(withDock, /id="composeRandom"/);
+  assert.match(withDock, /id="sceneBackdrop"/);
+  const bare = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.doesNotMatch(bare, /id="composeRandom"/);
+  assert.doesNotMatch(bare, /id="sceneBackdrop"/);
 });
 
 test("extractSceneItems returns nothing for a sentence naming no real class — the honest miss, never a crash", () => {
@@ -691,21 +725,21 @@ test("extractSceneItems prefers a real multi-word class over a shorter class nam
   // is still real product logic and needs its own coverage.
   const classIndex = { water: { materials: {} }, "body of water": { materials: {} } };
   const items = extractSceneItems("a wide body of water stretched out", classIndex);
-  assert.deepEqual(items, [{ className: "body of water", materialLabel: null }]);
+  assert.deepEqual(items, [{ className: "body of water", materialLabel: null, moving: false }]);
 });
 
 test("extractSceneItems: 'body of water' is a real catalog class, resolved whole from real text with no other class fragmenting it", () => {
   const classIndex = realClassIndexFor(["body of water"]);
   const items = extractSceneItems("the body of water was calm", classIndex);
-  assert.deepEqual(items, [{ className: "body of water", materialLabel: null }]);
+  assert.deepEqual(items, [{ className: "body of water", materialLabel: null, moving: false }]);
 });
 
 test("extractSceneItems repeats a class once per real occurrence in the text", () => {
   const classIndex = realClassIndexFor(["cat"]);
   const items = extractSceneItems("a cat, then another cat", classIndex);
   assert.deepEqual(items, [
-    { className: "cat", materialLabel: null },
-    { className: "cat", materialLabel: null },
+    { className: "cat", materialLabel: null, moving: false },
+    { className: "cat", materialLabel: null, moving: false },
   ]);
 });
 
