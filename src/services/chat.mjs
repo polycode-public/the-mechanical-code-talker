@@ -7453,6 +7453,7 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
     ["/goals", "the goals a trace can be recognized against: the maintenance invariants, the tool goals, this world's objective, and your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
+    ["/classify <term>", "run the EL classifier and remember what follows from a term (reaches restriction-shaped conclusions /syllogise's chains can't)"],
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["remember <X> is a <Y>", "teach a fact in plain English (\"every X is a Y\" and a bare \"X is a Y\" work too)"],
@@ -15975,6 +15976,53 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       // a count that happens to equal it.
       if (res.truncated) {
         lines.push(`budget of ${res.budget} reached — more may follow; run \`tmct syllogise --budget <n>\` for a wider pass.`);
+      }
+      lines.push("These are derived, not taught — /memory shows each one's provenance and premises.");
+      return mk(lines.join("\n"));
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
+  }
+
+  // /classify <term> — run one bounded EL saturation pass (src/domain/el-
+  // classify.mjs) over what's remembered about a term and WRITE the entailed
+  // facts it closes over. /syllogise's own rule set only chains
+  // rdfs:subClassOf/rdf:type edges; /classify's seven EL completion rules
+  // additionally reach class expressions the graph never declared as a node
+  // (an owl:someValuesFrom restriction), so the two commands cover different
+  // ground rather than one superseding the other. Same posture as
+  // /syllogise: an explicit request, a required term (the whole-store pass
+  // spends its budget on facts nobody asked about), and every written fact
+  // carries entailed:el-* provenance, a justification and a trust discounted
+  // below the premises it rode.
+  if (name === "classify") {
+    note(trace, "goal: classify what's remembered about one term under the EL completion rules, writing what follows");
+    if (!memoryDir) return mk("no memory store here — /classify works inside a repo session.", { miss: true });
+    if (!argText) {
+      return mk('/classify needs a term, e.g. `/classify heart` — it closes over what I remember about that term.', { miss: true });
+    }
+    try {
+      const { classifyEl } = await import("../domain/el-classify.mjs");
+      const { resolveReasoningConfig } = await import("../domain/reasoning-config.mjs");
+      const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
+      const { SUBCLASS_PREDICATE } = await import("../domain/syllogise.mjs");
+      const reasoning = resolveReasoningConfig(null);
+      const res = await classifyEl(memoryDir, {
+        budget: reasoning.classifyBudget,
+        rounds: reasoning.classifyRounds,
+        focus: [...factTermVariants(normFactTerm, argText)],
+        store: { loadMemory, readFactRows, appendFacts },
+      });
+      note(trace, `result: derived ${res.count} entailed fact(s) (rounds ${res.rounds}, budget ${res.budget})`);
+      if (!res.count) {
+        return mk(`nothing new classifies from what I remember about "${argText}" — no entailed facts derived (rounds ${res.rounds}, budget ${res.budget}).`, { miss: true });
+      }
+      const lines = [`derived ${res.count} entailed fact(s) classifying "${argText}":`];
+      for (const d of res.derived) lines.push(`  ${d.subject} ${SUBCLASS_PREDICATE} ${d.object} (${d.rule})`);
+      // Same reasoning as /syllogise's own budget-wall line: a truncated pass
+      // that still can't answer the question is worse than no offer at all.
+      if (res.truncated) {
+        lines.push(`budget of ${res.budget} reached — more may follow; run \`tmct classify --budget <n>\` for a wider pass.`);
       }
       lines.push("These are derived, not taught — /memory shows each one's provenance and premises.");
       return mk(lines.join("\n"));
