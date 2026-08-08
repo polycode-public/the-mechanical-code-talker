@@ -518,6 +518,16 @@ in the tier.
 
 ## 6. Phase 1 — the EL saturation classifier
 
+**DELIVERED** — sections 6.1 through 6.5 shipped in `src/domain/el-classify.mjs`: normal-form
+reading, the seven completion rules, batch and query-mode goal minting, and the materialising pass.
+The config and CLI verb from 6.6 shipped too: `src/domain/reasoning-config.mjs`, the `[reasoning]`
+pass-through in `src/adapters/toml-config.mjs`, and `tmct classify` (`src/domain/cli-verbs.mjs`,
+`bin/tmct.mjs`, the `classify` npm script). The chat command from 6.6 — `/classify <term>` in
+`src/services/chat.mjs` — is deferred to the serialized wave that owns `chat.mjs`; every other file
+in this section builds and reads fine without it. Tests per 6.7 landed: `el-normalize`,
+`el-saturate`, `el-goals`, `el-classify-pass`, `el-entailment-fixtures` (21 fixture rows, one or
+more per completion rule) in `test/adapters/`, plus `test/fixtures/el-entailments.jsonl`.
+
 New module: **`src/domain/el-classify.mjs`**. Imports `./hash.mjs` and `./syllogise.mjs` only. Both
 relative, both domain, so the layer checker stays green.
 
@@ -757,7 +767,7 @@ same `resolveRuntimeConfig`, same `openMemoryBackend` and `finally { await close
 same one-line stdout summary. Add `"classify": "node --disable-warning=ExperimentalWarning bin/tmct.mjs classify"`
 to `package.json`'s scripts, matching the `syllogise` wrapper.
 
-**Chat.** Add `/classify <term>` to `runCommand`'s if-chain in `src/services/chat.mjs`, directly
+**Chat — deferred to the serialized `chat.mjs` wave.** Add `/classify <term>` to `runCommand`'s if-chain in `src/services/chat.mjs`, directly
 after the `/syllogise` branch and modelled on it: refuse without an argument, build the focus set
 through `factTermVariants(normFactTerm, argText)`, call `classifyEl`, list the derived facts, state
 the budget wall when `truncated`, and close with the "these are derived, not taught" line. Add its
