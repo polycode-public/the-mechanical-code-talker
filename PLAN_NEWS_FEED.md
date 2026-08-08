@@ -144,16 +144,17 @@ Network posture first, because it shapes the sequence: **the page makes no third
 before an explicit start action.** On first visit the sources panel shows a start button and
 the request log shows zero rows; pressing start records an opt-in preference (localStorage,
 beside the existing preference keys) and arms the poll cycle. Return visits with the preference
-set poll on load. The home page hero's "offline" claim becomes "offline by default" when this
-page ships (phase 7 carries the copy change).
+set poll on load; a **stop & forget** control (section 13.1) clears that preference and reverts
+the page to its first-visit state on the next load. The home page hero's "offline" claim becomes
+"offline by default" when this page ships (phase 7 carries the copy change).
 
 | state | phase | what the user sees | testable assertion |
 |---|---|---|---|
 | S0 seed | `"seeding"` | seed progress, dashboard tiles at zero, start button visible | `window.tmct.seed.phase` reaches `"ready"`; request log empty; zero third-party requests observed |
-| S1 first items | `"seeded"` | feed items built from seed facts alone | ≥1 feed item rendered before any network response; every fact id in it resolves to a seed-band provenance; time-to-first-article recorded on `window.tmct.news.metrics` |
-| S2 polling | `"polling"` | after start: per-source status chips flip to fetching; request log grows one row per request (URL, time, bytes, status); new items land on top as each source returns | item count grows; newest item's `builtAt` > S1 items'; log rows match observed requests one for one |
-| S3 ranking | `"grounding"` | the ungrounded-terms panel populates, ranked by occurrence count | ledger rows sorted count desc then term asc; counts match fixture arithmetic |
-| S4 enriching | `"enriching"` | top-ranked terms (capped per cycle) looked up in KB sources; existing items refresh in place; a syllogism round runs; new ungrounded terms join the list | a previously ungrounded term flips to grounded; an existing item's fact list grows; the derived tile increases by the round's count; a term that misses every KB source enters the negative cache and is not retried within its TTL |
+| S1 first items | `"seeded"` | feed items built from seed facts alone, each labelled "from the seed graph — start to poll live sources" | ≥1 feed item rendered before any network response; every fact id in it resolves to a seed-band provenance; every rendered item carries the seed label until the first poll completes; time-to-first-article recorded on `window.tmct.news.metrics` |
+| S2 polling | `"polling"` | after start: per-source status chips flip to fetching; request log grows one row per request (URL, time, bytes, status); new items land on top as each source returns | item count grows; newest item's `builtAt` > S1 items'; log rows match observed requests one for one; time-to-first-complete-poll records once every enabled source has returned or failed once |
+| S3 ranking | `"grounding"` | the fact-ungrounded-terms panel populates, ranked by occurrence count, each row labelled "parseable but knowledge-free" or "unknown word" | ledger rows sorted count desc then term asc; counts match fixture arithmetic; a lexicon-known term with zero fact rows appears in the list labelled "parseable but knowledge-free", not silently omitted |
+| S4 enriching | `"enriching"` | top-ranked terms (capped per cycle) looked up in KB sources; existing items refresh in place; a syllogism round runs; new fact-ungrounded terms join the list | a previously fact-ungrounded term flips to fact-grounded; an existing item's fact list grows; the derived tile increases by the round's count; a term that misses every KB source enters the negative cache and is not retried within its TTL |
 | S5 idle | `"idle"` | timer armed at the page-set interval; controls live; graph-size tile current | `window.tmct.news.nextPollAt` set; changing the interval select re-arms; a failing source's next poll is backed off |
 
 Free text and upload run the same S3–S4 machinery on demand and can fire in any state after S1.
@@ -228,10 +229,10 @@ MediaWiki action/REST APIs, DBpedia Lookup).
 
 | source | URL | format | curl verdict | browser verdict | verdict |
 |---|---|---|---|---|---|
-| NYT World News | `https://rss.nytimes.com/services/xml/rss/nyt/World.xml` | RSS 2.0 | 200, 117 KB, `ACAO: *` | **pass** (200, 116 KB) | **default** — a major recognised outlet whose feed a browser can read directly; items carry title, link, permalink guid, description, pubDate, `dc:`/`media:` extensions |
+| NYT World News | `https://rss.nytimes.com/services/xml/rss/nyt/World.xml` | RSS 2.0 | 200, 117 KB, `ACAO: *` | **pass** (200, 116 KB) | **selectable** — a major recognised outlet whose feed a browser can read directly; items carry title, link, permalink guid, description, pubDate, `dc:`/`media:` extensions; its personal-use-with-attribution licence (section 4.3) sits awkwardly as an on-by-default source, so it ships opt-in |
 | Wikimedia featured feed | `https://api.wikimedia.org/feed/v1/wikipedia/en/featured/YYYY/MM/DD` | API JSON | 200, 288 KB, `ACAO: *` | **pass** (200, 288 KB) | **default** — the best-tagged source probed: `mostread` gave 43 articles each with a plain-text `extract` and a `wikibase_item` Q-id that grounds straight into the Wikidata KB source; `news` key present only some days; CC BY-SA |
 | Hacker News | `https://hacker-news.firebaseio.com/v0/topstories.json` + `/v0/item/<id>.json` | API JSON | not curl-probed (added in the browser round) | **pass** (200 both) | **default** — recognised tech-news aggregator whose title vocabulary overlaps the seeded code bands (seon, tier2-aws/python/java), so it grounds where general news prose cannot; two-step fetch, capped at 10 items per poll |
-| USGS earthquakes | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson` | GeoJSON | not curl-probed | **pass** (200, 33 KB) | **selectable** — a recognised institution publishing semantically structured contemporary data (magnitude, place, time per feature); public domain |
+| USGS earthquakes | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson` | GeoJSON | not curl-probed | **pass** (200, 33 KB) | **default** — a recognised institution publishing semantically structured contemporary data (magnitude, place, time per feature); public domain, no attribution burden, the third contemporary default beside Wikimedia featured and Hacker News |
 | Wikinews published | `https://en.wikinews.org/w/api.php?...&origin=*` | MediaWiki JSON | 200, `ACAO: *` | **pass** (200) | **selectable** — CC BY real news with clean structure; its own lead story announces the Wikimedia Foundation closing Wikinews, so it ships selectable rather than default and its health row will tell users when it goes |
 | GDELT DOC 2.0 | `https://api.gdeltproject.org/api/v2/doc/doc?query=...&format=json` | API JSON | 200, `ACAO: *` | **FAIL** — console shows "blocked by CORS policy: No 'Access-Control-Allow-Origin'"; retried twice | dropped — the CORS header is conditional on the client and absent for real browsers; the curl pass is recorded so nobody re-litigates this from curl alone |
 | BBC News World | `https://feeds.bbci.co.uk/news/world/rss.xml` | RSS 2.0 | 200, 28 KB, no CORS header | **FAIL** (failed to fetch) | dropped from the registry — reachable from Node surfaces (CORS is a browser rule), so it works as an add-by-URL source on the CLI; the browser add-by-URL flow reports it "source does not permit browser access" |
@@ -249,10 +250,21 @@ MediaWiki action/REST APIs, DBpedia Lookup).
 | AP News world | `https://apnews.com/hub/world-news?output=rss` | claimed RSS | 200 but `text/html`, 1.2 MB page | — | dropped — no public feed anymore |
 | Wikipedia current events portal | `https://en.wikipedia.org/api/rest_v1/page/mobile-html/Portal%3ACurrent_events` | mobile-html | 200, 186 KB page HTML, `ACAO: *` | pass but unusable | dropped — a rendered portal page has no item structure to parse honestly |
 
-**The shipped contemporary five, all browser-verified: NYT World (RSS), Wikimedia featured feed
-(JSON), Hacker News (JSON) as defaults; USGS earthquakes (GeoJSON) and Wikinews (JSON)
+**The shipped contemporary five, all browser-verified: Wikimedia featured feed (JSON), Hacker
+News (JSON), USGS earthquakes (GeoJSON) as defaults; NYT World (RSS) and Wikinews (JSON)
 selectable.** The feature is viable down to one working source; the health rows make any decay
 visible.
+
+**HN's latency budget is designed, not discovered.** Its two-step fetch issues 11 sequential
+requests through the gate — one `topstories.json` call, then ten `item/<id>.json` calls — so the
+wall clock is dominated by the ten gaps between them, not the requests themselves. At the shared
+2s courtesy floor that is 10 × 2000ms = 20s of pure waiting before the tenth item lands, which is
+where the ~22s serialized-poll figure comes from. Hacker News's Firebase-backed API comfortably
+tolerates a faster anonymous poll than an RSS host does, so the registry gives it its own, lower
+floor: `minIntervalMs: 250` (section 6.1), HN-specific — the shared 2s floor stays exactly as it
+is for Wikimedia, NYT, USGS and Wikinews. That drops the wait to 10 × 250ms = 2.5s, so a full HN
+poll completes in a few seconds rather than 22; the rig's time-to-first-complete-poll metric
+(section 16) is what checks this in practice rather than by arithmetic alone.
 
 ### 4.2 Knowledge-base sources — probed
 
@@ -271,10 +283,12 @@ Wiktionary as defaults; DBpedia Lookup and English Wikipedia selectable.**
 
 ### 4.3 Licensing and attribution
 
-- NYT publishes its feeds for personal, non-commercial use with attribution and a link back; the
-  item renderer links every source article and names the outlet; the about page states the terms.
-  Hacker News API content is user-submitted titles plus links; the item links the story and the
-  HN discussion. USGS data is US public domain, credited anyway.
+- USGS data is US public domain, credited anyway. Hacker News API content is user-submitted
+  titles plus links; the item links the story and the HN discussion. NYT publishes its feeds for
+  personal, non-commercial use with attribution and a link back — terms that sit awkwardly on an
+  on-by-default source, which is why NYT ships selectable rather than default (section 4.1); the
+  item renderer still links every source article and names the outlet, and the about page states
+  the terms for anyone who turns it on.
 - Wikimedia content (Wikipedia, Simple English Wikipedia, Wikinews, Wiktionary) is CC BY-SA
   (Wikinews CC BY 2.5); attribution is the article link the item already carries. Wikidata is
   CC0. DBpedia is CC BY-SA.
@@ -400,7 +414,10 @@ All shapes are plain JSON. Node ids and item ids are content-addressed through `
   homepage: "https://www.nytimes.com/section/world",
   licence: "personal use with attribution",
   browserVerified: "2026-08-08",   // date of the last passing in-browser probe
-  enabledByDefault: true,
+  minIntervalMs: 2000,             // per-source courtesy floor; only Hacker News overrides down
+                                   // (section 4, section 9.2)
+  enabledByDefault: false,         // licence terms (personal, non-commercial with attribution)
+                                   // keep it selectable rather than on by default
 }
 ```
 
@@ -437,24 +454,40 @@ Every fetched item is snapshotted so re-processing after a new grounding has the
 }
 ```
 
-### 6.3 The ungrounded-term ledger
+### 6.3 The fact-ungrounded-term ledger
+
+The ledger tracks every term with zero fact rows in the graph — the gap the news loop exists to
+close. Grounding is a split status, not one flag: a term is **vocab-grounded** when the lexicon
+resolves it, and **fact-grounded** when the graph holds at least one fact row for it. The two are
+independent and both get tracked. Admission to the ledger is fact-degree only: any term with zero
+fact rows enters, lexicon-known or not — a lexicon-known term with no facts yet ("ceasefire",
+"tariff") is exactly the case the loop must enrich, so it is not treated as already grounded and
+skipped. The lexicon check answers a narrower question, parseability: a token the tokenizer
+cannot resolve as a candidate term at all is neither vocab- nor fact-grounded, and never reaches
+the ledger.
 
 ```js
 // createTermLedger() -> { terms: Map<term, entry> }
 {
   term,                  // normalized through normFactTerm — dedupe across cycles is by this key
   count,                 // occurrences across all processed sentences, the ranking key
+  vocabGrounded,         // true when the lexicon resolves the term — set once on first insert,
+                         // never revisited afterward; display only, never gates admission
   itemIds: [],           // snapshots that mentioned it (capped at 12, first-seen order)
   firstSeen, lastSeen,   // ISO strings from `now`
-  status: "pending",     // "pending" | "enriching" | "grounded" | "missed"
+  status: "pending",     // "pending" | "enriching" | "grounded" | "missed" — fact-grounding
+                         // progress, set by the enrichment loop
   missedAt: "",          // when status became "missed" — the negative-cache clock
 }
 ```
 
-Ranking order is total: count desc, then term asc. `"missed"` is the negative cache: the term
-was tried against every enabled KB source and nothing came back; it is not retried until
-`negative_cache_ttl_hours` passes or a new KB source is enabled, and it never blocks the queue —
-`rankedTerms` filters it out of the pending view while the TTL holds.
+Ranking order is total: count desc, then term asc. `"grounded"` means the graph now holds at
+least one fact row for the term (fact-grounded, regardless of `vocabGrounded`). The ledger and
+the page's ranked list label every row by `vocabGrounded`: "parseable but knowledge-free" when
+true, "unknown word" when false, so the two different problems never read as one. `"missed"` is
+the negative cache: the term was tried against every enabled KB source and nothing came back; it
+is not retried until `negative_cache_ttl_hours` passes or a new KB source is enabled, and it never
+blocks the queue — `rankedTerms` filters it out of the pending view while the TTL holds.
 
 ### 6.4 The `[news]` config section
 
@@ -464,7 +497,7 @@ by `resolveNewsConfig` in `src/services/news.mjs`, following the `[research]` pr
 ```toml
 [news]
 # Enabled contemporary sources (ids from the registry; defaults shown).
-# sources = ["nyt-world", "wikimedia-featured", "hacker-news"]
+# sources = ["wikimedia-featured", "hacker-news", "usgs-quakes"]
 # Enabled knowledge-base sources.
 # kb_sources = ["simple-wikipedia", "wikidata", "wiktionary"]
 # Extra sources by URL (https only; format auto-detected: rss | atom | jsonfeed).
@@ -482,14 +515,17 @@ by `resolveNewsConfig` in `src/services/news.mjs`, following the `[research]` pr
 # news_fact_cap = 4000   # news-provenance facts kept; oldest-by-observedAt evicted past the cap
 # feed_top = 3           # latest items pinned at the top
 # window_hours = 48      # recency window for hub scoring
-# Courtesy floor for every news fetch gate; only ever raised.
+# Courtesy floor override; when set, raises every source's fetch gate to at least this value —
+# it can only push a source's floor up from its own registry default (section 6.1), never down.
 # min_interval_ms = 2000
 ```
 
 `NEWS_DEFAULTS` freezes exactly these values; `clampNewsConfig` clamps every number to a
-non-negative integer, `poll_minutes` to 0 or ≥ 5, `min_interval_ms` only upward from 2000,
-`feed_top` to [1, 10], `item_cap` to [1, 200], `enrich_terms_per_cycle` to [1, 10],
-`syllogisms_per_ingest` to [0, 50].
+non-negative integer, `poll_minutes` to 0 or ≥ 5, `feed_top` to [1, 10], `item_cap` to [1, 200],
+`enrich_terms_per_cycle` to [1, 10], `syllogisms_per_ingest` to [0, 50]. `min_interval_ms`, when
+set, raises every source's fetch-gate floor to at least that value; left unset, each source
+keeps its own registry default — 2000ms for most, the lower HN-specific floor from section 4 for
+Hacker News.
 
 Eviction (the `news_fact_cap`) applies to `news:`-tagged facts only, never to seed, taught or
 research facts, and runs at ingest time so the graph cannot grow past quota unattended. The
@@ -506,12 +542,16 @@ No new trust tiers. News writes map onto the existing `SOURCE_PRIOR` kinds:
 | contemporary item synthesis (optimistic tier) | `optimistic-extract:news:<sourceId>` | existing 0.35 prior, unchanged |
 | KB enrichment | the source's own `provenanceTag(term)` via the research seam | `referenceLive` (as research today) |
 | shipped fixture replay (demo buttons) | `news-fixture:<sourceId>@<itemId>` | `corpus` |
+| uploaded `.jsonl` row, stated provenance above teach | re-tagged `teach:upload:<file>@<ts>` (`ingestUploadedFactRows`, section 10.2) | `teach` |
+| uploaded `.jsonl` row, stated provenance at or below teach | kept as stated | as stated |
 | syllogism round | `entailed:<rule>` | existing entailed prior, unchanged |
 
-Each feed item shows the tier of its facts (a small chip: web / reference / corpus / entailed),
-so a fixture-replayed demo item is visibly not a live claim. The `news:` prefix is what the feed
-builder and the dashboard tiles filter on, and what a `/news forget` extension could retract by,
-the same way research provenance groups today.
+Each feed item shows the tier of its facts (a small chip: web / reference / corpus / teach /
+entailed), so a fixture-replayed demo item is visibly not a live claim, and an uploaded file can
+never render with trust it didn't earn — the validate-and-downgrade rule above caps it at teach
+regardless of what the file itself claims. The `news:` prefix is what the feed builder and the
+dashboard tiles filter on, and what a `/news forget` extension could retract by, the same way
+research provenance groups today.
 
 ### 6.6 The news item (the feed unit)
 
@@ -536,7 +576,8 @@ in place) when enrichment grows its sub-graph, and is stable when nothing change
 `src/services/news.mjs` owns the capability. Every surface — `news.html`, `chat.html`'s
 `/news`, the TUI (via chat), the CLI verb, and the JS import — consumes the same exported
 functions: `resolveNewsConfig`, `parseNewsRequest`, `pollNewsSources`, `ingestNewsSnapshot`,
-`enrichTopTerms`, `reprocessAfterGrounding`, `isGroundedTerm`, `buildFeed`, `newsTurn`, plus
+`enrichTopTerms`, `reprocessAfterGrounding`, `isVocabGroundedTerm`, `isFactGroundedTerm`,
+`ingestUploadedFactRows`, `buildFeed`, `newsTurn`, plus
 the domain builders (`buildNewsItems`, `rankedTerms`) re-exported through the package entry
 beside the existing public exports. No surface re-implements any step; a JS consumer gets
 exactly what the page runs:
@@ -598,16 +639,21 @@ New module. Imports `normFactTerm` the same way `src/domain/syllogise.mjs` impor
 
 ```js
 export function createTermLedger()                       // { terms: Map }
-export function bumpTerms(ledger, termCounts, itemId, now)
+export function bumpTerms(ledger, termCounts, itemId, now, vocabGroundedByTerm = new Map())
 // termCounts: Map<term, occurrences-in-this-text>. Normalizes keys, adds counts, tracks
-// itemIds. Dedupe across cycles is inherent: one entry per normalized term.
+// itemIds. `vocabGroundedByTerm` (term -> boolean) seeds each new entry's `vocabGrounded` flag
+// (false when a term is missing from the map), set once on first insert and never revisited —
+// lexicon membership doesn't change. Dedupe across cycles is inherent: one entry per normalized
+// term.
 export function rankedTerms(ledger, { limit = 20, status = null, now = null, ttlMs = 0 } = {})
 // entries sorted count desc then term asc; status filters when given; a "missed" entry
 // whose missedAt + ttlMs has passed `now` re-enters the pending view (the negative-cache
 // expiry, computed pure — no clock inside).
 export function markTerm(ledger, term, status, now)      // sets missedAt when status "missed"
-export function groundedSweep(ledger, isGrounded)
-// flips every pending/missed entry whose isGrounded(term) is now true; returns the flipped terms.
+export function groundedSweep(ledger, isFactGrounded)
+// flips every pending/missed entry whose isFactGrounded(term) is now true; returns the flipped
+// terms. `vocabGrounded` never gates this sweep — a term can flip to "grounded" (fact-grounded)
+// while `vocabGrounded` stays false, or the reverse; the two states are independent.
 export function ledgerPayload(ledger)                    // JSON-safe snapshot, sorted
 export function ledgerFromPayload(payload)
 ```
@@ -620,7 +666,7 @@ serialize identically.
 | file | what it holds |
 |---|---|
 | `test/domain/feed-normalize.test.mjs` | one fixture per format drawn verbatim from the probe bodies (an NYT RSS sample with `dc:`/`media:` fields, an Atom sample, the jsonfeed.org feed, a Daring Fireball item); format detection; markup stripping including CDATA, entities and a script-injection string that must come out inert; document order; the limit cap; a malformed block is skipped not thrown; `feedItemId` stability |
-| `test/domain/term-ledger.test.mjs` | counts accumulate across bumps; ranking is count desc then term asc; payload round-trips byte-identically; `groundedSweep` flips and reports; the negative-cache TTL expiry is pure (two `now` values, two answers, same ledger untouched); itemIds cap at 12 |
+| `test/domain/term-ledger.test.mjs` | counts accumulate across bumps; ranking is count desc then term asc; payload round-trips byte-identically; `vocabGrounded` is set once on first insert from `vocabGroundedByTerm` and never revisited on later bumps; `groundedSweep` flips and reports on fact-grounding alone, independent of `vocabGrounded`; the negative-cache TTL expiry is pure (two `now` values, two answers, same ledger untouched); itemIds cap at 12 |
 
 Fixtures live at `test/fixtures/news/` (`nyt-world.rss.xml`, `sample.atom.xml`,
 `jsonfeed-org.json`, `daringfireball-item.json`, `wikimedia-featured.json`, `hn-topstories.json`,
@@ -751,7 +797,7 @@ New module, modelled on `research-source.mjs` (a registry plus predicates, not a
 
 ```js
 export const NEWS_SOURCE_RECORDS = Object.freeze([ /* the ten section-4 records, both kinds */ ])
-export const DEFAULT_NEWS_SOURCE_IDS = Object.freeze(["nyt-world", "wikimedia-featured", "hacker-news"]);
+export const DEFAULT_NEWS_SOURCE_IDS = Object.freeze(["wikimedia-featured", "hacker-news", "usgs-quakes"]);
 export const DEFAULT_NEWS_KB_IDS = Object.freeze(["simple-wikipedia", "wikidata", "wiktionary"]);
 export function registerNewsSource(record)      // add-by-URL and tests extend the registry
 export function newsSourceRecords()
@@ -759,10 +805,15 @@ export function normalizeNewsSourceIds(ids)     // unknown ids dropped, order pr
 
 export function createNewsFetcher(record, { fetchImpl, minIntervalMs, validators, now } = {})
 // -> { id, async fetchItems() -> { items, bytes, notModified } | null }
+// The gate's minIntervalMs defaults to record.minIntervalMs when the caller doesn't override
+// it, so Hacker News runs at its own lower floor (section 4) while every other source keeps
+// the shared 2s default.
 // rss/atom/jsonfeed: gate.fetchText -> parseFeed -> normalizeFeedItems.
-// wikimedia-feed: GET /feed/v1/wikipedia/en/featured/YYYY/MM/DD for the caller's `now`;
-//   items from the `news` key when present, else top `mostread` entries; summary = extract;
-//   each item also carries wikibaseItem for the Wikidata short-circuit.
+// wikimedia-feed: GET /feed/v1/wikipedia/en/featured/YYYY/MM/DD using the caller's `now`
+//   converted to UTC, so the payload is the same for every visitor regardless of local
+//   timezone; a 404 (the day's page not yet published) retries once against the previous UTC
+//   day before giving up; items from the `news` key when present, else top `mostread` entries;
+//   summary = extract; each item also carries wikibaseItem for the Wikidata short-circuit.
 // hn: GET topstories.json, then item/<id>.json for the first 10 ids through the same gate;
 //   title only, url from the item, summary "".
 // usgs: GET the 2.5_day GeoJSON; title = properties.title, url = properties.url,
@@ -826,7 +877,7 @@ All with injected `fetchImpl` stubs serving the phase 0 fixtures; no network in 
 
 | file | what it holds |
 |---|---|
-| `test/adapters/news-sources.test.mjs` | each fetcher turns its fixture into the expected snapshots (all seven formats); the courtesy gate is honoured; a 429 cools off; a failure returns null; a stub 304 comes back `notModified` with the validator headers sent; hn caps at 10 item fetches; every adapter output survives an injection-shaped fixture string inert; `preflightNewsUrl` classifies https/blocked/no-feed; unknown ids drop in `normalizeNewsSourceIds` |
+| `test/adapters/news-sources.test.mjs` | each fetcher turns its fixture into the expected snapshots (all seven formats); the courtesy gate is honoured; hn's fetcher uses its own lower `minIntervalMs`, every other source uses the shared 2000ms default; the wikimedia-feed date is computed in UTC and a 404 retries the previous UTC day; a 429 cools off; a failure returns null; a stub 304 comes back `notModified` with the validator headers sent; hn caps at 10 item fetches; every adapter output survives an injection-shaped fixture string inert; `preflightNewsUrl` classifies https/blocked/no-feed; unknown ids drop in `normalizeNewsSourceIds` |
 | `test/adapters/wiktionary-live.test.mjs` | definition parse, genus extraction ("a vent or fissure on the surface of a planet" → isa "vent"), markup stripping, empty result → null |
 | `test/adapters/dbpedia-lookup-live.test.mjs` | top-doc mapping, category → isa, empty docs → null |
 | `test/adapters/news-store.test.mjs` | round-trip on the repo backend; browser/in-memory no-op; corrupt file reads as null; request log caps at 200 |
@@ -882,10 +933,14 @@ export async function pollNewsSources(ctx)
 export async function ingestNewsSnapshot(ctx, snapshot)
 // splitSentences(title + ". " + summary) -> ingestText(text, { memoryDir, sourceTag:
 // `news:${snapshot.sourceId}@${snapshot.id}`, optimistic: true, lexicon }) -> record factIds
-// on the snapshot; bumpTerms(ledger, ungroundedCounts, snapshot.id, now).
-// ingestText returns ungroundedTerms as a Set today; this phase widens extract-facts.mjs to
-// also return ungroundedCounts (a Map term -> occurrences in this text) — additive, no caller
-// breaks. Then runs the syllogism round: syllogise(memoryDir, { focus: [subjects+objects of
+// on the snapshot; bumpTerms(ledger, ungroundedCounts, snapshot.id, now, vocabGroundedByTerm).
+// ingestText returns ungroundedTerms as a Set today, computed by the old conflated rule (a
+// lexicon-resolved noun already read as grounded); this phase widens extract-facts.mjs so
+// `ungroundedCounts` (a Map term -> occurrences in this text) follows the fact-degree rule
+// instead (section 6.3): every term with zero fact rows, lexicon-known or not — additive, no
+// caller breaks, since the old `ungroundedTerms` set stays a subset of it. `vocabGroundedByTerm`
+// (term -> isVocabGroundedTerm(lexicon, term)) is computed alongside, for ledger display only.
+// Then runs the syllogism round: syllogise(memoryDir, { focus: [subjects+objects of
 // the new facts through factTermVariants], expandFocus: true, budget:
 // config.syllogismsPerIngest, store }). Returns { facts, derived, ungrounded }.
 
@@ -893,8 +948,9 @@ export async function enrichTopTerms(ctx, { limit = config.enrichTermsPerCycle }
 // take the top `limit` pending terms from rankedTerms (negative cache filtered by TTL);
 // for each, mark "enriching", then walk the enabled KB sources in config order through
 // getResearchProvider({ source }); first lookup hit wins; ingest the article through the
-// research lane's ingest under the source's provenanceTag; on success mark "grounded" and
-// reprocessAfterGrounding; on all-null mark "missed" with missedAt = now.
+// research lane's ingest under the source's provenanceTag; on success mark "grounded"
+// (fact-grounded — `vocabGrounded` is untouched) and reprocessAfterGrounding; on all-null mark
+// "missed" with missedAt = now.
 // Wikimedia-feed items that carried wikibaseItem short-circuit straight to the wikidata
 // source with the Q-id. Returns { enriched: [term], missed: [term], facts, derived }.
 
@@ -902,18 +958,32 @@ export async function reprocessAfterGrounding(ctx, groundedTerms)
 // every snapshot (and unprocessed KB article text held in state) whose text mentions a newly
 // grounded term gets ingestNewsSnapshot run again (processedRounds++); content-addressed fact
 // ids make the re-run upsert rather than duplicate. Then one syllogism round focused on the
-// union of the round's new facts. Then groundedSweep(ledger, isGrounded) so the ranked list
-// sheds everything the round grounded.
+// union of the round's new facts. Then groundedSweep(ledger, isFactGroundedTerm) so the ranked
+// list sheds everything the round fact-grounded.
 
-export function isGroundedTerm(rows, lexicon, term)
-// true when factTermVariants(normFactTerm, term) hits any row subject/object, or the lexicon
-// resolves the term as a noun. THE grounding definition, used everywhere.
+export function isVocabGroundedTerm(lexicon, term)
+// true when the lexicon resolves the term as a noun. Answers parseability only — never used to
+// decide ledger admission or enrichment eligibility, display only.
+
+export function isFactGroundedTerm(rows, term)
+// true when factTermVariants(normFactTerm, term) hits any row subject/object. THE fact-grounding
+// definition: what ledger admission, `groundedSweep`, and enrichment eligibility all test. A
+// term with zero fact rows is fact-ungrounded and belongs in the ledger, whether or not it is
+// vocab-grounded.
 
 export async function buildFeed(ctx)
 // readFactRows -> buildNewsItems(rows, { now, windowMs, limit: config.itemCap,
 // sourcesByFactId: from state.items }) -> state, returned for rendering. Seed-only graphs
 // produce items too (S1): with no news-tagged rows in the window, scoreHubs falls back to
-// whole-graph degree so the first paint is never empty.
+// whole-graph degree so the first paint is never empty; every item in that fallback state
+// carries the seed label (section 13.1) until pollNewsSources runs once.
+
+export function ingestUploadedFactRows(rows, { fileLabel, now } = {})
+// validate-and-downgrade (section 6.5): any row whose stated provenance sits above the teach
+// tier in the SOURCE_PRIOR order is re-tagged `teach:upload:<fileLabel>@<now>` before it lands;
+// rows at or below teach keep their stated provenance. Pure; the page's `.jsonl` upload and any
+// future CLI upload path both call this before appending — an uploaded file can never claim
+// operator- or corpus-grade trust it didn't earn.
 
 export async function newsTurn(line, ctx)
 // parseNewsRequest -> the matching call -> a rendered text block (items as "N. <paragraph>
@@ -922,18 +992,19 @@ export async function newsTurn(line, ctx)
 // surface renders through this one function so wording stays identical.
 
 export function cycleMetrics(before, after, { source } = {})
-// the rig row (section 16): { at, sourceId, sentences, groundedRate, factsAdded,
-// termsResolved, derived, timeToFirstArticleMs? } — computed from two state snapshots,
-// pure, appended to state.metrics by the callers above.
+// the rig row (section 16): { at, sourceId, sentences, groundedRateStrict,
+// groundedRateOptimistic, factsAdded, termsResolved, derived, timeToFirstArticleMs?,
+// timeToFirstCompletePollMs? } — computed from two state snapshots, pure, appended to
+// state.metrics by the callers above.
 ```
 
 ### 10.3 Phase 3 tests
 
 | file | what it holds |
 |---|---|
-| `test/services/news-service.test.mjs` | poll merges by id and enforces item_cap; health rows track failures, back off with doubling, and auto-disable at 3; a backed-off source is skipped until its time; ingest writes facts under the `news:` tag and bumps the ledger with real counts; the syllogism round runs with the configured budget and its derived count is reported; enrich caps at enrich_terms_per_cycle, walks sources in config order, first hit wins, miss enters the negative cache and is not retried inside the TTL; reprocess re-runs exactly the snapshots that mention the grounded term, upserts without duplicates, and sweeps the ledger; eviction retracts only news facts, oldest first, never below the cap; `isGroundedTerm` on facts, on lexicon, and on neither; buildFeed S1 fallback on a seed-only graph; the request log records every fetch; `cycleMetrics` arithmetic; determinism: same state + same `now` twice → byte-identical feed |
+| `test/services/news-service.test.mjs` | poll merges by id and enforces item_cap; health rows track failures, back off with doubling, and auto-disable at 3; a backed-off source is skipped until its time; ingest writes facts under the `news:` tag and bumps the ledger with real counts, admitting a lexicon-known, fact-empty term (`vocabGrounded` true) exactly like an unknown word; the syllogism round runs with the configured budget and its derived count is reported; enrich caps at enrich_terms_per_cycle, walks sources in config order, first hit wins, miss enters the negative cache and is not retried inside the TTL; reprocess re-runs exactly the snapshots that mention the grounded term, upserts without duplicates, and sweeps the ledger by fact-grounding alone; eviction retracts only news facts, oldest first, never below the cap; `isVocabGroundedTerm` and `isFactGroundedTerm` independently — a term with facts but no lexicon hit, a term with a lexicon hit but no facts (still ledger-eligible), and a term with neither; `ingestUploadedFactRows` downgrades an above-teach row and leaves an at-or-below-teach row untouched; buildFeed S1 fallback on a seed-only graph; the request log records every fetch; `cycleMetrics` arithmetic including both grounding-rate columns; determinism: same state + same `now` twice → byte-identical feed |
 | `test/services/news-config.test.mjs` | defaults, clamps (including the poll floor of 5), TOML pass-through via `normalizeConfig`, precedence with `mergeEffective`; `parseNewsRequest` one case per kind plus a decline |
-| `test/adapters/extract-facts-from-text.test.mjs` (extended) | `ungroundedCounts` counts occurrences and stays consistent with the existing `ungroundedTerms` set |
+| `test/adapters/extract-facts-from-text.test.mjs` (extended) | `ungroundedCounts` counts occurrences per fact-ungrounded term (zero fact rows, lexicon-known or not) and is a superset of the existing `ungroundedTerms` set — a lexicon-known, fact-empty term like "ceasefire" appears in `ungroundedCounts` but not in the legacy `ungroundedTerms` |
 
 ### 10.4 Phase 3 acceptance
 
@@ -989,10 +1060,11 @@ Corpus rows in a new lane `test/corpus/news.jsonl`, runner `test/corpus/news.tes
 | `news.feed.seed-first-items` | `news-feed-seed-facts-make-the-first-items` | setup.facts seeds a small graph; `/news` → regex: a paragraph naming the seeded hub |
 | `news.feed.deterministic` | `news-feed-same-graph-same-feed` | `/news` twice → same-as-turn |
 | `news.rank.counts` | `news-rank-orders-ungrounded-terms-by-occurrence` | teach two sentences sharing one unknown term, one sentence with another; `/news rank` → regex: first term listed first with count 2 |
+| `news.rank.vocab-grounded-still-ranks` | `news-rank-lists-a-lexicon-known-term-with-no-facts` | a sentence mentions a term the seed lexicon resolves as a noun ("ceasefire") but no fact row names it; `/news rank` → regex: the term appears, labelled "parseable but knowledge-free", not omitted |
 | `news.miss.no-sources` | `news-poll-with-no-enabled-sources-reads-as-a-plain-report` | config disables all sources; `/news poll` → regex: "no sources enabled", predicate: not a fact write |
 | `news.miss.unknown-subcommand` | `news-unknown-subcommand-shows-usage-never-guesses` | `/news frobnicate` → regex: usage line |
 
-(the lane picks up more rows in phase 8; these five make the matrix group non-thin and give it
+(the lane picks up more rows in phase 8; these six make the matrix group non-thin and give it
 its negative keys from day one.)
 
 ### 11.2 Phase 4 acceptance
@@ -1051,26 +1123,35 @@ chat seed, consent-gated timers, the request log, and the free-text/upload panel
 - `<section class="dash">`: a `.kpirow` of five tiles — `feed.items`, `terms.ungrounded`,
   `facts.from-news`, `graph.size` (facts plus estimated bytes from
   `navigator.storage.estimate`, refreshed per cycle), `sources.live` — and `.barpanels` of two
-  `.tile.tile-bars`: the ranked ungrounded terms as `microbarsHtml` (the on-page ranking
-  display), and per-source item counts with health chips;
+  `.tile.tile-bars`: the ranked fact-ungrounded terms as `microbarsHtml` (the on-page ranking
+  display, each bar labelled "parseable but knowledge-free" or "unknown word" per its
+  `vocabGrounded` flag), and per-source item counts with health chips;
 - the controls row: the start button (first visit; becomes poll-now after consent), the
   poll-interval select (`off / 5 / 15 / 60` minutes, default from config, floor 5, persisted as
-  a localStorage preference), source toggles (defaults on; selectables off; a `browserBlocked`
-  entry renders "source does not permit browser access"), an add-by-URL input (https only,
-  preflighted, section 9.2), `enrich now`, and the two fixture demo buttons ("replay recorded
-  NYT sample", "replay recorded Wikipedia sample") that push the bundled `news-fixtures.json`
-  payloads through the exact live pipeline under the `news-fixture:` tag;
+  a localStorage preference), a **stop & forget** control beside it that clears the start-consent
+  preference and halts the timer, reverting the page to its first-visit state on the next load
+  (the revoke path the about page names, section 14 item 3), source toggles (defaults on;
+  selectables off; a `browserBlocked` entry renders "source does not permit browser access"),
+  an add-by-URL input (https only, preflighted, section 9.2), `enrich now`, and the two fixture
+  demo buttons ("replay recorded NYT sample", "replay recorded Wikipedia sample") that push the
+  bundled `news-fixtures.json` payloads through the exact live pipeline under the
+  `news-fixture:` tag;
 - the request log: a collapsible table, one row per request — URL, time, bytes, status —
   fed from `state.requestLog`, empty until consent, the page's own provenance;
 - the feed: `feed_top` newest items pinned, the rest below; each item renders the paragraph,
   the tier chip, a `<details>` fact list (each line via `factSentence`, expandable again to the
   raw triple record `{ id, subject, predicate, object, provenance, trust }` through the
-  `factTripleParts` helper), and the source links;
+  `factTripleParts` helper), and the source links; before the first successful poll, every item
+  also carries an explicit label, "from the seed graph — start to poll live sources", beyond the
+  corpus tier chip, so seed content never reads as live news;
 - the teach panel: a textarea, two example buttons that fill it (a short prose corpus about a
   seeded topic, and a ten-line JSONL fact set — inline constants `NEWS_EXAMPLE_TEXTS`), a file
   input accepting `.txt`/`.md` (prose corpus), `.json` (lexicon in the `lexicon-core.json`
-  shape, merged as a vocab hint), `.jsonl` (fact rows appended directly — the graph's own
-  exchange shape as the ontology form), and an ingest button;
+  shape, merged as a vocab hint), `.jsonl` (fact rows validated and appended through
+  `ingestUploadedFactRows`, section 10.2 — any row whose stated provenance sits above the teach
+  tier is re-tagged `teach:upload:<file>@<ts>` before it lands, so an uploaded file can never
+  claim operator- or corpus-grade trust it didn't earn; the graph's own exchange shape as the
+  ontology form, now behind that guard), and an ingest button;
 - the page log (`appendLogLine`).
 
 Every interpolation of fetched or user-supplied text goes through `escapeHtml`. A test greps
@@ -1082,10 +1163,11 @@ the renderer for unescaped sinks.
 `createChatSession`: in-memory store, `applySeedPayload` with `chat-seed.json`,
 `openPersistedStore({ storeKey: "news", stamp })` carrying facts plus the news state,
 `publishTmctSurface({ page: { start, poll, enrich, buildFeed, rank, addSource, setInterval,
-ingestText, ingestFile, replayFixture } })`, the S0–S5 phase machine plus `metrics` (including
-time-to-first-article, measured from navigation start to the first item render) on
-`window.tmct.news`, and the poll timer as a plain re-armed interval honouring consent, the
-floor, and per-source backoff. Browser fetching uses the phase 2 fetchers with
+ingestText, ingestFile, replayFixture, revokeConsent } })`, the S0–S5 phase machine plus
+`metrics` (including time-to-first-article, measured from navigation start to the first item
+render, and time-to-first-complete-poll, measured to the last enabled source returning or
+failing once) on `window.tmct.news`, and the poll timer as a plain re-armed interval honouring
+consent, the floor, and per-source backoff. Browser fetching uses the phase 2 fetchers with
 `fetchImpl: fetch`.
 
 `scripts/build-news-bundle.mjs` + `"build:news-bundle"` script, exporting `main(outDir)` through
@@ -1097,7 +1179,7 @@ floor, and per-source backoff. Browser fetching uses the phase 2 fetchers with
 | file | what it holds |
 |---|---|
 | `test/services/news-viz.test.mjs` | the rendered HTML carries the meta marker pair, the seven dashboard tiles/panels' labels, the start button, the request-log section, the controls, the two fixture buttons and two example buttons; no unescaped interpolation sink; no third-party URL outside the sources config block |
-| `test/adapters/news-browser-entry.test.mjs` (function-level, beside `mudiii-browser-entry.test.mjs` and its siblings) | session builds against a seed payload; page API surface is published; no fetch fires before `start()` (stub fetchImpl asserts zero calls); phase transitions fire in order against stubbed fetchers; fixture replay lands facts under `news-fixture:` with corpus-tier trust; the interval setter re-arms and clamps to the floor |
+| `test/adapters/news-browser-entry.test.mjs` (function-level, beside `mudiii-browser-entry.test.mjs` and its siblings) | session builds against a seed payload; page API surface is published; no fetch fires before `start()` (stub fetchImpl asserts zero calls); phase transitions fire in order against stubbed fetchers; fixture replay lands facts under `news-fixture:` with corpus-tier trust; pre-start items carry the seed label; an uploaded row above teach tier lands re-tagged `teach:upload:<file>@<ts>`; `revokeConsent` clears the start preference and a reload reads as first-visit again; the interval setter re-arms and clamps to the floor |
 
 Acceptance:
 
@@ -1125,9 +1207,12 @@ items below are the genuinely per-page surfaces.
    mirroring the ledger block; everything list-driven (sitemap, meta, precache) follows from
    `DEMO_PAGES` untouched.
 3. `public/news-about.html`: the seven fixed sections (`#what #play #shots #inference #build
-   #papers #credits`) with the Next chain, covering the mechanism, the network posture
-   (consent, request log, conditional requests), the full source roster with both probe
-   verdicts, licences and attribution (section 4.3), and the papers hooks (abstention,
+   #papers #credits`) with the Next chain, covering the mechanism, the network posture — the
+   start click is a one-time preference, not a per-fetch prompt: it persists in localStorage
+   across return visits, which is why the page polls on load once you've started it, and the
+   **stop & forget** control (section 13.1) clears that preference and reverts the page to its
+   first-visit state — the request log, conditional requests, the full source roster with both
+   probe verdicts, licences and attribution (section 4.3), and the papers hooks (abstention,
    open-world; plus format citations: RSS 2.0, Atom RFC 4287, JSON Feed 1.1).
 4. `public/index.html`: the demo card (`.claim-cell`, h3 equal to `DEMO_PAGE_META.news.title`),
    the feature plate (renumber the roman numerals), the "What each demo demonstrates"
@@ -1180,7 +1265,7 @@ through `buildDemoSiteSnapshot` + `serveDirectory`):
 | file | what it holds |
 |---|---|
 | `test-e2e/pages-news.test.mjs` | structural: page loads with zero console/page errors; **zero third-party requests before the start action** (the `openPage` helper already blocks third-party hosts — the assertion is that none is even attempted pre-consent); after a synthetic start with all routes blocked, the page degrades to S1 plus failure chips and stays error-free; the seven tiles/panels render; no horizontal overflow at 375 and 320 px; the about and help anchors resolve |
-| `test-e2e/pages-news-feed.test.mjs` | the contract, states S1–S5: `page.route` fulfils each default source from the fixtures; S1 items exist before routes release; items grow on poll; the request log gains one row per fulfilled route with plausible byte counts; the ranked list matches fixture arithmetic; enrich (routes fulfil the KB fixtures) flips a term, refreshes an item, bumps the derived tile, and a blocked KB term enters the negative cache; the fixture demo button produces corpus-tier items with the network still blocked; the interval select re-arms `nextPollAt` and clamps to the floor; time-to-first-article lands on `window.tmct.news.metrics` |
+| `test-e2e/pages-news-feed.test.mjs` | the contract, states S1–S5: `page.route` fulfils each default source from the fixtures; S1 items exist before routes release; items grow on poll; the request log gains one row per fulfilled route with plausible byte counts; the ranked list matches fixture arithmetic; enrich (routes fulfil the KB fixtures) flips a term, refreshes an item, bumps the derived tile, and a blocked KB term enters the negative cache; the fixture demo button produces corpus-tier items with the network still blocked; the interval select re-arms `nextPollAt` and clamps to the floor; time-to-first-article and time-to-first-complete-poll both land on `window.tmct.news.metrics` |
 
 CI: add both file names to the `e2e-web-local-origin` job list in `.gitlab-ci.yml` (specs not
 named in a job never run — the standing hazard).
@@ -1194,6 +1279,7 @@ Remaining corpus rows (same lane, same runner):
 | `news.enrich.negative-cache` | `news-missed-term-waits-out-its-ttl-before-retry` |
 | `news.ingest.free-text` | `news-free-text-teaches-facts-and-ranks-the-rest` |
 | `news.ingest.lexicon-upload` | `news-lexicon-json-widens-grounding-without-fact-writes` |
+| `news.ingest.upload-downgrade` | `news-uploaded-jsonl-above-teach-tier-downgrades-to-teach` |
 | `news.miss.enrich-all-sources-empty` | `news-enrichment-miss-marks-the-term-missed-never-guesses` |
 
 Acceptance:
@@ -1212,37 +1298,49 @@ node --test test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
 Goal: the measurement rig ships with the feature, not after it. It answers, with committed
 numbers, the question every claim about this page will need.
 
-**The five metrics**, produced by `cycleMetrics` (section 10.2) and accumulated in
+**The six metrics**, produced by `cycleMetrics` (section 10.2) and accumulated in
 `state.metrics`:
 
-1. grounding rate per source per cycle (recognized + optimistic sentences over total sentences);
+1. grounding rate per source per cycle, as two separate columns — **strict** (recognized
+   sentences over total) and **optimistic** (recognized + optimistic sentences over total) —
+   never merged into one number;
 2. facts synthesised per poll;
 3. ungrounded terms resolved per enrichment round;
 4. syllogisms derived per round;
-5. time-to-first-article (page metric, navigation start to first rendered item).
+5. time-to-first-article (page metric, navigation start to first rendered item);
+6. time-to-first-complete-poll (page metric, navigation start to the last enabled source
+   returning or failing once — section 4's HN latency budget is what this metric checks).
 
 **The rig runner**: `scripts/news-rig.mjs`. Replays the committed fixture set through the full
 service loop (poll → ingest → rank → enrich → reprocess → build) against the standard seed,
-deterministically, and prints the metrics table plus a per-source breakdown. Because input and
-seed are fixed, the numbers are reproducible on any machine — the same posture as the
-benchmark reports. The first measured run's table lands in `reports/NEWS_RIG.md` and its
-headline number back-fills the share post placeholder (phase 7a.6).
+deterministically, and prints the metrics table (strict and optimistic grounding rate as
+separate columns) plus a per-source breakdown. Because input and seed are fixed, the numbers are
+reproducible on any machine — the same posture as the benchmark reports. The first measured
+run's table lands in `reports/NEWS_RIG.md` and its headline number back-fills the share post
+placeholder (phase 7a.6).
 
-**Expectations, set here so nobody is surprised:** the prose band measured 18.65% grounding on
-Simple English Wikipedia sentences, and contemporary news prose is denser with unknown names,
-so it will likely ground lower. The page is designed to read as alive and useful at roughly 10%
-grounding: the feed shows facts-with-sources rather than article summaries (section 8.3), the
-ungrounded panel turns the misses into the visible work queue, and the default source choices
-lean toward already-groundable vocabulary (Wikimedia extracts with Q-ids; Hacker News titles
-against the seeded code bands). The rig is what turns that design intent into a measured claim.
+**Expectations, set here so nobody is surprised:** the prose band measured 18.65% **strict**
+grounding on Simple English Wikipedia sentences (its optimistic count is zero on that band, so
+the two columns read the same there); contemporary news prose is denser with unknown names, so
+both columns will likely read lower here. Publishing strict and optimistic as separate columns,
+with strict as the headline, means a lower number here never reads as a moved goalpost against
+the prose band's own strict-only 18.65%. The page is designed to read as alive and useful at
+roughly 10% strict grounding: the feed shows facts-with-sources rather than article summaries
+(section 8.3), the ungrounded panel turns the misses into the visible work queue, and the
+default source choices lean toward already-groundable vocabulary (Wikimedia extracts with
+Q-ids; Hacker News titles against the seeded code bands). The rig is what turns that design
+intent into a measured claim.
 
 **The claims block**: one admission-standard block on the claims page, backed by the rig table
 in `reports/NEWS_RIG.md`, pinned by `test/estate/claims.test.mjs` (`CLAIMS_PAGE_BLOCKS` grows
-by one; the block states the grounding rate, the fixture provenance, and the honest-miss
-framing). The block lands in the same commit as the first committed rig report, never before.
+by one; the block states the grounding rate as its two published columns — strict is the
+headline number, optimistic sits beside it labelled as such — the fixture provenance, and the
+honest-miss framing). The block lands in the same commit as the first committed rig report,
+never before.
 
 Tests: `test/services/news-rig.test.mjs` runs the rig entry function on the fixture set and
-asserts the metrics arithmetic and determinism (two runs, identical tables).
+asserts the metrics arithmetic (including both grounding-rate columns) and determinism (two
+runs, identical tables).
 
 Acceptance:
 
@@ -1305,10 +1403,12 @@ surface grew a verb) and the e2e tier are the coordinator's post-merge job.
   degrades to a labelled chip, never a broken page, and the e2e structural spec asserts exactly
   that degradation.
 - **Grounding quality is bounded by the ingest grammar.** Headline prose is dense with names the
-  lexicon lacks; most contemporary sentences will land in the optimistic tier or the ungrounded
-  ledger. That is the designed behaviour — the ledger is the honest-miss wall made visible, the
-  KB loop is the uplift path, and section 16 sets the numeric expectation (~10% must read as
-  alive) and measures it rather than hoping.
+  lexicon lacks; most contemporary sentences will land in the optimistic tier or the
+  fact-ungrounded ledger. That is the designed behaviour — the ledger's fact-degree admission
+  (section 6.3) makes sure a lexicon-known hub term with no facts yet still queues for
+  enrichment rather than reading as already grounded; it is the honest-miss wall made visible,
+  the KB loop is the uplift path, and section 16 sets the numeric expectation (~10% strict must
+  read as alive) and measures it rather than hoping.
 - **Determinism vs. live data.** The world is not deterministic; the engine is. Same payload,
   same facts; same facts plus same `now`, same feed. Tests never fetch, fixtures pin every
   parser, and the two-orders check pins the builder, so all nondeterminism stays at the network
