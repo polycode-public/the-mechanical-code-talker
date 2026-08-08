@@ -48,11 +48,6 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
   animation machinery is live on adventure.html's bundle but visually inert there until any
   adventure class gains facing/moving frames, plus one small `adventure-viz.mjs` render call
   once art exists.
-- [ ] **PLAN_NEWS_FEED.md** (operator, 2026-08-08) — IN FLIGHT: Fable sub-agent writing the
-  design-only plan for the news.html demo + core news capability (contemporary + knowledge-base
-  source research with live probes, grounding/enrichment/syllogism cycle, hub-centered feed,
-  all consumer surfaces, sibling-repo alignment with the-quiet-feed and marginalia). Plan only,
-  no implementation.
 
 ## Discipline
 
