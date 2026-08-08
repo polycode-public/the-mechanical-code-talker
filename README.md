@@ -123,7 +123,7 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 | `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
 | `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
 | `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
-| `public/` | the demo site: the hand-written home page, the six about pages, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
+| `public/` | the demo site: the hand-written home page, `help.html`, the six about pages, `receipts.html`, `claims.html`, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
 
 `node_modules/` (dependencies) and dotfiles/hidden tooling directories are omitted above.
 
@@ -417,10 +417,30 @@ own domain: a full chat seeded with 63,470 facts (the same nine bands as
 **memory ledger** (every fact as a readable sentence; drill by clicking the
 terms inside), and a Towers-of-Hanoi **plan** replayed move by move. A 3D
 **town square** has a fox and goblins each plan their own move from what
-they've personally seen. The rest are the text-adventure game and a
-**sprite gallery** whose chat dock answers from 1,480 generated sprite
-facts. The chat page and the ledger take the same paste-or-drop text in
+they've personally seen; the same game also opens onto a market day in the
+square and a chapel corner where two foxes hunt, each its own closed-opener
+scene. The text-adventure page renders its household staff (butler, cook,
+gardener, housekeeper) as turning, walking sprites on their own schedule,
+skipped entirely if you have reduced motion set. The rest are the
+text-adventure game and a **sprite gallery** whose chat dock answers from
+1,480 generated sprite facts: hover a tile to flip it between its static and
+moving frame, click one to start it turning and click again to cycle its
+emotions, hit "random scene" to compose a sentence from the graph's own
+vocabulary (colours, emotions, roles, rooms), or open an ontology tree to see
+every class's `rdfs:subClassOf` parent drawn as a connector line rather than
+listed. The chat page and the ledger take the same paste-or-drop text in
 place; every page that holds a fact store exports it as JSONL.
+
+Two browsers can also link directly, no server in between: chat's share
+overlay walks a five-step WebRTC handshake (mint an invite, send it, paste
+back a reply, connect), and the mesh grows past a pair — three peers converge
+on the same fact store through a deterministic merge, real browsers driving
+real WebRTC in CI, not a mock. `help.html` walks asking, teaching, sharing,
+and what to do when something goes wrong. `receipts.html` and `claims.html`
+carry the site's own numbers and claims, each figure naming the committed
+file it was measured or rendered from, including the ones that don't flatter
+tmct.
+
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
 and a service worker precaches the big ones, so a second visit works
 offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
@@ -480,6 +500,15 @@ resolves to a real graph traversal or declines cleanly:
   entities' real edges side by side, never a hand-written diff;
 - list follow-ups: after "which modules import src/core/model.mjs",
   "which of those are tested" resolves against that list;
+- follow-up context more broadly: "it", "that", and "those" bind to whatever
+  you just asked about or were told, so a set survives a count ("how many
+  functions are there" then "list them" answers against the same set), and a
+  genuine tie — "that" fitting two things said in the same turn — declines
+  and lists both candidates rather than guessing which one you meant;
+- filler-clause openers: "oh nice. um what about cats" answers like its
+  clean form underneath, but only when the opener matches a closed inventory
+  of fillers and what's left still grounds; a stripped remainder can never
+  reach the teach lane, so a filler-topped teach attempt still declines;
 - curated synonyms plus a filtered ConceptNet slice, clause openers
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
@@ -627,6 +656,16 @@ proof chain, composed answer) for a caller that wants to consume this
 programmatically rather than read the report. `tmct plan --help` has the full
 flag reference.
 
+`/goals` (or `tmct plan --goals` on the command line) lists what a trace can
+be recognized against: the maintenance invariants above, one goal per
+declared tool, this world's own objective, and whatever you've taught as an
+action rule. Inside the text adventure, ask "what am I doing" or "what is
+the butler doing" and tmct reads the moves actually taken and names the
+declared goal they fit, by containment. A trace that fits two goals equally
+well declines and lists both rather than picking one, and a trace that fits
+none is told so plainly, pointed at the goal set it didn't match — the same
+honest-miss rule the rest of tmct runs on.
+
 ## Teach it a game, then ask it to plan
 
 The planner above works over a fixed toolset. This one works over rules you
@@ -669,6 +708,14 @@ asserts the plan is exactly 2^n − 1 moves every time, and a second game
 (`crates.txt`, stacking crates with different rules and a two-goal
 conjunction) solves with zero interpreter changes. `--render blocks` writes
 the plan as a self-contained animated page (see "Two more surfaces" above).
+
+Once a plan is found, you can question it without re-solving for real. "what
+if disk-1 started on peg-c instead?" re-solves the hypothetical board and
+reports its own move count, leaving the held plan, its cursor, and its move
+count untouched. "why did you move disk-1 first instead of disk-2?" (or "why
+not move disk-2 first?", the same answer) forces the alternative first move
+and names either the extra cost against the plan found or the taught
+precondition that blocks it outright.
 
 ## Play a game with it
 
@@ -742,6 +789,15 @@ the curated revision-pinned pack (`reference`, 0.6). A fact fetched live never
 outranks the shipped article on the same term, and a fact you teach outranks
 both.
 
+That miss-time rescue is passive. `research <topic>` is the deliberate
+version: say `research owls` and tmct fetches the article, ingests it as
+graph facts, and queues the topics its lead section links to, one per
+`research next` (the chat page's own play button submits that for you).
+Asking by name is its own consent for the fetch: unlike the miss-time
+rescue, it needs no `/wiki on`. A topic that fails to fetch or ground
+reports the miss plainly and moves the queue on rather than faking a result.
+`research stop` clears the queue.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
@@ -808,7 +864,10 @@ built-in lexicon, as long as one side of the sentence is already grounded.
 tmct never mints a fact between two totally ungrounded terms; it declines and
 nudges you to ground one side first. Quantified teaching stores the
 quantifier ("some functions are risky" … "how many functions are risky" →
-"A few."), and "how many facts are there" counts the store back.
+"A few."), and "how many facts are there" counts the store back. A
+quantified subject over a locative works the same way: "every disk rests on
+peg-a" teaches, so does "one more disk rests on peg-a", and the read-back
+answers either shape ("does every disk rest on peg-a" → "yes — …").
 
 The store answers about its own contents directly. "list facts" and "list
 utterances" enumerate what it holds; "how many sessions are there", "how many
@@ -1558,9 +1617,9 @@ npm run chatbench:judge -- --product /tmp/chatbench-smoke/product.jsonl
 tmct is $0 to run and meant to be trusted offline, so the supply chain is
 hardened:
 
-- CI runs **SAST and secret detection**.
-- A nightly **`npm audit` + OSV-Scanner** job watches dependencies.
-- Releases are published with **npm provenance** (`--provenance`).
+- CI runs **SAST (semgrep) and secret detection** on every pipeline.
+- Releases are published with **provenance-signed** npm publishing (`--provenance`).
+- `npm run audit` runs a local `npm audit` check on demand; nothing schedules it.
 
 The npm tarball carries Sigstore-signed provenance naming the GitLab pipeline
 that built it. Every published version also gets a GitLab release tag pinned to
@@ -1642,9 +1701,12 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
   `owl:disjointWith` would over-claim, since "john is not a man" denies one membership rather than
   a class axiom, and OWL 2's `negativePropertyAssertion` needs a reified shape the flat JSON store
   has no room for.
-- **Dialogue acts.** tmct has no intent vocabulary. ISO 24617-2 (SemAF) is the standard for one, and
-  `docs/references/schemas/iso-24617-2-dialogue-acts.md` maps tmct's behaviour onto it so that if
-  one is built it uses the standard's names.
+- **Dialogue acts.** ISO 24617-2 (SemAF) is the standard for tagging a turn's own speech act
+  (question, assertion, request), and tmct has no such taxonomy.
+  `docs/references/schemas/iso-24617-2-dialogue-acts.md` maps tmct's behaviour onto the standard's
+  names, in case one gets built. Goal recognition is a separate, shipped capability: `/goals` and
+  `tmct plan --goals` list the goals a trace can be checked against, and the recognizer matches an
+  observed trace to one of them by containment, refusing when nothing fits.
 
 ## Licensing
 
