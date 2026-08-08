@@ -1595,7 +1595,7 @@ async function main() {
         "graph-query tool calls for a compound or maintenance-goal request.\n\n" +
         "Usage:\n" +
         "  tmct plan \"<request>\" [--repo <abs>] [--graph <path>] [--config <path>]\n" +
-        "       [--tools <name,name,...>] [--json]\n\n" +
+        "       [--tools <name,name,...>] [--json] [--goals]\n\n" +
         "  --repo <abs>     target a repo's graph (<abs>/.tmct/graph.json); default: git root/cwd\n" +
         "  --graph <path>   explicit graph file (repeatable — multiple graphs merge)\n" +
         "  --config <path>  an alternate tmct.toml location (a file or a directory)\n" +
@@ -1604,7 +1604,9 @@ async function main() {
         "                   registered capability\n" +
         "  --json           print the full machine-readable loop result instead of\n" +
         "                   the human-readable report (a non-zero exit still means\n" +
-        "                   an honest refusal, not a crash)\n\n" +
+        "                   an honest refusal, not a crash)\n" +
+        "  --goals          print the declared goals a trace is recognized against,\n" +
+        "                   with where each came from, and exit\n\n" +
         "Examples:\n" +
         "  tmct plan \"of the modules impacted by src/lib/http.mjs, which are untested\"\n" +
         "  tmct plan \"what most needs a test in this codebase\"\n" +
@@ -1615,6 +1617,7 @@ async function main() {
     const { strFlag, resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const toolsFlag = strFlag(rest, ["--tools"]);
     const jsonFlag = rest.includes("--json");
+    const goalsFlag = rest.includes("--goals");
     // The request is every argv token that isn't a recognized flag or its value,
     // rejoined with single spaces — so both `tmct plan "quoted request"` and a
     // bare `tmct plan unquoted request words` work.
@@ -1623,11 +1626,11 @@ async function main() {
     for (let i = 0; i < rest.length; i += 1) {
       const a = rest[i];
       if (FLAG_WITH_VALUE.has(a)) { i += 1; continue; }
-      if (a === "--json") continue;
+      if (a === "--json" || a === "--goals") continue;
       requestParts.push(a);
     }
     const request = requestParts.join(" ").trim();
-    if (!request) {
+    if (!request && !goalsFlag) {
       process.stderr.write("tmct plan: needs a request, e.g. `tmct plan \"of the modules impacted by X, which are untested\"`\n");
       process.exit(2);
     }
@@ -1660,6 +1663,17 @@ async function main() {
         process.stderr.write(`tmct plan: unknown --tools name(s): ${unknown.join(", ")}. Registered capabilities: ${declared.join(", ")}.\n`);
         process.exit(2);
       }
+    }
+    if (goalsFlag) {
+      const { declaredGoals } = await import("../src/domain/router/recognize.mjs");
+      const { renderDeclaredGoals } = await import("../src/services/chat.mjs");
+      const { loadMemory, readFactRows, readRuleRows } = await import("../src/adapters/memory/core.mjs");
+      const memory = await loadMemory(memoryDir);
+      const goals = declaredGoals({ worldRows: readFactRows(memory), ruleRows: readRuleRows(memory) }, { tools });
+      process.stdout.write(renderDeclaredGoals(goals) + "\n");
+      await closeMemoryStore();
+      for (const dispose of ctx.disposers || []) dispose();
+      return;
     }
     try {
       const result = await runCapabilityPlan(request, tools, ctx);

@@ -172,6 +172,7 @@ export const CLI_VERBS = [
       { flag: "[--config <path>]", prose: ["untested\", \"what most needs a test\") — a real STRIPS/"] },
       { flag: "[--tools <a,b,...>]", prose: ["PDDL planner (src/domain/router/*), never a guessed call."] },
       { flag: "[--json]", prose: ["Prints the grounded step sequence + composed answer,", "or an honest \"no plan found\". --tools restricts the", "declared toolset; --json prints the full loop result."] },
+      { flag: "[--goals]", prose: ["print the declared goals a trace is recognized", "against, with where each came from, and exit"] },
     ],
   },
   {
