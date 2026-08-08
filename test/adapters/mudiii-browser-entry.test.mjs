@@ -14,6 +14,7 @@ import {
 } from "../../src/surfaces/web/mudiii-browser-entry.mjs";
 import { roleOfId, foldTownSquareState } from "../../src/services/predator-prey.mjs";
 import { renderMudEditorText, gridWorldEditorState } from "../../src/services/mud-editor.mjs";
+import { renderAgentEditorText } from "../../src/services/agent-editor.mjs";
 import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
 import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
@@ -236,4 +237,71 @@ test("routeBetweenCells declines rather than drawing a route to a cell nothing r
   assert.equal(routeBetweenCells(worldPayload.facts, "cell-2-2", "cell-99-99"), null);
   assert.equal(routeBetweenCells(worldPayload.facts, "not-a-cell", "cell-2-2"), null);
   assert.equal(routeBetweenCells([], "cell-2-2", "cell-4-2"), null, "no exit facts, no route");
+});
+
+// ---- session.applyAgentEdit ---------------------------------------------
+
+test("session.applyAgentEdit writes only rows whose subject is the named instance", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+  const rows = readFactRows(await loadMemory(session.memoryDir));
+  const edited = `${renderAgentEditorText(rows, "goblin-1")}\ngoblin-1 evades cabbage.`;
+  const result = await session.applyAgentEdit("goblin-1", edited);
+  assert.deepEqual(result.unrecognized, []);
+  assert.equal(result.added, 1, "one new trait line was added");
+
+  const after = readFactRows(await loadMemory(session.memoryDir));
+  assert.ok(
+    after.some((r) => r.subject === "goblin-1" && r.predicate === "mgx:evades" && r.object === "cabbage"),
+    "the new row belongs to goblin-1",
+  );
+  assert.deepEqual(
+    after.filter((r) => r.subject === "goblin-2"),
+    rows.filter((r) => r.subject === "goblin-2"),
+    "goblin-2's own rows are untouched by an edit scoped to goblin-1",
+  );
+});
+
+test("an unparsed line in the actor card retracts nothing", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
+  const rows = readFactRows(await loadMemory(session.memoryDir));
+  const withoutOneLine = renderAgentEditorText(rows, "goblin-1")
+    .split("\n")
+    .filter((l) => !l.startsWith("goblin-1 evades"))
+    .join("\n");
+  const result = await session.applyAgentEdit("goblin-1", `${withoutOneLine}\nthis line means nothing to the table`);
+  assert.equal(result.unrecognized.length, 1);
+  assert.equal(result.removed, 0, "a half-edited document never reads as a retraction");
+
+  const after = readFactRows(await loadMemory(session.memoryDir));
+  assert.deepEqual(
+    after.filter((r) => r.subject === "goblin-1").map((r) => [r.predicate, r.object]).sort(),
+    rows.filter((r) => r.subject === "goblin-1").map((r) => [r.predicate, r.object]).sort(),
+    "goblin-1's own rows are exactly what they were before the failed sync",
+  );
+});
+
+test("editing goblin-1 leaves goblin-2's rows byte-identical", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+  const before = readFactRows(await loadMemory(session.memoryDir)).filter((r) => r.subject === "goblin-2");
+  const rows = readFactRows(await loadMemory(session.memoryDir));
+  const edited = renderAgentEditorText(rows, "goblin-1")
+    .split("\n")
+    .filter((l) => !l.startsWith("goblin-1 evades"))
+    .join("\n");
+  await session.applyAgentEdit("goblin-1", edited);
+  const after = readFactRows(await loadMemory(session.memoryDir)).filter((r) => r.subject === "goblin-2");
+  assert.deepEqual(after, before);
+});
+
+test("a trait edit leaves every agent's cell and the world epoch unchanged, so no re-cast fired", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+  const before = await session.board();
+  const rows = readFactRows(await loadMemory(session.memoryDir));
+  const edited = `${renderAgentEditorText(rows, "goblin-1")}\ngoblin-1 evades cabbage.`;
+  await session.applyAgentEdit("goblin-1", edited);
+  const after = await session.board();
+  assert.equal(after.epoch, before.epoch, "no recast means the epoch never advances");
+  for (const id of Object.keys(before.agents)) {
+    assert.equal(after.agents[id].cell, before.agents[id].cell, `${id} still stands where it stood`);
+  }
 });
