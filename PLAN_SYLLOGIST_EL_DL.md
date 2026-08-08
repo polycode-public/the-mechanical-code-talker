@@ -1,10 +1,10 @@
 # PLAN_SYLLOGIST_EL_DL.md — beyond OWL 2 RL: an EL classifier, then a DL tableau prover
 
 Status: DESIGN, nothing built. Every module path below is a file that does not exist yet.
-Sequencing: this tier sits after the two cheaper inference uplifts on the effort-per-value ladder.
-Those are complete OWL 2 RL property reasoning and generalized Horn rule frames, levers L7 and L8
-in `PLAN_NLU_BENCHMARKS.md`. Both are still open. The EL stage is worth doing on its own merits.
-The DL stage is a costed option this document makes buildable.
+The plan delivers the whole arc — phase 0 representation, the EL classifier, and the DL tableau
+through the SHOIQ increments — as one body of work. Where a phase overlaps the cheaper OWL 2 RL
+property levers (L7/L8 in `PLAN_NLU_BENCHMARKS.md`, both open), the overlap is stated at that
+phase so whichever lands first is visible to the other.
 
 This plan is written to be built by a Sonnet-tier implementer with no further design work. Every
 phase names its module paths, its data structures, its function signatures, its test files, its
@@ -1164,8 +1164,8 @@ to run `node scripts/ensure-worlds-pack.mjs`, `node scripts/ensure-sprite-facts.
 
 - **Size.** Stage EL is comparable to `src/domain/syllogise.mjs` today, around 900 to 1,200 lines
   plus tests. Stage DL is the largest single component since `src/domain/ask.mjs`: a real engine plus
-  a fixture corpus, and phase 4 roughly doubles phase 3's line count. That cost is the reason for the
-  sequencing note at the top.
+  a fixture corpus, and phase 4 roughly doubles phase 3's line count. The per-phase test-first
+  pins in sections 8 and 9 are what keep that size deliverable by a Sonnet-tier implementer.
 - **Worst-case blowup is a semantics problem.** SHOIQ is NEXPTIME-hard. Budgets are part of the
   contract from the first commit, and every budget exhaustion is counted in infbench, so a silent
   weakening shows up as a number rather than a feeling.
