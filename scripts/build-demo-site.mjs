@@ -873,11 +873,14 @@ runBtn.addEventListener("click", function () {
       if (result && result.solved) {
         resultEl.innerHTML = "Your device: <span class=\\"ink\\">" + result.ms.toFixed(2) + " ms</span>. " + committedLine;
       } else {
-        resultEl.textContent = "could not run on this device";
+        const reason = result && result.declined
+          ? "the teach step \\"" + result.declined.sentence + "\\" was declined (" + result.declined.via + ")"
+          : "no plan found within the search bound";
+        resultEl.textContent = "could not run on this device: " + reason;
       }
     })
-    .catch(function () {
-      resultEl.textContent = "could not run on this device";
+    .catch(function (err) {
+      resultEl.textContent = "could not run on this device: " + (err && err.message ? err.message : String(err));
     })
     .finally(function () {
       runBtn.disabled = false;

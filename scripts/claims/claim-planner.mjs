@@ -104,10 +104,13 @@ function runIsolatedInstance(domainName, size) {
  *  median crosses CROSS_MS (or a single run at that size runs over the
  *  isolation timeout), measuring every size along the way with an
  *  adaptively-sized rep count. Returns `{ unit, sizes, largestUnder1s,
- *  firstOver10s }` — `sizes` is every measured size in order, `largestUnder1s`/
- *  `firstOver10s` are derived from that same list (null when the sweep never
- *  saw one). Throws PlannerDeclineError the moment any teach sentence at any
- *  size is declined, rather than folding a mis-teach into the timing data. */
+ *  firstOver10s }` — `sizes` is every measured size in order, `largestUnder1s`
+ *  is the largest size that BOTH solved and stayed under UNDER_MS (a size
+ *  whose search gave up quickly is a fast miss, not a fast solve, so it
+ *  cannot be the headline value), `firstOver10s` is derived from the same
+ *  list on time alone (null when the sweep never saw one). Throws
+ *  PlannerDeclineError the moment any teach sentence at any size is
+ *  declined, rather than folding a mis-teach into the timing data. */
 function measureDomain(domainName) {
   const { unit } = PLANNER_DOMAINS[domainName];
   const sizes = [];
@@ -144,7 +147,7 @@ function measureDomain(domainName) {
     size = Math.max(size + 1, Math.round(size * GROWTH));
   }
 
-  const largestUnder1s = [...sizes].reverse().find((s) => s.medianMs <= UNDER_MS)?.size ?? null;
+  const largestUnder1s = [...sizes].reverse().find((s) => s.solved && s.medianMs <= UNDER_MS)?.size ?? null;
   const firstOver10s = sizes.find((s) => s.medianMs > CROSS_MS)?.size ?? null;
   return { unit, sizes, largestUnder1s, firstOver10s };
 }
