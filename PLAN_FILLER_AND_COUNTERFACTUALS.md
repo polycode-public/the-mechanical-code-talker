@@ -1,11 +1,20 @@
 # PLAN_FILLER_AND_COUNTERFACTUALS.md — two design passes: filler-clause prefixes, planner counterfactuals
 
-Status: RESEARCH / DESIGN — not started. Both items moved here from `NEXT.md` (2026-07-22,
-operator instruction) because each needs a real design pass before any diff is worth writing.
-Live evidence for both comes from the 2026-07-21 xl-graph probe session
+Status: item 1 BUILT (see below); item 2 RESEARCH / DESIGN. Both items moved here from
+`NEXT.md` (2026-07-22, operator instruction) because each needs a real design pass before any
+diff is worth writing. Live evidence for both comes from the 2026-07-21 xl-graph probe session
 (`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log`).
 
-## 1. Filler-clause prefix widening
+## 1. Filler-clause prefix widening — BUILT
+
+`fillerClausePrefix`/`leadsInterrogative` (`src/domain/interpret/normalize.mjs`) peel a closed
+interjection/hesitation/meta-announcement inventory ahead of a real question; `runTurn`
+(`src/services/chat.mjs`) retries a filler-led miss once on the peeled remainder, and the three
+write gates (teach lane, bare taxonomy teach, relaxed-teach collision) all read
+`leadsInterrogative` so a filler-led question never reaches the write boundary as a declarative.
+Pinned by `grammar.noise.filler-clause*` in `test/corpus/grammar.jsonl` and unit coverage in
+`test/adapters/interpret.test.mjs`, `chat-teach-exclusion.test.mjs`, and the new
+`chat-filler-clause-prefix.test.mjs`.
 
 ### The gap
 
