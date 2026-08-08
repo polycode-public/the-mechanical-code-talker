@@ -2,7 +2,7 @@
 
 The **sibling of chatbench**, on a new axis. chatbench measures the *chat turn*
 (a request → the right grounded answer) on the CEFR ladder; AGENTBENCH measures
-the **tool loop** (a request → the right *tool call(s)*) on the **TOOL-0→TOOL-8 tool-use
+the **tool loop** (a request → the right *tool call(s)*) on the **TOOL-0→TOOL-9 tool-use
 rungs**. Same versioned-naming + regression discipline (`BENCHMARK_AGENT_<version>.md`,
 `_00N` for re-runs), one decisive difference:
 
@@ -55,12 +55,15 @@ exact signature (`runAgentbench(cases, { driver })`).
 | **TOOL-6** | Goal deduction | self-directed — deduce the goal, then plan (closed-world) |
 | **TOOL-7** | Recovery & replanning | a step fails (empty/error) and the driver observes it and replans a fallback — `expect.recover` |
 | **TOOL-8** | Composition under ambiguity | enumerate the tied readings (`expect.candidateResults`) or refuse-with-a-nudge — never an arbitrary pick |
+| **TOOL-9** | Goal recognition | infer the goal from an OBSERVED trace and confirm it against a bounded scheme — N declared goals plus an explicit reject class — rather than force-fit a partial trace to the nearest goal (`expect.inferredGoal` / `expect.reject` / `expect.ambiguousGoals`) |
 
 The stub driver is exercised only on **TOOL-0/TOOL-1/TOOL-2**; the goal driver clears the whole
-ladder, **TOOL-0 through TOOL-8** (`test-benchmarks/agentbench/envelope.json`'s `rungReached`). TOOL-7's replanning
+ladder, **TOOL-0 through TOOL-9** (`test-benchmarks/agentbench/envelope.json`'s `rungReached`). TOOL-7's replanning
 branch lives in the planner's own method table (`src/domain/router/planner.mjs`'s `recover`
 method); TOOL-8's tied-candidate composer lives at the resolver's binding seam
 (`src/domain/router/resolver.mjs`'s `resolveOne`) — see `PLAN_TOOL_LADDER_UPLIFT.md` for both.
+TOOL-9's recognizer lives at `src/domain/router/recognize.mjs`'s `recognizeGoal` (containment over
+declared operator sequences, never a score).
 
 ## The grade (deterministic) + the metric PAIR
 
@@ -137,7 +140,7 @@ node test-benchmarks/agentbench/run.mjs --only ab-a0-describe-widget
   NOT read from `package.json`). Two runs over the same tree + stamp produce
   byte-identical `product.jsonl`.
 - **`--stamp`** must be a filesystem-safe label; **`--out`** overrides the output
-  dir; **`--rung <TOOL-0|…|TOOL-8>`** and **`--only <id,…>`** narrow the selection;
+  dir; **`--rung <TOOL-0|…|TOOL-9>`** and **`--only <id,…>`** narrow the selection;
   **`--ladder`** gates ascending rungs.
 
 ## Case shape (`cases.jsonl`, one JSON object per line)
@@ -150,17 +153,26 @@ node test-benchmarks/agentbench/run.mjs --only ab-a0-describe-widget
               "terminates": true, "proof": true } }
 ```
 
-- **`rung`** — one of `TOOL-0 TOOL-1 TOOL-2 TOOL-3 TOOL-4 TOOL-5 TOOL-6 TOOL-7 TOOL-8`.
+- **`rung`** — one of `TOOL-0 TOOL-1 TOOL-2 TOOL-3 TOOL-4 TOOL-5 TOOL-6 TOOL-7 TOOL-8 TOOL-9`.
 - **`request`** — the imperative handed to the driver.
 - **`tools`** — the DECLARED toolset (every name must be a registered capability).
 - **`expect.calls`** — the expected call sequence (name + pinned input as a lower
   bound; extra optional keys on the produced call are allowed). Omitted for a
-  refuse case.
+  refuse or a recognition case.
 - **`expect.refuse`** — `true` when the correct outcome is an honest refusal
-  (no fitting declared tool, or an unresolvable entity). Mutually exclusive with
-  `expect.calls`.
+  (no fitting declared tool, an unresolvable entity, or the TOOL-9 reject/ambiguous
+  shapes below). Mutually exclusive with `expect.calls`.
 - **`expect.terminates`** — the loop must end (always `true` for these bounded cases).
 - **`expect.proof`** — when `true`, a valid proof chain is required.
+- **`trace`** — a TOOL-9 case only: the OBSERVED call sequence (`[{name, input}]`)
+  the recognizer reads back, in place of a request the driver routes.
+- **`expect.inferredGoal`** — a TOOL-9 case only: the goal id the trace fits.
+  Mutually exclusive with `expect.refuse`.
+- **`expect.reject`** — a TOOL-9 refuse case only: `true` pins the reject class
+  (the trace fits no declared goal).
+- **`expect.ambiguousGoals`** — a TOOL-9 refuse case only: the two-or-more tied
+  goal ids the trace fits, when the recognizer refuses-and-lists rather than
+  rejecting.
 
 ## Reference bands (ILLUSTRATIVE anchors — NOT run here)
 

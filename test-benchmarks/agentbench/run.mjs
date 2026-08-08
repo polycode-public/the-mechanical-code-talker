@@ -217,7 +217,11 @@ export async function runCase(caseDef, driver, ctx, stamp) {
   });
   let loopResult;
   try {
-    loopResult = await Promise.race([driver(caseDef.request, caseDef.tools, ctx), guard]);
+    // A recognition case hands the driver its OBSERVED TRACE on the ctx — the
+    // seam takes three arguments, and every non-recognition case carries no
+    // trace, so its ctx is the shared one untouched.
+    const runCtx = Array.isArray(caseDef.trace) && caseDef.trace.length ? { ...ctx, trace: caseDef.trace } : ctx;
+    loopResult = await Promise.race([driver(caseDef.request, caseDef.tools, runCtx), guard]);
   } finally {
     clearTimeout(timer);
   }
@@ -244,6 +248,11 @@ export async function runCase(caseDef, driver, ctx, stamp) {
       ...(loopResult?.composed !== undefined ? { composed: loopResult.composed } : {}),
       ...(loopResult?.why ? { why: loopResult.why } : {}),
       ...(loopResult?.observed ? { observed: loopResult.observed } : {}),
+      // TOOL-9 recognition fields — a named goal, an explicit reject, or the
+      // tied-goal list a refuse-and-list ambiguity produces.
+      ...(loopResult?.inferredGoal !== undefined ? { inferredGoal: loopResult.inferredGoal } : {}),
+      ...(loopResult?.reject !== undefined ? { reject: loopResult.reject } : {}),
+      ...(loopResult?.ambiguousGoals !== undefined ? { ambiguousGoals: loopResult.ambiguousGoals } : {}),
     },
     verdict,
   };

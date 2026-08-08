@@ -34,12 +34,17 @@ import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 //        driver enumerates the tied readings (expect.candidateResults, one
 //        dispatched read per tied candidate) or refuses-with-a-nudge — never an
 //        arbitrary pick, never a hallucinated call.
+// TOOL-9 Goal recognition: infer the goal from an OBSERVED trace and confirm it
+//        against a bounded scheme — N declared goals plus an explicit reject
+//        class — rather than force-fit a partial trace to the nearest goal
+//        (expect.inferredGoal / expect.reject / expect.ambiguousGoals).
 // TOOL-0..TOOL-2 are exercised by the seed set + stub driver; the goal driver
-// clears the whole ladder, TOOL-0 through TOOL-8 (see agentbench/envelope.json's
+// clears the whole ladder, TOOL-0 through TOOL-9 (see agentbench/envelope.json's
 // rungReached). TOOL-7's replanning branch lives in the planner's own method
 // table; TOOL-8's tied-candidate composer lives at the resolver's binding seam
-// (src/domain/router/{planner,resolver}.mjs).
-export const RUNGS = Object.freeze(["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5", "TOOL-6", "TOOL-7", "TOOL-8"]);
+// (src/domain/router/{planner,resolver}.mjs); TOOL-9's recognizer lives at
+// src/domain/router/recognize.mjs.
+export const RUNGS = Object.freeze(["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5", "TOOL-6", "TOOL-7", "TOOL-8", "TOOL-9"]);
 
 /** The honest-gate completion floor: the gate is "0% hallucination AT ≥N%
  *  completion". A refuse-everything driver scores 0% hallucination but ~0%
@@ -72,7 +77,11 @@ export function parseCases(text, { knownLabels = null } = {}) {
     if ("refuse" in e && typeof e.refuse !== "boolean") errors.push(`${c.id}: expect.refuse must be a boolean`);
     if ("proof" in e && typeof e.proof !== "boolean") errors.push(`${c.id}: expect.proof must be a boolean`);
     const refuse = e.refuse === true;
-    if (!refuse) {
+    // A TOOL-9 recognition case answers from an observed trace, not a call: it
+    // has expect.inferredGoal in place of expect.calls, so the calls lint below
+    // must not fire for one.
+    const recognizes = typeof e.inferredGoal === "string";
+    if (!refuse && !recognizes) {
       if (!Array.isArray(e.calls) || !e.calls.length) {
         errors.push(`${c.id}: a non-refuse case needs expect.calls (a non-empty array)`);
       } else {
@@ -87,7 +96,9 @@ export function parseCases(text, { knownLabels = null } = {}) {
         });
       }
     } else if (e.calls) {
-      errors.push(`${c.id}: a refuse case must not also declare expect.calls`);
+      errors.push(refuse
+        ? `${c.id}: a refuse case must not also declare expect.calls`
+        : `${c.id}: a recognition case (expect.inferredGoal) must not also declare expect.calls`);
     }
     // expect.recover — the TOOL-7 marker: after the primary branch returns
     // empty/error, a named FALLBACK call must fire (the driver replans rather
@@ -149,6 +160,31 @@ export function parseCases(text, { knownLabels = null } = {}) {
       const keys = isPlainObject(c.floorExpect) ? Object.keys(c.floorExpect) : null;
       if (!keys || keys.length !== 1 || c.floorExpect.refuse !== true) {
         errors.push(`${c.id}: floorExpect supports only { refuse: true } — the floor arm either shares the expectation or declares the refusal`);
+      }
+    }
+    // A recognition case (TOOL-9) carries an OBSERVED trace and expects a named
+    // goal, an explicit reject, or a refuse-and-list over the tied goals. A
+    // trace step names a declared capability and binds it the same way an
+    // expected call does, so a stale trace fails at parse time.
+    if ("trace" in c) {
+      if (!Array.isArray(c.trace) || !c.trace.length) errors.push(`${c.id}: trace must be a non-empty array of observed calls`);
+      else c.trace.forEach((call, j) => {
+        const cat = `${c.id} trace step ${j + 1}`;
+        if (!isPlainObject(call) || typeof call.name !== "string") { errors.push(`${cat}: step needs a name`); return; }
+        if (!(c.tools || []).includes(call.name)) errors.push(`${cat}: "${call.name}" not in the case's declared tools`);
+        for (const problem of hallucinationsIn(call, c.tools || [])) errors.push(`${cat}: trace step is ${problem.reason} (${problem.detail})`);
+      });
+    }
+    if (recognizes && !Array.isArray(c.trace)) errors.push(`${c.id}: expect.inferredGoal needs an observed trace`);
+    if ("reject" in e) {
+      if (e.reject !== true) errors.push(`${c.id}: expect.reject, when present, is true`);
+      else if (!refuse) errors.push(`${c.id}: expect.reject annotates a refuse case (a reject IS the honest miss)`);
+      else if (recognizes) errors.push(`${c.id}: a case cannot both name a goal and reject`);
+    }
+    if ("ambiguousGoals" in e) {
+      if (!refuse) errors.push(`${c.id}: expect.ambiguousGoals only annotates a refuse case (the refuse-and-list shape)`);
+      else if (!Array.isArray(e.ambiguousGoals) || e.ambiguousGoals.length < 2) {
+        errors.push(`${c.id}: expect.ambiguousGoals must list two or more tied goal ids`);
       }
     }
     cases.push(c);
@@ -231,7 +267,18 @@ export function gradeCase(caseDef, loopResult) {
 
   // 3 / 4. outcome match
   let completed = false;
-  if (caseDef.expect.refuse === true) {
+  if (typeof caseDef.expect.inferredGoal === "string") {
+    // TOOL-9 recognized: the driver names the goal the trace fits, makes no
+    // call, and does not reject. A named goal outside the declared N+1 set is
+    // already caught by the hallucination gate above (it emits no call), so the
+    // check here is the identity of the goal itself.
+    const got = typeof loopResult?.inferredGoal === "string" ? loopResult.inferredGoal : null;
+    if (got === caseDef.expect.inferredGoal && loopResult?.reject !== true && calls.length === 0) completed = true;
+    else if (got === null) reasons.push("expected a recognized goal; the driver named none");
+    else if (loopResult?.reject === true) reasons.push("expected a recognized goal; the driver rejected the trace");
+    else if (calls.length) reasons.push("a recognition answers from the trace and makes no call; the driver produced one");
+    else reasons.push(`recognized "${got}" but the trace fits "${caseDef.expect.inferredGoal}"`);
+  } else if (caseDef.expect.refuse === true) {
     const refusedCleanly = loopResult?.refused === true && calls.length === 0;
     // TOOL-8: an ambiguous case must ALSO enumerate the tied candidates (one
     // dispatched read each) — a bare refusal that drops the candidates, or an
@@ -246,7 +293,24 @@ export function gradeCase(caseDef, loopResult) {
           : `produced candidate set ${describeCalls(produced)} != expected ${describeCalls(caseDef.expect.candidateResults)}`);
       }
     }
-    if (refusedCleanly && candidatesOk) completed = true;
+    // TOOL-9 reject/ambiguous: the recognizer's own refuse-and-list shape.
+    // expect.reject pins the reject class (the trace fits none of the declared
+    // goals); expect.ambiguousGoals pins a refuse-and-list over the tied
+    // survivors. Neither annotation exists outside a recognition case.
+    let rejectOk = true;
+    if (caseDef.expect.reject === true) {
+      rejectOk = loopResult?.reject === true;
+      if (!rejectOk) reasons.push("expected the reject class (the trace fits no declared goal); the driver refused for another reason");
+    }
+    let ambiguousOk = true;
+    if (Array.isArray(caseDef.expect.ambiguousGoals)) {
+      const produced = Array.isArray(loopResult?.ambiguousGoals) ? loopResult.ambiguousGoals : null;
+      ambiguousOk = produced !== null && sameSet(produced, caseDef.expect.ambiguousGoals);
+      if (!ambiguousOk) reasons.push(produced === null
+        ? "expected an ambiguous recognition listing the tied goals; none produced"
+        : `produced tied goal set ${describeSet(produced)} != expected ${describeSet(caseDef.expect.ambiguousGoals)}`);
+    }
+    if (refusedCleanly && candidatesOk && rejectOk && ambiguousOk) completed = true;
     else if (!refusedCleanly) reasons.push("expected an honest refusal; driver produced a call instead");
   } else {
     const expectedCalls = caseDef.expect.calls || [];

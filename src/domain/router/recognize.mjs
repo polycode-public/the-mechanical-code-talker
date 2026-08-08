@@ -250,3 +250,96 @@ export function declaredGoals(ctx = {}, { tools = null } = {}) {
     .filter((g) => fitsToolset(g.plans, tools))
     .sort((a, b) => codepointCompare(a.id, b.id));
 }
+
+/** A trace FITS a plan when its operators are a subsequence of the plan's, in
+ *  an order the plan admits. Exact and deterministic: two pointers, no score. */
+export function fitsPlan(trace, plan) {
+  let i = 0;
+  for (const step of trace) {
+    while (i < plan.length && plan[i] !== step.op) i += 1;
+    if (i >= plan.length) return false;
+    i += 1;
+  }
+  return true;
+}
+
+/** The topic a capability's own `cap:knows` add-effect names, or the operator
+ *  itself when it declares none (a world/taught effect predicate has no
+ *  registry entry to look one up in). */
+function operatorTopic(op) {
+  for (const effect of effectsOf(op)?.add ?? []) {
+    if (effect.pred === "cap:knows" && effect.topic) return effect.topic;
+  }
+  return op;
+}
+
+/** The recognition proof: one `goal-fit` receipt naming the fitting plan, then
+ *  one `causal-link` per observed step, chained from the graph. A step's own
+ *  bound argument is the condition it names; a step that took none names the
+ *  topic its producer supplied instead — the same "what threaded in" reading
+ *  `drive.mjs`'s own causal-link proofs use. */
+function buildProof(trace, goal, plan) {
+  const proof = [{ step: "goal-fit", goal: goal.id, plan, ok: true }];
+  for (let k = 1; k <= trace.length; k += 1) {
+    const step = trace[k - 1];
+    const producer = k === 1 ? "graph" : `step-${k - 1}`;
+    const producerOp = k === 1 ? step.op : trace[k - 2].op;
+    const values = Object.values(step.args || {});
+    const condition = values.length ? String(values[0]) : operatorTopic(producerOp);
+    proof.push({ step: "causal-link", producer, condition, consumer: `step-${k}:${step.op}`, role: "recognition", ok: true });
+  }
+  return proof;
+}
+
+/**
+ * Which declared goal an observed trace fits. Exactly three outcomes, never a
+ * fourth:
+ *   - one goal survives  → { goal, reject: false, ambiguous: null, proof, why }
+ *   - two or more        → { goal: null, reject: false, ambiguous: [...], proof: [], why }
+ *   - none                → { goal: null, reject: true,  ambiguous: null, proof: [], why }
+ * An empty trace rejects, naming that nothing was observed — it does not fit
+ * every goal vacuously.
+ *
+ * `expand(goal)` (optional) returns the admissible plans for a goal that ships
+ * none of its own (a world or taught goal, whose plans need a state to search
+ * from). A goal with no plans and no expand hook is excluded, not guessed at.
+ */
+export function recognizeGoal(trace, goals, { expand = null } = {}) {
+  if (!Array.isArray(trace) || !trace.length) {
+    return { goal: null, reject: true, ambiguous: null, proof: [], why: "no steps observed yet — there is nothing to recognize" };
+  }
+  const declared = Array.isArray(goals) ? goals : [];
+  const fits = [];
+  for (const goal of declared) {
+    let plans = Array.isArray(goal.plans) && goal.plans.length ? goal.plans : null;
+    if (!plans) {
+      if (typeof expand !== "function") continue; // no plan to test against — excluded, not guessed at
+      const expanded = expand(goal);
+      plans = Array.isArray(expanded) && expanded.length ? expanded : null;
+      if (!plans) continue;
+    }
+    const fittingPlan = plans.find((plan) => fitsPlan(trace, plan));
+    if (fittingPlan) fits.push({ goal, plan: fittingPlan });
+  }
+
+  if (fits.length === 1) {
+    const { goal, plan } = fits[0];
+    return {
+      goal, reject: false, ambiguous: null,
+      proof: buildProof(trace, goal, plan),
+      why: `the trace fits ${goal.id} (${goal.label}) — ${trace.length} observed step(s) are a subsequence of ${plan.join(" -> ")}`,
+    };
+  }
+  if (fits.length > 1) {
+    const survivors = fits.map((f) => f.goal);
+    const ids = survivors.map((g) => g.id);
+    return {
+      goal: null, reject: false, ambiguous: survivors, proof: [],
+      why: `the trace fits ${survivors.length} declared goals (${ids.join(", ")}) — a longer trace narrows it, so I won't pick one`,
+    };
+  }
+  return {
+    goal: null, reject: true, ambiguous: null, proof: [],
+    why: `the trace fits none of the ${declared.length} declared goals — it is off the declared model, which is a reject, not a nearest fit`,
+  };
+}

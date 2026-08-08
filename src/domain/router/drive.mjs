@@ -40,10 +40,12 @@ import {
   compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
 } from "../domain.mjs";
 import { findActionPath } from "../planning.mjs";
+import { traceOfCalls, declaredGoals, recognizeGoal } from "./recognize.mjs";
 
 export const ROUTER_DRIVER = "resolver-0.8.0";
 export const GOAL_DRIVER = "goal-0.8.1";
 export const TAUGHT_DRIVER = "taught-0.1.0";
+export const RECOGNIZE_DRIVER = "recognize-0.1.0";
 
 /** Every registered capability's name — the default declared toolset for a
  *  caller that doesn't want to hand-pick a subset. */
@@ -256,6 +258,27 @@ export async function runTaughtPlan(request, tools, ctx) {
   return {
     calls, refused: false, terminated: true, proof, driver: TAUGHT_DRIVER, why,
     observed: `plan(taught): ${calls.length} move${calls.length === 1 ? "" : "s"} simulated over the taught rules — taught: calls are never dispatched; in chat, "next" executes move 1`,
+  };
+}
+
+// ---- the recognition lane -----------------------------------------------------
+
+/** Recognize what an observed trace was doing, as a loopResult the same graders
+ *  and surfaces read. `ctx.trace` is the observed step source: an array of
+ *  { name, input } calls (a runCapabilityPlan result, or a transcript's
+ *  tool_use blocks). Makes no calls and writes nothing — recognition never
+ *  changes what it is recognizing. */
+export async function runRecognition(tools, ctx) {
+  const trace = traceOfCalls(ctx.trace || []);
+  const goals = declaredGoals(ctx, { tools });
+  const r = recognizeGoal(trace, goals);
+  return {
+    calls: [], terminated: true, driver: RECOGNIZE_DRIVER,
+    refused: r.goal === null,
+    proof: r.proof, why: r.why,
+    ...(r.goal ? { inferredGoal: r.goal.id } : {}),
+    ...(r.reject ? { reject: true } : {}),
+    ...(r.ambiguous ? { ambiguousGoals: r.ambiguous.map((g) => g.id) } : {}),
   };
 }
 

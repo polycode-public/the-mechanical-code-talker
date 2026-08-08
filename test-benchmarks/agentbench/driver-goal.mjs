@@ -26,12 +26,18 @@
 
 import { resolverDriver } from "./driver-resolver.mjs";
 import { goalReason } from "../../src/domain/router/goal-reasoner.mjs";
+import { runRecognition } from "../../src/domain/router/drive.mjs";
 
 export const DRIVER = "goal-0.8.1";
 
 /** The goal-reasoner driver: C1 first, then escalate a C1 refusal to the
  *  closed-world C2 goal-reasoner. Returns a graded loopResult. */
 export async function goalDriver(request, tools, ctx) {
+  // 0. A case carrying an OBSERVED TRACE is a recognition case, not a routing
+  //    one: the question is what the trace was doing, and no tool call answers
+  //    it. Every other case has no ctx.trace and reaches C1 exactly as before.
+  if (Array.isArray(ctx.trace) && ctx.trace.length) return runRecognition(tools, ctx);
+
   // 1. C1 — the resolver/planner. If it grounds the request, that answer stands.
   const c1 = await resolverDriver(request, tools, ctx);
   // A C1 refusal already carrying candidateResults (the tied-candidate
