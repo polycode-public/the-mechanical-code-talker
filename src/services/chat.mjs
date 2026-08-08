@@ -7348,6 +7348,7 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
     ["/plan <request>", "the capability router: plan+execute a compound or maintenance-goal request (\"of the modules impacted by X, which are untested\", \"what most needs a test\")"],
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
+    ["/goals", "the goals a trace can be recognized against: the maintenance invariants, the tool goals, this world's objective, and your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
@@ -15582,6 +15583,7 @@ const GOAL_BY_COMMAND = {
   exports: GOAL_BY_KIND.reexports,
   arch: "understand the overall architecture (package/module boundaries)",
   capabilities: "see what /plan can plan over — built-in query tools and taught actions",
+  goals: "see the declared goals a trace is recognized against, and where each one came from",
   syllogise: "materialize the entailed facts that follow from what's remembered about one term",
   wiki: "toggle the live Wikipedia supplement for questions nothing local can answer",
   wikipedia: "choose which source the research lane fetches from",
@@ -15608,6 +15610,58 @@ function domainPackLine({ name, groundingKind, groundingAdapter, commandCount, c
   if (countNounCount) adds.push(`${countNounCount} count noun${countNounCount === 1 ? "" : "s"}`);
   if (adds.length) parts.push(`adds ${adds.join(" and ")}`);
   return parts.length ? `${name} — ${parts.join("; ")}` : String(name);
+}
+
+const GOAL_ID_COLUMN = 21;
+
+/** One /goals (or `tmct plan --goals`) listing row: the id padded to a fixed
+ *  column, the goal's own label, and an optional short provenance tail. */
+function goalListingRow(goal, tail) {
+  return `  ${goal.id.padEnd(GOAL_ID_COLUMN)}— ${goal.label}${tail ? ` (${tail})` : ""}`;
+}
+
+/** The declared goal set, grouped by source in the order a reader reasons
+ *  about them: the maintenance invariants first (they're deduced, not
+ *  declared per-tool), the tool goals, this world's own objective, then the
+ *  taught actions. An empty world/taught group still prints one line, so the
+ *  reader can tell "none declared" from "not looked for" — /goals and
+ *  `tmct plan --goals` share this renderer so the two surfaces never drift. */
+export function renderDeclaredGoals(goals) {
+  const bySource = (source) => goals.filter((g) => g.source === source);
+  const goalRules = bySource("goal-rules");
+  const capGoals = bySource("capability");
+  const worldGoals = bySource("world");
+  const taughtGoals = bySource("taught");
+
+  const lines = [`${goals.length} declared goals — a trace that fits none of them is a reject, and I say so.`, ""];
+
+  lines.push(`maintenance invariants (${goalRules.length}):`);
+  for (const g of goalRules) lines.push(goalListingRow(g, g.provenance.split(" — ")[0]));
+  lines.push("");
+
+  lines.push(`tool goals (${capGoals.length}), one per declared capability:`);
+  for (const g of capGoals) lines.push(goalListingRow(g, null));
+  lines.push("");
+
+  if (worldGoals.length) {
+    lines.push(`this world's objective (${worldGoals.length}):`);
+    for (const g of worldGoals) lines.push(goalListingRow(g, g.provenance.replace(/^world marker /, "")));
+  } else {
+    lines.push("this world's objective: none — no world is loaded, so nothing marks an objective.");
+  }
+  lines.push("");
+
+  if (taughtGoals.length) {
+    lines.push(`taught actions (${taughtGoals.length}):`);
+    for (const g of taughtGoals) {
+      const tail = g.provenance.split("; ").map((part) => part.split(" — effect ")[0]).join(", ");
+      lines.push(goalListingRow(g, tail));
+    }
+  } else {
+    lines.push('taught actions: none yet — teach one ("you can move a disk onto a peg.") and it joins this list.');
+  }
+
+  return lines.join("\n").replace(/\n+$/, "");
 }
 
 async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
@@ -15751,6 +15805,28 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       for (const pack of packs) lines.push(`  ${domainPackLine(pack)}`);
     }
     return mk(lines.join("\n"));
+  }
+
+  // /goals — the bounded set a recognized trace is checked against: the
+  // maintenance invariants the goal-reasoner deduces, one goal per declared
+  // tool, this world's own objective marker, and the taught actions' effect
+  // states. Printable on purpose: "the trace fits none of these" only reads as
+  // honest when you can see the set it did not fit.
+  if (name === "goals") {
+    note(trace, "goal: see the declared goals a trace is recognized against, and where each one came from");
+    const { declaredGoals } = await import("../domain/router/recognize.mjs");
+    let worldRows = [];
+    let ruleRows = [];
+    if (memoryDir) {
+      try {
+        const { loadMemory, readFactRows, readRuleRows } = await import("../adapters/memory/core.mjs");
+        const memory = await loadMemory(memoryDir);
+        worldRows = readFactRows(memory);
+        ruleRows = readRuleRows(memory);
+      } catch { /* an unreadable store lists like an empty one */ }
+    }
+    const goals = declaredGoals({ worldRows, ruleRows });
+    return mk(renderDeclaredGoals(goals));
   }
 
   // /syllogise <term> — forward-chain what's remembered about <term> into
