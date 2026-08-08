@@ -1,8 +1,9 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: DESIGN, nothing built. Every module path marked "new" below is a file that does not exist
-yet. The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and
-rig, the claims block, the removal of the OpenBookQA stack, and the five measured rungs that follow.
+Status: F0 (the fixture) and F1 (the option splitter) are built and tested. Every other module path
+marked "new" below is still a file that does not exist yet. The plan delivers the whole arc: the
+closed multiple-choice lane, the CommonsenseQA fixture and rig, the claims block, the removal of the
+OpenBookQA stack, and the five measured rungs that follow.
 
 This plan is written to be built by a Sonnet-tier implementer with no further design work. Every
 phase names its module paths, its data structures, its function signatures, its test files, its
@@ -272,6 +273,10 @@ states both, and the repo already carries the ConceptNet attribution twice in `c
 
 ## 4. Phase F0 — the fixture
 
+**Built.** `scripts/claims/fetch-commonsenseqa-sample.mjs`, the committed 100-row
+`test-benchmarks/claims/commonsenseqa-sample.jsonl`, its `.NOTICE`, and
+`test/estate/commonsenseqa-fixture.test.mjs` all landed; section 4.7's acceptance commands are green.
+
 **Model tier: Haiku.** Mechanical: a fetch script, a deterministic slice, two text files, one JSON
 entry.
 
@@ -370,6 +375,10 @@ npm run check:pii
 ---
 
 ## 5. Phase F1 — the option splitter
+
+**Built.** `src/domain/choice-question.mjs` and `test/domain/choice-question.test.mjs` (23 tests,
+every positive and negative row plus the six required extras) landed;
+`test/estate/import-layers.test.mjs` stays green and section 5.5's acceptance commands are green.
 
 **Model tier: Sonnet.** A closed-set parser is where the design risk in this phase sits.
 

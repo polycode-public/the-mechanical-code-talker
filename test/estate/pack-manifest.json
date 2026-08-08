@@ -339,6 +339,7 @@
   "src/domain/ask-vocab.mjs",
   "src/domain/ask.mjs",
   "src/domain/child-pack.mjs",
+  "src/domain/choice-question.mjs",
   "src/domain/cli-verbs.mjs",
   "src/domain/codegraph.mjs",
   "src/domain/codeplan/graph-delta.mjs",
