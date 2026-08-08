@@ -307,7 +307,7 @@ Two sibling repos ship parts of this shape today and may later migrate onto this
 The design does not bind to that migration; it shapes the seams so the capability could serve
 them. Findings from a full read of both trees, then the mapping.
 
-### 5.1 the-quiet-feed (`/Users/antony/projects/polycode-projects/the-quiet-feed`)
+### 5.1 the-quiet-feed (`../the-quiet-feed`)
 
 - **Ingestion**: RSS + Atom with hand-rolled regex parsing, no XML dependency, in
   `app/services/rssFeedService.js` (`parseRssItems`, `parseAtomItems`, `parseFeed` with format
@@ -329,7 +329,7 @@ them. Findings from a full read of both trees, then the mapping.
 - **Entity extraction / KB**: none. Wikipedia and Wikidata appear only as ordinary catalogue
   feeds.
 
-### 5.2 marginalia (`/Users/antony/projects/polycode-projects/marginalia`)
+### 5.2 marginalia (`../marginalia`)
 
 - **Ingestion**: a dependency-free RSS/Atom parser as a chat tool,
   `app/functions/chat/tools/fresh-sources.mjs` (`extractFeedItems`, `rss()`), plus GDELT, HN
