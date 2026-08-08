@@ -3,8 +3,10 @@
 // groups, plus each ancestor cluster within Person roles/Physical objects —
 // see sprite-catalog-viz.mjs's own catalogSections), each linking out to its
 // own class's card on the group page that actually holds the full gallery.
-// This page also holds every section's ontology tree, drawn above that
-// section, which is where the ancestry pills on every sprite page point.
+// This page holds one ontology tree per section, drawn above that section
+// as a real hierarchy diagram — connector lines from parent box to child
+// box — and its ancestry pills anchor to those trees in-page (each group
+// page draws its own sections' trees the same way).
 // The composer (the "there is a" lead-in) and the chat dock both still
 // answer over the WHOLE catalog from this page, even though only one class
 // per section has a card here — see test-e2e/pages-sprites-groups.test.mjs
@@ -160,6 +162,31 @@ test("an ancestry pill is a real link to that term's own node in its section's t
     assert.equal(await node.locator(".tree-term").textContent(), "person");
     assert.equal(await node.locator(".tree-img svg").count(), 1, "a term with a template shows its own real sprite");
     assert.equal(await node.getAttribute("data-level"), "1", "person sits one level under organism here");
+  } finally {
+    await context.close();
+  }
+});
+
+test("every recorded parent link in a tree is drawn as a real connector line, and a two-parent node's edges wear the accent", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    const tree = page.locator(".ontology-tree", { has: page.locator("#tree-person-worker-driver") });
+    await tree.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() =>
+      document.getElementById("tree-person-worker-driver").closest(".ontology-tree").querySelectorAll(".tree-edges path").length > 0);
+    const parentLinks = await tree.locator(".tree-node .tree-up a").count();
+    assert.ok(parentLinks > 0, "the tree really records parent links, or this test proves nothing");
+    assert.equal(await tree.locator(".tree-edges path").count(), parentLinks, "one drawn line per recorded parent link");
+    const d = await tree.locator(".tree-edges path").first().getAttribute("d");
+    assert.match(d, /^M-?[\d.]+ -?[\d.]+C/, "each connector is a real drawn curve, never an empty path");
+
+    const queenTree = page.locator(".ontology-tree", { has: page.locator("#tree-person-everything-else-queen") });
+    await queenTree.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() =>
+      document.getElementById("tree-person-everything-else-queen").closest(".ontology-tree").querySelectorAll(".tree-edges path.edge-dual").length >= 2);
+    assert.ok(await queenTree.locator(".tree-edges path.edge-dual").count() >= 2,
+      "both edges into the two-parent queen node carry the dual accent");
+    assert.deepEqual(consoleErrors, [], "drawing the connectors logs no console error");
   } finally {
     await context.close();
   }
