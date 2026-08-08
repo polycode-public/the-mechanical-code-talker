@@ -33,17 +33,23 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **PLAN_SYLLOGIST_EL_DL.md — full arc** — in flight, coordinator + worktree sub-agents;
-  the plan doc states per-phase status. Landed: phase 0 grammar/ontology, phase 1 EL classifier
-  with `tmct classify` and `/classify`, phase 3 ALC tableau, increments 4a-4b. In worktrees now:
-  0b teach lane (the `chat.mjs` slot), 4c-4e. Then: phase 2 EL wiring, 3b `/prove`, phase 5
-  consistency surfacing, track 6 site/claims.
-- [ ] **PLAN_NEWS_FEED.md — full arc** — in flight, same model. Landed: phases 0-2 (domain,
-  fixtures, adapters, store). In a worktree now: phase 3 service. Then: phase 4 chat wiring
-  (serialized), 5 CLI, 6 page, 7 site, 8 e2e/CI, 9 rig+claims.
-- [ ] **PLAN_COMMON_SENSE_QA.md — full arc** — in flight, same model. Landed: F0 fixture, F1
-  splitter, F2 chat lane. In a worktree now: F3 rig. Then: F4 claims block, F5 removal + corpus
-  rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
+- [ ] **PLAN_SYLLOGIST_EL_DL.md — remaining phases** — paused at a clean seam; the plan doc
+  states per-phase status. Landed: phases 0/0b, 1 (with `tmct classify` and `/classify`), 2 (EL
+  wired into the ask lanes; E1/E2 answer end to end), 3, and 4a-4e (the full SHOIQ increment
+  ladder). Next rounds: 3b `/prove` (a `chat.mjs` round; also gates regenerating the INF-7/INF-8
+  ceiling markers and verdicts, deliberately left pre-EL until the chat surface can reach the
+  tableau), phase 5 consistency surfacing, track 6 site/claims.
+- [ ] **PLAN_NEWS_FEED.md — remaining phases** — paused before phase 4. Landed: phases 0-3 and
+  5 (domain, fixtures, adapters, store, service, CLI verb). Next rounds: phase 4 chat wiring (a
+  `chat.mjs` round; also carries the strict-tier provenance nuance recorded in the plan's phase
+  3 section), 6 page, 7a/7b site, 8 e2e + CI enrolment, 9 rig + claims.
+- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — paused after F3. Landed: F0-F3; the
+  first measured claim is 0 of 100, all 100 abstained (`results/claims/commonsenseqa.json`).
+  The rig's root-cause finding, recorded in the plan's F3 section: `extractStemSourceTerm` in
+  `src/domain/choice-question.mjs` only reads "where would you find X" stems, so most fixture
+  questions miss before the probe (and its child-pack pull) runs — broaden it before expecting
+  rungs R1-R3 to move the number. Next rounds: F4 claims-block swap, F5 removal + corpus rows,
+  rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
