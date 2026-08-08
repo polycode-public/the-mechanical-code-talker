@@ -1238,6 +1238,11 @@ same memoized ancestor walk `buildAncestorCloser` uses. Blocking is unaffected: 
 precomputed data the existing equality-blocking test already reads correctly. Test file
 `test/adapters/tableau-role-hierarchy.test.mjs`. This increment is the smallest of the five.
 
+**Delivered.** `kb.roleClosure` maps every role to the set of roles below it in the
+`rdfs:subPropertyOf` hierarchy, precomputed once per KB; the ∃-rule's witness check and the ∀-rule's
+successor walk both read an edge's role through it instead of an exact match. Blocking untouched.
+Tests in `test/adapters/tableau-role-hierarchy.test.mjs`.
+
 **4c — O: nominals.** `owl:oneOf` gives `{t:"nom", ind}`. A nominal is a singleton concept: two nodes
 labelled the same nominal are the same individual and must be merged. This is E6. Merging needs the
 same machinery 4d's ≤-rule needs, so build 4d's merge first and reuse it. Nominals break the
