@@ -888,6 +888,15 @@ anything that reads it.
 
 ## 8. Phase 3 — the ALC tableau core
 
+Shipped: `src/domain/tableau.mjs` (sections 8.1–8.6 below — the concept-expression AST, the
+explicit-stack search engine and its five expansion rules, subset blocking, the tri-state proof
+API, KB module extraction, and reading the store into a KB), plus section 8.8's test files
+(`test/adapters/tableau-expr.test.mjs`, `tableau-core.test.mjs`, `tableau-module.test.mjs`,
+`tableau-kb.test.mjs`, `tableau-prove.test.mjs`, `tableau-alc-fixtures.test.mjs`) and
+`test/fixtures/alc-entailments.jsonl`. Open: section 8.7's `/prove` chat command, its
+`chat-prove-command.test.mjs`, and the `inference.dl.*` corpus rows — these land in the serialized
+`src/services/chat.mjs` track.
+
 New module: **`src/domain/tableau.mjs`**. Imports `./hash.mjs` only.
 
 ALC first: ⊓, ⊔, ¬, ∃, ∀. Query-time only, never materialised in this plan's stages. A case-split

@@ -439,6 +439,7 @@
   "src/domain/sprite-templates.mjs",
   "src/domain/svg-instance-ids.mjs",
   "src/domain/syllogise.mjs",
+  "src/domain/tableau.mjs",
   "src/domain/text-stats.mjs",
   "src/domain/town-square-world.mjs",
   "src/domain/world-snapshot.mjs",
