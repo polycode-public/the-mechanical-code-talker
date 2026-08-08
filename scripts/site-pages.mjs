@@ -29,7 +29,7 @@ export const ABOUT_PAGES = DEMO_PAGES.map(aboutPageOf);
 
 /** Every hand-authored, git-tracked page/asset the site serves. The generated
  *  demo pages are not here: they are written fresh by build-demo-site.mjs. */
-export const TRACKED_PAGES = ["index.html", ...ABOUT_PAGES];
+export const TRACKED_PAGES = ["index.html", "help.html", ...ABOUT_PAGES];
 
 export const SHARED_STYLESHEET = "site.css";
 
@@ -86,6 +86,13 @@ export const RECEIPTS_META = {
 export const CLAIMS_META = {
   title: "Claims and limits",
   description: "Every claim tmct makes about itself, measured against a committed source and rendered from that source at build time, including the ones that don't flatter it.",
+};
+
+/** The help page's own head-tag metadata. Same posture as RECEIPTS_META: no
+ *  paired about page, sits outside DEMO_PAGES. */
+export const HELP_META = {
+  title: "Help",
+  description: "How to ask and teach on chat.html, what the burrow demonstrates, how sharing a world works, and what to do when something goes wrong.",
 };
 
 /** The claims page's block manifest: which results/claims/<name>.json file

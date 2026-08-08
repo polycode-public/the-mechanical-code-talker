@@ -1,6 +1,6 @@
 # PLAN_HELP.md — one help page for chat.html and mud.html
 
-Status: DESIGN — not yet implemented. Nothing in this document is live code.
+Status: BUILT. `public/help.html` is live, tracked, and wired into the site build.
 
 ## Why one page, and why its own
 

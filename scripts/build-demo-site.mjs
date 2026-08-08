@@ -35,7 +35,7 @@ import { shortCommit, versionFileText } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
-import { ABOUT_PAGES, DEMO_PAGES, DEMO_PAGE_META, INDEX_META, RECEIPTS_META, CLAIMS_META, CLAIMS_PAGE_BLOCKS, SHARED_STYLESHEET } from "./site-pages.mjs";
+import { ABOUT_PAGES, DEMO_PAGES, DEMO_PAGE_META, INDEX_META, RECEIPTS_META, CLAIMS_META, CLAIMS_PAGE_BLOCKS, HELP_META, SHARED_STYLESHEET } from "./site-pages.mjs";
 import { escapeHtml } from "../src/services/viz-theme.mjs";
 import { compareVersions } from "../src/domain/publish-gate.mjs";
 import { checkClaim, loadSchema } from "./claims/lib.mjs";
@@ -137,6 +137,21 @@ function claimsHeadMeta() {
     socialTitle: CLAIMS_META.title,
     description: CLAIMS_META.description,
     canonicalUrl: `${SITE_ORIGIN}/claims.html`,
+    ogImageUrl: `${SITE_ORIGIN}/og/index.png`,
+  };
+}
+
+/** The help page's head metadata. Hand-authored and tracked like index.html
+ *  and the about pages (it is a plain static document with no engine), so it
+ *  fills through the same meta:begin/meta:end marker those pages carry
+ *  rather than being written wholesale like receipts.html/claims.html. No
+ *  paired about page, so it reuses the home page's og:image. */
+function helpHeadMeta() {
+  return {
+    pageTitleTag: `${HELP_META.title} — tmct`,
+    socialTitle: HELP_META.title,
+    description: HELP_META.description,
+    canonicalUrl: `${SITE_ORIGIN}/help.html`,
     ogImageUrl: `${SITE_ORIGIN}/og/index.png`,
   };
 }
@@ -550,11 +565,11 @@ async function loadScenarioWorlds(names) {
   }
 }
 
-// The 12 hand-authored pages (index.html + the 11 about pages) carry a
-// <!-- meta:begin -->/<!-- meta:end --> marker pair in their tracked <head>
-// in place of their own <title>/<meta name="description"> lines; this fills
-// the marker's interior fresh on every build, so a title/description edit
-// only ever needs to land in scripts/site-pages.mjs.
+// The 13 hand-authored pages (index.html, help.html, the 11 about pages)
+// carry a <!-- meta:begin -->/<!-- meta:end --> marker pair in their tracked
+// <head> in place of their own <title>/<meta name="description"> lines; this
+// fills the marker's interior fresh on every build, so a title/description
+// edit only ever needs to land in scripts/site-pages.mjs.
 {
   const markerRe = /<!-- meta:begin -->[\s\S]*?<!-- meta:end -->/;
   const fillMetaMarker = (path, meta) => {
@@ -563,8 +578,9 @@ async function loadScenarioWorlds(names) {
     writeFileSync(path, html.replace(markerRe, `<!-- meta:begin -->\n${renderMetaHeadBlock(meta)}\n<!-- meta:end -->`));
   };
   fillMetaMarker(join(SITE, "index.html"), indexHeadMeta());
+  fillMetaMarker(join(SITE, "help.html"), helpHeadMeta());
   for (const slug of DEMO_PAGES) fillMetaMarker(join(SITE, `${slug}-about.html`), aboutPageMeta(slug));
-  console.log(`filled meta:begin/meta:end blocks in index.html and ${DEMO_PAGES.length} about pages`);
+  console.log(`filled meta:begin/meta:end blocks in index.html, help.html and ${DEMO_PAGES.length} about pages`);
 }
 
 const GITLAB_REPO_URL = "https://gitlab.com/polycode-projects/the-mechanical-code-talker";
@@ -953,7 +969,7 @@ Sitemap: ${SITE_ORIGIN}/sitemap.xml
 `;
 
 function renderSitemapXml() {
-  const locs = [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/receipts.html`, `${SITE_ORIGIN}/claims.html`];
+  const locs = [`${SITE_ORIGIN}/`, `${SITE_ORIGIN}/receipts.html`, `${SITE_ORIGIN}/claims.html`, `${SITE_ORIGIN}/help.html`];
   for (const slug of DEMO_PAGES) {
     locs.push(`${SITE_ORIGIN}/${slug}.html`);
     locs.push(`${SITE_ORIGIN}/${slug}-about.html`);
@@ -1014,6 +1030,7 @@ const DEPLOY_TRACKING = [
   "./index.html",
   "./og/index.png",
   "./chat.html",
+  "./help.html",
 ${ABOUT_PAGES.map((p) => `  ${JSON.stringify(`./${p}`)},`).join("\n")}
   ${JSON.stringify(`./${SHARED_STYLESHEET}`)},
   "./chat-browser.bundle.js",
@@ -1098,7 +1115,7 @@ self.addEventListener("fetch", (event) => {
   // any precached asset's bytes move — the seed hash is reused rather than
   // recomputed over its 90-odd MB a second time.
   const hashedAssets = [
-    ["index.html", null], ["chat.html", null],
+    ["index.html", null], ["chat.html", null], ["help.html", null],
     ...ABOUT_PAGES.map((p) => [p, null]), [SHARED_STYLESHEET, null],
     ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
     ["vendor/wink.js", null], ["vendor/p2p.js", null], ["vendor/three.js", null],
