@@ -33,7 +33,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-None open.
+- [ ] **claims.html "Run it on this device" fails** — the C7 replication button (solve a 9-disk
+  Hanoi puzzle in the browser, through the same code that produced the committed 721.32 ms
+  figure) renders "could not run on this device" after the click instead of a measured time.
+  Diagnose what the in-page runner actually hits (bundle path, worker, or exception — the
+  message swallows the cause), fix the run, and make the failure line name its reason when a
+  real one remains.
 
 ## Discipline
 
