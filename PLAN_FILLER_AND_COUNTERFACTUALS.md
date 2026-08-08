@@ -1,6 +1,6 @@
 # PLAN_FILLER_AND_COUNTERFACTUALS.md — two design passes: filler-clause prefixes, planner counterfactuals
 
-Status: item 1 BUILT (see below); item 2 RESEARCH / DESIGN. Both items moved here from
+Status: item 1 BUILT (see below); item 2 BUILT (see below). Both items moved here from
 `NEXT.md` (2026-07-22, operator instruction) because each needs a real design pass before any
 diff is worth writing. Live evidence for both comes from the 2026-07-21 xl-graph probe session
 (`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log`).
@@ -49,7 +49,17 @@ then closed the two-word tier only.
 - Corpus rows pin both sides in the `grammar.noise.*` lane; unit coverage in
   `test/adapters/interpret.test.mjs`.
 
-## 2. Plan-justification counterfactuals
+## 2. Plan-justification counterfactuals — BUILT
+
+Two new recognizer shapes in `planFollowUpAnswer` (`src/services/chat.mjs`), active only while a
+plan slot is live: a hypothetical-start re-solve ("what if disk-1 started on peg-c instead?")
+rebuilds the plan's own start board with one piece moved and re-runs the same BFS, and a
+forced-alternative compare ("why did you move disk-1 first instead of disk-2?" / "why not move
+disk-2 first?") forces the named alternative into the plan's own first move and compares the
+re-searched cost, naming the violated precondition when the alternative has no legal first move.
+Both are read-only — the held plan, cursor and move count survive the question unchanged. Pinned
+by `planning.counterfactual.*` in `test/corpus/planning.jsonl` and unit coverage in
+`test/adapters/chat-plan-counterfactuals.test.mjs`.
 
 ### The gap
 
