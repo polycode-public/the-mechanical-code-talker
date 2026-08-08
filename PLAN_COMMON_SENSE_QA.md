@@ -663,6 +663,19 @@ node --test "test/estate/*.test.mjs"
 
 ## 7. Phase F3 — the rig
 
+**Built.** `scripts/claims/claim-commonsenseqa.mjs` seeds exactly the INIT_XL_BANDS band set through
+`resolveExtensions`/`seedActiveCorpusEntries` (the same path `scripts/build-chat-seed.mjs` uses),
+runs the 100-item fixture through the choice lane with a fresh `sessionId` per item, and writes
+`results/claims/commonsenseqa.json`. `"claim:commonsenseqa"` is in `package.json`. Measured: 0 of 100
+correct (answered 0, refused 0, abstained 100; `sourceEdgePresent` 0), matching section 2.1's own
+0-of-100 source-to-gold edge count against `INIT_XL_BANDS` alone — no item's child-pack pull ever
+ran. Found along the way, and NOT fixed here because it sits entirely outside this rig's own code
+(`src/domain/choice-question.mjs`, phase F1): `extractStemSourceTerm` only recognizes a "where would
+you find/see/keep/put/store/place X" stem shape, so it returns `""` for most of the fixture's
+natural-language stems (the "what"-led 47 percent chief among them), which sends the lane straight
+to its no-`sourceTerm` miss before `probeChoiceOptions` ever runs. Section 7.6's acceptance commands
+are green.
+
 **Model tier: Sonnet.** The seeding path and the detail columns need care; the scoring is trivial.
 
 New file: **`scripts/claims/claim-commonsenseqa.mjs`**. Registered in `package.json` as
