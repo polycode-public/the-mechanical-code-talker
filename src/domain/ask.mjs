@@ -4055,7 +4055,20 @@ function renderCore(parsed, result, graph) {
         miss: true, ambiguous: false,
       };
     }
-    const entityWord = nounFor(parsed.entityType || "Module", 2);
+    // No entity type was parsed (a bare "what denotes X" names no grain), so the
+    // word for what was searched comes off the kind's own object classes in the
+    // loaded graph rather than defaulting to "modules" — a kind like `denotes`
+    // never targets a module at all, and saying so would misname what was searched.
+    // When the graph holds no edges of this kind at all, there is nothing to
+    // read a class from, and "Module" stays the plain default.
+    const entityWord = parsed.entityType
+      ? nounFor(parsed.entityType, 2)
+      : (() => {
+          const kindClasses = [...classesForKinds(graph, kindsFor(parsed.kind))];
+          if (kindClasses.length === 1) return nounFor(kindClasses[0], 2);
+          if (kindClasses.length > 1) return kindClasses.map((c) => nounFor(c, 2)).join(" or ");
+          return nounFor("Module", 2);
+        })();
     // Name the resolved antecedent, not the raw pronoun: "who touched it" that
     // bound "it" to fnAlpha must say so, or the receipt reads as though nothing
     // was resolved at all. Scoped to a context pronoun so a typed term keeps the
