@@ -92,7 +92,7 @@ export const CLAIMS_META = {
  *  paired about page, sits outside DEMO_PAGES. */
 export const HELP_META = {
   title: "Help",
-  description: "How to ask and teach on chat.html, what the burrow demonstrates, how sharing a world works, and what to do when something goes wrong.",
+  description: "How to ask and teach on chat.html, how sharing a world works, and what to do when something goes wrong.",
 };
 
 /** The claims page's block manifest: which results/claims/<name>.json file

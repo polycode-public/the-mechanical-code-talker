@@ -53,9 +53,6 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
   source research with live probes, grounding/enrichment/syllogism cycle, hub-centered feed,
   all consumer surfaces, sibling-repo alignment with the-quiet-feed and marginalia). Plan only,
   no implementation.
-- [ ] **Help page burrow decision** — public/help.html shipped and CI-verified, but its
-  `#burrow` section documents `mud.html`, which `7245ff0a` retired from the site build; decide
-  whether mud.html returns to the build or the burrow guidance repoints at what ships.
 
 ## Discipline
 

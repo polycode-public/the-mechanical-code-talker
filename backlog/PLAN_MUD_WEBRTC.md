@@ -238,7 +238,7 @@ left guessing what to do next. Walked end to end:
    Carol sees Alice's row appear in her node list a beat after Bob's.
 
 Both pages link to a shared help page from a small "?" in the page chrome; its content is
-specified in `PLAN_HELP.md`, and its sharing section walks this same flow in end-user words.
+specified in `archive/PLAN_HELP.md`, and its sharing section walks this same flow in end-user words.
 
 **Messages, once a channel is open**, all plain JSON:
 
