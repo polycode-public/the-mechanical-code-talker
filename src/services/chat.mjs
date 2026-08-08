@@ -8539,6 +8539,14 @@ function apposedFactTerm(term, rows, normFactTerm) {
  *  factReadBack(...)` — never both). */
 const CAN_ASK_RE = /^(?:can|could)\s+(all\s+|every\s+)?(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
 const DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+/** The class-level existential sibling of DOES_HAVE_ASK_RE for a verb OTHER
+ *  than "have" — "does a heart contain a hinge". A someValuesFrom
+ *  restriction (taught, or EL-entailed by /classify) never cares which
+ *  English near-synonym for "has" named it, and the store carries no
+ *  per-verb sense distinction for this shape yet, so restrictionExistentialHit
+ *  answers on the (subject, filler) SHAPE alone, tried only once
+ *  DOES_HAVE_ASK_RE's own literal-"have" reader has already declined. */
+const DOES_EXISTENTIAL_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+([a-z]+)\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
 const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // "what is used for riding" / "what can be used for riding" / "what is for
@@ -8939,6 +8947,61 @@ function withDeducedGoal(res, envelope, query) {
     if (whatIs) goal = deduceGoalFromParsed({ shape: "meta", object: whatIs[1] });
   }
   return goal ? { ...res, goal } : res;
+}
+
+/** The class-level existential mirror of a direct hasA/tmct:has fact: a
+ *  stored (taught, or EL-entailed by /classify) someValuesFrom restriction
+ *  reachable from the subject names the filler. Runs off `factRows` rather
+ *  than the reduced `memoryFacts` shape because the citation needs each
+ *  hit's own `justification` — an EL-derived restriction cites the taught
+ *  premises it composed (e.g. "heart is a kind of some-has-valve; valve is a
+ *  kind of flap"), not just its own single entailed row. Falls back to
+ *  citing the hit itself when no subClassOf premise is on record (a directly
+ *  taught, unchained restriction). Returns the rendered `{text,
+ *  replace: true}` yes turn on a hit. On a miss, `subjectWord` (the surface
+ *  text the question named the subject with) decides the reply: the subject
+ *  has SOME remembered restriction that just doesn't reach this filler, so
+ *  the miss names `/classify` — the one command that can compose further
+ *  ("/syllogise" is never offered here, since its plain scm-sco chase never
+ *  touches a class expression) — or, with no restriction on the subject at
+ *  all, plain null so the caller's own miss cascade stands unchanged. */
+async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fillerVariants, subjectWord = null) {
+  const { ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("../domain/syllogise.mjs");
+  const rows = await factRows(memoryDir, cache);
+  const onPropertyOf = new Map();
+  const someValuesFromOf = new Map();
+  for (const r of rows) {
+    if (r.predicate === ON_PROPERTY_PREDICATE) onPropertyOf.set(r.subject, r.object);
+    else if (r.predicate === SOME_VALUES_FROM_PREDICATE) someValuesFromOf.set(r.subject, r.object);
+  }
+  // Restricted to a genuine someValuesFrom restriction — onProperty alone
+  // also marks a cardinality restriction (owl:maxCardinality/minCardinality/
+  // cardinality, no someValuesFrom row of its own), which classifyEl's EL
+  // rules never touch; offering /classify over one would be wrong advice,
+  // and it would also swallow a query the cardinality live chases
+  // (factReadBackReaders' CARD_AT_LEAST_ASK_RE/CARD_EXISTENCE_ASK_RE) are
+  // the ones meant to answer, including a provable "no".
+  const subjectRestrictions = rows.filter((r) => r.predicate === SUBCLASS_PREDICATE && subjectVariants.has(r.subject)
+    && onPropertyOf.has(r.object) && someValuesFromOf.has(r.object));
+  const hit = subjectRestrictions
+    .filter((r) => fillerVariants.has(someValuesFromOf.get(r.object)))
+    .sort((a, b) => a.object.localeCompare(b.object))[0];
+  if (hit) {
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const premises = (hit.justification || [])
+      .map((id) => byId.get(id))
+      .filter((r) => r && r.predicate === SUBCLASS_PREDICATE);
+    const cited = premises.length ? premises : [hit];
+    return { text: `yes — ${cited.map(renderFactLine).join("; ")}`, replace: true };
+  }
+  if (subjectRestrictions.length && subjectWord) {
+    return {
+      text: `I can't confirm that — nothing I remember composes to it yet. Run "/classify ${subjectWord}", then ask me again.`,
+      replace: true,
+      miss: true,
+    };
+  }
+  return null;
 }
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
@@ -9565,7 +9628,24 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       if (!nextFrontier.length) break;
       frontier = nextFrontier;
     }
-    return null;
+    // No direct or ⊑-lifted possession fact — a bare-existential teach or an
+    // EL classification stores the SAME knowledge as a subClassOf-to-
+    // restriction chain rather than a flat possession triple, so try that
+    // shape before declining.
+    return restrictionExistentialHit(memoryDir, cache, subj, obj, doesHave[1].trim());
+  }
+
+  // (b2b-el) "does a heart contain a hinge" — DOES_HAVE_ASK_RE only ever
+  // matches the literal verb "have"; a class-level existential question can
+  // use any near-synonym, so this sibling reader tries the SAME restriction
+  // chase restrictionExistentialHit runs above, keyed on shape alone, once
+  // (b2b)'s own literal-"have" surface has already declined to match at all.
+  const doesExistential = q.match(DOES_EXISTENTIAL_ASK_RE);
+  if (doesExistential) {
+    const subj = factTermVariants(normFactTerm, doesExistential[1]);
+    const obj = factTermVariants(normFactTerm, doesExistential[3]);
+    const hit = await restrictionExistentialHit(memoryDir, cache, subj, obj, doesExistential[1].trim());
+    if (hit) return hit;
   }
 
   // (b2c) "do birds fly" — the do-support surface of (b2), same capableOf
@@ -11236,9 +11316,29 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     );
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
-      const recovery = deeperChainExists
-        ? `The facts to settle it are here, but the chain is longer than I follow while answering. Run "/syllogise ${subjectWord}", then ask me again.`
-        : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`;
+      // A someValuesFrom restriction node among the subject's own remembered
+      // isa facts means the gap is a class expression /syllogise's plain
+      // scm-sco chase never reaches — /classify is the offer that can
+      // actually close it, named instead of /syllogise rather than beside
+      // it, so the offer never points at a command that provably can't help.
+      // A CARDINALITY restriction (owl:maxCardinality/minCardinality/
+      // cardinality, also onProperty-bearing but with no someValuesFrom row
+      // of its own) is excluded on purpose: classifyEl's rules don't touch
+      // that shape either.
+      const { ON_PROPERTY_PREDICATE: RESTRICTION_ON_PROPERTY, SOME_VALUES_FROM_PREDICATE: RESTRICTION_SOME_VALUES_FROM } = await import("../domain/syllogise.mjs");
+      const onPropertyNodes = new Set();
+      const someValuesFromNodes = new Set();
+      for (const f of rows) {
+        if (f.predicate === RESTRICTION_ON_PROPERTY) onPropertyNodes.add(f.subject);
+        else if (f.predicate === RESTRICTION_SOME_VALUES_FROM) someValuesFromNodes.add(f.subject);
+      }
+      const restrictionNodes = new Set([...onPropertyNodes].filter((n) => someValuesFromNodes.has(n)));
+      const involvesRestriction = knownSubjectIsa.some((f) => restrictionNodes.has(f.object));
+      const recovery = involvesRestriction
+        ? `The facts to settle it are here, but reaching it means composing a restriction /syllogise doesn't follow. Run "/classify ${subjectWord}", then ask me again.`
+        : deeperChainExists
+          ? `The facts to settle it are here, but the chain is longer than I follow while answering. Run "/syllogise ${subjectWord}", then ask me again.`
+          : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`;
       return {
         text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
         replace: true,
@@ -12431,26 +12531,107 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
 // materialisation, not the whole-store maintenance job /syllogise runs.
 const AUTO_SYNTHESIS_BUDGET = 12;
 
+/** The `[reasoning]` knobs for a classification pass rooted at `memoryDir` —
+ *  the repo's own `tmct.toml` when it sets one, the shipped defaults
+ *  otherwise. `resolveReasoningConfig` wants the NORMALIZED sparse pass-
+ *  through `normalizeConfig` produces (a bare `loadTomlConfig` object has no
+ *  `.reasoning` key of its own), the same load-then-normalize sequence the
+ *  CLI's own `resolveRuntimeConfig` already runs. Failure-tolerant: a missing
+ *  or unreadable `tmct.toml` degrades to the defaults, never a thrown error. */
+async function resolveReasoningConfigForRepo(memoryDir) {
+  const { resolveReasoningConfig } = await import("../domain/reasoning-config.mjs");
+  try {
+    const { loadTomlConfig, normalizeConfig } = await import("../adapters/toml-config.mjs");
+    const raw = await loadTomlConfig(memoryDir);
+    const normalized = await normalizeConfig(raw, { configDir: memoryDir });
+    return resolveReasoningConfig(normalized);
+  } catch {
+    return resolveReasoningConfig(null);
+  }
+}
+
+/** The focus set classifyEl needs to reach a bare-existential or transitive-
+ *  role chain rooted at `seedTerms`: each seed's own `rdfs:subClassOf`
+ *  descendant walk, folded through every someValuesFrom restriction it
+ *  reaches onto that restriction's own filler, walked again from there — so
+ *  a taught "heart ⊑ ∃has.valve, valve ⊑ ∃has.hinge" reaches both `valve`
+ *  and `hinge` from a focus seeded on `heart` alone. classifyEl's own focus
+ *  gate takes its input as given (unlike syllogise's `expandFocus`, it has no
+ *  expansion step of its own), so this walk runs here rather than inside the
+ *  classifier. Bounded by `hops`. Pure. */
+function elClassifyFocus(rows, seedTerms, onPropertyPredicate, someValuesFromPredicate, hops = 8) {
+  const subClassOf = new Map();
+  const onPropertyOf = new Map();
+  const someValuesFromOf = new Map();
+  for (const r of rows) {
+    if (r.predicate === SUBCLASS_PREDICATE) {
+      if (!subClassOf.has(r.subject)) subClassOf.set(r.subject, []);
+      subClassOf.get(r.subject).push(r.object);
+    } else if (r.predicate === onPropertyPredicate) {
+      onPropertyOf.set(r.subject, r.object);
+    } else if (r.predicate === someValuesFromPredicate) {
+      someValuesFromOf.set(r.subject, r.object);
+    }
+  }
+  const focus = new Set(seedTerms);
+  let frontier = [...focus];
+  for (let hop = 0; hop < hops && frontier.length; hop += 1) {
+    const next = [];
+    for (const t of frontier) {
+      for (const obj of subClassOf.get(t) || []) {
+        if (!focus.has(obj)) { focus.add(obj); next.push(obj); }
+        const filler = onPropertyOf.has(obj) ? someValuesFromOf.get(obj) : null;
+        if (filler && !focus.has(filler)) { focus.add(filler); next.push(filler); }
+      }
+    }
+    frontier = next;
+  }
+  return focus;
+}
+
 /** After a learn-on-miss load stored new facts about `term`, run a bounded,
  *  focus-scoped forward-chaining pass so the new facts connect to what's
- *  already remembered — the auto sibling of the /syllogise command. Derived
+ *  already remembered — the auto sibling of the /syllogise command, plus its
+ *  EL sibling (the auto sibling of /classify): the same seed focus feeds
+ *  both, syllogise expanding it through its own `expandFocus`, classifyEl
+ *  through `elClassifyFocus` since it has no such option of its own. Derived
  *  facts carry entailed:* provenance at their discounted trust and are
- *  retractable. Failure-tolerated: a synthesis miss never disturbs the answer
- *  the load already composed. Returns the count derived. */
+ *  retractable. Both passes are failure-tolerated and independent of each
+ *  other: neither a syllogise miss nor an EL miss disturbs the answer the
+ *  load already composed, or the other pass's own result. Returns the total
+ *  count derived across both. */
 async function synthesiseAroundTerm(memoryDir, term, cache, budget = AUTO_SYNTHESIS_BUDGET) {
   if (!memoryDir || !term || budget <= 0) return 0;
+  let count = 0;
   try {
     const { syllogise } = await import("../domain/syllogise.mjs");
     const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
+    const seedFocus = [...factTermVariants(normFactTerm, term)];
     const res = await syllogise(memoryDir, {
-      focus: [...factTermVariants(normFactTerm, term)],
+      focus: seedFocus,
       expandFocus: true,
       budget,
       store: { loadMemory, readFactRows, appendFacts },
     });
-    if (res?.count && cache) cache.rows = null;
-    return res?.count || 0;
-  } catch { return 0; }
+    if (res?.count) { count += res.count; if (cache) cache.rows = null; }
+  } catch { /* a syllogise miss never disturbs the answer the load already composed */ }
+  try {
+    const { classifyEl } = await import("../domain/el-classify.mjs");
+    const { ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("../domain/syllogise.mjs");
+    const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
+    const seedFocus = [...factTermVariants(normFactTerm, term)];
+    const rows = readFactRows(await loadMemory(memoryDir));
+    const focus = elClassifyFocus(rows, seedFocus, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE);
+    const reasoning = await resolveReasoningConfigForRepo(memoryDir);
+    const elRes = await classifyEl(memoryDir, {
+      budget: reasoning.classifyBudget,
+      rounds: reasoning.classifyRounds,
+      focus,
+      store: { loadMemory, readFactRows, appendFacts },
+    });
+    if (elRes?.count) { count += elRes.count; if (cache) cache.rows = null; }
+  } catch { /* an EL pass miss never disturbs the answer the load already composed */ }
+  return count;
 }
 
 /** The term an explicit "ask Wikipedia" phrasing names — "what does wikipedia
@@ -16080,14 +16261,15 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     }
     try {
       const { classifyEl } = await import("../domain/el-classify.mjs");
-      const { resolveReasoningConfig } = await import("../domain/reasoning-config.mjs");
       const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
-      const { SUBCLASS_PREDICATE } = await import("../domain/syllogise.mjs");
-      const reasoning = resolveReasoningConfig(null);
+      const { SUBCLASS_PREDICATE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("../domain/syllogise.mjs");
+      const reasoning = await resolveReasoningConfigForRepo(memoryDir);
+      const rows = readFactRows(await loadMemory(memoryDir));
+      const focus = elClassifyFocus(rows, [...factTermVariants(normFactTerm, argText)], ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE);
       const res = await classifyEl(memoryDir, {
         budget: reasoning.classifyBudget,
         rounds: reasoning.classifyRounds,
-        focus: [...factTermVariants(normFactTerm, argText)],
+        focus,
         store: { loadMemory, readFactRows, appendFacts },
       });
       note(trace, `result: derived ${res.count} entailed fact(s) (rounds ${res.rounds}, budget ${res.budget})`);

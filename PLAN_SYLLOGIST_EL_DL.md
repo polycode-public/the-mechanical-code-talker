@@ -887,37 +887,74 @@ npm run check:budgets
 
 ## 7. Phase 2 — wire EL into the ask lanes
 
-EL conclusions are materialised subsumptions, so the existing ask lanes consume them as ordinary
-lookups. There are no query-time changes to the ask engine at all. What phase 2 adds is the
-plumbing that makes the classification happen and the answer cite it honestly.
+**DELIVERED**, in `src/services/chat.mjs`. Revises this section's own opening claim — "no
+query-time changes to the ask engine at all" didn't hold, item 3 below is exactly such a change,
+found necessary while making the corpus rows below actually pass.
 
-1. **The auto-fold hook.** `src/services/chat.mjs` already runs a focused `syllogise` pass off the
-   hot path through its fold sibling. Add the matching `classifyEl` call beside it, same focus set,
-   same budget source (`resolveReasoningConfig`), same fire-and-forget discipline. It must never
-   block the turn.
-2. **Provenance rendering.** `citationProvenance` and `renderFactLine` already handle an
-   `entailed:*` tag. Confirm the two new tags read cleanly in a cited line, and add the
-   `entailed:elSubsumption` and `entailed:elRestriction` cases to whatever provenance-family
-   switch the describe lane uses.
-3. **The miss message.** When an ask misses and the term has stored facts that EL could reach, the
-   existing miss text already offers `/syllogise <term>`. Extend that offer to name `/classify
-   <term>` when the miss involves a restriction or a "does a X have a Y" shape.
+1. **The auto-fold hook.** `synthesiseAroundTerm` (the focused `syllogise` fold sibling a
+   learn-on-miss load already runs) now runs a focused `classifyEl` pass beside it, off the same
+   seed focus term set and budgeted from `resolveReasoningConfig`. The two passes are independently
+   failure-tolerant — a miss in either never disturbs the other or the answer the load already
+   composed.
+2. **Focus expansion for `classifyEl`.** `classifyEl`'s own focus gate takes its input as given —
+   unlike `syllogise`'s `expandFocus`, it has no expansion step of its own, so a `/classify heart`
+   seeded on "heart" alone never reached a second premise's own subject (e.g. "valve" in "every
+   valve is a flap"), and a chained restriction never closed. `elClassifyFocus` (new, pure) walks
+   the `rdfs:subClassOf` graph forward from the seed terms, following every someValuesFrom
+   restriction onto its filler and continuing from there, bounded by a hop count. Both `/classify`
+   and the auto-fold hook use it.
+3. **The ask-lane existential reader.** `DOES_HAVE_ASK_RE`'s existing block only ever read a direct
+   `mgx:hasA`/`tmct:has` fact, never a `subClassOf`-to-restriction shape — "does a heart have a
+   valve" stayed a miss even for a directly taught bare-existential premise, with no classification
+   involved at all. `restrictionExistentialHit` (new) reads a taught or EL-entailed someValuesFrom
+   restriction reachable from the subject and cites the taught premises an entailed hit composed
+   through (its own `justification`), not just its single entailed row; `DOES_HAVE_ASK_RE`'s block
+   tries it after its direct-fact/⊑-lift checks fail. A sibling regex, `DOES_EXISTENTIAL_ASK_RE`,
+   answers the same shape for any other verb ("does a heart contain a hinge") — the chase is
+   role-agnostic by design, since the store carries no per-verb sense distinction yet.
+4. **Provenance rendering.** `citationProvenance`/`renderFactLine` already handled every
+   `entailed:*` tag generically (stripping `#node:…`, an "i learned: …" fallback); `entailed:
+   elSubsumption` and `entailed:elRestriction` read cleanly through that same path with no new case
+   needed, confirmed by `chat-el-lane.test.mjs` and by `/memory`'s own provenance listing.
+5. **The miss message.** The "is X a Y" ladder's own `/syllogise` recovery offer now names
+   `/classify` instead whenever the subject's own remembered isa facts include a someValuesFrom
+   restriction — `/syllogise`'s plain scm-sco chase never composes a class expression, so it is
+   never offered for a gap only `/classify` can close. `restrictionExistentialHit`'s own miss path
+   offers `/classify <subject>` the same way for a "does X have/verb Y" question whose subject has
+   some restriction on record that just doesn't reach the asked filler — but never for a
+   cardinality restriction (`owl:maxCardinality`/`minCardinality`/`cardinality`, no someValuesFrom
+   of its own): `classifyEl`'s rules don't touch that shape, and the cardinality live chases in
+   `factReadBackReaders` are the ones meant to answer it, including a provable "no".
 
-New test file `test/adapters/chat-el-lane.test.mjs`: the auto-fold fires, the answer cites the EL
-provenance, and a term with nothing to classify produces no write.
+New test file `test/adapters/chat-el-lane.test.mjs`: the auto-fold hook fires and cites both
+premises, it writes nothing for a term with no existential chain to classify, a directly taught
+restriction answers with no classify pass needed, provenance renders cleanly, the shape-only
+reader answers a verb the classifier never saw, and an untaught filler stays an honest miss.
 
-Corpus rows in `test/corpus/inference.jsonl`:
+Corpus rows landed in `test/corpus/inference.jsonl`, plus the phase-0
+`inference.represent.bare-existential` row's own expectation flipped from an honest miss to a
+direct "yes" — exactly the reader gap item 3 above closes:
 
 | key | id | shape |
 |---|---|---|
 | `inference.el.nested-existential` | `inference-el-nested-existential-answers-through-a-constructed-restriction` | teach "every heart has a valve", teach "every valve is a flap", run `/classify heart`, ask "does a heart have a flap" → yes, both premises cited |
-| `inference.el.existential-chain` | `inference-el-existential-chain-composes-through-a-transitive-role` | teach "every heart has a valve", teach "every valve has a hinge", teach "having is transitive", run `/classify heart`, ask "does a heart contain a hinge" → yes |
+| `inference.el.existential-chain` | `inference-el-existential-chain-composes-through-a-transitive-role` | a transitive role composes two existentials; the ask uses "contain", a verb the classifier never saw |
 | `inference.el.honest-miss` | `inference-el-untaught-filler-stays-an-honest-miss` | teach only the first premise, ask the E1 question → not a yes |
-| `inference.el.budget-wall` | `inference-el-budget-exhaustion-reads-as-a-miss` | a chain past the configured budget → the miss wall, never a guess |
+| `inference.el.budget-wall` | `inference-el-budget-exhaustion-reads-as-a-miss` | a `setup.facts`-preloaded chain long enough to exhaust the default classify budget on its own pairwise closure → truncates, the follow-up stays honest |
 
-Regenerate the infbench cases and rerun the INF-7 band. That band's `ceiling` fields become
-stale the moment EL lands, so phase 2 deletes the `EL_CEILING` marker from the two INF-7 templates
-in `generate-cases.mjs` and flips their expected verdicts from `unproven` to `yes`.
+The budget-wall row reaches truncation through the default budget's own combinatorial cost (a few
+reached chain concepts pairwise-close through the rest of a long `subClassOf` chain), not a
+lowered `[reasoning]` config: `memoryDir` is an opaque store handle in a real chat session
+(`createSession`'s own `openMemoryBackend` result), not a filesystem path, so there is no repo root
+to read a `tmct.toml` override from at that layer. `resolveReasoningConfigForRepo` (new) reads one
+when `memoryDir` genuinely is a path — the common case for a direct `runTurn` caller, including
+every test in this file — and degrades to the shipped defaults otherwise, matching `/classify`'s
+prior behaviour exactly for a real session.
+
+Regenerating the infbench INF-7 band's cases and flipping its `ceiling` markers, as this section
+originally called for, is open: `test/bench/infbench-chat.test.mjs`'s pinned verdicts already stay
+green against the delivered reader, so nothing here blocks on it, but the marker text itself still
+reads as pre-EL.
 
 Acceptance:
 
