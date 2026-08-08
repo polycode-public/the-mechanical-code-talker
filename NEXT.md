@@ -42,16 +42,20 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
   arm used to silently drop the quantifier and store a wrong fact; it misses honestly now.
   Parsing those subjects is real, separate grammar work.
 - [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 and A0 shipped and
-  CI-verified; B2 (`/goals` + `tmct plan --goals`) CODE-COMPLETE on `main`, riding the next
-  batch, joined by B4 (autoplay re-base, CODE-COMPLETE — shipped-world corpus byte-green). IN
-  FLIGHT: B3 (containment + reject + TOOL-9, atomic with grader and envelope; owns
-  `recognize.mjs` + agentbench). Queued: B5 (recognition surfaces), after B3. Briefs in the
-  session scratchpad.
-- [ ] **Sprites redesign** (operator, 2026-08-08: ontology-section design, hover/turn/emotion
-  animation rules on every sprite tile, per-group focus modes, random scene with rooms, full-wall
-  room backdrop, walking cat; machinery in core `src/` for adventure.html) — IN FLIGHT: Fable
-  sub-agent in worktree `.claude/worktrees/agent-a700c24067e243b74` (branch
-  `worktree-agent-a700c24067e243b74`), committing per step; merge its commits as they verify.
+  CI-verified; B2, B3 (TOOL-9 reached: envelope `rungReached: TOOL-9`, 0% hallucination,
+  agi-scales notch 3) and B4 all CODE-COMPLETE on `main`, riding the next batch. IN FLIGHT: B5
+  (recognition surfaces — "what am I doing", NPC intent, `runCapabilityPlan.recognition`), the
+  plan's final slice.
+- [ ] **Sprites redesign** — CODE-COMPLETE: worktree merged onto `main` (4 commits + pack
+  manifest), worktree and branch removed, post-merge radius green (123/123 targeted, 220/220
+  fast, demo:build clean). Riding the next batch; coordinator runs the sprites e2e files at the
+  push. Adventure hookup note: adventure classes ship no facing/moving art yet, so the shared
+  machinery is live on that page but visually inert until art exists.
+- [ ] **PLAN_NEWS_FEED.md** (operator, 2026-08-08) — IN FLIGHT: Fable sub-agent writing the
+  design-only plan for the news.html demo + core news capability (contemporary + knowledge-base
+  source research with live probes, grounding/enrichment/syllogism cycle, hub-centered feed,
+  all consumer surfaces, sibling-repo alignment with the-quiet-feed and marginalia). Plan only,
+  no implementation.
 - [ ] **Help page burrow decision** — public/help.html shipped and CI-verified, but its
   `#burrow` section documents `mud.html`, which `7245ff0a` retired from the site build; decide
   whether mud.html returns to the build or the burrow guidance repoints at what ships.
