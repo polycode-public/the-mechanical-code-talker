@@ -4,12 +4,23 @@
 // Unlike memory-ask-browser-entry.mjs (factAnswer/factReadBack only), this
 // exposes the FULL turn engine: createChatSession wraps the shared
 // createTurnSession (turn-session.mjs) around chat.mjs's runTurn — the
-// focus/last/planState/researchState threading src/services/chat-session.mjs's
+// focus/last/planState/researchState/newsState threading src/services/chat-session.mjs's
 // createSession.turn does, minus every filesystem side effect (no transcript
 // log, no sidecar, no graph upsert). Memory is an in-memory Backend-B handle,
 // optionally pre-loaded with a built seed payload (scripts/build-chat-seed.mjs),
 // so teach turns, recall, proof chains and the honest miss all run
 // client-side with zero I/O.
+//
+// The news lane's own state (newsState) rides turn-session.mjs's shared
+// threading with no extra wiring here, the same way researchState already
+// does. What IS this file's own job: a persistent newsConfig object (so a
+// `/news add`/`/news interval` mutation survives turn to turn, the same
+// reason liveReferenceOn/synthesisBudgetOn are held here rather than
+// recreated per turn) and registerNewsProvider — the news lane's own
+// provider-set stub seam, the same shape registerResearchProvider gives
+// tests below. Neither building the default fetchers nor registering a stub
+// set fires a fetch; a fetch only happens once the user's own turn actually
+// runs `/news poll` or `/news enrich`.
 //
 // Two browser traps this file still owns, beyond what createTurnSession
 // already covers (passing `env: {}` explicitly, since a browser has no
@@ -47,7 +58,13 @@ import { registerReferencePackProvider } from "../../adapters/corpus/reference-p
 // provider is stubbed. The adapter is fetch-only, so it bundles as-is.
 // registerResearchProvider is the research lane's sibling seam
 // (simple.wikipedia.org) — same stubbing contract for its e2e tests.
-import { registerLiveReferenceProvider, registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
+import { registerLiveReferenceProvider, registerResearchProvider, getResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
+// The news lane's own config resolver and contemporary-source registry —
+// this session's default /news providers are built from the same fetcher
+// factory news.html's own session uses (src/surfaces/web/news-browser-entry.mjs),
+// just over the browser's own fetch rather than an injected test one.
+import { resolveNewsConfig } from "../../services/news.mjs";
+import { newsSourceRecords, normalizeNewsSourceIds, createNewsFetcher, preflightNewsUrl } from "../../adapters/corpus/news-sources.mjs";
 // Best-effort IndexedDB persistence for the page's session store — the page
 // decides when to save/load/clear; this entry only carries the wrapper
 // across the bundle boundary.
@@ -82,6 +99,48 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  * for `ask()` — a question about taught facts has a real graph to traverse
  * while a code-structure question keeps its honest no-code-graph refusal.
  */
+let registeredNewsProviders = null;
+
+/** Swap chat.html's own `/news` providers set — `{ newsFetchers, getResearchProvider,
+ *  preflightNewsUrl }`, the same stub seam registerResearchProvider gives tests
+ *  above — so a test (or a future page control) can answer `/news` against a
+ *  fixed set of sources instead of the real network. Pass null to restore the
+ *  default: real fetchers, over the browser's own fetch, for every source the
+ *  session's own newsConfig currently enables. Registering (or not) never
+ *  fires a fetch by itself — only the user's own `/news poll`/`/news enrich`
+ *  turn does. */
+export function registerNewsProvider(providers) {
+  registeredNewsProviders = providers && typeof providers === "object" ? providers : null;
+}
+
+/** The default `/news` providers for one session's current `newsConfig`:
+ *  real fetchers for every enabled contemporary source (browser fetch, no
+ *  request until a fetcher's own fetchItems() runs) and the same research
+ *  provider `/wiki` and `research <topic>` already use for KB enrichment.
+ *  Rebuilt only when the enabled source list has actually changed since the
+ *  last call (`/news add` is the one turn that can change it), so an
+ *  ordinary turn that never touches `/news` pays nothing repeated here. */
+function newsProvidersFor(config) {
+  let cachedProviders = null;
+  let cachedKey = null;
+  return () => {
+    const key = normalizeNewsSourceIds(config.sources).join(",");
+    if (cachedProviders && cachedKey === key) return cachedProviders;
+    const newsFetchers = new Map();
+    for (const id of normalizeNewsSourceIds(config.sources)) {
+      const record = newsSourceRecords().find((r) => r.id === id);
+      if (record) newsFetchers.set(id, createNewsFetcher(record, { fetchImpl: (...args) => globalThis.fetch(...args) }));
+    }
+    cachedProviders = {
+      newsFetchers,
+      getResearchProvider: ({ source } = {}) => getResearchProvider({ source }),
+      preflightNewsUrl: (url) => preflightNewsUrl(url, { fetchImpl: (...args) => globalThis.fetch(...args) }),
+    };
+    cachedKey = key;
+    return cachedProviders;
+  };
+}
+
 export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
   setDigestStructures(digestStructures || []);
   const memoryDir = createInMemoryStore();
@@ -117,12 +176,19 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   // The auto-synthesis budget for this session's learn-on-miss loads — the
   // page's slider sets it; 0 stores article facts without any entailed rows.
   let synthesisBudgetOn = Number.isFinite(synthesisBudget) ? synthesisBudget : 12;
+  // This session's own `/news` config — one persistent, mutable object (not
+  // recreated per turn), so a `/news add`/`/news interval` mutation survives
+  // turn to turn the same way it does in a CLI session's newsConfig.
+  const newsConfig = resolveNewsConfig(null);
+  const defaultNewsProviders = newsProvidersFor(newsConfig);
 
   const session = createTurnSession({
     memoryDir, graph: codeGraph, lexicon, sessionId, vocabHint,
     buildExtraOptions: () => ({
       liveReference: liveReferenceOn, onLiveLookup,
       synthesisBudget: synthesisBudgetOn,
+      newsConfig,
+      newsProviders: registeredNewsProviders ?? defaultNewsProviders(),
     }),
     // `result.liveReference` mirrors a `/wiki on|off|supplement|always`
     // command back into this session's own toggle state.
@@ -186,7 +252,7 @@ publishTmctSurface({
   plan: enginePlan,
   page: {
     registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider,
-    registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats,
+    registerResearchProvider, registerNewsProvider, normFactTerm, vocabExampleHint, memoryStats,
     openPersistedStore, exportFactsJsonl, researchedFactRows,
     splitSentences: splitSentencesPreservingPaths,
   },
