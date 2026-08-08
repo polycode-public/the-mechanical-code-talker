@@ -26,7 +26,7 @@
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
@@ -37,7 +37,6 @@ import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-
 import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
 import { ABOUT_PAGES, DEMO_PAGES, DEMO_PAGE_META, INDEX_META, RECEIPTS_META, CLAIMS_META, CLAIMS_PAGE_BLOCKS, HELP_META, SHARED_STYLESHEET } from "./site-pages.mjs";
 import { escapeHtml } from "../src/services/viz-theme.mjs";
-import { compareVersions } from "../src/domain/publish-gate.mjs";
 import { checkClaim, loadSchema } from "./claims/lib.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -593,44 +592,6 @@ async function loadScenarioWorlds(names) {
 
 const GITLAB_REPO_URL = "https://gitlab.com/polycode-projects/the-mechanical-code-talker";
 
-/** The newest `reports/<prefix>_<version>.md`, compared by semver — the
- *  committed write-up a bench cycle leaves behind once it ships (older
- *  cycles move to archive/, which this deliberately does not read). Throws
- *  when none exists: a receipts figure with nothing to cite is a bug, not a
- *  gap to paper over. */
-function latestReportPath(prefix) {
-  const dir = join(ROOT, "reports");
-  const re = new RegExp(`^${prefix}_(\\d+\\.\\d+\\.\\d+)\\.md$`);
-  const found = readdirSync(dir).map((name) => ({ name, version: re.exec(name)?.[1] })).filter((f) => f.version);
-  if (!found.length) throw new Error(`no reports/${prefix}_<version>.md found`);
-  found.sort((a, b) => compareVersions(a.version, b.version));
-  return join(dir, found[found.length - 1].name);
-}
-
-/** A bench report's own bolded headline sentence, quoted verbatim rather
- *  than a number lifted out of context. Every `reports/BENCHMARK_*.md` write-up
- *  states its result this way — chatbench as `**Result: ...**`, idxbench as
- *  `**Headline: ...**`. */
-function extractReportHeadline(path, label) {
-  const text = readFileSync(path, "utf8");
-  const found = new RegExp(`\\*\\*${label}:\\s*([\\s\\S]*?)\\*\\*`).exec(text);
-  if (!found) throw new Error(`${path}: no **${label}: ...** headline to quote`);
-  return found[1].trim();
-}
-
-/** A bench report as a receipts-page source: its headline sentence, the
- *  path receipts.html cites in each figure's data-source, and the GitLab
- *  blob link the page sends a reader to for the full write-up. */
-function reportSource(prefix, label) {
-  const path = latestReportPath(prefix);
-  const relPath = relative(ROOT, path).replace(/\\/g, "/");
-  return {
-    headline: extractReportHeadline(path, label),
-    relPath,
-    url: `${GITLAB_REPO_URL}/-/blob/main/${relPath}`,
-  };
-}
-
 const fmtInt = (n) => Number(n).toLocaleString("en-US");
 const fmtMs = (n) => Number(n).toFixed(2);
 
@@ -639,7 +600,7 @@ const fmtMs = (n) => Number(n).toFixed(2);
  *  naming exactly where it came from — test/estate/receipts.test.mjs re-reads
  *  those same files and checks every figure against them. Nothing here is
  *  typed in by hand. */
-function renderReceiptsHtml({ receipts, chatbench, idxbench }) {
+function renderReceiptsHtml({ receipts }) {
   const { latencyMs, graph, pages, host } = receipts;
   const RJ = "test-benchmarks/receipts/receipts.json";
   const pageRows = pages.map((p, i) => `
@@ -666,8 +627,6 @@ function renderReceiptsHtml({ receipts, chatbench, idxbench }) {
     <ol class="about-crumbs">
       <li><a href="#latency">Query latency</a></li>
       <li><a href="#size">Graph and page size</a></li>
-      <li><a href="#quality">Answer quality</a></li>
-      <li><a href="#fidelity">Index fidelity</a></li>
       <li><a href="#cost">Running cost</a></li>
       <li><a href="#chain">Supply chain</a></li>
     </ol>
@@ -712,20 +671,6 @@ function renderReceiptsHtml({ receipts, chatbench, idxbench }) {
         which measures the same deployed pages with a curl-per-asset pass and a real Chromium cold load.</p>
     </section>
 
-    <section class="about-section" id="quality">
-      <h2>Answer quality</h2>
-      <p>chatbench judges tmct's answers against a graded case pool with an LLM judge, offline, never in the product.</p>
-      <blockquote data-source="${chatbench.relPath}#result">${escapeHtml(chatbench.headline)}</blockquote>
-      <p class="source-note">Source: <a href="${chatbench.url}"><code>${escapeHtml(chatbench.relPath)}</code></a>.</p>
-    </section>
-
-    <section class="about-section" id="fidelity">
-      <h2>Index fidelity</h2>
-      <p>idxbench checks how faithfully the code-index producer restates source as a graph, deterministically, with no LLM and no network.</p>
-      <blockquote data-source="${idxbench.relPath}#headline">${escapeHtml(idxbench.headline)}</blockquote>
-      <p class="source-note">Source: <a href="${idxbench.url}"><code>${escapeHtml(idxbench.relPath)}</code></a>.</p>
-    </section>
-
     <section class="about-section" id="cost">
       <h2>Running cost</h2>
       <p>tmct ships as a static site. The engine runs in your browser, and every answer comes from the graph already on the page. No request reaches an inference API to answer a question. A static build costs the same to host whether one visitor arrives or a thousand, so the running cost is $0 by design.</p>
@@ -746,11 +691,9 @@ function renderReceiptsHtml({ receipts, chatbench, idxbench }) {
 {
   const receiptsJsonPath = join(ROOT, "test-benchmarks", "receipts", "receipts.json");
   const receipts = JSON.parse(readFileSync(receiptsJsonPath, "utf8"));
-  const chatbench = reportSource("BENCHMARK_CEFR_ENGLISH", "Result");
-  const idxbench = reportSource("BENCHMARK_CODE_INDEX", "Headline");
   const receiptsPath = join(SITE, "receipts.html");
-  writeFileSync(receiptsPath, injectMetaHead(renderReceiptsHtml({ receipts, chatbench, idxbench }), receiptsHeadMeta()));
-  console.log(`wrote ${receiptsPath} (${receipts.pages.length} pages, chatbench ${chatbench.relPath}, idxbench ${idxbench.relPath})`);
+  writeFileSync(receiptsPath, injectMetaHead(renderReceiptsHtml({ receipts }), receiptsHeadMeta()));
+  console.log(`wrote ${receiptsPath} (${receipts.pages.length} pages)`);
 }
 
 // claims.html: every figure reads straight from a committed results/claims/

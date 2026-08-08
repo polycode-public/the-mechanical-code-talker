@@ -46,15 +46,6 @@ function readFigures(html) {
   return figures;
 }
 
-/** A bench report's own bolded headline sentence, extracted the same way
- *  build-demo-site.mjs's receipts template pulls it, for the two markdown
- *  sources the page cites. */
-function extractReportHeadline(mdText, label) {
-  const found = new RegExp(`\\*\\*${label}:\\s*([\\s\\S]*?)\\*\\*`).exec(mdText);
-  assert.ok(found, `expected a **${label}: ...** headline in the report`);
-  return found[1].trim();
-}
-
 function readPage() {
   assert.ok(existsSync(RECEIPTS_PAGE), "public/receipts.html is missing — run `npm run demo:build` first");
   return readFileSync(RECEIPTS_PAGE, "utf8");
@@ -88,26 +79,6 @@ test("the pages table lists every page receipts.json measured", { skip: siteUnbu
   for (const slug of receipts.pages.map((p) => p.slug)) {
     assert.ok(html.includes(`<code>${slug}</code>`), `receipts.html has no row for page "${slug}"`);
   }
-});
-
-test("the answer-quality figure quotes the latest chatbench report's own headline", { skip: siteUnbuilt }, () => {
-  const html = readPage();
-  const figures = readFigures(html).filter((f) => f.tag === "blockquote" && f.source.includes("BENCHMARK_CEFR_ENGLISH"));
-  assert.equal(figures.length, 1, "expected exactly one chatbench headline blockquote");
-  const [relPath] = figures[0].source.split("#");
-  const reportText = readFileSync(join(ROOT, relPath), "utf8");
-  const expected = extractReportHeadline(reportText, "Result");
-  assert.equal(figures[0].text, expected);
-});
-
-test("the index-fidelity figure quotes the latest idxbench report's own headline", { skip: siteUnbuilt }, () => {
-  const html = readPage();
-  const figures = readFigures(html).filter((f) => f.tag === "blockquote" && f.source.includes("BENCHMARK_CODE_INDEX"));
-  assert.equal(figures.length, 1, "expected exactly one idxbench headline blockquote");
-  const [relPath] = figures[0].source.split("#");
-  const reportText = readFileSync(join(ROOT, relPath), "utf8");
-  const expected = extractReportHeadline(reportText, "Headline");
-  assert.equal(figures[0].text, expected);
 });
 
 test("every figure's cited source file is actually committed", { skip: siteUnbuilt }, () => {
