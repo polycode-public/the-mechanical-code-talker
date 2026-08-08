@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
-import { emptyRecord } from "../../src/domain/discourse.mjs";
+import { emptyRecord, advanceTurn, register } from "../../src/domain/discourse.mjs";
 
 const GRAPH_FILE = join(new URL("../..", import.meta.url).pathname, "examples", "mini-webapp", ".tmct", "graph.json");
 
@@ -83,4 +83,32 @@ test("a plural follow-up with no prior answer still misses honestly", async () =
   assert.equal(t0.record.miss, true, "nothing to refer to is an honest miss");
   assert.match(String(t0.answer), /needs a previous answer to refer to/,
     "the fallback never manufactures a referent from an empty record");
+});
+
+/** A set referent spec — the shape a listing answer registers. */
+function setSpec(over = {}) {
+  return {
+    kind: "set", class: "Module", label: "3 modules",
+    ids: ["Module:base.mjs", "Module:tasks.mjs", "Module:events.mjs"], attrs: { count: 3 },
+    from: { lane: "listingFilter", query: "which modules import http.mjs" },
+    ...over,
+  };
+}
+
+/** Two sets registered in one turn — the plural synthetic tie. */
+function sameTurnSetPair() {
+  let rec = advanceTurn(emptyRecord());
+  rec = register(rec, setSpec());
+  rec = register(rec, setSpec({ label: "2 modules", ids: ["Module:base.mjs", "Module:tasks.mjs"], attrs: { count: 2 } }));
+  return rec;
+}
+
+test("the prev-set fallback declines a same-turn set tie rather than narrowing one of them", async () => {
+  const graph = await miniWebappGraph();
+  const r = await runTurn("which of those are modules", {
+    config: { graphFile: GRAPH_FILE }, graph, discourse: sameTurnSetPair(),
+  });
+  assert.equal(r.record.miss, true, "a same-turn set tie is an honest miss");
+  assert.match(String(r.answer), /needs a previous answer to refer to/,
+    "the fallback never picks one of two sets registered in the same turn");
 });

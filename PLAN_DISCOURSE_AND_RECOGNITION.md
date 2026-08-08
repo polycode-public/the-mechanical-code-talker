@@ -437,10 +437,7 @@ the same specific misses the singular lane makes. Checked before the ask engine 
 slice 2 is, so `those before logger.mjs was` never reaches the keyword-spot multi-token patient
 guard. Tests: `test/domain/discourse-plural-temporal-comparison.test.mjs` plus two new
 `games.compositional.temporal` corpus rows (the composed M-of-N answer, and the undatable-set
-refusal). Built against a base before slice 4 landed, so it binds by recency rather than calling
-`bind()` with `{ tieRefuses: true }` — a same-turn plural tie is unreachable today anyway (no lane
-registers two `set` referents in one turn), but wiring the flag in alongside the singular lane
-(below) is a real, still-open remainder now that slice 4's `joinOr` helper exists to render it.
+refusal).
 
 **Slice 4 — the ambiguity refusal. BUILT.**
 The temporal-comparison lane calls `bind()` with `{ tieRefuses: true }` and, before its
@@ -454,8 +451,6 @@ The real chat-corpus tie row (a genuine same-turn tie reached through actual con
 hand-built record) is closed by slice 5a's superlative-winner registration — the first lane that
 registers two singular-admitting referents in one turn, so it is what first makes a live tie
 reachable — see `games/superlative-winner-and-score-tie-a-singular-pronoun` under slice 5 below.
-The plural temporal lane above still binds by recency; that lane's own `tieRefuses` wiring is the
-one open remainder from this slice.
 
 **Slice 5 — the remaining lanes register. BUILT.**
 The superlative lane registers its winner as an `entity` (or a metric tie as a `set`) plus the

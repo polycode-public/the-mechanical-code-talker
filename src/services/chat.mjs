@@ -13874,11 +13874,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // A count erases its own matches to [], so the previous turn carries no id
   // set for the next "which of those" to narrow. When the carry is empty, fall
   // back to the session record: a standing `set` referent that "those" binds
-  // keeps a narrowed set alive across a counting hop. No same-turn plural tie
-  // is reachable yet (no lane registers two set referents in one turn), so this
-  // probe needs no tie refusal.
+  // keeps a narrowed set alive across a counting hop. A tie leaves `prev` empty
+  // and the anaphora node makes its own "needs a previous answer" decline —
+  // this probe never picks one of two sets registered in the same turn.
   if (!prev.length && discourseHolder) {
-    const boundSet = bindDiscourseForm(discourseHolder.record, "those");
+    const boundSet = bindDiscourseForm(discourseHolder.record, "those", { tieRefuses: true });
     if (boundSet?.referent?.ids?.length) prev = boundSet.referent.ids.filter(Boolean);
   }
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
