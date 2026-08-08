@@ -1,193 +1,1200 @@
 # PLAN_SYLLOGIST_EL_DL.md — beyond OWL 2 RL: an EL classifier, then a DL tableau prover
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
-Sequencing: this tier sits AFTER the two cheaper inference uplifts (complete OWL 2 RL
-property reasoning; generalized Horn rule frames — `PLAN_NLU_BENCHMARKS.md` levers L7/L8)
-on the effort-per-value ladder. The EL stage is worth doing on its own merits; the DL
-stage is a costed option this document makes buildable, not a recommendation to build now.
+Status: DESIGN, nothing built. Every module path below is a file that does not exist yet.
+Sequencing: this tier sits after the two cheaper inference uplifts on the effort-per-value ladder.
+Those are complete OWL 2 RL property reasoning and generalized Horn rule frames, levers L7 and L8
+in `PLAN_NLU_BENCHMARKS.md`. Both are still open. The EL stage is worth doing on its own merits.
+The DL stage is a costed option this document makes buildable.
 
-## Where this sits
+This plan is written to be built by a Sonnet-tier implementer with no further design work. Every
+phase names its module paths, its data structures, its function signatures, its test files, its
+corpus rows and its acceptance commands. Where a phase needs a different model tier, it says so.
 
-`src/domain/syllogise.mjs` today ships seven deterministic kernels. **Five are inside the OWL 2 RL
-fragment**: subclass transitivity, type propagation, disjointness "provable no", and someValuesFrom
-application and subsumption. **Two step just outside it**: cardinality lower bounds (monotonicity),
-which `syllogise.mjs:527` already flags as "outside OWL 2 RL's own decidable profile"; and max-0
-denial — tmct's `cax-maxc0`, which is NOT a W3C rule name but a universal generalization of the real
-W3C `cls-maxc1` (Table 6). `cls-maxc1` derives `false` for one individual; `cax-maxc0` derives a
-CLASS-level negative fact, a strictly stronger step RL does not license. All run under
-budget/focus/screen/trust guards, materialising off the hot path so a query-time miss becomes a
-lookup. `archive/PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
-solved; DL satisfiability is tableau-shaped and solved; tmct's trust/provenance layer is
-the part the literature is silent on) and owns the incrementality/retraction horizon.
+---
 
-Everything RL-shaped extends the current architecture with more pure kernels. This plan
-covers the two tiers where that stops being true:
+## 1. What ships today
 
-- **OWL 2 EL** — polynomial like RL, but a different *algorithm* (saturation-based TBox
-  classification), not more forward-chaining rules. Buys reasoning about class
-  expressions that were never declared as graph nodes.
-- **OWL 2 DL** (whose description logic is **SROIQ**; this tier targets ALC first, growing toward
-  SHOIQ as a deliberate waypoint short of full SROIQ) — a tableau prover. Buys
-  disjunction, complement, and case analysis. Worst-case complexity is NEXPTIME and
-  beyond; budgets become part of the semantics, not a tuning knob.
+`src/domain/syllogise.mjs` (1,768 lines) holds seven inference kernels. Five run in the batch
+materialising pass, `syllogise()`. Two are query-rooted and run only as a live read-only chase
+from `src/services/chat.mjs`.
 
-Both stay inside the project ethos: pure JS, no LLM, deterministic (fixed rule-application
-and branching order), $0 per query.
+| kernel | export | shape | inside OWL 2 RL? |
+|---|---|---|---|
+| scm-sco | `deriveSubClassClosure`, `deriveSubClassClosureDelta` | (a ⊑ b), (b ⊑ c) ⊨ a ⊑ c | yes |
+| cax-sco | `deriveTypePropagation` | (x : C), (C ⊑ … ⊑ D) ⊨ x : D | yes |
+| cax-dw | `deriveDisjointViolations` | (x : C1), (C1 ⊥ C2) ⊨ x is not a C2 | yes |
+| cls-svf1 | `deriveSomeValuesFromApplication` | (x p y), (y : C), R = ∃p.C ⊨ x : R | yes |
+| scm-svf1 | `deriveSomeValuesFromSubsumption` | ∃p.C1 ⊑ ∃p.C2 when C1 ⊑ C2 | yes |
+| cardinality monotonicity | `proveCardinalityAtLeast` | (C ⊑ =n p.D or ≥n p.D), n ≥ m ⊨ C has at least m D | no |
+| cax-maxc0 | `proveMaxCardinalityZeroDenial` | C ⊑ ≤0 p.D ⊨ no C has a D | no |
 
-## The failure edge today — explicit examples
+The last two step outside RL. The file's own "cardinality monotonicity" section header calls the
+first one "outside OWL 2 RL's own decidable profile". `cax-maxc0` is not a W3C rule name. It is a
+universal generalization of the real W3C `cls-maxc1` (Table 6): `cls-maxc1` derives `false` for one
+individual, `cax-maxc0` derives a class-level negative fact.
 
-Each example: what the graph holds, what the user asks, what happens today, and where it
-lands after delivery. "Today" behavior is the honest miss wall unless stated otherwise,
-which is correct behavior, but these are all questions whose answers follow
-from what tmct was told.
+Two more exports are not rules. `findConsistencyViolations` detects a single subject whose own
+asserted types clash under a stored `owl:disjointWith`. `findIsaChain` is a bounded rooted proof
+search that chat uses to cite a chain.
 
-**E1 — nested existential classification (falls to EL).**
-Graph: `heart ⊑ ∃hasPart.valve` (every heart has a valve), `valve ⊑ flap` (a valve is a
-kind of flap). Ask: *"does a heart have a flap?"*
-Today: miss. The shipped `scm-svf1` can only relate two restriction nodes that were BOTH
-independently declared in the graph; the restriction `∃hasPart.flap` was never declared,
-so nothing derives `heart ⊑ ∃hasPart.flap`. EL saturation constructs and classifies such
-expressions as part of the algorithm.
-After EL: "yes — every heart has a valve, and a valve is a flap."
+All five batch rules run under the same four guards: BUDGET (max new derivations per pass, plus max
+fixpoint rounds for scm-sco), FOCUS (an optional term set scoping derivations), SCREENS (tautology
+and dedup against what is already stored), and TRUST (every conclusion writes under an `entailed:*`
+provenance tag with prior 0.3, so it never outranks a stated fact).
 
-**E2 — existential chains (falls to EL with role composition).**
-Graph: `heart ⊑ ∃hasPart.valve`, `valve ⊑ ∃hasPart.hinge`. Ask: *"does a heart contain a
-hinge, somewhere?"* Today: miss (no reasoning composes two existentials). After EL with a
-transitive `hasPart` (or a declared chain axiom): yes. Note the overlap: plain `hasPart`
-transitivity alone is RL (`prp-trp`, lever L7); the EL-only part is composing it through
-*undeclared* intermediate class expressions as in E1.
+Retraction is delete-and-rederive, not JTMS. `retractSubClassOf` removes a fact, then walks the
+`citedBy` index built from each entailed fact's `mgx:factJustification` environments. Each candidate
+is checked three ways, cheapest first: an intact stored environment keeps it, a fresh enumeration
+from survivors re-grounds it, and the closure-walking derivability check is the final authority.
+`archive/PLAN_SYLLOGIST.md` owns the incrementality and retraction horizon and records what is
+already delivered there. This plan does not restate it.
 
-**E3 — disjunction elimination (falls to DL).**
-Teach: *"every pet is a cat or a dog"*, *"rex is a pet"*, *"rex is not a cat"*. Ask: *"is
-rex a dog?"*
-Today this fails one step earlier than inference: `unionOf` has no teach frame and no
-stored representation ("or" in a teach sentence is not parsed), and "rex is not a cat"
-triggers retraction (`RETRACT_NOT_A_RE`), not a negative assertion. So the knowledge
-can't even be stated, let alone used. After phase 0 it stores; after DL, the prover
-answers yes by case elimination — the first conclusions in tmct's history that require
-reasoning by cases.
+### What the graph can already hold
 
-**E4 — complement classes (falls to DL).**
-Teach: *"everything that is not aquatic is terrestrial"*, *"a stone is not aquatic"*.
-Ask: *"is a stone terrestrial?"* Today: unrepresentable (`complementOf` does not exist in
-the graph vocabulary) → miss. After DL: yes.
+Every stored fact is an RDF reification written by `appendFact` in `src/adapters/memory/core.mjs`.
+`readFactRows(memory)` folds each triple group into one row:
 
-**E5 — contradiction through cardinality interplay (falls to DL).**
-Graph: `bicycle ⊑ ≥2 hasPart.wheel` (at least two wheels), plus a taught
-`beryl rdf:type bicycle` and a max-0 wheels restriction on beryl's class. Today: the
-shipped max-0 denial and the ≥m lower-bound check each work alone, but
-`findConsistencyViolations` only inspects disjointness — the min/max clash coexists
-silently. After DL: the consistency pass reports the contradiction with both premises
-named.
+```js
+{ id, subject, predicate, object, provenance, trust, observedAt, quantifier,
+  environments, justification, sourceIds, sourceTypes, assertions }
+```
 
-**E6 — enumerated classes / nominals (falls to DL).**
-Teach: *"the primary colours are exactly red, yellow and blue"*. Ask: *"is teal a primary
-colour?"* Today: `oneOf` is unrepresentable → miss. After DL: a provable no — closing a
-class by enumeration is the honest route to "no, and I know the complete list", an answer
-shape tmct doesn't have for any class today.
+`subject` and `object` are normalized through `normFactTerm` (CURIE prefix stripped, lowercased).
+The predicate keeps its vocabulary casing. The fact id content-addresses the triple, so re-asserting
+the same sentence upserts rather than duplicates.
 
-## Where the failure edge shifts after delivery
+The OWL vocabulary the store actually carries today:
 
-The point of naming the new edge now is that budget-exhausted proofs and out-of-scope
-questions must land on the SAME honest miss wall the chat surface already has — a tableau
-timeout is a miss, never a guess. Post-delivery, the edge sits at:
+`rdf:type`, `rdfs:subClassOf`, `owl:disjointWith`, `owl:Restriction`, `owl:onProperty`,
+`owl:someValuesFrom`, `owl:onClass`, `owl:intersectionOf`, `owl:cardinality`,
+`owl:minCardinality`, `owl:maxCardinality`, `owl:hasValue`, plus the `mgx:` relation predicates and
+their `mgxneg:` negative twins (`src/domain/memory/capability.mjs`).
 
-- **Arithmetic and datatypes.** *"does the bicycle have more wheels than seats?"* —
-  comparing two derived counts needs a counting/arithmetic tier neither stage here
-  designs; until one exists these land on the honest miss wall. (Concrete engineering
-  does exist to adopt when wanted — SWRL built-ins, Datalog with aggregation.)
-- **N-ary events and time.** *"alice gave bob a book yesterday; who had the book last
-  week?"* — n-ary relations, fluents, temporal ordering. A further tier with known
-  candidate literatures (reification, event calculus); lands on the miss wall until
-  designed.
-- **Defaults and exceptions.** *"birds fly; penguins are birds; penguins don't fly"* —
-  non-monotonic. Two halves, and only one is unbuilt. Storing the negative and keeping
-  it beside the positive shipped: `archive/PLAN_DEFEASIBLE_NEGATION.md` (DELIVERED)
-  source-indexes each claim, so a taught "penguins don't fly" is stored, not declined, and
-  a same-subject positive and negative from different sources read as consistent
-  disagreement rather than a contradiction. What is still a tier of its own is the
-  *reasoning* — resolving the conflict within one source by preferring the more specific
-  rule (default logic, answer-set programming are the candidate literatures, none yet
-  settled into an obvious deterministic fit). Until that lands, a single-source
-  positive+negative is surfaced, not silently coalesced.
-- **Budget-exhausted proofs.** Any query whose tableau exceeds its step budget returns
-  "can't prove or disprove within budget" — surfaced as an honest miss with a distinct
-  marker so chatbench can count them separately from parse misses.
-- **Full FOL, probability, induction.** Open research horizons with no generally
-  accepted engineering to adopt today; nothing in this plan depends on them, and their
-  absence is benchmark-observable rather than something to legislate here.
+`owl:unionOf`, `owl:complementOf`, `owl:oneOf` and `owl:differentFrom` appear nowhere in `src/`.
+`owl:oneOf` appears in `ontology/tmct-core.ttl` only inside datatype enumerations for tmct's own
+meta-model.
 
-## Design
+### Where a sentence becomes a fact
 
-**Stage EL — a saturation classifier (`src/el-classify.mjs`).**
-ELK-style: normalize the TBox to EL canonical forms (`C ⊑ D`, `C1 ⊓ C2 ⊑ D`,
-`C ⊑ ∃p.D`, `∃p.C ⊑ D`), then saturate with the EL completion rules to a fixpoint.
-Polynomial; same operational shape as `syllogise()` (batch pass off the hot path,
-budget/focus caps, deterministic ordering, conclusions written under `entailed:el-*`
-provenance with `min(premiseTrusts) × ruleConfidence` trust, retractable by provenance).
-Output is materialised subsumptions/memberships, so the existing ask lanes consume them
-as ordinary lookups — no query-time changes at all.
+Two paths write class axioms, and they run in a fixed order.
 
-**Stage DL — a bounded tableau prover (`src/tableau.mjs`).**
-ALC first (⊓ ⊔ ¬ ∃ ∀), extending toward SHOIQ (transitive roles, role hierarchies,
-nominals, qualified cardinality) in separately-tested increments. Query-time only, not
-materialised in this plan's stages — a case-split conclusion depends on every branch of
-its proof, and batch provenance/retraction for that shape is an open design problem a
-later tier can take on with the JTMS groundwork as its starting point. Determinism:
-fixed expansion-rule priority, lexicographic branch ordering, no randomization. Every
-call returns a tri-state: proved (with the premise set, for trust and for a plain-English
-proof rendering), disproved, or budget-exhausted (→ the honest miss above). Wired behind
-an explicit `/prove` chat command first; only after chatbench shows it safe does it
-become an automatic fallback on ask-lane misses.
+**The ACE grammar** is tried first. `src/services/chat.mjs`'s `assertTurn` calls
+`assertSentence` (`src/domain/grammar/assert.mjs`), which calls `parseAce`
+(`src/domain/grammar/ace.mjs`) and appends every emitted triple under an `ace:chat:<sessionId>@<ts>`
+tag. It implements nine patterns, listed in `docs/references/schemas/ace-owl-fragment.md`. It is the
+only path that emits real class axioms. Every content word must be declared in
+`src/domain/grammar/lexicon-core.json`; an undeclared word makes the parse decline rather than
+guess.
 
-**Shared groundwork (phase 0) — representation before inference.**
-Teach frames and graph vocabulary for `unionOf` ("every X is a Y or a Z"), `complementOf`
-("everything that is not X is Y"), `oneOf` ("the Xs are exactly A, B and C"), negative
-type assertions ("rex is not a cat" as an assertion, today only a retraction trigger —
-this is the "negative-capability data model" already noted as not built), and
-`differentFrom`. Everything stores, reads back, and round-trips with zero inference —
-useful on its own (the graph can finally *hold* this knowledge) and prerequisite to both
-stages.
+**The teach lane** runs only when ACE declines. It is a long ordered `if` chain of regexes in
+`src/services/chat.mjs`, each writing through `teachFact` under a `teach:chat:<sessionId>@<ts>` tag.
+It mints mostly `mgx:` relation predicates, plus `owl:disjointWith` through `mintNegativeUniversal`
+and `mgxneg:subClassOf` through the bare-negative branch.
 
-## Steps
+Read-back goes through `FACT_PREDICATE_PHRASES` in `src/services/chat.mjs` (a flat predicate →
+English-phrase table), then `predicatePhrase`, `factPhrase` and `renderFactLine`. The restriction
+scaffolding predicates are absent from that table on purpose: a restriction never renders as a plain
+fact line, it renders through a dedicated live-chase sentence built from the restriction's own
+fields.
 
-0. Phase-0 representation: vocabulary, teach frames, read-back, round-trip tests.
-1. EL normalizer + saturation kernels, unit-tested against the OWL 2 conformance suite's
-   EL subset; batch `tmct classify` verb beside `tmct syllogise`.
-2. Wire EL conclusions into ask (E1/E2 become lookups); chatbench cases for the E1/E2
-   shapes; measure groundedness movement.
-3. ALC tableau core with tri-state + budgets; `/prove` command with plain-English proof
-   rendering; conformance subset for ALC.
-4. SHOIQ increments (transitivity, hierarchies, nominals, qualified cardinality), each
-   with its own conformance slice — E3 through E6 land across these.
-5. Consistency surfacing: extend the violation report to tableau-found contradictions
-   (E5), with both premises quoted.
+---
 
-## Costs and risks
+## 2. The failure edge today — the six worked examples
 
-- **Size.** Stage EL is comparable to `src/domain/syllogise.mjs` today. Stage DL is the largest
-  single component since `ask.mjs` — a real engine plus a conformance corpus. That cost
-  is the reason for the sequencing note at the top.
-- **Worst-case blowup is a semantics problem, not a perf problem.** SHOIQ is
-  NEXPTIME-hard; budgets must be part of the contract from day one, and every
-  budget-exhaustion must be observable (counted in chatbench) so silent weakening is
-  impossible.
-- **Trust for case-split proofs.** A disjunction-derived fact rests on all branches; the
-  premise set for trust is the union. Decided before stage 3, not during.
-- **Open-world honesty is why the CLINC result holds.** The CLINC out-of-scope result
-  (`PLAN_NLU_BENCHMARKS.md`) is won by refusing what tmct can't ground. Nothing in
-  phase 0 or the provers may introduce closed-world assumptions outside explicitly
-  enumerated (`oneOf`) or explicitly negated knowledge.
-- **Overlap discipline.** E2-style cases partially fall to cheaper L7 property rules;
-  every example above gets a chatbench case tagged with the tier that should first solve
-  it, so a cheaper tier landing early is visible and this plan shrinks accordingly.
+Each example gives what the graph holds, what the user asks, what happens now, and where it lands
+after delivery. Every "today" claim below was re-checked against the code at 5.0.21.
 
-## Not in this plan
+Four of the six already have generated benchmark cases. `test-benchmarks/infbench/` grades bands
+INF-1 through INF-8; INF-7 is E1 and E2, INF-8 is E3 and E4. Its `generate-cases.mjs` mints them
+from templates `elConstructedRestriction`, `elExistentialChain`, `dlDisjunction` and `dlComplement`,
+each row carrying a `ceiling` field naming what would have to ship for the row to move. E5 and E6
+have no infbench template yet; phase 0 adds them.
 
-- FOL, arithmetic, temporal/event reasoning, defaults, probabilistic weighting — each a
-  further tier past DL; the "where the edge shifts" section above names the candidate
-  literatures for whichever gets designed next.
-- Incremental/RETE materialisation and retraction algorithms (`archive/PLAN_SYLLOGIST.md` owns
-  that horizon).
-- LLM involvement, including for proof rendering — proofs render through the same
-  template machinery as every other answer, per the project's no-LLM product path.
+**E1 — nested existential (lands in EL).**
+Graph: `heart ⊑ ∃has.valve`, `valve ⊑ flap`. Ask: *"does a heart have a flap?"*
+
+Today: a miss, and it misses one step earlier than the old text said. ACE has no bare-existential
+teach frame, so "every heart has a valve" is declined outright. `parseEvery` routes a sentence
+containing "has" to `parseCardinality` only when the next token is "at" or "exactly"; otherwise it
+looks for "is", finds none, and returns null. The teach lane then reads it through
+`QUANTIFIED_HAS_TEACH_RE` and mints a plain `mgx:hasA` relation fact, which carries no restriction.
+So the premise never becomes `heart ⊑ ∃has.valve` at all.
+
+There is one route that does store the shape: "every heart has at least 1 valve" goes through
+`parseCardinality`, which emits `heart rdfs:subClassOf min-1-valve` plus the restriction node's
+`owl:onProperty has`, `owl:minCardinality 1` and `owl:onClass valve` rows. That is ∃has.valve in
+cardinality clothing, and phase 1's normalizer reads it as such.
+
+Even with the premise stored, `scm-svf1` cannot close E1: it relates two restriction nodes that were
+both independently declared, and `∃has.flap` was never declared.
+
+After phase 0 the bare-existential frame stores the premise directly. After EL, the answer is
+"yes — every heart has a valve, and a valve is a flap."
+
+**E2 — existential chain (lands in EL).**
+Graph: `heart ⊑ ∃has.valve`, `valve ⊑ ∃has.hinge`. Ask: *"does a heart contain a hinge, somewhere?"*
+
+Today: a miss, for the same premise-storage reason as E1, and because nothing composes two
+existentials. The composition also needs the role to be declared transitive, and no teach frame
+declares a role property today.
+
+Note the overlap with the cheaper tier: plain `has` transitivity at the assertion level is RL's
+`prp-trp`, which is lever L7. The EL-only part is composing it through class expressions that were
+never declared, as in E1. Phase 0's transitive-role frame writes the one row both tiers read.
+
+**E3 — disjunction elimination (lands in DL).**
+Teach: *"every pet is a cat or a dog"*, *"rex is a pet"*, *"rex is not a cat"*. Ask: *"is rex a dog?"*
+
+Today: a miss, but only the disjunction is missing. The old text said "rex is not a cat" triggers
+retraction. It does not, and has not for some time. `RETRACT_NOT_A_RE` matches the sentence, and the
+branch behind it stores rather than deletes:
+
+1. If a positive `rex rdf:type cat` or `rex rdfs:subClassOf cat` is stored, it writes
+   `rex mgxneg:subClassOf cat` beside it and reports the disagreement.
+2. If no positive is stored and the object resolves as a declared lexicon noun, it mints
+   `rex owl:disjointWith cat` through `mintNegativeUniversal`.
+3. If the store has nothing about the subject at all, it declines by name and stores nothing.
+
+Only "forget that X is a Y" retracts, through `RETRACT_FORGET_RE` and `retractSubClassOf`.
+
+So E3's negative half stores today under path 2, gated on the object being in the lexicon. The
+residual phase-0 work is to make an individual-level negative type assertion store without that
+gate, and to add `owl:unionOf`. After phase 0 the knowledge is stateable. After DL the prover
+answers yes by case elimination, the first tmct conclusion that needs reasoning by cases.
+
+**E4 — complement classes (lands in DL).**
+Teach: *"everything that is not aquatic is terrestrial"*, *"a stone is not aquatic"*. Ask: *"is a
+stone terrestrial?"*
+
+Today: a miss. `owl:complementOf` does not exist in the graph vocabulary, so the first sentence has
+nowhere to land. The second sentence stores as in E3 when the lexicon gate passes.
+
+After phase 0 both store. After DL, yes.
+
+**E5 — contradiction through cardinality interplay (lands in DL).**
+Graph: `bicycle ⊑ ≥2 has.wheel` (from "every bicycle has at least 2 wheels"), `beryl rdf:type
+bicycle`, and a max-0 wheels restriction on beryl's class.
+
+Today: `proveCardinalityAtLeast` and `proveMaxCardinalityZeroDenial` each work alone from chat's
+live chase. Nothing puts them together. `findConsistencyViolations` reads only type edges, subclass
+edges and disjointness edges; it never looks at a cardinality restriction, so the min/max clash sits
+in the store silently. `findContradictions` in `src/adapters/memory/core.mjs` is a different check
+again. It compares object counts per predicate against the resolution table, and reads no
+restriction at all.
+
+After DL's qualified-cardinality increment, the consistency pass reports the contradiction and names
+both premises.
+
+**E6 — enumerated classes and nominals (lands in DL).**
+Teach: *"the primary colours are exactly red, yellow and blue"*. Ask: *"is teal a primary colour?"*
+
+Today: a miss. `owl:oneOf` is unrepresentable for classes.
+
+After phase 0 the enumeration stores, which alone buys the positive half (red, yellow and blue each
+get an `rdf:type` row). After DL's nominal increment, "is teal a primary colour" becomes a provable
+no. Closing a class by enumeration is the route to "no, and I know the complete list", an answer
+shape tmct has for no class today.
+
+---
+
+## 3. Where the edge moves after delivery
+
+A budget-exhausted proof and an out-of-scope question must land on the same honest miss wall the
+chat surface already has. A tableau timeout is a miss, never a guess. After both stages the edge
+sits at:
+
+- **Arithmetic and datatypes.** *"does the bicycle have more wheels than seats?"* compares two
+  derived counts. That needs a counting tier neither stage here designs. Candidate engineering
+  exists to adopt: SWRL built-ins, Datalog with aggregation. Until a tier is designed these land on
+  the honest miss wall.
+- **N-ary events and time.** *"alice gave bob a book yesterday; who had the book last week?"* needs
+  n-ary relations, fluents and temporal ordering. Candidate literatures: reification, event
+  calculus.
+- **Defaults and exceptions.** Storage shipped: `archive/PLAN_DEFEASIBLE_NEGATION.md` records the
+  `mgxneg:` polarity prefix and source-indexed claims, so a taught "penguins don't fly" is stored
+  beside the positive and read as disagreement. The open tier is the reasoning, which means
+  resolving a same-source conflict by preferring the more specific rule. Candidate literatures:
+  default logic, answer-set programming. Until that lands, a single-source positive and negative is
+  surfaced rather than silently coalesced.
+- **Budget-exhausted proofs.** Any query whose tableau exceeds its step budget returns "can't prove
+  or disprove within budget", surfaced as an honest miss with its own marker so infbench and
+  chatbench count it separately from a parse miss.
+- **Full FOL, probability, induction.** Research horizons with no generally accepted engineering to
+  adopt today. Nothing here depends on them, and their absence is benchmark-observable.
+
+---
+
+## 4. The constitution
+
+These hold for every phase and every module below.
+
+- **Pure JS, no LLM in the product path.** Proof rendering goes through the same template machinery
+  as every other answer.
+- **Deterministic.** Fixed rule-application order, fixed branch order, no randomization, no wall
+  clock, no arrival-order dependence. Feeding the same fact set in two different orders must produce
+  the same answer, byte for byte. Sort candidate lists before committing them, exactly as every
+  kernel in `syllogise.mjs` already does.
+- **$0 per query.** No network, no model, no service.
+- **Budget exhaustion is an honest miss.** A prover that runs out of budget returns `exhausted`, and
+  the caller renders a miss. It never downgrades to a guess and never reports a partial result as a
+  verdict.
+- **Open-world.** Nothing may introduce a closed-world assumption outside explicitly enumerated
+  (`owl:oneOf`) or explicitly negated knowledge. The CLINC out-of-scope result is won by refusing
+  what tmct cannot ground.
+- **Domain purity.** Every new module lives under `src/domain/` and imports nothing non-relative.
+  Not a package, not a node builtin. `test/estate/import-layers.test.mjs` fails on the first
+  violation and its allowlist may only shrink. Store access is injected through a `store` option,
+  the same contract `syllogise()` already uses via `requireStore`.
+
+---
+
+## 5. Phase 0 — representation before inference
+
+Goal: the graph can hold union, complement, enumeration, individual-level negative types,
+individual inequality, bare existentials and transitive roles. Everything stores, reads back and
+round-trips with zero inference. Useful on its own, and a prerequisite for both stages.
+
+### 5.1 New vocabulary
+
+| predicate | subject | object | meaning |
+|---|---|---|---|
+| `owl:unionOf` | union node | a member class | repeated rows, one per member |
+| `owl:complementOf` | complement node | the negated class | exactly one row per node |
+| `owl:oneOf` | the enumerated class | a member individual | repeated rows, one per member |
+| `owl:differentFrom` | an individual | another individual | symmetric, stored one direction |
+| `owl:TransitiveProperty` | (as `rdf:type` object) | — | `p rdf:type owl:TransitiveProperty` |
+
+Repeated rows for `owl:unionOf` and `owl:oneOf` follow the flat-store convention
+`owl:intersectionOf` already uses: the JSON fact store has no RDF lists, so a list flattens to one
+row per member. `ontology/tmct-core.ttl` documents the same class expression in proper Turtle list
+syntax beside it.
+
+Negative type assertion reuses `owl:disjointWith` with an individual subject. That is the shape
+`deriveDisjointViolations` already writes for its own conclusions (`{ subject: x, predicate:
+"owl:disjointWith", object: C }`), and the shape `mintNegativeUniversal` already writes from the
+teach lane. Reusing it means the shipped cax-dw dedup screen recognises a taught negative as known,
+and `FACT_PREDICATE_PHRASES` already renders it as "is not a". Phase 0 adds no new predicate for
+this case; it removes the lexicon gate that currently blocks it.
+
+### 5.2 New ACE patterns
+
+All seven go in `src/domain/grammar/ace.mjs`, beside the existing nine. Each adds a
+`PATTERN_<NAME>` constant, an entry in the frozen `PATTERNS` array, a parse function, and a row in
+`docs/references/schemas/ace-owl-fragment.md`'s pattern table.
+
+Node names stay readable and deterministic, matching the existing `some-<pred>-<target>` and
+`<tag>-<n>-<class>` conventions, so the same sentence always re-emits the same triples and
+`appendFact` stays idempotent.
+
+**Pattern 10 — union.** *"every pet is a cat or a dog"*, extending to "or a N4" and so on.
+
+```
+u  = `${ns}` + members sorted by local name, joined with "-or-"   e.g. tmct:cat-or-dog
+u  rdf:type          owl:Class     kind owl:unionOf
+u  owl:unionOf       cat           kind owl:unionOf
+u  owl:unionOf       dog           kind owl:unionOf
+pet rdfs:subClassOf  u             kind owl:unionOf
+```
+
+Sort the members lexicographically by normalized local name before building the node name, so "a cat
+or a dog" and "a dog or a cat" mint the same node. Emit the `owl:unionOf` rows in that same sorted
+order.
+
+Parse: `parseEvery` already finds the `is` index. When the tail after `is` contains a top-level
+"or", split on it, resolve each arm as a noun phrase with `resolveNP`, and require every arm to be a
+class (`individual` false). Any arm that fails to resolve makes the whole pattern decline through
+`missOrNull`, as every other pattern does.
+
+**Pattern 11 — complement.** *"everything that is not aquatic is terrestrial"*.
+
+```
+c  = `${ns}not-aquatic`
+c  rdf:type          owl:Class      kind owl:complementOf
+c  owl:complementOf  aquatic        kind owl:complementOf
+c  rdfs:subClassOf   terrestrial    kind owl:complementOf
+```
+
+Parse: leading token "everything", then "that", "is", "not", an optional determiner, a class noun
+phrase, then "is", then a class noun phrase. Also accept "everything that is not a N1 is a N2".
+
+**Pattern 12 — negative type assertion.** *"rex is not a cat"* where the subject resolves as an
+individual (a declared proper name, or a code-ref shape).
+
+```
+rex owl:disjointWith cat    kind owl:disjointWith
+```
+
+The class-level form "no N1 is a N2" stays pattern 6, unchanged. The two are separated by
+`resolveNP`'s `individual` flag, so no new disambiguation is needed.
+
+**Pattern 13 — enumeration.** *"the primary colours are exactly red, yellow and blue"*.
+
+```
+primary-colour owl:oneOf red        kind owl:oneOf
+primary-colour owl:oneOf yellow     kind owl:oneOf
+primary-colour owl:oneOf blue       kind owl:oneOf
+red    rdf:type primary-colour      kind owl:oneOf
+yellow rdf:type primary-colour      kind owl:oneOf
+blue   rdf:type primary-colour      kind owl:oneOf
+```
+
+The `rdf:type` rows are the positive half, and they make the enumeration immediately useful to the
+five shipped rules with no new inference at all. Members sort lexicographically before emission.
+The subject noun phrase folds to its singular lemma through `lookupNoun`, so "the primary colours"
+stores under `primary-colour`.
+
+Parse: "the", a plural class noun phrase, "are", "exactly", then a comma or "and" separated list of
+noun phrases. `tokenize` already drops commas, so the list is the token run with "and" as the only
+separator left.
+
+**Pattern 14 — individual inequality.** *"rex is not whiskers"* where both sides resolve as
+individuals.
+
+```
+rex owl:differentFrom whiskers    kind owl:differentFrom
+```
+
+Pattern 12 requires a determiner plus a class noun after "not". Pattern 14 requires a declared
+proper name with no determiner. That split is deterministic and needs no lookahead.
+
+**Pattern 15 — bare existential.** *"every heart has a valve"*, and the general verb form *"every
+heart contains a valve"*.
+
+```
+r  = `${ns}some-has-valve`                       (or some-<pred>-<target> for a general verb)
+r  rdf:type            owl:Restriction   kind owl:someValuesFrom
+r  owl:onProperty      tmct:has          kind owl:someValuesFrom
+r  owl:someValuesFrom  valve             kind owl:someValuesFrom
+heart rdfs:subClassOf  r                 kind owl:someValuesFrom
+```
+
+Parse: this is a new arm inside `parseEvery`, tried after the existing `that` and cardinality arms.
+`parseCardinality` already claims the sentence when the token after "has" is "at" or "exactly", so
+the new arm fires only when the token after the verb is a determiner or a noun. The verb resolves
+through `lookupVerb` and the predicate through `predicateOf`, so `${ns}has` is just the case where
+the verb is "has".
+
+This is the pattern E1 and E2 have been waiting on. `test-benchmarks/infbench/generate-cases.mjs`'s
+INF-7 notes say so directly.
+
+**Pattern 16 — transitive role.** *"containing is transitive"*, *"contains is transitive"*.
+
+```
+tmct:contains rdf:type owl:TransitiveProperty    kind owl:TransitiveProperty
+```
+
+Parse: a single declared verb token, then "is transitive". Fold the surface form to the verb's
+lemma through `lookupVerb` before minting the predicate with `predicateOf`.
+
+### 5.3 Teach-lane changes
+
+Two changes in `src/services/chat.mjs`, both narrow.
+
+1. **Drop the lexicon gate on the singular-negation path.** Today the bare-negative branch only
+   mints a `owl:disjointWith` exclusion when `lookupNoun(loadLexicon(), object)` resolves. Widen it
+   so a subject that resolves as an individual (a code-ref shape, or a term the store already knows
+   as an `rdf:type` subject) writes the individual-level negative directly, with no lexicon
+   requirement. Keep the existing adjective guard: "zeus is not mortal" must keep declining, so the
+   widened arm requires the object to be a term the store already carries as a class, or a declared
+   noun, and never a bare adjective.
+2. **Add read-back phrasing.** Extend `FACT_PREDICATE_PHRASES`:
+
+   | predicate | phrase |
+   |---|---|
+   | `owl:unionOf` | `is either` |
+   | `owl:complementOf` | `is anything that is not` |
+   | `owl:oneOf` | `includes exactly` |
+   | `owl:differentFrom` | `is not the same as` |
+
+   A union node needs a sentence, not a row-per-member dump. Add `renderUnionLine(node, members)`
+   beside `renderFactLine`, producing *"every pet is a cat or a dog (source: …)"* from the node's
+   `rdfs:subClassOf` parent and its sorted members. Same shape for an enumeration:
+   `renderEnumerationLine(cls, members)` producing *"the primary colours are exactly red, yellow and
+   blue (source: …)"*. Both take the fact rows and return one line; both are pure.
+
+`owl:TransitiveProperty` never renders as a plain fact line. Suppress it in the describe lane the
+same way the restriction scaffolding predicates are suppressed.
+
+### 5.4 Ontology and docs
+
+- `ontology/tmct-core.ttl`: declare the five new terms in section 2, with the flat-store convention
+  comment for the two repeated-row predicates, matching the existing `owl:intersectionOf` note.
+  `test/adapters/grammar-ontology.test.mjs` pins the core vocabulary against this file.
+- `docs/references/schemas/ace-owl-fragment.md`: seven new rows in the pattern table, numbered 10
+  through 16.
+- `docs/references/schemas/owl2-vocabulary.md`: add the five terms to the emitted-vocabulary list.
+- `ontology/README.md`: seven new rows in the pattern → kind table.
+
+### 5.5 Phase 0 tests
+
+| file | what it holds |
+|---|---|
+| `test/adapters/grammar-ace-class-expressions.test.mjs` | one test per new pattern: the exact triple list emitted, node-name determinism (same sentence twice, same names), member sort order, and the decline path for an undeclared word |
+| `test/adapters/teach-negative-and-enumeration.test.mjs` | the widened individual-negative path stores; the adjective guard still declines; "forget that X is a Y" still retracts and the bare negative still does not; the four new read-back phrasings |
+| `test/adapters/grammar-ontology.test.mjs` | extended: the five new terms are declared in `tmct-core.ttl` |
+
+New corpus rows in `test/corpus/inference.jsonl`, one JSON object per line. Row contract is enforced
+by `validateRow` in `test/corpus/run-lane.mjs` and guarded by `test/estate/corpus-schema.test.mjs`:
+`id`, `key`, `turns`, `expect`, optional `note` and `setup`.
+
+| key | id | turns |
+|---|---|---|
+| `inference.represent.union` | `inference-represent-union-stores-and-reads-back` | teach "every pet is a cat or a dog", ask "what is a pet" |
+| `inference.represent.complement` | `inference-represent-complement-stores-and-reads-back` | teach "everything that is not aquatic is terrestrial", ask "what do you know about terrestrial" |
+| `inference.represent.enumeration` | `inference-represent-enumeration-stores-members-as-types` | teach "the primary colours are exactly red, yellow and blue", ask "is red a primary colour" (yes, from the `rdf:type` rows alone) |
+| `inference.represent.negative-type` | `inference-represent-negative-type-stores-without-a-lexicon-entry` | teach "rex is a pet", teach "rex is not a cat", ask "is rex a cat" |
+| `inference.represent.different-from` | `inference-represent-different-from-stores` | teach "rex is not whiskers", ask "what do you know about rex" |
+| `inference.represent.bare-existential` | `inference-represent-bare-existential-mints-a-restriction` | teach "every heart has a valve", ask "does a heart have a valve" |
+| `inference.represent.transitive-role` | `inference-represent-transitive-role-stores` | teach "containing is transitive", ask "what do you know about contains" |
+| `inference.represent.bare-negative-never-retracts` | `inference-represent-bare-negative-keeps-the-positive` | teach "rex is a cat", teach "rex is not a cat", ask "is rex a cat" (both stored, disagreement reported) |
+
+Add two infbench templates in `test-benchmarks/infbench/generate-cases.mjs`, beside `dlDisjunction`
+and `dlComplement`, so E5 and E6 are measured from the same run as E1 through E4:
+
+- `dlCardinalityClash`, band INF-8, premises *"every bicycle has at least 2 wheels"*, *"every
+  bicycle has at most 0 wheels"*, *"beryl is a bicycle"*, query *"is beryl a bicycle"*, expected
+  verdict `inconsistent`. `ceiling`: qualified cardinality in Stage DL.
+- `dlNominalEnumeration`, band INF-8, premises *"the primary colours are exactly red, yellow and
+  blue"*, query *"is teal a primary colour"*, expected verdict `no`. `ceiling`: nominals in Stage
+  DL plus phase-0 `oneOf` representation.
+
+Regenerate `cases.jsonl` with `node test-benchmarks/infbench/generate-cases.mjs` and update
+`envelope.json` through `generate-envelope.mjs`.
+
+### 5.6 Phase 0 acceptance
+
+```
+npm run test:fast
+node --test test/adapters/grammar-ace-class-expressions.test.mjs
+node --test test/adapters/teach-negative-and-enumeration.test.mjs
+node --test test/adapters/grammar-ace.test.mjs test/adapters/grammar-assert.test.mjs test/adapters/grammar-ontology.test.mjs
+node --test test/adapters/interpret-ace-strategy.test.mjs
+node --test "test/estate/*.test.mjs"
+node --test test/corpus/inference.test.mjs
+node scripts/corpus-matrix.mjs
+node --test test/bench/infbench.test.mjs test/bench/infbench-kernel.test.mjs test/bench/infbench-chat.test.mjs
+```
+
+New tests go in `test/adapters/`, never in `test/fast/` or `test/smoke/`. Those two tiers have
+wall-clock budgets that `npm run check:budgets` enforces, and a tier that breaks its budget is a bug
+in the tier.
+
+---
+
+## 6. Phase 1 — the EL saturation classifier
+
+New module: **`src/domain/el-classify.mjs`**. Imports `./hash.mjs` and `./syllogise.mjs` only. Both
+relative, both domain, so the layer checker stays green.
+
+ELK-style: normalize the TBox to EL canonical forms, then saturate with the completion rules to a
+fixpoint. Polynomial. Same operational shape as `syllogise()`: a batch pass off the hot path, budget
+and focus caps, deterministic ordering, conclusions written under `entailed:el-*` provenance,
+retractable by provenance.
+
+### 6.1 Normal forms
+
+Four forms, following Baader, Brandt and Lutz, *Pushing the EL Envelope* (IJCAI 2005). `A`, `A1`,
+`A2`, `B` are concept names, `⊤` or `⊥`.
+
+```js
+// NF1  A ⊑ B
+{ form: "sub", sub: "heart", sup: "organ", from: ["fact:…"] }
+// NF2  A1 ⊓ A2 ⊑ B          subs sorted, always length 2
+{ form: "and", subs: ["cat", "dog"], sup: "bot", from: ["fact:…"] }
+// NF3  A ⊑ ∃r.B
+{ form: "someRight", sub: "heart", role: "has", filler: "valve", from: ["fact:…"] }
+// NF4  ∃r.A ⊑ B
+{ form: "someLeft", role: "has", filler: "flap", sup: "some-has-flap", from: ["fact:…"] }
+```
+
+`from` is the ordered list of stored fact ids the axiom came from. It is what makes a derived
+conclusion's justification real rather than decorative.
+
+Two reserved names: `"top"` and `"bot"`. Neither can collide with a stored term, because
+`normFactTerm` never produces them from a class noun and the normalizer rejects a graph that
+declares either.
+
+### 6.2 Reading the store into normal form
+
+```js
+/** Fold stored fact rows into normalized EL axioms. Pure, no I/O.
+ *  Returns { axioms, roleAxioms, concepts, roles, restrictionOf, truncated }. */
+export function normalizeElTBox(rows, { budget = 500 } = {}) { … }
+```
+
+The five stored shapes it recognises, in this order:
+
+1. `A rdfs:subClassOf B` where `B` is not a restriction node → NF1.
+2. `A rdfs:subClassOf R` where `R` carries `owl:onProperty p` and `owl:someValuesFrom C` → NF3
+   `A ⊑ ∃p.C`, plus NF4 `∃p.C ⊑ R` so the restriction node itself stays a named concept.
+3. `A rdfs:subClassOf R` where `R` carries `owl:onProperty has`, `owl:onClass C`, and either
+   `owl:minCardinality n` or `owl:cardinality n` with `n ≥ 1` → NF3 `A ⊑ ∃has.C`, plus NF4
+   `∃has.C ⊑ R`. This is the cardinality-as-existential bridge, and it is what lets the shipped
+   pattern-5 frame feed EL. Reuse `buildCardinalityRestrictions` from `syllogise.mjs` to reconstruct
+   the records.
+4. `I owl:intersectionOf M1`, `I owl:intersectionOf M2`, `I rdfs:subClassOf B`. Members that are
+   atomic give NF2 `M1 ⊓ M2 ⊑ B`. A member that is a restriction node is already a named concept by
+   rule 2 or 3, so it needs no fresh name. An intersection of more than two members folds left into
+   a chain of NF2 axioms over deterministic intermediate names `${m1}-and-${m2}`, members sorted.
+5. `A owl:disjointWith B` → NF2 `A ⊓ B ⊑ ⊥`. This is EL⊥, and it is what lets the classifier prove a
+   "no" and detect an unsatisfiable class.
+
+`roleAxioms` carries `{ kind: "transitive", role, from }` from `p rdf:type owl:TransitiveProperty`,
+and `{ kind: "sub", sub, sup, from }` from `p rdfs:subPropertyOf q` when lever L7 lands that row.
+
+`restrictionOf` is a `Map` from restriction node id to `{ role, filler }`, so the write path can
+re-emit a restriction's scaffolding.
+
+`truncated` is true when the row count exceeded `budget`. A truncated normalization still returns
+what it built; the saturation below just sees less.
+
+### 6.3 The completion rules
+
+State is two indexes:
+
+- `subsumers: Map<conceptName, Set<conceptName>>` — `S(A)`, every named concept `A` is known to be
+  subsumed by.
+- `roleEdges: Map<roleName, Set<"A␟B">>` — `R(r)`, every pair with `A ⊑ ∃r.B`.
+
+Seven rules, applied in this fixed order every round. Each names its inputs and its output.
+
+| rule | inputs | output |
+|---|---|---|
+| CR0 init | every concept name `A` | add `A` and `top` to `S(A)` |
+| CR1 | `A' ∈ S(A)`, NF1 `A' ⊑ B` | add `B` to `S(A)` |
+| CR2 | `A1 ∈ S(A)`, `A2 ∈ S(A)`, NF2 `A1 ⊓ A2 ⊑ B` | add `B` to `S(A)` |
+| CR3 | `A' ∈ S(A)`, NF3 `A' ⊑ ∃r.B` | add `(A, B)` to `R(r)` |
+| CR4 | `(A, B) ∈ R(r)`, `B' ∈ S(B)`, NF4 `∃r.B' ⊑ C` | add `C` to `S(A)` |
+| CR5 | `(A, B) ∈ R(r)`, `bot ∈ S(B)` | add `bot` to `S(A)` |
+| CR6 | `(A, B) ∈ R(r)`, role axiom `r ⊑ s` | add `(A, B)` to `R(s)` |
+| CR7 | `(A, B) ∈ R(r)`, `(B, C) ∈ R(r)`, `r` transitive | add `(A, C)` to `R(r)` |
+
+```js
+/** Saturate the normalized TBox to a fixpoint. Pure, no I/O.
+ *  Returns { subsumers, roleEdges, unsatisfiable, derivationOf, rounds, truncated }. */
+export function saturateEl(normalized, { budget = 2000, rounds = 64, focus = null } = {}) { … }
+```
+
+`derivationOf` is a `Map` from `"A␟B"` (a derived subsumption) to the ordered premise fact-id list of
+the FIRST derivation that produced it. First-derivation-wins is deterministic given a fixed rule
+order and a sorted worklist, so the same fact set always yields the same justification.
+
+`unsatisfiable` is the sorted array of concept names with `bot ∈ S(A)`. Those are reported, never
+materialised. An unsatisfiable class is a consistency finding, and phase 5 surfaces it.
+
+Determinism rules the implementer must follow, matching what `syllogise.mjs` already does:
+
+- Every iteration over a `Map` or `Set` goes through a sorted array first.
+- The worklist is a FIFO queue, seeded in sorted concept order.
+- Each round collects its additions from a snapshot, sorts them, then commits. No read during
+  mutate.
+- `budget` counts committed additions across the whole pass. `rounds` bounds the fixpoint loop. Hit
+  either and `truncated` is true.
+- `focus`, when given, is a `Set` of normalized terms; a rule only fires when one of the concepts it
+  touches is in the set. No focus means whole graph, exactly as `normalizeFocus` handles it today.
+
+### 6.4 Goal axioms — how E1 actually closes
+
+Plain saturation never derives `heart ⊑ ∃has.flap`, because `∃has.flap` is not a concept in the
+TBox. That expression has to be introduced as a goal before the rules can reach it. This is the
+piece that makes E1 work, and it has two modes.
+
+**Batch mode.** For every NF3 axiom `A ⊑ ∃r.B`, mint a goal NF4 axiom `∃r.B' ⊑ X` for every `B'` in
+`B`'s subclass-ancestor closure, where `X` is the deterministic name `some-${r}-${B'}`. That is
+exactly the E1 shape, and it is bounded: the goal count is the number of NF3 axioms times the
+average ancestor depth, capped by its own budget.
+
+```js
+/** Mint the bounded goal set for a batch pass. Pure. Returns an array of NF4 axioms. */
+export function elGoalAxioms(normalized, { budget = 200 } = {}) { … }
+```
+
+**Query mode.** One goal, minted from the question.
+
+```js
+/** Mint the single goal axiom for "does a <sub> <role> a <filler>?". Pure.
+ *  Returns { axiom, name }. */
+export function elGoalFor(role, filler) { … }
+
+/** Bounded query-rooted EL proof. Normalizes, adds the one goal, saturates, and
+ *  reports whether `sub` acquired the goal name. Pure, no I/O.
+ *  Returns { proved: true, premises } | { proved: false, exhausted } */
+export function proveElSubsumption(rows, sub, { role, filler }, { budget = 2000, rounds = 64 } = {}) { … }
+```
+
+E1 traced through: NF3 `heart ⊑ ∃has.valve` gives `(heart, valve) ∈ R(has)` by CR3. NF1
+`valve ⊑ flap` gives `flap ∈ S(valve)` by CR1. The goal NF4 `∃has.flap ⊑ some-has-flap` fires CR4:
+`(heart, valve) ∈ R(has)`, `flap ∈ S(valve)`, so `some-has-flap ∈ S(heart)`. Answer: yes.
+
+E2 traced through: NF3 `heart ⊑ ∃has.valve` and `valve ⊑ ∃has.hinge` give `(heart, valve)` and
+`(valve, hinge)` in `R(has)`. With `has` declared transitive, CR7 gives `(heart, hinge) ∈ R(has)`.
+The goal `∃has.hinge ⊑ some-has-hinge` then fires CR4. Answer: yes.
+
+### 6.5 The materialising pass
+
+```js
+export const EL_SUBSUMPTION_RULE = "elSubsumption";
+export const ENTAILED_EL_PROVENANCE = `entailed:${EL_SUBSUMPTION_RULE}`;
+export const EL_RESTRICTION_RULE = "elRestriction";
+export const ENTAILED_EL_RESTRICTION_PROVENANCE = `entailed:${EL_RESTRICTION_RULE}`;
+/** Same sub-1 discount as CAX_DW_RULE_CONFIDENCE, same reason. */
+export const EL_RULE_CONFIDENCE = 0.95;
+export const DEFAULT_EL_BUDGET = 2000;
+export const DEFAULT_EL_ROUNDS = 64;
+
+/**
+ * Run one bounded EL classification pass over the memory graph under `repoDir`.
+ * Normalizes, mints batch goals, saturates, and materialises each new named
+ * subsumption via `appendFacts` under its entailed provenance.
+ *
+ * opts: `budget`, `rounds`, `focus`, `maxEnvironments`, `store` (REQUIRED —
+ * { loadMemory, readFactRows, appendFacts }).
+ *
+ * Returns { derived, count, budget, rounds, truncated, unsatisfiable, goalCount }.
+ */
+export async function classifyEl(repoDir, {
+  budget = DEFAULT_EL_BUDGET, rounds = DEFAULT_EL_ROUNDS, focus = null,
+  maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store,
+} = {}) { … }
+```
+
+What it writes:
+
+- `A rdfs:subClassOf B` for every `B ∈ S(A)` where `B` is a concept the graph already names, `B ≠ A`,
+  `B ≠ top`, and the row is not already stored. Provenance `entailed:elSubsumption`,
+  `justification: [derivationOf.get("A␟B")]`, `premiseTrusts` from the premise rows,
+  `ruleConfidence: EL_RULE_CONFIDENCE`.
+- `A rdfs:subClassOf X` where `X` is an introduced restriction name. Provenance
+  `entailed:elRestriction`, and the pass writes `X`'s scaffolding rows alongside
+  (`X rdf:type owl:Restriction`, `X owl:onProperty r`, `X owl:someValuesFrom B`) under the same
+  provenance, so a later reader and the shipped cls-svf1 and scm-svf1 kernels see a well-formed
+  restriction.
+
+What it does not write: an unsatisfiable concept. Those come back in `unsatisfiable` for phase 5.
+
+Justification: an EL conclusion carries exactly one environment. `syllogise()`'s alternate-discovery
+step enumerates support only for the predicates its own rule families own, so it will not grow an EL
+conclusion's environment set. An EL-aware enumerator is a later increment; `retractSubClassOf`'s
+boolean backstop keeps retraction correct in the meantime, because the closure walk re-verifies
+every candidate rather than trusting the citation.
+
+Trust: `min(premiseTrusts) × EL_RULE_CONFIDENCE`, computed by the existing `entailedTrustFrom` hook,
+so an EL conclusion stays strictly below its weakest premise.
+
+### 6.6 CLI verb, chat command, config
+
+**CLI.** Add one entry to `CLI_VERBS` in `src/domain/cli-verbs.mjs`, directly after the `syllogise`
+entry, in the same shape:
+
+```js
+{
+  mode: "classify",
+  errorLabel: "classify",
+  usage: "tmct classify [--repo <abs>]",
+  prose: ["EL classification (offline maintenance job): saturation-based TBox"],
+  flags: [
+    { flag: "[--budget <n>] [--rounds <n>]", prose: ["classification that reaches class expressions the graph never"] },
+    { flag: "[--config <path>]", prose: ["declared as nodes, writing bounded, low-trust, retractable", "entailed facts (never on the chat path)"] },
+  ],
+},
+```
+
+`dispatchableModes()` and `renderUsage()` pick it up with no further change. Add the dispatch block
+in `bin/tmct.mjs`'s `main()`, modelled line for line on the `syllogise` block: same `numFlag` helper,
+same `resolveRuntimeConfig`, same `openMemoryBackend` and `finally { await closeMemoryStore() }`,
+same one-line stdout summary. Add `"classify": "node --disable-warning=ExperimentalWarning bin/tmct.mjs classify"`
+to `package.json`'s scripts, matching the `syllogise` wrapper.
+
+**Chat.** Add `/classify <term>` to `runCommand`'s if-chain in `src/services/chat.mjs`, directly
+after the `/syllogise` branch and modelled on it: refuse without an argument, build the focus set
+through `factTermVariants(normFactTerm, argText)`, call `classifyEl`, list the derived facts, state
+the budget wall when `truncated`, and close with the "these are derived, not taught" line. Add its
+row to `helpText()`.
+
+**Config.** Add a `[reasoning]` section to `tmct.toml` and a pure resolver.
+
+```toml
+[reasoning]
+syllogise_budget = 50       # syllogise() budget
+syllogise_depth = 32        # syllogise() depth
+classify_budget = 2000      # classifyEl() budget
+classify_rounds = 64        # classifyEl() rounds
+max_environments = 4        # shared environment-set cap
+prove_steps = 5000          # tableau step budget, phase 3
+prove_branches = 256        # tableau branch budget, phase 3
+prove_nodes = 512           # tableau nodes-per-branch budget, phase 3
+```
+
+New module **`src/domain/reasoning-config.mjs`**, following the `src/domain/game-config.mjs`
+precedent: it exports the default constants and `resolveReasoningConfig(toml)`, which fills every
+unset key from those constants and clamps each to a positive integer. Add `reasoning` to
+`normalizeConfig`'s pass-through list in `src/adapters/toml-config.mjs`, beside `research` and
+`discourse`. An absent `tmct.toml` yields the defaults, which is the state
+`loadTomlConfig` already returns `null` for.
+
+CLI flags still win over the file, and the file wins over the defaults, through `mergeEffective`'s
+existing precedence.
+
+### 6.7 Phase 1 tests
+
+| file | what it holds |
+|---|---|
+| `test/adapters/el-normalize.test.mjs` | one test per stored shape → normal form, including the cardinality-as-existential bridge and the ⊥ form from `owl:disjointWith`; the >2-member intersection fold; the `truncated` flag |
+| `test/adapters/el-saturate.test.mjs` | one test per completion rule CR1–CR7, each with a positive and a control case; order-independence (feed the axioms in two different orders, demand identical output); budget and rounds truncation; the unsatisfiable report |
+| `test/adapters/el-goals.test.mjs` | batch goal minting is bounded and deterministic; `elGoalFor` names match the batch names; E1 and E2 close through `proveElSubsumption` |
+| `test/adapters/el-classify-pass.test.mjs` | `classifyEl` writes the right rows with the right provenance, trust and justification; a second pass derives nothing new (idempotence); restriction scaffolding is written; a store missing a required function throws a loud construction error |
+| `test/adapters/el-entailment-fixtures.test.mjs` | the EL entailment fixture set, below |
+
+**Entailment fixtures.** There is no OWL conformance harness in this repo. `src/tools/conformance.mjs`
+is the provider-interface contract kit and has nothing to do with OWL. So phase 1 authors its own
+fixture set at `test/fixtures/el-entailments.jsonl`, one object per line:
+
+```json
+{"id":"el-cr4-nested-existential","axioms":[["heart","rdfs:subClassOf","some-has-valve"],["some-has-valve","owl:onProperty","has"],["some-has-valve","owl:someValuesFrom","valve"],["valve","rdfs:subClassOf","flap"]],"ask":{"sub":"heart","role":"has","filler":"flap"},"expect":"proved"}
+```
+
+Draw the cases from the W3C OWL 2 EL profile's own entailment examples and from *Pushing the EL
+Envelope*'s worked rules, one fixture per completion rule plus the six examples in section 2 that
+land in EL. Twenty to thirty rows is enough; the point is per-rule coverage, not volume.
+
+### 6.8 Phase 1 acceptance
+
+```
+npm run test:fast
+node --test "test/adapters/el-*.test.mjs"
+node --test test/adapters/syllogise.test.mjs
+node --test test/adapters/cli-verbs.test.mjs test/adapters/toml-config.test.mjs test/adapters/config.test.mjs
+node --test "test/estate/*.test.mjs"
+npm run check:budgets
+```
+
+---
+
+## 7. Phase 2 — wire EL into the ask lanes
+
+EL conclusions are materialised subsumptions, so the existing ask lanes consume them as ordinary
+lookups. There are no query-time changes to the ask engine at all. What phase 2 adds is the
+plumbing that makes the classification happen and the answer cite it honestly.
+
+1. **The auto-fold hook.** `src/services/chat.mjs` already runs a focused `syllogise` pass off the
+   hot path through its fold sibling. Add the matching `classifyEl` call beside it, same focus set,
+   same budget source (`resolveReasoningConfig`), same fire-and-forget discipline. It must never
+   block the turn.
+2. **Provenance rendering.** `citationProvenance` and `renderFactLine` already handle an
+   `entailed:*` tag. Confirm the two new tags read cleanly in a cited line, and add the
+   `entailed:elSubsumption` and `entailed:elRestriction` cases to whatever provenance-family
+   switch the describe lane uses.
+3. **The miss message.** When an ask misses and the term has stored facts that EL could reach, the
+   existing miss text already offers `/syllogise <term>`. Extend that offer to name `/classify
+   <term>` when the miss involves a restriction or a "does a X have a Y" shape.
+
+New test file `test/adapters/chat-el-lane.test.mjs`: the auto-fold fires, the answer cites the EL
+provenance, and a term with nothing to classify produces no write.
+
+Corpus rows in `test/corpus/inference.jsonl`:
+
+| key | id | shape |
+|---|---|---|
+| `inference.el.nested-existential` | `inference-el-nested-existential-answers-through-a-constructed-restriction` | teach "every heart has a valve", teach "every valve is a flap", run `/classify heart`, ask "does a heart have a flap" → yes, both premises cited |
+| `inference.el.existential-chain` | `inference-el-existential-chain-composes-through-a-transitive-role` | teach "every heart has a valve", teach "every valve has a hinge", teach "having is transitive", run `/classify heart`, ask "does a heart contain a hinge" → yes |
+| `inference.el.honest-miss` | `inference-el-untaught-filler-stays-an-honest-miss` | teach only the first premise, ask the E1 question → not a yes |
+| `inference.el.budget-wall` | `inference-el-budget-exhaustion-reads-as-a-miss` | a chain past the configured budget → the miss wall, never a guess |
+
+Regenerate the infbench cases and rerun the INF-7 band. That band's `ceiling` fields become
+stale the moment EL lands, so phase 2 deletes the `EL_CEILING` marker from the two INF-7 templates
+in `generate-cases.mjs` and flips their expected verdicts from `unproven` to `yes`.
+
+Acceptance:
+
+```
+npm run test:fast
+node --test test/adapters/chat-el-lane.test.mjs
+node --test test/corpus/inference.test.mjs
+node --test "test/adapters/chat-*.test.mjs"
+node scripts/corpus-matrix.mjs
+node --test test/bench/infbench-chat.test.mjs
+npm run build:ask-bundle
+```
+
+The ask bundle inlines chat readers, so it drifts on every reader change. Rebuild it before running
+anything that reads it.
+
+---
+
+## 8. Phase 3 — the ALC tableau core
+
+New module: **`src/domain/tableau.mjs`**. Imports `./hash.mjs` only.
+
+ALC first: ⊓, ⊔, ¬, ∃, ∀. Query-time only, never materialised in this plan's stages. A case-split
+conclusion depends on every branch of its proof, and batch provenance for that shape is an open
+design problem a later tier can take on with the JTMS groundwork as its starting point.
+
+### 8.1 Concept expressions
+
+A plain JSON AST. No classes, no symbols, so it serializes and compares cheaply.
+
+```js
+{ t: "atom", name: "cat" }
+{ t: "top" }
+{ t: "bot" }
+{ t: "nom",  ind: "rex" }                    // a nominal, phase 4c
+{ t: "not",  c: <expr> }
+{ t: "and",  cs: [<expr>, …] }               // cs sorted by canonicalKey
+{ t: "or",   cs: [<expr>, …] }               // cs sorted by canonicalKey
+{ t: "some", r: "has", c: <expr> }
+{ t: "all",  r: "has", c: <expr> }
+{ t: "atLeast", n: 2, r: "has", c: <expr> }  // phase 4d
+{ t: "atMost",  n: 0, r: "has", c: <expr> }  // phase 4d
+```
+
+```js
+/** A stable string key for an expression. Sorting, dedup and clash detection
+ *  all go through this, so two structurally equal expressions are one key. Pure. */
+export function canonicalKey(expr) { … }
+
+/** Negation normal form: push every ¬ inward to the atoms. Pure. */
+export function toNNF(expr) { … }
+```
+
+### 8.2 Nodes, edges, branches
+
+```js
+// One individual in the model under construction.
+{ id: "x0", labels: Map<canonicalKey, { expr, from: string[] }>, blockedBy: null }
+
+// One role edge.
+{ from: "x0", r: "has", to: "x0.1", fromFacts: string[] }
+
+// One branch of the search.
+{
+  nodes: Map<string, node>,
+  edges: [edge, …],
+  todo: [{ nodeId, key }, …],   // pending rule applications, FIFO
+  steps: 0,
+  closed: false,
+  clash: null,                  // { nodeId, keyA, keyB, premises: string[] }
+}
+```
+
+Branches live on an explicit stack. No recursion: a deep ∃-chain must not depend on the JS call
+stack.
+
+Successor naming is deterministic: a node `x` creating its `n`-th successor names it `${x.id}.${n}`,
+counting from 1, in the order the ∃-rules fire. Because rule order is fixed, so is every id.
+
+### 8.3 Expansion rules and their order
+
+Fixed priority, non-generating before generating and deterministic before non-deterministic. The
+implementer applies the first rule that has any applicable instance, and re-checks from the top after
+every application.
+
+1. **⊓-rule.** A node labelled `{t:"and", cs}` gets every element of `cs` added to its label, each
+   carrying the parent label's `from` list.
+2. **∀-rule.** A node labelled `{t:"all", r, c}` adds `c` to every existing `r`-successor.
+3. **⊑-rule (TBox internalization).** For each TBox axiom `C ⊑ D`, every node gets
+   `toNNF({t:"or", cs:[{t:"not",c:C}, D]})`. Axioms are applied in sorted `canonicalKey(C)` order,
+   one axiom per node per application, tracked so an axiom is never re-applied to the same node.
+4. **⊔-rule.** A node labelled `{t:"or", cs}` branches. Disjuncts are tried in `canonicalKey` order.
+   The stack pushes them in reverse, so the lexicographically first disjunct is explored first.
+5. **∃-rule.** A node labelled `{t:"some", r, c}` with no `r`-successor already labelled `c` creates
+   a fresh successor and labels it `c`.
+
+**Blocking.** Subset blocking: a node `x` is blocked when some ancestor `y` has
+`labels(x) ⊆ labels(y)` by key. A blocked node applies no generating rule. This is sound and
+complete for ALC. Phase 4a upgrades it to equality blocking, which transitive roles need.
+
+**Clash.** A branch closes when some node's label set holds `{t:"bot"}`, or holds both `C` and
+`toNNF({t:"not", c: C})` by key. The clash record carries the union of both labels' `from` lists.
+
+### 8.4 The tri-state result
+
+```js
+{ status: "proved",    premises: string[], steps, branches }
+{ status: "disproved", model: { nodes, edges }, steps, branches }
+{ status: "exhausted", reason: "steps" | "branches" | "nodes", steps, branches }
+```
+
+```js
+export const DEFAULT_PROVE_STEPS = 5000;
+export const DEFAULT_PROVE_BRANCHES = 256;
+export const DEFAULT_PROVE_NODES = 512;
+/** Same sub-1 discount as CAX_DW_RULE_CONFIDENCE, same reason. */
+export const TABLEAU_RULE_CONFIDENCE = 0.95;
+
+/** Build the tableau knowledge base from stored fact rows. Pure.
+ *  Returns { axioms, assertions, roles, individuals }. */
+export function buildTableauKb(rows) { … }
+
+/** Is the KB plus the given assertions satisfiable? Pure, no I/O. */
+export function isSatisfiable(kb, extraAssertions, { maxSteps, maxBranches, maxNodes } = {}) { … }
+
+/** Entailment by refutation: does the KB entail `subject : concept`?
+ *  Asserts NNF(¬concept) on the subject and checks satisfiability.
+ *  Every branch closed → proved. An open branch → disproved, with the branch
+ *  as a counter-model. Any budget hit → exhausted, never a verdict. */
+export function proveEntailment(kb, subject, concept, opts = {}) { … }
+
+/** Every clash the KB produces on its own, with both premises named. Pure. */
+export function findTableauViolations(kb, subjects, opts = {}) { … }
+```
+
+Budgets are part of the semantics, not a tuning knob. `maxSteps` counts rule applications across all
+branches. `maxBranches` counts branches opened. `maxNodes` counts nodes in any one branch. Exceeding
+any one of them returns `exhausted` for the whole call. A partially explored search never reports a
+verdict.
+
+**Premises for a proved result.** Each label entry carries `from`, the fact ids that put it there.
+The premise set for `proved` is the union, across every closed branch, of that branch's clash
+premises plus the `from` lists of every axiom applied on the path to it. Trust for a case-split
+conclusion is `min` over that union times `TABLEAU_RULE_CONFIDENCE`, computed through the existing
+`entailedTrustFrom` helper. That settles the plan's old open question about case-split trust:
+the union over branches, the minimum over the union.
+
+### 8.5 Reading the store into a KB
+
+`buildTableauKb(rows)` maps each stored shape:
+
+| stored | KB |
+|---|---|
+| `A rdfs:subClassOf B` | axiom `A ⊑ B` |
+| `A rdfs:subClassOf R`, `R` a someValuesFrom restriction | axiom `A ⊑ ∃r.C` |
+| `A rdfs:subClassOf R`, `R` a cardinality restriction | axiom `A ⊑ ≥n r.C` or `≤n r.C` (phase 4d; before that, `≥1` reads as `∃r.C` and anything else is skipped) |
+| `A owl:disjointWith B`, both classes | axiom `A ⊑ ¬B` |
+| `x rdf:type C` | assertion `C(x)` |
+| `x owl:disjointWith C`, `x` an individual | assertion `¬C(x)` |
+| `x mgxneg:subClassOf C` | assertion `¬C(x)` |
+| `U owl:unionOf A`, `U owl:unionOf B` | axioms `U ⊑ A ⊔ B` and `A ⊔ B ⊑ U` |
+| `N owl:complementOf A` | axioms `N ⊑ ¬A` and `¬A ⊑ N` |
+| `C owl:oneOf a`, `C owl:oneOf b` | axioms `C ⊑ {a} ⊔ {b}` and each `{a} ⊑ C` (phase 4c) |
+| `a owl:differentFrom b` | inequality `a ≠ b` (phase 4d) |
+| `p rdf:type owl:TransitiveProperty` | role axiom, transitive (phase 4a) |
+| `p rdfs:subPropertyOf q` | role axiom, hierarchy (phase 4b) |
+
+An individual `x` is distinguished from a class by the same test `deriveDisjointViolations` already
+relies on: a code-ref individual carries one of `. / \ # : @`, and an individual is anything that
+appears as an `rdf:type` subject.
+
+### 8.6 The `/prove` command
+
+New branch in `runCommand`'s if-chain in `src/services/chat.mjs`, after `/classify`, following the
+`/syllogise` shape exactly.
+
+```
+/prove is rex a dog
+```
+
+Steps: refuse without an argument; parse the argument through the ask engine's existing question
+parse to get a `(subject, class)` pair; refuse when the parse declines, naming the shapes that work;
+read the fact rows; `buildTableauKb`; `proveEntailment`; render.
+
+Rendering, through the existing template machinery and nothing new:
+
+- `proved`: `yes — <premise lines joined with "; ">; so <subject> is a <class>.` Premise lines come
+  from `renderFactLine`, so provenance and trust read exactly as they do everywhere else. When the
+  proof used a ⊔-rule, prefix the conclusion clause with `in every case, ` so the reader sees it was
+  a case analysis.
+- `disproved`: `no — I can build a consistent picture where <subject> is not a <class>.` Name the
+  premises that constrain it.
+- `exhausted`: the honest miss wall. `I can't prove or disprove that within my budget (<n> steps).
+  Nothing was guessed.` Mark the turn `miss: true` and tag the record so chatbench and infbench can
+  count budget misses separately from parse misses.
+
+`/prove` stays an explicit command in phase 3. Only after infbench and chatbench show it safe does it
+become an automatic fallback on an ask-lane miss. That promotion is its own increment.
+
+### 8.7 Phase 3 tests
+
+| file | what it holds |
+|---|---|
+| `test/adapters/tableau-expr.test.mjs` | `canonicalKey` stability and `toNNF` correctness, one case per connective; the sorted-`cs` invariant |
+| `test/adapters/tableau-core.test.mjs` | one test per expansion rule; blocking terminates a `A ⊑ ∃r.A` loop; the branch stack explores the lexicographically first disjunct first; every budget returns `exhausted` and never a verdict |
+| `test/adapters/tableau-kb.test.mjs` | `buildTableauKb` maps each stored shape from the table above; an individual is told from a class correctly |
+| `test/adapters/tableau-prove.test.mjs` | E3 and E4 close; the premise union is right for a case-split proof; trust is `min × 0.95`; a satisfiable KB gives `disproved` with a counter-model; order-independence over the input rows |
+| `test/adapters/tableau-alc-fixtures.test.mjs` | the ALC entailment fixture set at `test/fixtures/alc-entailments.jsonl`, same JSONL shape as the EL fixtures, drawn from the standard ALC tableau worked examples |
+| `test/adapters/chat-prove-command.test.mjs` | `/prove` without an argument refuses; a proved answer cites premises; an exhausted answer is a miss and carries the budget marker |
+
+Corpus rows in `test/corpus/inference.jsonl`:
+
+| key | id |
+|---|---|
+| `inference.dl.disjunction` | `inference-dl-disjunction-elimination-answers-by-cases` |
+| `inference.dl.complement` | `inference-dl-complement-answers-from-a-negated-class` |
+| `inference.dl.budget-miss` | `inference-dl-budget-exhaustion-is-a-miss-never-a-guess` |
+| `inference.dl.counter-model` | `inference-dl-unentailed-question-reads-as-a-disproof-not-a-miss` |
+
+Acceptance:
+
+```
+npm run test:fast
+node --test "test/adapters/tableau-*.test.mjs"
+node --test test/adapters/chat-prove-command.test.mjs
+node --test test/corpus/inference.test.mjs
+node --test "test/estate/*.test.mjs"
+node scripts/corpus-matrix.mjs
+npm run build:ask-bundle
+```
+
+---
+
+## 9. Phase 4 — growing toward SHOIQ
+
+Four increments, each its own commit, each with its own test file. All four touch
+`src/domain/tableau.mjs`, so they serialize.
+
+**4a — S: transitive roles.** `p rdf:type owl:TransitiveProperty` makes the ∀-rule propagate through
+transitive successors: a node labelled `{t:"all", r, c}` with `r` transitive adds both `c` and
+`{t:"all", r, c}` to each `r`-successor. Blocking upgrades from subset to equality blocking, which
+transitive roles need for termination. Test file `test/adapters/tableau-transitive.test.mjs`,
+including a termination test on `A ⊑ ∃r.A` with `r` transitive.
+
+**4b — H: role hierarchies.** `p rdfs:subPropertyOf q` makes ∃ and ∀ read the role closure: an
+`r`-edge counts as an `s`-edge for every `s` above `r`. Precompute the closure once per KB with the
+same memoized ancestor walk `buildAncestorCloser` uses. Test file
+`test/adapters/tableau-role-hierarchy.test.mjs`. This increment is the smallest of the four.
+
+**4c — O: nominals.** `owl:oneOf` gives `{t:"nom", ind}`. A nominal is a singleton concept: two nodes
+labelled the same nominal are the same individual and must be merged. This is E6. Merging needs the
+same machinery 4d's ≤-rule needs, so build 4d's merge first and reuse it. Test file
+`test/adapters/tableau-nominals.test.mjs`, covering "is teal a primary colour" as a provable no.
+
+**4d — Q: qualified cardinality.** `owl:minCardinality`, `owl:maxCardinality` and `owl:cardinality`
+with `owl:onClass` give `{t:"atLeast"}` and `{t:"atMost"}`. The ≥-rule generates `n` pairwise-distinct
+successors. The ≤-rule merges two successors when a node has more than `n` of them, branching over
+which pair merges, in a fixed pair order. `owl:differentFrom` seeds the inequality relation that
+keeps the ≥-rule's successors distinct. This is E5. Test file
+`test/adapters/tableau-cardinality.test.mjs`, covering the min/max clash with both premises named.
+
+Corpus rows, one per increment:
+
+| key | id |
+|---|---|
+| `inference.dl.transitive-role` | `inference-dl-transitive-role-propagates-a-universal` |
+| `inference.dl.role-hierarchy` | `inference-dl-subproperty-lets-a-restriction-reach-a-narrower-role` |
+| `inference.dl.enumeration` | `inference-dl-closed-enumeration-answers-a-provable-no` |
+| `inference.dl.cardinality-clash` | `inference-dl-min-max-clash-names-both-premises` |
+
+Acceptance for each increment: `npm run test:fast`, that increment's test file, all of
+`test/adapters/tableau-*.test.mjs`, and `node --test test/corpus/inference.test.mjs`.
+
+After 4d, delete `DL_DISJUNCTION_CEILING`, `DL_COMPLEMENT_CEILING` and the two markers phase 0 added
+from `test-benchmarks/infbench/generate-cases.mjs`, flip the INF-8 expected verdicts,
+regenerate `cases.jsonl` and `envelope.json`, and rerun the band.
+
+---
+
+## 10. Phase 5 — surfacing consistency
+
+Today `findConsistencyViolations` in `src/domain/syllogise.mjs` reads only type edges, subclass edges
+and disjointness edges. It stays that way: it runs on chat's hot path and it is cheap.
+
+Phase 5 adds the wider check beside it, not inside it.
+
+1. `findTableauViolations(kb, subjects, opts)` in `src/domain/tableau.mjs` returns every clash the KB
+   produces on its own, each as `{ subject, premises, kind }`, bounded by the same three budgets and
+   sorted deterministically.
+2. `classifyEl`'s `unsatisfiable` array feeds the same report: an EL-detected unsatisfiable class is
+   the cheap half of the same finding.
+3. `src/services/chat.mjs` calls both from the existing contradiction-report path and renders each
+   through the template that already quotes both premises for a disjointness clash. A tableau clash
+   quotes its premise lines through `renderFactLine`, so provenance reads the same as everywhere
+   else.
+4. `tmct memory` and `/memory verbose` list the findings alongside the existing contradiction
+   groups.
+
+Test file `test/adapters/consistency-tableau.test.mjs`: the E5 clash is reported with both premises;
+an EL-unsatisfiable class is reported; a consistent store reports nothing; a budget-exhausted check
+reports nothing rather than a false clean bill.
+
+Corpus row `inference.consistency.cardinality-clash`, id
+`inference-consistency-min-max-clash-is-reported-not-answered-from`.
+
+Acceptance: `npm run test:fast`, the new test file, `node --test test/adapters/syllogise.test.mjs`,
+`node --test test/adapters/memory-inspect.test.mjs`, `node --test test/corpus/inference.test.mjs`.
+
+---
+
+## 11. Concurrency and model tiers
+
+File ownership is what decides what can run at once. The rule is one owner per file per round.
+
+| track | owns | depends on | model |
+|---|---|---|---|
+| 0a ACE patterns | `src/domain/grammar/ace.mjs`, `lexicon.mjs`, `test/adapters/grammar-ace-class-expressions.test.mjs` | — | Sonnet |
+| 0b teach lane and read-back | `src/services/chat.mjs`, `test/adapters/teach-negative-and-enumeration.test.mjs` | 0a's triple shapes | Sonnet |
+| 0c ontology and docs | `ontology/*`, `docs/references/schemas/*` | — | Haiku |
+| 0d corpus and infbench | `test/corpus/inference.jsonl`, `test-benchmarks/infbench/generate-cases.mjs` | 0a, 0b | Haiku |
+| 1 EL classifier | `src/domain/el-classify.mjs`, `test/adapters/el-*.test.mjs`, `test/fixtures/el-entailments.jsonl` | phase 0's stored shapes, which this document fixes | Sonnet |
+| 1b verb, command, config | `src/domain/cli-verbs.mjs`, `bin/tmct.mjs`, `src/domain/reasoning-config.mjs`, `src/adapters/toml-config.mjs`, `tmct.toml`, `package.json` | 1's exports | Haiku |
+| 2 EL wiring | `src/services/chat.mjs` | 0b, 1, 1b | Sonnet |
+| 3 tableau core | `src/domain/tableau.mjs`, `test/adapters/tableau-*.test.mjs`, `test/fixtures/alc-entailments.jsonl` | phase 0's stored shapes | Sonnet |
+| 3b `/prove` | `src/services/chat.mjs` | 2, 3 | Sonnet |
+| 4a–4d SHOIQ | `src/domain/tableau.mjs` | 3, then each other in order | Sonnet |
+| 5 consistency | `src/domain/tableau.mjs`, `src/services/chat.mjs` | 4d | Sonnet |
+
+**What runs concurrently.** 0a, 0c and 3 can all start at once: 0c touches no code, and 3 builds
+against the stored shapes this document fixes rather than against phase 0's code. 1 can start
+alongside 3 for the same reason. 1b can start once 1's exported names exist, which this document
+already gives.
+
+**What serializes.** Everything touching `src/services/chat.mjs` runs one at a time: 0b, then 2,
+then 3b, then 5. Everything touching `src/domain/tableau.mjs` runs one at a time: 3, then 4a, 4b,
+4c, 4d, then 5. 0d runs after 0a and 0b so its expected answers are real.
+
+**Model tiers.** Sonnet is enough for every code track here, because this document fixes the data
+structures, the rule set and the signatures, which is where the design risk lives. Haiku covers the
+three mechanical tracks: the ontology and docs table entries, the verb and config wiring against two
+verbatim precedents, and the corpus rows.
+
+Two tracks are worth watching, and if either stalls the answer is a tighter test file rather than a
+larger model. Track 3's clash bookkeeping is the subtlest code in the plan: the `from` lists have to
+be threaded through every rule so the premise union comes out right. Write
+`test/adapters/tableau-core.test.mjs` first, one test per rule, and let it pin the design before the
+engine exists. Track 4d's ≤-rule merge is the second: build the merge and its test before 4c needs
+it.
+
+**Sub-agent discipline.** Every dispatch brief caps testing at `npm run test:fast` plus that track's
+own blast radius. The full suite and the e2e tiers are the coordinator's job after the merge. A
+fresh worktree has no `corpus/worlds/`, no `corpus/sprites/` and no ask bundle, so every brief says
+to run `node scripts/ensure-worlds-pack.mjs`, `node scripts/ensure-sprite-facts.mjs` and
+`npm run build:ask-bundle` before any `node --test`.
+
+---
+
+## 12. Costs and risks
+
+- **Size.** Stage EL is comparable to `src/domain/syllogise.mjs` today, around 900 to 1,200 lines
+  plus tests. Stage DL is the largest single component since `src/domain/ask.mjs`: a real engine plus
+  a fixture corpus, and phase 4 roughly doubles phase 3's line count. That cost is the reason for the
+  sequencing note at the top.
+- **Worst-case blowup is a semantics problem.** SHOIQ is NEXPTIME-hard. Budgets are part of the
+  contract from the first commit, and every budget exhaustion is counted in infbench, so a silent
+  weakening shows up as a number rather than a feeling.
+- **Determinism under branching.** The ⊔-rule and the ≤-rule are the two places where an
+  implementation can drift into arrival-order dependence. Both tests demand the same answer from two
+  differently ordered inputs, the same check `sortFactIndividualsById` protects the fact store with.
+- **The EL justification is single-environment.** `syllogise()`'s alternate-discovery step does not
+  know the EL predicates, so an EL conclusion carries one environment until an EL-aware enumerator
+  lands. Retraction stays correct through its boolean backstop, which re-verifies rather than
+  trusting a citation. Growing the enumerator is a later increment with a clear starting point.
+- **Open-world honesty.** The CLINC out-of-scope result is won by refusing what tmct cannot ground.
+  Nothing in phase 0 or either prover may introduce a closed-world assumption outside explicitly
+  enumerated or explicitly negated knowledge. The `owl:oneOf` case is the one place a closure is
+  asserted, and it is asserted by the user, in words, and cited as such.
+- **Overlap discipline.** E2 partly falls to the cheaper L7 property rules. Every example above has
+  an infbench case tagged with the tier that should first solve it, so a cheaper tier landing early
+  is visible and this plan shrinks accordingly.
+
+---
+
+## 13. Not in this plan
+
+- FOL, arithmetic, temporal and event reasoning, defaults, probabilistic weighting. Section 3 names
+  the candidate literatures for whichever gets designed next.
+- Incremental and RETE-shaped materialisation, and the retraction algorithms.
+  `archive/PLAN_SYLLOGIST.md` owns that horizon, including its own named remainder: the `citedBy`
+  index is rebuilt per retraction rather than persisted, chat's live proof-chase does not consume the
+  relevance frontier, and `/syllogise <term>` runs the plain focus rather than `expandFocus`.
+- Batch materialisation of tableau conclusions. A case-split conclusion rests on every branch of its
+  proof, and provenance for that shape needs its own design pass.
+- LLM involvement of any kind, including proof rendering. Proofs render through the same template
+  machinery as every other answer.
