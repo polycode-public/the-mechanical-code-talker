@@ -1,12 +1,16 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slices 1–5 are all built (`src/domain/discourse.mjs`; the commit-filter lane
-registers, the session shell threads the record, the temporal-comparison lane flips the frozen
-row — now `games/cross-turn-temporal-composition-composes` — the listing/filter lanes register
-plural `set` referents that survive a count, the superlative, qualifier, dated-fact and adventure
-lanes register too, the temporal lane refuses and lists a same-turn tie rather than picking by
-recency, and a plural temporal comparison (`were those before X was touched`) composes over a
-plural set, quantifying the members it dates from the graph). All of Part B is still design.
+Status: Part A slices 1–5 and Part B slices 1–5 are all built. Part A
+(`src/domain/discourse.mjs`): the commit-filter lane registers, the session shell threads the
+record, the temporal-comparison lane flips the frozen row — now
+`games/cross-turn-temporal-composition-composes` — the listing/filter lanes register plural `set`
+referents that survive a count, the superlative, qualifier, dated-fact and adventure lanes register
+too, the temporal lane refuses and lists a same-turn tie rather than picking by recency, and a
+plural temporal comparison (`were those before X was touched`) composes over a plural set,
+quantifying the members it dates from the graph. Part B (`src/domain/router/recognize.mjs` and
+`src/domain/router/drive.mjs`): a trace reads back from a capability call list, a played world, or a
+plan board; `declaredGoals` gathers the N from four sources; `recognizeGoal` tests containment with
+an explicit reject class; autoplay and the chat/CLI surfaces both recognize through it.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -727,9 +731,14 @@ local to `adventure-autoplay.mjs`, searches the exposed fold for the admissible 
 Tests: `test/services/adventure-autoplay.test.mjs`; the shipped-world adventure corpus rows
 (93/93) are unchanged.
 
-**Slice 5 — the recognition surfaces.** "What am I doing", NPC intent, and a recognition field on
-`runCapabilityPlan`'s result. The reject class renders as its own honest line everywhere, never as
-a hedged nearest fit.
+**Slice 5 — the recognition surfaces. BUILT.** "What am I doing" and "what is `<npc>` doing" in
+`adventure.mjs`'s `worldContextAnswer`, both over the same `recognizeGoal`, with `expandWorldGoal`
+searched from the subject's OWN starting room rather than its current one (a plan `fitsPlan`
+checks against has to start where the observed trace itself starts). `runCapabilityPlan`
+(`src/domain/router/drive.mjs`) gained an additive `recognition` field, present only when `ctx.trace`
+is set; the 68 existing agentbench rows are untouched. The reject class renders as its own honest
+line in both surfaces, never a hedged nearest fit. Tests: `test/services/adventure-recognition.test.mjs`,
+`test/domain/recognition-plan-result.test.mjs`.
 
 ## B6. Risks and non-goals
 
