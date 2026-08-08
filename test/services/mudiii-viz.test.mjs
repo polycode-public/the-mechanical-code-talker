@@ -644,6 +644,52 @@ test("renderMudiiiHtml: edit mode reuses mud-editor.mjs's renderMudEditorText un
   assert.match(html, /id="mudiiiEditStage"/);
 });
 
+// ---- the actor card (R4: per-instance edit) -----------------------------
+
+test("renderMudiiiHtml: the actor card reuses #agentSelect and carries its own tabs, textarea and status line", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /id="agentSelect"/, "the actor card follows the same select the camera already uses");
+  assert.doesNotMatch(html, /id="actorSelect"/, "no second selector is added");
+  assert.match(html, /id="actorTabInstance"/);
+  assert.match(html, /id="actorTabClass"/);
+  assert.match(html, /id="actorEditorText"/);
+  assert.match(html, /id="actorEditorStatus"/);
+  assert.match(html, /id="mudiiiActorCard"/);
+});
+
+test("renderMudiiiHtml: the actor card is wired to render on entering edit mode and on every follow change", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /function renderActorEditor\(\)/);
+  assert.match(html, /renderEditPlacements\(\);\s*renderActorEditor\(\);/, "the card draws once on entering edit mode");
+  const onChange = /el\("agentSelect"\)\.addEventListener\("change", function \(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(onChange);
+  assert.match(onChange[1], /if \(editing\) renderActorEditor\(\);/, "picking a new agent refreshes the card while editing");
+});
+
+test("renderMudiiiHtml: the two tabs write to the instance or to its class, never a second subject scheme", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /function actorEditSubject\(\)/);
+  assert.match(html, /actorTab === "class" \? roleOfAgentId\(id\) : id/, "the class tab writes to the class name, the instance tab to the id itself");
+  assert.match(html, /el\("actorTabInstance"\)\.addEventListener\("click"/);
+  assert.match(html, /el\("actorTabClass"\)\.addEventListener\("click"/);
+});
+
+test("renderMudiiiHtml: a trait edit never re-casts the board", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const fn = /async function redrawAgentPresentation\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(fn, "the actor card's own scene redraw is in the page script");
+  assert.doesNotMatch(fn[1], /session\.recast/, "unlike the world editor's rebuildSceneFromEdit, this path never recasts");
+  assert.match(html, /session\.applyAgentEdit\(subject, el\("actorEditorText"\)\.value\)/);
+});
+
+test("renderMudiiiHtml: the actor card reuses the world editor's own suggestion machinery, not a second copy", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /function renderActorSuggestionPills\(\)/);
+  assert.match(html, /window\.tmct\.page\.relatedForTerm/);
+  assert.match(html, /el\("actorEditorPills"\)\.addEventListener\("click"/);
+  assert.match(html, /el\("actorEditorText"\)\.addEventListener\("input", onActorEditorChanged\);/);
+});
+
 // ---- roleOfAgentId ------------------------------------------------------
 
 test("roleOfAgentId: strips the trailing instance number, the same idPrefix the manifest keys under", () => {
