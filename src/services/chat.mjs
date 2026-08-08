@@ -4319,6 +4319,29 @@ const quantifiedHasObject = (m) => (/^all$/i.test(m[1])
  *  the single noun between the determiner and the verb; a two-token subject stays
  *  declined, like the preposition-pinned frame, because nothing names its head. */
 const DETERMINER_HAS_TEACH_RE = /^(?:the|an?|my|your|our|their|his|her|its)\s+([\w'-]+)\s+(?:has|have|had)\s+(.+?)[.!?]*$/i;
+/** The quantified LOCATIVE teach ("every disk rests on peg-a", "each disk
+ *  rests on peg-a", "all disks rest on peg-a") — QUANTIFIED_HAS_TEACH_RE's own
+ *  sibling for the board-fact verb family. The has/have frame can pin the
+ *  verb by naming it outright; a locative verb (rests/stands/sits/lies/…) has
+ *  no closed set to name, so the PREP_SRC preposition pins the split instead,
+ *  the same way GENERAL_VERB_DETERMINER_TEACH_RE's does. Same subject fold as
+ *  QUANTIFIED_HAS_TEACH_RE: "every"/"each" keep the singular noun, "all" folds
+ *  the plural. */
+const QUANTIFIED_LOCATIVE_TEACH_RE = new RegExp(
+  `^(every|each|all)\\s+([\\w'-]+)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`, "i",
+);
+const quantifiedLocativeSubject = (m) => (/^all$/i.test(m[1]) ? singularizeSurface(m[2]) : m[2]);
+/** The counting/indefinite lead that introduces ONE additional, unnamed
+ *  individual — "one more"/"another more" mirrors ACK_COUNTING_SRC's own
+ *  counting-aside vocabulary (normalize.mjs's ack-preamble arm), and bare
+ *  "another" is the ordinary English determiner "a"/"an" already is. None of
+ *  the three name WHICH disk, so all three fold onto the exact stored shape
+ *  "a disk rests on peg-a" already uses — no quantifier field, same subject,
+ *  same predicate. */
+const LOCATIVE_COUNTING_LEAD_SRC = "(?:just\\s+)?(?:one|another)\\s+more|another";
+const LOCATIVE_COUNTING_TEACH_RE = new RegExp(
+  `^(?:${LOCATIVE_COUNTING_LEAD_SRC})\\s+([\\w'-]+)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`, "i",
+);
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -4500,14 +4523,24 @@ async function generalVerbTeach(payload) {
   const m = p.match(GENERAL_VERB_TEACH_RE);
   if (!m) return null;
   let [, subjectRaw, verbRaw, objectRaw] = m;
+  let quantifier = "";
   // A determiner in the subject slot means the single-token subject bound has
   // bound the article and misread the real subject's second word as the verb
   // ("the small disk rests on…" gives subject="the", verb="small"). Re-read it
   // with the preposition pinning the verb; a sentence that frame can't pin
   // declines here exactly as it always has.
-  if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) {
-    const quantHas = p.match(QUANTIFIED_HAS_TEACH_RE);
-    const detHas = !quantHas ? p.match(DETERMINER_HAS_TEACH_RE) : null;
+  //
+  // The locative quantifier leads are checked here too, even though neither
+  // is in GENERAL_VERB_DETERMINER_RE's own single-token set: "another"/"one"
+  // (the first word of "another disk"/"one more disk") aren't articles, so
+  // without this OR the redirect below never triggers and the mis-bound
+  // subjectRaw/verbRaw from GENERAL_VERB_TEACH_RE ("another"/"disk" instead
+  // of "disk"/"rests") stands uncorrected.
+  const quantLoc = p.match(QUANTIFIED_LOCATIVE_TEACH_RE);
+  const countLoc = !quantLoc ? p.match(LOCATIVE_COUNTING_TEACH_RE) : null;
+  if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw) || quantLoc || countLoc) {
+    const quantHas = (!quantLoc && !countLoc) ? p.match(QUANTIFIED_HAS_TEACH_RE) : null;
+    const detHas = (!quantHas && !quantLoc && !countLoc) ? p.match(DETERMINER_HAS_TEACH_RE) : null;
     if (quantHas) {
       subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
@@ -4516,6 +4549,22 @@ async function generalVerbTeach(payload) {
       subjectRaw = detHas[1];
       verbRaw = "has";
       objectRaw = detHas[2];
+    } else if (quantLoc) {
+      // Universal locative ("every disk rests on peg-a") — the same
+      // "every"-only quantifier-field convention unknownSubjectFallback's
+      // isa teach already uses: "each"/"all" gate as universal too but
+      // record no quantifier string of their own.
+      subjectRaw = quantifiedLocativeSubject(quantLoc);
+      verbRaw = quantLoc[3];
+      objectRaw = `${quantLoc[4]} ${quantLoc[5]}`;
+      quantifier = /^every$/i.test(quantLoc[1]) ? "every" : "";
+    } else if (countLoc) {
+      // "one more disk"/"another disk" name one additional, unnamed
+      // individual — stored exactly like its bare-article twin "a disk
+      // rests on peg-a" below, no quantifier field.
+      subjectRaw = countLoc[1];
+      verbRaw = countLoc[2];
+      objectRaw = `${countLoc[3]} ${countLoc[4]}`;
     } else {
       const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
       if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
@@ -4556,7 +4605,10 @@ async function generalVerbTeach(payload) {
   if (PLACE_ADVERB_OBJECT_RE.test(object)) return null; // a place adverb is never a real object
   if (await readsAsNarratedEvent(verb, folded.predicate !== mintedPredicate)) return null;
   if (await readsAsUnknownEverywhere(subject, verb, object)) return null;
-  return { subject, predicate: negated ? negatedPredicate(folded.predicate) : folded.predicate, object };
+  return {
+    subject, predicate: negated ? negatedPredicate(folded.predicate) : folded.predicate, object,
+    ...(quantifier ? { quantifier } : {}),
+  };
 }
 
 /** Does this word read as a WORD at all — the committed lexicon knows it as a
@@ -4728,7 +4780,13 @@ async function bareTeachWrapperNudgeText(text) {
 // Wired into factReadBack, gated on an already-true `miss` so a real graph
 // query is never shadowed. Reuses generalVerbTeach's own exclude guards and
 // generalVerbPredicate, plus the SAME adverb-skip, so the two never disagree. ----
-const GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
+// The optional every/each/all/any lead lets "does every disk rest on peg-a"
+// reach the same subject the quantified locative teach stores under
+// ("disk") instead of mis-binding the quantifier itself as the subject
+// token — a plain "a"/"an" lead already worked because no article can be
+// mistaken for a subject noun, but "every"/"each"/"all"/"any" all look like
+// ordinary single-token subjects to this regex without the carve-out.
+const GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+(?:(?:every|each|all|any)\\s+)?([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
 const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:${PREP_SRC}))?)[?.!\\s]*$`, "i");
 /** GENERAL_VERB_EXCLUDE_RE was written for generalVerbTeach's fully-conjugated
  *  declarative verb ("X OWNS Y", "X MAINTAINS Y") — but "does/did X <verb> Y"
@@ -6364,9 +6422,19 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
     const detHasLed = detLed ? null : raw.match(DETERMINER_HAS_TEACH_RE);
     const quantHasLed = (detLed || detHasLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
+    // The two locative quantifier leads ("every disk rests…", "one more disk
+    // rests…") need the same override as quantHasLed/detHasLed just below:
+    // their own first word ("every"/"one"/"another") never POS-tags as a
+    // NOUN/PROPN, so without this the bare-sentence POS gate silently drops
+    // them exactly the way it used to drop "every overbid has a gouger".
+    const quantLocLed = (detLed || detHasLed || quantHasLed) ? null : raw.match(QUANTIFIED_LOCATIVE_TEACH_RE);
+    const countLocLed = (detLed || detHasLed || quantHasLed || quantLocLed)
+      ? null : raw.match(LOCATIVE_COUNTING_TEACH_RE);
     const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
       : (detHasLed ? detHasLed[1]
-        : (quantHasLed ? quantifiedHasSubject(quantHasLed) : raw.match(/^([\w'-]+)/)?.[1]));
+        : (quantHasLed ? quantifiedHasSubject(quantHasLed)
+          : (quantLocLed ? quantifiedLocativeSubject(quantLocLed)
+            : (countLocLed ? countLocLed[1] : raw.match(/^([\w'-]+)/)?.[1]))));
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
@@ -6375,7 +6443,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // NON_DECLARATIVE_OPENER_RE runs even for these leads — "every umm has a
     // thing" isn't a real quantified sentence, just filler that fits the shape.
     if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
-      && (quantHasLed || detHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
+      && (quantHasLed || detHasLed || quantLocLed || countLocLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
