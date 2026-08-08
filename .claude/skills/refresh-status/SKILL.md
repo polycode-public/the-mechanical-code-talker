@@ -39,8 +39,8 @@ that directory, not one of the reports itself.
    this skill was last run changes what gets enumerated, not this file.
 2. **Read `reports/BENCHMARK_SUMMARY_*.md` first, if one exists.** A summary report is already a
    synthesis pass over the individual axis reports — prefer its cross-axis table as the primary
-   source rather than re-deriving every number from nine files independently. Spot-check two or
-   three individual reports against the summary's claims for consistency before trusting it
+   source rather than re-deriving every number from each axis's own file independently. Spot-check
+   two or three individual reports against the summary's claims for consistency before trusting it
    wholesale.
 3. **For any axis with no summary entry** (a report exists but predates the summary, or there is
    no summary at all), read that report's own headline section directly: result, comparison to
@@ -66,7 +66,9 @@ that directory, not one of the reports itself.
    quick read, or `glab ci get --branch=main --output json` for the pipeline id/sha/timestamps,
    then `glab api "projects/<url-encoded-path>/pipelines/<id>/jobs?per_page=100"` for the full
    job list with per-job status and duration — the default page size silently truncates a
-   27-job pipeline to 20, so always pass `per_page=100` or paginate.
+   pipeline over 20 jobs to 20, so always pass `per_page=100` or paginate. This repo's own
+   pipeline already exceeds that count and keeps growing; read the real total fresh from the
+   fetched pipeline rather than citing a fixed number.
 8. **Report only a pipeline that actually finished** (`status: success` or a named failure), not
    one still running — if the latest is mid-flight, use the one before it and say so.
 9. **Map every job to what it exercises at the consumer surface**, not just pass/fail. A job name
@@ -96,11 +98,10 @@ that directory, not one of the reports itself.
     bucket:**
     - **Design horizon** — an approach is known or straightforward to work out; what's missing is
       time, not a solved problem. Most `PROPOSED`/`DESIGN`-status items are this.
-    - **Research horizon** — the plan itself names an open problem with no settled engineering
-      yet (e.g. `PLAN_SYLLOGIST_EL_DL.md`'s tableau-reasoning-plus-trust-guards combination, which
-      the doc says the literature is silent on). Only classify something here if the plan's own
-      text supports it — don't invent a research gap the doc doesn't name, and don't downgrade a
-      real one to "just needs engineering" either.
+    - **Research horizon** — the plan itself names an open problem with no settled engineering yet
+      (its own text says the literature doesn't cover some real combination the plan needs). Only
+      classify something here if the plan's own text supports it — don't invent a research gap the
+      doc doesn't name, and don't downgrade a real one to "just needs engineering" either.
     Per this project's own `CLAUDE.md` discipline: name the open problem plainly, never claim it
     is permanently unreachable — a research horizon is where the literature currently ends, not a
     wall.
@@ -110,7 +111,7 @@ that directory, not one of the reports itself.
 ## Part 4 — the README audit
 
 16. **Walk every `##` section of `README.md`** and extract its headline capability claim — not
-    every sentence, the section's actual claim. Seventeen sections is the going size; re-count
+    every sentence, the section's actual claim. Twenty sections is the going size; re-count
     fresh each run (`grep -n '^## ' README.md`), don't assume the prior count still holds.
 17. **For each claim, fill three columns:**
     - **Implemented** — does the code exist? Name the module (`src/domain/...`,
@@ -179,9 +180,10 @@ sub-agent or fork, then the coordinator does Part 5 itself once all three report
 ## What NOT to do
 
 - Don't touch any `reports/BENCHMARK_*.md` file itself — this skill only reads them.
-- Don't backfill a number for an axis with no report. Say "not yet measured" and name the owning
-  `benchmark-*` skill that would produce it, rather than leaving the axis out silently or
-  guessing at a plausible-sounding figure.
+- Don't backfill a number for an axis with no report. Say "not yet measured", and check
+  `.claude/skills/` fresh for a `benchmark-*` skill that would produce it — as of this writing
+  only `benchmark-cefr-english` exists, so most axes have no owning skill to name yet. Say that
+  plainly rather than inventing one or leaving the axis out silently.
 - Don't silently advance the "measured tree" version to match `package.json`'s current version
   without a real new report backing every number that changes — that would make STATUS.md's own
   central promise (numbers you can go verify) false.
