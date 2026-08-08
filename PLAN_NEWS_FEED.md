@@ -793,6 +793,25 @@ Goal: every shipped source behind one registry, every fetch behind a courtesy ga
 conditional-request support, state persistence beside the research queue's, and the re-probe
 script.
 
+**Built.** `courtesy.mjs` gains `fetchText`, the `validators` conditional-request map, and a
+`cachedFetch(key, work, { remember: false })` escape hatch (needed so a live feed poll always
+re-fetches instead of answering from the cache a term lookup wants) — all additive, the existing
+`fetchJson` behaviour unchanged, tested by `test/adapters/courtesy.test.mjs` (10 tests).
+`src/adapters/corpus/news-sources.mjs` ships the ten-record registry (`NEWS_SOURCE_RECORDS`,
+`registerNewsSource`, `newsSourceRecords`, `normalizeNewsSourceIds`) and `createNewsFetcher` for
+all seven wire shapes (rss, atom, jsonfeed, wikimedia-feed, hn, usgs, mediawiki), plus
+`preflightNewsUrl` for add-by-URL, tested by `test/adapters/news-sources.test.mjs` (28 tests).
+`src/adapters/corpus/wiktionary-live.mjs` and `dbpedia-lookup-live.mjs` register two new research
+sources through the existing seam (`wiktionary-live.test.mjs` 10 tests, `dbpedia-lookup-live.test.mjs`
+6 tests); `RESEARCH_SOURCE_CHOICES` grows to `["wikipedia", "wikidata", "simple-wikipedia",
+"wiktionary", "dbpedia"]`, tested by `test/adapters/research-source.test.mjs` (7 tests).
+`src/adapters/news-store.mjs` persists `.tmct/news-state.json` mirroring
+`research-queue-store.mjs`, including the request-log cap at 200 rows on save
+(`test/adapters/news-store.test.mjs`, 6 tests). `scripts/probe-news-sources.mjs` is written per
+section 9.5 but never run against the live network from this worktree — it is maintainer-run
+only. All 67 new tests pass offline against the `test/fixtures/news/` fixtures; no live network in
+any test.
+
 ### 9.1 Courtesy-gate extension (in `src/adapters/corpus/courtesy.mjs`)
 
 Two additive options, no behaviour change for existing callers:

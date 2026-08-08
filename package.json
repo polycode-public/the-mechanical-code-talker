@@ -98,6 +98,7 @@
     "capture:hero": "node --disable-warning=ExperimentalWarning test-capture/hero-mudiii.capture.mjs",
     "gen:screenshots": "node scripts/gen-screenshots.mjs",
     "gen:og-images": "node scripts/gen-og-images.mjs",
+    "probe:news-sources": "node scripts/probe-news-sources.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:pii": "node scripts/pii-lint.mjs",
     "check:pack": "node scripts/check-pack-manifest.mjs",

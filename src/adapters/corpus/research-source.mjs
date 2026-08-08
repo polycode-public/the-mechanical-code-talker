@@ -119,11 +119,24 @@ export function researchSources() {
   return [...sourceFactories.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-/** The config-facing choice words a user, tmct.toml or a CLI flag may name. */
-export const RESEARCH_SOURCE_CHOICES = Object.freeze(["wikipedia", "wikidata"]);
+/** The config-facing choice words a user, tmct.toml or a CLI flag may name.
+ *  "wikipedia" and "simple-wikipedia" are deliberate synonyms — both name the
+ *  same registered source, "wikipedia" for backward compatibility with the
+ *  original single-source config, "simple-wikipedia" so the news `kb_sources`
+ *  list (news-sources.mjs) can name every source by the same id its own
+ *  registry uses. */
+export const RESEARCH_SOURCE_CHOICES = Object.freeze([
+  "wikipedia", "wikidata", "simple-wikipedia", "wiktionary", "dbpedia",
+]);
 export const DEFAULT_RESEARCH_SOURCE_CHOICE = "wikipedia";
 
-const CHOICE_TO_SOURCE_NAME = Object.freeze({ wikipedia: "simple-wikipedia", wikidata: "wikidata" });
+const CHOICE_TO_SOURCE_NAME = Object.freeze({
+  wikipedia: "simple-wikipedia",
+  wikidata: "wikidata",
+  "simple-wikipedia": "simple-wikipedia",
+  wiktionary: "wiktionary",
+  dbpedia: "dbpedia-lookup",
+});
 
 /** The config-facing choice folded to a known one — an absent, empty or
  *  unrecognized value reads as the default. */
