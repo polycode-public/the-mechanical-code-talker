@@ -51,4 +51,4 @@ answer or refuses it.
 Wire one read-only tool (a "what calls X" query) through a minimal MCP stdio server, then run it
 against the same question set `idxbench` already grades, once via MCP and once via a
 grep-and-read baseline, and record tokens spent per correct answer. That number's long-term home
-is the receipts page ([PLAN_RECEIPTS.md](PLAN_RECEIPTS.md)).
+is the receipts page ([archive/PLAN_RECEIPTS.md](../archive/PLAN_RECEIPTS.md)).
