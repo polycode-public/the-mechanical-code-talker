@@ -33,9 +33,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-Batch cadence for this stretch (operator, 2026-08-08): sub-agents commit often; the coordinator
-merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch.
-
 - [ ] **Sprites iteration** (operator, 2026-08-08) — ontology sections get connector lines
   between boxes as a real hierarchy diagram; every sprite card clickable to start animating,
   click toggles turning/emoting, started cards keep running concurrently with state retained.
