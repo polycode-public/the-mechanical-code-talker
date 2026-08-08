@@ -19,12 +19,12 @@ to make that re-judge cheap.
 
 ## Last CI pipeline: every consumer surface exercised, all green
 
-[Pipeline #2743881922](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2743881922),
-sha `611dd850`, 2026-08-08, **25/25 jobs green** in 15m 37s wall-clock. The tree it verified
-carries all of 2026-08-08's landed work except one later docs-only commit (`987f02bf`, the
-syllogist plan revision), whose own reduced pipeline
-([#2743914988](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2743914988))
-also finished green (4/4 hygiene jobs; path rules skip the rest on an all-`.md` diff).
+[Pipeline #2743964157](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2743964157),
+sha `ffbb757b`, 2026-08-08, **26/26 jobs green** in 22m 29s wall-clock — the fullest job set CI
+defines, because this push's diff (the README capability fixes plus a build-script comment)
+matched `e2e:heavy`'s path rules, so the heavy tier (a full `demo:build`, an uncapped ConceptNet
+seed, an export/import round trip) ran alongside everything below. The tree it verified carries
+all of 2026-08-08's landed work.
 
 Jobs grouped by stage, mapped to the consumer surface each one exercises:
 
@@ -38,8 +38,7 @@ Jobs grouped by stage, mapped to the consumer surface each one exercises:
 | site-ready | `site:ready` | the CDN provably serves this exact commit before the deployed matrix runs |
 | e2e (deployed) | `e2e:deployed:shell`, `e2e:deployed:pages`, `e2e:deployed:pages-timing`, `e2e:deployed:mesh`, `capture:hero` | every shipped page, the timing-sensitive flows, and the three-peer P2P mesh — all against `https://tmct.polycode.co.uk`, not a local build |
 
-Longest job: `e2e:deployed:pages` at 7m 21s. The one defined job absent from the run,
-`e2e:heavy`, is path-rule-gated and this push's diff did not touch its paths.
+Longest job: `e2e:deployed:pages` at 7m 40s. No defined job was absent from this run.
 
 ## The benchmark axes
 
