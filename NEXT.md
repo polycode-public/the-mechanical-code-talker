@@ -50,6 +50,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   questions miss before the probe (and its child-pack pull) runs — broaden it before expecting
   rungs R1-R3 to move the number. Next rounds: F4 claims-block swap, F5 removal + corpus rows,
   rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
+- [ ] **Three seonix playtest findings (their PLAYTEST_LOG_004/005, relayed 2026-08-08)** —
+  (1) "what does X mean" misses LexiconTerm individuals `/describe` finds (worked on 3.0.8);
+  (2) the denotes ask lane reports no edges on a term whose `/describe` lists twenty, and the
+  reverse phrasing filters candidates to Modules though denotes objects are Functions/Classes;
+  (3) `/impact`'s closure drops `mgx:serves` edges seonix's native closure crosses. Diagnosis
+  track dispatched; fixes land through the `chat.mjs`/ask queue.
+- [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
+  for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
+  tripwire literals with a measured read.
+- [ ] **PLAN_RIVER_CROSSING.md is a three-line sketch** — a design wave is turning it into an
+  execution-ready plan (fact-driven agent classes with per-instance copies on spawn, editable
+  imperatives-as-facts, visible beliefs and live-recalculated plans, over the MUDIII surface).
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
