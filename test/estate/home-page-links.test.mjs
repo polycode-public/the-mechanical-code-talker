@@ -17,7 +17,7 @@ const INDEX = fileURLToPath(new URL("../../public/index.html", import.meta.url))
 // mudiii is excluded on purpose: it is a full-screen game page, not counted
 // in this guard's anchor set.
 const DEMO_PAGES = ["chat", "ledger", "sprites", "plan", "adventure", "news"];
-const EXPECTED_ANCHOR_COUNT = 20;
+const EXPECTED_ANCHOR_COUNT = 24;
 
 function extractDemoPageAnchors(html) {
   const hrefAlternation = DEMO_PAGES.join("|");
