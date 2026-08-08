@@ -33,11 +33,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **Sprites iteration** (operator, 2026-08-08) — ontology sections get connector lines
-  between boxes as a real hierarchy diagram; every sprite card clickable to start animating,
-  click toggles turning/emoting, started cards keep running concurrently with state retained.
-  IN FLIGHT: Fable sub-agent in worktree `.claude/worktrees/agent-ac4198800c88d82fd` (branch
-  `worktree-agent-ac4198800c88d82fd`), committing per step.
+None open.
 
 ## Discipline
 
