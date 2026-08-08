@@ -8,7 +8,7 @@
 // audit — the tests below pin both halves.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractSceneItems, tokenizeSceneText } from "../../src/domain/scene-compose.mjs";
+import { extractSceneItems, tokenizeSceneText, splitSceneBackdrop } from "../../src/domain/scene-compose.mjs";
 
 const indexOf = (...names) => Object.fromEntries(names.map((n) => [n, { materials: {} }]));
 const named = (items) => items.map((i) => i.className);
@@ -61,11 +61,41 @@ test("a material word is kept only when it is one of its own class's real labels
     cabinet: { materials: { wood: true } },
     lamp: { materials: { glass: true } },
   };
-  assert.deepEqual(extractSceneItems("wood cabinet", index), [{ className: "cabinet", materialLabel: "wood" }]);
-  assert.deepEqual(extractSceneItems("wood lamp", index), [{ className: "lamp", materialLabel: null }],
+  assert.deepEqual(extractSceneItems("wood cabinet", index), [{ className: "cabinet", materialLabel: "wood", moving: false }]);
+  assert.deepEqual(extractSceneItems("wood lamp", index), [{ className: "lamp", materialLabel: null, moving: false }],
     "a material real for one class never leaks onto another");
-  assert.deepEqual(extractSceneItems("red lamp", index), [{ className: "lamp", materialLabel: null }],
+  assert.deepEqual(extractSceneItems("red lamp", index), [{ className: "lamp", materialLabel: null, moving: false }],
     "an unrecognized modifier is dropped, never invented into a match");
+});
+
+test("modifiers stack: 'a moving black cat' reads both the pose and the colour, in either order", () => {
+  const index = { cat: { materials: { black: true, moving: true } } };
+  assert.deepEqual(extractSceneItems("a moving black cat", index), [{ className: "cat", materialLabel: "black", moving: true }]);
+  assert.deepEqual(extractSceneItems("a black moving cat", index), [{ className: "cat", materialLabel: "black", moving: true }]);
+});
+
+test("'moving' is honest: a class with no moving frame stays still rather than pretending", () => {
+  const index = { rock: { materials: {} }, cat: { materials: { moving: true } } };
+  assert.deepEqual(extractSceneItems("a moving rock", index), [{ className: "rock", materialLabel: null, moving: false }]);
+  assert.deepEqual(extractSceneItems("a moving cat", index), [{ className: "cat", materialLabel: null, moving: true }]);
+});
+
+test("a stray word between the modifiers and the class stops the walk-back", () => {
+  const index = { cat: { materials: { black: true, moving: true } } };
+  assert.deepEqual(extractSceneItems("a black old cat", index), [{ className: "cat", materialLabel: null, moving: false }]);
+});
+
+test("splitSceneBackdrop lifts the last named room onto the wall and keeps the entities standing", () => {
+  const items = [
+    { className: "cat", materialLabel: null, moving: true },
+    { className: "library", materialLabel: null, moving: false },
+    { className: "doctor", materialLabel: null, moving: false },
+  ];
+  const { backdrop, rest } = splitSceneBackdrop(items, ["library", "kitchen"]);
+  assert.equal(backdrop.className, "library");
+  assert.deepEqual(rest.map((i) => i.className), ["cat", "doctor"]);
+  assert.deepEqual(splitSceneBackdrop(items, []).backdrop, null, "with no room vocabulary nothing becomes a wall");
+  assert.equal(splitSceneBackdrop(items, []).rest.length, 3);
 });
 
 test("a class is repeated once per real occurrence rather than collapsed", () => {
