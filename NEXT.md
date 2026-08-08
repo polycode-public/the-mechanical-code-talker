@@ -33,6 +33,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **PLAN_SYLLOGIST_EL_DL.md — full arc** — in flight, coordinator + worktree sub-agents.
+  Wave 1: phase 0 grammar/ontology and the phase 1 EL classifier run concurrently in
+  harness-managed worktrees; the plan's `chat.mjs` edits (5.3 teach lane, phase 2 wiring) run
+  later in the serialized chat queue. Plan doc states per-phase status as phases land.
+- [ ] **PLAN_NEWS_FEED.md — full arc** — in flight, same model. Wave 1: phase 0-1 domain
+  modules and fixtures in a worktree; adapters, service, chat track (serialized) and the page
+  follow in later waves.
+- [ ] **PLAN_COMMON_SENSE_QA.md — full arc** — in flight, same model. Wave 1: the F0 fixture
+  and the F1 splitter in a worktree; the F2 chat lane (serialized), rig, claims block, removal
+  and the five rungs follow.
+- [ ] **CEFR dual-draw full-pool benchmark run** — in flight in its own stable worktree,
+  `.claude/worktrees/cefr-dual-draw` (branch `worktree-cefr-dual-draw`, cut from `main` at
+  6cea893e). Its chat levers merge last, with the `chat.mjs` merge discipline below.
 - [ ] **claims.html "Run it on this device" fails** — the C7 replication button (solve a 9-disk
   Hanoi puzzle in the browser, through the same code that produced the committed 721.32 ms
   figure) renders "could not run on this device" after the click instead of a measured time.
