@@ -1,9 +1,7 @@
 // fact-phrase.mjs — the one predicate -> English-phrase table, shared by the
 // news paraphrase renderer and chat's own fact read-back instead of growing a
-// twin (PLAN_NEWS_FEED.md section 8.1). The table is copied verbatim from
-// chat.mjs's private FACT_PREDICATE_PHRASES; test/domain/fact-phrase.test.mjs
-// pins the two identical until chat.mjs is repointed at this module to import
-// it instead of holding its own copy.
+// twin. chat.mjs imports FACT_PREDICATE_PHRASES from here rather than holding
+// its own copy.
 //
 // This module's own `predicatePhrase`/`factSentence` are the plain reader a
 // domain module can offer without chat.mjs's surrounding machinery (polarity
