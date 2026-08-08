@@ -5,6 +5,14 @@
 
 import { loadMemory, UTTERANCE_CLASS, IN_REPLY_TO_PROP, readFactRows, findContradictions } from "./core.mjs";
 import { loadBlockIndex } from "./blocks.mjs";
+import { buildTableauKb, findTableauViolations } from "../../domain/tableau.mjs";
+import { elUnsatisfiableClasses } from "../../domain/el-classify.mjs";
+
+// A store-wide audit checks every individual/class the store names, so its
+// budgets stay well under /prove's own per-question defaults (tableau.mjs's
+// DEFAULT_PROVE_STEPS etc.) — the cost here is per-subject, not per-turn.
+const CONSISTENCY_TABLEAU_OPTS = { maxSteps: 200, maxBranches: 16, maxNodes: 32 };
+const CONSISTENCY_EL_OPTS = { budget: 500, rounds: 16 };
 
 /** Log-scaled sample count for a class of `n` individuals: 2·log10(n), floored
  *  at 3, never more than n (10,000 → 8; 500 → 5; 3 → 3; 1 → 1). Verbose doubles. */
@@ -91,6 +99,35 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
         for (const r of group) {
           lines.push(`    ${truncate(r.object, textCap)} (trust ${r.trust.toFixed(2)}; ${verbose ? r.provenance : truncate(r.provenance, 60)})`);
         }
+      }
+    }
+
+    // ---- wider consistency findings: a DL tableau clash (a cardinality
+    //      clash, E5's own flagship, or any other clash the ALC-through-
+    //      SHOIQ tableau derives) and an EL-saturation-proved unsatisfiable
+    //      class, surfaced BESIDE the contradictions above rather than
+    //      folded into them — findConsistencyViolations only reads type,
+    //      subclass and disjointness edges, so neither shape sits inside
+    //      its own check. Both read-only; a budget-exhausted subject is
+    //      simply absent rather than counted as a clean bill. ----
+    const consistencyRows = readFactRows(memory);
+    const consistencyKb = buildTableauKb(consistencyRows);
+    const tableauFindings = findTableauViolations(consistencyKb, null, CONSISTENCY_TABLEAU_OPTS);
+    const elFindings = elUnsatisfiableClasses(consistencyRows, CONSISTENCY_EL_OPTS);
+    const consistencyById = new Map(consistencyRows.map((r) => [r.id, r]));
+    const renderPremises = (ids) => (ids || [])
+      .map((id) => consistencyById.get(id))
+      .filter(Boolean)
+      .map((r) => truncate(`${r.subject} ${r.predicate} ${r.object}`, textCap))
+      .join("; ");
+    if (tableauFindings.length || elFindings.unsatisfiable.length) {
+      const total = tableauFindings.length + elFindings.unsatisfiable.length;
+      lines.push("", `consistency findings (${total} — a DL/EL check beside the contradictions above):`);
+      for (const f of tableauFindings.slice(0, verbose ? 8 : 3)) {
+        lines.push(`  ${f.subject} is inconsistent: ${renderPremises(f.premises)}`);
+      }
+      for (const cls of elFindings.unsatisfiable.slice(0, verbose ? 8 : 3)) {
+        lines.push(`  ${cls} can never have any members: ${renderPremises(elFindings.premisesOf(cls))}`);
       }
     }
 

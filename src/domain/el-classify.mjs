@@ -477,6 +477,44 @@ export const EL_RULE_CONFIDENCE = 0.95;
 export const DEFAULT_EL_BUDGET = 2000;
 export const DEFAULT_EL_ROUNDS = 64;
 
+/** The two-pass saturation `classifyEl` runs internally (plain TBox first, to
+ *  learn each concept's real subsumer set, then goal-seeded re-saturation),
+ *  factored out so a read-only caller — the phase-5 consistency check below,
+ *  `elUnsatisfiableClasses` — can run the identical computation without
+ *  `classifyEl`'s own store write. Pure, no I/O. */
+function elSaturateTwoPass(rows, { budget = DEFAULT_EL_BUDGET, rounds = DEFAULT_EL_ROUNDS, focus = null } = {}) {
+  const normalized = normalizeElTBox(rows, { budget });
+  const firstPass = saturateEl(normalized, { budget, rounds, focus });
+  const goals = elGoalAxioms(normalized, firstPass.subsumers);
+  const goalInfo = new Map(goals.map((g) => [g.sup, { role: g.role, filler: g.filler }]));
+  const withGoals = { ...normalized, axioms: [...normalized.axioms, ...goals] };
+  const finalPass = saturateEl(withGoals, { budget, rounds, focus });
+  const truncated = normalized.truncated || firstPass.truncated || finalPass.truncated;
+  return { normalized, goals, goalInfo, finalPass, truncated };
+}
+
+/**
+ * The unsatisfiable half of an EL classification pass, with nothing written
+ * to the store — `classifyEl`'s own materialising write stays an explicit,
+ * separate step (the `/classify` command and `tmct classify`). A consistency
+ * report reads this instead: every class whose own subclass/intersection/
+ * disjointness structure saturates to `bot`, cited back to the fact ids that
+ * derived it. Pure, no I/O.
+ *
+ * Returns { unsatisfiable, premisesOf, truncated } — `unsatisfiable` is the
+ * same sorted array `classifyEl` returns from the same computation;
+ * `premisesOf(className)` is the ordered fact-id list its `bot` derivation
+ * rests on.
+ */
+export function elUnsatisfiableClasses(rows, opts = {}) {
+  const { finalPass, truncated } = elSaturateTwoPass(rows, opts);
+  return {
+    unsatisfiable: finalPass.unsatisfiable,
+    premisesOf: (className) => finalPass.derivationOf.get(`${className}${SEP}${BOT}`) || [],
+    truncated,
+  };
+}
+
 /**
  * Run one bounded EL classification pass over the memory graph under `repoDir`.
  * Normalizes, saturates once to find real subsumers, mints batch goals from that
@@ -500,13 +538,7 @@ export async function classifyEl(repoDir, {
   void maxEnvironments;
   const memory = await loadMemory(repoDir);
   const rows = readFactRows(memory);
-  const normalized = normalizeElTBox(rows, { budget });
-  const firstPass = saturateEl(normalized, { budget, rounds, focus });
-  const goals = elGoalAxioms(normalized, firstPass.subsumers);
-  const goalInfo = new Map(goals.map((g) => [g.sup, { role: g.role, filler: g.filler }]));
-  const withGoals = { ...normalized, axioms: [...normalized.axioms, ...goals] };
-  const finalPass = saturateEl(withGoals, { budget, rounds, focus });
-  const truncated = normalized.truncated || firstPass.truncated || finalPass.truncated;
+  const { normalized, goals, goalInfo, finalPass, truncated } = elSaturateTwoPass(rows, { budget, rounds, focus });
 
   const trustByTriple = new Map();
   for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);

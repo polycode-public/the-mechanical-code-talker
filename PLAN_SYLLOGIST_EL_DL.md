@@ -1469,6 +1469,19 @@ on their own corpus rows above.
 
 ## 10. Phase 5 — surfacing consistency
 
+**Delivered.** `findTableauViolations` (section 8.4's own API) already shipped in the tableau-core
+round; this round wires it, and a new read-only EL companion, into chat and `/memory`.
+`src/domain/el-classify.mjs` gained `elUnsatisfiableClasses(rows, opts)`, the same two-pass
+saturation `classifyEl` runs internally, factored out so a consistency check can read
+`unsatisfiable` without `classifyEl`'s own store write. `src/services/chat.mjs`'s
+`findWiderConsistencyClash(rows, variants, reasoning)` runs beside the existing cax-dw chase in the
+"what do you know about" lane: it seeds `extractTableauModule` with the subject's own asserted
+types (an individual's `rdf:type` edge alone doesn't reach its class's restrictions otherwise),
+tries `findTableauViolations` first, then `elUnsatisfiableClasses`, and cites every premise through
+`renderFactLine`. `src/adapters/memory/inspect.mjs`'s `renderMemory` runs the same pair over the
+whole store (tighter budgets than a single `/prove` question, since it audits every individual) and
+lists findings in a "consistency findings" section beside the existing contradictions.
+
 Today `findConsistencyViolations` in `src/domain/syllogise.mjs` reads only type edges, subclass edges
 and disjointness edges. It stays that way: it runs on chat's hot path and it is cheap.
 
