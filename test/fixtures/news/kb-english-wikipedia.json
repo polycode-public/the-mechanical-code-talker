@@ -1,0 +1,11 @@
+{
+  "type": "standard",
+  "title": "Heart",
+  "displaytitle": "Heart",
+  "extract": "The heart is a muscular organ found in most animals, which pumps blood through the blood vessels of the circulatory system.",
+  "description": "organ that circulates blood",
+  "wikibase_item": "Q1071",
+  "content_urls": {
+    "desktop": { "page": "https://en.wikipedia.org/wiki/Heart" }
+  }
+}

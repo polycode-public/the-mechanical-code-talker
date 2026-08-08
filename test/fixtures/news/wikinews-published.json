@@ -1,0 +1,27 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "recentchanges": [
+      {
+        "type": "new",
+        "ns": 0,
+        "title": "Ceasefire talks resume after week-long pause",
+        "pageid": 4820123,
+        "revid": 4820124,
+        "old_revid": 0,
+        "rcid": 9911001,
+        "timestamp": "2026-08-08T06:40:00Z"
+      },
+      {
+        "type": "new",
+        "ns": 0,
+        "title": "Earthquake shakes coastal town, no casualties reported",
+        "pageid": 4820130,
+        "revid": 4820131,
+        "old_revid": 0,
+        "rcid": 9911005,
+        "timestamp": "2026-08-08T05:10:00Z"
+      }
+    ]
+  }
+}

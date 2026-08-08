@@ -1,0 +1,20 @@
+{
+  "entities": {
+    "Q1071": {
+      "id": "Q1071",
+      "labels": { "en": { "language": "en", "value": "heart" } },
+      "descriptions": { "en": { "language": "en", "value": "organ that pumps blood through the blood vessels" } },
+      "claims": {
+        "P31": [
+          {
+            "mainsnak": {
+              "snaktype": "value",
+              "property": "P31",
+              "datavalue": { "value": { "id": "Q844483" }, "type": "wikibase-entityid" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

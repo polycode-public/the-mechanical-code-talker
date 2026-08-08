@@ -1,0 +1,22 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "JSON Feed",
+  "home_page_url": "https://www.jsonfeed.org/",
+  "feed_url": "https://www.jsonfeed.org/feed.json",
+  "items": [
+    {
+      "id": "https://www.jsonfeed.org/2020/05/12/announcing_json_feed_1_1.html",
+      "url": "https://www.jsonfeed.org/2020/05/12/announcing_json_feed_1_1.html",
+      "title": "Announcing JSON Feed 1.1",
+      "content_html": "<p>JSON Feed 1.1 is a minor update to the spec.</p>",
+      "date_published": "2020-05-12T12:00:00-07:00"
+    },
+    {
+      "id": "https://www.jsonfeed.org/2017/05/17/announcing_json_feed.html",
+      "url": "https://www.jsonfeed.org/2017/05/17/announcing_json_feed.html",
+      "title": "Announcing JSON Feed",
+      "content_text": "JSON Feed is a pragmatic syndication format for the web.",
+      "date_published": "2017-05-17T09:30:00-07:00"
+    }
+  ]
+}
