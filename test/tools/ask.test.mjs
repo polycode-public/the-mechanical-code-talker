@@ -1661,6 +1661,12 @@ function buildProviderGraph() {
     id: "lex:task", label: "task", class: "LexiconTerm", derived_from: [], mentions: [],
     attributes: [{ prop: "mgx:schemaDoc", key: "doc", value: "A unit of scheduled work tracked by the app." }],
   });
+  // A second documented individual carried under mgx:lexiconDoc rather than
+  // mgx:schemaDoc — the same meta lane must reach both properties.
+  entities.individuals.push({
+    id: "lex:sprint", label: "sprint", class: "LexiconTerm", derived_from: [], mentions: [],
+    attributes: [{ prop: "mgx:lexiconDoc", key: "doc", value: "A fixed block of time the team plans work in." }],
+  });
   entities.objectProperties.push({
     predicate: "serves", prop: "mgx:serves", count: 1,
     examples: [{
@@ -1724,6 +1730,16 @@ test("ask(): \"what is X\" answers from a documented individual whose class is n
     // the kind word is read off the individual's own class, not guessed as "predicate"
     assert.match(content, /task is a LexiconTerm in this graph's vocabulary/);
     assert.doesNotMatch(content, /predicate \(relation\)/);
+  }
+});
+
+test("ask(): \"what is X\" also answers from a documented individual carried under mgx:lexiconDoc", () => {
+  const graph = buildProviderGraph();
+  for (const q of ["what is sprint", "what does sprint mean"]) {
+    const { content, tmct_ask } = ask(graph, q);
+    assert.equal(tmct_ask.miss, false, `${q} should reach the meta lane`);
+    assert.match(content, /A fixed block of time the team plans work in\./);
+    assert.match(content, /sprint is a LexiconTerm in this graph's vocabulary/);
   }
 });
 
