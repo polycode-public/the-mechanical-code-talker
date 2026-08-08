@@ -1,0 +1,29 @@
+{"world":"river-crossing","kind":"meta","opening":"a farmer stands on the east bank with a fox, a goat and a cabbage. Ferry them all to the west bank — never leave the fox alone with the goat, or the goat alone with the cabbage."}
+{"world":"river-crossing","kind":"fact","subject":"bank-east","predicate":"rdf:type","object":"bank"}
+{"world":"river-crossing","kind":"fact","subject":"bank-west","predicate":"rdf:type","object":"bank"}
+{"world":"river-crossing","kind":"fact","subject":"fox","predicate":"mgx:display-name","object":"fox"}
+{"world":"river-crossing","kind":"fact","subject":"fox","predicate":"mgx:model","object":"fox"}
+{"world":"river-crossing","kind":"fact","subject":"fox","predicate":"mgx:consumes","object":"goat"}
+{"world":"river-crossing","kind":"fact","subject":"goat","predicate":"mgx:display-name","object":"goat"}
+{"world":"river-crossing","kind":"fact","subject":"goat","predicate":"mgx:consumes","object":"cabbage"}
+{"world":"river-crossing","kind":"fact","subject":"goat","predicate":"mgx:evades","object":"fox"}
+{"world":"river-crossing","kind":"fact","subject":"cabbage","predicate":"mgx:display-name","object":"cabbage"}
+{"world":"river-crossing","kind":"fact","subject":"cabbage","predicate":"mgx:evades","object":"goat"}
+{"world":"river-crossing","kind":"fact","subject":"farmer","predicate":"mgx:display-name","object":"farmer"}
+{"world":"river-crossing","kind":"fact","subject":"farmer","predicate":"mgx:guards","object":"fox"}
+{"world":"river-crossing","kind":"fact","subject":"farmer","predicate":"mgx:guards","object":"goat"}
+{"world":"river-crossing","kind":"fact","subject":"fox-1","predicate":"rdf:type","object":"fox"}
+{"world":"river-crossing","kind":"fact","subject":"fox-1","predicate":"rdf:type","object":"passenger"}
+{"world":"river-crossing","kind":"fact","subject":"fox-1","predicate":"mgx:currently-in","object":"bank-east"}
+{"world":"river-crossing","kind":"fact","subject":"goat-1","predicate":"rdf:type","object":"goat"}
+{"world":"river-crossing","kind":"fact","subject":"goat-1","predicate":"rdf:type","object":"passenger"}
+{"world":"river-crossing","kind":"fact","subject":"goat-1","predicate":"mgx:currently-in","object":"bank-east"}
+{"world":"river-crossing","kind":"fact","subject":"cabbage-1","predicate":"rdf:type","object":"cabbage"}
+{"world":"river-crossing","kind":"fact","subject":"cabbage-1","predicate":"rdf:type","object":"passenger"}
+{"world":"river-crossing","kind":"fact","subject":"cabbage-1","predicate":"mgx:currently-in","object":"bank-east"}
+{"world":"river-crossing","kind":"fact","subject":"farmer-1","predicate":"rdf:type","object":"farmer"}
+{"world":"river-crossing","kind":"fact","subject":"farmer-1","predicate":"mgx:currently-in","object":"bank-east"}
+{"world":"river-crossing","kind":"rule","name":"ferry onto","ruleKind":"action-signature","slots":{"subjectClass":"passenger","targetClass":"bank"}}
+{"world":"river-crossing","kind":"rule","name":"ferry onto","ruleKind":"action-signature","slots":{"subjectClass":"farmer","targetClass":"bank"}}
+{"world":"river-crossing","kind":"rule","name":"ferry onto","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}
+{"world":"river-crossing","kind":"rule","name":"ferry onto","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"farmer","objectRole":"target"}}

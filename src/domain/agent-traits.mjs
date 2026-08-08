@@ -221,6 +221,44 @@ export function castFromFacts(rows, { fallback = null } = {}) {
   };
 }
 
+const compareConstraints = (a, b) => {
+  if (a.left !== b.left) return a.left < b.left ? -1 : 1;
+  if (a.right !== b.right) return a.right < b.right ? -1 : 1;
+  if (a.guard !== b.guard) return a.guard < b.guard ? -1 : 1;
+  return 0;
+};
+
+/** The action-constraint slot sets a world's own drive facts imply, in the
+ *  `{ left, right, guard }` shape src/domain/domain.mjs compiles: for every
+ *  `X mgx:consumes Y` row, every `Z mgx:guards X` row yields a constraint
+ *  saying X and Y may not share a place unless Z is there too — the farmer
+ *  guarding the wolf's own appetite, not the goat it threatens. A consumes
+ *  pair with no guard row yields no constraint, which is why the town
+ *  square (the fox eats goblins and nobody guards anything) states none.
+ *  Sorted by (left, right, guard) and deduped, so a fact set that states
+ *  the same guard twice, or in either row order, yields one constraint
+ *  list. Pure. */
+export function constraintsFromDrives(rows) {
+  const guardsOfConsumer = new Map();
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:guards") continue;
+    if (!guardsOfConsumer.has(row.object)) guardsOfConsumer.set(row.object, new Set());
+    guardsOfConsumer.get(row.object).add(row.subject);
+  }
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:consumes") continue;
+    for (const guard of guardsOfConsumer.get(row.subject) || []) {
+      const key = `${row.subject}\0${row.object}\0${guard}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ left: row.subject, right: row.object, guard });
+    }
+  }
+  return out.sort(compareConstraints);
+}
+
 /** The instance's own rows for a fresh spawn of `className`: one row per
  *  trait `className`'s own class chain declares, subject rewritten to
  *  `instanceId`, plus the `rdf:type` row. Sorted by (predicate, object) so

@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  AGENT_TRAIT_PREDICATES, AGENT_TRAIT_MULTI, castFromFacts, classChainOf, fearedClassesOf,
-  rowsDeclareDrives, traitValueOf, traitValuesOf, traitOriginOf, agentTraitsOf,
+  AGENT_TRAIT_PREDICATES, AGENT_TRAIT_MULTI, castFromFacts, classChainOf, constraintsFromDrives,
+  fearedClassesOf, rowsDeclareDrives, traitValueOf, traitValuesOf, traitOriginOf, agentTraitsOf,
   classFactRowsFor, instanceFactsFrom,
 } from "../../src/domain/agent-traits.mjs";
 import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
 import { MUDIII_ROLES } from "../../src/services/predator-prey.mjs";
 import { appendFacts, createInMemoryStore, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { loadWorld, worldsPackDir } from "../../src/adapters/corpus/worlds-pack.mjs";
 
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
 
@@ -244,4 +245,34 @@ test("fearedClassesOf derives the flight from the eater's appetite, and a declar
     fearedClassesOf(rows, "goblin-1"),
     "the derivation is a pure function of the row set",
   );
+});
+
+test("constraintsFromDrives yields the river world's two constraints from its own consumes/guards rows", () => {
+  const world = loadWorld(worldsPackDir(), "river-crossing");
+  const constraints = constraintsFromDrives(world.facts);
+  assert.deepEqual(constraints, [
+    { left: "fox", right: "goat", guard: "farmer" },
+    { left: "goat", right: "cabbage", guard: "farmer" },
+  ]);
+  assert.deepEqual(
+    constraintsFromDrives([...world.facts].reverse()),
+    constraints,
+    "two row orders yield the same constraint list",
+  );
+});
+
+test("a consumes pair with no guard row yields no constraint", () => {
+  const rows = [
+    { subject: "fox", predicate: "mgx:consumes", object: "goblin" },
+  ];
+  assert.deepEqual(constraintsFromDrives(rows), []);
+});
+
+test("a guard row stated twice still yields one constraint", () => {
+  const rows = [
+    { subject: "wolf", predicate: "mgx:consumes", object: "goat" },
+    { subject: "farmer", predicate: "mgx:guards", object: "wolf" },
+    { subject: "farmer", predicate: "mgx:guards", object: "wolf" },
+  ];
+  assert.deepEqual(constraintsFromDrives(rows), [{ left: "wolf", right: "goat", guard: "farmer" }]);
 });
