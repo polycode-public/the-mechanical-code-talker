@@ -24,24 +24,33 @@ test("A rdfs:subClassOf R, R a someValuesFrom restriction, reads as A ⊑ ∃r.C
   assert.ok(hasAxiom(kb, atom("heart"), { t: "some", r: "has", c: atom("valve") }));
 });
 
-test("A rdfs:subClassOf R, R a min-cardinality-1 restriction, bridges to A ⊑ ∃r.C", () => {
+test("A rdfs:subClassOf R, R a min-cardinality restriction with onClass, reads as A ⊑ ≥n r.C", () => {
   const kb = buildTableauKb([
-    { id: "f1", subject: "bicycle", predicate: "rdfs:subClassOf", object: "min-1-wheel" },
-    { id: "f2", subject: "min-1-wheel", predicate: "owl:onProperty", object: "has" },
-    { id: "f3", subject: "min-1-wheel", predicate: "owl:onClass", object: "wheel" },
-    { id: "f4", subject: "min-1-wheel", predicate: "owl:minCardinality", object: "1" },
+    { id: "f1", subject: "bicycle", predicate: "rdfs:subClassOf", object: "min-2-wheel" },
+    { id: "f2", subject: "min-2-wheel", predicate: "owl:onProperty", object: "has" },
+    { id: "f3", subject: "min-2-wheel", predicate: "owl:onClass", object: "wheel" },
+    { id: "f4", subject: "min-2-wheel", predicate: "owl:minCardinality", object: "2" },
   ]);
-  assert.ok(hasAxiom(kb, atom("bicycle"), { t: "some", r: "has", c: atom("wheel") }));
+  assert.ok(hasAxiom(kb, atom("bicycle"), { t: "atLeast", n: 2, r: "has", c: atom("wheel") }));
 });
 
-test("A rdfs:subClassOf R, R a max-cardinality restriction, is skipped — not representable in ALC yet", () => {
+test("A rdfs:subClassOf R, R a max-cardinality restriction with onClass, reads as A ⊑ ≤n r.C", () => {
   const kb = buildTableauKb([
     { id: "f1", subject: "bicycle", predicate: "rdfs:subClassOf", object: "max-0-engine" },
     { id: "f2", subject: "max-0-engine", predicate: "owl:onProperty", object: "has" },
     { id: "f3", subject: "max-0-engine", predicate: "owl:onClass", object: "engine" },
     { id: "f4", subject: "max-0-engine", predicate: "owl:maxCardinality", object: "0" },
   ]);
-  assert.ok(!kb.axioms.some((a) => a.sub.name === "bicycle"), "a max-cardinality restriction must not mint an existential axiom");
+  assert.ok(hasAxiom(kb, atom("bicycle"), { t: "atMost", n: 0, r: "has", c: atom("engine") }));
+});
+
+test("A rdfs:subClassOf R, R a cardinality restriction with no onClass, is skipped — unqualified, not guessed at", () => {
+  const kb = buildTableauKb([
+    { id: "f1", subject: "bicycle", predicate: "rdfs:subClassOf", object: "min-2-wheel" },
+    { id: "f2", subject: "min-2-wheel", predicate: "owl:onProperty", object: "has" },
+    { id: "f3", subject: "min-2-wheel", predicate: "owl:minCardinality", object: "2" },
+  ]);
+  assert.ok(!kb.axioms.some((a) => a.sub.name === "bicycle"), "an unqualified cardinality restriction must not mint an axiom");
 });
 
 test("A owl:disjointWith B, both classes, reads as A ⊑ ¬B", () => {

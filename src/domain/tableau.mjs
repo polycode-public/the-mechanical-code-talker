@@ -1,19 +1,31 @@
-// tableau.mjs — an ALC description-logic tableau prover: satisfiability,
+// tableau.mjs — a SHOIQ description-logic tableau prover: satisfiability,
 // individual entailment, and class subsumption, over a KB read from the
 // memory graph's stored OWL fragment. Query-time only, never materialised —
 // a case-split conclusion depends on every branch of its proof, and batch
 // provenance for that shape is a later problem.
 //
-// ALC connectives — top, bottom, atomic negation, intersection, union,
-// existential and universal restriction — plus two SHOIQ letters: transitive
-// roles ("S": a role declared owl:TransitiveProperty makes the universal
-// rule propagate through its own successors, and blocking runs as equality
-// blocking throughout so that propagation still terminates) and role
-// hierarchies ("H": rdfs:subPropertyOf makes an edge on a narrower role
-// count as an edge on every role above it, read through a role closure
-// precomputed once per KB). The concept-expression AST also carries a
-// nominal tag and qualified-cardinality tags for a future nominal/
-// cardinality increment to grow into.
+// The letters, one increment each: ALC's core connectives (top, bottom,
+// atomic negation, intersection, union, existential and universal
+// restriction); S transitive roles (owl:TransitiveProperty propagates the
+// universal rule through a role's own successors, and blocking runs as
+// equality blocking throughout so that propagation still terminates); H
+// role hierarchies (rdfs:subPropertyOf lets a narrower role's edge satisfy
+// a wider one, read through a role closure precomputed once per KB); O
+// nominals (owl:oneOf gives a singleton concept, and two nodes labelled the
+// same nominal must be the same individual — the nominal-merge rule); Q
+// qualified cardinality (owl:minCardinality/maxCardinality/cardinality with
+// owl:onClass — the ≥-rule generates n pairwise-distinct successors, the
+// ≤-rule merges surplus successors under the same identity side-condition
+// the nominal merge uses); I inverse roles (owl:inverseOf lets every rule
+// that reads a role edge read it backwards too, and upgrades blocking from
+// equality to pairwise, per Horrocks & Sattler's SHOIQ decision procedure).
+//
+// UNA-lite (PLAN_SYLLOGIST_EL_DL.md section 4): a declared name is distinct
+// from every other declared name unless owl:sameAs says otherwise. The
+// tableau applies it at exactly two points: the merge rules' identity
+// side-condition (the nominal merge, the ≤-rule's own successor merge) and
+// ordinary clash detection. Attempting to merge two nodes UNA-lite forbids
+// is itself a clash, not a step the search takes silently.
 //
 // Deterministic throughout: fixed rule-application priority, a fixed branch
 // stack (LIFO, no JS-call recursion — a deep existential chain must not
@@ -172,6 +184,26 @@ function roleCountsAs(kb, edgeRole, role) {
   return counted ? counted.has(edgeRole) : false;
 }
 
+/** Every target a role-`role` edge from `nodeId` reaches, reading BOTH the
+ *  forward direction (an outgoing edge whose own role counts as `role`) and,
+ *  when the KB declares an inverse for an edge's role, the reverse direction
+ *  (an INCOMING edge whose role's registered inverse counts as `role`) —
+ *  the ∃/∀/≥/≤ rules all read role edges through this one function, so
+ *  every one of them is inverse-aware for free. With no inverses declared
+ *  this reduces to the plain forward walk every rule had before. */
+function roleEdgeTargets(branch, kb, nodeId, role) {
+  const targets = [];
+  for (const e of branch.edges) {
+    if (e.from === nodeId && roleCountsAs(kb, e.r, role)) {
+      targets.push({ to: e.to, fromFacts: e.fromFacts });
+    } else if (e.to === nodeId) {
+      const inv = kb && kb.inverseOf ? kb.inverseOf.get(e.r) : null;
+      if (inv && roleCountsAs(kb, inv, role)) targets.push({ to: e.from, fromFacts: e.fromFacts });
+    }
+  }
+  return targets;
+}
+
 // Meta-vocabulary objects a `rdf:type` row can carry that describe the
 // tableau's OWN scaffolding (a restriction node, a role's transitivity tag,
 // a class-expression node's own type tag) rather than an ABox assertion
@@ -190,6 +222,122 @@ export const DEFAULT_PROVE_NODES = 512;
  *  module never sees, so the caller pairs this with entailedTrustFrom. */
 export const TABLEAU_RULE_CONFIDENCE = 0.95;
 export const DEFAULT_MODULE_HOPS = 4;
+
+// ---- identity: the UNA-lite merge machinery --------------------------------
+//
+// One general-purpose merge, built here for the ≤-rule's surplus-successor
+// merge and reused as-is once the nominal-merge rule lands. The identity
+// side-condition is the same wherever a merge is attempted: never merge two
+// nodes that carry distinct declared individual names, and never merge two
+// nodes an inequality already separates — attempting either is itself a
+// clash (section 8.3), not a step the search takes silently.
+
+// A synthetic successor id always ends in ".<positive integer>" (the ∃/≥
+// rules mint `${parent.id}.${count}`) — the one shape a real declared name
+// never takes in this corpus (a code-ref name ends in an extension or a
+// symbol, never a bare digit run).
+const SYNTHETIC_SUCCESSOR_SUFFIX = /\.\d+$/;
+
+/** Is `id` a name UNA-lite treats as a distinct declared individual? A
+ *  subsumption proof's own fresh individual ("fresh-0", and anything it
+ *  generates) is explicitly excluded — it is an arbitrary hypothetical
+ *  instance, never a declared name. */
+function isNamedForUnaLite(kb, id) {
+  if (id === "fresh-0") return false;
+  if (kb && kb.namedIndividuals && kb.namedIndividuals.has(id)) return true;
+  return !SYNTHETIC_SUCCESSOR_SUFFIX.test(id);
+}
+
+function pairKey(a, b) {
+  return a < b ? `${a}␟${b}` : `${b}␟${a}`;
+}
+
+function markDistinct(branch, a, b, from) {
+  if (a === b) return;
+  const key = pairKey(a, b);
+  const existing = branch.inequalityFrom.get(key);
+  branch.inequalityFrom.set(key, existing ? sortedUnique([...existing, ...from]) : sortedUnique(from));
+}
+
+/** May `a` and `b` never be merged? Either both are UNA-lite-distinct
+ *  declared names, or the branch already carries an explicit inequality
+ *  between them (from a stored owl:differentFrom row, or from the ≥-rule's
+ *  own pairwise-distinct successor bookkeeping). */
+function isMergeBlocked(branch, kb, a, b) {
+  if (a === b) return false;
+  if (isNamedForUnaLite(kb, a) && isNamedForUnaLite(kb, b)) return true;
+  return branch.inequalityFrom.has(pairKey(a, b));
+}
+
+/** The stored reason `a` and `b` are inequal, if any — empty when the block
+ *  came purely from both being distinct declared names (a UNA-lite policy
+ *  fact, not a stored one). */
+function mergeBlockPremises(branch, a, b) {
+  const stored = branch.inequalityFrom.get(pairKey(a, b));
+  return stored ? stored.slice() : [];
+}
+
+function pickMergeSurvivor(kb, aId, bId) {
+  const aNamed = isNamedForUnaLite(kb, aId);
+  const bNamed = isNamedForUnaLite(kb, bId);
+  if (aNamed && !bNamed) return [aId, bId];
+  if (bNamed && !aNamed) return [bId, aId];
+  return aId < bId ? [aId, bId] : [bId, aId];
+}
+
+/** Merge two nodes in place: the survivor (a named individual if either
+ *  side is one, else the lexicographically first id) absorbs the other's
+ *  labels, edges redirect and de-dup, any inequality pair naming the
+ *  removed node remaps onto the survivor, and any other node's parent
+ *  pointer follows too. Returns the surviving node's id. Never called on a
+ *  blocked pair — the caller checks isMergeBlocked first. */
+function mergeNodes(branch, kb, aId, bId) {
+  if (aId === bId) return aId;
+  const [keepId, removeId] = pickMergeSurvivor(kb, aId, bId);
+  const keep = branch.nodes.get(keepId);
+  const remove = branch.nodes.get(removeId);
+  if (!keep || !remove) return keepId;
+
+  for (const [key, { expr, from }] of remove.labels) {
+    const existing = keep.labels.get(key);
+    keep.labels.set(key, { expr, from: existing ? sortedUnique([...existing.from, ...from]) : from.slice() });
+  }
+
+  const redirected = [];
+  const seenEdges = new Map();
+  for (const e of branch.edges) {
+    const from = e.from === removeId ? keepId : e.from;
+    const to = e.to === removeId ? keepId : e.to;
+    const dedupeKey = `${from}␟${e.r}␟${to}`;
+    const already = seenEdges.get(dedupeKey);
+    if (already) already.fromFacts = sortedUnique([...already.fromFacts, ...e.fromFacts]);
+    else {
+      const merged = { from, r: e.r, to, fromFacts: e.fromFacts.slice() };
+      seenEdges.set(dedupeKey, merged);
+      redirected.push(merged);
+    }
+  }
+  branch.edges = redirected;
+
+  for (const node of branch.nodes.values()) {
+    if (node.parent === removeId) node.parent = keepId;
+  }
+
+  const remapped = new Map();
+  for (const [rawKey, from] of branch.inequalityFrom) {
+    const [x, y] = rawKey.split("␟");
+    const nx = x === removeId ? keepId : x;
+    const ny = y === removeId ? keepId : y;
+    if (nx === ny) continue;
+    const newKey = pairKey(nx, ny);
+    const already = remapped.get(newKey);
+    remapped.set(newKey, already ? sortedUnique([...already, ...from]) : from);
+  }
+  branch.inequalityFrom = remapped;
+
+  branch.nodes.delete(removeId);
+  return keepId;
+}
 
 // ---- nodes, edges, branches ------------------------------------------------
 
@@ -233,6 +381,15 @@ function detectClash(node) {
   return null;
 }
 
+/** The set of role labels on edges INTO `nodeId` — what pairwise blocking
+ *  (below) compares between a candidate and its ancestor once inverse roles
+ *  exist. */
+function predecessorRoleLabels(branch, nodeId) {
+  const set = new Set();
+  for (const e of branch.edges) if (e.to === nodeId) set.add(e.r);
+  return set;
+}
+
 // Equality blocking: a node is blocked only by an ancestor whose label set is
 // exactly the same, not merely a superset. Subset blocking is sound and
 // complete for plain ALC, but a transitive role's ∀-rule copies a universal
@@ -242,13 +399,27 @@ function detectClash(node) {
 // carries. Equality blocking is the standard SHIQ-family fix, adopted here
 // once transitive roles exist rather than only when a KB happens to declare
 // one, so the same blocking rule runs every time.
-function isBlocked(node, branch) {
+//
+// Pairwise blocking (Horrocks & Sattler): once inverse roles let a rule read
+// an edge backwards, a candidate and its blocking ancestor must also match
+// on the ROLE LABELS of their own incoming edges, not just their concept
+// labels — otherwise a node whose real predecessor differs from its
+// ancestor's could silently inherit the wrong incoming-edge behaviour. Only
+// checked when the KB actually declares an inverse; with none declared this
+// is byte-identical to plain equality blocking.
+function isBlocked(node, branch, kb) {
   const keys = [...node.labels.keys()];
+  const pairwise = !!(kb && kb.inverseOf && kb.inverseOf.size > 0);
+  const nodePred = pairwise ? predecessorRoleLabels(branch, node.id) : null;
   let ancestorId = node.parent;
   while (ancestorId) {
     const ancestor = branch.nodes.get(ancestorId);
     if (!ancestor) break;
-    if (keys.length === ancestor.labels.size && keys.every((k) => ancestor.labels.has(k))) return true;
+    if (keys.length === ancestor.labels.size && keys.every((k) => ancestor.labels.has(k))) {
+      if (!pairwise) return true;
+      const ancestorPred = predecessorRoleLabels(branch, ancestor.id);
+      if (nodePred.size === ancestorPred.size && [...nodePred].every((r) => ancestorPred.has(r))) return true;
+    }
     ancestorId = ancestor.parent;
   }
   return false;
@@ -266,10 +437,10 @@ function cloneBranch(branch) {
       successorCount: node.successorCount,
     });
   }
-  return { nodes, edges: branch.edges.slice(), closed: false, clash: null };
+  return { nodes, edges: branch.edges.slice(), closed: false, clash: null, inequalityFrom: new Map(branch.inequalityFrom) };
 }
 
-// ---- the five expansion rules, fixed priority -----------------------------
+// ---- the expansion rules, fixed priority -----------------------------
 
 function applyAndRule(branch) {
   for (const node of branch.nodes.values()) {
@@ -283,22 +454,55 @@ function applyAndRule(branch) {
   return { applied: false, touched: [] };
 }
 
+/** Two nodes labelled with the SAME nominal must be the same individual —
+ *  there is no alternative to branch over, so this is a deterministic
+ *  action, unlike the ≤-rule's choice of which pair to merge. Picks the
+ *  first (sorted) nominal key that has 2+ carriers and the first (sorted)
+ *  pair among them, so the result is the same regardless of iteration
+ *  order. */
+function applyNominalMergeRule(branch, kb) {
+  const byNom = new Map();
+  for (const node of branch.nodes.values()) {
+    for (const key of node.labels.keys()) {
+      if (!key.startsWith("nom(")) continue;
+      if (!byNom.has(key)) byNom.set(key, []);
+      byNom.get(key).push(node.id);
+    }
+  }
+  const keys = [...byNom.keys()].sort();
+  for (const key of keys) {
+    const ids = [...new Set(byNom.get(key))].sort();
+    if (ids.length < 2) continue;
+    const [a, b] = ids;
+    if (isMergeBlocked(branch, kb, a, b)) {
+      const fromA = branch.nodes.get(a).labels.get(key)?.from || [];
+      const fromB = branch.nodes.get(b).labels.get(key)?.from || [];
+      return {
+        kind: "clash",
+        clash: { nodeId: a, keyA: key, keyB: `merge(${a},${b})`, premises: sortedUnique([...fromA, ...fromB, ...mergeBlockPremises(branch, a, b)]) },
+      };
+    }
+    return { kind: "merge", a, b };
+  }
+  return { kind: "none" };
+}
+
 /** The universal rule. For a transitive role, an r-successor also receives
  *  the universal label itself, not just its filler — that is what lets
  *  ∀r.C reach an r-successor's own r-successor with no separate rule: the
  *  copied label fires this same rule again, one hop further, the next time
- *  the search loop revisits it. */
+ *  the search loop revisits it. Reads role edges through roleEdgeTargets,
+ *  so a declared inverse lets an incoming edge satisfy the universal too. */
 function applyAllRule(branch, kb) {
   const transitiveRoles = kb && kb.transitiveRoles instanceof Set ? kb.transitiveRoles : null;
   for (const node of branch.nodes.values()) {
     for (const [, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "all") continue;
       const touched = [];
-      for (const edge of branch.edges) {
-        if (edge.from !== node.id || !roleCountsAs(kb, edge.r, expr.r)) continue;
-        const succ = branch.nodes.get(edge.to);
+      for (const { to, fromFacts } of roleEdgeTargets(branch, kb, node.id, expr.r)) {
+        const succ = branch.nodes.get(to);
         if (!succ) continue;
-        const succFrom = [...from, ...edge.fromFacts];
+        const succFrom = [...from, ...fromFacts];
         if (addLabel(succ, expr.c, succFrom)) touched.push(succ.id);
         if (transitiveRoles && transitiveRoles.has(expr.r) && addLabel(succ, expr, succFrom)) touched.push(succ.id);
       }
@@ -372,17 +576,92 @@ function applyOrRule(branch) {
 
 function applySomeRule(branch, kb) {
   for (const node of branch.nodes.values()) {
-    if (isBlocked(node, branch)) continue; // generating rule — blocked nodes create no successors
+    if (isBlocked(node, branch, kb)) continue; // generating rule — blocked nodes create no successors
     for (const [, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "some") continue;
       const cKey = canonicalKey(expr.c);
-      const hasWitness = branch.edges.some((e) => e.from === node.id && roleCountsAs(kb, e.r, expr.r) && branch.nodes.get(e.to)?.labels.has(cKey));
+      const hasWitness = roleEdgeTargets(branch, kb, node.id, expr.r).some((t) => branch.nodes.get(t.to)?.labels.has(cKey));
       if (hasWitness) continue;
       node.successorCount += 1;
       const child = makeNode(`${node.id}.${node.successorCount}`, node.id);
       addLabel(child, expr.c, from);
       branch.nodes.set(child.id, child);
       branch.edges.push({ from: node.id, r: expr.r, to: child.id, fromFacts: from.slice() });
+      return { applied: true, touched: [child.id] };
+    }
+  }
+  return { applied: false, touched: [] };
+}
+
+/** The ≤-rule. When a node's r/C-witnesses (read inverse-aware, through
+ *  roleEdgeTargets) outnumber the cardinality's threshold, some pair must
+ *  merge. A surplus with fewer than 2 witnesses to pair (n=0 with exactly
+ *  one witness) can never be brought down by merging at all — an
+ *  unconditional clash, citing the witness's own filler-label premises too,
+ *  so it names both restrictions. Otherwise, every pair blocked by the
+ *  UNA-lite identity side-condition is a direct clash (both the
+ *  cardinality's own premises and the blocking inequality's — the E5
+ *  shape); with at least one mergeable pair, branches over each, in a fixed
+ *  pair order, exactly like the ⊔-rule's own disjunct branching. */
+function applyAtMostRule(branch, kb) {
+  for (const node of branch.nodes.values()) {
+    for (const [key, { expr, from }] of sortedLabelEntries(node)) {
+      if (expr.t !== "atMost") continue;
+      const cKey = canonicalKey(expr.c);
+      const witnesses = [...new Set(roleEdgeTargets(branch, kb, node.id, expr.r).map((t) => t.to))]
+        .filter((id) => branch.nodes.get(id)?.labels.has(cKey))
+        .sort();
+      if (witnesses.length <= expr.n) continue;
+      const pairs = [];
+      for (let i = 0; i < witnesses.length; i += 1) {
+        for (let j = i + 1; j < witnesses.length; j += 1) pairs.push([witnesses[i], witnesses[j]]);
+      }
+      if (pairs.length === 0) {
+        const witnessFrom = branch.nodes.get(witnesses[0])?.labels.get(cKey)?.from || [];
+        return {
+          kind: "clash",
+          clash: { nodeId: node.id, keyA: key, keyB: `witness(${witnesses[0]})`, premises: sortedUnique([...from, ...witnessFrom]) },
+        };
+      }
+      const mergeable = pairs.filter(([a, b]) => !isMergeBlocked(branch, kb, a, b));
+      if (mergeable.length === 0) {
+        const [a, b] = pairs[0];
+        return {
+          kind: "clash",
+          clash: { nodeId: node.id, keyA: key, keyB: `merge(${a},${b})`, premises: sortedUnique([...from, ...mergeBlockPremises(branch, a, b)]) },
+        };
+      }
+      return { kind: "split-merge", pairs: mergeable };
+    }
+  }
+  return { kind: "none" };
+}
+
+/** The ≥-rule. A generating rule — never fires on a blocked node, and
+ *  (like the ∃-rule) creates exactly ONE fresh successor per invocation, so
+ *  the step budget scales with n rather than a whole restriction landing in
+ *  a single step. The search loop re-invokes it until the node's r/C-
+ *  witnesses (read inverse-aware, through roleEdgeTargets) reach the
+ *  threshold. Each fresh successor is marked pairwise-distinct from every
+ *  witness that already existed when it was created — that is what a ≥n
+ *  restriction actually means (n DISTINCT fillers), and
+ *  it is the bookkeeping the ≤-rule's identity side-condition later reads. */
+function applyAtLeastRule(branch, kb) {
+  for (const node of branch.nodes.values()) {
+    if (isBlocked(node, branch, kb)) continue;
+    for (const [, { expr, from }] of sortedLabelEntries(node)) {
+      if (expr.t !== "atLeast") continue;
+      const cKey = canonicalKey(expr.c);
+      const existing = [...new Set(roleEdgeTargets(branch, kb, node.id, expr.r).map((t) => t.to))]
+        .filter((id) => branch.nodes.get(id)?.labels.has(cKey))
+        .sort();
+      if (existing.length >= expr.n) continue;
+      node.successorCount += 1;
+      const child = makeNode(`${node.id}.${node.successorCount}`, node.id);
+      addLabel(child, expr.c, from);
+      branch.nodes.set(child.id, child);
+      branch.edges.push({ from: node.id, r: expr.r, to: child.id, fromFacts: from.slice() });
+      for (const otherId of existing) markDistinct(branch, child.id, otherId, from);
       return { applied: true, touched: [child.id] };
     }
   }
@@ -398,38 +677,50 @@ function checkTouched(branch, touched) {
   return null;
 }
 
+function afterTouch(branch, touched) {
+  const clash = checkTouched(branch, touched);
+  return clash ? { kind: "clash", clash } : { kind: "applied" };
+}
+
 /** Apply the first rule (in fixed priority order) that has any applicable
  *  instance, and report what happened. Never recurses — each call performs
  *  exactly one rule application (or one branch-point discovery); the caller
- *  loops. */
+ *  loops. Order: deterministic non-generating rules first (⊓, ∀, ⊑), then
+ *  the non-deterministic ⊔ and ≤ (each a genuine choice among several sound
+ *  continuations), then the two generating rules last (≥, ∃) so a model
+ *  grows only once nothing smaller finishes it. */
 function stepOnce(branch, kb) {
   const and_ = applyAndRule(branch);
-  if (and_.applied) {
-    const clash = checkTouched(branch, and_.touched);
-    return clash ? { kind: "clash", clash } : { kind: "applied" };
-  }
+  if (and_.applied) return afterTouch(branch, and_.touched);
+
   const all_ = applyAllRule(branch, kb);
-  if (all_.applied) {
-    const clash = checkTouched(branch, all_.touched);
-    return clash ? { kind: "clash", clash } : { kind: "applied" };
+  if (all_.applied) return afterTouch(branch, all_.touched);
+
+  const nomMerge_ = applyNominalMergeRule(branch, kb);
+  if (nomMerge_.kind === "clash") return nomMerge_;
+  if (nomMerge_.kind === "merge") {
+    const keepId = mergeNodes(branch, kb, nomMerge_.a, nomMerge_.b);
+    return afterTouch(branch, [keepId]);
   }
+
   const tbox_ = applyTboxRule(branch, kb);
-  if (tbox_.applied) {
-    const clash = checkTouched(branch, tbox_.touched);
-    return clash ? { kind: "clash", clash } : { kind: "applied" };
-  }
+  if (tbox_.applied) return afterTouch(branch, tbox_.touched);
+
   const or_ = applyOrRule(branch);
   if (or_.kind === "clash") return or_;
-  if (or_.kind === "applied") {
-    const clash = checkTouched(branch, or_.touched);
-    return clash ? { kind: "clash", clash } : { kind: "applied" };
-  }
+  if (or_.kind === "applied") return afterTouch(branch, or_.touched);
   if (or_.kind === "split") return or_;
+
+  const atMost_ = applyAtMostRule(branch, kb);
+  if (atMost_.kind === "clash") return atMost_;
+  if (atMost_.kind === "split-merge") return atMost_;
+
+  const atLeast_ = applyAtLeastRule(branch, kb);
+  if (atLeast_.applied) return afterTouch(branch, atLeast_.touched);
+
   const some_ = applySomeRule(branch, kb);
-  if (some_.applied) {
-    const clash = checkTouched(branch, some_.touched);
-    return clash ? { kind: "clash", clash } : { kind: "applied" };
-  }
+  if (some_.applied) return afterTouch(branch, some_.touched);
+
   return { kind: "done" };
 }
 
@@ -495,6 +786,24 @@ function search(initialBranch, kb, opts) {
         }
         break;
       }
+      if (result.kind === "split-merge") {
+        steps += 1;
+        if (steps > maxSteps) return { status: "exhausted", reason: "steps", steps, branches: branchesOpened };
+        const children = result.pairs.map(([a, b]) => {
+          const clone = cloneBranch(branch);
+          const keepId = mergeNodes(clone, kb, a, b);
+          const keepNode = clone.nodes.get(keepId);
+          const clash = keepNode && detectClash(keepNode);
+          if (clash) { clone.closed = true; clone.clash = clash; }
+          return clone;
+        });
+        for (let i = children.length - 1; i >= 0; i -= 1) {
+          branchesOpened += 1;
+          if (branchesOpened > maxBranches) return { status: "exhausted", reason: "branches", steps, branches: branchesOpened };
+          stack.push(children[i]);
+        }
+        break;
+      }
       return { status: "satisfiable", model: serializeBranch(branch), steps, branches: branchesOpened };
     }
     if (branchesOpened > maxBranches) return { status: "exhausted", reason: "branches", steps, branches: branchesOpened };
@@ -514,7 +823,22 @@ function buildInitialBranch(kb, extraAssertions) {
     if (!extra || !extra.ind || !extra.expr) continue;
     addLabel(ensureNode(extra.ind), toNNF(extra.expr), extra.from || []);
   }
-  return { nodes, edges: [], closed: false, clash: null };
+  // Every nominal individual is trivially a member of its own singleton —
+  // seed that self-label now, so the nominal-merge rule has something to
+  // find the first time another node gets forced into the same nominal.
+  for (const [ind, from] of kb.nominalIndividuals || []) {
+    addLabel(ensureNode(ind), { t: "nom", ind }, from);
+  }
+
+  const inequalityFrom = new Map();
+  for (const pair of kb.differentFrom || []) {
+    if (!pair || !pair.a || !pair.b || pair.a === pair.b) continue;
+    const key = pairKey(pair.a, pair.b);
+    const existing = inequalityFrom.get(key);
+    inequalityFrom.set(key, existing ? sortedUnique([...existing, ...pair.from]) : sortedUnique(pair.from));
+  }
+
+  return { nodes, edges: [], closed: false, clash: null, inequalityFrom };
 }
 
 /** Is the KB plus the given assertions satisfiable? `extraAssertions` is
@@ -583,7 +907,8 @@ function describeClashKind(clash) {
 
 /** Build the tableau knowledge base from a row set — on a real question,
  *  the output of extractTableauModule, never the raw store. Pure. Returns
- *  { axioms, assertions, roles, individuals }. */
+ *  { axioms, assertions, roles, individuals, transitiveRoles, roleClosure,
+ *  namedIndividuals, nominalIndividuals, differentFrom, inverseOf }. */
 export function buildTableauKb(rows) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && r.subject && r.predicate) : [];
 
@@ -593,12 +918,15 @@ export function buildTableauKb(rows) {
   const cardinalityOf = new Map();  // restriction -> { kind, n, id }
   const unionMembersOf = new Map(); // union node -> [row, …]
   const complementOf = new Map();   // complement node -> row
+  const oneOfMembersOf = new Map(); // enumerated class -> [row, …]
   const subClassRows = [];
   const disjointRows = [];
   const typeRows = [];
   const negTypeRows = [];
   const transitiveRoles = new Set();
   const subPropertyRows = [];
+  const differentFromRows = [];
+  const inverseOfRows = [];
 
   const pushMap = (map, key, value) => {
     if (!map.has(key)) map.set(key, []);
@@ -623,8 +951,9 @@ export function buildTableauKb(rows) {
     else if (p === "owl:unionof") pushMap(unionMembersOf, r.subject, r);
     else if (p === "owl:complementof") complementOf.set(r.subject, r);
     else if (p === "rdfs:subpropertyof") subPropertyRows.push(r);
-    // owl:oneOf, owl:differentFrom, owl:inverseOf: reserved for a future
-    // increment, not read here.
+    else if (p === "owl:differentfrom") differentFromRows.push(r);
+    else if (p === "owl:oneof") pushMap(oneOfMembersOf, r.subject, r);
+    else if (p === "owl:inverseof") inverseOfRows.push(r);
   }
 
   const individualNamesFromType = new Set();
@@ -653,11 +982,19 @@ export function buildTableauKb(rows) {
     }
     const cardRow = cardinalityOf.get(restriction);
     const onClassRow = onClassOf.get(restriction);
-    if (cardRow && onClassRow && (cardRow.kind === "min" || cardRow.kind === "exact") && cardRow.n >= 1) {
-      axioms.push(mkAxiom(atom(r.subject), someE(propRow.object, atom(onClassRow.object)), [r.id, propRow.id, onClassRow.id, cardRow.id]));
+    if (cardRow && onClassRow) {
+      const cardIds = [r.id, propRow.id, onClassRow.id, cardRow.id];
+      if (cardRow.kind === "min") {
+        axioms.push(mkAxiom(atom(r.subject), { t: "atLeast", n: cardRow.n, r: propRow.object, c: atom(onClassRow.object) }, cardIds));
+      } else if (cardRow.kind === "max") {
+        axioms.push(mkAxiom(atom(r.subject), { t: "atMost", n: cardRow.n, r: propRow.object, c: atom(onClassRow.object) }, cardIds));
+      } else if (cardRow.kind === "exact") {
+        axioms.push(mkAxiom(atom(r.subject), { t: "atLeast", n: cardRow.n, r: propRow.object, c: atom(onClassRow.object) }, cardIds));
+        axioms.push(mkAxiom(atom(r.subject), { t: "atMost", n: cardRow.n, r: propRow.object, c: atom(onClassRow.object) }, cardIds));
+      }
     }
-    // A max-cardinality (or an unqualified/zero) restriction isn't
-    // representable as an ALC axiom yet — skipped, not guessed at.
+    // An unqualified restriction (no owl:onClass) isn't representable as a
+    // qualified-cardinality axiom yet — skipped, not guessed at.
   }
 
   for (const r of disjointRows) {
@@ -687,13 +1024,44 @@ export function buildTableauKb(rows) {
     axioms.push(mkAxiom(notAtom, atom(complementId), [r.id]));
   }
 
+  // owl:oneOf: the enumerated class is subsumed by the union of its members'
+  // singleton (nominal) concepts, and each member's singleton is in turn
+  // subsumed by the enumerated class — a closed class, per section 8.6.
+  // Every member also gets its own self-label ({ind} ⊑ {ind}, trivially
+  // true) seeded at branch-init time (buildInitialBranch), so the nominal-
+  // merge rule has a real carrier of the nominal to merge an outsider into.
+  const nominalIndividuals = new Map(); // ind -> fact ids that declared it
+  for (const [classId, memberRows] of oneOfMembersOf) {
+    const sorted = [...memberRows].sort((a, b) => String(a.object).localeCompare(String(b.object)));
+    const nomExprs = sorted.map((mr) => ({ t: "nom", ind: mr.object }));
+    const ids = sorted.map((mr) => mr.id);
+    axioms.push(mkAxiom(atom(classId), toNNF(orE(nomExprs)), ids));
+    for (const mr of sorted) {
+      axioms.push(mkAxiom({ t: "nom", ind: mr.object }, atom(classId), [mr.id]));
+      const existing = nominalIndividuals.get(mr.object);
+      nominalIndividuals.set(mr.object, existing ? sortedUnique([...existing, mr.id]) : [mr.id]);
+    }
+  }
+
+  const differentFrom = differentFromRows
+    .map((r) => ({ a: r.subject, b: r.object, from: [r.id] }))
+    .sort((a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b));
+
+  // owl:inverseOf is stored symmetrically by the grammar (both directions
+  // minted), but this reads either direction alone too, defensively.
+  const inverseOf = new Map();
+  for (const r of inverseOfRows) {
+    inverseOf.set(r.subject, r.object);
+    if (!inverseOf.has(r.object)) inverseOf.set(r.object, r.subject);
+  }
+
   const roles = new Set();
   for (const { object } of onPropertyOf.values()) roles.add(object);
 
   const subPropertyEdges = subPropertyRows
     .map((r) => [r.subject, r.object])
     .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
-  const roleNames = new Set([...roles, ...subPropertyEdges.flat()]);
+  const roleNames = new Set([...roles, ...subPropertyEdges.flat(), ...inverseOf.keys(), ...inverseOf.values()]);
   const roleClosure = buildRoleClosure(subPropertyEdges, roleNames);
 
   axioms.sort((a, b) =>
@@ -703,8 +1071,12 @@ export function buildTableauKb(rows) {
   assertions.sort((a, b) => a.ind.localeCompare(b.ind) || canonicalKey(a.expr).localeCompare(canonicalKey(b.expr)));
 
   const individuals = [...new Set(assertions.map((a) => a.ind))].sort();
+  const namedIndividuals = new Set(individuals);
 
-  return { axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure };
+  return {
+    axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure,
+    namedIndividuals, nominalIndividuals, differentFrom, inverseOf,
+  };
 }
 
 function restrictKbToIndividual(kb, ind) {
@@ -715,6 +1087,10 @@ function restrictKbToIndividual(kb, ind) {
     individuals: [ind],
     transitiveRoles: kb.transitiveRoles,
     roleClosure: kb.roleClosure,
+    namedIndividuals: kb.namedIndividuals,
+    nominalIndividuals: kb.nominalIndividuals,
+    differentFrom: kb.differentFrom,
+    inverseOf: kb.inverseOf,
   };
 }
 
