@@ -1308,6 +1308,14 @@ blocking, which the tree-model breakage properly calls for, is not needed until 
 roles. Test file `test/adapters/tableau-nominals.test.mjs`, covering "is teal a primary colour" as a
 provable no.
 
+**Delivered**, built on top of 4d's merge machinery (landed first, in commit order, per this
+section's own note). `owl:oneOf` reads as a closed union of nominal disjuncts plus each member
+subsumed back into the class; every nominal individual gets its own self-label at branch-init so the
+new nominal-merge rule (highest priority among the deterministic rules — it runs right after ⊓/∀,
+before ⊑-internalization) has a real carrier to identify an outsider against. E6 proves through
+`proveEntailment(kb, "teal", { t: "not", c: atom("primary-colour") })`. Tests in
+`test/adapters/tableau-nominals.test.mjs`.
+
 **4d — Q: qualified cardinality.** `owl:minCardinality`, `owl:maxCardinality` and `owl:cardinality`
 with `owl:onClass` give `{t:"atLeast"}` and `{t:"atMost"}`. The ≥-rule generates `n` pairwise-distinct
 successors. The ≤-rule merges two successors when a node has more than `n` of them, branching over
@@ -1317,6 +1325,15 @@ keeps the ≥-rule's successors distinct. The merge carries an identity side-con
 connected by `owl:differentFrom`, with no `owl:sameAs` between them — attempting to do so is itself a
 clash (section 8.3), not a step the search takes. This is E5. Test file
 `test/adapters/tableau-cardinality.test.mjs`, covering the min/max clash with both premises named.
+
+**Delivered.** The ≥-rule creates one fresh successor per invocation (the same per-step granularity
+the ∃-rule has, so the step budget scales with `n` rather than landing in one step) and marks it
+pairwise-distinct from every witness that already existed. The ≤-rule tries every candidate pair in a
+fixed order; a surplus with fewer than two witnesses to pair (`n=0` against exactly one witness) is
+an unconditional clash, since no merge could ever reach zero. E5 (`bicycleWithWheels(2, 0)`) closes
+with both restrictions' fact ids named in the premises, verified through both `proveEntailment` and
+`findTableauViolations`. `mergeNodes`, `isMergeBlocked` and the UNA-lite named-individual test live at
+module scope, reused as-is by 4c. Tests in `test/adapters/tableau-cardinality.test.mjs`.
 
 **4e — I: inverse roles.** `owl:inverseOf` gives each role its own recorded inverse. Represented
 through a new ACE pattern, pattern 17, added to `src/domain/grammar/ace.mjs`'s frozen `PATTERNS`
@@ -1360,7 +1377,26 @@ terms. Test file `test/adapters/tableau-inverse.test.mjs`, covering the ACE patt
 emission, the inverse-aware ∃/∀/≤ handling, pairwise blocking terminating a mutually-referential loop
 (`A ⊑ ∃r.A`, `A ⊑ ∀invR.A`, `r owl:inverseOf invR`), and the motivating example above proved.
 
-Corpus rows, one per increment:
+**Delivered.** All role-edge reads (∃, ∀, ≥, ≤) go through one `roleEdgeTargets` helper, so an
+inverse-declared role is read backwards for every one of them at once. Blocking checks
+`kb.inverseOf.size > 0` and switches to pairwise (matching incoming-edge role sets, not just concept
+labels) only then — with no inverse declared it is byte-identical to plain equality blocking, so 4a
+through 4d's own termination tests are untouched. `buildTableauKb` has no reader for an asserted ABox
+role fact between two named individuals (no ACE pattern or teach-lane frame stores one, and adding
+that is outside this plan's scope), so the motivating example's own "does the store already have a
+`part-of` edge to read" question is answered through nominals instead of a directly-asserted relation:
+two `owl:oneOf`-declared individuals stand in for the named heart and valve, one asserts
+`∃contains.{other}`, and the question ("is the valve NOT part of the heart") only stays consistent by
+contradicting itself — the inverse edge alone proves the positive. The verb pair used throughout
+(`test/adapters/tableau-inverse.test.mjs`, `ontology/tmct-core.ttl`) is "containing"/"belonging"
+rather than "being part of": the lexicon's own declared `belong` verb already carries the override
+predicate `mgx:partOf`, so it reaches the same predicate this section's flavour text names without
+adding a lexicon entry — pattern 17 itself accepts any two declared verbs, 3sg or gerund, on either
+side. Tests in `test/adapters/tableau-inverse.test.mjs`.
+
+Corpus rows, one per increment — deferred with the `chat.mjs` `/prove` wiring (section 8's own
+`test/adapters/chat-prove-command.test.mjs` and `inference.dl.*` rows), since a corpus row exercises
+the chat surface a query actually reaches, not the tableau module alone:
 
 | key | id |
 |---|---|
@@ -1375,7 +1411,14 @@ Acceptance for each increment: `npm run test:fast`, that increment's test file, 
 
 After 4d, delete `DL_DISJUNCTION_CEILING`, `DL_COMPLEMENT_CEILING` and the two markers phase 0 added
 from `test-benchmarks/infbench/generate-cases.mjs`, flip the INF-8 expected verdicts,
-regenerate `cases.jsonl` and `envelope.json`, and rerun the band.
+regenerate `cases.jsonl` and `envelope.json`, and rerun the band. **Deferred alongside the corpus rows
+above**: every INF-8 template runs `arms: ["chat"]` only, graded by driving a real `runChat()`
+session — checked directly against the committed corpus (`node test-benchmarks/infbench/generate-cases.mjs`'s
+own dlDisjunction/dlComplement/dlCardinalityClash/dlNominalEnumeration cases, run through
+`runInfbench`), today's chat surface still answers "I couldn't read that as a question I can answer"
+for all four, since none of them route through `/prove` yet — that wiring is section 8.7's, not this
+plan's phase-4 tableau work. Flipping the expected verdicts now, before that wiring lands, would
+commit a corpus that claims a capability the chat surface doesn't have.
 
 ---
 
