@@ -27,6 +27,7 @@
 import { findActionPath } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { baseSubjectOf } from "../domain/world-snapshot.mjs";
+import { declaredGoals } from "../domain/router/recognize.mjs";
 import { foldWorldState, adventureTurn, worldActionRows } from "./adventure.mjs";
 
 const isTypedRow = (rows, subject, type) =>
@@ -101,6 +102,27 @@ function exposedContainers(exposedRows, exposedState) {
   return [...ids].filter((id) => roomOfSubject(id, exposedRows, exposedState) != null).sort();
 }
 
+/** The admissible plans for a world carry goal, searched over the EXPOSED
+ *  fold only — a plan through ground this run has not walked is not
+ *  admissible. Each plan is the operator sequence a recognized trace would
+ *  have to match: one `mgx:currently-in` step per room hop, then the
+ *  `mgx:located-in` step the final take writes. Returns `[]` when the
+ *  target's room isn't exposed yet or no seen path reaches it, so the goal
+ *  is excluded rather than guessed at — this hook stays local to autoplay
+ *  rather than landing in the shared recognizer, since only autoplay's own
+ *  exposure-bounded search can tell an admissible plan from a guess. */
+export function expandWorldGoal(goal, { here, exposedRows, exposedState }) {
+  if (goal?.source !== "world" || !goal.goalState?.subject) return [];
+  const target = goal.goalState.subject;
+  if (carriedByPlayer(exposedState, target)) return [[]];
+  const targetRoom = roomOfSubject(target, exposedRows || [], exposedState);
+  if (!targetRoom) return [];
+  if (targetRoom === here) return [["mgx:located-in"]];
+  const path = findActionPath(here, (room) => room === targetRoom, exposedExitApplyActions(exposedState));
+  if (!path || !path.actions.length) return [];
+  return [[...path.actions.map(() => "mgx:currently-in"), "mgx:located-in"]];
+}
+
 /** One tick's worth of progress toward standing in `targetRoom` and then
  *  issuing `finalCommand` once there — the same path-then-act shape the
  *  objective fetch above already uses, generalized so opening/unlocking a
@@ -156,7 +178,20 @@ export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
 
   const exposedRows = exposedFacts(rows, exposed);
   const exposedState = foldWorldState(exposedRows);
-  const objectiveId = exposedRows.find((r) => r.predicate === "mgx:is-objective" && r.object === "true")?.subject ?? null;
+  // The world's objective is one declared goal among N, gathered by the same
+  // enumerator /goals prints. Exposure still bounds it: a marker the run has
+  // not seen is not in exposedRows, so it is not in this set either.
+  const goals = declaredGoals({ worldRows: exposedRows, ruleRows: [] }, {});
+  const worldGoals = goals.filter((g) => g.source === "world");
+  const objectiveId = worldGoals.length === 1 ? worldGoals[0].goalState.subject : null;
+
+  if (worldGoals.length > 1) {
+    return {
+      turn: state.turnCount,
+      goal: `stalled — this world declares ${worldGoals.length} objectives (${worldGoals.map((g) => g.goalState.subject).join(", ")}) and nothing says which one to chase.`,
+      plan: null, done: false, stalled: true, exposedRoomIds: exposed,
+    };
+  }
 
   // Win: the objective is already carried — checked against the FULL fold,
   // since what the player itself carries is always self-evidently known,
@@ -274,7 +309,10 @@ export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
   const path = findActionPath(here, hasUnexposedExit, exposedExitApplyActions(exposedState));
   if (!path || !path.actions.length) {
     return {
-      turn: state.turnCount, goal: "stalled — every reachable room is already explored, and no goal was ever found.",
+      turn: state.turnCount,
+      goal: goals.length
+        ? `stalled — every reachable room is already explored, and nothing I've done fits any of the ${goals.length} declared goals for this world.`
+        : "stalled — every reachable room is already explored, and this world declares no goal to head for.",
       plan: null, done: false, stalled: true, exposedRoomIds: exposed,
     };
   }

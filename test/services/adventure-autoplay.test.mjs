@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
-import { exposedFacts, runAdventureAutoplayTick } from "../../src/services/adventure-autoplay.mjs";
+import { exposedFacts, runAdventureAutoplayTick, expandWorldGoal } from "../../src/services/adventure-autoplay.mjs";
 
 // ---- a small, hand-built fixture world: A - B - C - D in a line, each room
 // linked both ways, mirroring Ashcombe Hall's own go/take rule shapes so
@@ -212,6 +212,60 @@ test("fetch: the objective's room is exposed but not co-located — auto-play pa
   assert.equal(result.done, true, "the following tick sees it carried and reports the win");
 });
 
+test("a world with one objective marker plans toward it exactly as it always has", async () => {
+  const dir = await seedLineWorld({ objectiveRoom: "c" });
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a", "b", "c"]), planHolder });
+  assert.equal(result.stalled, false);
+  assert.equal(result.done, false);
+  assert.match(result.goal, /heading toward the c/);
+  const rows = readFactRows(await loadMemory(dir));
+  assert.equal(foldWorldState(rows).placements.get("player")?.object, "b", "one step per tick, toward c — the single-objective path is unchanged");
+});
+
+test("a world declaring two objectives stalls and names both rather than taking the first", async () => {
+  const dir = await seedLineWorld({
+    objectiveRoom: "a",
+    extraFacts: [
+      { subject: "second", predicate: "rdf:type", object: "portable" },
+      { subject: "second", predicate: "mgx:located-in", object: "b" },
+      { subject: "second", predicate: "mgx:is-objective", object: "true" },
+    ],
+  });
+  const planHolder = planHolderFor();
+  const before = readFactRows(await loadMemory(dir)).length;
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a"]), planHolder });
+  assert.equal(result.stalled, true);
+  assert.equal(result.done, false);
+  assert.match(result.goal, /declares 2 objectives/);
+  assert.match(result.goal, /prize/);
+  assert.match(result.goal, /second/);
+  const after = readFactRows(await loadMemory(dir)).length;
+  assert.equal(after, before, "a stalled tick never fabricates a move, even a tie between two objectives");
+});
+
+test("expandWorldGoal returns no plan when no seen path reaches the objective", async () => {
+  const dir = await seedLineWorld({ objectiveRoom: "d" });
+  const rows = readFactRows(await loadMemory(dir));
+  const goal = { source: "world", goalState: { subject: "prize" } };
+
+  const notYetExposedRows = exposedFacts(rows, new Set(["a"]));
+  const notYetExposedState = foldWorldState(notYetExposedRows);
+  assert.deepEqual(
+    expandWorldGoal(goal, { here: "a", exposedRows: notYetExposedRows, exposedState: notYetExposedState }),
+    [],
+    "the prize's room isn't exposed yet, so no plan is admissible",
+  );
+
+  const seenRows = exposedFacts(rows, new Set(["a", "b", "c", "d"]));
+  const seenState = foldWorldState(seenRows);
+  assert.deepEqual(
+    expandWorldGoal(goal, { here: "a", exposedRows: seenRows, exposedState: seenState }),
+    [["mgx:currently-in", "mgx:currently-in", "mgx:currently-in", "mgx:located-in"]],
+    "once the objective's room is exposed and reachable, the plan is the walk-then-take operator sequence",
+  );
+});
+
 test("stalled: the whole reachable-and-exposed world is exhausted with no objective ever found", async () => {
   const dir = await seedLineWorld(); // no mgx:is-objective fact anywhere
   const planHolder = planHolderFor();
@@ -222,6 +276,22 @@ test("stalled: the whole reachable-and-exposed world is exhausted with no object
   await runAdventureAutoplayTick(dir, { exposedRoomIds: result.exposedRoomIds, planHolder });
   const after = readFactRows(await loadMemory(dir)).length;
   assert.equal(after, before, "a stalled tick never fabricates a move");
+});
+
+test("the explored-out stall names how many declared goals the run failed to fit", async () => {
+  const dir = await seedLineWorld(); // no mgx:is-objective fact anywhere
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a", "b", "c", "d"]), planHolder });
+  assert.equal(result.stalled, true);
+  assert.match(result.goal, /fits any of the \d+ declared goals for this world/);
+});
+
+test("a world declaring no goal stalls with a line that does not say 'any of the 0'", async () => {
+  const dir = await seedLineWorld(); // no mgx:is-objective fact anywhere
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a", "b", "c", "d"]), planHolder });
+  assert.equal(result.stalled, true);
+  assert.doesNotMatch(result.goal, /any of the 0/, "the tool and invariant goals the registry always declares keep this line off the awkward zero case");
 });
 
 test("exposure never leaks: the objective's TRUE room is known to the full store but not yet exposed — auto-play explores rather than beelining to it", async () => {
