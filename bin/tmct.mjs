@@ -1416,6 +1416,46 @@ async function main() {
     return;
   }
 
+  if (mode === "news") {
+    // `tmct news` — the news feed over this graph: poll contemporary sources,
+    // rank ungrounded terms, enrich the top terms through knowledge-base sources,
+    // and build a feed of what changed. Same repo resolution as `memory`/
+    // `syllogise` — resolveRuntimeConfig (src/services/cli-args.mjs): --repo >
+    // git root > cwd. Also accepts `--config` for symmetry.
+    const rest = process.argv.slice(3);
+    const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
+    const { newsTurn, resolveNewsConfig, createNewsState } = await import("../src/services/news.mjs");
+    const { loadMemory, readFactRows, appendFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { loadTomlConfig } = await import("../src/adapters/toml-config.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Same env > tmct.toml > default backend resolution as `tmct memory` — the
+    // news facts must land in the store chat reads back.
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    const store = { loadMemory, readFactRows, appendFacts };
+    const memory = await loadMemory(memoryDir);
+    const rows = readFactRows(memory);
+    const config = resolveNewsConfig(toml?.news);
+    const state = createNewsState();
+    let res;
+    try {
+      const line = rest.join(" ").trim();
+      // Prepend `/news` to make parseNewsRequest recognize the subcommand.
+      const newsLine = line ? `/news ${line}` : "/news poll";
+      res = await newsTurn(newsLine, {
+        memoryDir, rows, store, config, state, now: () => new Date().toISOString(),
+      });
+    } finally {
+      await closeMemoryStore();
+    }
+    if (res) {
+      process.stdout.write(res.text + "\n");
+    } else {
+      process.stdout.write("(no response)\n");
+    }
+    return;
+  }
+
   if (mode === "extract") {
     // `tmct extract` — run a text file's sentences through the chat's own teach
     // recognizer and keep what it grounds. Lazily imported: it pulls the whole

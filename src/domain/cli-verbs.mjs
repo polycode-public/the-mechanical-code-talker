@@ -137,6 +137,16 @@ export const CLI_VERBS = [
     ],
   },
   {
+    mode: "news",
+    errorLabel: "news",
+    usage: "tmct news [poll|rank|enrich|sources] [--repo <abs>]",
+    prose: ["the news feed over this graph: a contemporary sources dashboard,"],
+    flags: [
+      { flag: "[--limit <n>]", prose: ["grounding-driven enrichment loop, and a ranked list of", "candidate facts waiting to be learned"] },
+      { flag: "[--config <path>]", prose: [] },
+    ],
+  },
+  {
     mode: "viz",
     errorLabel: "viz",
     usage: "tmct viz [--repo <abs>]",
