@@ -42,7 +42,12 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
 - [ ] **Adventure sprite art** — the sprites redesign shipped and CI-verified; its shared
   animation machinery is live on adventure.html's bundle but visually inert there until any
   adventure class gains facing/moving frames, plus one small `adventure-viz.mjs` render call
-  once art exists.
+  once art exists. IN FLIGHT: sub-agent on it in the main tree.
+- [ ] **Sprites iteration** (operator, 2026-08-08) — ontology sections get connector lines
+  between boxes as a real hierarchy diagram; every sprite card clickable to start animating,
+  click toggles turning/emoting, started cards keep running concurrently with state retained.
+  IN FLIGHT: Fable sub-agent in worktree `.claude/worktrees/agent-ac4198800c88d82fd` (branch
+  `worktree-agent-ac4198800c88d82fd`), committing per step.
 
 ## Discipline
 
