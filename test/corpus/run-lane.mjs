@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stringify as stringifyToml } from "smol-toml";
 import { driveSessionTurns } from "../helpers/session.mjs";
+import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
 import * as predicates from "./predicates.mjs";
 
 const CORPUS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -150,6 +151,14 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
         }
         if (s.fixture !== undefined) flag("setup.facts: not usable with a fixture — an ephemeral fixture session gets a fresh memory dir the preload cannot reach");
       }
+      if (s.newsFixtures !== undefined) {
+        const validItem = (it) => it && typeof it === "object" && isNonEmptyString(it.title)
+          && (it.guid === undefined || isNonEmptyString(it.guid)) && (it.url === undefined || isNonEmptyString(it.url));
+        if (!Array.isArray(s.newsFixtures) || !s.newsFixtures.every((fx) => fx && typeof fx === "object"
+          && isNonEmptyString(fx.sourceId) && Array.isArray(fx.items) && fx.items.length > 0 && fx.items.every(validItem))) {
+          flag("setup.newsFixtures: must be an array of {sourceId, items: [{title[, guid][, url][, summary][, publishedAt]}]} objects");
+        }
+      }
     }
   }
   return problems;
@@ -159,6 +168,28 @@ function fixturePath(fixture) {
   const asGiven = path.resolve(REPO_ROOT, fixture);
   if (existsSync(asGiven)) return asGiven;
   return path.resolve(REPO_ROOT, "test", "fixtures", fixture);
+}
+
+/** `setup.newsFixtures` -> a `/news` providers set (news.mjs's own ctx.providers
+ *  shape) whose fetchers serve literal, committed items instead of a real
+ *  network fetch — the network-free way a corpus row exercises `/news poll`.
+ *  Each source id's fetcher hands back its configured items exactly once
+ *  (a second poll in the same row reads as "nothing new", the same as a real
+ *  source with no fresh content). */
+function newsProvidersFromFixtures(newsFixtures) {
+  const newsFetchers = new Map();
+  for (const fx of newsFixtures) {
+    let served = false;
+    newsFetchers.set(fx.sourceId, {
+      id: fx.sourceId,
+      async fetchItems() {
+        if (served) return { items: [], bytes: 0 };
+        served = true;
+        return { items: normalizeFeedItems(fx.sourceId, fx.items, { now: new Date().toISOString() }), bytes: 0 };
+      },
+    });
+  }
+  return { newsFetchers };
 }
 
 function assertExpectation(exp, turn, rowId, preds = predicates, allTurns = []) {
@@ -198,6 +229,7 @@ export async function runChatRow(row, preds = predicates) {
       env: { ...(setup.seed ? {} : { TMCT_NO_SEED: "1" }), ...(setup.env ?? {}) },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
+      ...(setup.newsFixtures?.length ? { newsProviders: newsProvidersFromFixtures(setup.newsFixtures) } : {}),
     };
     if (setup.config !== undefined) {
       const toml = typeof setup.config === "string" ? setup.config : stringifyToml(setup.config);

@@ -22,6 +22,13 @@ import { dispatchTool, dispatchToolStructured, loadGraph, TOOLS } from "../tools
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, moduleCountOf, packageCounts, modulesOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
+// How a stored fact predicate reads in English — one phrase per predicate the
+// two writers (the ACE grammar, the ConceptNet map) actually emit, shared
+// with the news feed's own paraphrase renderer (src/domain/news-feed.mjs)
+// instead of growing a twin. An unknown predicate renders verbatim rather
+// than being guessed around (see this file's own predicatePhrase, below,
+// which layers polarity/comparative/mechanical-fallback handling on top).
+import { FACT_PREDICATE_PHRASES } from "../domain/fact-phrase.mjs";
 import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
@@ -59,6 +66,7 @@ import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpu
 import "../adapters/corpus/wikidata-live.mjs";
 import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest, researchSourceLabel } from "./research.mjs";
 import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue-store.mjs";
+import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./news.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
@@ -7493,6 +7501,7 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
     ["/wikipedia | /wikidata", "which source \"research <topic>\" fetches from for the rest of the session: Simple English Wikipedia's prose (the default) or Wikidata's structured claims. tmct.toml's [research] source sets the starting value; tmct chat --research-source overrides it per invocation"],
     ["research <topic> [limit N] [depth D]", "fetch the topic from the session's research source (Simple English Wikipedia by default — /wikidata switches it) (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
+    ["/news [poll|rank|enrich|sources|add <url>]", "the news feed over this graph"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -7643,60 +7652,6 @@ async function recallFromBlocks(memoryDir, query, graph) {
 }
 
 // ---- W4: asserted Facts → answers (the memory graph's reified triples) ----
-
-/** How a stored fact predicate reads in English — one phrase per predicate the
- *  two writers (the ACE grammar, the ConceptNet map) actually emit. An unknown
- *  predicate renders verbatim rather than being guessed around. */
-const FACT_PREDICATE_PHRASES = {
-  "rdfs:subClassOf": "is a kind of",
-  "mgxneg:subClassOf": "is not a kind of",
-  "rdf:type": "is a",
-  "owl:disjointWith": "is not a",
-  "owl:unionOf": "is either",
-  "owl:complementOf": "is anything that is not",
-  "owl:oneOf": "includes exactly",
-  "owl:differentFrom": "is not the same as",
-  "mgx:partOf": "is part of",
-  "mgx:memberOf": "is a member of",
-  "mgx:collectionOf": "is a collection of",
-  "mgx:hasA": "has",
-  "mgx:usedFor": "is used for",
-  "mgx:capableOf": "can",
-  "mgx:atLocation": "is found in",
-  "mgx:causes": "causes",
-  "mgx:hasProperty": "is",
-  "mgx:madeOf": "is made of",
-  "mgx:receivesAction": "can be",
-  "mgx:createdBy": "is created by",
-  "mgx:mannerOf": "is a way to",
-  "mgx:desires": "wants",
-  "mgx:locatedNear": "is typically near",
-  "mgx:motivatedByGoal": "is motivated by",
-  "mgx:obstructedBy": "can be prevented by",
-  "mgx:causesDesire": "makes you want to",
-  "mgx:hasSubevent": "involves",
-  "mgx:hasFirstSubevent": "begins with",
-  "mgx:hasLastSubevent": "ends with",
-  "mgx:hasPrerequisite": "requires",
-  "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
-  "mgx:rendersAs": "renders as", // the render-template binding ("a disk renders as a block")
-  "mgx:synonym": "means the same as",
-  "mgx:antonym": "is the opposite of",
-  "mgx:similarTo": "is similar to",
-  "mgx:relatedTo": "is related to",
-  "mgx:symbolOf": "is a symbol of",
-  // A loaded adventure world's placement predicates, so a describe read-back of
-  // a visible prop reads as English ("lamp is in the study") instead of the
-  // mechanical -s fold garbling them ("lamp locateds in study"). The world's
-  // SECRET/mechanics predicates (a hidden object's location, the objective
-  // marker, the lock/open/NPC internals) are kept out of the describe lane
-  // entirely by WORLD_INTERNAL_PREDICATES below, so they never render at all.
-  "mgx:currently-in": "is in",
-  "mgx:located-in": "is in",
-  "mgx:fixed-in": "is fixed in",
-  "mgx:stands-locked-in": "stands locked in",
-  "mgx:works-in": "works in",
-};
 
 /** The world-mechanics predicates the generic describe read-back must never
  *  surface: a hidden object's location and the objective marker spoil the
@@ -15971,6 +15926,7 @@ const GOAL_BY_COMMAND = {
   wikidata: "choose which source the research lane fetches from",
   export: "write the memory store to a file, in the standard JSONL shape",
   ingest: "read a local text file and store every fact the recognizer grounds from it",
+  news: "surface or work the news feed built over this graph",
 };
 
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
@@ -16045,12 +16001,12 @@ export function renderDeclaredGoals(goals) {
   return lines.join("\n").replace(/\n+$/, "");
 }
 
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null, lexicon = null, newsState = null, newsConfig = null, newsProviders = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
   const argText = (sp === -1 ? "" : line.slice(sp + 1)).trim();
-  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext, researchSourceNext } = {}) => ({
+  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext, researchSourceNext, newsStateNext } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
@@ -16059,6 +16015,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
     ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
     ...(researchSourceNext !== undefined ? { researchSource: researchSourceNext } : {}),
+    ...(newsStateNext !== undefined ? { newsState: newsStateNext } : {}),
   });
 
   if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText(codeDomainActive, codeDomainActive ? laneVocab?.helpRows : [])); }
@@ -16123,6 +16080,39 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
         : "research fetches go to Wikidata (structured claims, CC0 1.0) for the rest of this session — /wikipedia switches them back to Simple English Wikipedia.",
       { researchSourceNext: name },
     );
+  }
+
+  // /news [poll|rank|enrich|sources|add <url>|interval <minutes>] — the news
+  // feed built over this graph. src/services/news.mjs owns the capability;
+  // every surface (this one, news.html, the CLI verb, a JS import) renders
+  // through its own newsTurn, so wording never drifts between them. Session
+  // state threads turn-to-turn as newsState, the same way researchState
+  // does; newsConfig is a live, mutable object a caller threads once per
+  // session, so a `/news add`/`/news interval` mutation persists by
+  // reference across turns without a separate round-trip field.
+  if (name === "news") {
+    note(trace, "goal: surface or work the news feed built over this graph");
+    if (!memoryDir) return mk("no memory store here — /news works inside a repo session.", { miss: true });
+    try {
+      const { loadMemory, readFactRows, appendFacts, removeFacts } = await import("../adapters/memory/core.mjs");
+      const effectiveNewsConfig = newsConfig || resolveNewsConfig(null);
+      const effectiveNewsState = newsState || createNewsState();
+      const newsCtx = {
+        memoryDir,
+        store: { loadMemory, readFactRows, appendFacts, removeFacts },
+        cache,
+        lexicon,
+        config: effectiveNewsConfig,
+        state: effectiveNewsState,
+        providers: newsProviders || { getResearchProvider },
+        now: () => new Date().toISOString(),
+      };
+      const result = await newsTurn(line, newsCtx);
+      note(trace, `result: ${String(result?.text || "").split("\n")[0]}`);
+      return mk(result.text, { miss: Boolean(result.miss), newsStateNext: effectiveNewsState });
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
   }
 
   // /memory [verbose] — what tmct remembers, as text (the same renderer
@@ -17506,7 +17496,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -17598,7 +17588,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue, newsState, newsConfig, newsProviders };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
