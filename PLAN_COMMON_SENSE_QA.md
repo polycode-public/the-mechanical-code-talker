@@ -500,6 +500,20 @@ node --test "test/estate/*.test.mjs"
 
 ## 6. Phase F2 — the chat lane
 
+**Built.** The lane sits in `dispatchTurn` between the slash-command check and `assertTurn`, exactly
+as section 6.1 specifies: `probeChoiceOptions` (beside the grounding ladder) does the pair-level
+probe, pulling the child pack once per turn for the source term only, and the three outcomes (one
+option grounds, several ground, none ground) route through `joinOr`/`factPhrase`/`citationProvenance`
+as designed. `"ask-choice": "choiceQuestion"` is in `LANE_DIALOGUE_ACTS`
+(`src/domain/dialogue-acts.mjs`), `result.lane` is set on the answering and refusing paths, and
+`test/adapters/chat-dialogue-act-labels.test.mjs` gained a case for it. `test/adapters/chat-choice-lane.test.mjs`
+carries the nine named behaviours from section 6.5, including the tie invariant with differently-weighted
+edges. `chain` stays null (rung 3's work). Section 6.7's acceptance commands are green; found along
+the way, and NOT fixed here because it sits entirely outside this lane's own code (`src/domain/grammar/ace.mjs`):
+`parseAce` currently leaves residue `["or"]` on a disjunctive class sentence ("every pet is a cat or
+a dog"), so that shape does not yet teach — pre-existing on `main`, confirmed unrelated to F0/F1/F2 by
+reproducing it before this lane's own edits.
+
 **Model tier: Sonnet.** This is the subtlest phase. `chat.mjs` is 17,791 lines and this track owns it
 alone for the duration.
 

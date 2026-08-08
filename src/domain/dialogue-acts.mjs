@@ -136,6 +136,7 @@ export const LANE_DIALOGUE_ACTS = Object.freeze({
   teach: "inform",
   "ask-set": "setQuestion",
   "ask-propositional": "propositionalQuestion",
+  "ask-choice": "choiceQuestion",
   goal: "request",
   imperative: "instruct",
   "honest-miss": "autoNegative",
