@@ -338,6 +338,7 @@
   "src/adapters/uuid.mjs",
   "src/adapters/wink-model.mjs",
   "src/domain/agent-belief.mjs",
+  "src/domain/agent-traits.mjs",
   "src/domain/answer-variants.json",
   "src/domain/answer-variants.mjs",
   "src/domain/ask-vocab.mjs",
