@@ -1,6 +1,6 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slices 1–5 and Part B slices 1–5 are all built. Part A
+Status: DELIVERED — archived 2026-08-08, Part A slices 1–5 and Part B slices 1–5 all built. Part A
 (`src/domain/discourse.mjs`): the commit-filter lane registers, the session shell threads the
 record, the temporal-comparison lane flips the frozen row — now
 `games/cross-turn-temporal-composition-composes` — the listing/filter lanes register plural `set`

@@ -152,7 +152,7 @@ top of what the product's language work has ahead of it. Two capabilities sit be
 tmct's own terms:
 
 - **Full discourse-record composition** — the typed cross-turn record (DRT-lite,
-  `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A) that composes meaning across several prior answers, past the prev-set anaphora the lanes carry
+  `archive/PLAN_DISCOURSE_AND_RECOGNITION.md` Part A) that composes meaning across several prior answers, past the prev-set anaphora the lanes carry
   today. The `C2:cross-turn-composition` HORIZON_CELL (above) is where a first probe of it is
   staged; the record itself is unbuilt.
 - **Winograd-class coreference** — pronoun resolution that turns on world knowledge, not surface

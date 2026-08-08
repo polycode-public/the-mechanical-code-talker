@@ -108,7 +108,7 @@ needs; the design below is mostly about composing them, not inventing new primit
   already. `currentPosition`, `roomAffordances`, `objectLookProperties`, `objectClassChain`,
   `personKnowledgeLines`, and `personRoomReport` are the exact primitives this plan's NPC-memory
   and object-state work would extend, not replace. Discourse binding for `it`/`them`/`him`/`her`
-  (`bindPronouns`, `registerReferent`) shipped this session (`PLAN_DISCOURSE_AND_RECOGNITION.md`
+  (`bindPronouns`, `registerReferent`) shipped this session (`archive/PLAN_DISCOURSE_AND_RECOGNITION.md`
   Part A) and already threads through `adventureTurn` — a player exploring a city block and
   saying "who lives there" or "pick that up" already has a real mechanism underneath it.
 - **`PLAN_MUD.md`.** Persistence for a shared world over a `server:<name>` memory backend is
