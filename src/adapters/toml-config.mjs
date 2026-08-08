@@ -147,6 +147,11 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // through; default-filling is resolveDiscourseConfig's job.
   if (src.discourse !== undefined) cfg.discourse = src.discourse;
 
+  // Recognition knob (src/domain/router/recognize.mjs): sparse PASS-THROUGH,
+  // the raw `[recognition]` table (max_trace) rides through; default-filling
+  // is resolveRecognitionConfig's job.
+  if (src.recognition !== undefined) cfg.recognition = src.recognition;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;

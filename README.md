@@ -1293,6 +1293,10 @@ source = "wikipedia"        # wikipedia | wikidata — where "research <topic>" 
 [discourse]
 max_referents = 12          # how many referents stay resolvable across turns
 
+# Goal recognition (src/domain/router/recognize.mjs).
+[recognition]
+max_trace = 32              # how many observed steps a recognition reads back
+
 [telemetry]
 enabled = false             # local-only counters; never phones home
 

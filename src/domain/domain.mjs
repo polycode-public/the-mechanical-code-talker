@@ -197,6 +197,14 @@ const domainIndividuals = (domain) => {
   return out;
 };
 
+/** `{ base, step }` for an @stepN-stamped subject, or null for a bare one —
+ *  the one parser for the board's own snapshot grammar, so a caller outside
+ *  this file never keeps a second copy of the regex. */
+export function parseStepSubject(subject) {
+  const m = SNAPSHOT_RE.exec(String(subject || ""));
+  return m ? { base: m[1], step: Number(m[2]) } : null;
+}
+
 /** The current state as canonical sorted rows over the domain's dynamic
  *  predicates. Prefers the newest @stepN snapshot when one exists, so a
  *  re-plan after per-step execution never reads the stale step-0 board. */

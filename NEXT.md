@@ -33,7 +33,30 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-None open.
+Batch cadence for this stretch (operator, 2026-08-08): sub-agents commit often; the coordinator
+merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch. The
+first batch carries the `links:check` fix (`backlog/PLAN_MCP.md` repoint) for the red pipeline at
+`b71c2443`.
+
+- [ ] **Filler-clause prefix widening** (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §1) — IN FLIGHT:
+  sub-agent editing `src/services/chat.mjs` + `src/domain/interpret/normalize.mjs` in the main
+  tree; includes the write-boundary fix (a filler lead let "anyway what is a horse" store a
+  garbled fact).
+- [ ] **Plan-justification counterfactuals** (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2) — QUEUED
+  behind the filler item (both write `chat.mjs`); dispatch brief ready in the session scratchpad.
+- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — slice B1 (trace reader)
+  CODE-COMPLETE, in this batch. Queued: A0 (Part A prose correction + the one remaining
+  silent-pick guard in `runAsk`'s prev fallback), B2 (`/goals` + `tmct plan --goals`), B3
+  (containment + reject + TOOL-9, atomic with grader and envelope), B4 (autoplay re-base), B5
+  (recognition surfaces). A0/B2 serialize on `chat.mjs`; briefs in the session scratchpad.
+- [ ] **Sprites redesign** (operator, 2026-08-08: ontology-section design, hover/turn/emotion
+  animation rules on every sprite tile, per-group focus modes, random scene with rooms, full-wall
+  room backdrop, walking cat; machinery in core `src/` for adventure.html) — IN FLIGHT: Fable
+  sub-agent in worktree `.claude/worktrees/agent-a700c24067e243b74` (branch
+  `worktree-agent-a700c24067e243b74`), committing per step; merge its commits as they verify.
+- [ ] **Help page** — public/help.html BUILT, in this batch. Open remainder: `PLAN_HELP.md`'s
+  `#burrow` section documents `mud.html`, which `7245ff0a` retired from the site build; decide
+  whether mud.html returns to the build or the burrow guidance repoints at what ships.
 
 ## Discipline
 

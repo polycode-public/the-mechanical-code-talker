@@ -9,6 +9,7 @@
 // share the slot.
 
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
+import { parseSnapshotSubject, snapshotSubject } from "../domain/world-snapshot.mjs";
 import { parseImperative, OBJECT_PRONOUNS } from "../domain/grammar/ace.mjs";
 import { loadLexicon, withProperNames, classify } from "../domain/grammar/lexicon.mjs";
 import { register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
@@ -177,11 +178,6 @@ async function resumedPosition(memoryDir) {
 
 // ---- the world-state fold ----------------------------------------------------
 
-// A snapshot subject is `base@turnN`, or `base@epochE@turnN` once a recast has
-// moved the world past epoch 0 — the fold below reads both, and epoch-0 writes
-// keep the bare form so an unrecast store never changes shape.
-const SNAPSHOT_RE = /^(.+?)@(?:epoch(\d+)@)?turn(\d+)$/;
-
 /** Which run of the world a store is on. Recasting a shared world (mud.html's
  *  RESET, a slider, the scenario dropdown) reopens the same deterministic
  *  instance ids over a fresh store while peers may still hold the old run's
@@ -199,21 +195,13 @@ export function worldEpochFact(epoch) {
   return { subject: WORLD_EPOCH_SUBJECT, predicate: WORLD_EPOCH_PREDICATE, object: String(epoch) };
 }
 
-/** `{ base, epoch, turn }` for a snapshot subject, or null for a base subject.
- *  The one parser every reader outside this file should use — a local
- *  `@turn(\d+)$` regex reads an epoch-stamped subject's base as
- *  "mole-1@epoch2", which matches no character. */
-export function parseSnapshotSubject(subject) {
-  const m = SNAPSHOT_RE.exec(String(subject || ""));
-  return m ? { base: m[1], epoch: m[2] ? Number(m[2]) : 0, turn: Number(m[3]) } : null;
-}
+// The snapshot-subject grammar itself (`{ base, epoch, turn }` for a stamped
+// subject, null for a base row) lives in domain/world-snapshot.mjs, the one
+// place every reader — this lane, autoplay, the recognizer — parses it from.
+// Re-exported here so every existing importer of snapshotSubject and
+// parseSnapshotSubject keeps working.
+export { snapshotSubject, parseSnapshotSubject };
 
-/** The snapshot subject a turn writes: bare `@turnN` while the world is on
- *  epoch 0 (every store that has never been recast, and every fact written
- *  before epochs existed), the epoch-stamped form after. */
-export function snapshotSubject(base, turn, epoch = 0) {
-  return epoch > 0 ? `${base}@epoch${epoch}@turn${turn}` : `${base}@turn${turn}`;
-}
 const PLACEMENT_PREDICATES = new Set([
   "mgx:currently-in", "mgx:located-in", "mgx:fixed-in", "mgx:stands-locked-in", "mgx:hidden-in",
 ]);
@@ -303,7 +291,7 @@ export function isMudStatePredicate(predicate) {
 export function worldIndividualNames(rows) {
   const names = new Set();
   for (const row of rows || []) {
-    if (SNAPSHOT_RE.test(row.subject)) continue;
+    if (parseSnapshotSubject(row.subject)) continue;
     if (row.predicate === "rdf:type" || PLACEMENT_PREDICATES.has(row.predicate)) names.add(row.subject);
     if (EXIT_PREDICATE_RE.test(row.predicate)) { names.add(row.subject); names.add(row.object); }
   }
@@ -332,8 +320,8 @@ export function foldWorldState(factRows) {
       if (Number.isInteger(marked) && marked > epoch) epoch = marked;
       continue;
     }
-    const m = SNAPSHOT_RE.exec(row.subject);
-    if (m && m[2] && Number(m[2]) > epoch) epoch = Number(m[2]);
+    const snap = parseSnapshotSubject(row.subject);
+    if (snap && snap.epoch > epoch) epoch = snap.epoch;
   }
   const placements = new Map(); // subject -> { predicate, object, turn, epoch }
   const positions = new Map();  // subject -> { predicate, object, turn, epoch }
@@ -345,11 +333,11 @@ export function foldWorldState(factRows) {
     !prior || rowEpoch > prior.epoch || (rowEpoch === prior.epoch && turn >= prior.turn);
   for (const row of rows) {
     if (row.predicate === WORLD_EPOCH_PREDICATE) continue;
-    const m = SNAPSHOT_RE.exec(row.subject);
-    const base = m ? m[1] : row.subject;
-    const rowEpoch = m ? (m[2] ? Number(m[2]) : 0) : epoch;
-    const turn = m ? Number(m[3]) : 0;
-    if (m && rowEpoch === epoch) turnCount = Math.max(turnCount, turn);
+    const snap = parseSnapshotSubject(row.subject);
+    const base = snap ? snap.base : row.subject;
+    const rowEpoch = snap ? snap.epoch : epoch;
+    const turn = snap ? snap.turn : 0;
+    if (snap && rowEpoch === epoch) turnCount = Math.max(turnCount, turn);
     if (PLACEMENT_PREDICATES.has(row.predicate)) {
       if (outranks(rowEpoch, turn, placements.get(base))) placements.set(base, { predicate: row.predicate, object: row.object, turn, epoch: rowEpoch });
       continue;
@@ -369,7 +357,7 @@ export function foldWorldState(factRows) {
       continue;
     }
     const exit = EXIT_PREDICATE_RE.exec(row.predicate);
-    if (exit && !m) {
+    if (exit && !snap) {
       if (!exits.has(row.subject)) exits.set(row.subject, new Map());
       exits.get(row.subject).set(exit[1], row.object);
     }
@@ -946,7 +934,7 @@ export function worldDigestRows(rows, state, actingSubject = "player") {
     .filter(([, place]) => OUT_OF_PLAY_PLACES.has(place.object))
     .map(([subject]) => subject));
   for (const row of rows || []) {
-    if (SNAPSHOT_RE.test(row.subject)) continue;                 // folded above
+    if (parseSnapshotSubject(row.subject)) continue;              // folded above
     if (gone.has(row.subject)) continue;                         // out of the world entirely
     // Room text comes from the world source only. A merged corpus overlaps a
     // room's own vocabulary ("library rdfs:subClassOf literary study"), and

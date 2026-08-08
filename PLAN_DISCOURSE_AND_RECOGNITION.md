@@ -699,9 +699,15 @@ steps into `hanoi-3`"*, from the store, with no session state at all.
 
 Five slices, each independently testable, each pinned.
 
-**Slice 1 — the trace reader.** `traceOf(rows)`, pure, no recognition. Turns `@turnN`/`@stepN` rows
-and a `calls` array into the ordered step list. Testable on its own against the adventure and plan
-fixtures.
+**Slice 1 — the trace reader. BUILT.** Pure, no recognition: `src/domain/world-snapshot.mjs`
+(the snapshot-subject grammar, lifted out of `adventure.mjs` and re-exported from there) and
+`src/domain/router/recognize.mjs` (`traceOfCalls`, `traceOfWorldRows`, `traceOfBoardRows`, each
+returning capped, oldest-first `{ k, actor, op, args, kind }` steps, deterministic regardless of
+row arrival order), with `[recognition] max_trace` resolving per session. Because `@turnN` rows
+record state rather than actions, a step keys on the operator (effect predicate / tool name) — the
+row is the effect. Lifting the grammar also fixed autoplay's own subject parse, which mis-read
+`base@epochN@turnK` subjects and exposed nothing after a recast. Tests:
+`test/domain/world-snapshot.test.mjs` and `test/domain/recognition-trace.test.mjs`.
 
 **Slice 2 — the declared-goal enumerator and its surface.** `declaredGoals(ctx)` gathers the N from
 the four sources, and `/goals` (chat) and `tmct plan --goals` print them with provenance. Testable:

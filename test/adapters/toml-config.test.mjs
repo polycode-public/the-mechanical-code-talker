@@ -118,6 +118,13 @@ test("normalizeConfig: [research] rides through unmodified (sparse: absent when 
   assert.deepEqual(norm.research, { fanout_limit: 3, depth_limit: 0, min_interval_ms: 4000 });
 });
 
+test("normalizeConfig: [recognition] rides through unmodified (sparse: absent when unset), snake_case keys untouched", async () => {
+  const none = await normalizeConfig({}, { configDir: "/x" });
+  assert.equal(none.recognition, undefined);
+  const norm = await normalizeConfig({ recognition: { max_trace: 16 } }, { configDir: "/x" });
+  assert.deepEqual(norm.recognition, { max_trace: 16 });
+});
+
 test("normalizeConfig: [games]/[planning] round-trip through a real tmct.toml on disk", async () => {
   const dir = await tmp();
   try {

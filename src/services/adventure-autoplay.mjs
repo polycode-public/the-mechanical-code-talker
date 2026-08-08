@@ -26,10 +26,8 @@
 // fact simply has nothing for this module to infer a goal toward.
 import { findActionPath } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
+import { baseSubjectOf } from "../domain/world-snapshot.mjs";
 import { foldWorldState, adventureTurn, worldActionRows } from "./adventure.mjs";
-
-const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
-const baseSubjectOf = (subject) => SNAPSHOT_RE.exec(subject)?.[1] ?? subject;
 
 const isTypedRow = (rows, subject, type) =>
   (rows || []).some((r) => r.subject === subject && r.predicate === "rdf:type" && r.object === type);
