@@ -15,11 +15,11 @@
 
 export const DEMO_PAGES = [
   "chat",
+  "sprites",
   "ledger",
   "plan",
   "mudiii",
   "adventure",
-  "sprites",
 ];
 
 /** The hand-authored about page beside each demo page. */
