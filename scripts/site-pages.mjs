@@ -15,6 +15,7 @@
 
 export const DEMO_PAGES = [
   "chat",
+  "news",
   "sprites",
   "ledger",
   "plan",
@@ -42,6 +43,10 @@ export const DEMO_PAGE_META = {
   chat: {
     title: "Ask it anything, check every answer",
     description: "How tmct reads a plain English question and answers it from a graph, deterministically and offline, in your browser.",
+  },
+  news: {
+    title: "A feed that only ships what grounds",
+    description: "How tmct polls news sources on your say-so, grounds what it can against the graph, and ranks what it can't as the work still to do.",
   },
   plan: {
     title: "Watch it solve a puzzle it was taught",

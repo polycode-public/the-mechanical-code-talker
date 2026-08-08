@@ -31,6 +31,7 @@
     <ol class="about-crumbs">
       <li><a href="#what">What this is</a></li>
       <li><a href="#chat">Asking and teaching</a></li>
+      <li><a href="#news">Polling news sources</a></li>
       <li><a href="#sharing">Sharing a world</a></li>
       <li><a href="#nodes">Nodes and names</a></li>
       <li><a href="#trouble">When something goes wrong</a></li>
@@ -68,6 +69,15 @@ noted — remembered 1 fact: cat rdfs:subClassOf pet (every cat is a pet)
 <span class="you">what is a cat</span>
 you told me: cat is a kind of pet (source: ace:chat:...@...)</pre>
       <p>Taught facts are kept on this device, best effort, and are never sent anywhere unless you share them yourself (see <a href="#sharing">Sharing a world</a>).</p>
+    </section>
+
+    <section class="about-section" id="news">
+      <h2>Polling news sources</h2>
+      <p>news.html polls real sources on a timer and grounds what comes back against the graph. It never fetches anything until you click start.</p>
+      <p><strong>Starting it.</strong> Click &ldquo;start polling live sources.&rdquo; That records a preference on this device, so a later visit polls on load without asking again. The button then reads &ldquo;poll now&rdquo; instead. &ldquo;Stop &amp; forget&rdquo; clears that preference and puts the page back to its first-visit state.</p>
+      <p><strong>The ranked list.</strong> Every term the page has met but can't yet ground goes on a list, most common first. A row reads &ldquo;parseable but knowledge-free&rdquo; when the word itself is known but nothing is stored about it yet, and &ldquo;unknown word&rdquo; when the word itself isn't recognized. The page's own knowledge-base loop works through the top of that list on its own.</p>
+      <p><strong>A blocked source.</strong> Paste a URL to add your own source and the page fetches it once before adding it. If your browser can't reach it (a CORS rule most sites don't opt out of), it lands in the panel labelled &ldquo;source does not permit browser access&rdquo; and the poll cycle skips it, rather than silently returning nothing.</p>
+      <p>Every request the page makes is logged, with its URL, time, size and status, so you can see exactly what left your browser and when.</p>
     </section>
 
     <section class="about-section" id="sharing">

@@ -18,6 +18,7 @@
 
 const SCREENSHOT = {
   chat: "chat.png",
+  news: "news.png",
   plan: "plan.png",
   adventure: "adventure.png",
   ledger: "ledger.png",
@@ -41,6 +42,23 @@ const POSTS = {
         text: "No server, no API key, no model. One bundle, one seed file of about 63,000 facts, and wink-nlp for lemmas. Here is the whole stack." },
       { angle: "try a question", to: "index.html?q=what%20calls%20Task",
         text: "The box on this page runs the real engine on a real code graph, live in your browser, primed with a question. Type your own over the top of it." },
+    ],
+  },
+  news: {
+    title: "A feed that only ships what grounds",
+    posts: [
+      { angle: "what it is", to: "news.html",
+        text: "A news dashboard that fetches nothing until you click start. It polls real sources, grounds what it can against the graph, and ranks what it can't as the work still to do." },
+      { angle: "the honest miss", to: "news-about.html#inference",
+        text: "A term the page has met but can't yet ground doesn't get skipped or guessed at. It goes on a ranked list, sorted by how often it turned up, so the biggest gap in the graph is the easiest one to find." },
+      { angle: "a real exchange", to: "news-about.html#play",
+        text: "Two buttons replay a real recorded NYT and Wikipedia response through the live pipeline with the network switched off, so you can watch it ground a real article with nothing fetched." },
+      { angle: "the reading behind it", to: "news-about.html#papers",
+        text: "The refusal follows Chow's 1970 reject option and Reiter's 1978 open world assumption, the same literature chat.html's own honest miss rests on. The feed formats follow RSS 2.0, Atom and JSON Feed." },
+      // Filled in once reports/NEWS_RIG.md exists: this sentence gets the
+      // measured strict grounding rate from the fixture rig run.
+      { angle: "the number", to: "news.html",
+        text: "The measurement rig behind this page prints a strict and an optimistic grounding rate on every run, from the same fixtures the demo buttons replay. Its first published number lands in reports/NEWS_RIG.md." },
     ],
   },
   plan: {

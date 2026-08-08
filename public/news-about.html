@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- meta:begin -->
+<title>A feed that only ships what grounds — tmct</title>
+<meta name="description" content="How tmct polls news sources on your say-so, grounds what it can against the graph, and ranks what it can&#39;t as the work still to do.">
+<link rel="canonical" href="https://tmct.polycode.co.uk/news-about.html">
+<meta property="og:title" content="A feed that only ships what grounds">
+<meta property="og:description" content="How tmct polls news sources on your say-so, grounds what it can against the graph, and ranks what it can&#39;t as the work still to do.">
+<meta property="og:image" content="https://tmct.polycode.co.uk/og/news.png">
+<meta property="og:url" content="https://tmct.polycode.co.uk/news-about.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="the-mechanical-code-talker">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://tmct.polycode.co.uk/og/news.png">
+<!-- meta:end -->
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<a class="skip-link" href="#about-main">Skip to the page</a>
+<div class="about-shell">
+  <nav class="about-nav" aria-label="Sections of this page">
+    <a class="about-back" href="./index.html">&larr; all seven demos</a>
+    <p class="eyebrow">On this page</p>
+    <ol class="about-crumbs">
+        <li><a href="#what">What it demonstrates</a></li>
+        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#shots">What it looks like</a></li>
+        <li><a href="#inference">What it works out</a></li>
+        <li><a href="#build">How it is built</a></li>
+        <li><a href="#papers">Related work</a></li>
+        <li><a href="#credits">Credits and further reading</a></li>
+    </ol>
+    <a class="about-open" href="./news.html" target="_blank" rel="noopener noreferrer">open news.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+  </nav>
+
+  <main class="about-main" id="about-main">
+    <header class="about-head">
+      <p class="eyebrow">demonstration 2 of 11 &middot; news.html</p>
+      <h1>A feed that only ships what grounds</h1>
+      <p class="lede">This page polls real news sources, but only on your say-so, and it only turns what comes back into facts it can point at. What it can't ground goes on a ranked list instead of into a made-up sentence.</p>
+    </header>
+
+    <section class="about-section" id="what">
+      <h2>What it demonstrates</h2>
+      <p>chat.html answers a question you ask. news.html asks its own questions, on a timer, of five real feeds: a Wikimedia featured-articles feed, Hacker News, USGS earthquakes, and two more you can switch on, NYT World News and Wikinews. Nothing fetches until you click start.</p>
+      <p>The page opens on a seven-part dashboard: how many feed items it has built, how many terms it has met but can't yet ground, how many facts came from news, the graph's current size, how many sources are live, a ranked list of the ungrounded terms, and a per-source health strip.</p>
+      <p>Ground a term and its old items get reprocessed with the new fact in them. Every item still names its sources and shows a trust chip, the same tiers the ledger page uses.</p>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="play">
+      <h2>Chat you can replay</h2>
+      <p>Before you click anything, the feed already shows a few items, built only from the graph's own seed facts. Each one carries a label so it never reads as live news.</p>
+      <pre class="transcript"><span class="cite">feed.items: 2 &middot; from the seed graph — start to poll live sources</span></pre>
+      <p>Two buttons replay a real recorded response through the exact live pipeline, with the network switched off. Nothing here is scripted output; it is the same ingest, grounding and paraphrase code a live poll runs.</p>
+      <pre class="transcript"><span class="you">click: replay recorded NYT sample</span>
+<span class="cite">a new item lands, tagged news-fixture:, tier corpus</span>
+<span class="you">click: replay recorded Wikipedia sample</span>
+<span class="cite">a second item lands the same way</span></pre>
+      <p class="source-note">Asserted in <code>test/adapters/news-browser-entry.test.mjs</code>: a fixture replay lands facts tagged <code>news-fixture:</code> at the corpus trust tier, with zero fetches, whether or not you have ever clicked start.</p>
+      <p>Teach it something directly and it grounds on the spot. The teach panel has two ready-made examples: a short paragraph and a ten-line fact set.</p>
+      <pre class="transcript"><span class="you">teach: "A ceasefire is a formal agreement to stop fighting. A tariff is a tax on imported goods."</span>
+<span class="cite">terms.ungrounded drops by one for each term the sentence grounds</span></pre>
+      <p>Click start and it polls for real. The button reads &ldquo;start polling live sources&rdquo; until you click it, then &ldquo;poll now&rdquo; on every visit after, because a preference remembers that you asked once.</p>
+      <p class="source-note">Asserted in <code>test/adapters/news-browser-entry.test.mjs</code>: zero fetches happen before <code>start()</code>; calling it fires the first poll and writes the consent preference; a fresh session sharing the same preference store polls on load without asking again.</p>
+      <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="shots">
+      <h2>What it looks like</h2>
+      <p>The dashboard strip, the ranked ungrounded-terms panel, and the newest three feed items on top.</p>
+      <figure class="shot">
+        <img src="./screenshots/news.png" width="1024" height="600" alt="The tmct news page showing the dashboard tiles, the ranked list of ungrounded terms, and the newest feed items" loading="lazy">
+        <figcaption>news.html. Feed items, the ranked ungrounded-terms panel, and a source health strip.</figcaption>
+      </figure>
+      <a class="next-link" href="#inference"><span class="next-label">Next</span> What it works out <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="inference">
+      <h2>What it works out</h2>
+      <p><strong>Grounded is two different questions.</strong> A term is vocab-grounded when the lexicon knows the word at all, and fact-grounded when the graph holds at least one fact about it. &ldquo;Ceasefire&rdquo; is a real English word the parser reads fine, and the graph might still hold nothing about it — the ranked list labels that case &ldquo;parseable but knowledge-free&rdquo;, and labels a word the parser can't read at all &ldquo;unknown word&rdquo;, so the two problems never look like one.</p>
+      <p><strong>Ranking is an invitation, not a verdict.</strong> The ungrounded list is sorted by how often a term turned up, most first. A term at the top of the list isn't wrong or bad, it's just the biggest gap the graph has right now. Ground it and it drops off the list; the knowledge-base loop tries the top few terms itself, each poll.</p>
+      <p><strong>A source that fails is reported as a failure.</strong> Every fetch goes through one courtesy gate: a timeout, a rate limit or a dead source all read back as a failed poll, never as a fact. Three failures in a row and the source auto-disables itself, visibly, rather than quietly going stale.</p>
+      <p><strong>A miss can expire.</strong> A term the knowledge-base loop tried and got nothing back for sits in a negative cache for a day, so the loop doesn't keep re-asking a source that just said no. It comes back into play once the cache expires, or the moment you switch on a source that hasn't tried it yet.</p>
+      <p><strong>What it retrieves.</strong> Each feed item is built around one hub term and everything within two hops of it in the graph, so it reads as a set of grounded sentences about one thing, with sources named underneath, never as a rewritten article.</p>
+      <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="build">
+      <h2>How it is built</h2>
+      <p><code>src/services/news.mjs</code> is the one place every surface goes through: this page, chat.html's own <code>/news</code> command, the CLI verb, and a plain JS import all call the same functions, so no surface can drift from what the others do.</p>
+      <p>Feed parsing is string scanning over RSS, Atom and JSON Feed, plus the three sources' own JSON shapes, in <code>src/domain/feed-normalize.mjs</code> — no XML library, because a domain module can only import other domain modules. Every fetch runs through <code>createCourtesyGate</code>, the same single-slot, rate-limited, timeout-bound gate every other live source in this repo already uses.</p>
+      <p>The page is static with no backend of its own, so it can only read a source the browser itself can fetch. Every source in the registry was checked from a real browser tab hitting the live URL before it shipped; a source that only worked from curl, not a browser, was dropped from the default list rather than shipped broken.</p>
+      <p>Grounding reuses the same ingest path chat.html's own teach turn uses: strict facts from sentences the grammar fully reads, a lower-confidence optimistic tier for the rest. A bounded syllogism round runs after each batch, so a handful of new facts can chain into a few more without anyone asking a follow-up question.</p>
+      <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="papers">
+      <h2>Related work</h2>
+      <p>The refusal this page is built around, and the wire formats it reads, both follow published work rather than an invented shape.</p>
+      <ul class="refs">
+        <li>Chow, &ldquo;On optimum recognition error and reject tradeoff&rdquo;, <em>IEEE Transactions on Information Theory</em> 16(1), 1970.<span class="ref-note">The reject option: a classifier allowed to decline. An ungrounded term goes on the ranked list instead of into a guessed sentence.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978, pp. 55&ndash;76.<span class="ref-note">The open world assumption. A term with no fact yet is a gap in the graph, not a claim that nothing exists to know.</span></li>
+        <li>Winer, &ldquo;RSS 2.0 Specification&rdquo;, Berkman Klein Center for Internet &amp; Society, 2003 (revised 2009).<span class="ref-note">The wire format behind the NYT World and Wikinews feeds.</span></li>
+        <li>Nottingham and Sayre, eds., RFC 4287, &ldquo;The Atom Syndication Format&rdquo;, IETF, December 2005.<span class="ref-note">The second feed format the parser reads.</span></li>
+        <li>Ungerleider et al., &ldquo;JSON Feed Version 1.1&rdquo;, jsonfeed.org, 2020.<span class="ref-note">The third; also the add-by-URL demo target, since jsonfeed.org's own feed is the one CORS-clean JSON Feed found in source research.</span></li>
+      </ul>
+      <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="credits">
+      <h2>Credits and further reading</h2>
+      <p>The sources this page can read, and what each one costs to use.</p>
+      <ul class="refs">
+        <li>Wikimedia featured feed, Hacker News and USGS earthquakes are on by default: no key, no cost, checked from a real browser tab before shipping.</li>
+        <li>NYT World News is off by default. Its feed is published for personal, non-commercial use with attribution, so this page links every NYT item back to the story and names the outlet, and leaves turning it on to you.</li>
+        <li>Wikinews is off by default too — its own front page currently announces the Wikimedia Foundation closing the site, so the health row here is what tells you if that feed goes quiet.</li>
+        <li>Simple English Wikipedia, Wikidata and Wiktionary back the knowledge-base loop by default; DBpedia Lookup and English Wikipedia are switchable extras.</li>
+        <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>, &ldquo;Standards and bibliography&rdquo;, for the full reference list.</li>
+      </ul>
+      <a class="next-link" href="./sprites-about.html"><span class="next-label">Next demo</span> The sprite library <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <footer>
+      <p>MPL-2.0 &middot;
+        <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+        &middot;
+        <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+        &middot; <a href="./index.html">tmct home</a>
+        &middot; &copy; Polycode Limited.</p>
+    </footer>
+  </main>
+</div>
+<script type="module" src="./about-nav.mjs"></script>
+</body>
+</html>
