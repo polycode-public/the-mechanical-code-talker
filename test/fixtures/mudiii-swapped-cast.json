@@ -1,0 +1,21 @@
+{
+  "_readme": "The town-square board with the drive rows swapped: the goblin declares the pursue and consume links and the fox declares none, so the goblin hunts and the fox — whose fear derives from the goblin's own appetite — flees. Everything else (vision, mass, drain) states the same numbers the shipped world states. The test seeds the shipped world's rows minus its drive rows, adds these, and runs the SAME engine entry point the shipped fixture replays through: what swaps the cast is the rows alone, never a code branch.",
+  "world": "town-square",
+  "traitRows": [
+    { "subject": "fox", "predicate": "mgx:vision-radius", "object": "4" },
+    { "subject": "fox", "predicate": "mgx:hasMass", "object": "20" },
+    { "subject": "fox", "predicate": "mgx:mass-drain-per-turn", "object": "0.08" },
+    { "subject": "goblin", "predicate": "mgx:vision-radius", "object": "3" },
+    { "subject": "goblin", "predicate": "mgx:hasMass", "object": "8" },
+    { "subject": "goblin", "predicate": "mgx:mass-drain-per-turn", "object": "0.06" },
+    { "subject": "goblin", "predicate": "mgx:pursues", "object": "fox" },
+    { "subject": "goblin", "predicate": "mgx:consumes", "object": "fox" }
+  ],
+  "_initialNote": "fox-1 and goblin-1 open two cells apart, inside both vision radii, so the very first tick shows the swap: the goblin acquires the fox and chases, the fox acquires the goblin and evades.",
+  "initial": {
+    "agents": {
+      "fox-1": { "role": "predator", "cell": "cell-6-6", "facing": "south", "mass": 20 },
+      "goblin-1": { "role": "prey", "cell": "cell-6-8", "facing": "north", "mass": 8 }
+    }
+  }
+}

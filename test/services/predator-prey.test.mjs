@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   MUDIII_ROLES, MUDIII_STATE_PREDICATES,
   foldTownSquareState, greedyBlend, gridApplyActions, greedyAway, greedyToward, hasActiveWebAt, isMudiiiStatePredicate,
-  liveWebs, pathStateKey, placeFood, recastTownSquare, roleOfId, rolesHuntedBy, rolesHunting,
+  liveWebs, pathStateKey, placeFood, pursuedBy, fearedBy, recastTownSquare, roleOfId, rolesHuntedBy, rolesHunting,
   runTownSquareTick, seededWander,
   startTownSquareGame, townSquareBoard, townSquareTickPayload,
 } from "../../src/services/predator-prey.mjs";
@@ -1484,5 +1484,100 @@ test("the town square's own config asks for none of it, so a plain turn writes n
     assert.equal(tick.ecology.some((e) => ["catch-prey", "lay-egg", "hatch-egg"].includes(e.type)), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- drives, vision, mass and drain read off the rows -----------------------------
+
+test("pursuedBy and fearedBy read a subject's drives off the rows, the fear deriving from the eater's own appetite", () => {
+  const rows = [
+    classify("fox-1", "fox"), classify("goblin-1", "goblin"),
+    { subject: "fox", predicate: "mgx:pursues", object: "goblin" },
+    { subject: "fox", predicate: "mgx:consumes", object: "goblin" },
+    { subject: "goblin", predicate: "mgx:consumes", object: "crumb" },
+  ];
+  assert.deepEqual(pursuedBy(rows, "fox-1"), ["goblin"], "the instance reads its class's pursues row through the chain");
+  assert.deepEqual(pursuedBy(rows, "goblin-1"), [], "a goblin pursues nothing, and nothing is invented for it");
+  assert.deepEqual(fearedBy(rows, "goblin-1"), ["fox"], "the fear is the inverse of the fox's own consumes row");
+  assert.deepEqual(fearedBy(rows, "fox-1"), [], "nothing declares an appetite for a fox");
+
+  const withDeclaredFear = [...rows, { subject: "goblin-1", predicate: "mgx:evades", object: "wolf" }];
+  assert.deepEqual(fearedBy(withDeclaredFear, "goblin-1"), ["wolf"], "a declared evades set replaces the derived one entirely");
+});
+
+test("one goblin taught its own evades row stops fearing the fox while its sibling keeps fleeing", async () => {
+  const dir = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-5-7"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-7-5"), weigh("goblin-2", 8),
+    { subject: "goblin-2", predicate: "mgx:evades", object: "wolf" },
+  ], "instance-evade-override");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: CONFIG });
+    assert.equal(tick.rungs["goblin-1"], "evade", "the sibling still inherits the derived fear of the fox");
+    assert.equal(tick.rungs["goblin-2"], "wander", "its own evades row replaced the derived set, and no wolf is on this board");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("vision radius reads per subject: an instance's own short-sight row blinds it while the class default still sees", async () => {
+  // fox-1 and the goblin sit 3 apart — inside the class's stated radius of 4,
+  // outside the taught instance radius of 1.
+  const seeing = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-8-5"), weigh("goblin-1", 8),
+  ], "class-vision");
+  const blinded = await boardWith([
+    classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-8-5"), weigh("goblin-1", 8),
+    { subject: "fox-1", predicate: "mgx:vision-radius", object: "1" },
+  ], "instance-vision");
+  try {
+    const sees = await runTownSquareTick(seeing, { layout: LAYOUT, config: CONFIG });
+    assert.equal(sees.rungs["fox-1"], "chase", "the class's stated radius of 4 acquires the goblin");
+    const blind = await runTownSquareTick(blinded, { layout: LAYOUT, config: CONFIG });
+    assert.equal(blind.rungs["fox-1"], "wander", "the instance's own radius of 1 no longer reaches it");
+  } finally {
+    await rm(seeing, { recursive: true, force: true });
+    await rm(blinded, { recursive: true, force: true });
+  }
+});
+
+test("mass drain reads per subject, so one taught goblin starves faster than its untouched sibling", async () => {
+  const dir = await boardWith([
+    classify("goblin-1", "goblin"), place("goblin-1", "cell-2-2"), weigh("goblin-1", 8),
+    classify("goblin-2", "goblin"), place("goblin-2", "cell-9-9"), weigh("goblin-2", 8),
+    { subject: "goblin-1", predicate: "mgx:mass-drain-per-turn", object: "1" },
+  ], "instance-drain");
+  try {
+    const tick = await runTownSquareTick(dir, { layout: LAYOUT, config: CONFIG });
+    assert.equal(tick.agents["goblin-1"].mass, 7, "its own row: 8 - 1");
+    assert.equal(tick.agents["goblin-2"].mass, 7.94, "the class's stated drain: 8 - 0.06");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a fresh mint's mass comes from the class's own row, and from config only on a board that states none", async () => {
+  const configWith5 = { ...CONFIG, predatorInitialMass: 5 };
+  const stated = await boardWith([], "mint-mass-stated");
+  const bare = await mkdtemp(join(tmpdir(), "tmct-mudiii-mint-mass-config-"));
+  try {
+    await startTownSquareGame(stated, { layout: LAYOUT, config: configWith5 });
+    const statedRows = readFactRows(await loadMemory(stated));
+    assert.ok(
+      statedRows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "20"),
+      "the world's own fox row outranks the config number",
+    );
+    await startTownSquareGame(bare, { layout: LAYOUT, config: configWith5 });
+    const bareRows = readFactRows(await loadMemory(bare));
+    assert.ok(
+      bareRows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "5"),
+      "a store with no class row seeds from the config number",
+    );
+  } finally {
+    await rm(stated, { recursive: true, force: true });
+    await rm(bare, { recursive: true, force: true });
   }
 });
