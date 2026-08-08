@@ -381,7 +381,13 @@ test("the corpus-to-SKOS bridge is annotated: mgx:relatedTo points at skos:relat
 
 test("the ontology grounds the grammar: every emitted kind appears, and lexicon predicates/classes are declared", async () => {
   const text = await readFile(TTL_FILE, "utf8");
-  for (const kind of ["rdfs:subClassOf", "rdf:type", "owl:ObjectProperty", "owl:DatatypeProperty", "owl:someValuesFrom", "owl:minCardinality", "owl:maxCardinality", "owl:cardinality", "owl:disjointWith", "owl:hasValue", "owl:intersectionOf", "owl:onProperty", "owl:onClass", "owl:Restriction"]) {
+  for (const kind of [
+    "rdfs:subClassOf", "rdf:type", "owl:ObjectProperty", "owl:DatatypeProperty", "owl:someValuesFrom",
+    "owl:minCardinality", "owl:maxCardinality", "owl:cardinality", "owl:disjointWith", "owl:hasValue",
+    "owl:intersectionOf", "owl:onProperty", "owl:onClass", "owl:Restriction",
+    // phase-0 patterns 10-16 (PLAN_SYLLOGIST_EL_DL.md section 5)
+    "owl:unionOf", "owl:complementOf", "owl:oneOf", "owl:differentFrom", "owl:TransitiveProperty",
+  ]) {
     assert.ok(text.includes(kind), `grammar kind ${kind} covered`);
   }
   // top-level software-entity classes align with the lexicon's noun lemmas

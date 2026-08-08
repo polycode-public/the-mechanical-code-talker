@@ -586,7 +586,7 @@ dact:apology a dact:CommunicativeFunction ;
   rdfs:comment "Expresses regret for something the speaker did." .
 
 # ---------------------------------------------------------------------------
-# 2. Grammar-emitted kinds (src/grammar/ace.mjs) — how the 8 ACE-OWL patterns
+# 2. Grammar-emitted kinds (src/grammar/ace.mjs) — how the 16 ACE-OWL patterns
 #    use the standard vocabulary. Facts store these as predicate strings; the
 #    `kind` label on each emitted triple names the governing OWL construct.
 #
@@ -606,6 +606,18 @@ dact:apology a dact:CommunicativeFunction ;
 #                                           owl:hasValue restriction / owl:DatatypeProperty
 #                                           assertion (data ADJ)
 #
+#    pattern 10  every N1 is a N2 or a N3     owl:unionOf, arms sorted by local name
+#    pattern 11  everything that is not N1    owl:complementOf
+#                is N2
+#    pattern 12  PROPERNAME is not a N        owl:disjointWith (individual subject)
+#    pattern 13  the N1 N2s are exactly       owl:oneOf, + rdf:type per member,
+#                M1, M2 and M3                + pairwise owl:differentFrom
+#    pattern 14  PROPERNAME1 is not           owl:differentFrom
+#                PROPERNAME2
+#    pattern 15  every N1 VERB [a] N2         owl:someValuesFrom (bare existential,
+#                                             no that-clause)
+#    pattern 16  VERB is transitive           owl:TransitiveProperty
+#
 #    Flat-store stand-in: the JSON fact store has no RDF lists, so a pattern-4
 #    intersection is flattened to REPEATED owl:intersectionOf triples (one per
 #    member) on a readable deterministic node, e.g.
@@ -618,6 +630,15 @@ tmct:has a owl:ObjectProperty ;
   rdfs:label "has" ;
   rdfs:comment "The generic possession property pattern-5 cardinality restrictions constrain (every module has at least 1 test)." .
 
+# Patterns 10-16's five new terms (phase 0 of PLAN_SYLLOGIST_EL_DL.md). Two of
+# the five follow the SAME flat-store convention as owl:intersectionOf above:
+# the JSON fact store has no RDF lists, so owl:unionOf and owl:oneOf flatten to
+# REPEATED rows, one per member, on a readable deterministic node — e.g. a
+# pattern-10 union of tmct:cat and tmct:dog stores as
+#   tmct:cat-or-dog owl:unionOf tmct:cat ;
+#                   owl:unionOf tmct:dog .
+# rather than one owl:unionOf row holding an RDF list.
+
 # Documentation example of a pattern-4 emission in real Turtle (kept as a
 # named, deterministic node exactly as the grammar mints it):
 tmct:some-imports-database a owl:Restriction ;
@@ -627,6 +648,31 @@ tmct:some-imports-database a owl:Restriction ;
 tmct:module-that-imports-database a owl:Class ;
   owl:intersectionOf ( tmct:module tmct:some-imports-database ) ;
   rdfs:subClassOf tmct:service .
+
+# Documentation examples of the five phase-0 terms, each exactly as pattern
+# 10-16 mints it (owl: is standard OWL 2 vocabulary, so — like
+# owl:intersectionOf above — these terms need no declaration of their own,
+# only the flat-store convention note already given).
+
+tmct:cat-or-dog a owl:Class ;
+  owl:unionOf tmct:cat ;
+  owl:unionOf tmct:dog .
+tmct:pet a owl:Class ;
+  rdfs:subClassOf tmct:cat-or-dog .
+
+tmct:not-aquatic a owl:Class ;
+  owl:complementOf tmct:aquatic ;
+  rdfs:subClassOf tmct:terrestrial .
+
+tmct:primary-colour a owl:Class ;
+  owl:oneOf tmct:blue ;
+  owl:oneOf tmct:red ;
+  owl:oneOf tmct:yellow .
+tmct:blue owl:differentFrom tmct:red .
+tmct:blue owl:differentFrom tmct:yellow .
+tmct:red owl:differentFrom tmct:yellow .
+
+tmct:contains a owl:TransitiveProperty .
 
 # ---------------------------------------------------------------------------
 # 3. Software-entity classes — the lexicon's top-level nouns (lowercase lemma

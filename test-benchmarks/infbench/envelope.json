@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": {
-    "stamp": "5.0.5",
-    "caseCount": 399
+    "stamp": "5.0.25",
+    "caseCount": 413
   },
   "bands": [
     "INF-1",
@@ -83,8 +83,8 @@
       "gatePass": true,
       "metrics": {
         "overall": {
-          "n": 399,
-          "completion": 1,
+          "n": 413,
+          "completion": 0.9322033898305084,
           "fabricationRate": 0,
           "gatePass": true
         },
@@ -115,7 +115,7 @@
           },
           "INF-4": {
             "n": 70,
-            "completion": 1,
+            "completion": 0.7857142857142857,
             "fabricationRate": 0,
             "gatePass": true,
             "ceilingGraded": 30,
@@ -131,7 +131,7 @@
           },
           "INF-6": {
             "n": 40,
-            "completion": 1,
+            "completion": 0.875,
             "fabricationRate": 0,
             "gatePass": true,
             "ceilingGraded": 0,
@@ -146,12 +146,12 @@
             "ceilingGradedPassed": 14
           },
           "INF-8": {
-            "n": 20,
-            "completion": 1,
+            "n": 34,
+            "completion": 0.7647058823529411,
             "fabricationRate": 0,
             "gatePass": true,
-            "ceilingGraded": 12,
-            "ceilingGradedPassed": 12
+            "ceilingGraded": 26,
+            "ceilingGradedPassed": 18
           }
         }
       },
@@ -164,6 +164,8 @@
         ],
         "INF-8": [
           "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation",
+          "OWL 2 DL nominals + UNA-lite identity (Stage DL, PLAN_SYLLOGIST_EL_DL.md)",
+          "OWL 2 DL qualified-cardinality consistency checking (Stage DL, PLAN_SYLLOGIST_EL_DL.md)",
           "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation"
         ]
       }

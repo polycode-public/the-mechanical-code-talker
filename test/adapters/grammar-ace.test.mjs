@@ -160,7 +160,7 @@ test("pattern 8: copula — data adjective asserts the property, subclass adject
 test("near-misses return null — the grammar declines, it never guesses", () => {
   assert.equal(parseAce("most modules are tested"), null, "generalized quantifier is outside the fragment");
   assert.equal(parseAce("please summarize the codebase"), null);
-  assert.equal(parseAce("every module imports config"), null, "universal + bare relation is not one of the 8 patterns");
+  assert.equal(parseAce("every module frobnicates config"), null, "an undeclared verb is never guessed, even in an otherwise well-formed universal + bare relation");
   assert.equal(parseAce("hello"), null);
   assert.equal(parseAce(""), null);
   assert.equal(parseAce(null), null);

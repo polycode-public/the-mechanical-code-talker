@@ -1,5 +1,5 @@
 // grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser.
-// Implements the 9 controlled-English sentence patterns of
+// Implements the 16 controlled-English sentence patterns of
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
@@ -47,12 +47,20 @@ const PATTERN_DISJOINT_WITH = "disjointWith";
 const PATTERN_POSSESSIVE = "possessive";
 const PATTERN_ADJECTIVE = "adjective";
 const PATTERN_CAPABILITY = "capability";
+const PATTERN_UNION = "union";
+const PATTERN_COMPLEMENT = "complement";
+const PATTERN_NEGATIVE_TYPE = "negativeType";
+const PATTERN_ENUMERATION = "enumeration";
+const PATTERN_DIFFERENT_FROM = "differentFrom";
+const PATTERN_BARE_EXISTENTIAL = "bareExistential";
+const PATTERN_TRANSITIVE_ROLE = "transitiveRole";
 
 /** The pattern field's full domain, in the README's table order. */
 const PATTERNS = Object.freeze([
   PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM,
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
-  PATTERN_CAPABILITY,
+  PATTERN_CAPABILITY, PATTERN_UNION, PATTERN_COMPLEMENT, PATTERN_NEGATIVE_TYPE,
+  PATTERN_ENUMERATION, PATTERN_DIFFERENT_FROM, PATTERN_BARE_EXISTENTIAL, PATTERN_TRANSITIVE_ROLE,
 ]);
 
 const DET = new Set(["a", "an", "the"]);
@@ -395,7 +403,81 @@ function parseCardinality(lexicon, toks, lower, hasIdx) {
   ], { n });
 }
 
-/** Patterns 1, 4, 5 and 8's "every …" arm. */
+/** Pattern 10 — "every N1 is a N2 or a N3 [or a N4 …]" → owl:unionOf, arms
+ *  sorted by local name so "a cat or a dog" and "a dog or a cat" mint the
+ *  identical union node and re-teaching the sentence stays idempotent. */
+function parseUnion(lexicon, toks, isIdx) {
+  const ns = lexicon.ns;
+  const rest = toks.slice(isIdx + 1);
+  const restLower = rest.map((t) => t.toLowerCase());
+  const orAt = [];
+  restLower.forEach((t, i) => { if (t === "or") orAt.push(i); });
+  if (!orAt.length) return null;
+  const np1 = resolveNP(lexicon, toks.slice(1, isIdx));
+  const arms = [];
+  let start = 0;
+  for (const pos of [...orAt, rest.length]) {
+    arms.push(resolveNP(lexicon, rest.slice(start, pos)));
+    start = pos + 1;
+  }
+  const allNps = [np1, ...arms];
+  if (allNps.some((np) => np.term == null)) return missOrNull(PATTERN_UNION, allNps);
+  if (allNps.some((np) => np.individual)) return null;
+  const sortedArms = [...arms].sort((a, b) => {
+    const la = local(lexicon, a.term);
+    const lb = local(lexicon, b.term);
+    return la < lb ? -1 : la > lb ? 1 : 0;
+  });
+  const u = `${ns}${sortedArms.map((a) => local(lexicon, a.term)).join("-or-")}`;
+  return hit(PATTERN_UNION, allNps, [
+    { subject: u, predicate: "rdf:type", object: "owl:Class", kind: "owl:unionOf" },
+    ...sortedArms.map((a) => ({ subject: u, predicate: "owl:unionOf", object: a.term, kind: "owl:unionOf" })),
+    { subject: np1.term, predicate: "rdfs:subClassOf", object: u, kind: "owl:unionOf" },
+  ]);
+}
+
+/** Pattern 15 — "every N1 VERB [det] N2" → someValuesFrom bare existential
+ *  restriction: "every heart has a valve" (the `has` verb), and the general
+ *  verb form "every heart contains a valve". Tried after the `that` and
+ *  cardinality arms — `parseCardinality` already claims the sentence when the
+ *  token after "has" is "at"/"exactly". No compound object (matches
+ *  `parseRestriction`/`parseCardinality`'s own convention), so a two-noun
+ *  object phrase a curated has-a teach owns ("a render method") stays
+ *  declined here and falls through untouched. */
+function parseBareExistential(lexicon, toks, lower) {
+  const ns = lexicon.ns;
+  for (let i = 2; i < toks.length - 1; i += 1) {
+    const verb = lookupVerb(lexicon, lower[i]);
+    if (!verb) continue;
+    let objStart = i + 1;
+    if (verb.prep) {
+      if (lower[objStart] !== verb.prep) continue;
+      objStart += 1;
+      if (objStart >= toks.length) continue;
+    }
+    const np1 = resolveNP(lexicon, toks.slice(1, i));
+    // A subject that fails to resolve at THIS verb position means the word at
+    // `i` is a coincidental noun/verb homonym ("test" in "every flaky test is
+    // a risk") sitting inside a sentence this arm was never meant to claim —
+    // try the next candidate verb position rather than committing to a miss
+    // that would shadow whichever OTHER pattern actually fits.
+    if (np1.term == null) continue;
+    const np2 = resolveNP(lexicon, toks.slice(objStart));
+    if (np2.term == null) return missOrNull(PATTERN_BARE_EXISTENTIAL, [np1, np2]);
+    if (np1.individual || np2.individual) return null;
+    const pred = predicateOf(verb, ns);
+    const r = `${ns}some-${local(lexicon, pred)}-${local(lexicon, np2.term)}`;
+    return hit(PATTERN_BARE_EXISTENTIAL, [np1, np2], [
+      { subject: r, predicate: "rdf:type", object: "owl:Restriction", kind: "owl:someValuesFrom" },
+      { subject: r, predicate: "owl:onProperty", object: pred, kind: "owl:someValuesFrom" },
+      { subject: r, predicate: "owl:someValuesFrom", object: np2.term, kind: "owl:someValuesFrom" },
+      { subject: np1.term, predicate: "rdfs:subClassOf", object: r, kind: "owl:someValuesFrom" },
+    ]);
+  }
+  return null;
+}
+
+/** Patterns 1, 4, 5, 8, 10 and 15's "every …" arm. */
 function parseEvery(lexicon, toks, lower) {
   const thatIdx = lower.indexOf("that");
   if (thatIdx > 1) return parseRestriction(lexicon, toks, lower, thatIdx);
@@ -403,8 +485,12 @@ function parseEvery(lexicon, toks, lower) {
   if (hasIdx > 1 && (lower[hasIdx + 1] === "at" || lower[hasIdx + 1] === "exactly")) {
     return parseCardinality(lexicon, toks, lower, hasIdx);
   }
+  const bareExistential = parseBareExistential(lexicon, toks, lower);
+  if (bareExistential) return bareExistential;
   const isIdx = lower.indexOf("is");
   if (isIdx <= 1 || isIdx === toks.length - 1) return null;
+  const union = parseUnion(lexicon, toks, isIdx);
+  if (union) return union;
   const rest = toks.slice(isIdx + 1);
   const everyAdjOnly = rest.length === 1 ? lookupAdjective(lexicon, rest[0]) : null;
   const subjectToks = toks.slice(1, isIdx);
@@ -436,6 +522,98 @@ function parseDisjoint(lexicon, toks, lower) {
   if (np1.individual || np2.individual) return null;
   return hit(PATTERN_DISJOINT_WITH, [np1, np2], [
     { subject: np1.term, predicate: "owl:disjointWith", object: np2.term, kind: "owl:disjointWith" },
+  ]);
+}
+
+/** Pattern 11 — "everything that is not N1 is N2" → owl:complementOf. Also
+ *  accepts an articled N1 ("everything that is not a N1 is a N2"). */
+function parseComplement(lexicon, toks, lower) {
+  const ns = lexicon.ns;
+  if (lower[2] !== "is" || lower[3] !== "not") return null;
+  const isIdx = lower.indexOf("is", 4);
+  if (isIdx < 5) return null;
+  const np1 = resolveNP(lexicon, toks.slice(4, isIdx));
+  const np2 = resolveNP(lexicon, toks.slice(isIdx + 1));
+  if (np1.term == null || np2.term == null) return missOrNull(PATTERN_COMPLEMENT, [np1, np2]);
+  if (np1.individual || np2.individual) return null;
+  const c = `${ns}not-${local(lexicon, np1.term)}`;
+  return hit(PATTERN_COMPLEMENT, [np1, np2], [
+    { subject: c, predicate: "rdf:type", object: "owl:Class", kind: "owl:complementOf" },
+    { subject: c, predicate: "owl:complementOf", object: np1.term, kind: "owl:complementOf" },
+    { subject: c, predicate: "rdfs:subClassOf", object: np2.term, kind: "owl:complementOf" },
+  ]);
+}
+
+/** Patterns 12 and 14 — "SUBJECT is not OBJECT" where the subject resolves as
+ *  an individual (a declared proper name or a code-ref shape — resolveNP's
+ *  own `individual` flag, deliberately narrower than `readsAsIndividualName`,
+ *  so an undeclared bare word stays the class-level pattern 6's territory,
+ *  never silently reinterpreted here): owl:disjointWith when the object is a
+ *  declared class, owl:differentFrom when the object is another individual. */
+function parseNegation(lexicon, toks, lower, isIdx) {
+  if (lower[isIdx + 1] !== "not") return null;
+  const rest = toks.slice(isIdx + 2);
+  if (!rest.length) return null;
+  const np1 = resolveNP(lexicon, toks.slice(0, isIdx));
+  const np2 = resolveNP(lexicon, rest);
+  if (np1.term == null || np2.term == null) return missOrNull(PATTERN_NEGATIVE_TYPE, [np1, np2]);
+  if (!np1.individual) return null;
+  if (np2.individual) {
+    return hit(PATTERN_DIFFERENT_FROM, [np1, np2], [
+      { subject: np1.term, predicate: "owl:differentFrom", object: np2.term, kind: "owl:differentFrom" },
+    ]);
+  }
+  return hit(PATTERN_NEGATIVE_TYPE, [np1, np2], [
+    { subject: np1.term, predicate: "owl:disjointWith", object: np2.term, kind: "owl:disjointWith" },
+  ]);
+}
+
+/** Pattern 13 — "the N1 N2s are exactly M1, M2 [and M3 …]" → owl:oneOf, with
+ *  the positive rdf:type half and the pairwise owl:differentFrom closure
+ *  UNA-lite's merge machinery needs. `tokenize` already drops commas, so the
+ *  member list is the token run with "and" as the only separator left.
+ *  Members sort lexicographically before emission, so re-teaching the same
+ *  sentence re-emits the identical triple list. */
+function parseEnumeration(lexicon, toks, lower) {
+  const areIdx = lower.indexOf("are");
+  if (areIdx < 2 || lower[areIdx + 1] !== "exactly") return null;
+  const memberToks = toks.slice(areIdx + 2).filter((t) => t.toLowerCase() !== "and");
+  if (!memberToks.length) return null;
+  const subject = resolveNP(lexicon, toks.slice(1, areIdx));
+  const members = memberToks.map((t) => resolveNP(lexicon, [t]));
+  const allNps = [subject, ...members];
+  if (allNps.some((np) => np.term == null)) return missOrNull(PATTERN_ENUMERATION, allNps);
+  if (subject.individual || members.some((m) => m.individual)) return null;
+  const sorted = [...members].sort((a, b) => (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
+  const triples = [
+    ...sorted.map((m) => ({ subject: subject.term, predicate: "owl:oneOf", object: m.term, kind: "owl:oneOf" })),
+    ...sorted.map((m) => ({ subject: m.term, predicate: "rdf:type", object: subject.term, kind: "owl:oneOf" })),
+  ];
+  for (let i = 0; i < sorted.length; i += 1) {
+    for (let j = i + 1; j < sorted.length; j += 1) {
+      triples.push({ subject: sorted[i].term, predicate: "owl:differentFrom", object: sorted[j].term, kind: "owl:differentFrom" });
+    }
+  }
+  return hit(PATTERN_ENUMERATION, allNps, triples);
+}
+
+/** Pattern 16 — "VERB is transitive" → owl:TransitiveProperty on the verb's
+ *  minted predicate. Accepts the verb's 3sg surface ("contains") through the
+ *  existing `lookupVerb` fold, and its gerund ("containing") through a small
+ *  local ing-stripping fold — the lexicon's own morphology never folds
+ *  gerunds, since no other pattern needs one. */
+function parseTransitiveRole(lexicon, toks, lower) {
+  const ns = lexicon.ns;
+  const surface = lower[0];
+  let verb = lookupVerb(lexicon, surface);
+  if (!verb && surface.length > 4 && /ing$/.test(surface)) {
+    const stem = surface.slice(0, -3);
+    verb = lookupVerb(lexicon, stem) || lookupVerb(lexicon, `${stem}e`);
+  }
+  if (!verb) return null;
+  const pred = predicateOf(verb, ns);
+  return hit(PATTERN_TRANSITIVE_ROLE, [], [
+    { subject: pred, predicate: "rdf:type", object: "owl:TransitiveProperty", kind: "owl:TransitiveProperty" },
   ]);
 }
 
@@ -522,21 +700,34 @@ function parseCopula(lexicon, toks, lower, isIdx) {
   ]);
 }
 
-/** Parse one sentence against the 9-pattern ACE-OWL sub-fragment. See the file
- *  header for the result contract; `lexicon` defaults to the committed core
- *  under the library's own neutral DEFAULT_NS ("ex:") when the caller doesn't
- *  supply one. */
+/** Parse one sentence against the 16-pattern ACE-OWL sub-fragment. See the
+ *  file header for the result contract; `lexicon` defaults to the committed
+ *  core under the library's own neutral DEFAULT_NS ("ex:") when the caller
+ *  doesn't supply one. */
 export function parseAce(sentence, lexicon = loadLexicon()) {
   const toks = tokenize(sentence);
   if (toks.length < 3) return null;
   const lower = toks.map((t) => t.toLowerCase());
+  if (toks.length === 3 && lower[1] === "is" && lower[2] === "transitive") {
+    const transitive = parseTransitiveRole(lexicon, toks, lower);
+    if (transitive) return transitive;
+  }
+  if (lower[0] === "everything" && lower[1] === "that") return parseComplement(lexicon, toks, lower);
   if (lower[0] === "every") return parseEvery(lexicon, toks, lower);
   if (lower[0] === "no") return parseDisjoint(lexicon, toks, lower);
   if (/'s$/.test(lower[0]) && lower[0].length > 2) return parsePossessive(lexicon, toks, lower);
   if (lower[0] === "the" && lower.includes("of") && lower.includes("is")) {
     return parseOfForm(lexicon, toks, lower);
   }
+  if (lower[0] === "the" && lower.includes("are") && lower.includes("exactly")) {
+    const enumeration = parseEnumeration(lexicon, toks, lower);
+    if (enumeration) return enumeration;
+  }
   const isIdx = lower.indexOf("is");
+  if (isIdx > 0 && lower[isIdx + 1] === "not") {
+    const negation = parseNegation(lexicon, toks, lower, isIdx);
+    if (negation) return negation;
+  }
   if (isIdx > 0) return parseCopula(lexicon, toks, lower, isIdx);
   const canIdx = lower.indexOf("can");
   if (canIdx > 0 && canIdx < toks.length - 1) {

@@ -45,6 +45,13 @@ section 2:
 | no N1 is a N2 | `owl:disjointWith` |
 | N1's N2 is VALUE | `owl:DatatypeProperty` or `owl:ObjectProperty` per the noun's declared typing |
 | ADJ N / X is ADJ | `rdfs:subClassOf` (subclass adjective) or `owl:hasValue` / `owl:DatatypeProperty` (data adjective) |
+| every N1 is a N2 or a N3 [or a N4 …] | `owl:unionOf` (arms sorted by local name) |
+| everything that is not N1 is N2 | `owl:complementOf` |
+| PROPERNAME is not a N | `owl:disjointWith` (subject an individual) |
+| the N1 N2s are exactly M1, M2 [and M3 …] | `owl:oneOf` (+ `rdf:type` per member, + pairwise `owl:differentFrom`) |
+| PROPERNAME1 is not PROPERNAME2 | `owl:differentFrom` (both sides individuals) |
+| every N1 VERB [a] N2 | `owl:someValuesFrom` (bare existential, no `that`-clause) |
+| VERB is transitive | `owl:TransitiveProperty` |
 
 Two flat-store conventions to know: an intersection (pattern 4) is stored as
 **repeated `owl:intersectionOf` triples** (the JSON fact store has no RDF
