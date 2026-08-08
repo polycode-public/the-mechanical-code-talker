@@ -3040,17 +3040,17 @@ function modifierIsWired(shape, kind, entityType) {
 }
 const TRANSITIVE_MAX_DEPTH = 8; // matches renderImpact's own default (codegraph.mjs)
 
-/** A graph's own vocabulary nodes carry their definition text under this
- *  property. A code entity's docstring rides `seon:hasDoc` and shares the
- *  plain `doc` key, so the PROP is what separates the two. */
-const SCHEMA_DOC_PROP = "mgx:schemaDoc";
+/** A graph's own vocabulary nodes carry their definition text under one of
+ *  these properties. A code entity's docstring rides `seon:hasDoc` and shares
+ *  the plain `doc` key, so this set is what separates the two. */
+const SCHEMA_DOC_PROPS = new Set(["mgx:schemaDoc", "mgx:lexiconDoc"]);
 
 /** The definition text an individual publishes about itself, or null. Reading
  *  the meta lane off this attribute rather than a fixed class-name list lets a
  *  graph declare its own documented individual class (a glossary term, say)
  *  and have "what is X" answer for it like any other vocabulary node. */
 function schemaDefinitionOf(ind) {
-  return (ind?.attributes || []).find((a) => a.prop === SCHEMA_DOC_PROP)?.value || null;
+  return (ind?.attributes || []).find((a) => SCHEMA_DOC_PROPS.has(a.prop))?.value || null;
 }
 
 function schemaKindWordFor(cls) {
@@ -4055,7 +4055,20 @@ function renderCore(parsed, result, graph) {
         miss: true, ambiguous: false,
       };
     }
-    const entityWord = nounFor(parsed.entityType || "Module", 2);
+    // No entity type was parsed (a bare "what denotes X" names no grain), so the
+    // word for what was searched comes off the kind's own object classes in the
+    // loaded graph rather than defaulting to "modules" — a kind like `denotes`
+    // never targets a module at all, and saying so would misname what was searched.
+    // When the graph holds no edges of this kind at all, there is nothing to
+    // read a class from, and "Module" stays the plain default.
+    const entityWord = parsed.entityType
+      ? nounFor(parsed.entityType, 2)
+      : (() => {
+          const kindClasses = [...classesForKinds(graph, kindsFor(parsed.kind))];
+          if (kindClasses.length === 1) return nounFor(kindClasses[0], 2);
+          if (kindClasses.length > 1) return kindClasses.map((c) => nounFor(c, 2)).join(" or ");
+          return nounFor("Module", 2);
+        })();
     // Name the resolved antecedent, not the raw pronoun: "who touched it" that
     // bound "it" to fnAlpha must say so, or the receipt reads as though nothing
     // was resolved at all. Scoped to a context pronoun so a typed term keeps the

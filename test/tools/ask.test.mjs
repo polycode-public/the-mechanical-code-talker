@@ -1661,6 +1661,12 @@ function buildProviderGraph() {
     id: "lex:task", label: "task", class: "LexiconTerm", derived_from: [], mentions: [],
     attributes: [{ prop: "mgx:schemaDoc", key: "doc", value: "A unit of scheduled work tracked by the app." }],
   });
+  // A second documented individual carried under mgx:lexiconDoc rather than
+  // mgx:schemaDoc — the same meta lane must reach both properties.
+  entities.individuals.push({
+    id: "lex:sprint", label: "sprint", class: "LexiconTerm", derived_from: [], mentions: [],
+    attributes: [{ prop: "mgx:lexiconDoc", key: "doc", value: "A fixed block of time the team plans work in." }],
+  });
   entities.objectProperties.push({
     predicate: "serves", prop: "mgx:serves", count: 1,
     examples: [{
@@ -1712,6 +1718,37 @@ test("ask(): serves/denotes are absent from a graph tmct's own indexer built, an
   assert.equal(ask(graph, "what does myFile.mjs serve").tmct_ask.miss, true);
 });
 
+// A `denotes` graph whose edges point at Class individuals, not modules — the
+// empty-reverse-result branch must name that real object grain, not fabricate
+// "modules" for a kind that never targets one.
+function buildDenotesToClassGraph() {
+  const entities = buildEntities([
+    { path: "src/models/foo.mjs", dotted: "src.models.foo", imports: [], calls: [],
+      defines: [{ name: "Foo", kind: "class", lineno: 1, decorators: [] }] },
+    { path: "src/models/bar.mjs", dotted: "src.models.bar", imports: [], calls: [],
+      defines: [{ name: "Bar", kind: "class", lineno: 1, decorators: [] }] },
+  ], [], { generatedAt: "t" });
+  entities.individuals.push({
+    id: "lex:model", label: "model", class: "LexiconTerm", derived_from: [], mentions: [], attributes: [],
+  });
+  entities.objectProperties.push({
+    predicate: "denotes", prop: "mgx:denotes", count: 1,
+    examples: [{
+      subject: "lex:model", object: "fn:src/models/foo.mjs#Foo",
+      subjectLabel: "model", objectLabel: "Foo",
+    }],
+  });
+  return parseEntities(entities);
+}
+
+test("ask(): a bare reverse \"what denotes X\" on an empty result names the kind's real object grain, not modules", () => {
+  const graph = buildDenotesToClassGraph();
+  const { content, tmct_ask } = ask(graph, "what denotes Bar");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /^No classes found whose module directly denotes Bar\./);
+  assert.doesNotMatch(content, /No modules found/);
+});
+
 // ---- §meta shape reaches any individual carrying a definition, not a fixed
 // class-name list — a graph can declare its own documented vocabulary class. ----
 
@@ -1724,6 +1761,16 @@ test("ask(): \"what is X\" answers from a documented individual whose class is n
     // the kind word is read off the individual's own class, not guessed as "predicate"
     assert.match(content, /task is a LexiconTerm in this graph's vocabulary/);
     assert.doesNotMatch(content, /predicate \(relation\)/);
+  }
+});
+
+test("ask(): \"what is X\" also answers from a documented individual carried under mgx:lexiconDoc", () => {
+  const graph = buildProviderGraph();
+  for (const q of ["what is sprint", "what does sprint mean"]) {
+    const { content, tmct_ask } = ask(graph, q);
+    assert.equal(tmct_ask.miss, false, `${q} should reach the meta lane`);
+    assert.match(content, /A fixed block of time the team plans work in\./);
+    assert.match(content, /sprint is a LexiconTerm in this graph's vocabulary/);
   }
 });
 

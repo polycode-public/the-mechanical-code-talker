@@ -119,6 +119,8 @@ export function relationKind(group) {
   if (/\b(touch|chang|modif)/.test(pred)) return "touches";
   if (/\bcontain/.test(pred)) return "contains";
   if (/\b(inherit|subclass|extend|specializ)/.test(pred)) return "inherits";
+  if (/denot/.test(pred)) return "denotes";
+  if (/\bserve/.test(pred)) return "serves";
   return null;
 }
 
@@ -386,6 +388,11 @@ export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
         if (!coveredBy.has(e.object)) coveredBy.set(e.object, []);
         coveredBy.get(e.object).push(e.subjectLabel || e.subject);
       }
+    } else if (kind === "serves") {
+      // serves runs subject-provides-object (a handler serves a route), the
+      // opposite of imports/calls' subject-depends-on-object — so the
+      // dependent here is the OBJECT, not the subject.
+      for (const e of g.edges) addDependent(e.subject, e.object, e.objectLabel || e.object, g.predicate);
     }
   }
 
@@ -435,7 +442,7 @@ export function renderImpact(graph, ind, { maxDepth = 8 } = {}) {
   });
   const truncatedStructural = graph.truncated.filter((t) => {
     const kind = relationKind({ predicate: t.predicate });
-    return kind === "imports" || kind === "calls" || kind === "callsSymbol" || kind === "tests";
+    return kind === "imports" || kind === "calls" || kind === "callsSymbol" || kind === "tests" || kind === "serves";
   });
   if (truncatedStructural.length) {
     lines.push(

@@ -96,6 +96,8 @@ test("relationKind matches the SEON/mgx prop token first, then the verb", () => 
   assert.equal(relationKind({ predicate: "covers" }), "tests");
   assert.equal(relationKind({ predicate: "contains entity" }), "contains");
   assert.equal(relationKind({ predicate: "subclass of" }), "inherits");
+  assert.equal(relationKind({ predicate: "mgx:denotesCodeEntity" }), "denotes");
+  assert.equal(relationKind({ predicate: "serves as backend for" }), "serves");
   assert.equal(relationKind({ predicate: "works at" }), null);
 });
 
@@ -245,6 +247,46 @@ test("impactClosure: two symbols calling each other in the SAME module never pro
   };
   const g = parseEntities(selfLoopPayload);
   assert.deepEqual(impactClosure(g, g.byId.get("mod:app/c.mjs")), []);
+});
+
+test("impactClosure: a serves edge's dependent runs opposite imports/calls — the route depends on the handler that serves it", () => {
+  const servesPayload = {
+    individuals: [
+      { id: "mod:app/handlers/tasks.mjs", class: "Module", label: "app/handlers/tasks.mjs" },
+      { id: "mod:app/routes/tasks.mjs", class: "Module", label: "app/routes/tasks.mjs" },
+    ],
+    objectProperties: [
+      // handler PROVIDES/backs the route, so the route is the dependent.
+      { predicate: "serves", prop: "mgx:serves", examples: [
+        { subject: "mod:app/handlers/tasks.mjs", object: "mod:app/routes/tasks.mjs",
+          subjectLabel: "app/handlers/tasks.mjs", objectLabel: "app/routes/tasks.mjs" },
+      ] },
+    ],
+  };
+  const g = parseEntities(servesPayload);
+  const levels = impactClosure(g, g.byId.get("mod:app/handlers/tasks.mjs"));
+  assert.equal(levels.length, 1);
+  assert.deepEqual(levels[0].map((d) => d.id), ["mod:app/routes/tasks.mjs"]);
+  assert.equal(levels[0][0].via, "serves");
+});
+
+test("renderImpact: a serves-only dependent renders, and its truncation counts toward the impact warning", () => {
+  const servesPayload = {
+    individuals: [
+      { id: "mod:app/handlers/tasks.mjs", class: "Module", label: "app/handlers/tasks.mjs" },
+      { id: "mod:app/routes/tasks.mjs", class: "Module", label: "app/routes/tasks.mjs" },
+    ],
+    objectProperties: [
+      { predicate: "serves", prop: "mgx:serves", count: 5, examples: [
+        { subject: "mod:app/handlers/tasks.mjs", object: "mod:app/routes/tasks.mjs",
+          subjectLabel: "app/handlers/tasks.mjs", objectLabel: "app/routes/tasks.mjs" },
+      ] },
+    ],
+  };
+  const g = parseEntities(servesPayload);
+  const text = renderImpact(g, g.byId.get("mod:app/handlers/tasks.mjs"));
+  assert.match(text, /app\/routes\/tasks\.mjs \(serves it\)/);
+  assert.match(text, /warning: partial edge lists \(serves: 1\/5\)/);
 });
 
 test("renderDescribe: edges both directions, commit attestation + provenance", () => {
