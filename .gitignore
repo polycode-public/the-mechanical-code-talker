@@ -104,6 +104,8 @@ public/ledger-browser.bundle.js
 public/sprites-browser.bundle.js
 public/ingest-browser.bundle.js
 public/research-browser.bundle.js
+public/news-browser.bundle.js
+public/news-fixtures.json
 public/claims-browser.bundle.js
 public/chat-seed.json
 public/reference-pack/

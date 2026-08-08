@@ -1187,6 +1187,49 @@ node bin/tmct.mjs news sources
 Goal: `news.html` as a generated demo page with its own bundle, the ledger dashboard idiom, the
 chat seed, consent-gated timers, the request log, and the free-text/upload panel.
 
+**Built.** `src/services/news-viz.mjs` (`renderNewsHtml`), `src/surfaces/web/news-browser-entry.mjs`
+(`createNewsSession`) and `scripts/build-news-bundle.mjs` ship as specified below: the S0–S5 phase
+machine, the explicit-start consent gate (a `tmct.news.started` localStorage preference, restored
+by `createNewsSession`'s own injectable `prefs` store so the session — not the DOM — owns whether a
+returning visit polls on load), the request log, the two named fixture-replay demo buttons ("replay
+recorded NYT sample", "replay recorded Wikipedia sample") fed by the bundled `news-fixtures.json`,
+the seven-tile dashboard (`.kpirow` × 5, `.tile-bars` × 2) on the shared `viz-theme.mjs`/
+`memory-panel-viz.mjs` machinery, and `escapeHtml` at every render site (pinned by a test that every
+`https://` this page names sits inside the one fenced `<!-- sources:start -->` … `<!-- sources:end
+-->` block). `renderNewsHtml`'s inline script is a classic (non-module) IIFE that splices its shared
+helpers via `.toString()`, the same convention `ledger-viz.mjs`/`chat-page-viz.mjs` use — not an ES
+`<script type="module">` import, which a static generated page has no bundler to resolve.
+
+Two scope calls, made because the phase's own text names them loosely enough to leave room and the
+dispatch brief said render + entry + bundle only: the `page:` bag `publishTmctSurface` receives
+carries static helpers only (`registerWinkModel`, `openPersistedStore`, `newsSourceRecords`,
+`NEWS_START_PREF_KEY`); every session-bound verb (`start`/`poll`/`enrich`/`buildFeed`/`rank`/
+`addSource`/`setInterval`/`ingestText`/`ingestFile`/`replayFixture`/`revokeConsent`) lives on the
+session object itself, reached as `tmct.session.<verb>()` through the generic surface `tmct-surface.mjs`
+already provides — the same access pattern `tmct.session.turn()` uses everywhere else, rather than a
+second, session-scoped copy of the same eleven functions duplicated onto `page`. And
+`news-fixtures.json` bundles exactly the two fixtures the two named demo buttons need (the NYT RSS
+body, the Wikimedia featured-feed body) rather than every format in `test/fixtures/news/` — the
+broader per-source fixture-route bundle a live-poll e2e spec would fulfil routes from is phase 8's
+own job, when that spec exists to consume it.
+
+Tested by `test/services/news-viz.test.mjs` (10 tests: the meta marker pair, the single h1, all
+seven dashboard tile/panel labels, the start button and controls, the two fixture buttons, the two
+teach-panel example buttons, escaping under an adversarial title and seed stamp, and the fenced
+sources-block boundary) and `test/adapters/news-browser-entry.test.mjs` (11 tests: no fetch before
+`start()`, `start()` firing the first fetch and persisting consent, the phase sequence settling on
+`idle`, `addSource()`'s own preflight running independent of poll consent, fixture replay landing
+`news-fixture:` corpus-tier facts without any fetch, the seed-only fallback, upload
+validate-and-downgrade, `revokeConsent` reading back as first-visit on a fresh session sharing the
+same `prefs` store, `setInterval`'s floor clamp and timer re-arm, a lexicon `.json` upload widening
+vocabulary with no fact write, and the full session verb surface). Both new files are in
+`test/estate/pack-manifest.json`; `test/estate/import-layers.test.mjs` and `test/estate/pack.test.mjs`
+pass. `npm run build:news-bundle` builds a 1.2 MB `public/news-browser.bundle.js` (in line with the
+research bundle's own size) and a 3 KB `public/news-fixtures.json`; both are gitignored, Pages-only
+build output, their `.gitignore` lines added in this round. `public/news.html` itself — the actual
+generated page, and its own `.gitignore` line — stays phase 7a's job: `DEMO_PAGES` enrolment and
+`npm run demo:build` are out of this round.
+
 ### 13.1 `src/services/news-viz.mjs`
 
 `renderNewsHtml({ title, seedStamp, seedBytes, digestStructures })`, modelled on
