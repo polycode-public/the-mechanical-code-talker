@@ -4,11 +4,16 @@
 // a case-split conclusion depends on every branch of its proof, and batch
 // provenance for that shape is a later problem.
 //
-// ALC connectives: top, bottom, atomic negation, intersection, union,
-// existential and universal restriction. The concept-expression AST also
-// carries a nominal tag and qualified-cardinality tags for a future
-// role-hierarchy/nominal/cardinality increment to grow into; this module's
-// own expansion rules and clash detection only reason over the ALC subset.
+// ALC connectives — top, bottom, atomic negation, intersection, union,
+// existential and universal restriction — plus two SHOIQ letters: transitive
+// roles ("S": a role declared owl:TransitiveProperty makes the universal
+// rule propagate through its own successors, and blocking runs as equality
+// blocking throughout so that propagation still terminates) and role
+// hierarchies ("H": rdfs:subPropertyOf makes an edge on a narrower role
+// count as an edge on every role above it, read through a role closure
+// precomputed once per KB). The concept-expression AST also carries a
+// nominal tag and qualified-cardinality tags for a future nominal/
+// cardinality increment to grow into.
 //
 // Deterministic throughout: fixed rule-application priority, a fixed branch
 // stack (LIFO, no JS-call recursion — a deep existential chain must not
@@ -114,6 +119,59 @@ function clampNonNegativeInt(value, fallback) {
 
 const CODE_REF_SHAPE = /[./\\#:@]/;
 
+// ---- role hierarchy closure -------------------------------------------
+
+/** A memoized forward walk over `edges` ([[from, to], …]): returns a
+ *  function from a node to the full set of nodes reachable by following
+ *  `edges`, transitively. One adjacency map built once, cached per query —
+ *  the same shape syllogise.mjs's own buildAncestorCloser uses. */
+function buildForwardWalk(edges) {
+  const succ = new Map();
+  for (const [a, b] of edges || []) {
+    if (!a || !b || a === b) continue;
+    if (!succ.has(a)) succ.set(a, new Set());
+    succ.get(a).add(b);
+  }
+  const cache = new Map();
+  return (start) => {
+    if (cache.has(start)) return cache.get(start);
+    const seen = new Set();
+    const stack = [...(succ.get(start) || [])];
+    while (stack.length) {
+      const n = stack.pop();
+      if (seen.has(n)) continue;
+      seen.add(n);
+      for (const next of succ.get(n) || []) if (!seen.has(next)) stack.push(next);
+    }
+    cache.set(start, seen);
+    return seen;
+  };
+}
+
+/** For every role in `roleNames`, the set of roles (including itself) whose
+ *  edges count as that role's own edges under `rdfs:subPropertyOf` —
+ *  every role at or below it in the hierarchy. `subPropertyEdges` is
+ *  `[[sub, sup], …]`. Precomputed once per KB, so a rule reading "does this
+ *  edge satisfy role X" is one Set lookup, not a walk. */
+function buildRoleClosure(subPropertyEdges, roleNames) {
+  const subRolesOf = buildForwardWalk((subPropertyEdges || []).map(([sub, sup]) => [sup, sub]));
+  const closure = new Map();
+  for (const role of roleNames) closure.set(role, new Set([role, ...subRolesOf(role)]));
+  return closure;
+}
+
+/** Does an edge labelled `edgeRole` satisfy a rule asking for `role`? True
+ *  when they're the same role, or when `edgeRole` is a declared sub-role of
+ *  `role` under the KB's precomputed role closure. With no closure entry for
+ *  `role` (it never appeared in a stored `owl:onProperty` or
+ *  `rdfs:subPropertyOf` row), only an exact match counts — the same
+ *  behaviour every rule had before role hierarchies existed. */
+function roleCountsAs(kb, edgeRole, role) {
+  if (edgeRole === role) return true;
+  const counted = kb && kb.roleClosure ? kb.roleClosure.get(role) : null;
+  return counted ? counted.has(edgeRole) : false;
+}
+
 // Meta-vocabulary objects a `rdf:type` row can carry that describe the
 // tableau's OWN scaffolding (a restriction node, a role's transitivity tag,
 // a class-expression node's own type tag) rather than an ABox assertion
@@ -175,13 +233,22 @@ function detectClash(node) {
   return null;
 }
 
+// Equality blocking: a node is blocked only by an ancestor whose label set is
+// exactly the same, not merely a superset. Subset blocking is sound and
+// complete for plain ALC, but a transitive role's ∀-rule copies a universal
+// label onto every successor down the transitive chain (below), and subset
+// blocking can stop that copy one step early, before the copied universal
+// has actually produced the same consequences the blocking ancestor already
+// carries. Equality blocking is the standard SHIQ-family fix, adopted here
+// once transitive roles exist rather than only when a KB happens to declare
+// one, so the same blocking rule runs every time.
 function isBlocked(node, branch) {
   const keys = [...node.labels.keys()];
   let ancestorId = node.parent;
   while (ancestorId) {
     const ancestor = branch.nodes.get(ancestorId);
     if (!ancestor) break;
-    if (keys.every((k) => ancestor.labels.has(k))) return true;
+    if (keys.length === ancestor.labels.size && keys.every((k) => ancestor.labels.has(k))) return true;
     ancestorId = ancestor.parent;
   }
   return false;
@@ -216,15 +283,24 @@ function applyAndRule(branch) {
   return { applied: false, touched: [] };
 }
 
-function applyAllRule(branch) {
+/** The universal rule. For a transitive role, an r-successor also receives
+ *  the universal label itself, not just its filler — that is what lets
+ *  ∀r.C reach an r-successor's own r-successor with no separate rule: the
+ *  copied label fires this same rule again, one hop further, the next time
+ *  the search loop revisits it. */
+function applyAllRule(branch, kb) {
+  const transitiveRoles = kb && kb.transitiveRoles instanceof Set ? kb.transitiveRoles : null;
   for (const node of branch.nodes.values()) {
     for (const [, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "all") continue;
       const touched = [];
       for (const edge of branch.edges) {
-        if (edge.from !== node.id || edge.r !== expr.r) continue;
+        if (edge.from !== node.id || !roleCountsAs(kb, edge.r, expr.r)) continue;
         const succ = branch.nodes.get(edge.to);
-        if (succ && addLabel(succ, expr.c, [...from, ...edge.fromFacts])) touched.push(succ.id);
+        if (!succ) continue;
+        const succFrom = [...from, ...edge.fromFacts];
+        if (addLabel(succ, expr.c, succFrom)) touched.push(succ.id);
+        if (transitiveRoles && transitiveRoles.has(expr.r) && addLabel(succ, expr, succFrom)) touched.push(succ.id);
       }
       if (touched.length) return { applied: true, touched };
     }
@@ -294,13 +370,13 @@ function applyOrRule(branch) {
   return { kind: "none" };
 }
 
-function applySomeRule(branch) {
+function applySomeRule(branch, kb) {
   for (const node of branch.nodes.values()) {
     if (isBlocked(node, branch)) continue; // generating rule — blocked nodes create no successors
     for (const [, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "some") continue;
       const cKey = canonicalKey(expr.c);
-      const hasWitness = branch.edges.some((e) => e.from === node.id && e.r === expr.r && branch.nodes.get(e.to)?.labels.has(cKey));
+      const hasWitness = branch.edges.some((e) => e.from === node.id && roleCountsAs(kb, e.r, expr.r) && branch.nodes.get(e.to)?.labels.has(cKey));
       if (hasWitness) continue;
       node.successorCount += 1;
       const child = makeNode(`${node.id}.${node.successorCount}`, node.id);
@@ -332,7 +408,7 @@ function stepOnce(branch, kb) {
     const clash = checkTouched(branch, and_.touched);
     return clash ? { kind: "clash", clash } : { kind: "applied" };
   }
-  const all_ = applyAllRule(branch);
+  const all_ = applyAllRule(branch, kb);
   if (all_.applied) {
     const clash = checkTouched(branch, all_.touched);
     return clash ? { kind: "clash", clash } : { kind: "applied" };
@@ -349,7 +425,7 @@ function stepOnce(branch, kb) {
     return clash ? { kind: "clash", clash } : { kind: "applied" };
   }
   if (or_.kind === "split") return or_;
-  const some_ = applySomeRule(branch);
+  const some_ = applySomeRule(branch, kb);
   if (some_.applied) {
     const clash = checkTouched(branch, some_.touched);
     return clash ? { kind: "clash", clash } : { kind: "applied" };
@@ -521,6 +597,8 @@ export function buildTableauKb(rows) {
   const disjointRows = [];
   const typeRows = [];
   const negTypeRows = [];
+  const transitiveRoles = new Set();
+  const subPropertyRows = [];
 
   const pushMap = (map, key, value) => {
     if (!map.has(key)) map.set(key, []);
@@ -537,13 +615,16 @@ export function buildTableauKb(rows) {
     else if (p === "owl:cardinality") cardinalityOf.set(r.subject, { kind: "exact", n: Number(r.object), id: r.id });
     else if (p === "rdfs:subclassof") subClassRows.push(r);
     else if (p === "owl:disjointwith") disjointRows.push(r);
-    else if (p === "rdf:type") typeRows.push(r);
+    else if (p === "rdf:type") {
+      typeRows.push(r);
+      if (String(r.object || "").toLowerCase() === "transitiveproperty") transitiveRoles.add(r.subject);
+    }
     else if (p === "mgxneg:subclassof") negTypeRows.push(r);
     else if (p === "owl:unionof") pushMap(unionMembersOf, r.subject, r);
     else if (p === "owl:complementof") complementOf.set(r.subject, r);
-    // owl:oneOf, owl:differentFrom, owl:TransitiveProperty (as rdf:type
-    // object below), rdfs:subPropertyOf, owl:inverseOf: reserved for a
-    // future increment, not read here.
+    else if (p === "rdfs:subpropertyof") subPropertyRows.push(r);
+    // owl:oneOf, owl:differentFrom, owl:inverseOf: reserved for a future
+    // increment, not read here.
   }
 
   const individualNamesFromType = new Set();
@@ -609,6 +690,12 @@ export function buildTableauKb(rows) {
   const roles = new Set();
   for (const { object } of onPropertyOf.values()) roles.add(object);
 
+  const subPropertyEdges = subPropertyRows
+    .map((r) => [r.subject, r.object])
+    .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+  const roleNames = new Set([...roles, ...subPropertyEdges.flat()]);
+  const roleClosure = buildRoleClosure(subPropertyEdges, roleNames);
+
   axioms.sort((a, b) =>
     canonicalKey(a.sub).localeCompare(canonicalKey(b.sub)) ||
     canonicalKey(a.sup).localeCompare(canonicalKey(b.sup)) ||
@@ -617,11 +704,18 @@ export function buildTableauKb(rows) {
 
   const individuals = [...new Set(assertions.map((a) => a.ind))].sort();
 
-  return { axioms, assertions, roles: [...roles].sort(), individuals };
+  return { axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure };
 }
 
 function restrictKbToIndividual(kb, ind) {
-  return { axioms: kb.axioms, assertions: (kb.assertions || []).filter((a) => a.ind === ind), roles: kb.roles, individuals: [ind] };
+  return {
+    axioms: kb.axioms,
+    assertions: (kb.assertions || []).filter((a) => a.ind === ind),
+    roles: kb.roles,
+    individuals: [ind],
+    transitiveRoles: kb.transitiveRoles,
+    roleClosure: kb.roleClosure,
+  };
 }
 
 /** Every clash the KB produces on its own, with both premises named. Pure.
