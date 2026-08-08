@@ -3,10 +3,11 @@
 // sprites-person-roles.html, sprites-objects.html, sprites-emotions.html —
 // one per src/services/sprite-catalog-viz.mjs's own CATALOG_GROUPS entry.
 // Each renders that ONE group's full card gallery: same styling, same
-// pose-first hover tiles, and one focused animated cell per card grid
-// (turning by default, emotions after a click). The section ontology trees
-// are not repeated here — a card's ancestry pills link across to the
-// landing page's tree instead, which is what several tests below follow.
+// pose-first hover tiles, and every card's animated cell clickable — a
+// click starts a resting card turning, toggles an animating one between
+// turning and emotions, and never stops another card. Each page draws its
+// own sections' ontology trees (connector lines included), and a card's
+// ancestry pills anchor to them in-page.
 // The composer and the ask dock still answer over the WHOLE catalog from
 // any one of these pages, never just this group's own classes —
 // test-e2e/pages-sprites.test.mjs covers the lighter landing page these
@@ -136,50 +137,54 @@ test("the person-roles page's person card renders all six curated emotion varian
   }
 });
 
-test("each card grid keeps exactly one focused cell, and it rotates through its turning positions on its own", async () => {
+test("the first cell of each card grid starts animating on load, rotating through its turning positions on its own", async () => {
   const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html");
   try {
     const bear = page.locator('.card[data-cls="bear"]');
     await bear.scrollIntoViewIfNeeded();
     const grid = page.locator(".cards", { has: bear }).first();
     const focused = grid.locator(".swatch.cycle.focused");
-    assert.equal(await focused.count(), 1, "one focused sprite per grid");
+    assert.equal(await focused.count(), 1, "one cell per grid animates before any click");
     assert.equal(await focused.getAttribute("data-mode"), "turning", "position-rotating is the default animation");
     const seen = new Set();
     for (let i = 0; i < 4; i += 1) {
       seen.add(await focused.locator(".swatch-img").innerHTML());
       await page.waitForTimeout(850);
     }
-    assert.ok(seen.size >= 3, `the focused cell really rotates, saw ${seen.size} frame(s)`);
+    assert.ok(seen.size >= 3, `the animating cell really rotates, saw ${seen.size} frame(s)`);
     assert.deepEqual(consoleErrors, [], "the rotation logs no console error");
   } finally {
     await context.close();
   }
 });
 
-test("clicking the focused cell swaps it to emotion cycling, and the grid keeps that choice when focus moves to another card", async () => {
+test("clicking a second card starts it too — both cards animate at once, each keeping its own mode", async () => {
   const { context, page, consoleErrors } = await openGroupPage("sprites-objects.html", { reducedMotion: "reduce" });
   try {
     const bear = page.locator('.card[data-cls="bear"]');
     await bear.scrollIntoViewIfNeeded();
     const grid = page.locator(".cards", { has: bear }).first();
-    const focused = () => grid.locator(".swatch.cycle.focused").first();
-    await focused().locator(".swatch-img").click();
-    assert.equal(await focused().getAttribute("data-mode"), "emotions", "the click swaps position-rotating for emotion-cycling");
+    const firstCard = await grid.locator(".swatch.cycle.focused").first().evaluate((el) => el.closest(".card").dataset.cls);
+    const first = grid.locator(`.card[data-cls="${firstCard}"] .swatch.cycle`).first();
+    await first.locator(".swatch-img").click();
+    assert.equal(await first.getAttribute("data-mode"), "emotions", "clicking an animating cell toggles its mode");
 
-    // Click a different card's cell: focus moves there, the grid's chosen
-    // mode rides along.
-    const other = grid.locator(".swatch.cycle:not(.focused)").first();
-    const otherCard = await other.evaluate((el) => el.closest(".card").dataset.cls);
-    await other.locator(".swatch-img").click();
-    assert.equal(await grid.locator(".swatch.cycle.focused").count(), 1, "still exactly one focused sprite");
-    const nowFocusedCard = await focused().evaluate((el) => el.closest(".card").dataset.cls);
-    assert.equal(nowFocusedCard, otherCard, "focus moved to the clicked sprite");
-    assert.equal(await focused().getAttribute("data-mode"), "emotions", "the grid remembered its chosen mode");
+    // Pinned by card class, not by :not(.focused) — that pseudo-class flips
+    // the moment the click lands, so a lazy locator would slide to a third
+    // cell.
+    const secondCard = await grid.locator(".swatch.cycle:not(.focused)").first().evaluate((el) => el.closest(".card").dataset.cls);
+    assert.notEqual(secondCard, firstCard);
+    const second = grid.locator(`.card[data-cls="${secondCard}"] .swatch.cycle`).first();
+    await second.locator(".swatch-img").click();
+    assert.equal(await grid.locator(".swatch.cycle.focused").count(), 2, "starting a second card leaves the first one running");
+    assert.equal(await second.getAttribute("data-mode"), "turning", "a fresh card starts with the turning rotation");
+    assert.equal(await first.getAttribute("data-mode"), "emotions", "the first card kept its own chosen mode");
 
-    await focused().locator(".swatch-img").click();
-    assert.equal(await focused().getAttribute("data-mode"), "turning", "clicking the focused cell toggles back");
-    assert.deepEqual(consoleErrors, [], "focus clicks log no console error");
+    await second.locator(".swatch-img").click();
+    assert.equal(await second.getAttribute("data-mode"), "emotions", "clicking the animating card again toggles its own mode");
+    assert.equal(await first.getAttribute("data-mode"), "emotions", "the toggle never reaches another card");
+    assert.equal(await grid.locator(".swatch.cycle.focused").count(), 2, "no click ever stops a card");
+    assert.deepEqual(consoleErrors, [], "the clicks log no console error");
   } finally {
     await context.close();
   }
@@ -244,24 +249,28 @@ test("hovering a resting tile flips its caption to the moving form and flip-book
   }
 });
 
-test("a group page's ancestry pills link to the landing page's own tree node for each term", async () => {
-  const { context, page } = await openGroupPage("sprites-person-roles.html");
+test("a group page draws its own cluster trees with connector lines, and its ancestry pills anchor to them in-page", async () => {
+  const { context, page, consoleErrors } = await openGroupPage("sprites-person-roles.html");
   try {
-    assert.equal(await page.locator(".ontology").count(), 0, "the trees all live on the landing page");
+    assert.ok(await page.locator(".ontology").count() > 0, "the group page draws its own sections' trees");
     const card = page.locator('.card[data-cls="driver"]');
     await card.scrollIntoViewIfNeeded();
     const hrefs = await card.locator("a.chain-link").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, [
-      "./sprites.html#tree-person-worker-driver",
-      "./sprites.html#tree-person-worker-worker",
-      "./sprites.html#tree-person-worker-doer",
-      "./sprites.html#tree-person-worker-person",
-      "./sprites.html#tree-person-worker-organism",
-    ], "every pill points at driver's own cluster tree, not some other section's");
+      "#tree-person-worker-driver", "#tree-person-worker-worker", "#tree-person-worker-doer",
+      "#tree-person-worker-person", "#tree-person-worker-organism",
+    ], "every pill is an in-page anchor into driver's own cluster tree, not some other section's");
 
     await card.locator("a.chain-link").first().click();
-    await page.waitForURL(/sprites\.html#tree-person-worker-driver$/);
+    await page.waitForFunction(() => window.location.hash === "#tree-person-worker-driver");
     assert.equal(await page.locator("#tree-person-worker-driver .tree-term").textContent(), "driver", "the link lands on a node that really exists");
+
+    const tree = page.locator(".ontology-tree", { has: page.locator("#tree-person-worker-driver") });
+    await page.waitForFunction(() =>
+      document.getElementById("tree-person-worker-driver").closest(".ontology-tree").querySelectorAll(".tree-edges path").length > 0);
+    const parentLinks = await tree.locator(".tree-node .tree-up a").count();
+    assert.equal(await tree.locator(".tree-edges path").count(), parentLinks, "one drawn connector per recorded parent link");
+    assert.deepEqual(consoleErrors, [], "the trees and their connectors log no console error");
   } finally {
     await context.close();
   }

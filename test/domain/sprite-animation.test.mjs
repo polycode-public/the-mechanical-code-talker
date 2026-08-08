@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, FOCUS_MODE_ORDER,
+  initialCardAnimation, cardAnimationClick,
   frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
   SPRITE_POSE_REST, SPRITE_POSE_MOVING,
 } from "../../src/domain/sprite-animation.mjs";
@@ -25,6 +26,22 @@ test("a resting tile names the moving frame it flips against: default against ba
   assert.equal(movingCounterpartLabel(null), "moving");
   assert.equal(movingCounterpartLabel("left"), "left + moving");
   assert.equal(movingCounterpartLabel("half-right"), "half-right + moving");
+});
+
+test("a card starts at rest and its first click starts the turning rotation, whatever mode it was left in", () => {
+  assert.deepEqual(initialCardAnimation(), { animating: false, mode: "turning" });
+  assert.deepEqual(cardAnimationClick(initialCardAnimation()), { animating: true, mode: "turning" });
+  assert.deepEqual(cardAnimationClick({ animating: false, mode: "emotions" }), { animating: true, mode: "turning" });
+  assert.deepEqual(cardAnimationClick(undefined), { animating: true, mode: "turning" }, "no state at all still reads as a card at rest");
+});
+
+test("clicking an animating card toggles its mode and never stops it, returning a fresh state each time", () => {
+  const started = cardAnimationClick(initialCardAnimation());
+  const toggled = cardAnimationClick(started);
+  assert.deepEqual(toggled, { animating: true, mode: "emotions" });
+  assert.deepEqual(cardAnimationClick(toggled), { animating: true, mode: "turning" });
+  assert.deepEqual(started, { animating: true, mode: "turning" }, "the click never mutates the state it was handed");
+  assert.notEqual(cardAnimationClick(started), started);
 });
 
 test("a click toggles the focused cell between its two modes and back", () => {
