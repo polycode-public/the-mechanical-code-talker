@@ -159,8 +159,6 @@
     "bench:receipts": "node scripts/bench-receipts.mjs",
     "claims": "node scripts/claims/run-all.mjs",
     "claim:prose-band": "node scripts/claims/claim-prose-band.mjs",
-    "claim:paraphrase": "node scripts/claims/claim-paraphrase.mjs",
-    "claim:definitions": "node scripts/claims/claim-definitions.mjs",
     "claim:openbookqa": "node scripts/claims/claim-openbookqa.mjs",
     "claim:planner": "node scripts/claims/claim-planner.mjs",
     "roll": "node scripts/roll.mjs",
