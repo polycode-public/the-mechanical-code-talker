@@ -152,6 +152,15 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // is resolveRecognitionConfig's job.
   if (src.recognition !== undefined) cfg.recognition = src.recognition;
 
+  // Reasoning-lane knobs (src/domain/reasoning-config.mjs): sparse
+  // PASS-THROUGH, same discipline as [games.*]/[research]/[recognition] —
+  // the raw `[reasoning]` table (syllogise_budget/syllogise_depth/
+  // classify_budget/classify_rounds/max_environments/prove_steps/
+  // prove_branches/prove_nodes, snake_case) rides through unmodified;
+  // mapping onto the internal camelCase shape and default-filling is
+  // resolveReasoningConfig's job.
+  if (src.reasoning !== undefined) cfg.reasoning = src.reasoning;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;

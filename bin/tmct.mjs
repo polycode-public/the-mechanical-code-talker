@@ -1375,6 +1375,47 @@ async function main() {
     return;
   }
 
+  if (mode === "classify") {
+    // `tmct classify` — the explicit EL saturation batch (never on the chat hot
+    // path): normalize the stored TBox to EL normal forms and forward-chain the
+    // seven completion rules into bounded, low-trust, retractable entailed
+    // facts. Same repo resolution as `syllogise` — resolveRuntimeConfig
+    // (src/services/cli-args.mjs): --repo > git root > cwd. Also accepts
+    // `--config` for symmetry (classify reads no code graph either).
+    const rest = process.argv.slice(3);
+    const numFlag = (name, dflt) => {
+      const j = rest.indexOf(name);
+      const v = j !== -1 ? Number(rest[j + 1]) : NaN;
+      return Number.isFinite(v) ? v : dflt;
+    };
+    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
+    const { classifyEl, DEFAULT_EL_BUDGET, DEFAULT_EL_ROUNDS } = await import("../src/domain/el-classify.mjs");
+    const { resolveReasoningConfig } = await import("../src/domain/reasoning-config.mjs");
+    const { loadMemory, readFactRows, appendFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Same env > tmct.toml > default backend resolution as `tmct syllogise` —
+    // the entailed facts must land in the store chat reads back.
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    const reasoning = resolveReasoningConfig(toml);
+    let res;
+    try {
+      res = await classifyEl(memoryDir, {
+        budget: numFlag("--budget", reasoning.classifyBudget ?? DEFAULT_EL_BUDGET),
+        rounds: numFlag("--rounds", reasoning.classifyRounds ?? DEFAULT_EL_ROUNDS),
+        store: { loadMemory, readFactRows, appendFacts },
+      });
+    } finally {
+      await closeMemoryStore();
+    }
+    process.stdout.write(
+      `tmct classify — derived ${res.count} entailed fact(s) (rounds ${res.rounds}, budget ${res.budget})`
+      + (res.unsatisfiable.length ? `, ${res.unsatisfiable.length} unsatisfiable class(es): ${res.unsatisfiable.join(", ")}` : "")
+      + (res.truncated ? ` — budget reached, more may follow; run \`tmct classify --budget <n>\` for a wider pass` : "") + "\n",
+    );
+    return;
+  }
+
   if (mode === "extract") {
     // `tmct extract` — run a text file's sentences through the chat's own teach
     // recognizer and keep what it grounds. Lazily imported: it pulls the whole

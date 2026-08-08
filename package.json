@@ -127,6 +127,7 @@
     "memory": "node --disable-warning=ExperimentalWarning bin/tmct.mjs memory",
     "memory:verbose": "node --disable-warning=ExperimentalWarning bin/tmct.mjs memory --verbose",
     "syllogise": "node --disable-warning=ExperimentalWarning bin/tmct.mjs syllogise",
+    "classify": "node --disable-warning=ExperimentalWarning bin/tmct.mjs classify",
     "viz": "node --disable-warning=ExperimentalWarning bin/tmct.mjs viz",
     "viz:term": "node --disable-warning=ExperimentalWarning bin/tmct.mjs viz --term",
     "plan": "node --disable-warning=ExperimentalWarning bin/tmct.mjs plan",

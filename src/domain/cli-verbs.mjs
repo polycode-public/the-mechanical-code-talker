@@ -127,6 +127,16 @@ export const CLI_VERBS = [
     ],
   },
   {
+    mode: "classify",
+    errorLabel: "classify",
+    usage: "tmct classify [--repo <abs>]",
+    prose: ["EL classification (offline maintenance job): saturation-based TBox"],
+    flags: [
+      { flag: "[--budget <n>] [--rounds <n>]", prose: ["classification that reaches class expressions the graph never"] },
+      { flag: "[--config <path>]", prose: ["declared as nodes, writing bounded, low-trust, retractable", "entailed facts (never on the chat path)"] },
+    ],
+  },
+  {
     mode: "viz",
     errorLabel: "viz",
     usage: "tmct viz [--repo <abs>]",
