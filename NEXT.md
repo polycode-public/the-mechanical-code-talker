@@ -65,13 +65,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
-- [ ] **PLAN_RIVER_CROSSING.md — execute** — the design wave delivered the full plan (phases
-  R0-R8, concurrency table, tiers). Implementation not started. Three stated defaults the
-  operator can override before the relevant phase runs: a class edit changes the next spawn,
-  not standing instances (R4); `fox` is the cast fallback unless a licensed wolf asset is
-  chosen before R3 writes the world file; the other Wikipedia variants (missionaries-and-
-  cannibals, bridge-and-torch) sequence as a later increment because they need precondition
-  shapes the domain engine lacks.
+- [ ] **PLAN_RIVER_CROSSING.md — execute** — R0-R3 shipped (the trait vocabulary, the class
+  chain and spawn copy, the drive engine reading facts, and the river-crossing world with its
+  constraint derived from the same rows). R4 onward (the per-instance editor, the belief/plan
+  panels, the site phase) not started. One stated default the operator can override: a class
+  edit changes the next spawn, not standing instances (R4). The other Wikipedia variants
+  (missionaries-and-cannibals, bridge-and-torch) sequence as a later increment because they
+  need precondition shapes the domain engine lacks.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a

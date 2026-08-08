@@ -760,6 +760,24 @@ node --test test/services/mudiii-turn.test.mjs test/corpus/games/mudiii.test.mjs
 
 ## 7. Phase R3 — the river crossing, defined in these same rules
 
+**Shipped.** `corpus/worlds/src/river-crossing.jsonl` carries the world: `fox`, `goat`, `cabbage`
+and `farmer` classes stating their `mgx:consumes`/`mgx:evades`/`mgx:guards` rows, four instances
+placed on `bank-east`, and the `ferry onto` action's two signatures and two effects (the ferried
+passenger, the co-travelling farmer). The world carries no `action-constraint` rule row at all —
+`constraintsFromDrives` in `src/domain/agent-traits.mjs` derives the two `{left, right, guard}`
+triples from the same `mgx:consumes`/`mgx:guards` rows every caller compiles alongside the
+world's authored rules, so retracting or adding a `mgx:consumes` row changes the puzzle's legal
+moves without a second rule to keep in sync. `wolf` never shipped: no CC0 wolf model exists in
+`data/mudiii-assets.json`, so the predator class is named `fox` and reuses the model already
+there; `goat`/`cabbage`/`farmer` carry no `mgx:model` row, an honest gap rather than an invented
+asset reference. `test/services/river-crossing.test.mjs` compiles the packed world exactly the
+way a future caller would (world rules + derived constraints -> `compileDomain`), and proves the
+opening position prunes to the single legal `ferry goat-1 onto bank-west`, the classic 7-move
+optimum, a shortened plan once the fox's appetite for the goat is retracted, and the honest miss
+once the fox is given a second appetite no single farmer can cover. `test/domain/agent-traits.test.mjs`
+covers `constraintsFromDrives` directly: the two river constraints, no constraint from an
+unguarded pair, order-independence, and a duplicated guard row deduping to one constraint.
+
 Goal: a river-crossing world that stands on the square, whose legality comes from the same
 `compileDomain`/`movesFromRules` path the chat lane already uses, and whose constraint is derived from
 the drive facts rather than authored twice.
