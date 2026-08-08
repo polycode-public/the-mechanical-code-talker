@@ -46,7 +46,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
-import { loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, readsAsIndividualName } from "../domain/grammar/lexicon.mjs";
+import { loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, readsAsIndividualName, CODE_REF_SHAPE } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import {
   REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
@@ -5669,6 +5669,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // through to the ordinary cascade exactly as it always has.
     if (retractNotMatch) {
       const { loadMemory: loadMemForNeg, normFactTerm: normTermForNeg, readFactRows: readRowsForNeg } = await import("../adapters/memory/core.mjs");
+      const { DISJOINT_PREDICATE: NEG_DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
       const negSubject = normTermForNeg(retractSubject);
       const negObject = normTermForNeg(retractObject);
       const priorRows = readRowsForNeg(await loadMemForNeg(memoryDir));
@@ -5698,13 +5699,41 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // declining exactly as it always has — this widens which NOUN pairs
       // read as an exclusion, never which property claims do.
       const singularNegation = retractSrc.match(SINGULAR_NEGATION_TEACH_RE);
-      if (singularNegation && lookupNoun(loadLexicon(), singularNegation[2])) {
+      if (singularNegation) {
         const [, negationSubject, negationObject] = singularNegation;
-        const negUniversal = await mintNegativeUniversal(negationSubject, negationObject, {
-          memoryDir, sessionId, observedAt, dateText,
-          ackText: `noted — remembered: no ${negationSubject} is a ${negationObject}`,
-        });
-        if (negUniversal) return negUniversal;
+        const objectIsDeclaredNoun = !!lookupNoun(loadLexicon(), negationObject);
+        // WIDENED ARM — an individual-level negative stores with no lexicon
+        // entry required at all, so long as (a) the subject reads as an
+        // individual — a declared proper name, a code-ref shape, or a term
+        // this store already carries as an rdf:type/subClassOf subject — and
+        // (b) the object is a class this store already carries (the object
+        // of a taught isa fact, or either side of a taught disjointness),
+        // never a bare adjective. TAUGHT facts only (never corpus background)
+        // decide both checks, the same discipline isTaughtFact applies
+        // elsewhere in this file — a corpus row mentioning "mortal" must never
+        // be able to smuggle an adjective past the guard "zeus is not mortal"
+        // keeps.
+        const isTaughtRow = (r) => !String(r.provenance || "").includes("corpus:") && !String(r.provenance || "").includes("web:");
+        const normNegationSubject = normTermForNeg(negationSubject);
+        const normNegationObject = normTermForNeg(negationObject);
+        const objectIsStoredClass = !objectIsDeclaredNoun && priorRows.some((r) => isTaughtRow(r) && (
+          (ISA_PREDICATES.has(r.predicate) && r.object === normNegationObject)
+          || (r.predicate === NEG_DISJOINT_PREDICATE && (r.subject === normNegationObject || r.object === normNegationObject))
+        ));
+        const subjectIsIndividual = objectIsStoredClass && (
+          !!lookupProperName(loadLexicon(), negationSubject)
+          || CODE_REF_SHAPE.test(negationSubject)
+          || priorRows.some((r) => isTaughtRow(r) && r.subject === normNegationSubject && ISA_PREDICATES.has(r.predicate))
+        );
+        if (objectIsDeclaredNoun || subjectIsIndividual) {
+          const negUniversal = await mintNegativeUniversal(negationSubject, negationObject, {
+            memoryDir, sessionId, observedAt, dateText,
+            ackText: objectIsDeclaredNoun
+              ? `noted — remembered: no ${negationSubject} is a ${negationObject}`
+              : `noted — remembered: ${negationSubject} is not a ${negationObject}`,
+          });
+          if (negUniversal) return negUniversal;
+        }
       }
 
       // Nothing stored to disagree with. The gate above is right to refuse
@@ -7622,6 +7651,10 @@ const FACT_PREDICATE_PHRASES = {
   "mgxneg:subClassOf": "is not a kind of",
   "rdf:type": "is a",
   "owl:disjointWith": "is not a",
+  "owl:unionOf": "is either",
+  "owl:complementOf": "is anything that is not",
+  "owl:oneOf": "includes exactly",
+  "owl:differentFrom": "is not the same as",
   "mgx:partOf": "is part of",
   "mgx:memberOf": "is a member of",
   "mgx:collectionOf": "is a collection of",
@@ -7674,6 +7707,15 @@ const WORLD_INTERNAL_PREDICATES = new Set([
   "mgx:is-npc", "mgx:acts-on-turn", "mgx:acts-toward",
   "mgx:is-container", "mgx:is-open",
 ]);
+
+/** A `<role> rdf:type owl:TransitiveProperty` declaration is role scaffolding,
+ *  not a fact about the role a reader wants listed back in English — it never
+ *  renders as a plain fact line, the same discipline that keeps the
+ *  restriction scaffolding predicates (owl:onProperty, owl:someValuesFrom, …)
+ *  out of FACT_PREDICATE_PHRASES. */
+function isTransitivePropertyDeclaration(f) {
+  return f.predicate === TYPE_PREDICATE && f.object === "transitiveproperty";
+}
 
 /** The world PLACEMENT predicates carry curated phrases above so they render as
  *  English, but they must stay OUT of the query-marker families derived from
@@ -7840,6 +7882,41 @@ function renderFactLine(f) {
   if (f.provenance.includes("reference:")) return `${factPhrase(f)}${cite}`;
   return `i learned: ${factPhrase(f)}${cite}`;
 }
+
+/** A union node's stored triples read back as ONE sentence rather than a
+ *  row-per-member dump: "every pet is a cat or a dog (source: …)". `node` is
+ *  the `<parent> rdfs:subClassOf <unionNode>` fact row (the parent and the
+ *  citation both come from it); `members` are the union node's own
+ *  `owl:unionOf` rows, sorted here by member name so the same union always
+ *  reads back the same way regardless of the order its rows arrived in.
+ *  Pure — takes the fact rows, returns one line. */
+function renderUnionLine(node, members) {
+  const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
+  const cite = node.provenance ? ` (source: ${citationProvenance(node.provenance)})` : "";
+  const arms = sorted.map((m) => `${indefiniteArticleFor(m.object)} ${m.object}`).join(" or ");
+  return `every ${node.subject} is ${arms}${cite}`;
+}
+
+/** An enumerated class's stored `owl:oneOf` triples read back as ONE sentence:
+ *  "the primary colours are exactly red, yellow and blue (source: …)". `cls`
+ *  is the enumerated class's own term; `members` are its `owl:oneOf` rows,
+ *  sorted here by member name for the same order-independence renderUnionLine
+ *  keeps. The class name pluralizes through the same naive "+s/+es/+ies" fold
+ *  thirdPersonSingularSurface already applies to a verb lemma — the same
+ *  accepted trade documented there. Pure — takes the fact rows, returns one
+ *  line. */
+function renderEnumerationLine(cls, members) {
+  const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
+  const names = sorted.map((m) => m.object);
+  const list = names.length > 1
+    ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+    : names.join("");
+  const citeSource = sorted.find((m) => m.provenance)?.provenance;
+  const cite = citeSource ? ` (source: ${citationProvenance(citeSource)})` : "";
+  const plural = thirdPersonSingularSurface(String(cls || "").replace(/-/g, " "));
+  return `the ${plural} are exactly ${list}${cite}`;
+}
+export { renderUnionLine, renderEnumerationLine };
 
 const SENSE_CITE_RE = / \(source: [^)]*\)$/;
 
@@ -9203,7 +9280,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // and mechanics predicates are dropped so "what is the letter" never reads
     // back where it's hidden or that it's the objective (WORLD_INTERNAL_PREDICATES).
     const subjectHits = (await factRows(memoryDir, cache))
-      .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate));
+      .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate) && !isTransitivePropertyDeclaration(f));
     // Matched through normFactPredicate, so a fact stored under a minted
     // spelling of the same relation ("mgx:used-for", from the participle
     // teach frame, in a store written before the spellings converged) is
@@ -9809,7 +9886,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // objective, and those datatype internals render as garbled non-English
     // besides. The adventure's own where/openness readers answer the legitimate
     // in-game questions from the world fold.
-    hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate));
+    hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate) && !isTransitivePropertyDeclaration(f));
     // A corpus-weak-only result set (every hit resolved ONLY through
     // ConceptNet's /r/RelatedTo tier) still composes its hedged "possibly"
     // lines below exactly as before — this reader's whole job is showing

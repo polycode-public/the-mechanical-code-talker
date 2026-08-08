@@ -424,8 +424,7 @@ lemma through `lookupVerb` before minting the predicate with `predicateOf`.
 
 ### 5.3 Teach-lane changes
 
-**Deferred** to a later serialized round against `src/services/chat.mjs` — not part of this
-delivery.
+**Delivered.**
 
 Two changes in `src/services/chat.mjs`, both narrow.
 
@@ -454,15 +453,10 @@ Two changes in `src/services/chat.mjs`, both narrow.
 `owl:TransitiveProperty` never renders as a plain fact line. Suppress it in the describe lane the
 same way the restriction scaffolding predicates are suppressed.
 
-**Coordination with `PLAN_NEWS_FEED.md`.** That plan's own phase 1 (section 8.1 there) extracts
-`FACT_PREDICATE_PHRASES` out of `chat.mjs` into a new shared module, `src/domain/fact-phrase.mjs`,
-and its phase 4 (the serialized chat track) deletes chat's private copy. Track 0b targets whichever
-of the two exists when it runs: if news's extraction has already landed, 0b adds its four new phrase
-rows and the two render helpers to `src/domain/fact-phrase.mjs` instead of `chat.mjs`; if it hasn't,
-0b extends the in-chat table exactly as written above, and news's own extraction phase carries 0b's
-entries through when it runs. Either order works because the two plans' `chat.mjs` tracks form one
-serialization queue, not two independent ones: the coordinator runs every round that touches
-`chat.mjs`, from either plan, one at a time against the same file.
+**Coordination with `PLAN_NEWS_FEED.md`.** News's own phase 1 extraction (`src/domain/fact-phrase.mjs`)
+had already landed by the time 0b ran, so the four new phrase rows went into both tables,
+byte-identical — `test/domain/fact-phrase.test.mjs`'s pin stays green until news's own phase 4
+deletes chat's private copy.
 
 ### 5.4 Ontology and docs
 
@@ -481,31 +475,26 @@ tmct's ontology, matching the file's own existing convention for every other `ow
 
 ### 5.5 Phase 0 tests
 
-**Delivered except the `chat.mjs`-dependent piece.** `grammar-ace-class-expressions.test.mjs` and
-the `grammar-ontology.test.mjs` extension are in. `teach-negative-and-enumeration.test.mjs` is
-deferred with 5.3 — it tests the widened teach-lane path, which doesn't exist yet.
+**Delivered.** `grammar-ace-class-expressions.test.mjs`, the `grammar-ontology.test.mjs` extension,
+and `teach-negative-and-enumeration.test.mjs` are all in.
 
-Corpus rows landed: `inference.represent.union`, `.complement`, `.enumeration`,
-`.different-from`, `.bare-existential`, `.transitive-role` — six of the eight rows below, each
-checked against the real chat pipeline's actual current output (not the eventual post-DL answer).
-Two adjustments from the table as written: `.enumeration` teaches "the metals are exactly copper,
-iron and tin" rather than "the primary colours are exactly red, yellow and blue" — `colour` and
-the separately-declared `colours` are two distinct lexicon nouns, so the plan's own example mints
-`primary-colours` (plural) while an "is X a primary colour" question folds to the singular and
-misses; `metal`/`metals` has no such collision. `.bare-existential`'s ask turn stays an honest
-miss (`does a heart have a valve`) — the someValuesFrom shape pattern 15 stores has no reader in
-the does-have ask lane yet, which is exactly what 5.3/phase 2 wire up.
-
-`inference.represent.negative-type` and `inference.represent.bare-negative-never-retracts` are
-deferred with 5.3 — both need the widened teach-lane negative path. `.different-from` also
-substitutes: pattern 14 fires only on resolveNP's own narrow `individual` flag (a declared proper
-name or a code-ref shape), which "rex"/"whiskers" are neither — the row teaches "GitHub is not
-GitLab" (both declared proper names) instead, matching what the pattern actually accepts today.
+Corpus rows landed: all eight rows below, each checked against the real chat pipeline's actual
+current output (not the eventual post-DL answer). Adjustments from the table as written:
+`.enumeration` teaches "the metals are exactly copper, iron and tin" rather than "the primary
+colours are exactly red, yellow and blue" — `colour` and the separately-declared `colours` are two
+distinct lexicon nouns, so the plan's own example mints `primary-colours` (plural) while an "is X a
+primary colour" question folds to the singular and misses; `metal`/`metals` has no such collision.
+`.bare-existential`'s ask turn stays an honest miss (`does a heart have a valve`) — the
+someValuesFrom shape pattern 15 stores has no reader in the does-have ask lane yet, which is exactly
+what phase 2 wires up. `.different-from` substitutes too: pattern 14 fires only on resolveNP's own
+narrow `individual` flag (a declared proper name or a code-ref shape), which "rex"/"whiskers" are
+neither — the row teaches "GitHub is not GitLab" (both declared proper names) instead, matching what
+the pattern actually accepts today.
 
 | file | what it holds |
 |---|---|
 | `test/adapters/grammar-ace-class-expressions.test.mjs` | one test per new pattern: the exact triple list emitted, node-name determinism (same sentence twice, same names), member sort order, and the decline path for an undeclared word |
-| `test/adapters/teach-negative-and-enumeration.test.mjs` | deferred — the widened individual-negative path stores; the adjective guard still declines; "forget that X is a Y" still retracts and the bare negative still does not; the four new read-back phrasings |
+| `test/adapters/teach-negative-and-enumeration.test.mjs` | the widened individual-negative path stores; the adjective guard still declines; "forget that X is a Y" still retracts and the bare negative still does not; the four new read-back phrasings; `owl:TransitiveProperty` stays out of the plain fact-line describe lane; `renderUnionLine`/`renderEnumerationLine` compose their sentence deterministically regardless of row order |
 | `test/adapters/grammar-ontology.test.mjs` | extended: the five new terms are declared in `tmct-core.ttl` |
 
 New corpus rows in `test/corpus/inference.jsonl`, one JSON object per line. Row contract is enforced
