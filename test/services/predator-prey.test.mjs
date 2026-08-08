@@ -28,6 +28,18 @@ async function boardWith(facts, label) {
   return dir;
 }
 
+const DRIVE_PREDICATES = ["mgx:pursues", "mgx:evades", "mgx:consumes"];
+
+/** A board whose world rows state NO drives, so the injected roles object and
+ *  config numbers decide alone — the pre-trait-vocabulary world every older
+ *  cast still is. */
+async function drivelessBoardWith(facts, label) {
+  const dir = await mkdtemp(join(tmpdir(), `tmct-mudiii-${label}-`));
+  await appendFacts(dir, worldRows().filter((r) => !DRIVE_PREDICATES.includes(r.predicate)));
+  if (facts.length) await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "world:town-square" })));
+  return dir;
+}
+
 const place = (id, cell) => ({ subject: id, predicate: "mgx:currently-in", object: cell });
 const weigh = (id, mass) => ({ subject: id, predicate: "mgx:hasMass", object: String(mass) });
 const classify = (id, kind) => ({ subject: id, predicate: "rdf:type", object: kind });
@@ -518,16 +530,17 @@ test("prey does not treat other prey as a threat — nothing preys on a goblin b
   }
 });
 
-test("a cast that declares a hunter of predators sends its predator to the evade rung", async () => {
+test("on a world that states no drives, a cast declaring a hunter of predators sends its predator to the evade rung", async () => {
   // The same engine, one roles object away: the links are reversed, so the
-  // goblin gives chase and the fox flees. Nothing in the decision names a
-  // species — it reads the cast's own links.
+  // goblin gives chase and the fox flees. The board's rows state no drives at
+  // all — that is what leaves the cast's own links deciding — so the world
+  // rows are seeded without the shipped trait rows.
   const rolesWherePreyHunts = {
     predator: { role: "predator", kind: "fox", idPrefix: "fox", hunts: null },
     prey: { role: "prey", kind: "goblin", idPrefix: "goblin", hunts: "predator" },
     food: { spawnedKind: "crumb", placedKind: "morsel" },
   };
-  const dir = await boardWith([
+  const dir = await drivelessBoardWith([
     classify("fox-1", "fox"), place("fox-1", "cell-5-5"), weigh("fox-1", 20),
     classify("goblin-1", "goblin"), place("goblin-1", "cell-8-5"), weigh("goblin-1", 8),
   ], "two-way-cast");
