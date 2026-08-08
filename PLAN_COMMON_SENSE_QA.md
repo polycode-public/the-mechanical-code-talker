@@ -666,15 +666,29 @@ node --test "test/estate/*.test.mjs"
 **Built.** `scripts/claims/claim-commonsenseqa.mjs` seeds exactly the INIT_XL_BANDS band set through
 `resolveExtensions`/`seedActiveCorpusEntries` (the same path `scripts/build-chat-seed.mjs` uses),
 runs the 100-item fixture through the choice lane with a fresh `sessionId` per item, and writes
-`results/claims/commonsenseqa.json`. `"claim:commonsenseqa"` is in `package.json`. Measured: 0 of 100
-correct (answered 0, refused 0, abstained 100; `sourceEdgePresent` 0), matching section 2.1's own
-0-of-100 source-to-gold edge count against `INIT_XL_BANDS` alone — no item's child-pack pull ever
-ran. Found along the way, and NOT fixed here because it sits entirely outside this rig's own code
-(`src/domain/choice-question.mjs`, phase F1): `extractStemSourceTerm` only recognizes a "where would
-you find/see/keep/put/store/place X" stem shape, so it returns `""` for most of the fixture's
-natural-language stems (the "what"-led 47 percent chief among them), which sends the lane straight
-to its no-`sourceTerm` miss before `probeChoiceOptions` ever runs. Section 7.6's acceptance commands
-are green.
+`results/claims/commonsenseqa.json`. `"claim:commonsenseqa"` is in `package.json`.
+
+First measurement: 0 of 100 correct (answered 0, refused 0, abstained 100; `sourceEdgePresent` 0),
+matching section 2.1's own 0-of-100 source-to-gold edge count against `INIT_XL_BANDS` alone — no
+item's child-pack pull ever ran. Root cause, found outside this rig's own code
+(`src/domain/choice-question.mjs`, phase F1): `extractStemSourceTerm` only recognized a "where would
+you find/see/keep/put/store/place X" stem shape, so it returned `""` for most of the fixture's
+natural-language stems (the "what"-led 47 percent chief among them), which sent the lane straight to
+its no-`sourceTerm` miss before `probeChoiceOptions` ever ran.
+
+**Resolved.** `extractStemSourceTerm` now tries six closed sentence templates in order — a
+broadened placement/possession verb set, a what-do-support subject read, a what-is-subject
+direct-object read, a where-copula subject read, a trailing of-clause read, and a want-to verb/object
+read — all reading only the stem text. Re-measured: still 0 of 100 correct, but `answered` moved 0 to
+1, `refused` 0 to 2, `abstained` 100 to 97, and `sourceEdgePresent` 0 to 2. Selection stayed at zero
+because reach and selection are different rungs: the extractor now finds a source term and pulls the
+child pack for more of the fixture's natural phrasings, but of the 22 source-to-gold edges the
+design survey found reachable in the child pack (section 2.1), only 2 turned up grounded after the
+broadened extraction — the rest sit behind stem shapes this closed template set still returns `""`
+for (a discovery gated further upstream, in `coreParse`'s own `leadsInterrogative` check: only 50 of
+the 100 fixture stems open with a word `QUESTION_LEAD_RE` recognizes at all, so half the fixture is
+declined before `extractStemSourceTerm` ever runs — untouched here, since it is a shared gate several
+other lanes also read). Section 7.6's acceptance commands are green.
 
 **Model tier: Sonnet.** The seeding path and the detail columns need care; the scoring is trivial.
 

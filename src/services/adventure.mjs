@@ -9,6 +9,7 @@
 // share the slot.
 
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
+import { classChainOf } from "../domain/agent-traits.mjs";
 import { parseSnapshotSubject, snapshotSubject } from "../domain/world-snapshot.mjs";
 import { parseImperative, OBJECT_PRONOUNS } from "../domain/grammar/ace.mjs";
 import { loadLexicon, withProperNames, classify } from "../domain/grammar/lexicon.mjs";
@@ -976,23 +977,11 @@ export function objectLookProperties(rows, state, object, actingSubject = "playe
  *  with the object itself ("housekeeper → person"): a breadth-first walk up
  *  the world's OWN rdf:type and rdfs:subClassOf edges (worldActionRows, so a
  *  merged corpus's taxonomy for the same word never joins the chain), the same
- *  upward-class rendering chat's "what do you know about X" shows. Pure. */
+ *  upward-class rendering chat's "what do you know about X" shows. The walk
+ *  itself is agent-traits.mjs's classChainOf, shared with that module's trait
+ *  resolver so the tree holds one chain walk rather than two. Pure. */
 export function objectClassChain(rows, object) {
-  const worldRows = worldActionRows(rows);
-  const parentsOf = (node) => worldRows
-    .filter((r) => r.subject === node && (r.predicate === "rdf:type" || r.predicate === "rdfs:subClassOf"))
-    .map((r) => r.object);
-  const seen = new Set([object]);
-  const chain = [object];
-  const queue = [...parentsOf(object)];
-  while (queue.length) {
-    const node = queue.shift();
-    if (seen.has(node)) continue;
-    seen.add(node);
-    chain.push(node);
-    queue.push(...parentsOf(node));
-  }
-  return chain;
+  return classChainOf(worldActionRows(rows), object);
 }
 
 async function worldDigest(prompt, { memoryDir, memory, rows, state, graph, actingSubject = "player" }) {

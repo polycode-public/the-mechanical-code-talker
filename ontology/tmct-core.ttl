@@ -1049,3 +1049,40 @@ mgx:knows-about a owl:ObjectProperty ;
   rdfs:label "knows-about" ;
   rdfs:comment "A person knows a topic, spoken as a short digest of that topic's own facts at talk time." .
 
+# --- Agent trait vocabulary (an agent class or instance's own imperatives) ---
+#
+#     A creature's drives, stated as facts on its class or overridden on one
+#     instance, read back nearest-first up its rdf:type/rdfs:subClassOf chain.
+#     rdfs:domain/rdfs:range are owl:Thing throughout: the subject is any
+#     agent class or instance and the object of each is a class name, and no
+#     class in a game world is itself formally declared as an owl:Class.
+
+mgx:pursues a owl:ObjectProperty ;
+  rdfs:label "pursues" ;
+  rdfs:domain owl:Thing ;
+  rdfs:range owl:Thing ;
+  rdfs:comment "An agent class or instance moves toward members of the named class. Repeated rows name several targets." .
+
+mgx:evades a owl:ObjectProperty ;
+  rdfs:label "evades" ;
+  rdfs:domain owl:Thing ;
+  rdfs:range owl:Thing ;
+  rdfs:comment "An agent class or instance moves away from members of the named class. Stated separately from mgx:pursues so a world can declare one drive without implying the other." .
+
+mgx:consumes a owl:ObjectProperty ;
+  rdfs:label "consumes" ;
+  rdfs:domain owl:Thing ;
+  rdfs:range owl:Thing ;
+  rdfs:comment "Contact between an agent and a member of the named class removes the target and transfers its mass to the agent — a food-chain edge, or (paired with mgx:guards) a puzzle's 'may not be left alone with' constraint." .
+
+mgx:vision-radius a owl:DatatypeProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range xsd:integer ;
+  rdfs:comment "The Chebyshev radius, in cells, within which an agent's belief about another subject's location is ground truth rather than an unverified told fact." .
+
+mgx:guards a owl:ObjectProperty ;
+  rdfs:label "guards" ;
+  rdfs:domain owl:Thing ;
+  rdfs:range owl:Thing ;
+  rdfs:comment "An agent's presence suspends an mgx:consumes pairing between the named class and any other class this same agent also guards — the farmer's presence keeping the wolf and the goat, or the goat and the cabbage, from being left alone together." .
+

@@ -48,13 +48,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   5 (domain, fixtures, adapters, store, service, CLI verb). Next rounds: phase 4 chat wiring (a
   `chat.mjs` round; also carries the strict-tier provenance nuance recorded in the plan's phase
   3 section), 6 page, 7a/7b site, 8 e2e + CI enrolment, 9 rig + claims.
-- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — paused after F3. Landed: F0-F3; the
-  first measured claim is 0 of 100, all 100 abstained (`results/claims/commonsenseqa.json`).
-  The rig's root-cause finding, recorded in the plan's F3 section: `extractStemSourceTerm` in
-  `src/domain/choice-question.mjs` only reads "where would you find X" stems, so most fixture
-  questions miss before the probe (and its child-pack pull) runs — broaden it before expecting
-  rungs R1-R3 to move the number. Next rounds: F4 claims-block swap, F5 removal + corpus rows,
-  rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
+- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — landed: F0-F3 plus the broadened
+  `extractStemSourceTerm` (six closed stem templates; re-measured claim now 1 answered, 2
+  refused, 97 abstained, `sourceEdgePresent` 2). The measured next gate, recorded in the
+  plan's F3 section: `coreParse`'s `leadsInterrogative` (`QUESTION_LEAD_RE` in
+  `src/domain/interpret/normalize.mjs`) declines 50 of the 100 fixture stems before the
+  choice lane runs at all, and that gate is shared with other lanes, so widening it is its
+  own careful round with the full chat blast radius. Next rounds: that gate, F4 claims-block
+  swap, F5 removal + corpus rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
 - [ ] **Three seonix playtest findings (their PLAYTEST_LOG_004/005, relayed 2026-08-08)** —
   (1) "what does X mean" misses LexiconTerm individuals `/describe` finds (worked on 3.0.8);
   (2) the denotes ask lane reports no edges on a term whose `/describe` lists twenty, and the

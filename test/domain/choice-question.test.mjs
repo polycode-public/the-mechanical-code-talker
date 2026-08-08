@@ -158,6 +158,60 @@ test("a newline-separated option list with no letters parses like the labelled f
   assert.deepEqual(optionTexts(parsed), ["first", "second"]);
 });
 
+// ---- stem source-term extraction: the broadened template set ----
+
+test("a broadened placement verb reads its object up to the option list's comma", () => {
+  const text = "Where can you buy a clock, watch or wallet?\nA) shop B) house";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "clock");
+});
+
+test("a what-do-support stem reads the subject between the auxiliary and the closing verb", () => {
+  const text = "What do beavers use to build dams?\nA) teeth B) claws";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "beavers");
+});
+
+test("a what-is-the-subject stem reads the verb's direct object instead of a subject", () => {
+  const text = "What uses a battery to work?\nA) remote B) book";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "battery");
+});
+
+test("a where-copula stem reads its subject past the leading article", () => {
+  const text = "Where is a kettle usually kept?\nA) kitchen B) garage";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "kettle");
+});
+
+test("a trailing of-clause names the term over the stem's own grammatical subject", () => {
+  const text = "What is the habitat of the fox?\nA) den B) nest";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "fox");
+});
+
+test("a want-to stem reads the verb's object when the verb takes one", () => {
+  const text = "Would you want to open a bakery before dawn?\nA) today B) later";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "bakery");
+});
+
+test("a want-to stem falls back to the bare verb when nothing follows it", () => {
+  const text = "What would you need if you want to smoke?\nA) lighter B) fork";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "smoke");
+});
+
+test("a possessive noun ends the captured phrase and drops its own trailing s", () => {
+  const text = "Where can you find a restaurant's phone number?\nA) sign B) website";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "restaurant");
+});
+
+test("a pronoun subject yields no source term rather than reading the pronoun as one", () => {
+  const text = "Where are you when you are ready to leave?\nA) home B) door";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "");
+});
+
+test("a stem with no recognized cue at all still parses, with an empty source term", () => {
+  const text = "How are the conditions for someone who lives in a shelter?\nA) good B) bad";
+  const parsed = splitChoiceQuestion(text);
+  assert.notEqual(parsed, null);
+  assert.equal(parsed.sourceTerm, "");
+});
+
 // ---- the exported bounds are the numbers the tests above rely on ----
 
 test("the exported option bounds match what the option-count declines test against", () => {

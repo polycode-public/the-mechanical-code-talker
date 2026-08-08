@@ -170,13 +170,142 @@ function findAcceptedLabelSequence(text) {
   return accepted;
 }
 
-// The one closed frame this module extracts a source term from directly:
-// "where would you find/see/keep/put/store/place X ..." — the shape the
-// rig's own enumerated stems take. Anything else yields "", which the
-// contract states is a valid outcome, not a failure.
-const PLACEMENT_VERB_RE = /\b(?:find|see|keep|put|store|place)\s+([a-z][\w'-]*)/i;
+// ---- stem source-term extraction ----
+//
+// A closed set of sentence templates, tried in order, each reading only the
+// stem text — never a fixture's own question_concept, which the real lane
+// never sees either. Every template ends the same way: hand the text after
+// its cue word to captureStemNounPhrase, which trims determiners, pronouns
+// and clause boundaries down to a short noun phrase. Anything no template
+// matches yields "", which the contract states is a valid outcome, not a
+// failure.
 
-const extractStemSourceTerm = (stem) => PLACEMENT_VERB_RE.exec(stem)?.[1]?.toLowerCase() ?? "";
+// Determiners and possessives stripped off the front of a captured phrase —
+// closed classes, not open vocabulary.
+const LEADING_DETERMINER_RE = /^(?:an?|the|some|any|few|many|several|more|most|my|your|his|its|our|their)\s+/i;
+
+// Pronouns that can open a captured phrase but never name a source term —
+// "where are you" and "what should he use" have no noun there to read.
+const PRONOUN_TERMS = new Set([
+  "you", "i", "it", "he", "she", "they", "we", "there", "someone",
+  "something", "one", "him", "her", "them", "who",
+  "himself", "herself", "itself", "themselves", "myself", "yourself",
+]);
+
+// Words that end a captured phrase rather than folding into it: the closed
+// prepositions this module already uses elsewhere (PREP_WORDS), plus the
+// conjunctions, clause-openers and auxiliary/modal verbs that mark a clause
+// boundary in the sentence shapes CommonsenseQA's stems actually use.
+const PHRASE_BOUNDARY_WORDS = new Set([
+  ...PREP_WORDS, "to", "behind", "before", "near", "next",
+  "along", "alongside", "under", "over", "between", "among", "during",
+  "without", "about", "by", "as", "like",
+  "that", "if", "when", "while", "being", "because", "since", "until",
+  "so", "and", "but", "or",
+  "immediately", "likely", "usually", "normally", "currently",
+  "is", "are", "was", "were", "do", "does", "did",
+  "has", "have", "had", "will", "would", "could", "should", "might", "must", "can",
+]);
+
+/** Reads a short noun phrase (at most three words) off the front of `words`,
+ *  stopping at the first phrase-boundary word. A possessive ("restaurant's")
+ *  ends the phrase right after the word it marks, its "'s" dropped — the
+ *  next word belongs to a different noun ("restaurant's phone number" reads
+ *  as "restaurant", not the number). */
+function readStemNounPhrase(words) {
+  const out = [];
+  for (const word of words) {
+    if (out.length >= 3 || PHRASE_BOUNDARY_WORDS.has(word)) break;
+    const possessive = word.endsWith("'s");
+    out.push(possessive ? word.slice(0, -2) : word);
+    if (possessive) break;
+  }
+  return out.join(" ");
+}
+
+/** Strips a leading determiner, then reads a noun phrase — "" when the
+ *  phrase would open on a pronoun or a boundary word, since neither ever
+ *  names a source term. Stops at the first comma, so an option-like list
+ *  ("a magazine, paper or gum") reads only its first member. */
+function captureStemNounPhrase(tailText) {
+  const [beforeComma] = String(tailText).split(",", 1);
+  const stripped = beforeComma.replace(LEADING_DETERMINER_RE, "");
+  const words = stripped.trim().toLowerCase().split(/[^a-z'-]+/).filter(Boolean);
+  if (words.length === 0 || PRONOUN_TERMS.has(words[0]) || PHRASE_BOUNDARY_WORDS.has(words[0])) return "";
+  return readStemNounPhrase(words);
+}
+
+// "where would you find/see/keep/put/store/place/buy/get/locate/hide/wear/
+// carry/use/take/open/cross X" — the placement and possession verbs whose
+// direct object is the term the question is about. Not anchored to "where":
+// the same object slot holds the source term in "what would you put X into"
+// too, and the verb match already carries the whole signal.
+const PLACEMENT_VERB_RE = /\b(?:find|found|see|keep|put|store|place|buy|get|locate|hide|wear|carry|use|take|open|cross)\s+(.+)$/i;
+const placementVerbSourceTerm = (stem) => {
+  const m = PLACEMENT_VERB_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "what do/does/did <subject> do/use/need/require" — the do-support shape
+// CommonsenseQA's "what"-led stems lean on most: the subject sits between
+// the auxiliary and the closing verb.
+const WHAT_DO_SUBJECT_RE = /\bwhat\s+(?:do|does|did)\s+(.+?)\s+(?:primarily\s+)?(?:do|does|did|use|need|require)\b/i;
+const whatDoSubjectSourceTerm = (stem) => {
+  const m = WHAT_DO_SUBJECT_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "what uses/needs/requires/has/holds/contains/involves X" — the shape
+// where "what" is itself the subject and the source term is the verb's
+// direct object instead.
+const WHAT_VERB_OBJECT_RE = /^what\s+(?:uses|needs|requires|has|holds|contains|involves)\s+(.+)$/i;
+const whatVerbObjectSourceTerm = (stem) => {
+  const m = WHAT_VERB_OBJECT_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "where is/are/was/were X" — the copula shape ("where is a doormat likely
+// to be") that PLACEMENT_VERB_RE's action verbs never match.
+const WHERE_COPULA_RE = /\bwhere\s+(?:is|are|was|were)\s+(.+)$/i;
+const whereCopulaSourceTerm = (stem) => {
+  const m = WHERE_COPULA_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "... of the/a X?" at the very end of the stem — "what is the habitat of
+// the fox?" names its term in a trailing relational clause, not its subject.
+const TRAILING_OF_CLAUSE_RE = /\bof\s+(?:an?|the)\s+([a-z][\w'-]*(?:\s+[a-z][\w'-]*){0,2})\s*\??\s*$/i;
+const trailingOfClauseSourceTerm = (stem) => {
+  const m = TRAILING_OF_CLAUSE_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "... want(s/ed/ing) to <verb> [object]" — the desire-cue stems. The object
+// grounds better than the bare verb when there is one ("want to open a
+// steakhouse" -> "steakhouse"); the verb itself is the fallback for an
+// intransitive want with nothing following it ("want to smoke?" -> "smoke").
+const WANT_TO_RE = /\bwant(?:s|ed|ing)?\s+to\s+([a-z][\w'-]*)\b(.*)$/i;
+const wantToSourceTerm = (stem) => {
+  const m = WANT_TO_RE.exec(stem);
+  if (!m) return "";
+  return captureStemNounPhrase(m[2]) || m[1].toLowerCase();
+};
+
+// Note: a leading "A/An/The <subject> ..." shape is not among these
+// templates. coreParse gates every input on leadsInterrogative before this
+// module ever runs, and that gate's QUESTION_LEAD_RE never accepts a line
+// starting with a determiner — so a stem in that shape is declined before
+// reaching extractStemSourceTerm, and a template for it would never fire.
+function extractStemSourceTerm(stem) {
+  return (
+    placementVerbSourceTerm(stem)
+    || whatDoSubjectSourceTerm(stem)
+    || whatVerbObjectSourceTerm(stem)
+    || whereCopulaSourceTerm(stem)
+    || trailingOfClauseSourceTerm(stem)
+    || wantToSourceTerm(stem)
+  );
+}
 
 function parseLabelledEnumerated(text) {
   const accepted = findAcceptedLabelSequence(text);
