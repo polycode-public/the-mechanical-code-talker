@@ -41,16 +41,13 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
   Surfaced by the filler work (now shipped and CI-verified, plan archived): the ack-preamble
   arm used to silently drop the quantifier and store a wrong fact; it misses honestly now.
   Parsing those subjects is real, separate grammar work.
-- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 and A0 shipped and
-  CI-verified; B2, B3 (TOOL-9 reached: envelope `rungReached: TOOL-9`, 0% hallucination,
-  agi-scales notch 3) and B4 all CODE-COMPLETE on `main`, riding the next batch. IN FLIGHT: B5
-  (recognition surfaces — "what am I doing", NPC intent, `runCapabilityPlan.recognition`), the
-  plan's final slice.
-- [ ] **Sprites redesign** — CODE-COMPLETE: worktree merged onto `main` (4 commits + pack
-  manifest), worktree and branch removed, post-merge radius green (123/123 targeted, 220/220
-  fast, demo:build clean). Riding the next batch; coordinator runs the sprites e2e files at the
-  push. Adventure hookup note: adventure classes ship no facing/moving art yet, so the shared
-  machinery is live on that page but visually inert until art exists.
+- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — A0/B1/B2/B3/B4 all
+  shipped and CI-verified (TOOL-9 reached). IN FLIGHT: B5 (recognition surfaces — "what am I
+  doing", NPC intent, `runCapabilityPlan.recognition`), the plan's final slice.
+- [ ] **Adventure sprite art** — the sprites redesign shipped and CI-verified; its shared
+  animation machinery is live on adventure.html's bundle but visually inert there until any
+  adventure class gains facing/moving frames, plus one small `adventure-viz.mjs` render call
+  once art exists.
 - [ ] **PLAN_NEWS_FEED.md** (operator, 2026-08-08) — IN FLIGHT: Fable sub-agent writing the
   design-only plan for the news.html demo + core news capability (contemporary + knowledge-base
   source research with live probes, grounding/enrichment/syllogism cycle, hub-centered feed,
