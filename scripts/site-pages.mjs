@@ -78,7 +78,7 @@ export const INDEX_META = {
  *  riding DEMO_PAGE_META. */
 export const RECEIPTS_META = {
   title: "Receipts",
-  description: "Query latency, graph and page size, and chatbench and idxbench headlines, measured and committed. Each figure on this page names the file it comes from.",
+  description: "Query latency and graph and page size, measured and committed. Each figure on this page names the file it comes from.",
 };
 
 /** The claims page's own head-tag metadata. Same posture as RECEIPTS_META:
@@ -104,7 +104,5 @@ export const HELP_META = {
  *  exists, parses, matches scripts/claims/schema.json, and cites sources that
  *  exist in the repo — the same three checks that test already runs over
  *  every JSON file present, now also pinned to what the page promises to
- *  show. `paraphrase` and `definitions` are the only other rigs under
- *  results/claims/; neither publishes a block here — definitions until its
- *  fixture is sampled from outside the repo. */
+ *  show. Every rig under results/claims/ publishes a block here. */
 export const CLAIMS_PAGE_BLOCKS = ["planner", "prose-band", "openbookqa"];
