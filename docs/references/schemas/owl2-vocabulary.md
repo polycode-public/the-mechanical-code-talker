@@ -36,6 +36,11 @@ working vocabulary note, not a copy of the specs.
 | `owl:onProperty` | OWL 2 | the property a restriction constrains |
 | `owl:someValuesFrom` | OWL 2 | existential — "every N1 that VERBs a N2 is a N3" |
 | `owl:minCardinality` / `owl:maxCardinality` / `owl:cardinality` | OWL 2 | "every N has at least / at most / exactly n N2" |
+| `owl:unionOf` | OWL 2 | union — "every N1 is a N2 or a N3" (repeated rows, one per member) |
+| `owl:complementOf` | OWL 2 | complement — "everything that is not N1 is N2" |
+| `owl:oneOf` | OWL 2 | enumeration — "the N1 N2s are exactly M1, M2 and M3" (repeated rows, one per member) |
+| `owl:differentFrom` | OWL 2 | individual inequality — "PROPERNAME1 is not PROPERNAME2", and the pairwise closure an enumeration mints among its own members |
+| `owl:TransitiveProperty` | OWL 2 | role transitivity — "VERB is transitive" (as the object of `rdf:type` on the verb's minted predicate) |
 
 Notes:
 

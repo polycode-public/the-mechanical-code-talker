@@ -1,6 +1,6 @@
 # tmct's ACE-OWL sub-fragment — the controlled-grammar pattern table
 
-Hand-authored stub defining the ~9 controlled-English sentence patterns tmct's
+Hand-authored stub defining the ~16 controlled-English sentence patterns tmct's
 grammar (Phase 2, `src/domain/grammar/ace.mjs`) maps to OWL axioms. The fragment is
 **inspired by** Attempto Controlled English (ACE) and the OWL output of its APE
 parser — it is a deliberately small sub-fragment, not an ACE implementation.
@@ -39,6 +39,13 @@ declines to emit.
 | 7 | possessives — *N1's N2 is …* / *the N2 of N1 is …* | data or object property assertion, **per the lexicon's declaration** of that property (datatype vs object) |
 | 8 | adjectives — *every ADJ N1 is …* / *N1 is ADJ* | subclass-with-restriction or `owl:DatatypeProperty` value, **per the declared adjective type** in the lexicon |
 | 9 | *N can VERB* | `N mgx:capableOf VERB` — capability assertion, interoperable with ConceptNet `/r/CapableOf` |
+| 10 | *every N1 is a N2 or a N3 [or a N4 …]* | `N1 rdfs:subClassOf U`, `U owl:unionOf N2, N3, …` — union, arms sorted by local name |
+| 11 | *everything that is not N1 is N2* | `C owl:complementOf N1`, `C rdfs:subClassOf N2` — complement |
+| 12 | *PROPERNAME is not a N* | `PROPERNAME owl:disjointWith N` — individual-level negative type |
+| 13 | *the N1 N2s are exactly M1, M2 [and M3 …]* | `owl:oneOf` enumeration, plus `rdf:type` per member and pairwise `owl:differentFrom` |
+| 14 | *PROPERNAME1 is not PROPERNAME2* | `PROPERNAME1 owl:differentFrom PROPERNAME2` — individual inequality |
+| 15 | *every N1 VERB [a] N2* | `N1 rdfs:subClassOf R`, `R` an `owl:someValuesFrom` restriction — bare existential, no `that`-clause |
+| 16 | *VERB is transitive* | `VERB rdf:type owl:TransitiveProperty` |
 
 ## Design notes
 
