@@ -154,6 +154,73 @@ function compareRows(a, b) {
   return 0;
 }
 
+const DRIVE_PREDICATES = Object.freeze(["mgx:consumes", "mgx:evades", "mgx:pursues"]);
+
+/** Whether any row states a drive (`mgx:pursues`, `mgx:evades` or
+ *  `mgx:consumes`). A world that states none is a world whose cast is still
+ *  driven by its injected roles object and config numbers alone. Pure. */
+export function rowsDeclareDrives(rows) {
+  return (rows || []).some((r) => DRIVE_PREDICATES.includes(r.predicate));
+}
+
+/** The class an appetite belongs to: the consuming subject's own bare
+ *  `rdf:type` class when it is an instance, otherwise the subject itself. */
+function consumerClassOf(rows, subject) {
+  const typed = (rows || []).find((r) => r.subject === subject && r.predicate === "rdf:type");
+  return typed ? typed.object : subject;
+}
+
+/** The class names `subject` moves away from: its own chain's `mgx:evades`
+ *  rows when any are declared, otherwise the inverse of `mgx:consumes` —
+ *  every class whose members declare an appetite for a class on `subject`'s
+ *  own chain. The inverse is what keeps a prey fleeing its eater without the
+ *  world stating the fear twice; a declared `mgx:evades` set replaces it
+ *  entirely, so one instance can be taught a different fear (or a fear of
+ *  something absent) without inheriting the derived one back. Sorted. Pure. */
+export function fearedClassesOf(rows, subject) {
+  const declared = traitValuesOf(rows, subject, "mgx:evades");
+  if (declared.length) return declared;
+  const chain = new Set(classChainOf(rows, subject));
+  const consumers = new Set();
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:consumes" || !chain.has(row.object)) continue;
+    consumers.add(consumerClassOf(rows, row.subject));
+  }
+  return [...consumers].sort();
+}
+
+/** The cast a world's own rows state, in the `{ predator, prey, food }` shape
+ *  the town-square engine's `roles` parameter already takes. A predator class
+ *  is one whose declared `mgx:pursues`/`mgx:consumes` names another class that
+ *  itself declares a drive; the prey class is the one it names. `fallback`
+ *  fills whatever the rows say nothing about — the food kinds always come
+ *  from it, since a spawned and a placed food differ by who put them there,
+ *  which no trait row states. Null when the rows state no cast at all and no
+ *  fallback was given. Sorted-first on ties, so two row orders build the same
+ *  cast. Pure. */
+export function castFromFacts(rows, { fallback = null } = {}) {
+  const driveSubjects = new Set(
+    (rows || []).filter((r) => DRIVE_PREDICATES.includes(r.predicate)).map((r) => r.subject),
+  );
+  const driveClasses = new Set([...driveSubjects].map((s) => consumerClassOf(rows, s)));
+  let predatorKind = null;
+  let preyKind = null;
+  for (const kind of [...driveClasses].sort()) {
+    const targets = [...traitValuesOf(rows, kind, "mgx:pursues"), ...traitValuesOf(rows, kind, "mgx:consumes")]
+      .filter((target) => target !== kind && driveClasses.has(target))
+      .sort();
+    if (targets.length) { predatorKind = kind; preyKind = targets[0]; break; }
+  }
+  if (!predatorKind) return fallback;
+  return {
+    predator: { role: "predator", kind: predatorKind, idPrefix: predatorKind, hunts: preyKind ? "prey" : null },
+    prey: preyKind
+      ? { role: "prey", kind: preyKind, idPrefix: preyKind, hunts: null }
+      : (fallback?.prey ?? null),
+    food: fallback?.food ?? null,
+  };
+}
+
 /** The instance's own rows for a fresh spawn of `className`: one row per
  *  trait `className`'s own class chain declares, subject rewritten to
  *  `instanceId`, plus the `rdf:type` row. Sorted by (predicate, object) so

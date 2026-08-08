@@ -382,12 +382,42 @@ export function* worldFactRows(lay) {
 
 const pluralize = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/** The two cast classes' own trait rows: vision, starting mass, drain, and
+ *  the pursue/consume links that make the predator a predator. These are the
+ *  rows the turn engine reads back per subject, so on a shipped board the
+ *  world's own statement — not the config table — is what drives the cast;
+ *  the config numbers remain the fallback for a world that states nothing.
+ *  The values quote game-config.mjs so the shipped statement and the shipped
+ *  fallback can never disagree. Every object is a string, because a fact
+ *  object is a term. The prey's fear is deliberately NOT stated: it derives
+ *  from the predator's own `mgx:consumes` row, so one fact carries both the
+ *  appetite and the flight. */
+export function* castTraitFactRows(lay) {
+  const fact = (subject, predicate, object) => ({ world: lay.name, kind: "fact", subject, predicate, object });
+  const knobs = DEFAULT_GAME_CONFIG.mudiii;
+  const { predator, prey, spawnedFood, placedFood } = CAST_KINDS;
+
+  yield fact(predator, "mgx:vision-radius", String(knobs.predatorVisionRadius));
+  yield fact(predator, "mgx:hasMass", String(knobs.predatorInitialMass));
+  yield fact(predator, "mgx:mass-drain-per-turn", String(knobs.predatorMassDecrementPerTurn));
+  yield fact(predator, "mgx:pursues", prey);
+  yield fact(predator, "mgx:consumes", prey);
+  yield fact(prey, "mgx:vision-radius", String(knobs.preyVisionRadius));
+  yield fact(prey, "mgx:hasMass", String(knobs.preyInitialMass));
+  yield fact(prey, "mgx:mass-drain-per-turn", String(knobs.preyMassDecrementPerTurn));
+  yield fact(prey, "mgx:consumes", spawnedFood);
+  yield fact(prey, "mgx:consumes", placedFood);
+}
+
 /** The board, the props and the cast restated as askable facts, so "what is
  *  the board?" and "what is the vision radius?" ground instead of missing.
- *  Every number is either fixed layout geometry or a shipped tuning default
- *  from game-config.mjs; the tunable ones say "by default", because a slider
- *  drag or a tmct.toml override moves them and a fact a slider falsifies is a
- *  lie. */
+ *  Every number is either fixed layout geometry, a trait the world itself
+ *  states (castTraitFactRows), or a shipped tuning default from
+ *  game-config.mjs; only the config-tunable ones say "by default", because a
+ *  tmct.toml override moves them and a fact an override falsifies is a lie.
+ *  The per-class vision/mass/drain numbers carry no hedge: after the engine's
+ *  fact read they are the world's own statement, and the config number is
+ *  only the fallback for a world that states nothing. */
 export function* structuralFactRows(lay) {
   const fact = (subject, predicate, object) => ({ world: lay.name, kind: "fact", subject, predicate, object });
   const knobs = DEFAULT_GAME_CONFIG.mudiii;
@@ -404,29 +434,24 @@ export function* structuralFactRows(lay) {
   yield fact("square", "mgx:hasA", `limit of ${pluralize(knobs.maxPreyPopulation, prey)} and ${pluralize(knobs.maxFoodItems, "food item")} at once by default`);
   yield fact("prop", "mgx:cover", "one cell each, which nothing can walk into");
 
-  yield fact(predator, "mgx:hasA", `vision radius of ${pluralize(knobs.predatorVisionRadius, "cell")} by default`);
-  yield fact(predator, "mgx:start-with", `mass ${knobs.predatorInitialMass} by default`);
-  yield fact(predator, "mgx:lose", `${knobs.predatorMassDecrementPerTurn} mass per turn by default`);
-  yield fact(prey, "mgx:hasA", `vision radius of ${pluralize(knobs.preyVisionRadius, "cell")} by default`);
-  yield fact(prey, "mgx:start-with", `mass ${knobs.preyInitialMass} by default`);
-  yield fact(prey, "mgx:lose", `${knobs.preyMassDecrementPerTurn} mass per turn by default`);
+  yield* castTraitFactRows(lay);
   yield fact(prey, "mgx:arrive", `every ${pluralize(knobs.preySpawnIntervalTurns, "turn")} at the edge of the board by default`);
   yield fact(spawnedFood, "mgx:arrive", `every ${pluralize(knobs.foodSpawnIntervalTurns, "turn")} on any open cell by default`);
   yield fact(spawnedFood, "mgx:start-with", `mass ${knobs.spawnedFoodMass} by default`);
   yield fact(placedFood, "mgx:start-with", `mass ${knobs.placedFoodMass} by default`);
   yield fact(placedFood, "mgx:arrive", "where the player puts it");
 
-  // The page's own slider label is "vision radius", so that exact term has to
-  // describe too, not just the per-class rows above. One combined row while
-  // the two class defaults agree, one row per class once they split — never a
-  // combined claim the config doesn't make. This cast splits them: the
-  // predator sees further than the prey, and the one-cell band that opens is
-  // the point.
+  // The dashboard's own term for the belief gate is "vision radius", so that
+  // exact term has to describe too, not just the per-class rows above. One
+  // combined row while the two class numbers agree, one row per class once
+  // they split — never a combined claim the trait rows don't make. This cast
+  // splits them: the predator sees further than the prey, and the one-cell
+  // band that opens is the point.
   if (knobs.predatorVisionRadius === knobs.preyVisionRadius) {
-    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.predatorVisionRadius, "cell")} for both the ${predator} and the ${prey} by default`);
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.predatorVisionRadius, "cell")} for both the ${predator} and the ${prey}`);
   } else {
-    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.predatorVisionRadius, "cell")} for the ${predator} by default`);
-    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.preyVisionRadius, "cell")} for the ${prey} by default`);
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.predatorVisionRadius, "cell")} for the ${predator}`);
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.preyVisionRadius, "cell")} for the ${prey}`);
   }
 }
 
