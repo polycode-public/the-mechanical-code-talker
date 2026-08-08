@@ -432,8 +432,8 @@ listed. The chat page and the ledger take the same paste-or-drop text in
 place; every page that holds a fact store exports it as JSONL.
 
 Two browsers can also link directly, no server in between: chat's share
-overlay walks a five-step WebRTC handshake (mint an invite, send it, paste
-back a reply, connect), and the mesh grows past a pair — three peers converge
+overlay walks a five-step WebRTC handshake (mint an invite, send it, create
+the reply, send that back, paste it to connect), and the mesh grows past a pair — three peers converge
 on the same fact store through a deterministic merge, real browsers driving
 real WebRTC in CI, not a mock. `help.html` walks asking, teaching, sharing,
 and what to do when something goes wrong. `receipts.html` and `claims.html`
@@ -501,8 +501,9 @@ resolves to a real graph traversal or declines cleanly:
 - list follow-ups: after "which modules import src/core/model.mjs",
   "which of those are tested" resolves against that list;
 - follow-up context more broadly: "it", "that", and "those" bind to whatever
-  you just asked about or were told, so a set survives a count ("how many
-  functions are there" then "list them" answers against the same set), and a
+  you just asked about or were told, so a listed set survives a count ("which
+  modules import http.mjs", then "how many of those are tested" — and "those"
+  still means that same list on the turn after the count), and a
   genuine tie — "that" fitting two things said in the same turn — declines
   and lists both candidates rather than guessing which one you meant;
 - filler-clause openers: "oh nice. um what about cats" answers like its

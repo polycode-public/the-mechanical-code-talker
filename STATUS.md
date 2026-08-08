@@ -102,7 +102,10 @@ security section states exactly what runs (SAST and secret detection per pipelin
 provenance-signed publishing, an unscheduled local audit script), and the bibliography's
 "no intent vocabulary" line was reworded to stay true beside the shipped goal recognition
 (`71ecac4d`). The suspected stale about-page count turned out correct in README — the stale
-figure was the build script's own comment, fixed alongside.
+figure was the build script's own comment, fixed alongside. A follow-up audit of the post-fix
+README verified all twelve new passages independently and found one defect in them — the
+follow-up-context worked example ran its two turns in an order the discourse record doesn't
+support (a count never registers a set) — corrected to the verified list-then-count sequence.
 
 ## Site weight
 
