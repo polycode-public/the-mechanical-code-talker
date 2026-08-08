@@ -53,6 +53,12 @@ import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../adapters/corpus/conceptnet.mjs";
 import { join } from "node:path";
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
+import {
+  SPRITE_POSE_REST, SPRITE_POSE_MOVING, isMovingSwatchLabel,
+  nextFocusMode, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+} from "../domain/sprite-animation.mjs";
+import { sceneVocabulary, randomSceneSentence, roomClassesFromWorldFacts } from "../domain/scene-random.mjs";
+import { splitSceneBackdrop } from "../domain/scene-compose.mjs";
 
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
@@ -127,6 +133,24 @@ export async function loadSpriteOntologyFactRows() {
     .filter((f) => f.predicate === "rdfs:subClassOf")
     .map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object }));
   return [...seedRows, ...gapfillRows, ...wordnetRows];
+}
+
+/** The room classes the adventure page's own scenario worlds declare, for
+ *  the scene composer's room vocabulary — the same worlds-pack provider read
+ *  the adventure build step makes, so the rooms a random scene can name are
+ *  exactly the rooms adventure.html plays in. A missing pack or world reads
+ *  as no rooms, never a build failure. I/O; the page render itself stays
+ *  pure given the returned list. */
+export async function loadAdventureSceneRoomClasses(worldNames = ["ashcombe-hall", "lantern-cottage", "greyvale-museum"]) {
+  const { getWorldsPackProvider, clearWorldsPackCache } = await import("../adapters/corpus/worlds-pack.mjs");
+  clearWorldsPackCache();
+  const provider = getWorldsPackProvider({});
+  const rooms = new Set();
+  for (const name of worldNames) {
+    const world = await provider.load(name).catch(() => null);
+    for (const room of roomClassesFromWorldFacts(world?.facts || [])) rooms.add(room);
+  }
+  return [...rooms].sort();
 }
 
 // ---- grouping (presentation only — every class still resolves through the
@@ -646,9 +670,12 @@ export function sceneComposerClassIndex(entries) {
 // ---- the animated cell (pure) ----
 //
 // A card's large tier varies on three axes: mood (mgx:feels), facing
-// (mgx:faces) and pose (mgx:pose). One image cell per class shows all three,
-// stepping through its display modes on click: static, moving, turning,
-// cycle-emotions, back to static. The page builds the frames client-side out
+// (mgx:faces) and pose (mgx:pose). One image cell per class stands where its
+// plain swatch was; each card grid keeps ONE such cell focused (the first,
+// by default), and the focused cell animates — rotating through its turning
+// positions, or cycling its emotions once clicked (sprite-animation.mjs's
+// nextFocusMode holds the toggle; the choice is kept per grid while the
+// visitor stays on the page). The page builds the frames client-side out
 // of its own already-rendered swatches (see the inline script below — the
 // same read-the-DOM posture the scene composer's class index takes), but the
 // frame ORDER and the tempo are real logic worth pinning on their own, so
@@ -708,32 +735,6 @@ export function turnFrameSequence(order, centreFrame, facingFrames) {
 export function movingFrameSequence(idleFrame, movingFrame) {
   if (!idleFrame || !movingFrame) return [];
   return [{ svg: idleFrame.svg, label: "idle" }, { svg: movingFrame.svg, label: "moving" }];
-}
-
-/** The display modes a card's one image cell steps through, in click order.
- *  A class only carries the modes it has real art for; static is always
- *  first, because that is what the cell rests on. */
-export const DISPLAY_MODE_ORDER = Object.freeze(["static", "moving", "turning", "emotions"]);
-
-/** The three axis sequences above, flattened into the ONE click-through
- *  sequence a card's single image cell walks: the static sprite, its moving
- *  pose, the whole turntable, then every mood, and round again. Each frame
- *  carries the mode it belongs to, so the cell can name what it is showing
- *  and can auto-step within one mode without running off into the next.
- *
- *  The leading frame of `moodFrames` is dropped: moodFrameSequence puts the
- *  plain sprite there, and that is already this sequence's static frame.
- *  A class with nothing but its static frame gets an empty sequence and
- *  keeps its ordinary swatch — there is nothing to cycle.
- *
- *  Pure; self-contained (no outer refs), `.toString()`-splice safe. */
-export function displayModeSequence(staticFrame, { movingFrame = null, turnFrames = [], moodFrames = [] } = {}) {
-  if (!staticFrame) return [];
-  const frames = [{ mode: "static", svg: staticFrame.svg, label: staticFrame.label }];
-  if (movingFrame) frames.push({ mode: "moving", svg: movingFrame.svg, label: "moving" });
-  for (const frame of turnFrames || []) frames.push({ mode: "turning", svg: frame.svg, label: frame.label });
-  for (const frame of (moodFrames || []).slice(1)) frames.push({ mode: "emotions", svg: frame.svg, label: frame.label });
-  return frames.length > 1 ? frames : [];
 }
 
 // ---- rendering ----
@@ -804,8 +805,9 @@ export function ontologyTreeHtml(tree, options) {
   const note = tree.truncated
     ? `<p class="tree-note">Some of these chains run further up than the levels shown. The rest stays on record.</p>`
     : "";
+  const legend = `<span class="ontology-legend" aria-hidden="true"><span class="lg lg-member">in this section</span><span class="lg lg-sibling">shared</span><span class="lg lg-abstract">no sprite yet</span><span class="lg lg-dual">two parents</span></span>`;
   return `<div class="ontology">
-    <h3 class="ontology-head">the ontology behind ${escapeHtml(sectionLabel)} <span class="count">${tree.termCount} concepts</span></h3>
+    <h3 class="ontology-head"><span class="ontology-lead">the ontology behind</span> <span class="ontology-term">${escapeHtml(sectionLabel)}</span> <span class="count">${tree.termCount} concepts</span>${legend}</h3>
     <div class="tree-scroll" tabindex="0" role="group" aria-label="ontology tree for ${escapeHtml(sectionLabel)}">
       <div class="ontology-tree">${branches}${apart}</div>
     </div>
@@ -838,13 +840,33 @@ function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasse
   return { treeFor, anchorBaseFor };
 }
 
+/** A swatch's caption is pose-first everywhere a sprite tile renders:
+ *  "default / static", "left / static", "happy / static" — the pose half
+ *  flips to "moving" on hover (the page script owns that), and a tile that
+ *  IS a moving frame ("moving", "left + moving") renders as its resting
+ *  variant's name already wearing the moving pose, which is exactly the
+ *  frame the page folds into that variant's hover flip. */
+export function swatchDisplayParts(s) {
+  const moving = isMovingSwatchLabel(s.label);
+  const variant = s.kind === "plain"
+    ? "default"
+    : moving
+      ? (s.label === "moving" ? "default" : s.label.replace(/ \+ moving$/, ""))
+      : s.label;
+  return { variant, pose: moving ? SPRITE_POSE_MOVING : SPRITE_POSE_REST };
+}
+
 function swatchHtml(s) {
-  const parts = [`<span class="swatch-label">${escapeHtml(s.label)}</span>`];
+  const { variant, pose } = swatchDisplayParts(s);
+  const parts = [
+    `<span class="swatch-label">${escapeHtml(variant)}</span>`,
+    `<span class="swatch-pose">${pose}</span>`,
+  ];
   if (s.treatment) parts.push(`<span class="swatch-treat">&rarr; ${escapeHtml(s.treatment)} treatment</span>`);
   const title = s.property ? `${s.property} = ${s.label}` : s.label;
   const cls = ["swatch", s.tier, s.kind].filter(Boolean).join(" ");
   const property = s.property ? ` data-property="${escapeHtml(s.property)}"` : "";
-  return `<div class="${cls}"${property} title="${escapeHtml(title)}"><div class="swatch-img">${s.svg}</div><div class="swatch-caption">${parts.join("")}</div></div>`;
+  return `<div class="${cls}"${property} data-pose="${pose}" title="${escapeHtml(title)}"><div class="swatch-img">${s.svg}</div><div class="swatch-caption">${parts.join("")}</div></div>`;
 }
 
 function tierRowHtml(tierName, swatches) {
@@ -945,7 +967,7 @@ function sectionHtml(group, entries, { clusterBy = null, treeFor, anchorBaseFor 
  *  from the WHOLE catalog, never just `groupId`'s own slice — a visitor on
  *  one group's page can still ask about, or compose, any real class from any
  *  other group. */
-export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, groupId = null, engineBundleJs = "" } = {}) {
+export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, groupId = null, engineBundleJs = "", adventureRoomClasses = [] } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const clusterBy = {
@@ -971,7 +993,7 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
   const footerEntries = groupId ? entries.filter((e) => e.group === groupId) : entries;
   const footerSwatches = footerEntries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   return renderSpriteCatalogPage({
-    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs,
+    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs, adventureRoomClasses,
     footerClassCount: footerEntries.length, footerSwatchCount: footerSwatches,
   });
 }
@@ -1004,17 +1026,24 @@ function crossPageNavHtml(entries, { currentGroupId = null, includeOverviewLink 
  *  always the WHOLE catalog (never filtered to one group), because the
  *  composer's class index and the dock's fact rows must resolve any real
  *  catalog class regardless of which cards this particular page shows. */
-function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs = "", footerClassCount, footerSwatchCount }) {
+function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, engineBundleJs = "", adventureRoomClasses = [], footerClassCount, footerSwatchCount }) {
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
   const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
   // The composer's class index, computed here over the WHOLE catalog and
   // embedded once — see sceneComposerClassIndex's own header for why this
   // replaced reading it back off the page's own rendered card markup.
-  const classIndexJs = !spritesBundleAvailable ? "{}" : embedJson(sceneComposerClassIndex(entries));
+  const classIndex = spritesBundleAvailable ? sceneComposerClassIndex(entries) : {};
+  const classIndexJs = !spritesBundleAvailable ? "{}" : embedJson(classIndex);
+  // The random-scene vocabulary, derived from the same class index, the
+  // dock's own fact rows and the adventure worlds' rooms — never a word list
+  // of its own (scene-random.mjs).
+  const sceneVocabJs = !spritesBundleAvailable
+    ? "null"
+    : embedJson(sceneVocabulary({ classIndex, spriteFactRows: dockRows, roomClasses: adventureRoomClasses }));
 
   const dockCss = !spritesBundleAvailable ? "" : `
-  .dockwrap { margin: .2rem 0 1.3rem; }
+  .dockwrap { margin: .2rem 0 1rem; }
   .dock-note { color: var(--muted); font-size: .8rem; margin: 0 0 .6rem; max-width: 72ch; }
   .docklog { display: flex; flex-direction: column; gap: .4rem; max-height: 240px; overflow-y: auto; margin-bottom: .5rem; }
   .docklog:empty { display: none; margin-bottom: 0; }
@@ -1079,17 +1108,19 @@ function renderSpriteCatalogPage({ title, entries, bodyHtml, navHtml, iconTempla
           aria-label="Continue the sentence: there is a&hellip;">
       </form>
       <div class="pills" id="composePills" role="group" aria-label="quick words to add">
+        <button type="button" class="pill pill-random" id="composeRandom">random scene</button>
         <button type="button" class="pill" data-fill="doctor">doctor</button>
         <button type="button" class="pill" data-fill="hat">hat</button>
         <button type="button" class="pill" data-fill="wood cabinet">wood cabinet</button>
         <button type="button" class="pill" data-fill="glass lamp">glass lamp</button>
-        <button type="button" class="pill" data-fill="cat">cat</button>
+        <button type="button" class="pill" data-fill="moving cat">moving cat</button>
         <button type="button" class="pill" data-fill="garden">garden</button>
       </div>
     </section>
     <section class="panel viewer-panel" aria-label="The composed scene">
       <h2>the scene</h2>
       <div class="scene-frame" id="sceneFrame">
+        <div class="scene-backdrop" id="sceneBackdrop" aria-hidden="true"></div>
         <div class="scene-row" id="sceneRow" aria-live="polite"></div>
         <span class="empty-note" id="sceneEmpty">nothing recognized yet. Try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
       </div>
@@ -1205,13 +1236,13 @@ ${THEME_TOKENS_CSS}
   :root[data-theme="light"] { --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0; --checker: rgba(0, 0, 0, .07); }
   body { margin: 0; background: var(--ai-canvas); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 1240px; margin: 0 auto; padding: 0 1.2rem 3rem; }
+  main { max-width: 1240px; margin: 0 auto; padding: 0 1.2rem 2rem; }
   button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
   .appbar { display: flex; align-items: flex-end; gap: 1rem; margin: 0 -1.2rem; padding: .6rem 1.2rem 0; background: var(--ai-bar); }
   .appbar h1 { font-family: ${MONO_STACK}; font-size: .84rem; font-weight: 600; letter-spacing: .02em; margin: 0; padding: .32rem .8rem .38rem; background: var(--ai-panel); color: var(--ink); border-radius: 4px 4px 0 0; }
   .appbar .doc-sub { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: color-mix(in srgb, var(--ai-bar-ink) 65%, transparent); padding-bottom: .5rem; }
   ${EYEBROW_LINKS_CSS}
-  .topbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; background: var(--ai-panel); border-bottom: 1px solid var(--ai-edge); margin: 0 -1.2rem 1.4rem; padding: .5rem 1.2rem; }
+  .topbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; background: var(--ai-panel); border-bottom: 1px solid var(--ai-edge); margin: 0 -1.2rem 1rem; padding: .5rem 1.2rem; }
   .jump { font-family: ${MONO_STACK}; font-size: .7rem; padding: .2rem .6rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: transparent; color: var(--ink); text-decoration: none; }
   .jump:hover { border-color: var(--corpus); color: var(--corpus); }
   .jump .count { color: var(--muted); }
@@ -1220,7 +1251,7 @@ ${THEME_TOKENS_CSS}
   .filter { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
   .filter input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--ai-panel-hi); color: var(--ink); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .3rem .6rem; width: 200px; }
   .filter .n { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); white-space: nowrap; }
-  .composer { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0 1.3rem; }
+  .composer { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin: .9rem 0 1rem; }
   @media (max-width: 700px) { .composer { grid-template-columns: 1fr; } }
   .composer .panel, .dockwrap .panel { background: var(--ai-panel); border: 1px solid var(--ai-edge); border-radius: 4px; padding: .75rem .85rem; min-width: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
   .composer h2, .dockwrap h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: -.75rem -.85rem .6rem; padding: .42rem .85rem; background: var(--ai-panel-hi); border-bottom: 1px solid var(--ai-edge); border-radius: 4px 4px 0 0; }
@@ -1230,62 +1261,98 @@ ${THEME_TOKENS_CSS}
   .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
   .pill { font-family: ${MONO_STACK}; font-size: .7rem; padding: .22rem .55rem; border: 1px solid var(--ai-edge); border-radius: 999px; background: var(--ai-panel-hi); color: var(--ink); cursor: pointer; }
   .pill:hover { border-color: var(--corpus); color: var(--corpus); }
-  .scene-frame { min-height: 5.6rem; display: flex; align-items: center; }
+  .scene-frame { position: relative; min-height: 6.4rem; display: flex; align-items: center; border-radius: 4px; overflow: hidden; }
+  /* A named room takes the whole wall: the backdrop layer sits behind the
+     standing entities and its svg fills the frame edge to edge. */
+  .scene-backdrop { position: absolute; inset: 0; display: none; }
+  .scene-backdrop svg { width: 100%; height: 100%; display: block; }
+  .scene-room-name { position: absolute; top: .3rem; right: .45rem; font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: color-mix(in srgb, var(--ai-panel) 82%, transparent); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .06rem .35rem; }
+  .scene-frame.has-backdrop { min-height: 11rem; align-items: flex-end; }
+  .scene-frame.has-backdrop .scene-backdrop { display: block; }
+  .scene-frame.has-backdrop .scene-row { position: relative; padding: 0 .8rem .5rem; align-items: flex-end; }
+  .scene-frame.has-backdrop .scene-sprite { border: 0; background: none; }
+  .scene-frame.has-backdrop .scene-label { background: color-mix(in srgb, var(--ai-panel) 82%, transparent); border-radius: 3px; padding: 0 .25rem; width: max-content; max-width: 100%; }
   .scene-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; width: 100%; }
   .scene-row:empty { display: none; }
   .scene-card { display: flex; flex-direction: column; align-items: center; width: 74px; }
   .scene-sprite { width: 60px; height: 60px; border-radius: 3px; border: 1px solid var(--ai-edge); display: flex; align-items: center; justify-content: center; padding: 6px; box-sizing: border-box; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
   .scene-sprite svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
+  @media (prefers-reduced-motion: no-preference) { .scene-walker .scene-sprite { transition: transform .74s linear; } }
   .scene-label { font-size: .7rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.2; }
   .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
-  .group { margin: 2.2rem 0; content-visibility: auto; contain-intrinsic-size: 800px; }
+  .pill-random { border-color: var(--taught); color: var(--taught); }
+  .pill-random:hover { border-color: var(--corpus); }
+  .group { margin: 1.4rem 0; content-visibility: auto; contain-intrinsic-size: 700px; }
   .group h2 { font-family: ${MONO_STACK}; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h2 .count { font-size: .7rem; color: var(--muted); font-weight: 400; }
-  .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .8rem; max-width: 68ch; }
-  .landing-sections { display: flex; flex-direction: column; gap: 1.6rem; }
-  .landing-section { min-width: 0; }
-  .landing-section-name { font-family: ${MONO_STACK}; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .4rem; display: flex; align-items: baseline; gap: .4rem; }
+  .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .6rem; max-width: 68ch; }
+  .landing-sections { display: flex; flex-direction: column; gap: 1.1rem; }
+  /* A landing section is one row of the chart: the ontology on the left,
+     its example card and "view all" link in a fixed side column — the tree
+     stays first in the DOM, the card just stops paying for a whole band of
+     its own. */
+  .landing-section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 258px; gap: .3rem 1rem; align-items: start; }
+  .landing-section-name { grid-column: 1 / -1; font-family: ${MONO_STACK}; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; display: flex; align-items: baseline; gap: .4rem; }
   .landing-section-name .count { font-weight: 400; opacity: .75; }
-  .landing-section .cards { grid-template-columns: minmax(0, 260px); }
-  .viewall { display: inline-block; font-family: ${MONO_STACK}; font-size: .7rem; margin-top: .4rem; color: var(--taught); text-decoration: none; }
+  .landing-section .ontology { grid-column: 1; grid-row: span 2; margin: 0; }
+  .landing-section .cards { grid-column: 2; grid-template-columns: minmax(0, 1fr); }
+  .landing-section .viewall { grid-column: 2; }
+  @media (max-width: 860px) { .landing-section { display: block; } .landing-section .ontology { margin: 0 0 .6rem; } }
+  .viewall { display: inline-block; font-family: ${MONO_STACK}; font-size: .7rem; margin-top: .3rem; color: var(--taught); text-decoration: none; }
   .viewall:hover { color: var(--corpus); text-decoration: underline; }
-  /* The section ontology trees. Levels run left to right, widest concept
+  /* The section ontology charts. Levels run left to right, widest concept
      first, inside a box that scrolls on its own so a wide graph never widens
-     the page. */
-  .ontology { margin: .3rem 0 .9rem; }
-  .ontology-head { font-family: ${MONO_STACK}; font-size: .64rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
-  .ontology-head .count { font-weight: 400; opacity: .75; }
-  .tree-scroll { overflow: auto; max-height: 22rem; border: 1px solid var(--ai-edge); border-radius: 4px; background: var(--ai-panel); padding: .55rem; overscroll-behavior: contain; }
-  .ontology-tree { display: flex; flex-direction: column; gap: .9rem; width: max-content; min-width: 100%; }
+     the page. The head sets the reading: a quiet serif lead-in, the term
+     itself, the concept count, and a legend decoding the node treatments —
+     the same border language the nodes below actually wear. */
+  .ontology { margin: .2rem 0 .8rem; }
+  .ontology-head { margin: 0 0 .3rem; display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; font-weight: 400; }
+  .ontology-lead { font-family: ${SERIF_STACK}; font-style: italic; font-size: .84rem; color: var(--muted); }
+  .ontology-term { font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink); }
+  .ontology-head .count { font-family: ${MONO_STACK}; font-size: .6rem; color: var(--muted); border: 1px solid var(--ai-edge); border-radius: 999px; padding: .04rem .4rem; }
+  .ontology-legend { margin-left: auto; display: flex; gap: .6rem; font-family: ${MONO_STACK}; font-size: .54rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .ontology-legend .lg { display: inline-flex; align-items: center; gap: .26rem; white-space: nowrap; }
+  .ontology-legend .lg::before { content: ""; width: .6rem; height: .6rem; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 2px; background: var(--card); }
+  .ontology-legend .lg-member::before { border-left: 3px solid var(--taught); }
+  .ontology-legend .lg-sibling::before { opacity: .5; }
+  .ontology-legend .lg-abstract::before { border-style: dashed; }
+  .ontology-legend .lg-dual::before { border-left: 3px solid var(--corpus); }
+  @media (max-width: 700px) { .ontology-legend { display: none; } }
+  .tree-scroll { overflow: auto; max-height: 15.5rem; border: 1px solid var(--ai-edge); border-radius: 4px; background: var(--ai-panel); padding: .5rem .55rem; overscroll-behavior: contain; }
+  .ontology-tree { display: flex; flex-direction: column; gap: .8rem; width: max-content; min-width: 100%; }
   .tree-branch { display: flex; align-items: flex-start; gap: .45rem; }
   .tree-apart { flex-direction: column; }
-  .tree-apart-head { font-family: ${MONO_STACK}; font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .3rem; }
-  .tree-apart .tree-level { flex-direction: row; flex-wrap: wrap; width: auto; }
-  .tree-level { display: flex; flex-direction: column; gap: .4rem; width: 10.5rem; flex: none; }
-  .tree-node { display: flex; flex-direction: column; align-items: center; gap: .18rem; text-align: center; padding: .3rem .3rem .35rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: var(--card); width: 10.5rem; box-sizing: border-box; }
-  .tree-node.member { border-color: var(--taught); }
-  .tree-node.sibling { opacity: .72; }
-  .tree-node.dual { border-left-width: 3px; border-left-color: var(--corpus); }
+  .tree-apart-head { font-family: ${MONO_STACK}; font-size: .58rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .3rem; }
+  .tree-apart .tree-level { flex-direction: row; flex-wrap: wrap; width: auto; padding-top: 0; }
+  .tree-level { display: flex; flex-direction: column; gap: .35rem; width: 9.4rem; flex: none; position: relative; }
+  /* The lead branch captions its columns with the real subClassOf depth each
+     one sits at — the number is the walk itself, not decoration. */
+  .tree-branch:first-child:not(.tree-apart) .tree-level { padding-top: .9rem; }
+  .tree-branch:first-child:not(.tree-apart) .tree-level::before { content: "depth " attr(data-level); position: absolute; top: 0; left: .15rem; font-family: ${MONO_STACK}; font-size: .5rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); opacity: .8; }
+  .tree-node { display: flex; flex-direction: column; align-items: center; gap: .16rem; text-align: center; padding: .28rem .28rem .32rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: var(--card); width: 9.4rem; box-sizing: border-box; }
+  .tree-node.member { border-left: 3px solid var(--taught); }
+  .tree-node.sibling { opacity: .6; }
+  .tree-node.dual { border-left: 3px solid var(--corpus); }
   .tree-node:target { outline: 2px solid var(--corpus); outline-offset: 2px; }
-  .tree-img, .tree-img-placeholder { width: 100%; height: 3.2rem; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .tree-img, .tree-img-placeholder { width: 100%; height: 2.7rem; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
   .tree-img { padding: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
   .tree-img svg { height: 100%; width: auto; max-width: 100%; display: block; filter: var(--sprite-pop); }
   .tree-img-placeholder { border-style: dashed; padding: .2rem .25rem; overflow: hidden; font-family: ${MONO_STACK}; font-size: .52rem; line-height: 1.25; color: var(--muted); }
-  .tree-term { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--ink); word-break: break-word; }
+  .tree-term { font-family: ${MONO_STACK}; font-size: .64rem; font-weight: 600; color: var(--ink); word-break: break-word; }
   a.tree-term { color: var(--taught); text-decoration: none; }
   a.tree-term:hover { color: var(--corpus); text-decoration: underline; }
   .tree-up { font-family: ${MONO_STACK}; font-size: .55rem; color: var(--muted); line-height: 1.25; word-break: break-word; }
   .tree-up a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--ai-edge); }
   .tree-up a:hover { color: var(--corpus); }
-  .tree-note { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .35rem 0 0; }
-  .cluster { margin: 1rem 0 1.5rem; }
+  .tree-note { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .3rem 0 0; }
+  .cluster { margin: .8rem 0 1.1rem; }
   .cluster-head { display: flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .55rem; }
   .cluster-head .count { font-weight: 400; opacity: .75; }
   .cluster-head::after { content: ""; flex: 1; height: 1px; background: var(--ai-edge); }
   .cluster-chip { width: 26px; height: 26px; display: inline-flex; padding: 2px; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 4px 4px; background-size: 8px 8px; background-color: var(--card); }
   .cluster-chip svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .7rem; }
-  .card { background: var(--card); border: 1px solid var(--ai-edge); border-radius: 4px; padding: .55rem .7rem .7rem; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); content-visibility: auto; contain-intrinsic-size: 220px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: .6rem; }
+  .card { background: var(--card); border: 1px solid var(--ai-edge); border-radius: 4px; padding: .5rem .65rem .6rem; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); content-visibility: auto; contain-intrinsic-size: 220px; }
   .card[hidden] { display: none; }
   .card-name { font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .35rem; }
   .chain { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); margin-bottom: .5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; }
@@ -1307,11 +1374,22 @@ ${THEME_TOKENS_CSS}
   .swatch.fallback { opacity: .55; }
   .swatch.fallback .swatch-img { border-style: dashed; }
   .swatch-caption { font-family: ${MONO_STACK}; font-size: .58rem; color: var(--muted); line-height: 1.25; margin-top: .15rem; word-break: break-word; }
+  /* The pose half of every tile's caption: "left / static" at rest,
+     "left / moving" while hovered — the flip happens on every tile, art or
+     not, so the caption always says which pose you are looking at. */
+  .swatch-pose::before { content: " / "; opacity: .6; }
+  .swatch-pose { color: var(--muted); }
+  .swatch-pose:empty { display: none; }
+  .swatch.hover-moving .swatch-pose { color: var(--corpus); }
   .swatch-treat { display: block; opacity: .8; }
-  .swatch.cycle .swatch-img { border-color: var(--taught); cursor: pointer; display: block; }
+  .swatch.cycle .swatch-img { cursor: pointer; display: block; }
   .swatch.cycle .swatch-img:hover { border-color: var(--corpus); }
   .swatch.cycle .swatch-caption { color: var(--taught); }
   .swatch.cycle .swatch-mode { display: block; font-size: .54rem; letter-spacing: .05em; text-transform: uppercase; color: var(--corpus); }
+  .swatch.cycle .swatch-mode:empty { display: none; }
+  /* The one focused sprite per card grid: the outline is the focus itself. */
+  .swatch.cycle.focused .swatch-img { border-color: var(--taught); box-shadow: 0 0 0 1px var(--taught); }
+  .swatch.cycle.focused .swatch-img:hover { border-color: var(--taught); }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--ai-edge); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, color .12s ease, opacity .12s ease; } }
 ${dockCss}</style>
@@ -1337,6 +1415,7 @@ ${dockCss}</style>
 <script>
 const SPRITE_CATALOG = ${pageData};
 const SPRITE_CLASS_INDEX = ${classIndexJs};
+const SPRITE_SCENE_VOCAB = ${sceneVocabJs};
 </script>
 ${spriteBundleScript}
 <script>
@@ -1362,6 +1441,34 @@ ${spriteBundleScript}
   q.addEventListener("input", apply);
   apply();
 
+  const esc = ${escapeHtml.toString()};
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  // One shared clock drives everything that moves on this page — the hover
+  // flip-books, the focused cells, the scene walkers — so no two animations
+  // can drift into different tempos.
+  const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
+  let tick = 0;
+  const tickHandlers = [];
+
+  // The pure machinery, spliced from the same modules the tests pin
+  // (sprite-catalog-viz.mjs's frame sequences, sprite-animation.mjs's tick
+  // machine, scene-compose.mjs's backdrop split, scene-random.mjs's
+  // sentence builder).
+  const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
+  const MOOD_PROPERTY = "mgx:feels";
+  const FACING_PROPERTY = "mgx:faces";
+  const moodFrameSequence = ${moodFrameSequence.toString()};
+  const turnFrameSequence = ${turnFrameSequence.toString()};
+  const movingFrameSequence = ${movingFrameSequence.toString()};
+  const nextFocusMode = ${nextFocusMode.toString()};
+  const frameAtTick = ${frameAtTick.toString()};
+  const focusModeFrames = ${focusModeFrames.toString()};
+  const oscillateWalkStep = ${oscillateWalkStep.toString()};
+  const walkFrameLabelCandidates = ${walkFrameLabelCandidates.toString()};
+  const splitSceneBackdrop = ${splitSceneBackdrop.toString()};
+  const randomSceneSentence = ${randomSceneSentence.toString()};
+
   // ---- the scene composer — reads the class/material index from
   // SPRITE_CLASS_INDEX, computed server-side over the WHOLE catalog
   // (sceneComposerClassIndex) and embedded above, never scoped to whichever
@@ -1369,9 +1476,9 @@ ${spriteBundleScript}
   // section, or a per-group page showing only one group, still composes any
   // real catalog class. Which class a typed word names is the bundle's
   // extractSceneItems, which asks the real resolver — the page never
-  // matches a class name itself.
-  const esc = ${escapeHtml.toString()};
-
+  // matches a class name itself. A named room becomes the wall behind the
+  // scene, and a "moving" entity walks: static/moving flip while crossing,
+  // the turning frames at each end, driven by the shared clock above.
   function wireSceneComposer() {
     const composeqEl = document.getElementById("composeq");
     if (!composeqEl) return;
@@ -1380,23 +1487,59 @@ ${spriteBundleScript}
     const composePillsEl = document.getElementById("composePills");
     const sceneRowEl = document.getElementById("sceneRow");
     const sceneEmptyEl = document.getElementById("sceneEmpty");
+    const sceneFrameEl = document.getElementById("sceneFrame");
+    const sceneBackdropEl = document.getElementById("sceneBackdrop");
+    const randomEl = document.getElementById("composeRandom");
     const classIndex = SPRITE_CLASS_INDEX;
+    const vocab = SPRITE_SCENE_VOCAB || { rooms: [], emotions: [], classes: [] };
+    const sceneWalkers = [];
+
+    function stepWalkers() {
+      for (const w of sceneWalkers) {
+        const step = oscillateWalkStep(tick + w.phase, {});
+        const candidates = walkFrameLabelCandidates({ facing: step.facing, pose: step.pose, material: w.material });
+        let svg = w.entry.defaultSvg || "";
+        for (const label of candidates) {
+          if (w.entry.materials[label]) { svg = w.entry.materials[label]; break; }
+        }
+        if (w.lastSvg !== svg) { w.spriteEl.innerHTML = svg; w.lastSvg = svg; }
+        w.spriteEl.style.transform = "translateX(" + (step.offsetFraction * 100).toFixed(1) + "%)";
+      }
+    }
+    tickHandlers.push(stepWalkers);
 
     function renderScene(text) {
       const items = extractSceneItems(text, classIndex);
-      if (!items.length) {
+      const split = splitSceneBackdrop(items, vocab.rooms);
+      sceneWalkers.length = 0;
+      const roomEntry = split.backdrop ? classIndex[split.backdrop.className] : null;
+      sceneFrameEl.classList.toggle("has-backdrop", !!roomEntry);
+      sceneBackdropEl.innerHTML = roomEntry
+        ? roomEntry.defaultSvg.replace("<svg ", '<svg preserveAspectRatio="xMidYMid slice" ')
+          + '<span class="scene-room-name">' + esc(split.backdrop.className) + "</span>"
+        : "";
+      if (!split.rest.length && !roomEntry) {
         sceneRowEl.innerHTML = "";
         sceneEmptyEl.hidden = false;
         return;
       }
       sceneEmptyEl.hidden = true;
-      sceneRowEl.innerHTML = items.map((item) => {
+      sceneRowEl.innerHTML = split.rest.map((item, at) => {
         const entry = classIndex[item.className];
         if (!entry) return "";
         const svg = (item.materialLabel && entry.materials[item.materialLabel]) || entry.defaultSvg || "";
-        const label = item.materialLabel ? item.materialLabel + " " + item.className : item.className;
-        return '<div class="scene-card"><div class="scene-sprite">' + svg + '</div><div class="scene-label">' + esc(label) + "</div></div>";
+        const label = (item.moving ? "moving " : "") + (item.materialLabel ? item.materialLabel + " " : "") + item.className;
+        return '<div class="scene-card' + (item.moving ? " scene-walker" : "") + '" data-at="' + at + '"><div class="scene-sprite">' + svg + '</div><div class="scene-label">' + esc(label) + "</div></div>";
       }).join("");
+      if (reducedMotion) return;
+      split.rest.forEach((item, at) => {
+        if (!item.moving) return;
+        const entry = classIndex[item.className];
+        const cardEl = sceneRowEl.querySelector('.scene-card[data-at="' + at + '"]');
+        if (!entry || !cardEl) return;
+        sceneWalkers.push({ spriteEl: cardEl.querySelector(".scene-sprite"), entry, material: item.materialLabel, phase: at * 5, lastSvg: null });
+      });
+      stepWalkers();
     }
 
     composeqEl.addEventListener("input", () => renderScene(composeqEl.value));
@@ -1404,136 +1547,216 @@ ${spriteBundleScript}
     composePillsEl.addEventListener("click", (e) => {
       const btn = e.target.closest(".pill");
       if (!btn) return;
+      if (btn.id === "composeRandom") return;
       const phrase = btn.dataset.fill || "";
       const current = composeqEl.value.trim();
       composeqEl.value = current ? current + ", a " + phrase : phrase;
       composeqEl.focus();
       renderScene(composeqEl.value);
     });
+    if (randomEl) {
+      randomEl.addEventListener("click", () => {
+        // Math.random is allowed exactly here — the sentence builder itself
+        // is pure and takes the rng as an argument.
+        const sentence = randomSceneSentence(vocab, Math.random);
+        composeqEl.value = sentence;
+        renderScene(sentence);
+        composeqEl.focus();
+      });
+    }
     renderScene("");
   }
   wireSceneComposer();
 
-  // ---- the animated cell — one image per class, standing where its plain
-  // swatch was, stepping through the display modes its own templates carry
-  // art for: static, moving, turning, cycle-emotions, back to static. Frames
-  // are the card's own already-rendered swatches (read straight off the DOM
-  // here — unlike the composer's classIndex above, this only ever needs
-  // whatever cards THIS page renders, never the whole catalog), ordered by
-  // the pure *FrameSequence functions spliced in below and flattened by
-  // displayModeSequence.
-  //
-  // A click always advances one frame, so every mode is reachable by hand.
-  // Inside an animated mode one shared interval steps the frames on, looping
-  // within that mode rather than running on into the next one; the static
-  // frame is the resting state and never auto-steps. Hovering the resting
-  // cell shows the moving pose while the pointer is over it.
-  //
-  // Reduced motion turns off the interval and the hover preview both. Clicks
-  // still step frame by frame, which is what keeps the walk deterministic.
-  const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};
-  const FACING_TURN_ORDER = ${embedJson(FACING_TURN_ORDER)};
-  const MOOD_PROPERTY = "mgx:feels";
-  const FACING_PROPERTY = "mgx:faces";
-  const POSE_PROPERTY = "mgx:pose";
-  const moodFrameSequence = ${moodFrameSequence.toString()};
-  const turnFrameSequence = ${turnFrameSequence.toString()};
-  const movingFrameSequence = ${movingFrameSequence.toString()};
-  const displayModeSequence = ${displayModeSequence.toString()};
-  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  const cycleSteppers = [];
+  // ---- the sprite tiles — pose-first captions everywhere: every tile reads
+  // "<variant> / static" at rest and "<variant> / moving" under the pointer,
+  // and a tile whose class really has that moving frame flip-books between
+  // the two drawings while hovered. The moving-frame tiles the server
+  // rendered fold into their resting variants here, so the grid shows each
+  // variant once and the motion lives on hover.
+  const movingSvgOf = new Map();
+  const hoverFlips = new Set();
 
-  function frameFromSwatch(swatch) {
-    const img = swatch && swatch.querySelector(".swatch-img");
-    const label = swatch && swatch.querySelector(".swatch-label");
-    if (!img || !label) return null;
-    return { svg: img.innerHTML, label: label.textContent.trim() };
+  function swatchEnter(sw) {
+    if (sw.classList.contains("hover-moving")) return;
+    if (sw.classList.contains("cycle") && sw.classList.contains("focused")) return;
+    sw.classList.add("hover-moving");
+    const poseEl = sw.querySelector(".swatch-pose");
+    if (poseEl) poseEl.textContent = "moving";
+    const flip = movingSvgOf.get(sw);
+    if (flip && !reducedMotion) {
+      flip.showMoving = true;
+      sw.querySelector(".swatch-img").innerHTML = flip.moving;
+      hoverFlips.add(sw);
+    }
+  }
+  function swatchLeave(sw) {
+    sw.classList.remove("hover-moving");
+    const poseEl = sw.querySelector(".swatch-pose");
+    if (poseEl) poseEl.textContent = "static";
+    const flip = movingSvgOf.get(sw);
+    if (flip) {
+      hoverFlips.delete(sw);
+      sw.querySelector(".swatch-img").innerHTML = flip.still;
+    }
+  }
+  // Per-tile mouseenter/mouseleave rather than a delegated mouseover: the
+  // flip replaces the svg UNDER the pointer, and a delegated handler would
+  // later see a mouseout whose target is that detached node — with no
+  // .swatch ancestor left to find, the leave would never fire.
+  function wireSwatchHover(sw) {
+    sw.addEventListener("mouseenter", () => swatchEnter(sw));
+    sw.addEventListener("mouseleave", () => swatchLeave(sw));
+  }
+  for (const sw of document.querySelectorAll(".swatch")) wireSwatchHover(sw);
+  tickHandlers.push(() => {
+    for (const sw of hoverFlips) {
+      const flip = movingSvgOf.get(sw);
+      if (!flip) continue;
+      flip.showMoving = !flip.showMoving;
+      sw.querySelector(".swatch-img").innerHTML = flip.showMoving ? flip.moving : flip.still;
+    }
+  });
+
+  // ---- the focused cell — one image cell per class stands where the plain
+  // swatch was, and each card grid keeps exactly one of them focused (the
+  // first, until the visitor clicks another). The focused cell animates:
+  // rotating through its turning positions by default, cycling its emotions
+  // once clicked. Clicking the focused cell is the toggle; clicking any
+  // other cell moves the focus to it. Each grid keeps its own chosen mode
+  // for as long as the visitor stays on the page. Frames come off the
+  // card's own already-rendered swatches — this only ever needs whatever
+  // cards THIS page renders, never the whole catalog.
+  //
+  // Reduced motion stops the clock: the focused cell then shows one real
+  // frame of its current mode, and clicks still switch focus and mode.
+  function tileOf(el) {
+    const img = el.querySelector(".swatch-img");
+    const labelEl = el.querySelector(".swatch-label");
+    if (!img || !labelEl) return null;
+    return {
+      el,
+      svg: img.innerHTML,
+      label: labelEl.textContent.trim(),
+      pose: el.dataset.pose || "static",
+      property: el.dataset.property || "",
+      kind: el.classList.contains("plain") ? "plain" : el.classList.contains("fallback") ? "fallback" : "",
+    };
   }
 
-  function makeModeCell(frames, cls) {
-    const holder = document.createElement("div");
-    holder.className = "swatch large cycle cycle-mode";
-    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="step the ' + esc(cls)
-      + ' sprite through its display modes"></button>'
-      + '<div class="swatch-caption"><span class="swatch-mode"></span><span class="swatch-label"></span></div>';
-    const frameImgEl = holder.querySelector(".swatch-img");
-    const frameModeEl = holder.querySelector(".swatch-mode");
-    const frameLabelEl = holder.querySelector(".swatch-label");
-    const movingIndex = frames.findIndex((f) => f.mode === "moving");
-    let frameIndex = 0;
-    let previewIndex = -1;
-    // Once the visitor starts clicking, the hover preview stops second-
-    // guessing them: it is the same pointer doing both, so without this the
-    // preview keeps pulling the cell back to the moving pose between clicks.
-    // Leaving the cell arms it again.
-    let previewBlocked = false;
-    const showFrame = () => {
-      const frame = frames[previewIndex >= 0 ? previewIndex : frameIndex];
-      frameImgEl.innerHTML = frame.svg;
-      frameModeEl.textContent = frame.mode;
-      frameLabelEl.textContent = frame.label;
-      holder.dataset.mode = frame.mode;
-    };
-    frameImgEl.addEventListener("click", () => {
-      previewIndex = -1;
-      previewBlocked = true;
-      frameIndex = (frameIndex + 1) % frames.length;
-      showFrame();
-    });
-    if (!reducedMotion && movingIndex > 0) {
-      holder.addEventListener("mouseenter", () => {
-        if (previewBlocked || previewIndex >= 0 || frames[frameIndex].mode !== "static") return;
-        previewIndex = movingIndex;
-        showFrame();
-      });
-      holder.addEventListener("mouseleave", () => {
-        previewBlocked = false;
-        if (previewIndex < 0) return;
-        previewIndex = -1;
-        showFrame();
-      });
+  const grids = new Map();
+
+  function restCell(cell) {
+    cell.holder.classList.remove("focused");
+    cell.holder.dataset.mode = "static";
+    cell.imgEl.innerHTML = cell.staticFrame.svg;
+    cell.modeEl.textContent = "";
+    cell.labelEl.textContent = "default";
+    cell.poseEl.textContent = cell.holder.classList.contains("hover-moving") ? "moving" : "static";
+    cell.active = [];
+  }
+
+  function focusCell(cell, mode) {
+    cell.holder.classList.add("focused");
+    cell.holder.dataset.mode = mode;
+    cell.active = focusModeFrames(mode, cell.frames);
+    const frame = frameAtTick(cell.active, tick) || cell.staticFrame;
+    cell.imgEl.innerHTML = frame.svg;
+    cell.modeEl.textContent = mode;
+    cell.labelEl.textContent = frame.label;
+    cell.poseEl.textContent = "";
+  }
+
+  function renderGrid(state) {
+    for (let i = 0; i < state.cells.length; i += 1) {
+      if (i === state.focusedIndex) focusCell(state.cells[i], state.mode);
+      else restCell(state.cells[i]);
     }
-    // Auto-stepping stays inside the mode the visitor stopped on, so the cell
-    // animates what they asked to see instead of drifting through the rest.
-    cycleSteppers.push(() => {
-      if (previewIndex >= 0) return;
-      const mode = frames[frameIndex].mode;
-      if (mode === "static") return;
-      const inMode = [];
-      for (let i = 0; i < frames.length; i += 1) if (frames[i].mode === mode) inMode.push(i);
-      if (inMode.length < 2) return;
-      frameIndex = inMode[(inMode.indexOf(frameIndex) + 1) % inMode.length];
-      showFrame();
-    });
-    showFrame();
-    return holder;
   }
 
   for (const card of cards) {
     const swatchRow = card.querySelector('.tier-row[data-tier="large"] .swatches');
     if (!swatchRow) continue;
     const cls = card.dataset.cls;
-    const rows = Array.from(swatchRow.querySelectorAll(".swatch"))
-      .map((el) => ({ el, property: el.dataset.property || "", frame: frameFromSwatch(el) }))
-      .filter((r) => r.frame);
-    const baseSwatch = swatchRow.querySelector(".swatch.plain, .swatch.fallback");
-    const baseFrame = frameFromSwatch(baseSwatch);
-    if (!baseSwatch || !baseFrame) continue;
+    const tiles = Array.from(swatchRow.querySelectorAll(".swatch")).map(tileOf).filter(Boolean);
 
-    const moodRows = rows.filter((r) => r.property === MOOD_PROPERTY);
+    const movingByVariant = {};
+    for (const t of tiles) {
+      if (t.pose !== "moving") continue;
+      movingByVariant[t.label] = t.svg;
+      t.el.remove();
+    }
+    const resting = tiles.filter((t) => t.pose !== "moving");
+    for (const t of resting) {
+      const key = t.kind === "plain" || t.kind === "fallback" ? "default" : t.label;
+      if (movingByVariant[key]) movingSvgOf.set(t.el, { still: t.svg, moving: movingByVariant[key], showMoving: false });
+    }
+
+    const base = resting.find((t) => t.kind === "plain") || resting.find((t) => t.kind === "fallback");
+    if (!base) continue;
+    const staticFrame = { svg: base.svg, label: "default" };
     const facingFrames = {};
-    for (const r of rows) { if (r.property === FACING_PROPERTY) facingFrames[r.frame.label] = r.frame; }
-    const movingRow = rows.find((r) => r.property === POSE_PROPERTY && r.frame.label === "moving");
+    for (const t of resting) {
+      if (t.property === FACING_PROPERTY && !t.label.includes(" + ")) facingFrames[t.label] = { svg: t.svg, label: t.label };
+    }
+    const moodTiles = resting.filter((t) => t.property === MOOD_PROPERTY && !t.label.includes(" + "));
+    const turnFrames = turnFrameSequence(FACING_TURN_ORDER, { svg: staticFrame.svg, label: "centre" }, facingFrames);
+    const moodFrames = moodFrameSequence({ svg: staticFrame.svg, label: cls }, moodTiles.map((t) => ({ svg: t.svg, label: t.label })));
+    const movingFrames = movingByVariant.default
+      ? movingFrameSequence({ svg: staticFrame.svg, label: "idle" }, { svg: movingByVariant.default, label: "moving" })
+      : [];
+    if (!turnFrames.length && !moodFrames.length && !movingFrames.length) continue;
 
-    const modeFrames = displayModeSequence({ svg: baseFrame.svg, label: cls }, {
-      movingFrame: movingRow && movingRow.frame,
-      turnFrames: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
-      moodFrames: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodRows.map((r) => r.frame)),
+    const holder = document.createElement("div");
+    holder.className = "swatch large cycle cycle-mode";
+    holder.dataset.pose = "static";
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="focus the ' + esc(cls)
+      + ' sprite, or switch its animation"></button>'
+      + '<div class="swatch-caption"><span class="swatch-mode"></span><span class="swatch-label"></span><span class="swatch-pose"></span></div>';
+    const cell = {
+      holder,
+      imgEl: holder.querySelector(".swatch-img"),
+      modeEl: holder.querySelector(".swatch-mode"),
+      labelEl: holder.querySelector(".swatch-label"),
+      poseEl: holder.querySelector(".swatch-pose"),
+      staticFrame,
+      frames: { turnFrames, moodFrames, movingFrames },
+      active: [],
+    };
+    if (movingByVariant.default) movingSvgOf.set(holder, { still: staticFrame.svg, moving: movingByVariant.default, showMoving: false });
+    movingSvgOf.delete(base.el);
+    wireSwatchHover(holder);
+    swatchRow.replaceChild(holder, base.el);
+
+    const grid = card.closest(".cards");
+    if (!grid) continue;
+    if (!grids.has(grid)) grids.set(grid, { cells: [], mode: "turning", focusedIndex: 0 });
+    const state = grids.get(grid);
+    const myIndex = state.cells.length;
+    state.cells.push(cell);
+    cell.imgEl.addEventListener("click", () => {
+      if (state.focusedIndex === myIndex) state.mode = nextFocusMode(state.mode);
+      else state.focusedIndex = myIndex;
+      renderGrid(state);
     });
-    if (modeFrames.length) swatchRow.replaceChild(makeModeCell(modeFrames, cls), baseSwatch);
   }
-  if (cycleSteppers.length && !reducedMotion) {
-    setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, CYCLE_FRAME_DELAY_MS);
+  for (const state of grids.values()) renderGrid(state);
+
+  tickHandlers.push(() => {
+    for (const state of grids.values()) {
+      const cell = state.cells[state.focusedIndex];
+      if (!cell || !cell.active.length) continue;
+      const frame = frameAtTick(cell.active, tick);
+      cell.imgEl.innerHTML = frame.svg;
+      cell.labelEl.textContent = frame.label;
+    }
+  });
+
+  if (!reducedMotion) {
+    setInterval(() => {
+      tick += 1;
+      for (const step of tickHandlers) step();
+    }, CYCLE_FRAME_DELAY_MS);
   }
 })();
 </script>
@@ -1560,7 +1783,7 @@ ${dockScripts}
  *  this page. Same chrome, same styling, same scripts as every per-group
  *  page — renderSpriteCatalogPage owns all of that; this function only
  *  picks which body and nav go in it. */
-export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
+export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false, adventureRoomClasses = [] } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const sections = catalogSections(entries, spritedClasses);
@@ -1596,7 +1819,7 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
   const navHtml = crossPageNavHtml(entries, {});
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   return renderSpriteCatalogPage({
-    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable,
+    title, entries, bodyHtml, navHtml, iconTemplates, largeTemplates, spritesBundleAvailable, adventureRoomClasses,
     footerClassCount: entries.length, footerSwatchCount: totalSwatches,
   });
 }

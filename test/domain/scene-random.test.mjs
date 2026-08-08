@@ -76,7 +76,7 @@ test("an identical rng stream builds the identical sentence, and every word trac
   const b = randomSceneSentence(vocab, rngAt(7));
   assert.equal(a, b);
   assert.ok(a.length > 0);
-  const known = new Set(["a", "on", "and", "in", "the", "moving", "library",
+  const known = new Set(["a", "an", "on", "and", "in", "the", "moving", "library",
     ...vocab.emotions, ...vocab.classes.flatMap((c) => [...c.name.split(" "), ...c.materials])]);
   for (const word of a.split(/\s+/)) assert.ok(known.has(word), `"${word}" appears in no vocabulary source`);
 });

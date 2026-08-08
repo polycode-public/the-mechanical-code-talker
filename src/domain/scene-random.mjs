@@ -76,6 +76,7 @@ export function randomSceneSentence(vocab, rng) {
     const at = Math.floor(rng() * list.length);
     return list[Math.min(Math.max(at, 0), list.length - 1)];
   };
+  const article = (phrase) => (/^[aeiou]/.test(phrase) ? `an ${phrase}` : `a ${phrase}`);
   const classes = vocab?.classes || [];
   const things = classes.filter((c) => !c.emotions.length);
   const actors = classes.filter((c) => c.emotions.length);
@@ -86,11 +87,11 @@ export function randomSceneSentence(vocab, rng) {
   if (thing) {
     const material = pick(thing.materials);
     const rest = pick(things.filter((c) => c !== thing));
-    const lead = `a ${material ? `${material} ` : ""}${thing.name}`;
-    parts.push(rest ? `${lead} on a ${rest.name}` : lead);
+    const lead = article(`${material ? `${material} ` : ""}${thing.name}`);
+    parts.push(rest ? `${lead} on ${article(rest.name)}` : lead);
   }
   const actor = pick(actors);
-  if (actor) parts.push(`a ${pick(actor.emotions)} ${actor.name}`);
+  if (actor) parts.push(article(`${pick(actor.emotions)} ${actor.name}`));
   const mover = pick(movers.filter((c) => c !== actor));
   if (mover) {
     const material = pick(mover.materials);

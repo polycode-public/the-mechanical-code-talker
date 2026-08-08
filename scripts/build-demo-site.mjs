@@ -355,6 +355,18 @@ let largeSpriteManifest = null;
   console.log(`wrote ${spritesPackOut} (${manifest.templates.length} templates, ${(bytes / 1024).toFixed(1)} KB)`);
 }
 
+// What each adventure scenario's dropdown entry says. The label names the
+// difference that made the world worth shipping — how big it is, and what it
+// is that makes it harder or easier — so picking one is a choice rather than
+// a guess at what a hyphenated world id means. Declared here, above the
+// sprite catalog block, because the scene composer's room vocabulary reads
+// the same world names.
+const ADVENTURE_SCENARIO_LABELS = {
+  "ashcombe-hall": "ashcombe hall (6 rooms, 1 lock)",
+  "lantern-cottage": "lantern cottage (3 rooms, no locks)",
+  "greyvale-museum": "greyvale museum (9 rooms, 3 locks)",
+};
+
 // The sprite library catalog: every class either tier resolves a sprite for,
 // grouped for browsing, each swatch resolved through the real
 // resolveSpriteAsset/classAncestorChain (never hand-simulated) — see
@@ -373,14 +385,18 @@ let largeSpriteManifest = null;
 // they're embedded in, so there's nothing page-specific to bundle per page.
 {
   const spriteLargeTemplates = readSpriteLargeTemplateFiles();
-  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, CATALOG_GROUPS } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
+  const { loadSpriteOntologyFactRows, loadAdventureSceneRoomClasses, renderSpriteCatalogHtml, renderSpriteCatalogLandingHtml, CATALOG_GROUPS } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
   const ontologyFactRows = await loadSpriteOntologyFactRows();
+  // The scene composer's room vocabulary: the same worlds the adventure
+  // page's scenario dropdown ships (the block below reads them again for its
+  // own embed).
+  const adventureRoomClasses = await loadAdventureSceneRoomClasses(Object.keys(ADVENTURE_SCENARIO_LABELS));
   const { main: buildSpritesBundle } = await import(join(here, "build-sprites-bundle.mjs"));
   const { outPath: spritesBundlePath, size: spritesBundleBytes } = await buildSpritesBundle(SITE);
   console.log(`wrote ${spritesBundlePath} (${(spritesBundleBytes / 1024).toFixed(0)} KB)`);
 
   const spritesPagePath = join(SITE, "sprites.html");
-  const spritesHtml = renderSpriteCatalogLandingHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
+  const spritesHtml = renderSpriteCatalogLandingHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true, adventureRoomClasses });
   await writeF(spritesPagePath, injectMetaHead(spritesHtml, demoPageMeta("sprites")));
   console.log(`wrote ${spritesPagePath}`);
 
@@ -393,6 +409,7 @@ let largeSpriteManifest = null;
       factRows: ontologyFactRows,
       spritesBundleAvailable: true,
       groupId: group.id,
+      adventureRoomClasses,
     });
     await writeF(groupPagePath, groupHtml);
     console.log(`wrote ${groupPagePath}`);
@@ -423,15 +440,6 @@ let largeSpriteManifest = null;
   console.log(`wrote ${planPath} (${plan.actions.length} moves, ${plan.states.length} snapshots)`);
 }
 
-// What each scenario's dropdown entry says. The label names the difference
-// that made the world worth shipping — how big it is, and what it is that
-// makes it harder or easier — so picking one is a choice rather than a guess
-// at what a hyphenated world id means.
-const ADVENTURE_SCENARIO_LABELS = {
-  "ashcombe-hall": "ashcombe hall (6 rooms, 1 lock)",
-  "lantern-cottage": "lantern cottage (3 rooms, no locks)",
-  "greyvale-museum": "greyvale museum (9 rooms, 3 locks)",
-};
 // Each label names the difference that made the layout worth shipping, not
 // just its size: what the board does to the chase is the reason to switch to
 // it. None state a cast count — the page's own sliders pick that at play

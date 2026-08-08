@@ -49,6 +49,10 @@ import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure
 import { parseWorldEditorText, planWorldEditorSync } from "../../services/adventure-editor.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
+import {
+  isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
+  focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+} from "../../domain/sprite-animation.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { directedGridLayout, roomGraphSvg } from "../../services/viz-room-graph.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
@@ -257,5 +261,12 @@ publishTmctSurface({
     worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
     relatedForTerm, classAncestorChain, openPersistedStore,
     directedGridLayout, roomGraphSvg,
+    // The sprite pages' shared animation state machine
+    // (sprite-animation.mjs), published so this page can drive the same
+    // hover flip / turning / walk behaviour over the sprites it resolves.
+    spriteAnimation: {
+      isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
+      focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+    },
   },
 });

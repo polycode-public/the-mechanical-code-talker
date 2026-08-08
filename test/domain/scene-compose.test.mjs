@@ -80,9 +80,17 @@ test("'moving' is honest: a class with no moving frame stays still rather than p
   assert.deepEqual(extractSceneItems("a moving cat", index), [{ className: "cat", materialLabel: null, moving: true }]);
 });
 
-test("a stray word between the modifiers and the class stops the walk-back", () => {
-  const index = { cat: { materials: { black: true, moving: true } } };
-  assert.deepEqual(extractSceneItems("a black old cat", index), [{ className: "cat", materialLabel: null, moving: false }]);
+test("an unrecognized modifier word is read past, so 'a moving black cat' still moves a cat with no black swatch", () => {
+  const index = { cat: { materials: { moving: true } } };
+  assert.deepEqual(extractSceneItems("a moving black cat", index), [{ className: "cat", materialLabel: null, moving: true }]);
+});
+
+test("a structure word ends the modifier run, so 'moving' can never jump across to a different item's noun", () => {
+  const index = { cabinet: { materials: {} }, cat: { materials: { moving: true } } };
+  assert.deepEqual(extractSceneItems("a moving cabinet and a cat", index), [
+    { className: "cabinet", materialLabel: null, moving: false },
+    { className: "cat", materialLabel: null, moving: false },
+  ]);
 });
 
 test("splitSceneBackdrop lifts the last named room onto the wall and keeps the entities standing", () => {

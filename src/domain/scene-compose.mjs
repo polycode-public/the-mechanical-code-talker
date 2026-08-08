@@ -28,6 +28,13 @@ export function tokenizeSceneText(text) {
   return tokens;
 }
 
+/** The words that end one item's run of preceding modifiers — the articles,
+ *  joins and placement words the scene sentences themselves are built from.
+ *  "a moving black cat" walks back past the unrecognized "black" to find the
+ *  real "moving"; "a cabinet and a moving cat" stops at "and", so a modifier
+ *  can never jump across to a different item's noun. */
+const MODIFIER_RUN_BREAKERS = new Set(["a", "an", "the", "and", "or", "with", "on", "in", "at", "of", "then", "there", "is", "are"]);
+
 const sceneClassGraphCache = new WeakMap();
 
 /** The `classIndex`'s own class names as a resolvable graph, one individual per
@@ -119,7 +126,10 @@ export function extractSceneItems(text, classIndex) {
         used[j] = true;
         continue;
       }
-      break;
+      // A structure word ends this item's modifier run; anything else ("black"
+      // before a cat with no black swatch) is an unrecognized modifier — read
+      // past it, never consumed, never guessed at.
+      if (MODIFIER_RUN_BREAKERS.has(word)) break;
     }
     for (let k = 0; k < hit.wordCount; k += 1) used[i + k] = true;
     items.push({ className: hit.className, materialLabel, moving });
