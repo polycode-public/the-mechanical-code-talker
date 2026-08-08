@@ -717,9 +717,12 @@ families' effect predicates — sorted by id, screened by a declared toolset. `/
 `{ goal, reject, proof, why }` with the three outcomes and no fourth. The first TOOL-9 cases land in
 `test-benchmarks/agentbench/cases.jsonl` here, including at least one that must reject.
 
-**Slice 4 — autoplay re-based on the general recognizer.** Autoplay's single marker read becomes one
-declared goal among N. Its behaviour on the shipped worlds must not change, pinned by the existing
-adventure corpus rows.
+**Slice 4 — autoplay re-based on the general recognizer. BUILT.** The single `mgx:is-objective`
+marker read is now a filter over `declaredGoals`' world-source goals: one shipped objective plans
+exactly as before, two stall and name both rather than picking the first. `expandWorldGoal`, kept
+local to `adventure-autoplay.mjs`, searches the exposed fold for the admissible walk-then-take plan.
+Tests: `test/services/adventure-autoplay.test.mjs`; the shipped-world adventure corpus rows
+(93/93) are unchanged.
 
 **Slice 5 — the recognition surfaces.** "What am I doing", NPC intent, and a recognition field on
 `runCapabilityPlan`'s result. The reject class renders as its own honest line everywhere, never as
