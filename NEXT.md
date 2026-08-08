@@ -36,11 +36,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Batch cadence for this stretch (operator, 2026-08-08): sub-agents commit often; the coordinator
 merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch.
 
-- [ ] **Locative teach with a quantified subject** — the locative-teach grammar cannot parse a
-  quantifier-prefixed subject ("one more disk rests on peg-a", "every disk rests on peg-a").
-  Surfaced by the filler work (now shipped and CI-verified, plan archived): the ack-preamble
-  arm used to silently drop the quantifier and store a wrong fact; it misses honestly now.
-  Parsing those subjects is real, separate grammar work.
 - [ ] **Goal recognition** (`archive/PLAN_DISCOURSE_AND_RECOGNITION.md`) — every slice of both
   parts built; A0–B4 CI-verified, B5 (recognition surfaces) CODE-COMPLETE on `main` riding the
   next batch, plan archived. Remove this entry when that batch's pipeline verifies B5.
