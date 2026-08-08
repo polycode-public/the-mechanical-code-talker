@@ -38,15 +38,12 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
 first batch carries the `links:check` fix (`backlog/PLAN_MCP.md` repoint) for the red pipeline at
 `b71c2443`.
 
-- [ ] **Filler-clause prefix widening** (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §1) — CODE-COMPLETE,
-  four commits on `main`, riding the next batch push. Remainder discovered while fixing it: the
-  locative-teach grammar cannot parse a quantifier-prefixed subject ("one more disk rests on
-  peg-a", "every disk rests on peg-a") — previously the ack-preamble arm silently dropped the
-  quantifier and stored a wrong fact; now it misses honestly. Parsing those subjects is real,
-  separate grammar work, still open.
-- [ ] **Plan-justification counterfactuals** (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2) — IN
-  FLIGHT: sub-agent editing `src/services/chat.mjs` + plan-lane corpus in the main tree,
-  committing per step.
+- [ ] **Filler + counterfactuals** (`archive/PLAN_FILLER_AND_COUNTERFACTUALS.md`, both sections
+  BUILT, plan archived) — CODE-COMPLETE on `main`, riding the next batch push. Open remainder
+  from §1's fix: the locative-teach grammar cannot parse a quantifier-prefixed subject ("one
+  more disk rests on peg-a", "every disk rests on peg-a") — previously the ack-preamble arm
+  silently dropped the quantifier and stored a wrong fact; now it misses honestly. Parsing
+  those subjects is real, separate grammar work, still open.
 - [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — slice B1 (trace reader)
   CODE-COMPLETE, in this batch. Queued: A0 (Part A prose correction + the one remaining
   silent-pick guard in `runAsk`'s prev fallback), B2 (`/goals` + `tmct plan --goals`), B3

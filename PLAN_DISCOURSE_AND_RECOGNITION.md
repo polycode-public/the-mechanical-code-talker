@@ -820,5 +820,5 @@ stub rather than a citation.
 - `docs/references/schemas/ace-6.7.md` — interpretation rule 15, the binding rule's grounding.
 - `docs/references/planning/BDI_GOAL_DRIVEN_AUTONOMY.md` — the meta-loop `goal-reasoner.mjs`
   implements, which recognition sits beside rather than replaces.
-- `PLAN_FILLER_AND_COUNTERFACTUALS.md` — the same closed-set-templates-first discipline, applied to
+- `archive/PLAN_FILLER_AND_COUNTERFACTUALS.md` — the same closed-set-templates-first discipline, applied to
   a different chat-layer gap.
