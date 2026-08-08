@@ -49,7 +49,7 @@
     <p class="eyebrow"><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">Polycode projects</a>
       &middot; <a href="#library">pure JS</a>
       &middot; <a href="#capabilities">no LLM</a>
-      &middot; <a href="#live-demo">offline</a>
+      &middot; <a href="#live-demo">offline by default</a>
       &middot; $0</p>
     <h1>tmct
       <span class="long">&nbsp;</span>
@@ -70,7 +70,7 @@
 
   <section class="claims" id="demos" aria-label="what the demo pages show">
     <div class="band-head">
-      <p class="eyebrow">six easy pieces</p>
+      <p class="eyebrow">seven easy pieces</p>
     </div>
     <div class="claim-grid">
       <div class="claim-cell">
@@ -85,6 +85,20 @@
         <span class="claim-actions">
           <a class="card-btn" href="./chat-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About Ask it anything, check every answer</span></a>
           <button class="card-btn share-btn" type="button" data-share-demo="chat"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share Ask it anything, check every answer</span></button>
+        </span>
+      </div>
+      <div class="claim-cell">
+        <a class="claim" href="./news.html" target="_blank" rel="noopener noreferrer">
+          <span class="claim-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="1.8" fill="currentColor"/><path d="M4 11.5c4.7 0 8.5 3.8 8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M4 5.5c8.05 0 14.5 6.45 14.5 14.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </span>
+          <h3>A feed that only ships what grounds</h3>
+          <p>Fetches nothing until you click start, logs every request on the page, and ranks what it still can't ground.</p>
+          <span class="claim-page">news.html <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></span>
+        </a>
+        <span class="claim-actions">
+          <a class="card-btn" href="./news-about.html"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/><path d="M12 11.2v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span class="sr-only">About A feed that only ships what grounds</span></a>
+          <button class="card-btn share-btn" type="button" data-share-demo="news"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.32 10.78 15.7 6.44M8.32 13.22 15.7 17.56" stroke-linecap="round"/></g></svg><span class="sr-only">Share A feed that only ships what grounds</span></button>
         </span>
       </div>
       <div class="claim-cell">
@@ -181,7 +195,7 @@
     </div>
     <div class="copy">
       <p>
-        Six demos, twelve capabilities between them. A tick means the demo shows that
+        Seven demos, twelve capabilities between them. A tick means the demo shows that
         capability. An eye means it is what the demo is for. Nothing in this table calls a
         model: every tick is deterministic code you can read in the repository, and each
         demo's own about page says which files back it.
@@ -216,6 +230,21 @@
           <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
           <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
           <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th scope="row"><a href="./news.html" target="_blank" rel="noopener noreferrer">news.html</a></th>
+          <td></td>
+          <td></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
+          <td><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 12.6 9.4 17.5 19.5 6.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only">yes</span></td>
           <td class="focus"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M1.9 12S5.7 5.6 12 5.6 22.1 12 22.1 12 18.3 18.4 12 18.4 1.9 12 1.9 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></svg><span class="sr-only">its focus</span></td>
           <td></td>
           <td></td>
@@ -331,7 +360,28 @@
     </figure>
   </section>
 
-  <section class="feature flip" id="feature-sprites">
+  <section class="feature flip" id="feature-news">
+    <div class="feature-copy">
+      <h2>A feed built only from what grounds</h2>
+      <p>
+        Click start and it polls real sources on a timer: a Wikimedia featured-articles feed,
+        Hacker News, USGS earthquakes, and two more you can switch on. Every source it can
+        ground turns into a paragraph of grounded sentences with links back to where they
+        came from. Every term it can't ground yet goes on a ranked list instead.
+      </p>
+      <a class="open-link" href="./news.html" target="_blank" rel="noopener noreferrer">open news.html &rarr; <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./news.html" target="_blank" rel="noopener noreferrer">
+        <img src="./screenshots/news.png" width="640" height="375"
+             alt="tmct news page: the dashboard tiles, the ranked ungrounded-terms panel, and the newest feed items">
+        <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
+      </a>
+      <figcaption><span class="plate-no">Plate II</span> &middot; news.html</figcaption>
+    </figure>
+  </section>
+
+  <section class="feature" id="feature-sprites">
     <div class="feature-copy">
       <h2>The sprite library</h2>
       <p>
@@ -365,7 +415,7 @@
              alt="tmct sprite library page: sprite shapes mapped to the ontology classes they belong to">
         <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
       </a>
-      <figcaption><span class="plate-no">Plate II</span> &middot; sprites.html</figcaption>
+      <figcaption><span class="plate-no">Plate III</span> &middot; sprites.html</figcaption>
     </figure>
   </section>
 
@@ -385,7 +435,7 @@
              alt="tmct memory ledger page: fact counts, a predicate breakdown, and the taught facts for the term 'peg'">
         <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
       </a>
-      <figcaption><span class="plate-no">Plate III</span> &middot; ledger.html</figcaption>
+      <figcaption><span class="plate-no">Plate IV</span> &middot; ledger.html</figcaption>
     </figure>
   </section>
 
@@ -406,7 +456,7 @@
              alt="tmct plan page: a Tower of Hanoi board mid-solve, with the move list and the PDDL plan artifact alongside">
         <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
       </a>
-      <figcaption><span class="plate-no">Plate IV</span> &middot; plan.html</figcaption>
+      <figcaption><span class="plate-no">Plate V</span> &middot; plan.html</figcaption>
     </figure>
   </section>
 
@@ -451,7 +501,7 @@
              alt="tmct mudiii page: a fox and goblins moving through a 3D town square, each reacting only to what it has personally seen">
         <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
       </a>
-      <figcaption><span class="plate-no">Plate V</span> &middot; mudiii.html</figcaption>
+      <figcaption><span class="plate-no">Plate VI</span> &middot; mudiii.html</figcaption>
     </figure>
   </section>
 
@@ -472,7 +522,7 @@
              alt="tmct adventure page: a room of Ashcombe Hall drawn from its facts, with the map and satchel alongside">
         <svg class="newtab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span>
       </a>
-      <figcaption><span class="plate-no">Plate VI</span> &middot; adventure.html</figcaption>
+      <figcaption><span class="plate-no">Plate VII</span> &middot; adventure.html</figcaption>
     </figure>
   </section>
 
