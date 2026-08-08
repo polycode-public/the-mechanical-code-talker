@@ -19,10 +19,11 @@ import {
   CATALOG_GROUPS, groupIsClustered,
   catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
   loadSpriteOntologyFactRows, subClassIndex, buildOntologyTree, sectionSlugFor, ontologyTreeNodeId,
-  ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT,
+  ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT, treeEdgePath,
 } from "../../src/services/sprite-catalog-viz.mjs";
 import {
-  nextFocusMode, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+  nextFocusMode, initialCardAnimation, cardAnimationClick,
+  frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
 } from "../../src/domain/sprite-animation.mjs";
 import { splitSceneBackdrop } from "../../src/domain/scene-compose.mjs";
 import { randomSceneSentence } from "../../src/domain/scene-random.mjs";
@@ -382,7 +383,9 @@ test("the page splices in the same pure machinery this suite tests, never a seco
   assert.ok(html.includes(moodFrameSequence.toString()), "the mood cycle's real ordering function reaches the page");
   assert.ok(html.includes(turnFrameSequence.toString()), "the facing sweep's real ordering function reaches the page");
   assert.ok(html.includes(movingFrameSequence.toString()), "the pose toggle's real ordering function reaches the page");
-  assert.ok(html.includes(nextFocusMode.toString()), "the focus-mode toggle is the tested one");
+  assert.ok(html.includes(initialCardAnimation.toString()), "each cell's starting state is the tested one");
+  assert.ok(html.includes(cardAnimationClick.toString()), "the start-or-toggle click machine is the tested one");
+  assert.ok(html.includes(treeEdgePath.toString()), "the connector geometry is the tested one");
   assert.ok(html.includes(frameAtTick.toString()), "the tick-to-frame walk is the tested one");
   assert.ok(html.includes(focusModeFrames.toString()), "the focused cell's frame pick is the tested one");
   assert.ok(html.includes(oscillateWalkStep.toString()), "the scene walk's step function is the tested one");
@@ -403,8 +406,8 @@ test("the hover flip-book and the shared clock are both off under reduced motion
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
   assert.match(html, /if \(flip && !reducedMotion\)/, "the hover image flip only runs when motion is allowed");
   assert.match(html, /if \(!reducedMotion\) \{\s*setInterval/, "the one clock only starts when motion is allowed");
-  assert.match(html, /cell\.imgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,160}nextFocusMode\(state\.mode\)/,
-    "clicking the focused cell toggles its group's mode whatever the motion setting");
+  assert.match(html, /cell\.imgEl\.addEventListener\("click", \(\) => \{[\s\S]{0,160}cardAnimationClick\(cell\.state\)/,
+    "clicking any cell starts or toggles that cell's own animation whatever the motion setting");
 });
 
 // ---- the section ontology trees ----
@@ -573,10 +576,31 @@ test("a term with no sprite renders an obvious placeholder slot carrying its own
   assert.match(html, /id="tree-person-worker-person"[^>]*>\s*<span class="tree-img" role="img" aria-label="the person sprite"><svg/);
 });
 
-test("a group page draws no trees of its own and sends its ancestry pills to the landing page's node for that term", () => {
+test("a group page draws its own sections' trees and its ancestry pills anchor to them in-page", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: realFactRows, groupId: GROUP_OBJECT });
-  assert.equal((html.match(/class="ontology-head"/g) || []).length, 0, "the trees all live on the landing page");
-  assert.match(html, /<a class="chain-link own" href="\.\/sprites\.html#tree-object-animal-dog">dog<\/a>/);
+  const objectSections = realSections.filter((s) => s.group.id === GROUP_OBJECT);
+  assert.equal((html.match(/class="ontology-head"/g) || []).length, objectSections.length, "one tree per cluster on the group's own page");
+  assert.match(html, /<a class="chain-link own" href="#tree-object-animal-dog">dog<\/a>/);
+});
+
+test("every rendered tree carries its own connector layer for the page script to draw parent-to-child lines into", () => {
+  const landing = renderSpriteCatalogLandingHtml({ iconTemplates, largeTemplates, factRows: realFactRows });
+  assert.equal(
+    (landing.match(/<div class="ontology-tree"><svg class="tree-edges" aria-hidden="true"><\/svg>/g) || []).length,
+    realSections.length,
+    "one edges svg per tree, sitting first so the node columns paint over it",
+  );
+  const group = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: realFactRows, groupId: GROUP_PERSON });
+  assert.ok((group.match(/<svg class="tree-edges" aria-hidden="true">/g) || []).length > 0, "the group pages carry the layer too");
+});
+
+test("treeEdgePath leaves the parent and meets the child on a horizontal tangent, with a floor on the bend for short or backward edges", () => {
+  assert.equal(treeEdgePath({ x: 100, y: 20 }, { x: 160, y: 80 }), "M100 20C130 20 130 80 160 80",
+    "the control points sit level with each endpoint, so the line arrives flat");
+  assert.equal(treeEdgePath({ x: 100, y: 20 }, { x: 104, y: 80 }), "M100 20C110 20 94 80 104 80",
+    "a near-vertical edge keeps a visible bend instead of collapsing to a spike");
+  const backward = treeEdgePath({ x: 200, y: 20 }, { x: 100, y: 20 });
+  assert.equal(backward, "M200 20C250 20 50 20 100 20", "a recorded loop's back edge still draws, bowing out past both boxes");
 });
 
 // ---- grouping ----

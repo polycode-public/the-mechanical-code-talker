@@ -55,7 +55,8 @@ import { join } from "node:path";
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
 import {
   SPRITE_POSE_REST, SPRITE_POSE_MOVING, isMovingSwatchLabel,
-  nextFocusMode, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+  initialCardAnimation, cardAnimationClick,
+  frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
 } from "../domain/sprite-animation.mjs";
 import { sceneVocabulary, randomSceneSentence, roomClassesFromWorldFacts } from "../domain/scene-random.mjs";
 import { splitSceneBackdrop } from "../domain/scene-compose.mjs";
@@ -278,10 +279,11 @@ export function catalogSections(entries, spritedClasses) {
 
 // ---- the section ontology trees ----
 //
-// Above each landing-page section sits the real rdfs:subClassOf graph its own
-// classes live in, drawn from the SAME fact rows the cards' ancestry pills
-// print — so a pill and a tree node can never disagree about who a class's
-// parents are. A tree carries three kinds of node:
+// Above each catalog section — on the landing page and on every group page —
+// sits the real rdfs:subClassOf graph its own classes live in, drawn from the
+// SAME fact rows the cards' ancestry pills print — so a pill and a tree node
+// can never disagree about who a class's parents are. A tree carries three
+// kinds of node:
 //   - the section's own classes ("member"),
 //   - every term their own chains walk through ("ancestor"), and
 //   - any OTHER catalog class that hangs off one of those ancestors
@@ -338,6 +340,21 @@ export function sectionSlugFor(section) {
  *  to this, on this page or on the landing page. Pure. */
 export function ontologyTreeNodeId(sectionSlug, term) {
   return `tree-${sectionSlug}-${slugify(term)}`;
+}
+
+/** The svg path a tree connector follows from a parent node's right edge to
+ *  its child's left edge — a curve that leaves and arrives on a horizontal
+ *  tangent, so every line meets its box flat instead of slashing through a
+ *  neighbour. Points are `{x, y}` in the tree's own pixel space; the floor
+ *  on the bend keeps a short or backward edge (a recorded subClassOf loop)
+ *  visibly curved rather than collapsing to a spike. Pure; self-contained,
+ *  `.toString()`-splice safe. */
+export function treeEdgePath(from, to) {
+  const bend = Math.max(10, Math.abs(to.x - from.x) / 2);
+  return "M" + from.x + " " + from.y
+    + "C" + (from.x + bend) + " " + from.y
+    + " " + (to.x - bend) + " " + to.y
+    + " " + to.x + " " + to.y;
 }
 
 /** The stand-in text a tree node shows when its term carries no sprite of its
@@ -671,17 +688,18 @@ export function sceneComposerClassIndex(entries) {
 //
 // A card's large tier varies on three axes: mood (mgx:feels), facing
 // (mgx:faces) and pose (mgx:pose). One image cell per class stands where its
-// plain swatch was; each card grid keeps ONE such cell focused (the first,
-// by default), and the focused cell animates — rotating through its turning
-// positions, or cycling its emotions once clicked (sprite-animation.mjs's
-// nextFocusMode holds the toggle; the choice is kept per grid while the
-// visitor stays on the page). The page builds the frames client-side out
-// of its own already-rendered swatches (see the inline script below — the
-// same read-the-DOM posture the scene composer's class index takes), but the
-// frame ORDER and the tempo are real logic worth pinning on their own, so
-// they live here as pure functions the page splices in by `.toString()`.
-// One delay constant serves every axis, so they can't drift into three
-// tempos.
+// plain swatch was, and every one of them is clickable: a click on a resting
+// cell starts it animating (turning rotation first, with the focus outline),
+// a click on an animating cell toggles it between turning and
+// emotion-cycling (sprite-animation.mjs's cardAnimationClick). Each cell
+// owns its own state, so any number of cells can run at once on the shared
+// tick, each keeping its state while the visitor moves around the page. The
+// page builds the frames client-side out of its own already-rendered
+// swatches (see the inline script below — the same read-the-DOM posture the
+// scene composer's class index takes), but the frame ORDER and the tempo are
+// real logic worth pinning on their own, so they live here as pure functions
+// the page splices in by `.toString()`. One delay constant serves every
+// axis, so they can't drift into three tempos.
 //
 // A `frame` is `{svg, label}`. An empty return means there is nothing worth
 // animating for that class, and the page leaves its static swatch alone.
@@ -748,11 +766,10 @@ export function classAnchorId(className) {
   return `card-${slugify(className)}`;
 }
 
-/** A card's ancestry pills. With a `treeAnchorBase` (the href prefix for this
- *  card's own section tree — `#tree-<section>-` on a page that draws the
- *  tree, `./sprites.html#tree-<section>-` on a group page that leaves the
- *  trees to the landing page) each pill is a real link to that term's own
- *  tree node. Without one the pills stay plain text. */
+/** A card's ancestry pills. With a `treeAnchorBase` (the href prefix for
+ *  this card's own section tree, `#tree-<section>-`) each pill is a real
+ *  in-page link to that term's own tree node. Without one the pills stay
+ *  plain text. */
 function chainHtml(chain, treeAnchorBase = null) {
   const shown = chain.slice(0, MAX_CHAIN_DISPLAY);
   const rest = chain.length - shown.length;
@@ -791,7 +808,12 @@ function treeNodeHtml(node, { sectionSlug, entriesByClass, resolveNodeSprite }) 
 }
 
 /** One section's tree, in its own scrolling box so a wide graph never widens
- *  the page itself. Levels run left to right, widest concept first. */
+ *  the page itself. Levels run left to right, widest concept first. The
+ *  `.tree-edges` svg is the connector layer: the page script draws one line
+ *  per parent link after layout (node heights depend on wrapped text, so the
+ *  geometry can only be measured in the browser), reading the same
+ *  `.tree-up` links the nodes print — a line and an "under x" label can
+ *  never disagree. */
 export function ontologyTreeHtml(tree, options) {
   const { sectionLabel } = options;
   const levelHtml = (nodes, level) =>
@@ -809,22 +831,21 @@ export function ontologyTreeHtml(tree, options) {
   return `<div class="ontology">
     <h3 class="ontology-head"><span class="ontology-lead">the ontology behind</span> <span class="ontology-term">${escapeHtml(sectionLabel)}</span> <span class="count">${tree.termCount} concepts</span>${legend}</h3>
     <div class="tree-scroll" tabindex="0" role="group" aria-label="ontology tree for ${escapeHtml(sectionLabel)}">
-      <div class="ontology-tree">${branches}${apart}</div>
+      <div class="ontology-tree"><svg class="tree-edges" aria-hidden="true"></svg>${branches}${apart}</div>
     </div>
     ${note}
   </div>`;
 }
 
 /** The two per-section functions every page-body builder below needs: the
- *  tree to draw above a section (empty on a page that defers its trees to the
- *  landing page) and the href prefix that section's ancestry pills point at.
- *  `treeHost` null means this page draws no trees of its own, so its pills
- *  reach across to sprites.html instead. Pure given already-loaded inputs. */
-function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasses, drawsTrees }) {
+ *  tree to draw above a section and the href prefix that section's ancestry
+ *  pills point at. Every sprite page draws its own sections' trees — the
+ *  landing page one per section, a group page one per cluster — so a pill is
+ *  always an in-page anchor. Pure given already-loaded inputs. */
+function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasses }) {
   const entriesByClass = new Map(entries.map((e) => [e.className, e]));
   const index = subClassIndex(factRows);
   const treeFor = (section) => {
-    if (!drawsTrees) return "";
     const sectionSlug = sectionSlugFor(section);
     const tree = buildOntologyTree(section, { index, spritedClasses, entriesByClass });
     return ontologyTreeHtml(tree, {
@@ -835,8 +856,7 @@ function sectionTreeRenderers({ entries, largeTemplates, factRows, spritedClasse
         resolveSpriteAsset(term, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `tree-${sectionSlug}-${term}` }),
     });
   };
-  const anchorBaseFor = (section) =>
-    `${drawsTrees ? "" : "./sprites.html"}#tree-${sectionSlugFor(section)}-`;
+  const anchorBaseFor = (section) => `#tree-${sectionSlugFor(section)}-`;
   return { treeFor, anchorBaseFor };
 }
 
@@ -975,11 +995,8 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
     resolveChip: (ancestor) =>
       resolveSpriteAsset(ancestor, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `cluster-${ancestor}` }),
   };
-  // A per-group page leaves the trees to sprites.html, which holds every
-  // section's, and points its own pills there. The full single-page render
-  // holds every section itself, so it draws and anchors its own.
   const { treeFor, anchorBaseFor } = sectionTreeRenderers({
-    entries, largeTemplates, factRows, spritedClasses, drawsTrees: !groupId,
+    entries, largeTemplates, factRows, spritedClasses,
   });
   const groupsToRender = groupId ? CATALOG_GROUPS.filter((g) => g.id === groupId) : CATALOG_GROUPS;
   const bodyHtml = groupsToRender
@@ -1229,11 +1246,11 @@ ${THEME_TOKENS_CSS}
   :root {
     --ai-bar: #26272B; --ai-bar-ink: #E7E5DF;
     --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0;
-    --checker: rgba(0, 0, 0, .07);
+    --checker: rgba(0, 0, 0, .07); --tree-edge: #9B9990;
   }
-  @media (prefers-color-scheme: dark) { :root { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); } }
-  :root[data-theme="dark"] { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); }
-  :root[data-theme="light"] { --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0; --checker: rgba(0, 0, 0, .07); }
+  @media (prefers-color-scheme: dark) { :root { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); --tree-edge: #5A5D66; } }
+  :root[data-theme="dark"] { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); --tree-edge: #5A5D66; }
+  :root[data-theme="light"] { --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0; --checker: rgba(0, 0, 0, .07); --tree-edge: #9B9990; }
   body { margin: 0; background: var(--ai-canvas); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1240px; margin: 0 auto; padding: 0 1.2rem 2rem; }
@@ -1320,16 +1337,27 @@ ${THEME_TOKENS_CSS}
   .ontology-legend .lg-dual::before { border-left: 3px solid var(--corpus); }
   @media (max-width: 700px) { .ontology-legend { display: none; } }
   .tree-scroll { overflow: auto; max-height: 15.5rem; border: 1px solid var(--ai-edge); border-radius: 4px; background: var(--ai-panel); padding: .5rem .55rem; overscroll-behavior: contain; }
-  .ontology-tree { display: flex; flex-direction: column; gap: .8rem; width: max-content; min-width: 100%; }
-  .tree-branch { display: flex; align-items: flex-start; gap: .45rem; }
+  .ontology-tree { position: relative; display: flex; flex-direction: column; gap: .8rem; width: max-content; min-width: 100%; }
+  /* The connector layer: one drawn line per recorded parent link, painted
+     under the node columns. The dual-parent accent matches the legend's own
+     "two parents" border, so both edges into such a node read as one story. */
+  .tree-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .tree-edges path { fill: none; stroke: var(--tree-edge); stroke-width: 2; }
+  .tree-edges path.edge-dual { stroke: var(--corpus); opacity: .7; }
+  .tree-branch { display: flex; align-items: flex-start; gap: 1.15rem; }
   .tree-apart { flex-direction: column; }
   .tree-apart-head { font-family: ${MONO_STACK}; font-size: .58rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .3rem; }
   .tree-apart .tree-level { flex-direction: row; flex-wrap: wrap; width: auto; padding-top: 0; }
-  .tree-level { display: flex; flex-direction: column; gap: .35rem; width: 9.4rem; flex: none; position: relative; }
+  /* z-index 1 keeps the node columns painting over the connector layer, so
+     a long edge dips behind the boxes it crosses instead of striking
+     through their art. */
+  .tree-level { display: flex; flex-direction: column; gap: .35rem; width: 9.4rem; flex: none; position: relative; z-index: 1; }
   /* The lead branch captions its columns with the real subClassOf depth each
-     one sits at — the number is the walk itself, not decoration. */
-  .tree-branch:first-child:not(.tree-apart) .tree-level { padding-top: .9rem; }
-  .tree-branch:first-child:not(.tree-apart) .tree-level::before { content: "depth " attr(data-level); position: absolute; top: 0; left: .15rem; font-family: ${MONO_STACK}; font-size: .5rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); opacity: .8; }
+     one sits at — the number is the walk itself, not decoration.
+     first-of-type, not first-child: the connector svg sits first in the
+     tree. */
+  .tree-branch:first-of-type:not(.tree-apart) .tree-level { padding-top: .9rem; }
+  .tree-branch:first-of-type:not(.tree-apart) .tree-level::before { content: "depth " attr(data-level); position: absolute; top: 0; left: .15rem; font-family: ${MONO_STACK}; font-size: .5rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); opacity: .8; }
   .tree-node { display: flex; flex-direction: column; align-items: center; gap: .16rem; text-align: center; padding: .28rem .28rem .32rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: var(--card); width: 9.4rem; box-sizing: border-box; }
   .tree-node.member { border-left: 3px solid var(--taught); }
   .tree-node.sibling { opacity: .6; }
@@ -1462,7 +1490,9 @@ ${spriteBundleScript}
   const moodFrameSequence = ${moodFrameSequence.toString()};
   const turnFrameSequence = ${turnFrameSequence.toString()};
   const movingFrameSequence = ${movingFrameSequence.toString()};
-  const nextFocusMode = ${nextFocusMode.toString()};
+  const initialCardAnimation = ${initialCardAnimation.toString()};
+  const cardAnimationClick = ${cardAnimationClick.toString()};
+  const treeEdgePath = ${treeEdgePath.toString()};
   const frameAtTick = ${frameAtTick.toString()};
   const focusModeFrames = ${focusModeFrames.toString()};
   const oscillateWalkStep = ${oscillateWalkStep.toString()};
@@ -1569,6 +1599,42 @@ ${spriteBundleScript}
   }
   wireSceneComposer();
 
+  // ---- the ontology connectors — one drawn line per recorded parent link,
+  // read off the same in-tree ".tree-up" links the nodes print, so a line
+  // and an "under x" label can never disagree. The geometry is measured
+  // after layout (node heights depend on wrapped text), and redrawn whenever
+  // a tree's own box changes size: its first real layout under
+  // content-visibility, a viewport resize, a font swap.
+  function drawTreeEdges(treeEl) {
+    const edgesSvg = treeEl.querySelector(":scope > .tree-edges");
+    if (!edgesSvg) return;
+    const base = treeEl.getBoundingClientRect();
+    if (!base.width) return;
+    const edges = [];
+    for (const node of treeEl.querySelectorAll(".tree-node")) {
+      const parentLinks = node.querySelectorAll(".tree-up a");
+      for (const link of parentLinks) {
+        const parentId = decodeURIComponent((link.getAttribute("href") || "").slice(1));
+        const parentEl = document.getElementById(parentId);
+        if (!parentEl || !treeEl.contains(parentEl)) continue;
+        const p = parentEl.getBoundingClientRect();
+        const c = node.getBoundingClientRect();
+        const d = treeEdgePath(
+          { x: Math.round(p.right - base.left), y: Math.round(p.top + p.height / 2 - base.top) },
+          { x: Math.round(c.left - base.left), y: Math.round(c.top + c.height / 2 - base.top) },
+        );
+        edges.push('<path class="edge' + (parentLinks.length > 1 ? " edge-dual" : "") + '" d="' + d + '"></path>');
+      }
+    }
+    edgesSvg.innerHTML = edges.join("");
+  }
+  const treeEls = Array.from(document.querySelectorAll(".ontology-tree"));
+  for (const treeEl of treeEls) drawTreeEdges(treeEl);
+  if (treeEls.length && typeof ResizeObserver === "function") {
+    const treeRedraw = new ResizeObserver((entries) => { for (const entry of entries) drawTreeEdges(entry.target); });
+    for (const treeEl of treeEls) treeRedraw.observe(treeEl);
+  }
+
   // ---- the sprite tiles — pose-first captions everywhere: every tile reads
   // "<variant> / static" at rest and "<variant> / moving" under the pointer,
   // and a tile whose class really has that moving frame flip-books between
@@ -1619,18 +1685,21 @@ ${spriteBundleScript}
     }
   });
 
-  // ---- the focused cell — one image cell per class stands where the plain
-  // swatch was, and each card grid keeps exactly one of them focused (the
-  // first, until the visitor clicks another). The focused cell animates:
-  // rotating through its turning positions by default, cycling its emotions
-  // once clicked. Clicking the focused cell is the toggle; clicking any
-  // other cell moves the focus to it. Each grid keeps its own chosen mode
-  // for as long as the visitor stays on the page. Frames come off the
-  // card's own already-rendered swatches — this only ever needs whatever
-  // cards THIS page renders, never the whole catalog.
+  // ---- the animated cells — one image cell per class stands where the
+  // plain swatch was, and every one of them is clickable. A click on a
+  // resting cell starts it animating (turning rotation first) and gives it
+  // the focus outline; a click on an animating cell toggles it between
+  // turning and emotion-cycling (cardAnimationClick, spliced above). Each
+  // cell owns its own state, so starting one never stops another — any
+  // number can run at once on the shared tick, and each keeps its state
+  // while the visitor moves around the page. The first cell of each card
+  // grid starts on load, so the page moves before the first click. Frames
+  // come off the card's own already-rendered swatches — this only ever
+  // needs whatever cards THIS page renders, never the whole catalog.
   //
-  // Reduced motion stops the clock: the focused cell then shows one real
-  // frame of its current mode, and clicks still switch focus and mode.
+  // Reduced motion stops the clock: an animating cell then shows one real
+  // frame of its current mode, and clicks still switch the focus treatment
+  // and the mode as static frame changes.
   function tileOf(el) {
     const img = el.querySelector(".swatch-img");
     const labelEl = el.querySelector(".swatch-label");
@@ -1645,7 +1714,8 @@ ${spriteBundleScript}
     };
   }
 
-  const grids = new Map();
+  const animatedCells = [];
+  const startedGrids = new Set();
 
   function restCell(cell) {
     cell.holder.classList.remove("focused");
@@ -1657,7 +1727,8 @@ ${spriteBundleScript}
     cell.active = [];
   }
 
-  function focusCell(cell, mode) {
+  function animateCell(cell) {
+    const mode = cell.state.mode;
     cell.holder.classList.add("focused");
     cell.holder.dataset.mode = mode;
     cell.active = focusModeFrames(mode, cell.frames);
@@ -1668,11 +1739,9 @@ ${spriteBundleScript}
     cell.poseEl.textContent = "";
   }
 
-  function renderGrid(state) {
-    for (let i = 0; i < state.cells.length; i += 1) {
-      if (i === state.focusedIndex) focusCell(state.cells[i], state.mode);
-      else restCell(state.cells[i]);
-    }
+  function renderCell(cell) {
+    if (cell.state.animating) animateCell(cell);
+    else restCell(cell);
   }
 
   for (const card of cards) {
@@ -1711,7 +1780,7 @@ ${spriteBundleScript}
     const holder = document.createElement("div");
     holder.className = "swatch large cycle cycle-mode";
     holder.dataset.pose = "static";
-    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="focus the ' + esc(cls)
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="animate the ' + esc(cls)
       + ' sprite, or switch its animation"></button>'
       + '<div class="swatch-caption"><span class="swatch-mode"></span><span class="swatch-label"></span><span class="swatch-pose"></span></div>';
     const cell = {
@@ -1723,30 +1792,31 @@ ${spriteBundleScript}
       staticFrame,
       frames: { turnFrames, moodFrames, movingFrames },
       active: [],
+      state: initialCardAnimation(),
     };
     if (movingByVariant.default) movingSvgOf.set(holder, { still: staticFrame.svg, moving: movingByVariant.default, showMoving: false });
     movingSvgOf.delete(base.el);
     wireSwatchHover(holder);
     swatchRow.replaceChild(holder, base.el);
 
+    // The first cell of each card grid starts on load; the rest wait for
+    // their own click.
     const grid = card.closest(".cards");
-    if (!grid) continue;
-    if (!grids.has(grid)) grids.set(grid, { cells: [], mode: "turning", focusedIndex: 0 });
-    const state = grids.get(grid);
-    const myIndex = state.cells.length;
-    state.cells.push(cell);
+    if (grid && !startedGrids.has(grid)) {
+      startedGrids.add(grid);
+      cell.state = cardAnimationClick(cell.state);
+    }
+    animatedCells.push(cell);
     cell.imgEl.addEventListener("click", () => {
-      if (state.focusedIndex === myIndex) state.mode = nextFocusMode(state.mode);
-      else state.focusedIndex = myIndex;
-      renderGrid(state);
+      cell.state = cardAnimationClick(cell.state);
+      renderCell(cell);
     });
   }
-  for (const state of grids.values()) renderGrid(state);
+  for (const cell of animatedCells) renderCell(cell);
 
   tickHandlers.push(() => {
-    for (const state of grids.values()) {
-      const cell = state.cells[state.focusedIndex];
-      if (!cell || !cell.active.length) continue;
+    for (const cell of animatedCells) {
+      if (!cell.state.animating || !cell.active.length) continue;
       const frame = frameAtTick(cell.active, tick);
       cell.imgEl.innerHTML = frame.svg;
       cell.labelEl.textContent = frame.label;
@@ -1789,7 +1859,7 @@ export function renderSpriteCatalogLandingHtml({ title = DEFAULT_TITLE, iconTemp
   const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
   const sections = catalogSections(entries, spritedClasses);
   const { treeFor, anchorBaseFor } = sectionTreeRenderers({
-    entries, largeTemplates, factRows, spritedClasses, drawsTrees: true,
+    entries, largeTemplates, factRows, spritedClasses,
   });
   const bodyHtml = CATALOG_GROUPS.map((g) => {
     const groupEntries = entries.filter((e) => e.group === g.id);
