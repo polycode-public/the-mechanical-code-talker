@@ -1270,7 +1270,8 @@ ${THEME_TOKENS_CSS}
   .scene-frame.has-backdrop { min-height: 11rem; align-items: flex-end; }
   .scene-frame.has-backdrop .scene-backdrop { display: block; }
   .scene-frame.has-backdrop .scene-row { position: relative; padding: 0 .8rem .5rem; align-items: flex-end; }
-  .scene-frame.has-backdrop .scene-sprite { border: 0; background: none; }
+  .scene-frame.has-backdrop .scene-card { width: 92px; }
+  .scene-frame.has-backdrop .scene-sprite { border: 0; background: none; width: 76px; height: 76px; }
   .scene-frame.has-backdrop .scene-label { background: color-mix(in srgb, var(--ai-panel) 82%, transparent); border-radius: 3px; padding: 0 .25rem; width: max-content; max-width: 100%; }
   .scene-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; width: 100%; }
   .scene-row:empty { display: none; }
