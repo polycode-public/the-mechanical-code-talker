@@ -96,6 +96,8 @@ test("relationKind matches the SEON/mgx prop token first, then the verb", () => 
   assert.equal(relationKind({ predicate: "covers" }), "tests");
   assert.equal(relationKind({ predicate: "contains entity" }), "contains");
   assert.equal(relationKind({ predicate: "subclass of" }), "inherits");
+  assert.equal(relationKind({ predicate: "mgx:denotesCodeEntity" }), "denotes");
+  assert.equal(relationKind({ predicate: "serves as backend for" }), "serves");
   assert.equal(relationKind({ predicate: "works at" }), null);
 });
 

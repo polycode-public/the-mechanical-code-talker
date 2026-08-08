@@ -119,6 +119,8 @@ export function relationKind(group) {
   if (/\b(touch|chang|modif)/.test(pred)) return "touches";
   if (/\bcontain/.test(pred)) return "contains";
   if (/\b(inherit|subclass|extend|specializ)/.test(pred)) return "inherits";
+  if (/denot/.test(pred)) return "denotes";
+  if (/\bserve/.test(pred)) return "serves";
   return null;
 }
 
