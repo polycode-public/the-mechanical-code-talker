@@ -34,9 +34,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 Batch cadence for this stretch (operator, 2026-08-08): sub-agents commit often; the coordinator
-merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch. The
-first batch carries the `links:check` fix (`backlog/PLAN_MCP.md` repoint) for the red pipeline at
-`b71c2443`.
+merges onto `main` often and pushes in batches; a pipeline fix rides the next ready batch.
 
 - [ ] **Filler + counterfactuals** (`archive/PLAN_FILLER_AND_COUNTERFACTUALS.md`, both sections
   BUILT, plan archived) — CODE-COMPLETE on `main`, riding the next batch push. Open remainder
@@ -44,17 +42,17 @@ first batch carries the `links:check` fix (`backlog/PLAN_MCP.md` repoint) for th
   more disk rests on peg-a", "every disk rests on peg-a") — previously the ack-preamble arm
   silently dropped the quantifier and stored a wrong fact; now it misses honestly. Parsing
   those subjects is real, separate grammar work, still open.
-- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — slice B1 (trace reader)
-  CODE-COMPLETE, in this batch. Queued: A0 (Part A prose correction + the one remaining
-  silent-pick guard in `runAsk`'s prev fallback), B2 (`/goals` + `tmct plan --goals`), B3
-  (containment + reject + TOOL-9, atomic with grader and envelope), B4 (autoplay re-base), B5
-  (recognition surfaces). A0/B2 serialize on `chat.mjs`; briefs in the session scratchpad.
+- [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 shipped and
+  CI-verified. IN FLIGHT: A0 (Part A prose correction + the one remaining silent-pick guard in
+  `runAsk`'s prev fallback). Queued: B2 (`/goals` + `tmct plan --goals`), B3 (containment +
+  reject + TOOL-9, atomic with grader and envelope), B4 (autoplay re-base), B5 (recognition
+  surfaces). A0/B2 serialize on `chat.mjs`; briefs in the session scratchpad.
 - [ ] **Sprites redesign** (operator, 2026-08-08: ontology-section design, hover/turn/emotion
   animation rules on every sprite tile, per-group focus modes, random scene with rooms, full-wall
   room backdrop, walking cat; machinery in core `src/` for adventure.html) — IN FLIGHT: Fable
   sub-agent in worktree `.claude/worktrees/agent-a700c24067e243b74` (branch
   `worktree-agent-a700c24067e243b74`), committing per step; merge its commits as they verify.
-- [ ] **Help page** — public/help.html BUILT, in this batch. Open remainder: `PLAN_HELP.md`'s
+- [ ] **Help page burrow decision** — public/help.html shipped and CI-verified, but its
   `#burrow` section documents `mud.html`, which `7245ff0a` retired from the site build; decide
   whether mud.html returns to the build or the burrow guidance repoints at what ships.
 
