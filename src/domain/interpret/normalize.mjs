@@ -173,6 +173,10 @@ const isListingRemainder = (rest) => {
   return LISTING_TAIL_KINDS.has((words[words.length - 1] || "").toLowerCase());
 };
 
+// The punctuation set every delimiter-anchored preamble/filler frame in this
+// file treats as a clause boundary.
+const DELIM_SRC = "[,.;:!]|—|–|-";
+
 /** Greeting lead-in with a delimiter (+ optional "quick question" bridge):
  *  "hey there, quick question - <Q>" -> "<Q>". Delimiter and non-empty
  *  remainder are both required, so a bare greeting stays small-talk. */
@@ -186,7 +190,14 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
  *  different wording — a throwaway counting aside before the real content,
  *  never part of the content itself ("ok, one more, teach me: no server is a
  *  client" must peel exactly as "ok cool, <Q>" already does). */
-const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem|(?:just\s+)?(?:one|another)\s+more|another\s+one)[\s,]+)+(.+)$/i;
+const ACK_WORDS_SRC = "ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem|another\\s+one";
+// The counting arm ("one more", "just one more") requires a trailing
+// delimiter, unlike the ack words above — without it, "one more disk rests
+// on peg-a" loses its own quantifier to this frame.
+const ACK_COUNTING_SRC = "(?:just\\s+)?(?:one|another)\\s+more";
+const ACK_PREAMBLE_RE = new RegExp(
+  `^(?:(?:${ACK_WORDS_SRC})[\\s,]+|(?:${ACK_COUNTING_SRC})\\s*(?:${DELIM_SRC})\\s*)+(.+)$`, "i",
+);
 /** Self-orientation lead-in with a delimiter — "just poking around, <Q>",
  *  "first time using this, <Q>". */
 const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here)|i'?m\s+new\s+(?:here|around\s+here|to\s+(?:this|all\s+this)(?:\s+(?:repo|codebase|project|app|tool|thing))?))\s*[,.—–-]\s*(.+)$/i;
@@ -340,6 +351,80 @@ export function applyPreambleFrames(text) {
     if (q === before) break;
   }
   return q;
+}
+
+// ---- closed FILLER-CLAUSE prefixes: sentence-initial small talk ahead of a
+// real question, distinct from the PREAMBLE frames above because family B
+// (hesitation + pivot) needs no delimiter — an unconditional peel here would
+// change what every existing normalizeQuery caller sees, so this is exposed
+// as its own function and consumed only where a caller opts in explicitly.
+
+const alt = (list) => [...list].sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+
+// Family A — interjection + comment. A delimiter is required: a bare
+// interjection followed by a noun ("oh water") is ordinary content.
+const FILLER_INTERJECTIONS = Object.freeze([
+  "oh", "ah", "aha", "ooh", "ohh", "wow", "huh", "hm", "hmm", "mm", "mmm",
+  "heh", "ha", "yay", "ugh", "oof", "phew", "whoa", "oops", "yikes", "oi",
+]);
+const FILLER_COMMENT_WORDS = Object.freeze([
+  "nice", "cool", "great", "neat", "lovely", "interesting", "good", "ok", "okay",
+  "fair enough", "makes sense", "i see", "got it", "fine",
+]);
+
+// Family B — hesitation + pivot. Repeatable, delimiter optional. Deliberately
+// excludes "like"/"so"/"now"/"then"/"right"/"ok": those either carry real
+// content ("like what?") or already peel through LEADING_CONNECTIVE_RE /
+// ACK_PREAMBLE_RE, and duplicating them here would give the same word two
+// competing owners.
+const FILLER_HESITATIONS = Object.freeze([
+  "um", "umm", "uhm", "uh", "uhh", "er", "err", "erm", "ehm", "eh",
+  "well", "anyway", "anyhow", "anyways", "regardless", "moving on",
+]);
+
+// Family C — meta-announcement: a self-describing announcement of the
+// question about to come. Delimiter required.
+const FILLER_ANNOUNCEMENTS = Object.freeze([
+  "quick question", "quick q", "one quick question", "just a quick question",
+  "random question", "random thing", "one more random thing", "another random thing",
+  "one more thing", "one last thing", "last thing", "one more question",
+  "side note", "side question", "sidebar", "off topic", "unrelated",
+  "on a different note", "different topic", "changing the subject", "new topic",
+  "just curious", "out of curiosity", "curious", "genuinely curious",
+  "while i'm here", "while i have you", "before i forget",
+]);
+
+const FILLER_A_SRC = `(?:${alt(FILLER_INTERJECTIONS)})(?:\\s+(?:${alt(FILLER_COMMENT_WORDS)}))?\\s*(?:${DELIM_SRC})\\s*`;
+const FILLER_B_SRC = `(?:${alt(FILLER_HESITATIONS)})\\s*(?:(?:${DELIM_SRC})\\s*|\\s+)`;
+const FILLER_C_SRC = `(?:${alt(FILLER_ANNOUNCEMENTS)})\\s*(?:${DELIM_SRC})\\s*`;
+
+// An optional leading "sorry"/"sorry," ahead of any family, once.
+const FILLER_CLAUSE_PREFIX_RE = new RegExp(
+  `^(?:sorry\\s*(?:${DELIM_SRC})?\\s*)?(?:${FILLER_A_SRC}|${FILLER_B_SRC}|${FILLER_C_SRC})+`, "i",
+);
+
+/** Peel a sentence-initial closed filler clause off `text`. Returns
+ *  { prefix, remainder } or null when nothing in the closed inventory leads
+ *  the line. Longest-alternative-first inside each family, so "one more
+ *  random thing" wins over "one more thing". Pure; no graph, no store. */
+export function fillerClausePrefix(text) {
+  const line = String(text || "").trim();
+  const m = line.match(FILLER_CLAUSE_PREFIX_RE);
+  if (!m || !m[0]) return null;
+  const remainder = line.slice(m[0].length).trim();
+  if (!remainder) return null; // a bare filler is small talk, not a peel
+  return { prefix: m[0].trim(), remainder };
+}
+
+/** QUESTION_LEAD_RE is anchored to the FIRST word, so a closed filler clause
+ *  in front of a question moves the interrogative off word one and every
+ *  write gate reads the line as a declarative. Peel once, then re-check the
+ *  same question underneath. */
+export function leadsInterrogative(text) {
+  const line = String(text || "").trim();
+  if (QUESTION_LEAD_RE.test(line)) return true;
+  const peel = fillerClausePrefix(line);
+  return Boolean(peel && QUESTION_LEAD_RE.test(peel.remainder));
 }
 
 /** Strippable leading framing clause: "since/[even] though/although/while/

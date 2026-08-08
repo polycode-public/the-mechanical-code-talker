@@ -13,7 +13,7 @@ import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../../
 import { mergeStrategyResults, alternateLines, sameParse } from "../../src/domain/interpret/merge.mjs";
 import {
   applyPreambleFrames, applySubordinationFrames, applySelfCorrectionFrames, applyConditionalFrames,
-  COUNTERFACTUAL_RE, normalizeQuery, datedTeachSuffix,
+  COUNTERFACTUAL_RE, normalizeQuery, datedTeachSuffix, fillerClausePrefix, leadsInterrogative,
 } from "../../src/domain/interpret/normalize.mjs";
 import { stripNoise } from "../../src/domain/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../../src/domain/ask.mjs";
@@ -447,6 +447,67 @@ test("preamble (show/give-me): a KIND-listing remainder is left untouched — th
   // negation-set listings keep their boolean composition after the unwrap too
   const neg = parseQuery("show me modules not importing src/logging.mjs", { nlp: null });
   assert.equal(neg.node, "boolean");
+});
+
+// ---- 1b. filler-clause prefixes (interpret/normalize.mjs fillerClausePrefix) ----
+
+test("fillerClausePrefix peels an interjection-plus-comment clause and returns the bare question", () => {
+  assert.deepEqual(fillerClausePrefix("oh nice. um what about cats"), { prefix: "oh nice. um", remainder: "what about cats" });
+  assert.deepEqual(fillerClausePrefix("ah cool, what is a horse"), { prefix: "ah cool,", remainder: "what is a horse" });
+  // a bare interjection with NO delimiter is ordinary content, never peeled
+  assert.equal(fillerClausePrefix("oh water is nice"), null);
+});
+
+test("fillerClausePrefix peels a bare hesitation particle with no delimiter", () => {
+  assert.deepEqual(fillerClausePrefix("um what about cats"), { prefix: "um", remainder: "what about cats" });
+  assert.deepEqual(fillerClausePrefix("anyway what is a horse"), { prefix: "anyway", remainder: "what is a horse" });
+});
+
+test("fillerClausePrefix peels a meta-announcement clause and its required delimiter", () => {
+  assert.deepEqual(
+    fillerClausePrefix("one more random thing, what is a horse"),
+    { prefix: "one more random thing,", remainder: "what is a horse" },
+  );
+  // no delimiter after the announcement -> the whole line reads as ordinary
+  // content, never a peel
+  assert.equal(fillerClausePrefix("quick question what is a horse"), null);
+});
+
+test("fillerClausePrefix peels a stack of clauses in one pass", () => {
+  assert.deepEqual(
+    fillerClausePrefix("sorry, oh nice. um what about cats"),
+    { prefix: "sorry, oh nice. um", remainder: "what about cats" },
+  );
+});
+
+test("fillerClausePrefix peels a hesitation word that doubles as content, and leadsInterrogative declines the non-interrogative remainder", () => {
+  // "well" leads FILLER_HESITATIONS, so the peel itself can't tell a
+  // discourse hesitation from a content word — the sentence stays safe
+  // because nothing downstream ever treats "water is a kind of liquid" as
+  // the interrogative half of a write-boundary check.
+  assert.deepEqual(
+    fillerClausePrefix("well water is a kind of liquid."),
+    { prefix: "well", remainder: "water is a kind of liquid." },
+  );
+  assert.equal(leadsInterrogative("well water is a kind of liquid."), false);
+});
+
+test("fillerClausePrefix returns null when the whole line is filler and nothing remains", () => {
+  assert.equal(fillerClausePrefix("um"), null);
+  assert.equal(fillerClausePrefix("anyway,"), null);
+  assert.equal(fillerClausePrefix("quick question,"), null);
+});
+
+test("leadsInterrogative sees the question behind a filler clause that QUESTION_LEAD_RE cannot", () => {
+  assert.equal(leadsInterrogative("anyway what is a horse"), true);
+  assert.equal(leadsInterrogative("anyway horse is nice"), false);
+  assert.equal(leadsInterrogative("what is a horse"), true);
+});
+
+test("the ack preamble peels a counting aside only when a delimiter follows it", () => {
+  assert.equal(applyPreambleFrames("one more, what is a horse"), "what is a horse");
+  // no delimiter -> "one more" is the sentence's own quantifier, left intact
+  assert.equal(applyPreambleFrames("one more disk rests on peg-a."), "one more disk rests on peg-a.");
 });
 
 // ---- 2. determiner-insensitive candidate merge (interpret/merge.mjs) ----
