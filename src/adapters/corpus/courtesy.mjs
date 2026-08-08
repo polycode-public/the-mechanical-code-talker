@@ -1,10 +1,12 @@
 // corpus/courtesy.mjs — the throttle, cool-off and cache machinery shared by
-// every live research adapter that talks to a Wikimedia API (wikipedia-live.mjs,
-// wikidata-live.mjs): one in-flight fetch at a time, a minimum interval between
-// round trips, a 429/maxlag cool-off honouring Retry-After, an abort timeout on
-// every fetch, and a cache that keeps hits AND misses so a term is never asked
-// twice. Every failure of any kind reads as null, so the caller's honest miss
-// stands.
+// every live adapter that fetches a third party: the research sources
+// (wikipedia-live.mjs, wikidata-live.mjs, wiktionary-live.mjs,
+// dbpedia-lookup-live.mjs) and the news sources (news-sources.mjs). One
+// in-flight fetch at a time, a minimum interval between round trips, a
+// 429/maxlag cool-off honouring Retry-After, an abort timeout on every fetch,
+// optional ETag/Last-Modified conditional-request memory, and a cache that
+// keeps hits AND misses so a term is never asked twice. Every failure of any
+// kind reads as null, so the caller's honest miss stands.
 //
 // No node builtins — this module ships in the browser bundles unchanged; the
 // only I/O is fetch.
@@ -18,13 +20,23 @@ export const RETRY_AFTER_FLOOR_MS = 5000;
 export const MAXLAG_SECONDS = 5;
 
 /**
- * One adapter instance's courtesy state: `{ fetchJson(url), cachedFetch(key,
- * work) }`. Every option a caller passes wins, so a test can hand it a zero
- * interval and a stub transport.
+ * One adapter instance's courtesy state: `{ fetchJson(url), fetchText(url),
+ * cachedFetch(key, work) }`. Every option a caller passes wins, so a test can
+ * hand it a zero interval and a stub transport.
  *
  * `waitForSlot` picks the throttle posture: false answers null the moment a
  * slot is unavailable (never block a chat turn), true waits for it (a queue
  * paced turn-by-turn, where a false miss would be dishonest).
+ *
+ * `validators`, when given, is a Map the CALLER owns (keyed by URL) that this
+ * gate reads an `{ etag, lastModified }` entry from before every request —
+ * sent as `If-None-Match` / `If-Modified-Since` — and writes back to after
+ * every 2xx response that carries an ETag or Last-Modified header. A 304
+ * answers `{ notModified: true }` instead of the usual body, so a caller can
+ * tell "nothing changed" apart from "the source failed" apart from "here is
+ * the new body". Without `validators` this is all inert: no conditional
+ * headers go out, and a 304 (which no server sends without them) falls
+ * through the ordinary `!res.ok` path to null exactly as before.
  */
 export function createCourtesyGate({
   fetchImpl,
@@ -33,6 +45,7 @@ export function createCourtesyGate({
   retryAfterFloorMs = RETRY_AFTER_FLOOR_MS,
   userAgent,
   waitForSlot = false,
+  validators = null,
 } = {}) {
   const doFetch = fetchImpl ?? ((...args) => globalThis.fetch(...args));
   const cache = new Map(); // key -> value | null (hits AND settled misses)
@@ -55,36 +68,79 @@ export function createCourtesyGate({
     coolOffUntil = Date.now() + Math.max(retryAfterMs || 0, retryAfterFloorMs);
   }
 
-  /** One GET, JSON-parsed, with the abort timeout and the 429/maxlag cool-off
-   *  wired in. Any failure of any kind — network, non-2xx, unparseable body —
-   *  reads as null. */
-  async function fetchJson(url) {
+  /** The conditional-request headers this URL's remembered validator earns,
+   *  or null when there is none yet (first fetch of this URL, or no
+   *  `validators` map at all). */
+  function conditionalHeaders(url) {
+    const entry = validators?.get(url);
+    if (!entry) return null;
+    const headers = {};
+    if (entry.etag) headers["If-None-Match"] = entry.etag;
+    if (entry.lastModified) headers["If-Modified-Since"] = entry.lastModified;
+    return Object.keys(headers).length ? headers : null;
+  }
+
+  /** Remember this URL's validator off a 2xx response, so the NEXT fetch of
+   *  it can ask "did this change" instead of paying for the whole body. */
+  function rememberValidators(url, res) {
+    if (!validators) return;
+    const etag = res.headers?.get?.("etag") ?? "";
+    const lastModified = res.headers?.get?.("last-modified") ?? "";
+    if (!etag && !lastModified) return;
+    const prior = validators.get(url) ?? {};
+    validators.set(url, { etag: etag || prior.etag || "", lastModified: lastModified || prior.lastModified || "" });
+  }
+
+  /** One GET, with the abort timeout, the 429/maxlag cool-off and the
+   *  conditional-request dance all wired in. Any failure of any kind —
+   *  network, non-2xx, unparseable body — reads as null; a 304 reads as
+   *  `{ notModified: true }`, but only when `validators` is in play (nothing
+   *  else could have earned a 304 in the first place). `asJson` picks the
+   *  body shape: parsed JSON (with the maxlag check) or raw text. */
+  async function fetchRaw(url, { asJson }) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
       const opts = {};
       if (controller) opts.signal = controller.signal;
-      const headers = identifyingHeaders();
-      if (headers) opts.headers = headers;
+      const headers = { ...(identifyingHeaders() ?? {}), ...(conditionalHeaders(url) ?? {}) };
+      if (Object.keys(headers).length) opts.headers = headers;
       const res = await doFetch(url, opts);
       if (res.status === 429) {
         openCoolOff(res.headers?.get?.("retry-after"));
         return null;
       }
+      if (res.status === 304) return validators ? { notModified: true } : null;
       if (!res.ok) return null;
-      const body = await res.json();
-      // A maxlag rejection arrives as HTTP 200 with an error body and a
-      // Retry-After header — back off exactly as a 429 asks.
-      if (body?.error?.code === "maxlag") {
-        openCoolOff(res.headers?.get?.("retry-after"));
-        return null;
+      rememberValidators(url, res);
+      if (asJson) {
+        const body = await res.json();
+        // A maxlag rejection arrives as HTTP 200 with an error body and a
+        // Retry-After header — back off exactly as a 429 asks.
+        if (body?.error?.code === "maxlag") {
+          openCoolOff(res.headers?.get?.("retry-after"));
+          return null;
+        }
+        return body;
       }
-      return body;
+      return await res.text();
     } catch {
       return null;
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
+  }
+
+  async function fetchJson(url) {
+    return fetchRaw(url, { asJson: true });
+  }
+
+  /** Same slot, cool-off, timeout and conditional-request handling as
+   *  fetchJson, returning the raw body text instead of a parsed object — what
+   *  every feed format (RSS/Atom/JSON Feed) needs, since JSON Feed is the only
+   *  one of the three worth parsing before this layer hands it over. */
+  async function fetchText(url) {
+    return fetchRaw(url, { asJson: false });
   }
 
   /** When the next network slot opens: past the cool-off, past the minimum
@@ -107,10 +163,17 @@ export function createCourtesyGate({
     }
   }
 
-  /** One slot-gated, cached operation: cache first (a settled hit or miss is
-   *  never refetched), then the slot, then `work()`, with every failure
-   *  cached as null so it never costs a second round trip. */
-  async function cachedFetch(cacheKey, work) {
+  /** One slot-gated operation: cache first (a settled hit or miss is never
+   *  refetched), then the slot, then `work()`, with every failure cached as
+   *  null so it never costs a second round trip.
+   *
+   *  `remember: false` skips the cache write (the poll loop's use: a live
+   *  feed must re-fetch every cycle, never answer from a stale hit), while
+   *  still gating `work()` behind the slot — so a caller that needs "paced,
+   *  but never stale" (every feed poller in news-sources.mjs) still gets the
+   *  minInterval spacing between successive calls, just without the
+   *  answer-forever memory a term lookup wants. */
+  async function cachedFetch(cacheKey, work, { remember = true } = {}) {
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     if (!(await takeSlot())) return null;
     let value = null;
@@ -121,9 +184,9 @@ export function createCourtesyGate({
     } finally {
       inFlight = false;
     }
-    cache.set(cacheKey, value);
+    if (remember) cache.set(cacheKey, value);
     return value;
   }
 
-  return { fetchJson, cachedFetch };
+  return { fetchJson, fetchText, cachedFetch };
 }
