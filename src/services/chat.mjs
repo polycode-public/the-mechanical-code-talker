@@ -3272,11 +3272,44 @@ const PLAN_OPTIMALITY_CONFIRM_RE = /^(?:is\s+(?:that|this)\s+(?:really|actually)
 // SAME reason the planner already printed, unprompted, right after "plan
 // found — N moves (shortest)". Re-displays the stored becauseText (below)
 // rather than an honest miss; a genuinely different justification question
-// ("why did you send X to Y instead of Z", "what if X started elsewhere")
-// asks for something this store doesn't compute at all (an alternative-path
-// or counterfactual explanation) and stays a miss.
+// ("why did you move X instead of Y", "what if X started elsewhere") is
+// answered by the counterfactual recognizers below instead, each re-solving
+// the BFS rather than re-displaying this text.
 const PLAN_WHY_SHORTEST_RE = /^why\s+(?:is|was)\s+(?:that|this|it)\s+the\s+shortest\s+(?:solution|plan|path|way)[?.!\s]*$/i;
 const PLAN_WHY_MOVE_RE = /^why\s+(?:that|this|the\s+next|the)\s+move[?.!\s]*$/i;
+// "what if disk-1 started on peg-c instead?" / "what if disk-3 rested on peg-b
+// at the start?" — a counterfactual PREMISE about where a piece began, answered
+// by re-running the same BFS from a modified start state. Active only while a
+// plan stands; the piece and the place must both be taught individuals, or the
+// branch declines and the honest miss stands.
+const PLAN_WHAT_IF_START_RE = new RegExp(
+  "^(?:and\\s+|so\\s+|but\\s+)?what\\s+if\\s+([\\w-]+)\\s+"
+  + "(?:had\\s+)?(?:started|start|starts|begun|began|begins|was|were|is|had\\s+been"
+  + "|rested|rests|sat|sits|stood|stands|lay|lies|lain)"
+  + `(?:\\s+(?:out|off))?\\s+(?:${PREP_SRC})\\s+([\\w-]+)`
+  + "(?:\\s+(?:instead|initially|to\\s+start\\s+with|at\\s+the\\s+start"
+  + "|from\\s+the\\s+start|at\\s+the\\s+beginning))?[?.!\\s]*$", "i",
+);
+// "why did you move disk-1 first instead of disk-2?" / "why move disk-1 onto
+// peg-c instead of peg-b?" — a contrastive question. Answered by forcing the
+// named alternative as the first move and comparing the outcome against the
+// plan that was found.
+const PLAN_WHY_ALTERNATIVE_RE = new RegExp(
+  "^(?:and\\s+|so\\s+|but\\s+)?why\\s+(?:did\\s+you\\s+|do\\s+you\\s+|would\\s+you\\s+)?"
+  + "(?:choose\\s+to\\s+|decide\\s+to\\s+)?([a-z]+)\\s+([\\w-]+)"
+  + `(?:\\s+(?:${PREP_SRC})\\s+([\\w-]+))?`
+  + "(?:\\s+(?:first|initially|at\\s+the\\s+start|to\\s+start(?:\\s+with)?|to\\s+begin(?:\\s+with)?))?"
+  + "\\s+(?:instead\\s+of|rather\\s+than|and\\s+not|not)\\s+([\\w-]+)[?.!\\s]*$", "i",
+);
+// "why not move disk-2 first?" / "why didn't you move disk-2 onto peg-b?" —
+// the same contrastive question with the alternative named alone. The plan's
+// own first move supplies the A side.
+const PLAN_WHY_NOT_ALTERNATIVE_RE = new RegExp(
+  "^(?:and\\s+|so\\s+|but\\s+)?why\\s+(?:not|didn'?t\\s+you|did\\s+you\\s+not|couldn'?t\\s+you)\\s+"
+  + "([a-z]+)\\s+([\\w-]+)"
+  + `(?:\\s+(?:${PREP_SRC})\\s+([\\w-]+))?`
+  + "(?:\\s+(?:first|initially|at\\s+the\\s+start|to\\s+start(?:\\s+with)?))?[?.!\\s]*$", "i",
+);
 // Board-state read-backs, answered off the CURRENT board (the latest @stepK
 // snapshot, or the taught board before any step) so a read never contradicts
 // the plan's own board@stepK line. Clearness is derived, never stored: a piece
@@ -13347,6 +13380,128 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "", gameConf
   };
 }
 
+/** Rebuild the plan's start board with one piece moved. Replaces every row
+ *  whose SUBJECT is the piece and whose predicate is a locative (the piece
+ *  can only be in one place), keeps every other row byte-identical, and
+ *  returns the rows in their original order with the replacement in the
+ *  original row's slot — the state key is order-sensitive, so a rebuild
+ *  that reorders rows would read as a different state to the search.
+ *  Returns null when the piece has no locative row on the taught board
+ *  (nothing to counterfactualize). */
+function boardWithPieceMoved(startRows, piece, place) {
+  const idx = startRows.findIndex((r) => r.subject === piece && locativePreposition(r.predicate) !== null);
+  if (idx < 0) return null;
+  const rows = startRows.slice();
+  rows[idx] = { ...rows[idx], object: place };
+  return rows;
+}
+
+/** Which slot does the named alternative belong in? Answered from the
+ *  taught class membership, so a target-class alternative forces the
+ *  target and a subject-class alternative forces the subject. Returns
+ *  "subject", "target", or null when the alternative shares no taught
+ *  class with either side of the chosen move — the branch declines and
+ *  the honest miss stands. */
+function forcedSlotFor(alternative, chosenSubject, chosenTarget, domain) {
+  const classesOf = (t) => Object.keys(domain.classMembers || {})
+    .filter((cls) => (domain.classMembers[cls] || []).includes(t));
+  const alt = new Set(classesOf(alternative));
+  if (!alt.size) return null;
+  if (chosenTarget && classesOf(chosenTarget).some((c) => alt.has(c))) return "target";
+  if (classesOf(chosenSubject).some((c) => alt.has(c))) return "subject";
+  return null;
+}
+
+/** Normalize a forced-alternative match (the "instead of B" voicing or the
+ *  "why not B" voicing) into which slot B replaces. The chosen A side
+ *  always comes from the plan's own first move, never from the sentence,
+ *  so the comparison is against the SAME move a cold "what is the next
+ *  move" would report. */
+function resolveForcedAlternative(alternativeRaw, chosen, domain, normFactTerm) {
+  const forced = normFactTerm(alternativeRaw);
+  const slot = forcedSlotFor(forced, chosen.subject, chosen.target, domain);
+  return { slot, forced };
+}
+
+/** predicatePhrase's head verb, based rather than third-person: "rests on"
+ *  -> "rest on". The precondition clauses below read as the taught rule's
+ *  own wording ("nothing may rest on…"), never a report ("rests on…"). */
+function basePhraseOf(predicate) {
+  const phrase = predicatePhrase(predicate);
+  const [head, ...tail] = phrase.split(" ");
+  return [baseVerbSurface(head), ...tail].join(" ");
+}
+
+/** The bare comparative words a "-than" predicate folds ("mgx:smaller-than"
+ *  -> "smaller than"), without predicatePhrase's own leading "is". */
+function comparativeWords(predicate) {
+  const m = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(String(predicate || ""));
+  return m ? m[1].replace(/-/g, " ") : predicatePhrase(predicate);
+}
+
+/** Why can the forced piece not take the given slot in a first move? Walks
+ *  every candidate grounding of every taught action with the forced piece
+ *  in that slot, records the first precondition each grounding fails, and
+ *  names the one that blocked the most of them. Deterministic: actions,
+ *  signatures and members are walked in compileDomain's own fixed sort
+ *  order, so a tie always breaks the same way. Returns { clause, witness }
+ *  or null when the forced piece has no candidate grounding at all to
+ *  explain (nothing identifiable blocked it). */
+async function firstBlockingPrecond(forced, slot, state, domain) {
+  const { precondHolds } = await import("../domain/domain.mjs");
+  const scopeMembers = (cls) => domain.taughtClassMembers?.[cls] || [];
+  const precondAppliesLocal = (precond, target) =>
+    precond.scope === "any" || (domain.classMembers[precond.scope] || []).includes(target);
+  const tally = new Map();
+  const order = [];
+  for (const action of domain.actions) {
+    for (const sig of action.signatures) {
+      if (slot === "subject" && !scopeMembers(sig.subjectClass).includes(forced)) continue;
+      if (slot === "target" && !scopeMembers(sig.targetClass).includes(forced)) continue;
+      const subjects = slot === "subject" ? [forced] : scopeMembers(sig.subjectClass);
+      const targets = slot === "target" ? [forced] : scopeMembers(sig.targetClass);
+      for (const subject of subjects) {
+        for (const target of targets) {
+          if (subject === target) continue;
+          for (const precond of action.preconds) {
+            if (!precondAppliesLocal(precond, target)) continue;
+            if (precondHolds(precond, subject, target, state, domain)) continue;
+            const key = JSON.stringify(precond);
+            if (!tally.has(key)) { tally.set(key, { count: 0, precond, action }); order.push(key); }
+            tally.get(key).count += 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (!tally.size) return null;
+  let best = null;
+  for (const key of order) {
+    const entry = tally.get(key);
+    if (!best || entry.count > best.count) best = entry;
+  }
+  const { precond: p, action } = best;
+  const role = p.role === "target" ? "the target" : "the piece you move";
+  if (p.shape === "no-incoming") {
+    // The winning precond's own role almost always matches the forced
+    // slot: it is the one that can fail for every candidate grounding
+    // regardless of the OTHER slot's value, which is exactly what makes it
+    // the highest tally. So the state row that names the forced piece as
+    // the blocked object is the row worth citing.
+    const witnessRow = state.find((r) => r.predicate === p.predicate && r.object === forced);
+    return { clause: `your "${action.name}" rule says nothing may ${basePhraseOf(p.predicate)} ${role}`, witness: witnessRow ? factPhrase(witnessRow) : null };
+  }
+  if (p.shape === "comparator") {
+    return { clause: `your "${action.name}" rule says the piece you move must be ${comparativeWords(p.predicate)} the target`, witness: null };
+  }
+  if (p.shape === "fact-value") {
+    const witnessRow = state.find((r) => r.subject === forced && r.predicate === p.predicate);
+    return { clause: `your "${action.name}" rule says the ${p.role} must${p.negate ? " not" : ""} ${basePhraseOf(p.predicate)}${p.value ? ` ${p.value}` : ""}`, witness: witnessRow ? factPhrase(witnessRow) : null };
+  }
+  return null;
+}
+
 /** Plan follow-up questions ("what is the next move", "how many moves", "why
  *  that move") answered off the ACTIVE plan, and board-state questions ("is X
  *  clear", "what rests on X", "where is X") answered off the CURRENT board (the
@@ -13357,7 +13512,7 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "", gameConf
  *  "next" moves a piece, "what rests on X" reflects the snapshot, not the stale
  *  pre-plan facts. Clearness is derived, never stored — a piece is clear iff
  *  nothing rests on it on the current board. */
-async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager = false }) {
+async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager = false, gameConfig = DEFAULT_GAME_CONFIG }) {
   const q = String(query).trim();
   const ps = planHolder?.state;
   const activePlan = ps && Array.isArray(ps.actions) && ps.actions.length;
@@ -13441,6 +13596,139 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager =
     const idx = ps.cursor < ps.actions.length ? ps.cursor : ps.actions.length - 1;
     const line = ps.stepGoals?.[idx] ?? `${ps.actions[idx].label} (step ${idx + 1} of ${ps.actions.length})`;
     return { text: `${line} — it is this step's move on the shortest path.`, deduced: "explain the next planned move", note: "PLAN FOLLOW-UP — why-move from the active plan's step goals" };
+  }
+
+  // COUNTERFACTUAL PREMISE — "what if <piece> started <place> instead?" rebuilds
+  // the plan's own start board with one piece moved, then re-runs the same BFS
+  // from it. Read-only: planHolder.state is never written here, so the held
+  // plan and its cursor survive the question unchanged.
+  const whatIf = q.match(PLAN_WHAT_IF_START_RE);
+  if (whatIf) {
+    if (!activePlan || !memoryDir || !Array.isArray(ps.states) || !ps.states.length) return null;
+    let ctx;
+    try { ctx = await loadPlanContext(memoryDir); } catch { return null; }
+    const { domain } = ctx;
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
+    const individuals = new Set(Object.values(domain.classMembers || {}).flat());
+    const piece = normFactTerm(whatIf[1]);
+    const place = normFactTerm(whatIf[2]);
+    if (!individuals.has(piece) || !individuals.has(place)) return null;
+    const startRows = boardWithPieceMoved(ps.states[0], piece, place);
+    if (!startRows) return null;
+    const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
+    const { findActionPath } = await import("../domain/planning.mjs");
+    const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
+    let isGoal;
+    try { isGoal = compileGoal(ps.goals, domain, { scope: "taught" }); } catch { return null; }
+    let found = null;
+    let budgetHit = null;
+    try {
+      found = findActionPath(startRows, isGoal, (s) => movesFromRules(s, domain, { scope: "taught" }), { maxDepth, stateKey: stateKeyFor });
+    } catch (err) {
+      if (!(err instanceof PlanBudgetError)) throw err;
+      budgetHit = err.message;
+    }
+    const changedRow = startRows.find((r) => r.subject === piece && r.object === place);
+    let text;
+    if (budgetHit) {
+      text = `I can't answer that from here — the search space from that start is too large (${budgetHit}). The real board still stands as taught.`;
+    } else if (!found) {
+      const legalFromHere = movesFromRules(startRows, domain, { scope: "taught" });
+      if (!legalFromHere.length) {
+        const blocked = await firstBlockingPrecond(piece, "subject", startRows, domain);
+        const clause = blocked
+          ? ` ${blocked.clause.charAt(0).toUpperCase()}${blocked.clause.slice(1)}${blocked.witness ? `, and ${blocked.witness}` : ""}.`
+          : "";
+        text = `no plan from that start — nothing can move at all.${clause} The real board still stands as taught.`;
+      } else {
+        text = `no plan from that start within ${maxDepth} moves to: ${ps.goalText}. The real board still stands as taught.`;
+      }
+    } else if (found.actions.length === 0) {
+      text = "from that start the goal already holds, so there is nothing to do. The real board still stands as taught.";
+    } else {
+      const m = found.actions.length;
+      const moveLines = found.actions.map((a, i) => `  ${i + 1}. ${actionLabel(a.name, a.subject, a.target)}`).join("\n");
+      text = `from that start it takes ${m} move${m === 1 ? "" : "s"} (shortest):\n${moveLines}\n\n`
+        + `hypothetical only — the real board still stands as taught, and the plan I found is unchanged.`;
+    }
+    return {
+      text,
+      deduced: `re-solve the plan from a hypothetical start (${piece} ${changedRow ? predicatePhrase(changedRow.predicate) : "at"} ${place})`,
+      note: "PLAN FOLLOW-UP — counterfactual start re-solved through the same BFS over the taught rules; the plan slot is untouched",
+    };
+  }
+
+  // FORCED-ALTERNATIVE COMPARE — "why did you <act> A instead of B?" / "why not
+  // <act> B first?" forces B into the same slot A held on the plan's own first
+  // move, re-searches from B's successor, and compares the total cost against
+  // the plan that was found. Also read-only: the held plan is never touched.
+  const altPos = q.match(PLAN_WHY_ALTERNATIVE_RE);
+  const altNeg = altPos ? null : q.match(PLAN_WHY_NOT_ALTERNATIVE_RE);
+  if (altPos || altNeg) {
+    if (!activePlan || !memoryDir || !Array.isArray(ps.states) || !ps.states.length) return null;
+    let ctx;
+    try { ctx = await loadPlanContext(memoryDir); } catch { return null; }
+    const { domain } = ctx;
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
+    const chosen = ps.actions[0];
+    const alternativeRaw = altPos ? altPos[4] : altNeg[2];
+    const { slot, forced } = resolveForcedAlternative(alternativeRaw, chosen, domain, normFactTerm);
+    if (!slot) return null;
+
+    const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
+    const { findActionPath } = await import("../domain/planning.mjs");
+    const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
+    let isGoal;
+    try { isGoal = compileGoal(ps.goals, domain, { scope: "taught" }); } catch { return null; }
+
+    const start = ps.states[0];
+    const n = ps.actions.length;
+    const chosenLabel = chosen.label;
+    const forcedLabel = actionLabel(chosen.name,
+      slot === "subject" ? forced : chosen.subject,
+      slot === "target" ? forced : chosen.target);
+    const legal = movesFromRules(start, domain, { scope: "taught" });
+    const forcedMoves = legal.filter((mv) => (slot === "subject"
+      ? mv.action.subject === forced
+      : mv.action.target === forced && mv.action.subject === chosen.subject));
+
+    let text;
+    if (!forcedMoves.length) {
+      const blocked = await firstBlockingPrecond(forced, slot, start, domain);
+      text = blocked
+        ? `${forced} can't go first — ${blocked.witness ? `${blocked.witness}, and ` : ""}${blocked.clause}.`
+        : `${forced} has no legal first move from the board this plan started on. ${chosenLabel} is the move I found.`;
+    } else {
+      let best = null;
+      for (const move of forcedMoves) {
+        let rest;
+        try {
+          rest = findActionPath(move.nextState, isGoal, (s) => movesFromRules(s, domain, { scope: "taught" }), { maxDepth, stateKey: stateKeyFor });
+        } catch (err) {
+          if (!(err instanceof PlanBudgetError)) throw err;
+          continue;
+        }
+        if (!rest) continue;
+        const cost = 1 + rest.actions.length;
+        if (best === null || cost < best) best = cost;
+      }
+      if (best === null) {
+        text = `forcing ${forcedLabel} first has no legal continuation within ${maxDepth} moves. ${chosenLabel} is the move on the plan I found.`;
+      } else if (best > n) {
+        text = `forcing ${forcedLabel} first costs ${best} moves against ${n}. The plan I found is ${best - n} move${best - n === 1 ? "" : "s"} shorter.`;
+      } else if (best === n) {
+        text = `forcing ${forcedLabel} first also takes ${n} moves. Both are shortest. `
+          + `The search walks every legal move breadth-first and returns the first shortest path it reaches, `
+          + `which is ${chosenLabel}.`;
+      } else {
+        text = `forcing ${forcedLabel} first costs ${best} moves — no more than the plan I found (${n}).`;
+      }
+    }
+    return {
+      text,
+      deduced: `compare the planned first move against a forced alternative (${forcedLabel})`,
+      note: "PLAN FOLLOW-UP — contrastive compare: the alternative was forced as the first move and re-searched through the same BFS; the plan slot is untouched",
+    };
   }
 
   const clear = q.match(IS_CLEAR_RE);
@@ -16991,6 +17279,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     const follow = await planFollowUpAnswer(workingLine, {
       memoryDir, planHolder,
       pendingPager: !!(Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length),
+      gameConfig: resolvedGameConfig,
     });
     if (follow) {
       note(trace, `goal: ${follow.deduced}`);
