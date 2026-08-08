@@ -51,6 +51,11 @@ export const FACT_PREDICATE_PHRASES = Object.freeze({
   "mgx:fixed-in": "is fixed in",
   "mgx:stands-locked-in": "stands locked in",
   "mgx:works-in": "works in",
+  "mgx:pursues": "pursues",
+  "mgx:evades": "evades",
+  "mgx:consumes": "eats",
+  "mgx:vision-radius": "sees within",
+  "mgx:guards": "guards",
 });
 
 /** A table hit, or the predicate's local name (the segment after its first

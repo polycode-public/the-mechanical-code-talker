@@ -10,6 +10,7 @@ import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square
 import { MUDIII_ROLES } from "../../src/services/predator-prey.mjs";
 import { appendFacts, createInMemoryStore, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { loadWorld, worldsPackDir } from "../../src/adapters/corpus/worlds-pack.mjs";
+import { factSentence } from "../../src/domain/fact-phrase.mjs";
 
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
 
@@ -33,6 +34,14 @@ test("every trait predicate stores and reads back through appendFacts/readFactRo
     assert.ok(read.some((r) => r.subject === subject && r.predicate === predicate && r.object === object),
       `${subject} ${predicate} ${object} did not read back`);
   }
+});
+
+test("the five new trait predicates each render a plain-English fact sentence", () => {
+  assert.equal(factSentence(fact("wolf", "mgx:pursues", "goat")), "wolf pursues goat");
+  assert.equal(factSentence(fact("goat", "mgx:evades", "wolf")), "goat evades wolf");
+  assert.equal(factSentence(fact("wolf", "mgx:consumes", "goat")), "wolf eats goat");
+  assert.equal(factSentence(fact("wolf", "mgx:vision-radius", "3")), "wolf sees within 3");
+  assert.equal(factSentence(fact("farmer", "mgx:guards", "goat")), "farmer guards goat");
 });
 
 test("a repeated mgx:pursues row for a second target reads back as two rows", async () => {

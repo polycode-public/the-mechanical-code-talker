@@ -1434,17 +1434,34 @@ predicate `mgx:partOf`, so it reaches the same predicate this section's flavour 
 adding a lexicon entry — pattern 17 itself accepts any two declared verbs, 3sg or gerund, on either
 side. Tests in `test/adapters/tableau-inverse.test.mjs`.
 
-Corpus rows, one per increment, still open — `/prove` (section 8.7) has landed, so each of these
-just needs its own row exercising `/prove <question>` against the chat surface, the same shape
-section 8.8's own `inference.dl.*` rows already establish, not the tableau module alone:
+Corpus rows, one per increment — `/prove` (section 8.7) has landed, so each of these just needs its
+own row exercising `/prove <question>` against the chat surface, the same shape section 8.8's own
+`inference.dl.*` rows already establish, not the tableau module alone:
 
-| key | id |
-|---|---|
-| `inference.dl.transitive-role` | `inference-dl-transitive-role-propagates-a-universal` |
-| `inference.dl.role-hierarchy` | `inference-dl-subproperty-lets-a-restriction-reach-a-narrower-role` |
-| `inference.dl.enumeration` | `inference-dl-closed-enumeration-answers-a-provable-no` |
-| `inference.dl.cardinality-clash` | `inference-dl-min-max-clash-names-both-premises` |
-| `inference.dl.inverse-role` | `inference-dl-inverse-role-answers-from-the-recorded-inverse-edge` |
+| key | id | status |
+|---|---|---|
+| `inference.dl.transitive-role` | `inference-dl-transitive-role-propagates-a-universal` | open |
+| `inference.dl.role-hierarchy` | `inference-dl-subproperty-lets-a-restriction-reach-a-narrower-role` | open |
+| `inference.dl.enumeration` | `inference-dl-closed-enumeration-answers-a-provable-no` | **delivered** |
+| `inference.dl.cardinality-clash` | `inference-dl-min-max-clash-names-both-premises` | **delivered** |
+| `inference.dl.inverse-role` | `inference-dl-inverse-role-answers-from-the-recorded-inverse-edge` | open |
+
+**Delivered.** The enumeration row teaches "the metals are exactly copper, iron and tin" and asks
+`/prove is bronze a metal`, a real subsumption question the tableau disproves over the taught
+closed enumeration. The cardinality-clash row reuses E5's own premises and asks `/prove is beryl a
+wheel`: since beryl's own class is unsatisfiable (the min/max clash), the tableau proves anything
+asked of it by refutation, citing both restrictions — the "names both premises" the id promises.
+
+The other three stay open, checked directly against the shipped grammar rather than assumed: each
+needs vocabulary no ACE pattern or teach-lane frame writes today. Transitive-role's own ∀-rule
+(4a) only propagates a taught `owl:allValuesFrom` restriction, and no pattern mints one — verified
+directly: a taught existential chain composed through a declared-transitive role answers through
+`/classify`/the EL ask lane, never through `/prove`, because the tableau's own transitivity handling
+never composes two existential edges the way EL's CR7 does. Role-hierarchy needs
+`rdfs:subPropertyOf`, and `src/services/chat.mjs`'s own scm-svf1 comment already names it
+ACE-unreachable. Inverse-role needs an asserted ABox role fact between two named individuals, the
+same gap 4e's own delivered note names for its motivating example. Each waits on whichever ACE
+pattern or teach-lane frame lands the missing shape first.
 
 Acceptance for each increment: `npm run test:fast`, that increment's test file, all of
 `test/adapters/tableau-*.test.mjs`, and `node --test test/corpus/inference.test.mjs`.
@@ -1468,6 +1485,19 @@ on their own corpus rows above.
 ---
 
 ## 10. Phase 5 — surfacing consistency
+
+**Delivered.** `findTableauViolations` (section 8.4's own API) already shipped in the tableau-core
+round; this round wires it, and a new read-only EL companion, into chat and `/memory`.
+`src/domain/el-classify.mjs` gained `elUnsatisfiableClasses(rows, opts)`, the same two-pass
+saturation `classifyEl` runs internally, factored out so a consistency check can read
+`unsatisfiable` without `classifyEl`'s own store write. `src/services/chat.mjs`'s
+`findWiderConsistencyClash(rows, variants, reasoning)` runs beside the existing cax-dw chase in the
+"what do you know about" lane: it seeds `extractTableauModule` with the subject's own asserted
+types (an individual's `rdf:type` edge alone doesn't reach its class's restrictions otherwise),
+tries `findTableauViolations` first, then `elUnsatisfiableClasses`, and cites every premise through
+`renderFactLine`. `src/adapters/memory/inspect.mjs`'s `renderMemory` runs the same pair over the
+whole store (tighter budgets than a single `/prove` question, since it audits every individual) and
+lists findings in a "consistency findings" section beside the existing contradictions.
 
 Today `findConsistencyViolations` in `src/domain/syllogise.mjs` reads only type edges, subclass edges
 and disjointness edges. It stays that way: it runs on chat's hot path and it is cheap.

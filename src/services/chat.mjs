@@ -8960,6 +8960,53 @@ async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fill
   return null;
 }
 
+/** Phase 5 (PLAN_SYLLOGIST_EL_DL.md): the wider consistency check beside
+ *  findConsistencyViolations, not folded into it — a DL tableau clash
+ *  (tableau.mjs's findTableauViolations) and an EL-saturation-proved
+ *  unsatisfiable class (el-classify.mjs's read-only elUnsatisfiableClasses)
+ *  both sit outside what that cheaper cax-dw chase reads: neither a
+ *  cardinality restriction nor a class-level EL⊥ derivation ever touches an
+ *  `rdf:type` edge. Both run READ-ONLY, scoped to `variants`'s own
+ *  signature-connected module (tableau.mjs's extractTableauModule) so an
+ *  unrelated part of the store never spends this turn's budget, and both
+ *  stay silent on a subject their own check couldn't finish rather than
+ *  clearing it. Returns the refusal text citing both premises, or null. */
+async function findWiderConsistencyClash(rows, variants, reasoning) {
+  const { extractTableauModule, buildTableauKb, findTableauViolations } = await import("../domain/tableau.mjs");
+  const { elUnsatisfiableClasses } = await import("../domain/el-classify.mjs");
+  // An individual's own stored TYPES seed the module too, not just its own
+  // name — extractTableauModule's structural walk starts from class/role
+  // vocabulary (rdfs:subClassOf, owl:onProperty, …), so an individual with
+  // only an `rdf:type` edge never pulls in its class's own restrictions
+  // unless that class is seeded directly.
+  const typeSeeds = rows.filter((r) => r.predicate === "rdf:type" && variants.has(r.subject)).map((r) => r.object);
+  const seeds = [...new Set([...variants, ...typeSeeds])];
+  const moduleRows = extractTableauModule(rows, seeds);
+  const byId = new Map(moduleRows.map((r) => [r.id, r]));
+
+  const kb = buildTableauKb(moduleRows);
+  const tableauSubjects = kb.individuals.filter((ind) => variants.has(ind));
+  if (tableauSubjects.length) {
+    const proveOpts = { maxSteps: reasoning.proveSteps, maxBranches: reasoning.proveBranches, maxNodes: reasoning.proveNodes };
+    const violation = findTableauViolations(kb, tableauSubjects, proveOpts)[0];
+    if (violation) {
+      const cited = violation.premises.map((id) => byId.get(id)).filter(Boolean).map(renderFactLine).join("; ");
+      return `I can't answer that — what I've been told about ${violation.subject} is inconsistent: `
+        + `${cited || "the facts I hold about it clash"}. I'd need one of those retracted before I can answer honestly.`;
+    }
+  }
+
+  const elCheck = elUnsatisfiableClasses(moduleRows, { budget: reasoning.classifyBudget, rounds: reasoning.classifyRounds, focus: new Set(seeds) });
+  const unsatHit = elCheck.unsatisfiable.find((c) => variants.has(c) || typeSeeds.includes(c));
+  if (unsatHit) {
+    const cited = elCheck.premisesOf(unsatHit).map((id) => byId.get(id)).filter(Boolean).map(renderFactLine).join("; ");
+    return `I can't answer that — "${unsatHit}" can never have any members: `
+      + `${cited || "its own subclass chain is unsatisfiable"}. I'd need one of those retracted before I can answer honestly.`;
+  }
+  return null;
+}
+export { findWiderConsistencyClash };
+
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
   let normFactTerm; let normFactPredicate;
   try { ({ normFactTerm, normFactPredicate } = await import("../adapters/memory/core.mjs")); } catch { return null; }
@@ -9967,6 +10014,17 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         };
       }
     }
+    // WIDER CONSISTENCY CHECK, beside the cax-dw chase above rather than
+    // folded into it (PLAN_SYLLOGIST_EL_DL.md, phase 5): a DL tableau clash
+    // (a cardinality clash — E5's own flagship — or any other clash the
+    // ALC-through-SHOIQ tableau derives) and an EL-saturation-proved
+    // unsatisfiable class both sit outside findConsistencyViolations, which
+    // only reads type, subclass and disjointness edges. Same READ-ONLY
+    // discipline, scoped to this subject's own signature-connected module so
+    // an unrelated part of the store never spends this turn's budget.
+    const reasoning = await resolveReasoningConfigForRepo(memoryDir);
+    const widerClash = await findWiderConsistencyClash(rows, variants, reasoning);
+    if (widerClash) return { text: widerClash, replace: true };
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
     const literalHit = hits.find((f) => variants.has(f.subject) || variants.has(f.object));
     const term = literalHit

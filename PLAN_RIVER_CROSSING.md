@@ -417,10 +417,10 @@ These hold for every phase and module below.
 comment each); `test/domain/agent-traits.test.mjs` proves every trait predicate — the five new
 ones and the five reused ones — stores and reads back through `appendFacts`/`readFactRows`, a
 repeated multi-valued row reads back as two rows, and a numeric object survives as the string it
-was written as. The `FACT_PREDICATE_PHRASES` entries in 4.3 are deferred: `chat.mjs` holds a
-private twin of that table pinned byte-identical to `src/domain/fact-phrase.mjs` by
-`test/domain/fact-phrase.test.mjs`, so the five phrases need a matching edit to both tables in the
-same change, not `fact-phrase.mjs` alone.
+was written as. The `FACT_PREDICATE_PHRASES` entries in 4.3 are in too, folded in from
+`PLAN_SYLLOGIST_EL_DL.md`'s chat.mjs round once the interim two-table pin was gone: one edit to
+`src/domain/fact-phrase.mjs`, proved by `test/domain/agent-traits.test.mjs`'s own sentence-
+rendering test.
 
 Goal: the graph can state every imperative that drives an agent. No behaviour changes; everything
 stores, reads back and round-trips.
