@@ -7483,6 +7483,7 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["/goals", "the goals a trace can be recognized against: the maintenance invariants, the tool goals, this world's objective, and your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/classify <term>", "run the EL classifier and remember what follows from a term (reaches restriction-shaped conclusions /syllogise's chains can't)"],
+    ["/prove <question>", "check a yes/no entailment by DL tableau refutation (\"is rex a dog\") — reaches disjunction and complement-class shapes /classify's EL rules can't, citing what it rests on"],
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["remember <X> is a <Y>", "teach a fact in plain English (\"every X is a Y\" and a bare \"X is a Y\" work too)"],
@@ -12589,6 +12590,24 @@ function elClassifyFocus(rows, seedTerms, onPropertyPredicate, someValuesFromPre
   return focus;
 }
 
+/** /prove's own single-term resolver: the exact stored spelling a surface
+ *  word (`isa[1]`/`isa[2]`) names, so `buildTableauKb`'s individual/class
+ *  test and `proveEntailment`/`proveSubsumption`'s own concept-name
+ *  arguments see the SAME string the fact rows are keyed under, not just a
+ *  normalized guess. Tries every plural/singular spelling `factTermVariants`
+ *  produces against every row's subject and object, in row order (row order
+ *  never varies the answer — normFactTerm is a pure fold, so every variant
+ *  present resolves to the one term the store actually uses); falls back to
+ *  the bare normalized surface word when the term is stored nowhere yet (an
+ *  honest "nothing constrains this" rather than a thrown error). Pure. */
+function resolveProveTerm(variants, rows, fallback) {
+  for (const r of rows) {
+    if (variants.has(r.subject)) return r.subject;
+    if (variants.has(r.object)) return r.object;
+  }
+  return fallback;
+}
+
 /** After a learn-on-miss load stored new facts about `term`, run a bounded,
  *  focus-scoped forward-chaining pass so the new facts connect to what's
  *  already remembered — the auto sibling of the /syllogise command, plus its
@@ -16285,6 +16304,90 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       }
       lines.push("These are derived, not taught — /memory shows each one's provenance and premises.");
       return mk(lines.join("\n"));
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
+  }
+
+  // /prove <question> — check a yes/no entailment by DL tableau refutation
+  // (src/domain/tableau.mjs), for a shape /classify's EL completion rules
+  // can't reach: disjunction elimination, complement classes, and every
+  // other class expression the ALC-through-SHOIQ tableau covers.
+  //
+  // Same posture as /syllogise and /classify: an explicit request, a
+  // required question, never the hot path an ordinary ask runs down. Unlike
+  // those two, this one writes NOTHING — a case-split conclusion's own
+  // provenance is an open design problem (PLAN_SYLLOGIST_EL_DL.md section
+  // 14), so the tableau stays query-time only, and every rendered verdict
+  // cites the taught facts it rests on rather than a stored one.
+  //
+  // The question parses through the same "is X a Y" shape the plain ask
+  // lane's isa family already reads (ISA_ASK_RE) — /prove is the explicit
+  // command for a shape that shape's own live chases can't close, not a
+  // second grammar. Refuses by name on anything else.
+  if (name === "prove") {
+    note(trace, "goal: check a yes/no entailment by DL tableau refutation, citing what it rests on");
+    if (!memoryDir) return mk("no memory store here — /prove works inside a repo session.", { miss: true });
+    if (!argText) {
+      return mk('/prove needs a question, e.g. `/prove is rex a dog` — a yes/no shape it can check by tableau refutation.', { miss: true });
+    }
+    const isaMatch = argText.match(ISA_ASK_RE);
+    if (!isaMatch) {
+      return mk('/prove only reads a yes/no shape today, e.g. "is rex a dog" or "is a stone a mammal".', { miss: true });
+    }
+    const subjectWord = isaMatch[1].trim();
+    const classWord = isaMatch[2].trim();
+    try {
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const { extractTableauModule, buildTableauKb, proveEntailment, proveSubsumption } = await import("../domain/tableau.mjs");
+      const rows = await factRows(memoryDir, cache);
+      const subjectTerm = resolveProveTerm(factTermVariants(normFactTerm, subjectWord), rows, normFactTerm(subjectWord));
+      const classTerm = resolveProveTerm(factTermVariants(normFactTerm, classWord), rows, normFactTerm(classWord));
+      const reasoning = await resolveReasoningConfigForRepo(memoryDir);
+      const proveOpts = { maxSteps: reasoning.proveSteps, maxBranches: reasoning.proveBranches, maxNodes: reasoning.proveNodes };
+      const moduleRows = extractTableauModule(rows, [subjectTerm, classTerm]);
+      const kb = buildTableauKb(moduleRows);
+      const result = kb.namedIndividuals.has(subjectTerm)
+        ? proveEntailment(kb, subjectTerm, { t: "atom", name: classTerm }, proveOpts)
+        : proveSubsumption(kb, subjectTerm, classTerm, proveOpts);
+      note(trace, `result: ${result.status} (steps ${result.steps}, branches ${result.branches})`);
+      const byId = new Map(moduleRows.map((r) => [r.id, r]));
+
+      if (result.status === "proved") {
+        const premiseRows = result.premises.map((id) => byId.get(id)).filter(Boolean);
+        const cited = premiseRows.map(renderFactLine).join("; ");
+        // A case-split conclusion (the ⊔-rule fired on a genuine owl:unionOf
+        // or owl:oneOf premise, not just the ⊑-rule's own routine
+        // TBox-internalization disjunction, which every proof passes
+        // through) reads as reasoning by cases, not a single deduction.
+        const caseSplit = premiseRows.some((r) => r.predicate === "owl:unionOf" || r.predicate === "owl:oneOf");
+        const conclusion = caseSplit ? `in every case, ${subjectWord} is a ${classWord}.` : `so ${subjectWord} is a ${classWord}.`;
+        return mk(`yes — ${cited}; ${conclusion}`);
+      }
+      if (result.status === "disproved") {
+        // A genuine "no", not a miss: the tableau built a consistent model
+        // where the entailment fails, and names the stored facts that model
+        // had to satisfy along the way (every label on the queried
+        // individual's own node, unioned across the branch it found).
+        const node = (result.model?.nodes || []).find((n) => n.id === subjectTerm);
+        const constrainingIds = [...new Set((node?.labels || []).flatMap((l) => l.from || []))].sort();
+        const constrainingRows = constrainingIds.map((id) => byId.get(id)).filter(Boolean);
+        const suffix = constrainingRows.length ? ` What I remember: ${constrainingRows.map(renderFactLine).join("; ")}.` : "";
+        return mk(`no — I can build a consistent picture where ${subjectWord} is not a ${classWord}.${suffix}`);
+      }
+      // exhausted: the honest budget wall, never a downgraded guess. Names
+      // the specific [reasoning] knob (tmct.toml) that ran out, so the
+      // reply says exactly what to raise for a wider search.
+      const knobByReason = { steps: "prove_steps", branches: "prove_branches", nodes: "prove_nodes" };
+      const budgetByReason = { steps: reasoning.proveSteps, branches: reasoning.proveBranches, nodes: reasoning.proveNodes };
+      const reason = knobByReason[result.reason] ? result.reason : "steps";
+      const res = mk(
+        `I can't prove or disprove that within my budget (${budgetByReason[reason]} ${reason}). Nothing was guessed. `
+        + `Raise \`[reasoning] ${knobByReason[reason]}\` in tmct.toml for a wider search.`,
+        { miss: true },
+      );
+      res.record.budgetExhausted = true;
+      return res;
     } catch (e) {
       return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
     }

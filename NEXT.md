@@ -35,10 +35,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **PLAN_SYLLOGIST_EL_DL.md — remaining phases** — paused at a clean seam; the plan doc
   states per-phase status. Landed: phases 0/0b, 1 (with `tmct classify` and `/classify`), 2 (EL
-  wired into the ask lanes; E1/E2 answer end to end), 3, and 4a-4e (the full SHOIQ increment
-  ladder). Next rounds: 3b `/prove` (a `chat.mjs` round; also gates regenerating the INF-7/INF-8
-  ceiling markers and verdicts, deliberately left pre-EL until the chat surface can reach the
-  tableau), phase 5 consistency surfacing, track 6 site/claims.
+  wired into the ask lanes; E1/E2 answer end to end), 3 with 3b (`/prove`; E3/E4 answer end to
+  end), and 4a-4e (the full SHOIQ increment ladder). Checked this round: `/prove` alone doesn't
+  lift the infbench INF-8 `dlDisjunction`/`dlComplement` ceiling markers — infbench's chat arm
+  drives the plain question with no `/prove` prefix, so the ceiling stays until `/prove` becomes
+  an automatic ask-lane fallback (or the harness routes those cases through it explicitly); the
+  plan's own phase-4 section records the check. Next rounds: phase 4's own five remaining
+  `inference.dl.*` corpus rows (transitive-role/role-hierarchy/enumeration/cardinality-clash/
+  inverse-role, each now just a `/prove`-driven chat row), phase 5 consistency surfacing, track 6
+  site/claims.
 - [ ] **PLAN_NEWS_FEED.md — remaining phases** — paused before phase 4. Landed: phases 0-3 and
   5 (domain, fixtures, adapters, store, service, CLI verb). Next rounds: phase 4 chat wiring (a
   `chat.mjs` round; also carries the strict-tier provenance nuance recorded in the plan's phase

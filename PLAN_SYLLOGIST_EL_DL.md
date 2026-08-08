@@ -980,9 +980,9 @@ explicit-stack search engine and its five expansion rules, subset blocking, the 
 API, KB module extraction, and reading the store into a KB), plus section 8.8's test files
 (`test/adapters/tableau-expr.test.mjs`, `tableau-core.test.mjs`, `tableau-module.test.mjs`,
 `tableau-kb.test.mjs`, `tableau-prove.test.mjs`, `tableau-alc-fixtures.test.mjs`) and
-`test/fixtures/alc-entailments.jsonl`. Open: section 8.7's `/prove` chat command, its
-`chat-prove-command.test.mjs`, and the `inference.dl.*` corpus rows — these land in the serialized
-`src/services/chat.mjs` track.
+`test/fixtures/alc-entailments.jsonl`. Section 8.7's `/prove` chat command has landed too, in the
+serialized `src/services/chat.mjs` track, with `test/adapters/chat-prove-command.test.mjs` and the
+`inference.dl.*` corpus rows.
 
 New module: **`src/domain/tableau.mjs`**. Imports `./hash.mjs` only.
 
@@ -1255,6 +1255,22 @@ Rendering, through the existing template machinery and nothing new:
 `/prove` stays an explicit command in phase 3. Only after infbench and chatbench show it safe does it
 become an automatic fallback on an ask-lane miss. That promotion is its own increment.
 
+**Delivered.** The question parse reuses `ISA_ASK_RE`, the same "is X a Y" grammar the plain isa
+ask lane already reads, rather than a second parser — `/prove is rex a dog` and `/prove is a stone
+a terrestrial` (a bare-noun complement class needs the same determiner `ISA_ASK_RE` requires
+everywhere else) both resolve. A new `resolveProveTerm` helper picks the exact stored spelling a
+surface word names (trying every `factTermVariants` spelling against the fact rows before falling
+back to the bare normalized word), so `buildTableauKb`'s individual/class test and
+`proveEntailment`/`proveSubsumption`'s own arguments see the same string the store uses.
+"Used a ⊔-rule" (the case-analysis prefix) reads off the cited premises directly: a genuine case
+split names an `owl:unionOf` or `owl:oneOf` row among them, which the routine per-axiom
+TBox-internalization disjunction every proof passes through never does. A `disproved` verdict
+carries `miss: false` — E3/E4's own corpus sibling `inference.dl.counter-model` pins this: a
+consistent counter-model is a real "no", never a miss. The exhausted render names which
+`[reasoning]` knob (`prove_steps`/`prove_branches`/`prove_nodes`) ran out and its configured value,
+and the turn record carries `budgetExhausted: true` for chatbench/infbench to key on. Nothing here
+writes to the store. Tests in `test/adapters/chat-prove-command.test.mjs`; corpus rows below.
+
 ### 8.8 Phase 3 tests
 
 | file | what it holds |
@@ -1418,9 +1434,9 @@ predicate `mgx:partOf`, so it reaches the same predicate this section's flavour 
 adding a lexicon entry — pattern 17 itself accepts any two declared verbs, 3sg or gerund, on either
 side. Tests in `test/adapters/tableau-inverse.test.mjs`.
 
-Corpus rows, one per increment — deferred with the `chat.mjs` `/prove` wiring (section 8's own
-`test/adapters/chat-prove-command.test.mjs` and `inference.dl.*` rows), since a corpus row exercises
-the chat surface a query actually reaches, not the tableau module alone:
+Corpus rows, one per increment, still open — `/prove` (section 8.7) has landed, so each of these
+just needs its own row exercising `/prove <question>` against the chat surface, the same shape
+section 8.8's own `inference.dl.*` rows already establish, not the tableau module alone:
 
 | key | id |
 |---|---|
@@ -1433,16 +1449,21 @@ the chat surface a query actually reaches, not the tableau module alone:
 Acceptance for each increment: `npm run test:fast`, that increment's test file, all of
 `test/adapters/tableau-*.test.mjs`, and `node --test test/corpus/inference.test.mjs`.
 
-After 4d, delete `DL_DISJUNCTION_CEILING`, `DL_COMPLEMENT_CEILING` and the two markers phase 0 added
-from `test-benchmarks/infbench/generate-cases.mjs`, flip the INF-8 expected verdicts,
-regenerate `cases.jsonl` and `envelope.json`, and rerun the band. **Deferred alongside the corpus rows
-above**: every INF-8 template runs `arms: ["chat"]` only, graded by driving a real `runChat()`
-session — checked directly against the committed corpus (`node test-benchmarks/infbench/generate-cases.mjs`'s
-own dlDisjunction/dlComplement/dlCardinalityClash/dlNominalEnumeration cases, run through
-`runInfbench`), today's chat surface still answers "I couldn't read that as a question I can answer"
-for all four, since none of them route through `/prove` yet — that wiring is section 8.7's, not this
-plan's phase-4 tableau work. Flipping the expected verdicts now, before that wiring lands, would
-commit a corpus that claims a capability the chat surface doesn't have.
+**Checked this round, after `/prove` landed:** `DL_DISJUNCTION_CEILING` and `DL_COMPLEMENT_CEILING`
+stay in `test-benchmarks/infbench/generate-cases.mjs`. `inference.dl.disjunction` and
+`inference.dl.complement` (section 8.8) prove E3/E4 through `/prove` directly, driven exactly like
+infbench's own `driveChat` (`test-benchmarks/infbench/run.mjs`) drives a case: teach every premise,
+then send `caseDef.query` as the next chat turn — except `driveChat` sends the plain question
+("is rex a dog" / "is a stone a terrestrial") with no `/prove` prefix, since `/prove` stays an
+explicit command rather than an automatic ask-lane fallback (section 8.7's own text). Run the same
+plain question through a real session after teaching E3's and E4's premises and it returns the same
+honest miss it returned before `/prove` existed — checked directly, not assumed. So the ceiling
+holds: flipping `dlDisjunction`/`dlComplement`'s expected verdicts now would commit a corpus that
+claims a capability the chat surface's plain-question path doesn't have. It lifts once `/prove`
+becomes that automatic fallback (section 8.7's own named next increment), or once infbench's harness
+routes these specific cases through `/prove` explicitly. `DL_CARDINALITY_CLASH_CEILING` and
+`DL_NOMINAL_ENUMERATION_CEILING` are untouched this round — out of this round's scope, still waiting
+on their own corpus rows above.
 
 ---
 
