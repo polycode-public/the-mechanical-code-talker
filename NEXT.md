@@ -33,19 +33,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **PLAN_SYLLOGIST_EL_DL.md — full arc** — in flight, coordinator + worktree sub-agents.
-  Wave 1: phase 0 grammar/ontology and the phase 1 EL classifier run concurrently in
-  harness-managed worktrees; the plan's `chat.mjs` edits (5.3 teach lane, phase 2 wiring) run
-  later in the serialized chat queue. Plan doc states per-phase status as phases land.
-- [ ] **PLAN_NEWS_FEED.md — full arc** — in flight, same model. Wave 1: phase 0-1 domain
-  modules and fixtures in a worktree; adapters, service, chat track (serialized) and the page
-  follow in later waves.
-- [ ] **PLAN_COMMON_SENSE_QA.md — full arc** — in flight, same model. Wave 1: the F0 fixture
-  and the F1 splitter in a worktree; the F2 chat lane (serialized), rig, claims block, removal
-  and the five rungs follow.
-- [ ] **CEFR dual-draw full-pool benchmark run** — in flight in its own stable worktree,
-  `.claude/worktrees/cefr-dual-draw` (branch `worktree-cefr-dual-draw`, cut from `main` at
-  6cea893e). Its chat levers merge last, with the `chat.mjs` merge discipline below.
+- [ ] **PLAN_SYLLOGIST_EL_DL.md — full arc** — in flight, coordinator + worktree sub-agents;
+  the plan doc states per-phase status. Landed: phase 0 grammar/ontology, phase 1 EL classifier
+  with `tmct classify` and `/classify`, phase 3 ALC tableau, increments 4a-4b. In worktrees now:
+  0b teach lane (the `chat.mjs` slot), 4c-4e. Then: phase 2 EL wiring, 3b `/prove`, phase 5
+  consistency surfacing, track 6 site/claims.
+- [ ] **PLAN_NEWS_FEED.md — full arc** — in flight, same model. Landed: phases 0-2 (domain,
+  fixtures, adapters, store). In a worktree now: phase 3 service. Then: phase 4 chat wiring
+  (serialized), 5 CLI, 6 page, 7 site, 8 e2e/CI, 9 rig+claims.
+- [ ] **PLAN_COMMON_SENSE_QA.md — full arc** — in flight, same model. Landed: F0 fixture, F1
+  splitter, F2 chat lane. In a worktree now: F3 rig. Then: F4 claims block, F5 removal + corpus
+  rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
+- [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
+  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
+  cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
+  negation-scope filter, the temporal-window boundary in commit counting, and growing the
+  under-covered C2 relative-embedded census cell.
 
 ## Discipline
 
