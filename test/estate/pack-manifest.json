@@ -488,6 +488,7 @@
   "src/services/mudiii-scene.mjs",
   "src/services/mudiii-turn.mjs",
   "src/services/mudiii-viz.mjs",
+  "src/services/news.mjs",
   "src/services/p2p-room.mjs",
   "src/services/pill-complete.mjs",
   "src/services/plan-pddl.mjs",
