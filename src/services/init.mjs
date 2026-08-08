@@ -158,6 +158,39 @@ source = ${JSON.stringify(config.research.source)}
 `;
   }
 
+  // [news] section — only emitted when a caller actually supplies it.
+  if (config.news && Object.keys(config.news).length > 0) {
+    out += `
+[news]
+# News feed configuration: contemporary sources (defaults: wikimedia-featured,
+# hacker-news, usgs-quakes), knowledge-base sources (defaults: simple-wikipedia,
+# wikidata, wiktionary), polling cycle minutes, enrichment budgets, and graph
+# retention caps. See PLAN_NEWS_FEED.md section 6.4 for every option.
+# Precedence: chat command > CLI flag > this file > defaults.
+`;
+    const newsKeys = [
+      "sources", "kb_sources", "extra_sources",
+      "poll_minutes", "enrich_minutes",
+      "enrich_terms_per_cycle", "negative_cache_ttl_hours",
+      "syllogisms_per_ingest",
+      "item_cap", "news_fact_cap", "feed_top", "window_hours",
+      "min_interval_ms",
+    ];
+    for (const key of newsKeys) {
+      if (config.news[key] !== undefined) {
+        const val = config.news[key];
+        const tomlKey = key.replace(/_/g, "_");
+        if (Array.isArray(val)) {
+          out += `${tomlKey} = ${JSON.stringify(val)}\n`;
+        } else if (typeof val === "string") {
+          out += `${tomlKey} = ${JSON.stringify(val)}\n`;
+        } else {
+          out += `${tomlKey} = ${val}\n`;
+        }
+      }
+    }
+  }
+
   // Extension-pack / bias sections — only emitted when a caller supplies them.
   const extras = {};
   if (config.extensions !== undefined) extras.extensions = config.extensions;
