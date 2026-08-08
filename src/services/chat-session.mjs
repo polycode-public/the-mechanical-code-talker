@@ -135,6 +135,15 @@ export async function createSession({
   // --research-source`) > tmct.toml's [research] source > "wikipedia".
   // Omitted (null) defers entirely to the toml/default tier.
   researchSource = null,
+  // The /news command's fetcher/research-provider set for this session —
+  // `{ newsFetchers, getResearchProvider, preflightNewsUrl }` (news.mjs's own
+  // ctx.providers shape). Omitted (the default) leaves it to runCommand's own
+  // fallback (KB enrichment through the shared research provider, contemporary
+  // polling reporting an honest "no-fetcher" per source). The seam a caller —
+  // a test, or a host embedding tmct with its own source set — hands in a
+  // fixed provider set without touching the network, the same way
+  // registerResearchProvider does for the research lane.
+  newsProviders = null,
   // The storage-backend seam: the default (empty or "default") resolves to
   // Backend C — the sqlite store at .tmct/memory/graph.sqlite, a live
   // node:sqlite connection lazily imported on open. The flat-file Backend A is
@@ -523,13 +532,15 @@ export async function createSession({
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
      *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt,
-     *  plan, record } — record is the same sidecar turn record the session persists.
-     *  A throwing runTurn must never abort the session: a piped/non-interactive
-     *  driver has no other chance to see this turn's answer. */
+     *  plan, record, factsTouched } — record is the same sidecar turn record the
+     *  session persists, and factsTouched is runTurn's own diffed Fact-row list
+     *  (empty when the turn wrote nothing). A throwing runTurn must never abort
+     *  the session: a piped/non-interactive driver has no other chance to see
+     *  this turn's answer. */
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, newsProviders, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -574,7 +585,7 @@ export async function createSession({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, research: result.research, record };
+      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, research: result.research, record, factsTouched: result.factsTouched };
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert

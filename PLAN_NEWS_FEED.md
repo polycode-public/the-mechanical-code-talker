@@ -1097,6 +1097,27 @@ Goal: `/news` in chat on every surface that hosts chat, beside `/wiki`, plus the
 deduplication. Everything in this phase touches `src/services/chat.mjs` or its session
 plumbing, so it runs alone.
 
+**Built.** All four files below ship as specified. `chat.mjs`'s private `FACT_PREDICATE_PHRASES`
+table is gone — it imports the table from `src/domain/fact-phrase.mjs`, and
+`test/domain/fact-phrase.test.mjs`'s interim pin (the one comparing the two copies) is deleted
+with it; the richer local `predicatePhrase` function (polarity flips, comparative/participle
+forms, the mechanical verb fallback) is untouched, since only the table itself was ever
+duplicated. `news.mjs`'s `ctx.providers` shape needed one small, additive extension beyond what
+this section names to actually be testable end to end without touching the network: `createSession`
+(`chat-session.mjs`) gained an optional `newsProviders` param — a caller-supplied provider set,
+the same seam `registerResearchProvider` gives the research lane, injected straight through
+`runTurn`'s existing option bag rather than a new module-level registration point — and its
+`turn()` now also returns `factsTouched` (it already existed on `runTurn`'s own result; only the
+session wrapper wasn't forwarding it). `test/corpus/run-lane.mjs` gained a matching, additive
+`setup.newsFixtures` field so a corpus row can drive `/news poll` against literal, committed items
+instead of a real fetch — no other lane's rows are affected.
+
+Not addressed in this round: the phase 3 section's flagged nuance (a strict-tier news hit also
+carrying the interactive recognizer's own `ace:`/`teach:` tag from driving text through a real
+chat turn, with cross-source corroboration lifting its computed trust above the bare web tier) is
+not assigned anywhere in this section's own file list or test table, so it stays open rather than
+being folded in here.
+
 File-by-file, following the `/wiki` + research-lane precedent:
 
 1. **`src/services/chat.mjs`**: a `news` branch in `runCommand`'s if-chain beside `/wiki`
@@ -1122,8 +1143,8 @@ The TUI (`src/surfaces/tui/app.mjs`) needs zero edits and gets the command for f
 
 | file | what it holds |
 |---|---|
-| `test/services/chat-news-command.test.mjs` | `/news` with no state shows the seed-built feed; `/news poll` with a stubbed provider set ingests and reports counts; `/news rank` lists ranked terms; `/news enrich` grounds the top term through a stubbed research provider and reports the refresh; an unknown subcommand shows usage; state round-trips through two turns; the help row exists |
-| `test/services/chat-fact-phrase.test.mjs` | chat renders fact lines through the shared table (a read-back turn per predicate family, asserting unchanged wording against the pre-extraction goldens) |
+| `test/services/chat-news-command.test.mjs` (7 tests) | `/news` with no state shows the seed-built feed; `/news poll` with a stubbed provider set ingests and reports counts; `/news rank` lists ranked terms; `/news enrich` grounds the top term through a stubbed research provider and reports the refresh; an unknown subcommand shows usage; newsConfig persists a `/news add` across turns when the caller threads the same object; the help row exists |
+| `test/services/chat-fact-phrase.test.mjs` (7 tests) | chat renders fact lines through the shared table (a read-back turn per predicate family, asserting unchanged wording against the pre-extraction goldens) |
 
 Corpus rows in a new lane `test/corpus/news.jsonl`, runner `test/corpus/news.test.mjs`
 (`runLane("news")`), keys validated by `validateRow`, all offline (stubbed providers via
@@ -1133,8 +1154,8 @@ Corpus rows in a new lane `test/corpus/news.jsonl`, runner `test/corpus/news.tes
 |---|---|---|
 | `news.feed.seed-first-items` | `news-feed-seed-facts-make-the-first-items` | setup.facts seeds a small graph; `/news` → regex: a paragraph naming the seeded hub |
 | `news.feed.deterministic` | `news-feed-same-graph-same-feed` | `/news` twice → same-as-turn |
-| `news.rank.counts` | `news-rank-orders-ungrounded-terms-by-occurrence` | teach two sentences sharing one unknown term, one sentence with another; `/news rank` → regex: first term listed first with count 2 |
-| `news.rank.vocab-grounded-still-ranks` | `news-rank-lists-a-lexicon-known-term-with-no-facts` | a sentence mentions a term the seed lexicon resolves as a noun ("ceasefire") but no fact row names it; `/news rank` → regex: the term appears, labelled "parseable but knowledge-free", not omitted |
+| `news.rank.counts` | `news-rank-orders-ungrounded-terms-by-occurrence` | `setup.newsFixtures` feeds two items sharing one unknown term through `/news poll`, one item with another; `/news rank` → regex: first term listed first with count 2 |
+| `news.rank.vocab-grounded-still-ranks` | `news-rank-lists-a-lexicon-known-term-with-no-facts` | an item mentions a term the seed lexicon resolves as a noun ("tariff") but no fact row names it; `/news rank` → regex: the term appears, labelled "parseable but knowledge-free", not omitted |
 | `news.miss.no-sources` | `news-poll-with-no-enabled-sources-reads-as-a-plain-report` | config disables all sources; `/news poll` → regex: "no sources enabled", predicate: not a fact write |
 | `news.miss.unknown-subcommand` | `news-unknown-subcommand-shows-usage-never-guesses` | `/news frobnicate` → regex: usage line |
 
