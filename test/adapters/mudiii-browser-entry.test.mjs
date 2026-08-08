@@ -129,7 +129,12 @@ test("syncing the editor's own unchanged text back writes nothing and retracts n
   const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
   await session.turn("put food at cell-3-4");
   const snap = await session.snapshot();
-  const text = renderMudEditorText(snap.rows, gridWorldEditorState(snap.state));
+  // The page's own editor renders the world-provenance rows (worldOnlyRows in
+  // mudiii-viz.mjs), never the whole store: the trait rows a spawn copied
+  // onto an instance carry their own spawn provenance and belong to the
+  // actor's editor, not this one. The round trip mirrors that same filter.
+  const editorRows = snap.rows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf("world:") === 0);
+  const text = renderMudEditorText(editorRows, gridWorldEditorState(snap.state));
   const result = await session.applyEdit(text);
   assert.deepEqual(result.unrecognized, [], "every sentence the renderer wrote reads back");
   assert.equal(result.added, 0, "a placement already true is not re-appended on every sync");

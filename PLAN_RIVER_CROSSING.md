@@ -626,6 +626,30 @@ node --test "test/estate/*.test.mjs"
 
 ## 6. Phase R2 — the drive engine reads facts
 
+**Shipped.** The decision chain resolves every threat/quarry/forage read, the vision radius, the
+starting mass and the per-turn drain through the trait rows whenever the board's rows state any
+drive; a board that states none keeps the injected roles object and config deciding alone, which
+is how the spider-fly cast and every hand-built cast behave exactly as before. `pursuedBy`/
+`fearedBy` ship in `predator-prey.mjs` (the fear deriving from the eater's own `mgx:consumes`
+when no `mgx:evades` is declared), `castFromFacts` in `agent-traits.mjs` rebuilds `MUDIII_ROLES`
+from the shipped world's rows, and every mint — opening roster, mid-play prey arrival, hatchling
+— appends `instanceFactsFrom` copies under `spawn:<class>:<id>@epoch<N>` provenance. The
+town-square world sources state the cast's traits (6.4's rows), quoting `game-config.mjs`; the
+6.3 reconciliation took the first option: the per-class "by default" prose rows BECAME the trait
+rows, since after the fact read the world's own statement is the number and the config override
+is only the fallback (`test/domain/town-square-world.test.mjs` moved with it, and so did the
+`mudiii-turn` test that pinned a custom config outranking the world). The ten-tick tape replays
+byte-identically, and `test/fixtures/mudiii-swapped-cast.json` +
+`test/services/predator-prey-swapped-cast.test.mjs` prove the swap: goblin to the chase rung,
+fox to the evade rung, same engine entry point, no code branch. The 1.6 readers ship too:
+`makeAgentLabel` takes a resolved label, `ensureAgent` prefers a stated `mgx:model` with the
+warn-and-fall-back rule, both fed by an `agentPresentation` map the page builds from the rows
+through the entry's page bag, and `mudiii-turn`'s belief answer reads vision through the same
+trait-first path as the tick. One addition the section below didn't name: rostered ids a
+hand-taught board placed without ever typing resolve their chain through a synthetic `rdf:type`
+row derived from the roster's own kind, since a pre-placement makes the mint's idempotency guard
+skip the write that would have typed them.
+
 Goal: `predator-prey.mjs` decides from rows. `MUDIII_ROLES` and `DEFAULT_GAME_CONFIG.mudiii` become
 the fallback for a world that states nothing, so the shipped square behaves identically and the tick
 fixture's tape stays byte-identical.

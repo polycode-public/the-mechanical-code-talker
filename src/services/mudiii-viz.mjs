@@ -1669,6 +1669,42 @@ function pageScript() {
   // mud.html's burrow-survey SVG, since a town square is a grid, not a room
   // graph.
   function worldOnlyRows(rows) { return rowsForWorld(rows, scenario().worldPayload.name); }
+
+  // What the rows say each agent is called (mgx:display-name) and drawn as
+  // (mgx:model), resolved through the class chain so a class row covers every
+  // instance, a mid-play arrival included. Null when the rows state neither
+  // for anything — the scene then keeps ids and prefix meshes, the honest
+  // fallback for a world that names nobody.
+  function agentPresentationFrom(rows) {
+    var traitsOf = window.tmct && window.tmct.page && window.tmct.page.agentTraitsOf;
+    if (!traitsOf) return null;
+    var kinds = {};
+    var instanceIds = {};
+    var presentedPredicates = { "mgx:display-name": true, "mgx:model": true };
+    (rows || []).forEach(function (row) {
+      if (!row || !row.subject || row.subject.indexOf("@") !== -1) return;
+      if (row.predicate === "rdf:type" && /-\d+$/.test(row.subject)) {
+        kinds[row.object] = true;
+        instanceIds[row.subject] = true;
+        return;
+      }
+      if (!presentedPredicates[row.predicate]) return;
+      if (/-\d+$/.test(row.subject)) instanceIds[row.subject] = true;
+      else kinds[row.subject] = true;
+    });
+    var byKind = {};
+    var byId = {};
+    var any = false;
+    var take = function (bag, key) {
+      var traits = traitsOf(rows, key);
+      if (!traits.displayName && !traits.model) return;
+      bag[key] = { label: traits.displayName, model: traits.model };
+      any = true;
+    };
+    Object.keys(kinds).forEach(function (kind) { take(byKind, kind); });
+    Object.keys(instanceIds).forEach(function (id) { take(byId, id); });
+    return any ? { byId: byId, byKind: byKind } : null;
+  }
   let editRows = [];
   // The FULL store, not the world's own rows: a term's synonyms and its is-a
   // chain mostly live in the background corpus, not in the square's vocabulary.
@@ -1772,6 +1808,7 @@ function pageScript() {
     }
     await callScene("boot", {
       propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+      agentPresentation: agentPresentationFrom(allStoreRows.length ? allStoreRows : editRows),
     });
     sendCameraToScene(camera);
     callScene("applyTick", { agents: agentsById, items: itemsById, ecology: [] });
@@ -1860,7 +1897,10 @@ function pageScript() {
     agentsById = {};
     itemsById = {};
     el("chatInput").disabled = false;
-    await callScene("boot", { propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1 });
+    await callScene("boot", {
+      propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+      agentPresentation: agentPresentationFrom((s.worldPayload && s.worldPayload.facts) || []),
+    });
 
     // The opening board, drawn through the very path a tick takes. Without
     // this the page's first sight of where anything stands is the first tick,

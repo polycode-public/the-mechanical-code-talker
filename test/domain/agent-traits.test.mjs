@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  AGENT_TRAIT_PREDICATES, AGENT_TRAIT_MULTI, classChainOf,
-  traitValueOf, traitValuesOf, traitOriginOf, agentTraitsOf,
+  AGENT_TRAIT_PREDICATES, AGENT_TRAIT_MULTI, castFromFacts, classChainOf, fearedClassesOf,
+  rowsDeclareDrives, traitValueOf, traitValuesOf, traitOriginOf, agentTraitsOf,
   classFactRowsFor, instanceFactsFrom,
 } from "../../src/domain/agent-traits.mjs";
+import { TOWN_SQUARE_LAYOUTS, worldFactRows } from "../../src/domain/town-square-world.mjs";
+import { MUDIII_ROLES } from "../../src/services/predator-prey.mjs";
 import { appendFacts, createInMemoryStore, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
@@ -206,4 +208,40 @@ test("AGENT_TRAIT_MULTI names exactly the multi-valued predicates in AGENT_TRAIT
   assert.deepEqual(singleValued.sort(), [
     "mgx:display-name", "mgx:hasMass", "mgx:is-predator", "mgx:mass-drain-per-turn", "mgx:model", "mgx:vision-radius",
   ]);
+});
+
+test("castFromFacts builds the shipped cast from the shipped world's rows, and equals MUDIII_ROLES for it", () => {
+  const shippedRows = [...worldFactRows(TOWN_SQUARE_LAYOUTS["town-square"])]
+    .map(({ subject, predicate, object }) => ({ subject, predicate, object }));
+  assert.ok(rowsDeclareDrives(shippedRows), "the shipped square states its drives");
+  const cast = castFromFacts(shippedRows, { fallback: MUDIII_ROLES });
+  assert.deepEqual(cast, MUDIII_ROLES);
+  assert.deepEqual(
+    castFromFacts([...shippedRows].reverse(), { fallback: MUDIII_ROLES }),
+    cast,
+    "two row orders build the same cast",
+  );
+});
+
+test("castFromFacts hands back the fallback whole when the rows state no cast, and null without one", () => {
+  const drivelessRows = [{ subject: "cell-1-1", predicate: "rdf:type", object: "cell" }];
+  assert.equal(castFromFacts(drivelessRows, { fallback: MUDIII_ROLES }), MUDIII_ROLES);
+  assert.equal(castFromFacts(drivelessRows), null);
+});
+
+test("fearedClassesOf derives the flight from the eater's appetite, and a declared evades set replaces it", () => {
+  const rows = [
+    { subject: "goblin-1", predicate: "rdf:type", object: "goblin" },
+    { subject: "fox", predicate: "mgx:consumes", object: "goblin" },
+    { subject: "fox-2", predicate: "rdf:type", object: "fox" },
+    { subject: "fox-2", predicate: "mgx:consumes", object: "goblin" },
+  ];
+  assert.deepEqual(fearedClassesOf(rows, "goblin-1"), ["fox"], "an instance's appetite names its class, deduped with the class's own");
+  const declared = [...rows, { subject: "goblin-1", predicate: "mgx:evades", object: "cabbage" }];
+  assert.deepEqual(fearedClassesOf(declared, "goblin-1"), ["cabbage"]);
+  assert.deepEqual(
+    fearedClassesOf([...rows].reverse(), "goblin-1"),
+    fearedClassesOf(rows, "goblin-1"),
+    "the derivation is a pure function of the row set",
+  );
 });

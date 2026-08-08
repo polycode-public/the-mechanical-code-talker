@@ -47,6 +47,9 @@ import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { mulberry32 } from "../domain/seeded-random.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import {
+  agentTraitsOf, classChainOf, fearedClassesOf, instanceFactsFrom, rowsDeclareDrives, traitValuesOf,
+} from "../domain/agent-traits.mjs";
 import { objectClassChain, parseSnapshotSubject, snapshotSubject, worldEpochFact, WORLD_EPOCH_PREDICATE } from "./adventure.mjs";
 
 export { DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor };
@@ -80,6 +83,38 @@ export function rolesHuntedBy(role, roles = MUDIII_ROLES) {
  *  sight of another predator rather than fleeing its own kind. Pure. */
 export function rolesHunting(role, roles = MUDIII_ROLES) {
   return CAST_ROLES.filter((other) => rolesHuntedBy(other, roles).includes(role));
+}
+
+/** The rows-aware sibling of rolesHuntedBy: the class names THIS subject
+ *  moves toward, read off its own chain's mgx:pursues rows. Empty for a
+ *  subject whose world states none — on a board whose rows state no drives
+ *  at all, the decision chain falls back to the cast's role links. Pure. */
+export function pursuedBy(rows, subject) {
+  return traitValuesOf(rows, subject, "mgx:pursues");
+}
+
+/** The rows-aware sibling of rolesHunting: the class names THIS subject
+ *  moves away from — its declared mgx:evades set when its chain states one,
+ *  otherwise every class whose members declare mgx:consumes for a class on
+ *  this subject's own chain. One appetite row carries both the hunt and the
+ *  flight, so a world never states the fear twice. Pure. */
+export function fearedBy(rows, subject) {
+  return fearedClassesOf(rows, subject);
+}
+
+/** Provenance for the trait rows a spawn copies from a class onto an
+ *  instance — its own tag family, apart from the world tag, so the ledger,
+ *  the editors and a later respawn can tell a copied row from an authored
+ *  one. */
+const spawnProvenanceTag = (kind, id, epoch) => `spawn:${kind}:${id}@epoch${epoch}`;
+
+/** The trait rows a fresh mint of `id` (an instance of `kind`) carries as its
+ *  own, ready to append: instanceFactsFrom minus the rdf:type row the mint
+ *  itself already writes, each stamped with the spawn provenance. */
+function spawnTraitCopies(rows, kind, id, epoch) {
+  return instanceFactsFrom(rows, kind, id)
+    .filter((copied) => copied.predicate !== "rdf:type")
+    .map((copied) => ({ ...copied, provenance: spawnProvenanceTag(kind, id, epoch) }));
 }
 
 const PLACEMENT_PREDICATE = "mgx:currently-in";
@@ -587,7 +622,7 @@ function goalLine(kind, { subject, cell, arrived, boardNoun = "square", catches 
 // arrival, and a cast that sets no interval never spawns that kind at all.
 
 function runEcologyPass({
-  state, layout, roles, config, turn, epoch,
+  state, rows, layout, roles, config, turn, epoch,
   postMovePlacements, postMoveMass, liveItemIds, itemCellOf, itemMassOf, foodIds,
 }) {
   const k = turn;
@@ -597,6 +632,17 @@ function runEcologyPass({
   const carriesPrey = config.carryPreyToWeb === true;
   const laysEggs = config.layEggs === true;
   const webbedAt = (c) => hasActiveWebAt(layout, state, k, c.x, c.y, config.webDurationTurns);
+  // On a board whose rows state drives, contact only removes what the eater's
+  // own mgx:consumes chain names — an appetite nobody declared eats nothing.
+  // On a board with no drive rows, the role pairing decides alone, exactly as
+  // it always has.
+  const factDriven = rowsDeclareDrives(rows);
+  const eats = (eaterId, targetId) => {
+    if (!factDriven) return true;
+    const appetite = traitValuesOf(rows, eaterId, "mgx:consumes");
+    const chain = classChainOf(rows, targetId);
+    return appetite.some((eaten) => chain.includes(eaten));
+  };
 
   const predators = [...postMovePlacements.keys()].filter((id) => roleOfId(id, roles) === "predator").sort();
   const prey = [...postMovePlacements.keys()].filter((id) => roleOfId(id, roles) === "prey").sort();
@@ -613,6 +659,7 @@ function runEcologyPass({
         if (takenAgents.has(preyId)) continue;
         const qc = postMovePlacements.get(preyId);
         if (pc.x !== qc.x || pc.y !== qc.y) continue;
+        if (!eats(predatorId, preyId)) continue;
         takenAgents.add(preyId);
         const gained = finalMass.get(preyId) ?? 0;
         finalMass.set(predatorId, (finalMass.get(predatorId) ?? 0) + gained);
@@ -634,6 +681,7 @@ function runEcologyPass({
         if (claimed.has(preyId)) continue;
         const qc = postMovePlacements.get(preyId);
         if (pc.x !== qc.x || pc.y !== qc.y) continue;
+        if (!eats(predatorId, preyId)) continue;
         carriedBy.set(predatorId, preyId);
         claimed.add(preyId);
         events.push({ type: "catch-prey", predator: predatorId, prey: preyId, cell: cellId(pc.x, pc.y) });
@@ -669,6 +717,7 @@ function runEcologyPass({
       if (takenItems.has(itemId)) continue;
       if (!foodIds.has(itemId)) continue;
       if (itemCellOf.get(itemId) !== here) continue;
+      if (!eats(preyId, itemId)) continue;
       takenItems.add(itemId);
       const gained = itemMassOf.get(itemId) ?? 0;
       finalMass.set(preyId, (finalMass.get(preyId) ?? 0) + gained);
@@ -743,6 +792,7 @@ function runEcologyPass({
         const hatchlingId = `${roles.predator.idPrefix}-${nextHatchlingNum}`;
         nextHatchlingNum += 1;
         const hatchlingMass = share + (i === 0 ? remainder : 0);
+        writes.push(...spawnTraitCopies(rows, roles.predator.kind, hatchlingId, epoch));
         writes.push({ subject: hatchlingId, predicate: "rdf:type", object: roles.predator.kind });
         writes.push({ subject: stamp(hatchlingId), predicate: PLACEMENT_PREDICATE, object: eggCell });
         writes.push({ subject: stamp(hatchlingId), predicate: MASS_PREDICATE, object: String(hatchlingMass) });
@@ -781,12 +831,14 @@ function runEcologyPass({
       const preyId = `${roles.prey.idPrefix}-${1 + maxIdSuffix(state.placements.keys(), roles.prey.kind)}`;
       const cell = seededPick(free, seedKey(layout.name, epoch, k, preyId, "spawn"));
       occupied.add(cell);
+      const preySpawnMass = agentTraitsOf(rows, roles.prey.kind).mass ?? config.preyInitialMass;
+      writes.push(...spawnTraitCopies(rows, roles.prey.kind, preyId, epoch));
       writes.push({ subject: preyId, predicate: "rdf:type", object: roles.prey.kind });
       writes.push({ subject: stamp(preyId), predicate: PLACEMENT_PREDICATE, object: cell });
-      writes.push({ subject: stamp(preyId), predicate: MASS_PREDICATE, object: String(config.preyInitialMass) });
+      writes.push({ subject: stamp(preyId), predicate: MASS_PREDICATE, object: String(preySpawnMass) });
       writes.push({ subject: stamp(preyId), predicate: FACING_PREDICATE, object: DEFAULT_FACING });
-      events.push({ type: "spawn-prey", agent: preyId, cell, mass: round2(config.preyInitialMass) });
-      spawned.push({ id: preyId, role: "prey", cell, mass: config.preyInitialMass });
+      events.push({ type: "spawn-prey", agent: preyId, cell, mass: round2(preySpawnMass) });
+      spawned.push({ id: preyId, role: "prey", cell, mass: preySpawnMass });
     }
   }
 
@@ -858,7 +910,8 @@ export async function startTownSquareGame(memoryDir, {
   layout, agents = null, predatorCount = null, preyCount = null,
   config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES, epoch = 0,
 } = {}) {
-  const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldTownSquareState(rows);
   const firstPredator = `${roles.predator.idPrefix}-1`;
   if (state.placements.get(firstPredator)?.epoch === epoch) return { started: false, facts: [] };
 
@@ -874,14 +927,21 @@ export async function startTownSquareGame(memoryDir, {
     const spec = roster[id];
     const role = spec.role ?? roleOfId(id, roles);
     const kind = role === "predator" ? roles.predator.kind : roles.prey.kind;
-    const mass = spec.mass ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
+    const mass = spec.mass
+      ?? agentTraitsOf(rows, kind).mass
+      ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
+    // The class's traits copy onto the instance BEFORE its own stamped rows:
+    // both rank as turn 0 of this epoch in the fold, and the fold takes the
+    // later row on a tied rank, so an explicit roster mass (a fixture's
+    // seeded starvation) must land after the copied class default.
+    facts.push(...spawnTraitCopies(rows, kind, id, epoch));
     facts.push({ subject: id, predicate: "rdf:type", object: kind });
     facts.push({ subject: stamp(id), predicate: PLACEMENT_PREDICATE, object: spec.cell });
     facts.push({ subject: stamp(id), predicate: MASS_PREDICATE, object: String(mass) });
     facts.push({ subject: stamp(id), predicate: MOOD_PREDICATE, object: "calm" });
     facts.push({ subject: stamp(id), predicate: FACING_PREDICATE, object: spec.facing ?? DEFAULT_FACING });
   }
-  await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: worldProvenanceTag(layout.name) })));
+  await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: f.provenance ?? worldProvenanceTag(layout.name) })));
   return { started: true, facts };
 }
 
@@ -1056,6 +1116,32 @@ function readLiveBoard(rows, state, { config, roles }) {
   };
 }
 
+/** `rows` widened with a bare `rdf:type` row for every rostered id that has
+ *  none — the rows every trait read below resolves against. A hand-taught
+ *  board can place `fox-1` by id without ever typing it (the pre-placement
+ *  then makes the mint's idempotency guard skip the roster write), and the
+ *  class chain would dead-end on the bare id while the roster itself already
+ *  knows the kind. The synthetic row states only what `liveOfKind` has
+ *  already concluded from the id, so this stays a pure function of the row
+ *  set. */
+function withRosterTypeRows(rows, { predators, prey, liveItemIds, roles }) {
+  const typed = new Set();
+  for (const row of rows || []) {
+    if (row.predicate === "rdf:type") typed.add(row.subject);
+  }
+  const synthetic = [];
+  for (const id of predators) {
+    if (!typed.has(id)) synthetic.push({ subject: id, predicate: "rdf:type", object: roles.predator.kind });
+  }
+  for (const id of prey) {
+    if (!typed.has(id)) synthetic.push({ subject: id, predicate: "rdf:type", object: roles.prey.kind });
+  }
+  for (const id of liveItemIds) {
+    if (!typed.has(id)) synthetic.push({ subject: id, predicate: "rdf:type", object: kindOfItem(id, roles) });
+  }
+  return synthetic.length ? [...rows, ...synthetic] : rows;
+}
+
 /** The render payload's `items` half — `{ id: { kind, cell } }` — over
  *  `liveItemIds`, skipping anything in `taken` (a tick's eaten set; a resting
  *  board passes none). Pure. */
@@ -1146,6 +1232,33 @@ export async function runTownSquareTick(memoryDir, {
   const agentsOfRoles = (roleList, exceptId) =>
     roleList.flatMap((r) => liveIdsOfRole[r] ?? []).filter((id) => id !== exceptId).sort();
 
+  // The one gate between the two ways a cast can be driven. Rows that state
+  // any drive at all drive EVERY threat/quarry/forage read below through the
+  // trait resolver; rows that state none leave the injected roles object and
+  // config numbers deciding alone, so a cast written before the trait
+  // vocabulary existed behaves exactly as it always did.
+  const traitRows = withRosterTypeRows(rows, { predators, prey, liveItemIds, roles });
+  const factDriven = rowsDeclareDrives(traitRows);
+  const traitsCache = new Map();
+  const traitsOf = (subject) => {
+    if (!traitsCache.has(subject)) traitsCache.set(subject, agentTraitsOf(traitRows, subject));
+    return traitsCache.get(subject);
+  };
+  const chainCache = new Map();
+  const chainSetOf = (subject) => {
+    if (!chainCache.has(subject)) chainCache.set(subject, new Set(classChainOf(traitRows, subject)));
+    return chainCache.get(subject);
+  };
+  const liveAgents = [...predators, ...prey].sort();
+  const agentsOfClasses = (classNames, exceptId) => (classNames.length
+    ? liveAgents.filter((id) => id !== exceptId && classNames.some((c) => chainSetOf(id).has(c)))
+    : []);
+  const forageTargetsOf = (agentId) => {
+    const appetite = traitsOf(agentId).consumes;
+    if (!appetite.length) return [];
+    return liveItemIds.filter((id) => foodIds.has(id) && appetite.some((c) => chainSetOf(id).has(c)));
+  };
+
   const decide = (agentId, role) => {
     const fromCell = parseCellId(state.placements.get(agentId).cell);
     // The visitor's hand, checked before any of the belief chain below. A
@@ -1153,7 +1266,8 @@ export async function runTownSquareTick(memoryDir, {
     // it would have on a turn nobody touched.
     const driven = acceptedManualMove(manualMoves?.[agentId], fromCell, applyActions);
     const restingFacing = state.facing.get(agentId)?.value ?? DEFAULT_FACING;
-    const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
+    const visionRadius = traitsOf(agentId).visionRadius
+      ?? (role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius);
     const beliefOpts = { visionRadius, toldFacts };
     // True unless a caller explicitly turns it off. A config object built by
     // hand (a fixture, a test, an older tmct.toml read before this key
@@ -1166,13 +1280,23 @@ export async function runTownSquareTick(memoryDir, {
     // visionRadius: Infinity call, not new belief machinery. The rival-threat
     // lookup below stays on beliefOpts either way: this switch is about food.
     const foodBeliefOpts = foodVisionGated ? beliefOpts : { ...beliefOpts, visionRadius: Infinity };
-    // Who counts as a threat and who counts as quarry both come off the cast's
-    // own hunts links. Nothing hunts a predator on either shipped board, so a
-    // predator's threat list is empty and a second predator in view is just
-    // another animal on the square.
-    const huntedRoles = rolesHuntedBy(role, roles);
-    const huntsAgents = huntedRoles.length > 0;
-    const hunters = agentsOfRoles(rolesHunting(role, roles), agentId);
+    // Who counts as a threat, who counts as quarry and what counts as food
+    // all come off the agent's OWN trait rows when the world states drives,
+    // and off the cast's role links when it states none. Nothing hunts a
+    // predator on either shipped board, so a predator's threat list is empty
+    // and a second predator in view is just another animal on the square.
+    const huntsAgents = factDriven
+      ? pursuedBy(traitRows, agentId).length > 0
+      : rolesHuntedBy(role, roles).length > 0;
+    const hunters = factDriven
+      ? agentsOfClasses(fearedBy(traitRows, agentId), agentId)
+      : agentsOfRoles(rolesHunting(role, roles), agentId);
+    const quarryCandidates = !huntsAgents ? [] : (factDriven
+      ? agentsOfClasses(pursuedBy(traitRows, agentId), agentId)
+      : agentsOfRoles(rolesHuntedBy(role, roles), agentId));
+    const forageCandidates = huntsAgents ? [] : (factDriven
+      ? forageTargetsOf(agentId)
+      : [...foodIds].sort());
     const threat = driven ? null : nearestBelievedTarget(agentId, fromCell, hunters, state, beliefOpts);
 
     let rung;
@@ -1235,7 +1359,7 @@ export async function runTownSquareTick(memoryDir, {
     } else if (threat) {
       const towardFood = huntsAgents
         ? null
-        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
+        : nearestBelievedTarget(agentId, fromCell, forageCandidates, state, foodBeliefOpts);
       if (blendsPreyDecision && !huntsAgents && towardFood) {
         // The one case the two rungs disagree about: this prey believes a
         // predator AND food, so a strict order has to pick between them and a
@@ -1270,8 +1394,8 @@ export async function runTownSquareTick(memoryDir, {
       }
     } else {
       const quarry = huntsAgents
-        ? nearestBelievedTarget(agentId, fromCell, agentsOfRoles(huntedRoles, agentId), state, beliefOpts)
-        : nearestBelievedTarget(agentId, fromCell, [...foodIds].sort(), state, foodBeliefOpts);
+        ? nearestBelievedTarget(agentId, fromCell, quarryCandidates, state, beliefOpts)
+        : nearestBelievedTarget(agentId, fromCell, forageCandidates, state, foodBeliefOpts);
       if (quarry) {
         rung = huntsAgents ? "chase" : "forage";
         const path = findActionPath(fromCell, (s) => s.x === quarry.cell.x && s.y === quarry.cell.y, applyActions, { stateKey: pathStateKey });
@@ -1343,8 +1467,11 @@ export async function runTownSquareTick(memoryDir, {
   const postMoveMass = new Map();
   for (const id of [...predators, ...prey]) {
     const role = agents[id].role;
-    const drain = role === "predator" ? config.predatorMassDecrementPerTurn : config.preyMassDecrementPerTurn;
-    const start = role === "predator" ? config.predatorInitialMass : config.preyInitialMass;
+    const traits = traitsOf(id);
+    const drain = traits.massDrainPerTurn
+      ?? (role === "predator" ? config.predatorMassDecrementPerTurn : config.preyMassDecrementPerTurn);
+    const start = traits.mass
+      ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
     const prior = state.mass.get(id)?.value ?? start;
     postMoveMass.set(id, Math.max(0, prior - drain));
   }
@@ -1356,7 +1483,7 @@ export async function runTownSquareTick(memoryDir, {
   }
 
   const pass = runEcologyPass({
-    state, layout: lay, roles, config, turn: k, epoch,
+    state, rows: traitRows, layout: lay, roles, config, turn: k, epoch,
     postMovePlacements, postMoveMass, liveItemIds, itemCellOf, itemMassOf, foodIds,
   });
 
@@ -1445,7 +1572,7 @@ export async function runTownSquareTick(memoryDir, {
 
   const turnMarker = { subject: stamp(BOARD_SUBJECT), predicate: TURN_PLAYED_PREDICATE, object: String(k) };
   const writes = [...movementWrites, ...pass.writes, ...moodWrites, turnMarker];
-  await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance: `${worldProvenanceTag(lay.name)}:turn${k}` })));
+  await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance: f.provenance ?? `${worldProvenanceTag(lay.name)}:turn${k}` })));
 
   return {
     turn: k,
@@ -1488,6 +1615,9 @@ export async function townSquareBoard(memoryDir, {
   const rows = readFactRows(await loadMemory(memoryDir));
   const state = foldTownSquareState(rows);
   const board = readLiveBoard(rows, state, { config, roles });
+  const traitRows = withRosterTypeRows(rows, {
+    predators: board.predators, prey: board.prey, liveItemIds: board.liveItemIds, roles,
+  });
 
   const agents = {};
   const rostered = [
@@ -1496,8 +1626,11 @@ export async function townSquareBoard(memoryDir, {
   ];
   for (const [id, role] of rostered) {
     const cell = state.placements.get(id).cell;
-    const visionRadius = role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius;
-    const initialMass = role === "predator" ? config.predatorInitialMass : config.preyInitialMass;
+    const traits = agentTraitsOf(traitRows, id);
+    const visionRadius = traits.visionRadius
+      ?? (role === "predator" ? config.predatorVisionRadius : config.preyVisionRadius);
+    const initialMass = traits.mass
+      ?? (role === "predator" ? config.predatorInitialMass : config.preyInitialMass);
     agents[id] = {
       role,
       cell,

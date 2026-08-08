@@ -30,7 +30,7 @@ async function withMemoryDir(prefix, fn) {
 
 // ---- opening moves, one per shipped layout ----------------------------------
 
-test("mudiiiTurn's opening move threads a custom gameConfig into startTownSquareGame's own written facts", () => withMemoryDir("tmct-mudiii-turn-config-", async (memoryDir) => {
+test("mudiiiTurn's opening mass comes from the world's own trait row — a custom gameConfig is only the fallback", () => withMemoryDir("tmct-mudiii-turn-config-", async (memoryDir) => {
   const gameConfig = {
     ...DEFAULT_GAME_CONFIG,
     mudiii: { ...DEFAULT_GAME_CONFIG.mudiii, predatorInitialMass: 99 },
@@ -41,8 +41,18 @@ test("mudiiiTurn's opening move threads a custom gameConfig into startTownSquare
 
   const rows = readFactRows(await loadMemory(memoryDir));
   assert.ok(
-    rows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "99"),
-    "the custom predatorInitialMass reaches the freshly-started game's own written facts",
+    rows.some((r) => r.subject === "fox" && r.predicate === "mgx:hasMass"
+      && r.object === String(DEFAULT_GAME_CONFIG.mudiii.predatorInitialMass)),
+    "the shipped board states the fox's starting mass as its own fact",
+  );
+  assert.ok(
+    rows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass"
+      && r.object === String(DEFAULT_GAME_CONFIG.mudiii.predatorInitialMass)),
+    "the world's stated mass seeds the mint; the config override stays the fallback for a world that states none",
+  );
+  assert.ok(
+    !rows.some((r) => r.subject === "fox-1@turn0" && r.predicate === "mgx:hasMass" && r.object === "99"),
+    "the config number does not overrule the world's own statement",
   );
 }));
 

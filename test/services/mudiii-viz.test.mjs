@@ -168,12 +168,14 @@ test("renderMudiiiHtml: one shared chat log and one shared input, never one per 
   assert.doesNotMatch(html, /window-a-chatlog|window-b-chatlog/, "no per-character panes");
 });
 
-test("renderMudiiiHtml: booting calls window.mudiiiScene.boot with the resolved prop placements and asset manifest", () => {
+test("renderMudiiiHtml: booting calls window.mudiiiScene.boot with the resolved prop placements, asset manifest and the rows' own agent presentation", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS, assetManifest: ASSETS });
   assert.match(
     html,
-    /callScene\("boot", \{ propPlacements: props, assetManifest: DATA\.assetManifest, gridSize: gridSizeOf\(\), cellSize: 1 \}\)/,
+    /callScene\("boot", \{\s*propPlacements: props, assetManifest: DATA\.assetManifest, gridSize: gridSizeOf\(\), cellSize: 1,\s*agentPresentation: agentPresentationFrom\(\(s\.worldPayload && s\.worldPayload\.facts\) \|\| \[\]\),\s*\}\)/,
   );
+  assert.match(html, /function agentPresentationFrom\(rows\)/, "the presentation is resolved from rows on the page, through the shared trait resolver");
+  assert.match(html, /window\.tmct\.page\.agentTraitsOf/, "the class-chain read is the engine's own, reached through the page bag");
 });
 
 test("renderMudiiiHtml: every tick calls window.mudiiiScene.applyTick with the raw tick-payload shape", () => {

@@ -413,15 +413,26 @@ test("mudiiiSceneScript ships a one-shot clip player and an e2e-observable remov
   );
 });
 
-test("mudiiiSceneScript hangs each agent's id above it as a screen-sized billboard sprite", async () => {
+test("mudiiiSceneScript hangs each agent's stated name (or its id) above it as a screen-sized billboard sprite", async () => {
   const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
   const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
-  assert.match(script, /function makeAgentLabel\(id, height\)/);
-  assert.match(script, /new THREE\.CanvasTexture\(canvas\)/, "the id is drawn to a canvas rather than loaded as an asset");
+  assert.match(script, /function makeAgentLabel\(label, height\)/, "the label text arrives resolved — the sprite never re-derives it from the id");
+  assert.match(script, /new THREE\.CanvasTexture\(canvas\)/, "the label is drawn to a canvas rather than loaded as an asset");
   assert.match(script, /sizeAttenuation: false/, "the label holds one size on screen however far the camera pulls back");
   assert.match(script, /sprite\.scale\.set\(LABEL_SCREEN_WIDTH, LABEL_SCREEN_WIDTH \/ 4, 1\)/, "the scale is chosen, not left to a default");
   assert.match(script, /sprite\.position\.y = height \+ 0\.3;/, "it sits just above the model's own top");
-  assert.match(script, /entry\.group\.add\(makeAgentLabel\(id, asset \? asset\.targetHeight : 1\)\)/, "parented to the group, so it rides the movement tween");
+  assert.match(script, /makeAgentLabel\(pres && pres\.label \? pres\.label : id, asset \? asset\.targetHeight : 1\)/, "a stated display name wins; an agent nobody named keeps its id");
+  assert.match(script, /labelSprite\.name = "label-" \+ id/, "the sprite stays findable by the agent's id whatever the label says");
+  assert.match(script, /entry\.group\.add\(labelSprite\)/, "parented to the group, so it rides the movement tween");
+});
+
+test("mudiiiSceneScript prefers a stated mgx:model and falls back to the id-prefix mesh on a name the manifest lacks", async () => {
+  const { mudiiiSceneScript } = await import("../../src/services/mudiii-scene.mjs");
+  const script = mudiiiSceneScript({ canvasId: "sceneCanvas", statusId: "sceneStatus", gridSize: 12, cellSize: 1 });
+  assert.match(script, /agentPresentation = \(input && input\.agentPresentation\) \|\| null/, "the rows' say arrives through boot");
+  assert.match(script, /byId\[id\] \|\| byKind\[kind\] \|\| null/, "an instance's own row wins over its kind's");
+  assert.match(script, /manifestByKind\[pres\.model\]/, "the stated model is looked up in the same manifest as everything else");
+  assert.match(script, /keeps its " \+ kind \+ " mesh/, "an unknown model name logs the miss and keeps the prefix mesh rather than blanking the board");
 });
 
 test("mudiiiSceneScript measures a mesh through the loaded model, never the group the label also sits in", async () => {

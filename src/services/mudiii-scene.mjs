@@ -428,6 +428,11 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   var propTemplates = {};
   var propInstances = [];
   var manifestByKind = {};
+  // What the world's own fact rows say each agent is called and drawn as:
+  // { byId: { id: { label, model } }, byKind: { kind: { label, model } } },
+  // or null for a page that passed none. An agent the rows say nothing about
+  // keeps its id as the label and its id-prefix kind as the mesh.
+  var agentPresentation = null;
   var lastAgentsById = {};
   var lastItemsById = {};
   // Every removeAgent/removeItem call, kept small and reset on boot — an
@@ -828,7 +833,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // than no id at all — which is why the scale below is in screen fractions
   // rather than world units.
   var LABEL_SCREEN_WIDTH = 0.13;
-  function makeAgentLabel(id, height) {
+  // The label text is what the rows say to call the agent (its
+  // mgx:display-name, or its id when nothing is stated) — the caller
+  // resolves that; this only draws whatever it is handed.
+  function makeAgentLabel(label, height) {
     var canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 64;
@@ -839,17 +847,23 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     ctx.lineWidth = 8;
     ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(20,16,10,.85)";
-    ctx.strokeText(id, 128, 34);
+    ctx.strokeText(label, 128, 34);
     ctx.fillStyle = "#F3ECDD";
-    ctx.fillText(id, 128, 34);
+    ctx.fillText(label, 128, 34);
     var material = new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(canvas), transparent: true, sizeAttenuation: false, depthWrite: false,
     });
     var sprite = new THREE.Sprite(material);
     sprite.scale.set(LABEL_SCREEN_WIDTH, LABEL_SCREEN_WIDTH / 4, 1);
     sprite.position.y = height + 0.3;
-    sprite.name = "label-" + id;
     return sprite;
+  }
+
+  function presentationFor(id, kind) {
+    if (!agentPresentation) return null;
+    var byId = agentPresentation.byId || {};
+    var byKind = agentPresentation.byKind || {};
+    return byId[id] || byKind[kind] || null;
   }
 
   function ensureAgent(id, agent) {
@@ -863,8 +877,20 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     entry.group.visible = false;
     scene.add(entry.group);
     agentGroups[id] = entry;
+    var pres = presentationFor(id, kind);
     var asset = manifestByKind[kind];
-    entry.group.add(makeAgentLabel(id, asset ? asset.targetHeight : 1));
+    // A stated mgx:model wins over the id-prefix lookup — and a model name
+    // the manifest carries no key for falls back to the prefix and logs the
+    // miss, so an edit can never blank the board.
+    if (pres && pres.model) {
+      var statedAsset = manifestByKind[pres.model];
+      if (statedAsset) asset = statedAsset;
+      // eslint-disable-next-line no-console
+      else console.warn("tmct: no model named \"" + pres.model + "\" in the asset manifest — " + id + " keeps its " + kind + " mesh");
+    }
+    var labelSprite = makeAgentLabel(pres && pres.label ? pres.label : id, asset ? asset.targetHeight : 1);
+    labelSprite.name = "label-" + id;
+    entry.group.add(labelSprite);
     if (asset) {
       loadGlbRaw(modelUrlFor(asset.destPath)).then(function (gltf) {
         normalizeToHeight(gltf.scene, asset.targetHeight);
@@ -1133,6 +1159,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     clearFlash();
     removalLog = [];
     manifestByKind = buildManifestByKind(input && input.assetManifest);
+    agentPresentation = (input && input.agentPresentation) || null;
     await placeProps((input && input.propPlacements) || []);
     cameraRigged = false;
     lookTarget = null;

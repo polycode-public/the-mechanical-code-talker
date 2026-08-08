@@ -438,18 +438,22 @@
 {"world":"town-square-market","kind":"fact","subject":"square","predicate":"mgx:start-with","object":"1 fox and 4 goblins by default"}
 {"world":"town-square-market","kind":"fact","subject":"square","predicate":"mgx:hasA","object":"limit of 6 goblins and 8 food items at once by default"}
 {"world":"town-square-market","kind":"fact","subject":"prop","predicate":"mgx:cover","object":"one cell each, which nothing can walk into"}
-{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:hasA","object":"vision radius of 4 cells by default"}
-{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:start-with","object":"mass 20 by default"}
-{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:lose","object":"0.08 mass per turn by default"}
-{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:hasA","object":"vision radius of 3 cells by default"}
-{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:start-with","object":"mass 8 by default"}
-{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:lose","object":"0.06 mass per turn by default"}
+{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:vision-radius","object":"4"}
+{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:hasMass","object":"20"}
+{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:mass-drain-per-turn","object":"0.08"}
+{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:pursues","object":"goblin"}
+{"world":"town-square-market","kind":"fact","subject":"fox","predicate":"mgx:consumes","object":"goblin"}
+{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:vision-radius","object":"3"}
+{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:hasMass","object":"8"}
+{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:mass-drain-per-turn","object":"0.06"}
+{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:consumes","object":"crumb"}
+{"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:consumes","object":"morsel"}
 {"world":"town-square-market","kind":"fact","subject":"goblin","predicate":"mgx:arrive","object":"every 5 turns at the edge of the board by default"}
 {"world":"town-square-market","kind":"fact","subject":"crumb","predicate":"mgx:arrive","object":"every 3 turns on any open cell by default"}
 {"world":"town-square-market","kind":"fact","subject":"crumb","predicate":"mgx:start-with","object":"mass 2 by default"}
 {"world":"town-square-market","kind":"fact","subject":"morsel","predicate":"mgx:start-with","object":"mass 2 by default"}
 {"world":"town-square-market","kind":"fact","subject":"morsel","predicate":"mgx:arrive","object":"where the player puts it"}
-{"world":"town-square-market","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"4 cells for the fox by default"}
-{"world":"town-square-market","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"3 cells for the goblin by default"}
+{"world":"town-square-market","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"4 cells for the fox"}
+{"world":"town-square-market","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"3 cells for the goblin"}
 {"world":"town-square-market","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"animal","targetClass":"cell"}}
 {"world":"town-square-market","kind":"rule","name":"go","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}

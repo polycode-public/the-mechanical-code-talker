@@ -234,31 +234,32 @@ test("the cast's own classes reach animal, and the world module and the engine n
   assert.deepEqual(SEED_TAXONOMY.map(([a]) => a).filter((c) => c === "fox").length, 1);
 });
 
-test("structural facts quote the shipped defaults and say \"by default\" for anything a slider can move", () => {
+test("structural facts quote the shipped numbers: trait rows for the cast, \"by default\" only where config still decides", () => {
   const knobs = DEFAULT_GAME_CONFIG.mudiii;
   const rows = [...structuralFactRows(TOWN_SQUARE_LAYOUTS["town-square"])];
   const objectsFor = (subject, predicate) => rows.filter((r) => r.subject === subject && r.predicate === predicate).map((r) => r.object);
   assert.deepEqual(objectsFor("board", "mgx:hasA"), ["12 rows", "12 columns", "144 cells"]);
-  assert.deepEqual(objectsFor("fox", "mgx:start-with"), [`mass ${knobs.predatorInitialMass} by default`]);
-  assert.deepEqual(objectsFor("goblin", "mgx:lose"), [`${knobs.preyMassDecrementPerTurn} mass per turn by default`]);
+  assert.deepEqual(objectsFor("fox", "mgx:hasMass"), [String(knobs.predatorInitialMass)]);
+  assert.deepEqual(objectsFor("fox", "mgx:vision-radius"), [String(knobs.predatorVisionRadius)]);
+  assert.deepEqual(objectsFor("fox", "mgx:pursues"), ["goblin"]);
+  assert.deepEqual(objectsFor("fox", "mgx:consumes"), ["goblin"]);
+  assert.deepEqual(objectsFor("goblin", "mgx:mass-drain-per-turn"), [String(knobs.preyMassDecrementPerTurn)]);
+  assert.deepEqual(objectsFor("goblin", "mgx:consumes"), ["crumb", "morsel"]);
+  assert.deepEqual(objectsFor("goblin", "mgx:evades"), [], "the fear derives from the fox's own appetite, never stated twice");
   assert.deepEqual(objectsFor("goblin", "mgx:arrive"), [`every ${knobs.preySpawnIntervalTurns} turns at the edge of the board by default`]);
   assert.deepEqual(objectsFor("crumb", "mgx:arrive"), [`every ${knobs.foodSpawnIntervalTurns} turns on any open cell by default`]);
+  assert.deepEqual(objectsFor("crumb", "mgx:start-with"), [`mass ${knobs.spawnedFoodMass} by default`], "food mass stays a config knob, so it keeps the hedge");
   assert.deepEqual(objectsFor("square", "mgx:cover"), ["138 open cells and 6 cells a prop stands on"]);
-  for (const row of rows) {
-    if (/^\d/.test(row.object) && /mass|radius|turn/.test(row.object)) {
-      assert.match(row.object, /by default/, `a tunable number stated as flat fact: ${JSON.stringify(row)}`);
-    }
-  }
 });
 
-test("the vision-radius row takes the split branch, because this cast's two radii differ", () => {
+test("the vision-radius term takes the split branch, because this cast's two radii differ", () => {
   const knobs = DEFAULT_GAME_CONFIG.mudiii;
   assert.notEqual(knobs.predatorVisionRadius, knobs.preyVisionRadius, "the asymmetry is the point — the one-cell band is where a predator has acquired something that cannot see it back");
   const rows = [...structuralFactRows(TOWN_SQUARE_LAYOUTS["town-square"])]
     .filter((r) => r.subject === "vision radius");
   assert.deepEqual(rows.map((r) => r.object), [
-    `${knobs.predatorVisionRadius} cells for the fox by default`,
-    `${knobs.preyVisionRadius} cells for the goblin by default`,
+    `${knobs.predatorVisionRadius} cells for the fox`,
+    `${knobs.preyVisionRadius} cells for the goblin`,
   ]);
 });
 
