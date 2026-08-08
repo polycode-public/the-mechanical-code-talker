@@ -2619,3 +2619,105 @@ test("a second-wave class's centre-moving anchor is exactly its own -with-emotio
     assert.equal(centreMoving.face.scale, front.face.scale, `${cls}: centre-moving must keep the front view's own face.scale`);
   }
 });
+
+// ---- Ashcombe Hall's own household staff (butler/cook/gardener/
+// housekeeper): unlike every class above, none of the four owns its own
+// turning/walking art. Each already has its own dedicated plain resting
+// template (butler.toml and its three siblings), so the hall-staff-*.toml
+// files instead declare ONE shared turntable/pose/mood family under all
+// four class names at once — a template ALIAS connecting the four to a
+// shared body, never new per-class art, and never touching a class's own
+// resting look.
+
+const HALL_STAFF_CLASSES = ["butler", "cook", "gardener", "housekeeper"];
+const HALL_STAFF_ANGLES = ["left", "half-left", "half-right", "right"];
+const hallStaffAngleVariant = (cls, angle) => variantRequiring(cls, [`${FACING_PROPERTY}=${angle}`]);
+const hallStaffMovingVariant = (cls, angle) => variantRequiring(cls, [`${FACING_PROPERTY}=${angle}`, `${POSE_PROPERTY}=moving`]);
+const hallStaffCentreMovingVariant = (cls) => variantRequiring(cls, [`${POSE_PROPERTY}=moving`]);
+
+test("every household-staff class still resolves, at rest, to its own distinct plain template — the alias never touches the resting look", () => {
+  const resting = HALL_STAFF_CLASSES.map((cls) => resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY));
+  for (let i = 0; i < HALL_STAFF_CLASSES.length; i += 1) {
+    const own = REAL_LARGE_TEMPLATES.find((t) => Array.isArray(t.classes) && t.classes.length === 1 && t.classes[0] === HALL_STAFF_CLASSES[i]);
+    assert.ok(own, `${HALL_STAFF_CLASSES[i]}: no single-class resting template found`);
+    assert.equal(resting[i], own.svg, `${HALL_STAFF_CLASSES[i]}: an untaught instance must render its own dedicated resting art`);
+    for (let j = i + 1; j < HALL_STAFF_CLASSES.length; j += 1) {
+      assert.notEqual(resting[i], resting[j], `${HALL_STAFF_CLASSES[i]} and ${HALL_STAFF_CLASSES[j]} must keep visually distinct resting art`);
+    }
+  }
+});
+
+test("every household-staff turntable/pose/mood variant is declared once, shared under all four class names — a real alias, not four copies", () => {
+  const variants = [
+    ...HALL_STAFF_ANGLES.map((a) => hallStaffAngleVariant("butler", a)),
+    ...HALL_STAFF_ANGLES.map((a) => hallStaffMovingVariant("butler", a)),
+    hallStaffCentreMovingVariant("butler"),
+    REAL_LARGE_TEMPLATES.find((t) => Array.isArray(t.classes) && t.classes.includes("butler") && t.parameters?.emotion && !t.match),
+  ];
+  for (const variant of variants) {
+    assert.ok(variant, "expected a household-staff variant, found none");
+    assert.deepEqual([...variant.classes].sort(), [...HALL_STAFF_CLASSES].sort(), "a household-staff variant must name all four staff classes, never just one");
+  }
+});
+
+test("every household-staff class carries all four named turntable angles as real single-constraint variants", () => {
+  for (const cls of HALL_STAFF_CLASSES) {
+    for (const angle of HALL_STAFF_ANGLES) {
+      assert.ok(hallStaffAngleVariant(cls, angle), `${cls} has no variant requiring ${FACING_PROPERTY} = ${angle}`);
+    }
+  }
+});
+
+test("every household-staff class carries a combined facing-and-pose variant at every angle, each requiring two facts at once", () => {
+  for (const cls of HALL_STAFF_CLASSES) {
+    for (const angle of HALL_STAFF_ANGLES) {
+      const variant = hallStaffMovingVariant(cls, angle);
+      assert.ok(variant, `${cls} has no combined ${FACING_PROPERTY}=${angle} + ${POSE_PROPERTY} variant`);
+      assert.equal(matchConstraints(variant).length, 2, `${cls}/${angle}: the combined variant must require exactly the two facts`);
+      assert.ok(Array.isArray(variant.match), `${cls}/${angle}: two constraints must be authored as repeated [[match]] tables`);
+    }
+  }
+});
+
+test("a taught mgx:faces/mgx:pose fact pulls every household-staff class off its own resting look and onto the shared turning/walking art", () => {
+  for (const cls of HALL_STAFF_CLASSES) {
+    const resting = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    for (const angle of HALL_STAFF_ANGLES) {
+      const facing = resolveSpriteAsset(cls, [], faces(`the-${cls}`, angle), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(facing.includes(`hall-staff-facing-${angle}-fill`), `${cls}/${angle}: the shared alias art must be what renders`);
+      assert.notEqual(facing, resting, `${cls}/${angle}: a facing fact must move the sprite off its resting art`);
+    }
+    const moving = resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(moving.includes("hall-staff-moving-fill"), `${cls}: the shared centre-moving alias art must be what renders`);
+    assert.notEqual(moving, resting, `${cls}: a pose fact must move the sprite off its resting art`);
+  }
+});
+
+test("mood, facing and pose all compose on every household-staff class, exactly as the second-wave person-role classes do", () => {
+  for (const cls of HALL_STAFF_CLASSES) {
+    for (const angle of HALL_STAFF_ANGLES) {
+      for (const word of EMOTION_WORDS) {
+        const facts = [
+          { subject: `the-${cls}`, predicate: FACING_PROPERTY, object: angle },
+          { subject: `the-${cls}`, predicate: POSE_PROPERTY, object: "moving" },
+          { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+        ];
+        const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+        assert.ok(svg.includes(`hall-staff-facing-${angle}-moving-fill`), `${cls}/${angle}/${word}: the shared moving-frame alias art must be what renders`);
+        assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${angle}/${word}: that mood's own fragment markup must appear`);
+        assert.ok(!svg.includes("{{"), `${cls}/${angle}/${word}: no unresolved placeholder token may reach the output`);
+      }
+    }
+  }
+});
+
+test("the household-staff right-facing aliases mirror the left-facing ones rather than redrawing them", () => {
+  for (const [leftAngle, rightAngle] of [["left", "right"], ["half-left", "half-right"]]) {
+    const left = hallStaffAngleVariant("butler", leftAngle);
+    const right = hallStaffAngleVariant("butler", rightAngle);
+    assert.ok(right.svg.includes('transform="translate(24 0) scale(-1 1)"'), `the ${rightAngle} file mirrors rather than redrawing`);
+    assert.ok(Math.abs(right.face.cx - (24 - left.face.cx)) < 1e-9, `the ${rightAngle} anchor must sit at 24 - ${left.face.cx}`);
+    assert.equal(right.face.cy, left.face.cy, "a mirror never changes the face's height");
+    assert.equal(right.face.scale, left.face.scale, "a mirror never changes the face's size");
+  }
+});
