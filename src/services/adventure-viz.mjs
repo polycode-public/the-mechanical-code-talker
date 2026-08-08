@@ -40,7 +40,7 @@
 // beyond this module's own exports, which is what keeps a raw `.toString()`
 // splice safe.
 //
-// Four further pure helpers are exported for testing but NOT spliced,
+// Five further pure helpers are exported for testing but NOT spliced,
 // because each calls another module's export — the in-page script instead
 // reaches through the browser bundle's own `tmct` surface (mirroring
 // how the spider-fly page's inline script calls it rather than re-importing
@@ -52,12 +52,16 @@
 // `pillsFor` mirrors it against `tmct.page.roomAffordances`),
 // `goalStatusLines` (calls `foldWorldState` and adventure-autoplay.mjs's own
 // `exposedFacts`; the in-page `goalStatusLinesFor` mirrors both against the
-// `tmct` surface too), and `visitedRoomGraph` (a directions-only
+// `tmct` surface too), `visitedRoomGraph` (a directions-only
 // layout of the rooms a session has actually visited, now a thin wrapper over
 // viz-room-graph.mjs's shared `directedGridLayout` — mud-viz.mjs's own
 // burrowGraph wrote the same BFS-grid layout a second time under its own
 // name, and that shared module is where the layout lives now; see its own
-// header for the algorithm and what `hints`/disconnected components mean).
+// header for the algorithm and what `hints`/disconnected components mean),
+// and `roomWalkerPropertyFacts` (calls sprite-animation.mjs's own
+// `oscillateWalkStep`; the in-page `walkerFactsFor` mirrors it against
+// `tmct.page.spriteAnimation.oscillateWalkStep` — see the room-sprite
+// resolution section below for how its output reaches the resolver).
 // The in-page script never splices `directedGridLayout`/`roomGraphSvg`
 // either, for the same not-self-contained reason: it calls
 // `tmct.page.directedGridLayout`/`tmct.page.roomGraphSvg` straight
@@ -93,13 +97,14 @@
 // (adventure-browser-entry.mjs), never here — this module only renders and
 // reads.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel, rowsForWorld, wordBeforeCursor, demoEyebrowHtml, EYEBROW_LINKS_CSS } from "./viz-theme.mjs";
-import { createTicker, createSerialQueue } from "./viz-ticker.mjs";
+import { createTicker, createSerialQueue, prefersReducedMotion } from "./viz-ticker.mjs";
 import { directedGridLayout } from "./viz-room-graph.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
 import { exposedFacts } from "./adventure-autoplay.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { classAncestorChain } from "../domain/sprite-map.mjs";
 import { renderWorldEditorText } from "./adventure-editor.mjs";
+import { oscillateWalkStep, SPRITE_POSE_MOVING } from "../domain/sprite-animation.mjs";
 
 const DEFAULT_TITLE = "tmct — the adventure";
 const PREVIEW_MAX_TICKS = 30;
@@ -163,6 +168,35 @@ export function spriteAncestryRows(rows, subject) {
  *  against (e.g. an mgx:hasProperty row). Pure. */
 export function factsForSubject(rows, subject) {
   return (rows || []).filter((r) => r.subject === subject);
+}
+
+/** A stable animation-cycle offset for `subject` — the sum of its own
+ *  character codes — so two members of staff sharing a room usually turn at
+ *  different points of the SAME shared clock rather than in lockstep (a
+ *  same-total coincidence between two particular names is possible, since
+ *  the walk cycle only has 18 steps; harmless either way, as the two just
+ *  read as turning together). Pure. */
+function walkerPhase(subject) {
+  return [...String(subject || "")].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+}
+
+/** The synthetic mgx:faces/mgx:pose property facts a room's own walking NPC
+ *  `subject` renders with at animation `tick` — sprite-animation.mjs's own
+ *  oscillateWalkStep read as the small `{predicate, object}` fact shape
+ *  sprite-templates.mjs's resolver already matches a TAUGHT fact against, so
+ *  household staff (butler/cook/gardener/housekeeper) cycle through the
+ *  turntable art data/sprites-large/*.toml's own household-staff aliases
+ *  carry, with nothing ever written to the store. `walkerPhase` offsets one
+ *  NPC's own cycle from another's. Empty at the walk's own front-facing/
+ *  at-rest instants (oscillateWalkStep's null facing, "static" pose) — the
+ *  class's own resting template already draws that, so this never asks for a
+ *  fact that changes nothing. Pure. */
+export function roomWalkerPropertyFacts(subject, tick) {
+  const step = oscillateWalkStep(Number(tick) + walkerPhase(subject), {});
+  const facts = [];
+  if (step.facing) facts.push({ predicate: "mgx:faces", object: step.facing });
+  if (step.pose === SPRITE_POSE_MOVING) facts.push({ predicate: "mgx:pose", object: step.pose });
+  return facts;
 }
 
 /** The room a subject's placement resolves into, for VISIBILITY — a room
@@ -1119,6 +1153,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   "use strict";
   const createTicker = ${createTicker.toString()};
   const createSerialQueue = ${createSerialQueue.toString()};
+  const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomSceneObjects = ${roomSceneObjects.toString()};
@@ -1573,10 +1608,35 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // unknown character as a figure, and neither should ever draw a creature.
   const ROOT_FALLBACK_BY_CLASS = { adventurer: "person", person: "person", room: "room" };
   const rootFallbackFor = (cls) => ROOT_FALLBACK_BY_CLASS[cls] || "portable";
+
+  // ---- NPC idle turn — a synthetic mgx:faces/mgx:pose fact pair (never
+  // written to the store) merged onto a person-classed room NPC's own
+  // property facts, so household staff (butler/cook/gardener/housekeeper)
+  // cycle through the turning/walking art data/sprites-large/*.toml's own
+  // household-staff aliases carry, the same [match] resolver path a taught
+  // fact would take. Mirrors the module's own exported, tested
+  // roomWalkerPropertyFacts against the bundle's published
+  // tmct.page.spriteAnimation.oscillateWalkStep (see this module's own
+  // header for why the calling-another-module pieces are mirrored rather
+  // than spliced). walkTick advances on its own clock below, separate from
+  // the game ticker — this never touches the store or the persisted save.
+  // Skipped entirely under prefers-reduced-motion, so a room with staff in
+  // it looks exactly as it did before this feature shipped.
+  const reducedMotion = prefersReducedMotion();
+  let walkTick = 0;
+  function walkerFactsFor(subject) {
+    const phase = [...String(subject || "")].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    const step = tmct.page.spriteAnimation.oscillateWalkStep(walkTick + phase, {});
+    const facts = [];
+    if (step.facing) facts.push({ predicate: "mgx:faces", object: step.facing });
+    if (step.pose === "moving") facts.push({ predicate: "mgx:pose", object: step.pose });
+    return facts;
+  }
   function resolveObjectSprite(rows, s) {
     if (s.subject === "you") return tmct.page.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmct.page.SPRITE_REGISTRY, { rootFallback: "person", instanceKey: "you" });
+    const walkFacts = !reducedMotion && s.spriteClass === "person" ? walkerFactsFor(s.subject) : [];
     return tmct.page.resolveSpriteAsset(
-      s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject),
+      s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject).concat(walkFacts),
       activeSpriteTemplates, tmct.page.SPRITE_REGISTRY,
       { rootFallback: rootFallbackFor(s.spriteClass), instanceKey: s.subject },
     );
@@ -1622,8 +1682,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     runTurn("go " + btn.getAttribute("data-direction"));
   });
 
-  function redraw(snap) {
-    lastSnapshot = snap;
+  // The room's own sprite tiles (wall band, floor stacks, the player's own
+  // slot) — factored out of redraw() so the NPC idle-turn clock below can
+  // refresh JUST these tiles on its own faster/independent cadence, without
+  // re-running the caption/pills/map/goal rebuilds redraw() also does, and
+  // critically without re-triggering schedulePersistSave() on every walk
+  // frame.
+  function redrawRoomSprites(snap) {
     const layout = roomSceneLayout(snap.rows, snap.state, snap.here);
     wallRowEl.innerHTML = layout.wall.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s), s.subject)).join("");
     floorRowEl.innerHTML = layout.floor.map((stack) => {
@@ -1634,6 +1699,11 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       }).join("") + "</div>";
     }).join("");
     youSlotEl.innerHTML = spriteCardHtml("you", "adventurer", resolveObjectSprite(snap.rows, { subject: "you", spriteClass: "adventurer" }));
+  }
+
+  function redraw(snap) {
+    lastSnapshot = snap;
+    redrawRoomSprites(snap);
     roomNameEl.textContent = "the " + snap.here;
     roomFrameEl.setAttribute("data-room-kind", roomKindForRoom(snap.rows, snap.here));
     roomKindIconEl.innerHTML = roomKindIconSvg(snap.rows, snap.here);
@@ -1850,6 +1920,18 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false; editModeBtn.disabled = false;
     if (scenarioSelectEl) scenarioSelectEl.disabled = false;
+  }
+
+  // The NPC idle-turn clock — its own interval, separate from the game
+  // ticker above (that one drives real turns and the persisted save; this
+  // one only cycles which frame the room's own staff show). Paused rooms,
+  // edit mode and an as-yet-unbooted session all just skip the redraw.
+  if (!reducedMotion) {
+    setInterval(() => {
+      walkTick += 1;
+      if (!lastSnapshot || document.body.classList.contains("editing")) return;
+      redrawRoomSprites(lastSnapshot);
+    }, ADVENTURE.tickWaitMs);
   }
 
   const ticker = createTicker({

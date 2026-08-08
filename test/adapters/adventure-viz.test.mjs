@@ -14,7 +14,7 @@ import {
   renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
   visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, groundedPlaceholder, suggestionsForTerm,
   exitDoorways,
-  spriteAncestryRows, factsForSubject, scenePlacement, roomSceneLayout, roomKindForRoom,
+  spriteAncestryRows, factsForSubject, scenePlacement, roomSceneLayout, roomKindForRoom, roomWalkerPropertyFacts,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -106,6 +106,25 @@ test("factsForSubject: returns only the rows belonging to the named subject", ()
     { subject: "lamp", predicate: "mgx:located-in", object: "study" },
   ]);
   assert.deepEqual(factsForSubject(ROWS, "nobody-home"), []);
+});
+
+test("roomWalkerPropertyFacts: a facing-and-moving tick yields both an mgx:faces and an mgx:pose fact", () => {
+  assert.deepEqual(roomWalkerPropertyFacts("", 0), [
+    { predicate: "mgx:faces", object: "right" },
+    { predicate: "mgx:pose", object: "moving" },
+  ]);
+});
+
+test("roomWalkerPropertyFacts: a facing-but-static tick yields only the facing fact — 'static' is the absent mgx:pose fact, never written", () => {
+  assert.deepEqual(roomWalkerPropertyFacts("", 1), [{ predicate: "mgx:faces", object: "right" }]);
+});
+
+test("roomWalkerPropertyFacts: the walk's own centre-turn instant yields no facts at all — the class's own resting template already draws front-on", () => {
+  assert.deepEqual(roomWalkerPropertyFacts("", 7), []);
+});
+
+test("roomWalkerPropertyFacts: two differently-named subjects usually land on different points of the SAME clock at the same tick", () => {
+  assert.notDeepEqual(roomWalkerPropertyFacts("butler", 0), roomWalkerPropertyFacts("gardener", 0));
 });
 
 test("roomSceneObjects: draws every subject actually visible in the room, sorted, excluding the player", () => {

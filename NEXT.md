@@ -39,10 +39,6 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
 - [ ] **Goal recognition** (`archive/PLAN_DISCOURSE_AND_RECOGNITION.md`) — every slice of both
   parts built; A0–B4 CI-verified, B5 (recognition surfaces) CODE-COMPLETE on `main` riding the
   next batch, plan archived. Remove this entry when that batch's pipeline verifies B5.
-- [ ] **Adventure sprite art** — the sprites redesign shipped and CI-verified; its shared
-  animation machinery is live on adventure.html's bundle but visually inert there until any
-  adventure class gains facing/moving frames, plus one small `adventure-viz.mjs` render call
-  once art exists. IN FLIGHT: sub-agent on it in the main tree.
 - [ ] **Sprites iteration** (operator, 2026-08-08) — ontology sections get connector lines
   between boxes as a real hierarchy diagram; every sprite card clickable to start animating,
   click toggles turning/emoting, started cards keep running concurrently with state retained.
