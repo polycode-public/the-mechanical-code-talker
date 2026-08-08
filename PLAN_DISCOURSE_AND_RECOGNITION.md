@@ -713,9 +713,12 @@ families' effect predicates — sorted by id, screened by a declared toolset. `/
 `test/domain/recognition-goals.test.mjs` and the `template.command.goals` rows in
 `test/corpus/templates.jsonl`.
 
-**Slice 3 — containment and the reject class.** `recognizeGoal(trace, goals, ctx)` returning
-`{ goal, reject, proof, why }` with the three outcomes and no fourth. The first TOOL-9 cases land in
-`test-benchmarks/agentbench/cases.jsonl` here, including at least one that must reject.
+**Slice 3 — containment and the reject class. BUILT.** `recognizeGoal(trace, goals, {expand})` in
+`recognize.mjs` tests subsequence containment over each goal's admissible plans: one survivor is
+recognized with the fitting plan as proof, two or more refuse-and-list, none survives is the reject
+class. Five TOOL-9 cases landed in `test-benchmarks/agentbench/cases.jsonl` (one recognized, two
+reject, two ambiguous refusals); `envelope.json` reads `rungReached: "TOOL-9"`. Tests:
+`test/domain/recognition-containment.test.mjs`.
 
 **Slice 4 — autoplay re-based on the general recognizer. BUILT.** The single `mgx:is-objective`
 marker read is now a filter over `declaredGoals`' world-source goals: one shipped objective plans
@@ -767,16 +770,16 @@ fits none.
 
 **A passing cycle looks like this:**
 
-1. TOOL-9 cases exist in `test-benchmarks/agentbench/cases.jsonl`, appended (never edited into existing rows), with
+1. MET. TOOL-9 cases exist in `test-benchmarks/agentbench/cases.jsonl`, appended (never edited into existing rows), with
    the addition recorded in the write-up. At least one case must reject, and at least one must be
    ambiguous and refuse.
-2. The goal driver reads `rungReached: TOOL-9` in `test-benchmarks/agentbench/envelope.json`, regenerated
+2. MET. The goal driver reads `rungReached: TOOL-9` in `test-benchmarks/agentbench/envelope.json`, regenerated
    deterministically.
-3. Hallucination stays 0%. A goal recognized outside the declared N+1 set fails outright, by the
+3. MET. Hallucination stays 0%. A goal recognized outside the declared N+1 set fails outright, by the
    measurement contract that already governs every rung.
-4. A forced nearest fit fails. A case whose trace fits nothing and gets a named goal back is a
+4. MET. A forced nearest fit fails. A case whose trace fits nothing and gets a named goal back is a
    failure even when the named goal is the plausible one.
-5. `scripts/agi-scales-aggregate.mjs`'s goal-origination distance moves from notch 2 to notch 3, whose
+5. MET. `scripts/agi-scales-aggregate.mjs`'s goal-origination distance moves from notch 2 to notch 3, whose
    described criterion is *a goal inferred from an observed trace (TOOL-9)*.
 
 ---
