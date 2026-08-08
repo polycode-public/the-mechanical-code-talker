@@ -617,6 +617,8 @@ dact:apology a dact:CommunicativeFunction ;
 #    pattern 15  every N1 VERB [a] N2         owl:someValuesFrom (bare existential,
 #                                             no that-clause)
 #    pattern 16  VERB is transitive           owl:TransitiveProperty
+#    pattern 17  VERB1 is the inverse         owl:inverseOf, both directions
+#                of VERB2
 #
 #    Flat-store stand-in: the JSON fact store has no RDF lists, so a pattern-4
 #    intersection is flattened to REPEATED owl:intersectionOf triples (one per
@@ -673,6 +675,13 @@ tmct:blue owl:differentFrom tmct:yellow .
 tmct:red owl:differentFrom tmct:yellow .
 
 tmct:contains a owl:TransitiveProperty .
+
+# Pattern 17's term (increment 4e of PLAN_SYLLOGIST_EL_DL.md), declared the
+# same way as the six terms above: owl: is standard OWL 2 vocabulary, so it
+# needs no declaration of its own, only this documentation example. Both
+# directions are stored, unlike owl:differentFrom's one-direction storage.
+tmct:contains owl:inverseOf tmct:owns .
+tmct:owns owl:inverseOf tmct:contains .
 
 # ---------------------------------------------------------------------------
 # 3. Software-entity classes — the lexicon's top-level nouns (lowercase lemma

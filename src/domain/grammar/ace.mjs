@@ -1,5 +1,5 @@
 // grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser.
-// Implements the 16 controlled-English sentence patterns of
+// Implements the 17 controlled-English sentence patterns of
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
@@ -54,6 +54,7 @@ const PATTERN_ENUMERATION = "enumeration";
 const PATTERN_DIFFERENT_FROM = "differentFrom";
 const PATTERN_BARE_EXISTENTIAL = "bareExistential";
 const PATTERN_TRANSITIVE_ROLE = "transitiveRole";
+const PATTERN_INVERSE_ROLE = "inverseRole";
 
 /** The pattern field's full domain, in the README's table order. */
 const PATTERNS = Object.freeze([
@@ -61,6 +62,7 @@ const PATTERNS = Object.freeze([
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
   PATTERN_CAPABILITY, PATTERN_UNION, PATTERN_COMPLEMENT, PATTERN_NEGATIVE_TYPE,
   PATTERN_ENUMERATION, PATTERN_DIFFERENT_FROM, PATTERN_BARE_EXISTENTIAL, PATTERN_TRANSITIVE_ROLE,
+  PATTERN_INVERSE_ROLE,
 ]);
 
 const DET = new Set(["a", "an", "the"]);
@@ -597,23 +599,42 @@ function parseEnumeration(lexicon, toks, lower) {
   return hit(PATTERN_ENUMERATION, allNps, triples);
 }
 
-/** Pattern 16 — "VERB is transitive" → owl:TransitiveProperty on the verb's
- *  minted predicate. Accepts the verb's 3sg surface ("contains") through the
- *  existing `lookupVerb` fold, and its gerund ("containing") through a small
- *  local ing-stripping fold — the lexicon's own morphology never folds
- *  gerunds, since no other pattern needs one. */
-function parseTransitiveRole(lexicon, toks, lower) {
-  const ns = lexicon.ns;
-  const surface = lower[0];
+/** A declared verb's minted predicate from a bare surface form: the 3sg
+ *  surface ("contains") through the existing `lookupVerb` fold, or its
+ *  gerund ("containing") through a small local ing-stripping fold — the
+ *  lexicon's own morphology never folds gerunds, since patterns 16 and 17
+ *  are the only ones that need one. Returns null for an undeclared verb. */
+function verbPredicateFromSurface(lexicon, surface) {
   let verb = lookupVerb(lexicon, surface);
   if (!verb && surface.length > 4 && /ing$/.test(surface)) {
     const stem = surface.slice(0, -3);
     verb = lookupVerb(lexicon, stem) || lookupVerb(lexicon, `${stem}e`);
   }
-  if (!verb) return null;
-  const pred = predicateOf(verb, ns);
+  return verb ? predicateOf(verb, lexicon.ns) : null;
+}
+
+/** Pattern 16 — "VERB is transitive" → owl:TransitiveProperty on the verb's
+ *  minted predicate. */
+function parseTransitiveRole(lexicon, toks, lower) {
+  const pred = verbPredicateFromSurface(lexicon, lower[0]);
+  if (!pred) return null;
   return hit(PATTERN_TRANSITIVE_ROLE, [], [
     { subject: pred, predicate: "rdf:type", object: "owl:TransitiveProperty", kind: "owl:TransitiveProperty" },
+  ]);
+}
+
+/** Pattern 17 — "V1 is the inverse of V2" → owl:inverseOf between the two
+ *  verbs' minted predicates, both directions (unlike owl:differentFrom's
+ *  one-direction storage), so either verb's forward walk finds the other
+ *  with no extra graph hop. Each side accepts the same 3sg-or-gerund fold
+ *  pattern 16 does. */
+function parseInverseRole(lexicon, toks, lower) {
+  const p1 = verbPredicateFromSurface(lexicon, lower[0]);
+  const p2 = verbPredicateFromSurface(lexicon, lower[5]);
+  if (!p1 || !p2) return null;
+  return hit(PATTERN_INVERSE_ROLE, [], [
+    { subject: p1, predicate: "owl:inverseOf", object: p2, kind: "owl:inverseOf" },
+    { subject: p2, predicate: "owl:inverseOf", object: p1, kind: "owl:inverseOf" },
   ]);
 }
 
@@ -700,7 +721,7 @@ function parseCopula(lexicon, toks, lower, isIdx) {
   ]);
 }
 
-/** Parse one sentence against the 16-pattern ACE-OWL sub-fragment. See the
+/** Parse one sentence against the 17-pattern ACE-OWL sub-fragment. See the
  *  file header for the result contract; `lexicon` defaults to the committed
  *  core under the library's own neutral DEFAULT_NS ("ex:") when the caller
  *  doesn't supply one. */
@@ -711,6 +732,10 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
   if (toks.length === 3 && lower[1] === "is" && lower[2] === "transitive") {
     const transitive = parseTransitiveRole(lexicon, toks, lower);
     if (transitive) return transitive;
+  }
+  if (toks.length === 6 && lower[1] === "is" && lower[2] === "the" && lower[3] === "inverse" && lower[4] === "of") {
+    const inverse = parseInverseRole(lexicon, toks, lower);
+    if (inverse) return inverse;
   }
   if (lower[0] === "everything" && lower[1] === "that") return parseComplement(lexicon, toks, lower);
   if (lower[0] === "every") return parseEvery(lexicon, toks, lower);

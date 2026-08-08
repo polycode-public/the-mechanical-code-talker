@@ -52,6 +52,7 @@ section 2:
 | PROPERNAME1 is not PROPERNAME2 | `owl:differentFrom` (both sides individuals) |
 | every N1 VERB [a] N2 | `owl:someValuesFrom` (bare existential, no `that`-clause) |
 | VERB is transitive | `owl:TransitiveProperty` |
+| VERB1 is the inverse of VERB2 | `owl:inverseOf` (both directions) |
 
 Two flat-store conventions to know: an intersection (pattern 4) is stored as
 **repeated `owl:intersectionOf` triples** (the JSON fact store has no RDF

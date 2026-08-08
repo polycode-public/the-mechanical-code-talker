@@ -1,6 +1,6 @@
 # tmct's ACE-OWL sub-fragment — the controlled-grammar pattern table
 
-Hand-authored stub defining the ~16 controlled-English sentence patterns tmct's
+Hand-authored stub defining the ~17 controlled-English sentence patterns tmct's
 grammar (Phase 2, `src/domain/grammar/ace.mjs`) maps to OWL axioms. The fragment is
 **inspired by** Attempto Controlled English (ACE) and the OWL output of its APE
 parser — it is a deliberately small sub-fragment, not an ACE implementation.
@@ -46,6 +46,7 @@ declines to emit.
 | 14 | *PROPERNAME1 is not PROPERNAME2* | `PROPERNAME1 owl:differentFrom PROPERNAME2` — individual inequality |
 | 15 | *every N1 VERB [a] N2* | `N1 rdfs:subClassOf R`, `R` an `owl:someValuesFrom` restriction — bare existential, no `that`-clause |
 | 16 | *VERB is transitive* | `VERB rdf:type owl:TransitiveProperty` |
+| 17 | *VERB1 is the inverse of VERB2* | `VERB1 owl:inverseOf VERB2`, `VERB2 owl:inverseOf VERB1` — both directions |
 
 ## Design notes
 
