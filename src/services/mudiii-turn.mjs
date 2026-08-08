@@ -27,6 +27,7 @@ import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { agentTraitsOf } from "../domain/agent-traits.mjs";
 
 const PREDATOR_KIND = MUDIII_ROLES.predator.kind; // "fox"
 const PREY_KIND = MUDIII_ROLES.prey.kind;         // "goblin"
@@ -506,9 +507,12 @@ async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_
     ...liveIdsOfKind(state.placements, SPAWNED_FOOD_KIND, state.removed),
     ...liveIdsOfKind(state.placements, PLACED_FOOD_KIND, state.removed),
   ];
-  const visionRadius = role === "predator"
-    ? gameConfig?.mudiii?.predatorVisionRadius
-    : gameConfig?.mudiii?.preyVisionRadius;
+  // The same trait-first read the tick engine performs: the observer's own
+  // mgx:vision-radius (or its class's) decides what it can see, and the
+  // config number covers a board whose rows state none — two readers of one
+  // question must not drift.
+  const visionRadius = agentTraitsOf(rows, observerId).visionRadius
+    ?? (role === "predator" ? gameConfig?.mudiii?.predatorVisionRadius : gameConfig?.mudiii?.preyVisionRadius);
   const belief = beliefSnapshotFor(observerId, observerCell, candidateIds, state, { visionRadius });
   const text = beliefLineFor(observerId, Object.entries(belief), taughtPlacementSubjects(rows, state.epoch));
   return {

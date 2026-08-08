@@ -19,6 +19,7 @@ import {
 import { findActionPath } from "../../domain/planning.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
+import { agentTraitsOf } from "../../domain/agent-traits.mjs";
 import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { classAncestorChain } from "../../domain/sprite-map.mjs";
@@ -340,5 +341,8 @@ publishTmctSurface({
     // cursor: the lateral SKOS neighbourhood and the vertical is-a chain.
     relatedForTerm, classAncestorChain,
     routeBetweenCells,
+    // What the page's scene boot reads to resolve each agent's stated
+    // display name and model off the rows, class chain included.
+    agentTraitsOf,
   },
 });
