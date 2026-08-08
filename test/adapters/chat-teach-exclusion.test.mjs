@@ -311,3 +311,24 @@ test("the ungrounded-pair refusal names the same unrecognized terms in both its 
     assert.equal((await factRows(dir)).length, 0);
   });
 });
+
+test("a filler-clause prefix ahead of a question never reaches the write boundary", async () => {
+  await withStore(async (dir) => {
+    await runTurn("a horse is a kind of animal.", { memoryDir: dir, sessionId: "s1" });
+    const { answer } = await runTurn("anyway what is a horse", { memoryDir: dir, sessionId: "s1" });
+    assert.doesNotMatch(answer, /noted — remembered/);
+    const rows = await factRows(dir);
+    assert.equal(rows.filter((r) => r.subject === "anyway").length, 0);
+  });
+});
+
+test("a counting aside before a wrapped teach still peels and stores", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("one more, teach me: no server is a client", { memoryDir: dir, sessionId: "s1" });
+    assert.match(answer, /noted — remembered/);
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "server");
+    assert.equal(rows[0].object, "client");
+  });
+});

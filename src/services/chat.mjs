@@ -40,7 +40,7 @@ import {
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
   locativePreposition,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix, QUESTION_LEAD_RE, fillerClausePrefix, leadsInterrogative } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -3175,7 +3175,7 @@ async function repairSharesLemma(from, to) {
  *    infix is unambiguous taxonomy-teach intent and the ACE path can't parse
  *    the two-word object; single-word objects stay with the ACE path. */
 async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
-  if (!memoryDir || QUESTION_LEAD_RE.test(line)) return null;
+  if (!memoryDir || leadsInterrogative(line)) return null;
   if (/\?\s*$/.test(String(line).trim())) return null; // a question never writes
   const inst = line.match(INSTANCE_TYPE_TEACH_RE);
   if (inst) {
@@ -5295,7 +5295,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // anchored QUESTION_LEAD_RE gate below — run the SAME closed misspelling
   // repair ask.mjs's typo tolerance applies BEFORE classifying, so the
   // question goes back to the question side instead of a teach suggestion.
-  if (QUESTION_LEAD_RE.test(correctMisspellings(rawInput))) return null;
+  if (leadsInterrogative(correctMisspellings(rawInput))) return null;
   const m = rawInput.match(TEACH_RE);
   const wrappedInput = m ? m[1].trim() : null;
   // The positive exclusion test (teachExclusionReason, above) — BARE surface
@@ -14067,7 +14067,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // short-circuit to null, and `miss` below (askMiss || THIS) would record a
   // null miss flag on every relaxation-rescued turn of a memory-less session.
   const relaxedTeachCollision = Boolean(!!(envelope?.relaxed?.dropped?.length) && !askMiss && memoryDir
-    && !QUESTION_LEAD_RE.test(trimmedQuery) && !/\?\s*$/.test(trimmedQuery)
+    && !leadsInterrogative(trimmedQuery) && !/\?\s*$/.test(trimmedQuery)
     && DECLARATIVE_KIND_OF_RE.test(trimmedQuery));
   const preCollisionAnswer = relaxedTeachCollision ? answer : null;
   const miss = askMiss || relaxedTeachCollision;
@@ -16594,6 +16594,27 @@ async function factsTouchedSince(memoryDir, before) {
   return touchedFactRows(before, after);
 }
 
+/** A whole-line miss whose only problem is a closed filler clause in front of a
+ *  real question. Peels the clause and re-runs the ORDINARY dispatcher once on
+ *  the remainder; accepted only on a double match — the peeled prefix comes from
+ *  the closed inventory AND the remainder grounds. A failed retry returns null
+ *  and the original miss stands untouched. Interrogative remainders only: a
+ *  stripped remainder must never reach the write boundary. */
+async function answerWithoutFillerPrefix(input, options, missed) {
+  if (!missed || typeof missed !== "object" || !missed.record?.miss) return null;
+  const peel = fillerClausePrefix(input);
+  if (!peel) return null;
+  const rest = peel.remainder;
+  if (!QUESTION_LEAD_RE.test(rest) && !/\?\s*$/.test(rest)) return null;
+  const retry = await dispatchTurn(rest, options);
+  if (!retry || typeof retry !== "object" || retry.record?.miss) return null;
+  if (retry.record?.type === "turn") retry.record.input = String(input ?? "").trim();
+  if (Array.isArray(retry.logLines) && retry.logLines.length > 1) {
+    retry.logLines[1] = `> ${String(input ?? "").trim()}`;
+  }
+  return retry;
+}
+
 /** Run one turn and report which Fact rows it wrote, as `factsTouched` beside
  *  the answer/record/logLines every caller already reads. The dispatch itself
  *  is dispatchTurn, below; this wrapper exists so the field lands on EVERY
@@ -16601,7 +16622,9 @@ async function factsTouchedSince(memoryDir, before) {
 export async function runTurn(input, options = {}) {
   const memoryDir = options?.memoryDir ?? null;
   const before = await factRowSnapshot(memoryDir);
-  const result = await dispatchTurn(input, options);
+  let result = await dispatchTurn(input, options);
+  const rescued = await answerWithoutFillerPrefix(input, options, result);
+  if (rescued) result = rescued;
   if (!result || typeof result !== "object") return result;
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
