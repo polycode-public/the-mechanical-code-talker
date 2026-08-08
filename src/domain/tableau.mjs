@@ -410,6 +410,39 @@ function applyAndRule(branch) {
   return { applied: false, touched: [] };
 }
 
+/** Two nodes labelled with the SAME nominal must be the same individual —
+ *  there is no alternative to branch over, so this is a deterministic
+ *  action, unlike the ≤-rule's choice of which pair to merge. Picks the
+ *  first (sorted) nominal key that has 2+ carriers and the first (sorted)
+ *  pair among them, so the result is the same regardless of iteration
+ *  order. */
+function applyNominalMergeRule(branch, kb) {
+  const byNom = new Map();
+  for (const node of branch.nodes.values()) {
+    for (const key of node.labels.keys()) {
+      if (!key.startsWith("nom(")) continue;
+      if (!byNom.has(key)) byNom.set(key, []);
+      byNom.get(key).push(node.id);
+    }
+  }
+  const keys = [...byNom.keys()].sort();
+  for (const key of keys) {
+    const ids = [...new Set(byNom.get(key))].sort();
+    if (ids.length < 2) continue;
+    const [a, b] = ids;
+    if (isMergeBlocked(branch, kb, a, b)) {
+      const fromA = branch.nodes.get(a).labels.get(key)?.from || [];
+      const fromB = branch.nodes.get(b).labels.get(key)?.from || [];
+      return {
+        kind: "clash",
+        clash: { nodeId: a, keyA: key, keyB: `merge(${a},${b})`, premises: sortedUnique([...fromA, ...fromB, ...mergeBlockPremises(branch, a, b)]) },
+      };
+    }
+    return { kind: "merge", a, b };
+  }
+  return { kind: "none" };
+}
+
 /** The universal rule. For a transitive role, an r-successor also receives
  *  the universal label itself, not just its filler — that is what lets
  *  ∀r.C reach an r-successor's own r-successor with no separate rule: the
@@ -617,6 +650,13 @@ function stepOnce(branch, kb) {
   const all_ = applyAllRule(branch, kb);
   if (all_.applied) return afterTouch(branch, all_.touched);
 
+  const nomMerge_ = applyNominalMergeRule(branch, kb);
+  if (nomMerge_.kind === "clash") return nomMerge_;
+  if (nomMerge_.kind === "merge") {
+    const keepId = mergeNodes(branch, kb, nomMerge_.a, nomMerge_.b);
+    return afterTouch(branch, [keepId]);
+  }
+
   const tbox_ = applyTboxRule(branch, kb);
   if (tbox_.applied) return afterTouch(branch, tbox_.touched);
 
@@ -737,6 +777,12 @@ function buildInitialBranch(kb, extraAssertions) {
     if (!extra || !extra.ind || !extra.expr) continue;
     addLabel(ensureNode(extra.ind), toNNF(extra.expr), extra.from || []);
   }
+  // Every nominal individual is trivially a member of its own singleton —
+  // seed that self-label now, so the nominal-merge rule has something to
+  // find the first time another node gets forced into the same nominal.
+  for (const [ind, from] of kb.nominalIndividuals || []) {
+    addLabel(ensureNode(ind), { t: "nom", ind }, from);
+  }
 
   const inequalityFrom = new Map();
   for (const pair of kb.differentFrom || []) {
@@ -816,7 +862,7 @@ function describeClashKind(clash) {
 /** Build the tableau knowledge base from a row set — on a real question,
  *  the output of extractTableauModule, never the raw store. Pure. Returns
  *  { axioms, assertions, roles, individuals, transitiveRoles, roleClosure,
- *  namedIndividuals, differentFrom }. */
+ *  namedIndividuals, nominalIndividuals, differentFrom }. */
 export function buildTableauKb(rows) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && r.subject && r.predicate) : [];
 
@@ -826,6 +872,7 @@ export function buildTableauKb(rows) {
   const cardinalityOf = new Map();  // restriction -> { kind, n, id }
   const unionMembersOf = new Map(); // union node -> [row, …]
   const complementOf = new Map();   // complement node -> row
+  const oneOfMembersOf = new Map(); // enumerated class -> [row, …]
   const subClassRows = [];
   const disjointRows = [];
   const typeRows = [];
@@ -858,8 +905,8 @@ export function buildTableauKb(rows) {
     else if (p === "owl:complementof") complementOf.set(r.subject, r);
     else if (p === "rdfs:subpropertyof") subPropertyRows.push(r);
     else if (p === "owl:differentfrom") differentFromRows.push(r);
-    // owl:oneOf, owl:inverseOf: reserved for a future increment, not read
-    // here.
+    else if (p === "owl:oneof") pushMap(oneOfMembersOf, r.subject, r);
+    // owl:inverseOf: reserved for a future increment, not read here.
   }
 
   const individualNamesFromType = new Set();
@@ -930,6 +977,25 @@ export function buildTableauKb(rows) {
     axioms.push(mkAxiom(notAtom, atom(complementId), [r.id]));
   }
 
+  // owl:oneOf: the enumerated class is subsumed by the union of its members'
+  // singleton (nominal) concepts, and each member's singleton is in turn
+  // subsumed by the enumerated class — a closed class, per section 8.6.
+  // Every member also gets its own self-label ({ind} ⊑ {ind}, trivially
+  // true) seeded at branch-init time (buildInitialBranch), so the nominal-
+  // merge rule has a real carrier of the nominal to merge an outsider into.
+  const nominalIndividuals = new Map(); // ind -> fact ids that declared it
+  for (const [classId, memberRows] of oneOfMembersOf) {
+    const sorted = [...memberRows].sort((a, b) => String(a.object).localeCompare(String(b.object)));
+    const nomExprs = sorted.map((mr) => ({ t: "nom", ind: mr.object }));
+    const ids = sorted.map((mr) => mr.id);
+    axioms.push(mkAxiom(atom(classId), toNNF(orE(nomExprs)), ids));
+    for (const mr of sorted) {
+      axioms.push(mkAxiom({ t: "nom", ind: mr.object }, atom(classId), [mr.id]));
+      const existing = nominalIndividuals.get(mr.object);
+      nominalIndividuals.set(mr.object, existing ? sortedUnique([...existing, mr.id]) : [mr.id]);
+    }
+  }
+
   const differentFrom = differentFromRows
     .map((r) => ({ a: r.subject, b: r.object, from: [r.id] }))
     .sort((a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b));
@@ -952,7 +1018,10 @@ export function buildTableauKb(rows) {
   const individuals = [...new Set(assertions.map((a) => a.ind))].sort();
   const namedIndividuals = new Set(individuals);
 
-  return { axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure, namedIndividuals, differentFrom };
+  return {
+    axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure,
+    namedIndividuals, nominalIndividuals, differentFrom,
+  };
 }
 
 function restrictKbToIndividual(kb, ind) {
@@ -964,6 +1033,7 @@ function restrictKbToIndividual(kb, ind) {
     transitiveRoles: kb.transitiveRoles,
     roleClosure: kb.roleClosure,
     namedIndividuals: kb.namedIndividuals,
+    nominalIndividuals: kb.nominalIndividuals,
     differentFrom: kb.differentFrom,
   };
 }
