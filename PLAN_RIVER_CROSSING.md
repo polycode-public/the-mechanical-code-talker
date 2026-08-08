@@ -413,6 +413,15 @@ These hold for every phase and module below.
 
 ## 4. Phase R0 — the trait vocabulary
 
+**Shipped.** `ontology/tmct-core.ttl` carries the five new predicates (label, domain/range,
+comment each); `test/domain/agent-traits.test.mjs` proves every trait predicate — the five new
+ones and the five reused ones — stores and reads back through `appendFacts`/`readFactRows`, a
+repeated multi-valued row reads back as two rows, and a numeric object survives as the string it
+was written as. The `FACT_PREDICATE_PHRASES` entries in 4.3 are deferred: `chat.mjs` holds a
+private twin of that table pinned byte-identical to `src/domain/fact-phrase.mjs` by
+`test/domain/fact-phrase.test.mjs`, so the five phrases need a matching edit to both tables in the
+same change, not `fact-phrase.mjs` alone.
+
 Goal: the graph can state every imperative that drives an agent. No behaviour changes; everything
 stores, reads back and round-trips.
 
@@ -479,6 +488,14 @@ node --test "test/estate/*.test.mjs"
 ---
 
 ## 5. Phase R1 — `src/domain/agent-traits.mjs`, the class chain and the instance copy
+
+**Shipped.** `src/domain/agent-traits.mjs` exports `classChainOf`, `traitValueOf`,
+`traitValuesOf`, `traitOriginOf`, `agentTraitsOf`, `classFactRowsFor` and `instanceFactsFrom`, all
+tested in `test/domain/agent-traits.test.mjs`. `classChainOf` is the chain walk lifted out of
+`adventure.mjs`'s `objectClassChain`, which now delegates to it (applying its own
+`worldActionRows` filter first) rather than holding a second copy of the walk; every existing
+`adventure.mjs` and `town-square-world.mjs` test still passes unchanged. Nothing calls the new
+module's spawn/resolver exports yet — that starts at R2.
 
 Goal: one pure module that answers "what drives this subject" from rows alone, and one that turns a
 class into an instance's own rows on spawn. Nothing calls it yet.
