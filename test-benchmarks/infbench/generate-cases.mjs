@@ -914,6 +914,92 @@ function dlComplement(rng) {
   return cases;
 }
 
+// E5/E6 (PLAN_SYLLOGIST_EL_DL.md phase 0): unlike dlDisjunction/dlComplement
+// above, every premise here parses TODAY — pattern 5's cardinality frame and
+// pattern 13's owl:oneOf enumeration are both phase-0-or-earlier grammar, so
+// both templates ARE lint()ed via checkEntailed. What's still missing is the
+// PROOF: neither the qualified-cardinality consistency check nor nominals +
+// UNA-lite identity has landed, so the honest floor is still a ceiling row.
+const DL_CARDINALITY_CLASH_CEILING = "OWL 2 DL qualified-cardinality consistency checking (Stage DL, PLAN_SYLLOGIST_EL_DL.md)";
+const DL_NOMINAL_ENUMERATION_CEILING = "OWL 2 DL nominals + UNA-lite identity (Stage DL, PLAN_SYLLOGIST_EL_DL.md)";
+
+function dlCardinalityClash(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(REGULAR_PLURAL_NOUNS, rng);
+  let cursor = 0;
+  const plural = (n) => `${n}s`;
+  for (let i = 0; i < 8; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [n1, n2] = picked;
+    const ind = mintIndividual();
+    // n1 ⊑ ≥2 has.n2, n1 ⊑ ≤0 has.n2, ind:n1 — the min/max clash makes the
+    // store inconsistent (E5), so the DIRECT membership fact must not certify
+    // uncontested. checkType "inconsistent" (dlDisjointProofSoundness's own
+    // shape): the query never produces a directional yes/no, so a miss on
+    // this clash is an honest incomplete, never a fabrication.
+    const premises = [
+      `every ${n1} has at least 2 ${plural(n2)}`,
+      `every ${n1} has at most 0 ${plural(n2)}`,
+      `${ind} is a ${n1}`,
+    ];
+    const query = `is ${ind} a ${n1}`;
+    const entailed = [
+      { subject: n1, predicate: "rdfs:subClassOf", object: `min-2-${n2}` },
+      { subject: n1, predicate: "rdfs:subClassOf", object: `max-0-${n2}` },
+      { subject: ind, predicate: "rdf:type", object: n1 },
+    ];
+    checkEntailed(`dl-cardclash-${i + 1}`, premises, entailed);
+    cases.push(mkCase({
+      band: "INF-8", template: "dlCardinalityClash", variant: "cardinality-clash",
+      arms: ["chat"], checkType: "inconsistent",
+      premises, query, expect: { verdict: "inconsistent", entailed, clash: [n1, n2] },
+      ceiling: DL_CARDINALITY_CLASH_CEILING,
+      note: "E5 (PLAN_SYLLOGIST_EL_DL.md): a min/max cardinality clash on the same restricted property (the bicycle/wheel shape). All three premises parse today; findConsistencyViolations never reads a cardinality restriction, so the clash sits silent and the direct membership fact would otherwise certify uncontested — an honest miss on the CLASH detection until Stage DL's qualified-cardinality increment wires the check.",
+    }));
+  }
+  return cases;
+}
+
+function dlNominalEnumeration(rng) {
+  const cases = [];
+  const regularPluralSet = new Set(REGULAR_PLURAL_NOUNS);
+  const shuffled = seededShuffle(CLASS_NOUNS, rng);
+  let cursor = 0;
+  const plural = (n) => `${n}s`;
+  for (let i = 0; i < 6; i += 1) {
+    // advance to the next regular-plural noun for the enumerated kind, so
+    // "kind" and "kinds" fold back to the SAME lemma (REGULAR_PLURAL_NOUNS'
+    // own doc explains why c1Cardinality needs the same guarantee) — walking
+    // the cursor forward also keeps `kind` out of the member/outsider draw
+    // just below, since pickClean can never re-select an already-passed index.
+    while (cursor < shuffled.length && !regularPluralSet.has(shuffled[cursor])) cursor += 1;
+    if (cursor >= shuffled.length) {
+      throw new Error("infbench/generate-cases.mjs: ran out of regular-plural nouns for dlNominalEnumeration");
+    }
+    const kind = shuffled[cursor];
+    cursor += 1;
+    const { picked, next } = pickClean(shuffled, cursor, 4);
+    cursor = next;
+    const [m1, m2, m3, outsider] = picked;
+    // the kind is exactly m1, m2 and m3; is outsider a kind? (E6). The
+    // enumeration itself parses and stores today (pattern 13); the honest
+    // "no" needs nominals (owl:oneOf read as a CLOSED class) plus UNA-lite's
+    // distinctness machinery, neither of which the tableau ships yet.
+    const premises = [`the ${plural(kind)} are exactly ${m1}, ${m2} and ${m3}`];
+    const query = `is ${outsider} a ${kind}`;
+    checkEntailed(`dl-nominal-${i + 1}`, premises, []);
+    cases.push(mkCase({
+      band: "INF-8", template: "dlNominalEnumeration", variant: "nominal-enumeration",
+      arms: ["chat"], checkType: "isa",
+      premises, query, expect: { verdict: "unproven", entailed: [] },
+      ceiling: DL_NOMINAL_ENUMERATION_CEILING,
+      note: "E6 (PLAN_SYLLOGIST_EL_DL.md): closing a class by enumeration. Pattern 13 stores the positive half (every member's rdf:type row) today, so 'is m1 a kind' already proves yes — but the negative 'no, outsider is not one of the named members' needs the tableau's nominal merge rule under UNA-lite, an honest miss until Stage DL.",
+    }));
+  }
+  return cases;
+}
+
 // The disjointness-proof-soundness discriminator: ind:c1, c1 ⊑ c2, c1 ⊥ c2.
 // Asked "is ind a c2", a sound engine must NOT answer "yes with a subclass
 // proof" — the memory is inconsistent, so the honest verdict is the clash, not
@@ -1359,6 +1445,7 @@ const TEMPLATE_SLUG = {
   a1UniversalConditional: "conditional", a2Reflexive: "reflexive", a2Converse: "converse",
   a2EntailedRetraction: "retract", b1DisjointVeto: "disjveto", b2PropertyInheritance: "prophas",
   c2SiblingResolution: "sibling",
+  dlCardinalityClash: "dlcardclash", dlNominalEnumeration: "dlnominal",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -1402,6 +1489,8 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     b1DisjointVeto: b1DisjointVeto(rng),
     b2PropertyInheritance: b2PropertyInheritance(rng),
     c2SiblingResolution: c2SiblingResolution(rng),
+    dlCardinalityClash: dlCardinalityClash(rng),
+    dlNominalEnumeration: dlNominalEnumeration(rng),
   };
   const all = Object.values(groups).flat();
   assignIds(all);
