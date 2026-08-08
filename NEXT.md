@@ -43,9 +43,10 @@ merges onto `main` often and pushes in batches; a pipeline fix rides the next re
   Parsing those subjects is real, separate grammar work.
 - [ ] **Goal recognition** (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part B) — B1 and A0 shipped and
   CI-verified; B2 (`/goals` + `tmct plan --goals`) CODE-COMPLETE on `main`, riding the next
-  batch. IN FLIGHT: B3 (containment + reject + TOOL-9, atomic with grader and envelope; owns
-  `recognize.mjs` + agentbench) and B4 (autoplay re-base; owns `adventure-autoplay.mjs`), in
-  parallel. Queued: B5 (recognition surfaces), after both. Briefs in the session scratchpad.
+  batch, joined by B4 (autoplay re-base, CODE-COMPLETE — shipped-world corpus byte-green). IN
+  FLIGHT: B3 (containment + reject + TOOL-9, atomic with grader and envelope; owns
+  `recognize.mjs` + agentbench). Queued: B5 (recognition surfaces), after B3. Briefs in the
+  session scratchpad.
 - [ ] **Sprites redesign** (operator, 2026-08-08: ontology-section design, hover/turn/emotion
   animation rules on every sprite tile, per-group focus modes, random scene with rooms, full-wall
   room backdrop, walking cat; machinery in core `src/` for adventure.html) — IN FLIGHT: Fable
