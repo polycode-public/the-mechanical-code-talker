@@ -160,6 +160,21 @@ export function provenanceTagToSource(tag) {
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+  // news-fixture:<sourceId>@<itemId> — the shipped demo buttons replaying a
+  // recorded fixture through the live pipeline, scored at the corpus tier so
+  // a fixture-replayed item never reads as a live claim.
+  if (head.startsWith("news-fixture:")) return { kind: "corpus", name: head.slice("news-fixture:".length).split("@")[0] || "unknown" };
+  // extracted:news:<sourceId>@<itemId> — the news capability's own
+  // strict-tier writes (a poll's contemporary items), routed through the
+  // same ingestText audit-tag wrapper every extracted: caller shares. Scored
+  // at the web-page tier rather than the generic extracted: tier, so a live
+  // news fetch never outranks the shipped reference packs. Checked ahead of
+  // the bare extracted: fallback below, which still catches every other
+  // extracted: caller unchanged. A bare news:<sourceId>@<itemId> tag (a
+  // future caller that writes it directly, with no extracted: wrapper)
+  // scores the same way.
+  if (head.startsWith("extracted:news:")) return { kind: "web", url: head.slice("extracted:".length) };
+  if (head.startsWith("news:")) return { kind: "web", url: head };
   if (head.startsWith("optimistic-extract:")) return { kind: "optimisticExtract", name: head.slice("optimistic-extract:".length) || "unknown" };
   if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
   if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };

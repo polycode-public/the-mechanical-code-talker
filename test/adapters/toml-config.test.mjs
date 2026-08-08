@@ -118,6 +118,13 @@ test("normalizeConfig: [research] rides through unmodified (sparse: absent when 
   assert.deepEqual(norm.research, { fanout_limit: 3, depth_limit: 0, min_interval_ms: 4000 });
 });
 
+test("normalizeConfig: [news] rides through unmodified (sparse: absent when unset), snake_case keys untouched", async () => {
+  const none = await normalizeConfig({}, { configDir: "/x" });
+  assert.equal(none.news, undefined);
+  const norm = await normalizeConfig({ news: { poll_minutes: 30, sources: ["hacker-news"] } }, { configDir: "/x" });
+  assert.deepEqual(norm.news, { poll_minutes: 30, sources: ["hacker-news"] });
+});
+
 test("normalizeConfig: [recognition] rides through unmodified (sparse: absent when unset), snake_case keys untouched", async () => {
   const none = await normalizeConfig({}, { configDir: "/x" });
   assert.equal(none.recognition, undefined);

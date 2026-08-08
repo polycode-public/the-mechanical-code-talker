@@ -149,6 +149,73 @@ function foldEntity(word, lexicon) {
   return normFactTerm(noun ? noun.lemma : word);
 }
 
+// The shortest word ingestText's fact-degree scan treats as a content-noun
+// candidate — long enough to rule out stray abbreviations and pronouns the
+// lexical fallback's stopword set doesn't already carry.
+const CANDIDATE_TERM_MIN_LENGTH = 3;
+
+/** Every NOUN/PROPN token `sentences` names, surface-form occurrence-counted —
+ *  a POS tagger reads unknown words by context, so an unlisted noun ("wombat")
+ *  counts exactly like a lexicon-known one. */
+function candidateTermOccurrencesPos(sentences, nlp) {
+  const counts = new Map();
+  for (const sentence of sentences) {
+    let values;
+    let pos;
+    try {
+      const doc = nlp.readDoc(String(sentence || ""));
+      values = doc.tokens().out(nlp.its.value);
+      pos = doc.tokens().out(nlp.its.pos);
+    } catch { continue; }
+    for (let i = 0; i < values.length; i += 1) {
+      if (pos[i] !== "NOUN" && pos[i] !== "PROPN") continue;
+      counts.set(values[i], (counts.get(values[i]) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** The no-wink-model fallback: every word that is neither a closed-class
+ *  scaffolding token nor a lexicon-known verb/adjective counts as a candidate
+ *  noun — narrower than the POS tier (no context to lean on), but the same
+ *  "an unlisted word can still be a content noun" posture. */
+function candidateTermOccurrencesLexical(sentences, lexicon) {
+  const counts = new Map();
+  for (const sentence of sentences) {
+    const words = String(sentence || "").match(/[A-Za-z][A-Za-z'-]*/g) || [];
+    for (const word of words) {
+      const lower = word.toLowerCase();
+      if (lower.length < CANDIDATE_TERM_MIN_LENGTH) continue;
+      if (OPTIMISTIC_SKIP.has(lower)) continue;
+      if (lookupVerb(lexicon, lower) || lookupAdjective(lexicon, lower)) continue;
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** Every fact-ungrounded term `sentences` names: a candidate noun folded to
+ *  its stored term key (`foldEntity`, so a ledger entry and a stored fact key
+ *  the same term identically) that `rows` holds zero fact rows for — the
+ *  fact-degree rule an ungrounded-term ledger admits by, independent of
+ *  whether the lexicon happens to know the word. Occurrence-counted, so a
+ *  term named three times outranks one named once. */
+function ungroundedTermOccurrences(sentences, rows, { lexicon, nlp }) {
+  const raw = nlp ? candidateTermOccurrencesPos(sentences, nlp) : candidateTermOccurrencesLexical(sentences, lexicon);
+  const grounded = new Set();
+  for (const row of rows) {
+    grounded.add(normFactTerm(row.subject));
+    grounded.add(normFactTerm(row.object));
+  }
+  const counts = new Map();
+  for (const [word, n] of raw) {
+    const term = foldEntity(word, lexicon);
+    if (!term || grounded.has(term)) continue;
+    counts.set(term, (counts.get(term) || 0) + n);
+  }
+  return counts;
+}
+
 /** The precise tier: wink POS tags pick out the NOUN/PROPN either side of a
  *  copula (→ rdfs:subClassOf) or a lexicon-known relation verb (→ its
  *  predicate). Adjectives, determiners and prepositions are never mistaken for
@@ -567,6 +634,11 @@ export async function ingestText(text, {
   const cfg = config || loadConfig(process.env, typeof dir === "string" ? dir : process.cwd());
   const lex = lexicon || loadLexicon();
   const nlp = optimistic ? winkInstance() : null;
+  // The fact-degree scan below runs whether or not --optimistic is on, so it
+  // reads its own wink handle rather than reusing `nlp` (which stays null off
+  // --optimistic, and changing that would also change the strict clause-
+  // fallback's own verb detection — a different, wider change than this one).
+  const termNlp = winkInstance();
 
   const extracted = [];
   const optimisticFacts = [];
@@ -577,6 +649,10 @@ export async function ingestText(text, {
   // the skip count so the summary names the real obstacle instead of blaming
   // the sentence's shape for a shape it actually recognizes.
   const ungroundedTerms = new Set();
+  // Every sentence's cleaned text, kept for the fact-degree scan (below) that
+  // runs once over the whole text after every fact this call will write has
+  // landed.
+  const cleanedSentences = [];
 
   // One recognized read of some text form: null when the strict recognizer
   // grounds nothing, else the Fact rows it touched.
@@ -597,6 +673,7 @@ export async function ingestText(text, {
         sentenceCount += 1;
         lastDecline = "";
         const cleaned = stripCitationResidue(sentence);
+        cleanedSentences.push(cleaned);
         // Whole sentence first, then each closed-marker clause as a fallback.
         let rows = null;
         for (const candidate of clauseCandidates(cleaned, { nlp })) {
@@ -647,6 +724,18 @@ export async function ingestText(text, {
       }
     }
 
+    const finalRows = readFactRows(await loadMemory(dir));
+    // ungroundedCounts widens the legacy ungroundedTerms rule (a lexicon-miss
+    // named in a decline) to the fact-degree rule: every term with zero fact
+    // rows, lexicon-known or not. ungroundedTerms stays a subset by
+    // construction — each of its terms is folded in below even on the rare
+    // chance the POS scan itself missed it.
+    const ungroundedCounts = ungroundedTermOccurrences(cleanedSentences, finalRows, { lexicon: lex, nlp: termNlp });
+    for (const term of ungroundedTerms) {
+      const key = normFactTerm(term);
+      if (key && !ungroundedCounts.has(key)) ungroundedCounts.set(key, 1);
+    }
+
     const result = {
       sentences: sentenceCount,
       recognized: recognizedSentences,
@@ -654,9 +743,10 @@ export async function ingestText(text, {
       optimistic: optimisticFacts,
       skipped: sentenceCount - recognizedSentences - optimisticSentences,
       ungroundedTerms: [...ungroundedTerms],
+      ungroundedCounts,
     };
     if (canonical) {
-      result.canonical = canonicalLines([...extracted, ...optimisticFacts], readFactRows(await loadMemory(dir)));
+      result.canonical = canonicalLines([...extracted, ...optimisticFacts], finalRows);
     }
     return result;
   } finally {

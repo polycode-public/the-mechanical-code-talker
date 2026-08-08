@@ -934,6 +934,47 @@ Goal: the orchestration everything else calls: poll, ingest, ground, rank, enric
 syllogise, build, evict, measure. One module, `src/services/news.mjs`, plus its config resolver.
 This module is the library contract (section 6.7).
 
+**Built.** `src/services/news.mjs` ships every function section 10.2 names — `resolveNewsConfig`/
+`clampNewsConfig`/`NEWS_DEFAULTS`, `parseNewsRequest`, `pollNewsSources`, `ingestNewsSnapshot`,
+`enrichTopTerms`, `reprocessAfterGrounding`, `isVocabGroundedTerm`, `isFactGroundedTerm`,
+`ingestUploadedFactRows`, `buildFeed`, `newsTurn`, `cycleMetrics` — plus `createNewsState`, a
+small companion that hands a fresh, empty, news-store-shaped state to a surface or a test
+starting cold. The package entry (`src/services/index.mjs`) re-exports the section 10.2 contract
+plus `buildNewsItems`/`rankedTerms`, per section 6.7. `extract-facts.mjs` gained the additive
+`ungroundedCounts` widening (a `Map<term, occurrences>` over every fact-ungrounded term a text
+names, lexicon-known or not — a strict superset of the legacy `ungroundedTerms` set, which stays
+untouched). `toml-config.mjs` carries the `[news]` sparse pass-through line.
+
+Two adjacent, narrowly-scoped fixes landed in the same commits, found while wiring eviction and
+trust through the tag shape `ingestText` actually produces (`extracted:news:<sourceId>@<itemId>`
+for a strict-tier hit, nesting the news tag rather than writing it bare):
+`domain/news-feed.mjs`'s `evictNewsFacts` now matches a `news:` tag wherever it sits in a fact's
+provenance (bare, or nested inside the ingest audit-tag wrapper), not only at the string's start —
+its own 16 pinned tests are unchanged and still green. `domain/memory/trust.mjs`'s
+`provenanceTagToSource` gained two cases: `news-fixture:<sourceId>@<itemId>` (the shipped demo
+buttons) resolves to the corpus tier, and `extracted:news:<sourceId>@<itemId>` (a strict-tier news
+hit) resolves to the web tier ahead of the generic `extracted:` fallback.
+
+Not fixed in this round, flagged rather than folded in because the fix reaches into `chat.mjs`'s
+`runTurn`, which phase 4 owns: a strict-tier hit also carries the interactive recognizer's own
+`ace:`/`teach:` tag from driving the sentence through a real chat turn, and cross-source
+corroboration lifts its computed trust above the bare web tier — the same characteristic
+`tmct extract --repo` already has for any document text, not something this phase introduces.
+
+Tested by `test/services/news-service.test.mjs` (19 tests: per-source health/backoff/auto-disable,
+merge-by-id with `item_cap`, the request log, eviction against `news_fact_cap`, grounding under
+the `news:` tag with ledger admission independent of lexicon membership, the bounded syllogise
+round, KB enrichment walking sources in config order with the negative cache, re-processing after
+a term grounds — including upsert-not-duplicate on a second pass — the two grounding definitions'
+independence, upload provenance downgrading, the seed-only feed fallback, determinism, and
+`cycleMetrics` arithmetic) and `test/services/news-config.test.mjs` (12 tests: defaults, every
+clamp including the `poll_minutes` floor, the `[news]` TOML pass-through and its `mergeEffective`
+precedence, and `parseNewsRequest`'s whole grammar). `test/adapters/extract-facts-from-text.test.mjs`
+gained the `ungroundedCounts` coverage the widening needs; `test/adapters/toml-config.test.mjs`
+gained the `[news]` pass-through case. All 246 tests across the phase's own files plus every file
+this phase touched pass offline, no network, real in-process grounding and syllogise runs (no
+mocked recognizer).
+
 ### 10.1 Config and parsing
 
 ```js

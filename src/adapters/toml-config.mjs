@@ -142,6 +142,15 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // resolveResearchConfig's job.
   if (src.research !== undefined) cfg.research = src.research;
 
+  // News-capability knobs (src/services/news.mjs): sparse PASS-THROUGH, same
+  // discipline as [research] — the raw `[news]` table (sources / kb_sources /
+  // extra_sources / poll_minutes / enrich_minutes / enrich_terms_per_cycle /
+  // negative_cache_ttl_hours / syllogisms_per_ingest / item_cap /
+  // news_fact_cap / feed_top / window_hours / min_interval_ms, snake_case)
+  // rides through unmodified; clamping and default-filling is
+  // resolveNewsConfig's job.
+  if (src.news !== undefined) cfg.news = src.news;
+
   // Discourse-record knob (src/domain/discourse.mjs): sparse PASS-THROUGH,
   // same discipline — the raw `[discourse]` table (max_referents) rides
   // through; default-filling is resolveDiscourseConfig's job.

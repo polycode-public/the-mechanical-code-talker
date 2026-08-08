@@ -64,3 +64,15 @@ export { CONFIG_FILE as TOML_CONFIG_FILE } from "../adapters/toml-config.mjs";
 // The "detailed answer" completions pipeline (also reachable as the
 // `./generateCompletion` and `./createCompletionsGraphAdapter` subpath exports).
 export { generateCompletion, createCompletionsGraphAdapter } from "./completions.mjs";
+
+// The news capability: scheduled multi-source ingestion, occurrence-ranked
+// grounding gaps, KB enrichment and the fact-churn feed builder — one
+// library contract every surface (news.html, chat's `/news`, the CLI verb,
+// a JS import) consumes the same way.
+export {
+  resolveNewsConfig, parseNewsRequest, pollNewsSources, ingestNewsSnapshot,
+  enrichTopTerms, reprocessAfterGrounding, isVocabGroundedTerm, isFactGroundedTerm,
+  ingestUploadedFactRows, buildFeed, newsTurn,
+} from "./news.mjs";
+export { buildNewsItems } from "../domain/news-feed.mjs";
+export { rankedTerms } from "../domain/term-ledger.mjs";

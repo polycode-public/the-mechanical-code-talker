@@ -493,3 +493,27 @@ test("a skip that really is an unrecognized shape names no ungrounded term", asy
   assert.equal(result.recognized, 0);
   assert.deepEqual(result.ungroundedTerms, []);
 });
+
+test("ungroundedCounts widens ungroundedTerms to the fact-degree rule: a lexicon-known, fact-empty term counts too, and every legacy ungroundedTerms entry is still a key", async () => {
+  // "tariff" is a lexicon-known noun with zero fact rows in an otherwise
+  // empty graph — the case the legacy ungroundedTerms rule (lexicon-miss
+  // only) misses but the news ledger needs (PLAN_NEWS_FEED.md section 6.3).
+  const result = await ingestText("A kestrel is a bird. A wombat is a marsupial. There was a new tariff yesterday.");
+  assert.deepEqual([...result.ungroundedTerms].sort(), ["marsupial", "wombat"]);
+  assert.ok(result.ungroundedCounts instanceof Map);
+  assert.equal(result.ungroundedCounts.get("tariff"), 1, "a lexicon-known, fact-empty term is counted");
+  assert.equal(result.ungroundedCounts.get("wombat"), 1);
+  assert.equal(result.ungroundedCounts.get("marsupial"), 1);
+  for (const term of result.ungroundedTerms) {
+    assert.ok(result.ungroundedCounts.has(term), `ungroundedCounts is a superset of the legacy ungroundedTerms set (missing "${term}")`);
+  }
+  // A term the strict tier already grounded never counts as ungrounded, even
+  // though it appears in the same text.
+  assert.equal(result.ungroundedCounts.has("kestrel"), false);
+  assert.equal(result.ungroundedCounts.has("bird"), false);
+});
+
+test("ungroundedCounts sums occurrences across repeated mentions of the same term", async () => {
+  const result = await ingestText("A tariff hurts trade. A new tariff was announced.");
+  assert.equal(result.ungroundedCounts.get("tariff"), 2);
+});
