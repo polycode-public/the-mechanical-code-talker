@@ -191,12 +191,22 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));
 }
 
-/** News-tagged (provenance starting `news:`) fact ids to retract, oldest
- *  observedAt first, ties by id — the eviction the service applies at ingest
- *  time so the graph cannot grow past `cap` unattended. Never selects a
- *  seed/taught/research/fixture-replay row. */
+// A `news:` tag, matched wherever it sits in a fact's provenance — bare
+// ("news:<sourceId>@<itemId>", the shape a caller writing directly under
+// this tag produces) or nested inside the strict/optimistic ingest wrapper
+// ("extracted:news:<sourceId>@<itemId>", "optimistic-extract:news:<sourceId>
+// @<itemId>" — ingestText's own audit-tag wrapping, and a fact the strict
+// recognizer also grounds carries a THIRD, unioned ace:/teach: tag ahead of
+// it). Never matches "news-fixture:" (no colon follows "news" there), which
+// is the deliberate exclusion the fixture-replay rows need.
+const NEWS_PROVENANCE_RE = /(?:^|[:|]\s*)news:/;
+
+/** News-tagged fact ids to retract, oldest observedAt first, ties by id —
+ *  the eviction the service applies at ingest time so the graph cannot grow
+ *  past `cap` unattended. Never selects a seed/taught/research/fixture-
+ *  replay row. */
 export function evictNewsFacts(rows, { cap }) {
-  const newsRows = rows.filter((r) => String(r.provenance || "").startsWith("news:"));
+  const newsRows = rows.filter((r) => NEWS_PROVENANCE_RE.test(String(r.provenance || "")));
   if (newsRows.length <= cap) return [];
   const sorted = newsRows.slice().sort((a, b) => {
     const at = toMs(a.observedAt || "");
