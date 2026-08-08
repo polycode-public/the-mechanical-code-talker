@@ -704,9 +704,14 @@ row is the effect. Lifting the grammar also fixed autoplay's own subject parse, 
 `base@epochN@turnK` subjects and exposed nothing after a recast. Tests:
 `test/domain/world-snapshot.test.mjs` and `test/domain/recognition-trace.test.mjs`.
 
-**Slice 2 — the declared-goal enumerator and its surface.** `declaredGoals(ctx)` gathers the N from
-the four sources, and `/goals` (chat) and `tmct plan --goals` print them with provenance. Testable:
-the count, the ids, and the source of each. Nothing recognizes anything yet.
+**Slice 2 — the declared-goal enumerator and its surface. BUILT.** `declaredGoals(ctx, {tools})` in
+`src/domain/router/recognize.mjs` gathers the N from the four sources — `GOAL_RULES`, the capability
+registry's `cap:knows` add-effects, a world pack's `mgx:is-objective` markers, and taught action
+families' effect predicates — sorted by id, screened by a declared toolset. `/goals` (chat) and
+`tmct plan --goals` (CLI) print them grouped by source with provenance, sharing one renderer
+(`renderDeclaredGoals` in `src/services/chat.mjs`). Nothing recognizes anything yet. Tests:
+`test/domain/recognition-goals.test.mjs` and the `template.command.goals` rows in
+`test/corpus/templates.jsonl`.
 
 **Slice 3 — containment and the reject class.** `recognizeGoal(trace, goals, ctx)` returning
 `{ goal, reject, proof, why }` with the three outcomes and no fourth. The first TOOL-9 cases land in
