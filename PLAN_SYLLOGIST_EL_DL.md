@@ -1,6 +1,9 @@
 # PLAN_SYLLOGIST_EL_DL.md — beyond OWL 2 RL: an EL classifier, then a DL tableau prover
 
-Status: DESIGN, nothing built. Every module path below is a file that does not exist yet.
+Status: Phase 0's grammar/ontology/docs/test slice has landed (section 5, except 5.3's
+`chat.mjs` teach-lane widening and read-back phrasing, and the corpus rows that depend on it —
+both deferred to a later serialized round). Phases 1 through 6 remain DESIGN, nothing built; every
+module path in those sections is a file that does not exist yet.
 The plan delivers the whole arc — phase 0 representation, the EL classifier, and the DL tableau
 through the SHOIQ increments — as one body of work. Where a phase overlaps the cheaper OWL 2 RL
 property levers (L7/L8 in `PLAN_NLU_BENCHMARKS.md`, both open), the overlap is stated at that
@@ -296,6 +299,14 @@ this case; it removes the lexicon gate that currently blocks it.
 
 ### 5.2 New ACE patterns
 
+**Delivered.** All seven patterns are in `src/domain/grammar/ace.mjs`. Two lexicon nouns the
+worked examples need (`terrestrial`, `yellow`) were missing and are now declared in
+`lexicon-core.json`. Pattern 15's bare-existential arm covers every plain "every N1 VERB [a] N2"
+shape, not just "has", so it now also claims several sentences the teach lane's flat has-a frame
+used to own. The corpus rows built on that exact shape were retargeted from "every" to "each" —
+`QUANTIFIED_HAS_TEACH_RE` reads the two quantifiers identically, so the taught fact and its
+confirmation text are unchanged, and the rows still exercise the teach lane they were written for.
+
 All seven go in `src/domain/grammar/ace.mjs`, beside the existing nine. Each adds a
 `PATTERN_<NAME>` constant, an entry in the frozen `PATTERNS` array, a parse function, and a row in
 `docs/references/schemas/ace-owl-fragment.md`'s pattern table.
@@ -413,6 +424,9 @@ lemma through `lookupVerb` before minting the predicate with `predicateOf`.
 
 ### 5.3 Teach-lane changes
 
+**Deferred** to a later serialized round against `src/services/chat.mjs` — not part of this
+delivery.
+
 Two changes in `src/services/chat.mjs`, both narrow.
 
 1. **Drop the lexicon gate on the singular-negation path.** Today the bare-negative branch only
@@ -452,6 +466,11 @@ serialization queue, not two independent ones: the coordinator runs every round 
 
 ### 5.4 Ontology and docs
 
+**Delivered.** The five terms are documented in `ontology/tmct-core.ttl` section 2 exactly the way
+`owl:intersectionOf` already is — a kind-table comment plus a real Turtle documentation example,
+not a formal `owl:AnnotationProperty` declaration: OWL's own vocabulary needs no redeclaration in
+tmct's ontology, matching the file's own existing convention for every other `owl:` term it uses.
+
 - `ontology/tmct-core.ttl`: declare the five new terms in section 2, with the flat-store convention
   comment for the two repeated-row predicates, matching the existing `owl:intersectionOf` note.
   `test/adapters/grammar-ontology.test.mjs` pins the core vocabulary against this file.
@@ -462,10 +481,31 @@ serialization queue, not two independent ones: the coordinator runs every round 
 
 ### 5.5 Phase 0 tests
 
+**Delivered except the `chat.mjs`-dependent piece.** `grammar-ace-class-expressions.test.mjs` and
+the `grammar-ontology.test.mjs` extension are in. `teach-negative-and-enumeration.test.mjs` is
+deferred with 5.3 — it tests the widened teach-lane path, which doesn't exist yet.
+
+Corpus rows landed: `inference.represent.union`, `.complement`, `.enumeration`,
+`.different-from`, `.bare-existential`, `.transitive-role` — six of the eight rows below, each
+checked against the real chat pipeline's actual current output (not the eventual post-DL answer).
+Two adjustments from the table as written: `.enumeration` teaches "the metals are exactly copper,
+iron and tin" rather than "the primary colours are exactly red, yellow and blue" — `colour` and
+the separately-declared `colours` are two distinct lexicon nouns, so the plan's own example mints
+`primary-colours` (plural) while an "is X a primary colour" question folds to the singular and
+misses; `metal`/`metals` has no such collision. `.bare-existential`'s ask turn stays an honest
+miss (`does a heart have a valve`) — the someValuesFrom shape pattern 15 stores has no reader in
+the does-have ask lane yet, which is exactly what 5.3/phase 2 wire up.
+
+`inference.represent.negative-type` and `inference.represent.bare-negative-never-retracts` are
+deferred with 5.3 — both need the widened teach-lane negative path. `.different-from` also
+substitutes: pattern 14 fires only on resolveNP's own narrow `individual` flag (a declared proper
+name or a code-ref shape), which "rex"/"whiskers" are neither — the row teaches "GitHub is not
+GitLab" (both declared proper names) instead, matching what the pattern actually accepts today.
+
 | file | what it holds |
 |---|---|
 | `test/adapters/grammar-ace-class-expressions.test.mjs` | one test per new pattern: the exact triple list emitted, node-name determinism (same sentence twice, same names), member sort order, and the decline path for an undeclared word |
-| `test/adapters/teach-negative-and-enumeration.test.mjs` | the widened individual-negative path stores; the adjective guard still declines; "forget that X is a Y" still retracts and the bare negative still does not; the four new read-back phrasings |
+| `test/adapters/teach-negative-and-enumeration.test.mjs` | deferred — the widened individual-negative path stores; the adjective guard still declines; "forget that X is a Y" still retracts and the bare negative still does not; the four new read-back phrasings |
 | `test/adapters/grammar-ontology.test.mjs` | extended: the five new terms are declared in `tmct-core.ttl` |
 
 New corpus rows in `test/corpus/inference.jsonl`, one JSON object per line. Row contract is enforced
@@ -482,6 +522,19 @@ by `validateRow` in `test/corpus/run-lane.mjs` and guarded by `test/estate/corpu
 | `inference.represent.bare-existential` | `inference-represent-bare-existential-mints-a-restriction` | teach "every heart has a valve", ask "does a heart have a valve" |
 | `inference.represent.transitive-role` | `inference-represent-transitive-role-stores` | teach "containing is transitive", ask "what do you know about contains" |
 | `inference.represent.bare-negative-never-retracts` | `inference-represent-bare-negative-keeps-the-positive` | teach "rex is a cat", teach "rex is not a cat", ask "is rex a cat" (both stored, disagreement reported) |
+
+**Delivered**, both appended after every earlier template in `generateCases()`'s own template list
+(not physically beside `dlDisjunction`/`dlComplement` in that list — every template shares one rng
+stream, and the file's own comment is explicit that appending is what keeps every earlier
+template's cases byte-stable across a regeneration; the function bodies do sit beside `dlDisjunction`
+and `dlComplement` in the file). Both stay at today's honest floor, `expect.verdict: "unproven"`
+(`dlNominalEnumeration`) matching `dlDisjunction`/`dlComplement`'s own convention, or the
+`checkType: "inconsistent"` shape `dlDisjointProofSoundness` already uses (`dlCardinalityClash`,
+whose grader never reads `expect.verdict` at all) — not the eventual `inconsistent`/`no` verdicts
+this section names, which are what each `ceiling` field is measured against once Stage DL ships.
+Regenerating `cases.jsonl` also picked up the two lexicon nouns 5.2 added: every template drawing
+from the shared noun pool reshuffles around them, so most of the file's premises read differently
+even though every band's case count is unchanged.
 
 Add two infbench templates in `test-benchmarks/infbench/generate-cases.mjs`, beside `dlDisjunction`
 and `dlComplement`, so E5 and E6 are measured from the same run as E1 through E4:
