@@ -37,7 +37,7 @@ const MUDIII_BUSY_TIMEOUT_MS = 60_000;
 
 // Same order as DEMO_PAGES in site-pages.mjs, which is also the order the
 // home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "ledger", "plan", "mudiii", "adventure", "sprites"];
+const PAGE_ORDER = ["chat", "ledger", "plan", "mudiii", "adventure", "sprites", "news"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -55,6 +55,7 @@ const READY_CHECKS = {
   ),
   ledger: (page) => page.locator(".dash").waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   sprites: (page) => page.locator(".card").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
+  news: (page) => page.locator(".news-item").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   // mudiii.html runs a live three.js animation loop and keeps fetching models
   // from the moment it boots, so "networkidle" (used by every ready check
   // above via the default in capturePage) would never resolve — see

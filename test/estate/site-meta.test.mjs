@@ -1,5 +1,5 @@
-// After `npm run demo:build`, every one of the site's 16 pages (index, help,
-// the 6 demo pages, the 6 about pages, receipts, claims) carries exactly one
+// After `npm run demo:build`, every one of the site's 18 pages (index, help,
+// the 7 demo pages, the 7 about pages, receipts, claims) carries exactly one
 // canonical link, one og:image tag and one twitter:card tag, robots.txt
 // matches the payload the deploy needs to stop search engines treating the
 // whole site as blocked, and sitemap.xml parses with all 16 locs. This reads
@@ -34,9 +34,9 @@ function countMatches(html, re) {
   return [...html.matchAll(re)].length;
 }
 
-test("the page list holds 16 pages: index, receipts, claims, help, 6 demo pages, 6 about pages", () => {
-  assert.equal(ALL_PAGES.length, 16);
-  assert.equal(new Set(ALL_PAGES).size, 16, "no page name repeats");
+test("the page list holds 18 pages: index, receipts, claims, help, 7 demo pages, 7 about pages", () => {
+  assert.equal(ALL_PAGES.length, 18);
+  assert.equal(new Set(ALL_PAGES).size, 18, "no page name repeats");
 });
 
 test("every page exists and carries exactly one canonical link, one og:image and one twitter:card", { skip: siteUnbuilt }, () => {
@@ -55,13 +55,13 @@ test("robots.txt matches the required payload exactly", { skip: siteUnbuilt }, (
   assert.equal(text, "User-agent: *\nAllow: /\nSitemap: https://tmct.polycode.co.uk/sitemap.xml\n");
 });
 
-test("sitemap.xml parses and holds 16 unique locs", { skip: siteUnbuilt }, () => {
+test("sitemap.xml parses and holds 18 unique locs", { skip: siteUnbuilt }, () => {
   const path = join(PUBLIC_DIR, "sitemap.xml");
   assert.ok(existsSync(path), "public/sitemap.xml is missing — run `npm run demo:build` first");
   const xml = readFileSync(path, "utf8");
   assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  assert.equal(locs.length, 16, "sitemap.xml should hold 16 <url><loc> entries");
-  assert.equal(new Set(locs).size, 16, "every loc in sitemap.xml should be unique");
+  assert.equal(locs.length, 18, "sitemap.xml should hold 18 <url><loc> entries");
+  assert.equal(new Set(locs).size, 18, "every loc in sitemap.xml should be unique");
   assert.ok(locs.includes("https://tmct.polycode.co.uk/"), "sitemap.xml should include the home page");
 });
