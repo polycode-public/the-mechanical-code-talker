@@ -23,9 +23,9 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-*(Footnote, not an open item: MUD3D was renamed MUDIII, design only, credit to
-`world-of-claudecraft` and MUD1/MUD2 chosen if `mudiii.html` ever ships. An optional email to
-Richard Bartle at that point is the operator's call to make if and when they choose to.)*
+*(Footnote, not an open item: `mudiii.html` shipped 2026-08-03 and is deployed; the
+`world-of-claudecraft` and MUD1/MUD2 credit placement rides PLAN_RIVER_CROSSING.md's site
+phase. An optional email to Richard Bartle remains the operator's call.)*
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
@@ -59,9 +59,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
-- [ ] **PLAN_RIVER_CROSSING.md is a three-line sketch** — a design wave is turning it into an
-  execution-ready plan (fact-driven agent classes with per-instance copies on spawn, editable
-  imperatives-as-facts, visible beliefs and live-recalculated plans, over the MUDIII surface).
+- [ ] **PLAN_RIVER_CROSSING.md — execute** — the design wave delivered the full plan (phases
+  R0-R8, concurrency table, tiers). Implementation not started. Three stated defaults the
+  operator can override before the relevant phase runs: a class edit changes the next spawn,
+  not standing instances (R4); `fox` is the cast fallback unless a licensed wolf asset is
+  chosen before R3 writes the world file; the other Wikipedia variants (missionaries-and-
+  cannibals, bridge-and-torch) sequence as a later increment because they need precondition
+  shapes the domain engine lacks.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
