@@ -32,8 +32,8 @@ import { createInMemoryStore, appendFacts, normFactTerm, loadMemory, readFactRow
 import { extractSceneItems, splitSceneBackdrop } from "../../domain/scene-compose.mjs";
 import { randomSceneSentence, sceneVocabulary } from "../../domain/scene-random.mjs";
 import {
-  isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
-  focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+  isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, initialCardAnimation,
+  cardAnimationClick, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
 } from "../../domain/sprite-animation.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -103,8 +103,8 @@ publishTmctSurface({
     // functions the page splices as text, published here for any caller that
     // reaches the machinery through the bundle instead.
     spriteAnimation: {
-      isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, frameAtTick,
-      focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
+      isMovingSwatchLabel, movingCounterpartLabel, nextFocusMode, initialCardAnimation,
+      cardAnimationClick, frameAtTick, focusModeFrames, oscillateWalkStep, walkFrameLabelCandidates,
     },
   },
 });

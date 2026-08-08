@@ -1,5 +1,5 @@
 // sprite-animation.mjs — the pure state machine behind every animated sprite
-// tile: the hover flip-book (static/moving), the focused cell's turning
+// tile: the hover flip-book (static/moving), each card's own turning
 // rotation and emotion cycle, and the oscillate-and-turn walk a "moving"
 // scene entity performs. Every function here is a pure function of its
 // arguments — no wall clock, no local counter; the caller passes the tick.
@@ -29,12 +29,30 @@ export function movingCounterpartLabel(restLabel) {
   return restLabel + " + moving";
 }
 
-/** The two modes a focused sprite steps between, and the click toggle. */
+/** The two modes an animating sprite steps between, and the click toggle. */
 export const FOCUS_MODE_ORDER = Object.freeze(["turning", "emotions"]);
 
 /** Pure; `.toString()`-splice safe. */
 export function nextFocusMode(mode) {
   return mode === "turning" ? "emotions" : "turning";
+}
+
+/** The animation state a sprite card starts in: at rest, with the turning
+ *  rotation queued for its first click. Pure; self-contained,
+ *  `.toString()`-splice safe. */
+export function initialCardAnimation() {
+  return { animating: false, mode: "turning" };
+}
+
+/** One click on a sprite card. A card at rest starts animating, turning
+ *  rotation first; a card already animating keeps running and toggles
+ *  between turning and emotion-cycling. Returns a fresh state and never
+ *  stops the card — each card owns its own state, so starting or toggling
+ *  one leaves every other card's animation alone. Pure; self-contained,
+ *  `.toString()`-splice safe. */
+export function cardAnimationClick(state) {
+  if (!state || !state.animating) return { animating: true, mode: "turning" };
+  return { animating: true, mode: state.mode === "turning" ? "emotions" : "turning" };
 }
 
 /** The frame a cycling cell shows at `tick`, looping. Pure;
