@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Sample Atom Feed</title>
+<link href="https://example.com/" rel="alternate"/>
+<link href="https://example.com/feed.atom" rel="self"/>
+<id>https://example.com/</id>
+<updated>2026-08-08T09:00:00Z</updated>
+<entry>
+<title>Quake Recorded Near Coastal Region</title>
+<link href="https://example.com/articles/quake-recorded" rel="alternate"/>
+<id>https://example.com/articles/quake-recorded</id>
+<updated>2026-08-08T09:00:00Z</updated>
+<published>2026-08-08T08:45:00Z</published>
+<summary type="html">&lt;p&gt;A moderate earthquake was recorded offshore, no injuries reported.&lt;/p&gt;</summary>
+</entry>
+<entry>
+<title>Second Entry With Only Content</title>
+<link href="https://example.com/articles/second-entry" rel="alternate"/>
+<id>https://example.com/articles/second-entry</id>
+<updated>2026-08-08T07:00:00Z</updated>
+<content type="html"><![CDATA[<p>Body text for the second entry, with an embedded <a href="https://example.com">link</a> right there.</p>]]></content>
+</entry>
+<entry>
+<title>Third Entry With Self Link First</title>
+<link href="https://example.com/feed.atom" rel="self"/>
+<link href="https://example.com/articles/third-entry" rel="alternate"/>
+<id>https://example.com/articles/third-entry</id>
+<updated>2026-08-08T06:00:00Z</updated>
+<summary>A self link appears before the alternate link, so extraction must prefer alternate.</summary>
+</entry>
+</feed>

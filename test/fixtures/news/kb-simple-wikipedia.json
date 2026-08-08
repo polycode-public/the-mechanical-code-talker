@@ -1,0 +1,11 @@
+{
+  "type": "standard",
+  "title": "Heart",
+  "displaytitle": "Heart",
+  "extract": "The heart is an organ that pumps blood around the body.",
+  "description": "organ that pumps blood",
+  "wikibase_item": "Q1071",
+  "content_urls": {
+    "desktop": { "page": "https://simple.wikipedia.org/wiki/Heart" }
+  }
+}

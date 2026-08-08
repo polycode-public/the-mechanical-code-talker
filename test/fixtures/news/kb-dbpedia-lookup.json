@@ -1,0 +1,10 @@
+{
+  "docs": [
+    {
+      "resource": ["http://dbpedia.org/resource/Heart"],
+      "label": ["<B>Heart</B>"],
+      "comment": ["The heart is a muscular organ in most animals."],
+      "category": ["http://dbpedia.org/resource/Category:Cardiac_anatomy"]
+    }
+  ]
+}

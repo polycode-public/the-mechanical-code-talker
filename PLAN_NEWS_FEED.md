@@ -1,7 +1,8 @@
 # PLAN_NEWS_FEED.md — a news dashboard over the graph: contemporary sources, grounding, enrichment, and a feed of what changed
 
-Status: DESIGN, nothing built. Every module path below that is not marked "ships today" is a file
-that does not exist yet.
+Status: phase 0 and phase 1 (the pure domain modules — section 7, section 8) are built and
+tested. Every other module path below that is not marked "ships today" is a file that does not
+exist yet.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every
 phase names its module paths, data structures, function signatures, config knobs, test files,
@@ -593,6 +594,13 @@ import { resolveNewsConfig, pollNewsSources, buildFeed } from "@polycode-project
 Goal: pure functions that turn feed text into normalized items and count ungrounded terms.
 No I/O anywhere in this phase.
 
+**Built.** `src/domain/feed-normalize.mjs` and `src/domain/term-ledger.mjs` ship as specified
+below, tested by `test/domain/feed-normalize.test.mjs` (21 tests) and
+`test/domain/term-ledger.test.mjs` (12 tests). The `test/fixtures/news/` fixtures section 7.3
+names are committed; the probe bodies section 4 records were not present on disk in the worktree
+that built this phase, so the fixtures are authored samples matching each format's real field
+shapes rather than trims of the recorded probe output.
+
 ### 7.1 `src/domain/feed-normalize.mjs`
 
 New module. Imports `./hash.mjs` only. XML is parsed by string scanning (regex over `<item>`/
@@ -690,6 +698,12 @@ node --test test/estate/import-layers.test.mjs
 
 Goal: from fact rows plus `now`, choose hubs, cut two-hop sub-graphs, assemble items, and render
 the paraphrase paragraph. Pure throughout.
+
+**Built.** `src/domain/fact-phrase.mjs` and `src/domain/news-feed.mjs` ship as specified below,
+tested by `test/domain/fact-phrase.test.mjs` (4 tests, including the pin against chat.mjs's own
+table) and `test/domain/news-feed.test.mjs` (16 tests, including the CRDT order-independence
+check and the cap-stability check). chat.mjs itself is untouched — the table stays duplicated in
+both places until phase 4 repoints chat.mjs at this module and deletes the pin.
 
 ### 8.1 `src/domain/fact-phrase.mjs`
 

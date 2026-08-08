@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+<channel>
+<title>NYT &gt; World News</title>
+<link>https://www.nytimes.com/section/world</link>
+<atom:link href="https://rss.nytimes.com/services/xml/rss/nyt/World.xml" rel="self" type="application/rss+xml"/>
+<description>World news, international news</description>
+<language>en-us</language>
+<copyright>Copyright 2026 The New York Times Company</copyright>
+<lastBuildDate>Sat, 08 Aug 2026 12:00:00 +0000</lastBuildDate>
+<item>
+<title>Talks Resume Over Ceasefire Terms</title>
+<link>https://www.nytimes.com/2026/08/08/world/talks-resume.html</link>
+<guid isPermaLink="true">https://www.nytimes.com/2026/08/08/world/talks-resume.html</guid>
+<description><![CDATA[Negotiators <b>returned</b> to the table &amp; described "cautious optimism" for a deal.]]></description>
+<dc:creator>Jane Reporter</dc:creator>
+<pubDate>Sat, 08 Aug 2026 09:15:00 +0000</pubDate>
+<media:content medium="image" url="https://static01.nyt.com/images/1.jpg"/>
+</item>
+<item>
+<title>Markets React to Tariff Announcement</title>
+<link>https://www.nytimes.com/2026/08/08/world/tariff-announcement.html</link>
+<guid isPermaLink="true">https://www.nytimes.com/2026/08/08/world/tariff-announcement.html</guid>
+<description>Investors weighed the announcement of a new tariff on imported steel.</description>
+<pubDate>Sat, 08 Aug 2026 08:00:00 +0000</pubDate>
+</item>
+<item>
+<title><![CDATA[<script>alert(1)</script> Officials Meet in Geneva]]></title>
+<link>https://www.nytimes.com/2026/08/08/world/geneva-meeting.html</link>
+<guid isPermaLink="true">https://www.nytimes.com/2026/08/08/world/geneva-meeting.html</guid>
+<description>A script-injection probe: &lt;img src=x onerror=alert(1)&gt; should render as inert text only.</description>
+<pubDate>Sat, 08 Aug 2026 07:30:00 +0000</pubDate>
+</item>
+<item>
+<title>Malformed Item Missing A Guid Tag</title>
+<link>https://www.nytimes.com/2026/08/08/world/no-guid.html</link>
+<description>An item with no guid tag, so normalizeFeedItems falls back to the link.</description>
+<pubDate>not a real date</pubDate>
+</item>
+</channel>
+</rss>

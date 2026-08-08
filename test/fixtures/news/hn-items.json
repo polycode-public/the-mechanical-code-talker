@@ -1,0 +1,32 @@
+[
+  {
+    "id": 41230001,
+    "type": "story",
+    "title": "Show HN: A deterministic RSS parser with no dependencies",
+    "url": "https://example.com/show-hn-deterministic-parser",
+    "by": "exampleuser",
+    "time": 1754640000,
+    "score": 128,
+    "descendants": 42
+  },
+  {
+    "id": 41230002,
+    "type": "story",
+    "title": "Ask HN: How do you ground language model output in facts?",
+    "text": "Curious what techniques people use to keep an assistant's claims checkable.",
+    "by": "anotheruser",
+    "time": 1754643600,
+    "score": 64,
+    "descendants": 30
+  },
+  {
+    "id": 41230003,
+    "type": "story",
+    "title": "USGS earthquake feed now published as GeoJSON",
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson",
+    "by": "geoenthusiast",
+    "time": 1754647200,
+    "score": 95,
+    "descendants": 12
+  }
+]

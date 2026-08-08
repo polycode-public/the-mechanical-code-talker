@@ -1,0 +1,29 @@
+{
+  "mostread": {
+    "date": "2026-08-08Z",
+    "articles": [
+      {
+        "title": "Ceasefire_negotiations",
+        "displaytitle": "Ceasefire negotiations",
+        "normalizedtitle": "Ceasefire negotiations",
+        "extract": "Ceasefire negotiations are talks aimed at halting armed conflict between parties.",
+        "description": "diplomatic process",
+        "wikibase_item": "Q1230635",
+        "content_urls": {
+          "desktop": { "page": "https://en.wikipedia.org/wiki/Ceasefire_negotiations" }
+        }
+      },
+      {
+        "title": "Tariff",
+        "displaytitle": "Tariff",
+        "normalizedtitle": "Tariff",
+        "extract": "A tariff is a tax imposed on imported goods and services.",
+        "description": "tax on imports",
+        "wikibase_item": "Q179380",
+        "content_urls": {
+          "desktop": { "page": "https://en.wikipedia.org/wiki/Tariff" }
+        }
+      }
+    ]
+  }
+}

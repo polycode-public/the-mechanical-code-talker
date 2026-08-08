@@ -1,0 +1,14 @@
+{
+  "version": "https://jsonfeed.org/version/1",
+  "title": "Daring Fireball",
+  "home_page_url": "https://daringfireball.net/",
+  "feed_url": "https://daringfireball.net/feeds/json",
+  "items": [
+    {
+      "id": "https://daringfireball.net/linked/2026/08/07/sample-post",
+      "url": "https://daringfireball.net/linked/2026/08/07/sample-post",
+      "content_html": "<p>&#9733; A linked-list post with a <a href=\"https://example.com\">source link</a> and no separate title field.</p>",
+      "date_published": "2026-08-07T14:22:00-04:00"
+    }
+  ]
+}
