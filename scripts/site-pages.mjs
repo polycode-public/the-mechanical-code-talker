@@ -56,7 +56,7 @@ export const DEMO_PAGE_META = {
     description: "How tmct stores memory as RDF triples with OWL labels, and shows where every fact came from and how far to trust it.",
   },
   sprites: {
-    title: "A poodle draws as a dog, because it is one",
+    title: "Concepts rendered using the ontology inheritance",
     description: "How tmct picks a shape for a word by walking the class hierarchy until it finds one it has.",
   },
   mudiii: {
