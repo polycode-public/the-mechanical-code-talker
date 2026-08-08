@@ -31,6 +31,7 @@ import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
 import { resolveRecognitionConfig } from "../domain/router/recognize.mjs";
 import { resolveResearchConfig } from "./research.mjs";
+import { resolveNewsConfig } from "./news.mjs";
 import { normalizeResearchChoice } from "../adapters/corpus/research-source.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
@@ -255,6 +256,12 @@ export async function createSession({
   // resolved once per session from the same tmct.toml, defaults filling
   // every unset key exactly as resolveGameConfig does above.
   const researchConfig = resolveResearchConfig(toml);
+  // The news lane's knobs (enabled sources, poll/enrich cadence, the
+  // enrichment/negative-cache budgets) — resolved once per session, the same
+  // way researchConfig is above. Threaded into every runTurn call as a
+  // stable, mutable object, so a `/news add`/`/news interval` mutation
+  // persists turn to turn by reference (see runCommand's own /news branch).
+  const newsConfig = resolveNewsConfig(toml);
   // This session's starting research source: the flag tier (`researchSource`,
   // e.g. `tmct chat --research-source`) over the toml tier over the shipped
   // default — /wikipedia|/wikidata in chat mutate this turn-to-turn below,
@@ -484,6 +491,7 @@ export async function createSession({
   // starting null and waiting for a "play <world>" opener line.
   let planState = adventureWorld ? { adventure: { world: adventureWorld } } : null;
   let researchState = null; // the in-progress research queue — advanced by "research next", cleared by completion or "research stop"
+  let newsState = null; // the news feed's session state (items/ledger/health/requestLog/metrics) — threaded the same way researchState is
   // The typed discourse record ([discourse] max_referents caps it) — session-scoped
   // like the focus, threaded turn to turn, never persisted.
   let discourseRecord = emptyRecord(resolveDiscourseConfig(toml));
@@ -506,6 +514,7 @@ export async function createSession({
     get lastAnswer() { return last; },
     get planState() { return planState; },
     get researchState() { return researchState; },
+    get newsState() { return newsState; },
     get turns() { return turns; },
     get narrate() { return narrateOn; },
     get liveReference() { return liveReferenceOn; },
@@ -520,7 +529,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -542,6 +551,7 @@ export async function createSession({
       last = nextLast;
       if ("planState" in result) planState = result.planState;
       if ("researchState" in result) researchState = result.researchState;
+      if ("newsState" in result) newsState = result.newsState;
       if ("discourse" in result) discourseRecord = result.discourse;
       // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
       // same way a focus update does — apply them to this handle's
