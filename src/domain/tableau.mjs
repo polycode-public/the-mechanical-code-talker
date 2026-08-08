@@ -4,11 +4,13 @@
 // a case-split conclusion depends on every branch of its proof, and batch
 // provenance for that shape is a later problem.
 //
-// ALC connectives: top, bottom, atomic negation, intersection, union,
-// existential and universal restriction. The concept-expression AST also
-// carries a nominal tag and qualified-cardinality tags for a future
-// role-hierarchy/nominal/cardinality increment to grow into; this module's
-// own expansion rules and clash detection only reason over the ALC subset.
+// ALC connectives — top, bottom, atomic negation, intersection, union,
+// existential and universal restriction — plus transitive roles (the SHOIQ
+// "S"): a role declared owl:TransitiveProperty makes the universal rule
+// propagate through its own successors, and blocking runs as equality
+// blocking throughout so that propagation still terminates. The
+// concept-expression AST also carries a nominal tag and qualified-
+// cardinality tags for a future nominal/cardinality increment to grow into.
 //
 // Deterministic throughout: fixed rule-application priority, a fixed branch
 // stack (LIFO, no JS-call recursion — a deep existential chain must not
@@ -175,13 +177,22 @@ function detectClash(node) {
   return null;
 }
 
+// Equality blocking: a node is blocked only by an ancestor whose label set is
+// exactly the same, not merely a superset. Subset blocking is sound and
+// complete for plain ALC, but a transitive role's ∀-rule copies a universal
+// label onto every successor down the transitive chain (below), and subset
+// blocking can stop that copy one step early, before the copied universal
+// has actually produced the same consequences the blocking ancestor already
+// carries. Equality blocking is the standard SHIQ-family fix, adopted here
+// once transitive roles exist rather than only when a KB happens to declare
+// one, so the same blocking rule runs every time.
 function isBlocked(node, branch) {
   const keys = [...node.labels.keys()];
   let ancestorId = node.parent;
   while (ancestorId) {
     const ancestor = branch.nodes.get(ancestorId);
     if (!ancestor) break;
-    if (keys.every((k) => ancestor.labels.has(k))) return true;
+    if (keys.length === ancestor.labels.size && keys.every((k) => ancestor.labels.has(k))) return true;
     ancestorId = ancestor.parent;
   }
   return false;
@@ -216,7 +227,13 @@ function applyAndRule(branch) {
   return { applied: false, touched: [] };
 }
 
-function applyAllRule(branch) {
+/** The universal rule. For a transitive role, an r-successor also receives
+ *  the universal label itself, not just its filler — that is what lets
+ *  ∀r.C reach an r-successor's own r-successor with no separate rule: the
+ *  copied label fires this same rule again, one hop further, the next time
+ *  the search loop revisits it. */
+function applyAllRule(branch, kb) {
+  const transitiveRoles = kb && kb.transitiveRoles instanceof Set ? kb.transitiveRoles : null;
   for (const node of branch.nodes.values()) {
     for (const [, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "all") continue;
@@ -224,7 +241,10 @@ function applyAllRule(branch) {
       for (const edge of branch.edges) {
         if (edge.from !== node.id || edge.r !== expr.r) continue;
         const succ = branch.nodes.get(edge.to);
-        if (succ && addLabel(succ, expr.c, [...from, ...edge.fromFacts])) touched.push(succ.id);
+        if (!succ) continue;
+        const succFrom = [...from, ...edge.fromFacts];
+        if (addLabel(succ, expr.c, succFrom)) touched.push(succ.id);
+        if (transitiveRoles && transitiveRoles.has(expr.r) && addLabel(succ, expr, succFrom)) touched.push(succ.id);
       }
       if (touched.length) return { applied: true, touched };
     }
@@ -332,7 +352,7 @@ function stepOnce(branch, kb) {
     const clash = checkTouched(branch, and_.touched);
     return clash ? { kind: "clash", clash } : { kind: "applied" };
   }
-  const all_ = applyAllRule(branch);
+  const all_ = applyAllRule(branch, kb);
   if (all_.applied) {
     const clash = checkTouched(branch, all_.touched);
     return clash ? { kind: "clash", clash } : { kind: "applied" };
@@ -521,6 +541,7 @@ export function buildTableauKb(rows) {
   const disjointRows = [];
   const typeRows = [];
   const negTypeRows = [];
+  const transitiveRoles = new Set();
 
   const pushMap = (map, key, value) => {
     if (!map.has(key)) map.set(key, []);
@@ -537,13 +558,15 @@ export function buildTableauKb(rows) {
     else if (p === "owl:cardinality") cardinalityOf.set(r.subject, { kind: "exact", n: Number(r.object), id: r.id });
     else if (p === "rdfs:subclassof") subClassRows.push(r);
     else if (p === "owl:disjointwith") disjointRows.push(r);
-    else if (p === "rdf:type") typeRows.push(r);
+    else if (p === "rdf:type") {
+      typeRows.push(r);
+      if (String(r.object || "").toLowerCase() === "transitiveproperty") transitiveRoles.add(r.subject);
+    }
     else if (p === "mgxneg:subclassof") negTypeRows.push(r);
     else if (p === "owl:unionof") pushMap(unionMembersOf, r.subject, r);
     else if (p === "owl:complementof") complementOf.set(r.subject, r);
-    // owl:oneOf, owl:differentFrom, owl:TransitiveProperty (as rdf:type
-    // object below), rdfs:subPropertyOf, owl:inverseOf: reserved for a
-    // future increment, not read here.
+    // owl:oneOf, owl:differentFrom, rdfs:subPropertyOf, owl:inverseOf:
+    // reserved for a future increment, not read here.
   }
 
   const individualNamesFromType = new Set();
@@ -617,11 +640,17 @@ export function buildTableauKb(rows) {
 
   const individuals = [...new Set(assertions.map((a) => a.ind))].sort();
 
-  return { axioms, assertions, roles: [...roles].sort(), individuals };
+  return { axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles };
 }
 
 function restrictKbToIndividual(kb, ind) {
-  return { axioms: kb.axioms, assertions: (kb.assertions || []).filter((a) => a.ind === ind), roles: kb.roles, individuals: [ind] };
+  return {
+    axioms: kb.axioms,
+    assertions: (kb.assertions || []).filter((a) => a.ind === ind),
+    roles: kb.roles,
+    individuals: [ind],
+    transitiveRoles: kb.transitiveRoles,
+  };
 }
 
 /** Every clash the KB produces on its own, with both premises named. Pure.

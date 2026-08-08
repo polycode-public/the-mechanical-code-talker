@@ -1228,6 +1228,10 @@ transitive successors: a node labelled `{t:"all", r, c}` with `r` transitive add
 transitive roles need for termination. Test file `test/adapters/tableau-transitive.test.mjs`,
 including a termination test on `A ⊑ ∃r.A` with `r` transitive.
 
+**Delivered.** `kb.transitiveRoles` reads `owl:TransitiveProperty` declarations off the store; the
+∀-rule copies its own label onto a transitive role's successor alongside the filler; blocking runs
+as equality blocking throughout. Tests in `test/adapters/tableau-transitive.test.mjs`.
+
 **4b — H: role hierarchies.** `p rdfs:subPropertyOf q` makes ∃ and ∀ read the role closure: an
 `r`-edge counts as an `s`-edge for every `s` above `r`. Precompute the closure once per KB with the
 same memoized ancestor walk `buildAncestorCloser` uses. Blocking is unaffected: the closure is
