@@ -903,6 +903,25 @@ solving at seven crossings while the world-pack path learns to do the same thing
 
 ## 8. Phase R4 — the per-instance edit affordance
 
+**Shipped.** `src/services/agent-editor.mjs` carries the closed AGENT_TRAIT_PREDICATES sentence
+table (`renderAgentEditorText`, `renderAgentClassText`, `parseAgentEditorText`,
+`planAgentEditorSync`), disjoint from `mud-editor.mjs`'s placement/class/exit/dig table and
+`mudiii-turn.mjs`'s teach table. `planAgentEditorSync` scopes both the append and the retract set
+to the one subject it is handed, so a pasted line naming another instance is never even read as
+belonging to it. `mudiii-browser-entry.mjs`'s `session.applyAgentEdit(subject, text)` is the
+session-level write path (never calls `recast`); `renderAgentEditorText`/`renderAgentClassText`
+join the `window.tmct.page` bag alongside `agentTraitsOf`, since they lean on `agent-traits.mjs`'s
+class-chain walk and so cannot splice via `.toString()` the way the self-contained world-editor
+functions do. The page wiring in `mudiii-viz.mjs` reuses `#agentSelect` as the actor card's own
+selector: a "this `<kind>`" tab writes to the followed instance, an "every `<kind>`" tab writes to
+its class, and the class tab's own lede names which instances already carry their own copies —
+the plan's stated default (a class edit changes the next spawn, not a standing instance) stands,
+and a trait edit never calls `session.recast`, so it redraws only the label/mesh presentation and
+leaves every placement alone. `test/services/agent-editor.test.mjs`,
+`test/services/mudiii-viz.test.mjs` and `test/adapters/mudiii-browser-entry.test.mjs` cover the
+round trip, the honest miss, the inherited-trait comment block, and that an edit to one instance
+never touches a sibling's rows or the board's cells/epoch.
+
 Goal: an actor card with its own editor, beside the whole-world one, editing only the selected
 instance. Same debounce, same parse discipline, same honest miss.
 

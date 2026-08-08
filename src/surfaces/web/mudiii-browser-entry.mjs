@@ -19,6 +19,9 @@ import {
 import { findActionPath } from "../../domain/planning.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 import { parseMudEditorText, planMudEditorSync, gridWorldEditorState } from "../../services/mud-editor.mjs";
+import {
+  parseAgentEditorText, planAgentEditorSync, renderAgentEditorText, renderAgentClassText,
+} from "../../services/agent-editor.mjs";
 import { agentTraitsOf } from "../../domain/agent-traits.mjs";
 import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
@@ -306,6 +309,29 @@ export async function createMudiiiSession(
     return engPlaceFood(memoryDir, { layout, ...opts });
   }
 
+  /** The actor card's own store sync — agent-editor.mjs's closed table,
+   *  disjoint from `applyEdit`'s world table. `subject` is whichever id the
+   *  card is scoped to when this is called: an instance id on the "this
+   *  goblin" tab, the class name itself on the "all goblins" tab — either
+   *  way `planAgentEditorSync` only ever reads and writes rows whose own
+   *  subject is that one id, so an actor edit can reach no instance, no
+   *  class and no placement it was not asked to touch. Never calls
+   *  `recast`: a trait is not where anything stands. */
+  async function applyAgentEdit(subject, text) {
+    const rows = readFactRows(await loadMemory(memoryDir));
+    const { triples, unrecognized } = parseAgentEditorText(text);
+    const { toAppend, toRemoveIds } = planAgentEditorSync(rows, subject, triples);
+    if (toAppend.length) {
+      await appendFacts(memoryDir, toAppend.map((f) => ({
+        subject: f.subject, predicate: f.predicate, object: f.object, provenance: `actor-edit:${subject}`,
+      })));
+    }
+    const removed = unrecognized.length === 0 && toRemoveIds.length
+      ? (await removeFacts(memoryDir, toRemoveIds)).removed.length
+      : 0;
+    return { unrecognized, added: toAppend.length, removed };
+  }
+
   return {
     memoryDir,
     codeGraph,
@@ -318,6 +344,7 @@ export async function createMudiiiSession(
     board,
     snapshot,
     applyEdit,
+    applyAgentEdit,
     placeFood,
   };
 }
@@ -344,5 +371,9 @@ publishTmctSurface({
     // What the page's scene boot reads to resolve each agent's stated
     // display name and model off the rows, class chain included.
     agentTraitsOf,
+    // The actor card's own render half — agent-editor.mjs leans on
+    // agent-traits.mjs's class-chain walk, so (like agentTraitsOf) it
+    // reaches the page through this bag rather than a `.toString()` splice.
+    renderAgentEditorText, renderAgentClassText,
   },
 });

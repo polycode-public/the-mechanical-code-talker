@@ -717,6 +717,16 @@ ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button 
       </section>
     </aside>
   </div>
+  <section class="actor-card" id="mudiiiActorCard" aria-label="the followed actor's own facts">
+    <div class="actor-tabs" role="tablist" aria-label="edit this actor alone, or its whole class">
+      <button type="button" id="actorTabInstance" class="actor-tab" role="tab" aria-selected="true">this actor</button>
+      <button type="button" id="actorTabClass" class="actor-tab" role="tab" aria-selected="false">its whole class</button>
+    </div>
+    <p class="edit-lede" id="actorCardLede">Follow an agent to edit what it wants — the class tab changes every one that has not been edited on its own, and the next one spawned; this tab changes only the one selected above.</p>
+    <textarea id="actorEditorText" spellcheck="false" aria-label="the followed actor's own facts as plain sentences, one per line"></textarea>
+    <div class="chatpills" id="actorEditorPills" aria-label="related words for the term before the cursor"></div>
+    <p class="edit-status" id="actorEditorStatus" role="status"></p>
+  </section>
   <section class="mudiii-chat" aria-label="talk to the square">
     <div class="chatlog" id="chatLog" aria-live="polite"></div>
     <div class="log-popup" id="chatLogPopup" role="dialog" aria-label="the whole reply" hidden>
@@ -963,6 +973,23 @@ const MUDIII_STYLE = `
   .edit-placements { display: flex; flex-direction: column; gap: .2rem; font-size: .74rem; }
   .edit-placement-row { display: flex; gap: .4rem; }
   .edit-empty { font-size: .74rem; font-style: italic; color: var(--square-stone-dark); }
+
+  .actor-card {
+    display: none; flex-direction: column; gap: .45rem; margin-bottom: 1rem;
+    background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; min-width: 0;
+  }
+  body.editing .actor-card { display: flex; }
+  .actor-tabs { display: flex; gap: .35rem; }
+  .actor-tab { font-family: ${MONO_STACK}; font-size: .68rem; padding: .22rem .6rem; border: 1px solid var(--square-stone-dark); border-radius: 3px; background: rgba(255,255,255,.5); }
+  .actor-tab[aria-selected="true"] { background: var(--square-accent); border-color: var(--square-accent); }
+  #actorEditorText {
+    width: 100%; box-sizing: border-box; min-height: 12rem; resize: vertical;
+    font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.6;
+    color: var(--square-ink); background: rgba(255,255,255,.6);
+    border: 1px solid var(--square-stone-dark); border-radius: 3px; padding: .55rem .6rem;
+  }
+  #actorEditorText:disabled { opacity: .55; }
 
   .mudiii-chat { background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px; box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; display: flex; flex-direction: column; gap: .5rem; }
   .chatlog { min-height: 8rem; max-height: 16rem; overflow-y: auto; }
@@ -1575,6 +1602,7 @@ function pageScript() {
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
     renderDriveRing();
+    if (editing) renderActorEditor();
     sendCameraToScene(camera);
   });
 
@@ -1735,6 +1763,7 @@ function pageScript() {
     el("editorStatus").textContent = "";
     renderSuggestionPills();
     renderEditPlacements();
+    renderActorEditor();
   }
 
   function exitEditMode() {
@@ -1835,6 +1864,151 @@ function pageScript() {
         : "synced \\u2014 no change.";
     }
     renderEditPlacements();
+  }
+
+  // ---- actor card (per-instance edit) -------------------------------------
+  // A second, disjoint sentence table beside the world editor's own: this
+  // card edits whichever agent #agentSelect currently follows, alone,
+  // through agent-editor.mjs's AGENT_TRAIT_PREDICATES rather than
+  // mud-editor.mjs's placement/class/exit/dig vocabulary. "this <kind>"
+  // writes to the instance id; "every <kind>" writes to the class name,
+  // which changes the NEXT spawn (R2's copy-on-spawn), never an instance
+  // already standing — the lede says so, naming which instances already
+  // carry their own copies.
+  let actorTab = "instance";
+
+  function actorPluralOf(word) {
+    return /(?:[sxz]|ch|sh)$/i.test(word) ? word + "es" : word + "s";
+  }
+
+  function actorEditSubject() {
+    const id = el("agentSelect").value;
+    if (!id) return null;
+    return actorTab === "class" ? roleOfAgentId(id) : id;
+  }
+
+  function renderActorEditor() {
+    const id = el("agentSelect").value;
+    const area = el("actorEditorText");
+    const status = el("actorEditorStatus");
+    status.className = "edit-status";
+    status.textContent = "";
+    if (!id || !window.tmct || !window.tmct.page.renderAgentEditorText) {
+      area.value = "";
+      area.disabled = true;
+      el("actorTabInstance").textContent = "this actor";
+      el("actorTabClass").textContent = "its whole class";
+      el("actorCardLede").textContent = "Follow an agent above to edit what it wants.";
+      return;
+    }
+    const kind = roleOfAgentId(id);
+    area.disabled = false;
+    el("actorTabInstance").textContent = "this " + kind;
+    el("actorTabInstance").setAttribute("aria-selected", actorTab === "instance" ? "true" : "false");
+    el("actorTabClass").textContent = "every " + actorPluralOf(kind);
+    el("actorTabClass").setAttribute("aria-selected", actorTab === "class" ? "true" : "false");
+    if (actorTab === "class") {
+      const siblings = Object.keys(agentsById).filter(function (aid) { return roleOfAgentId(aid) === kind; }).sort();
+      area.value = window.tmct.page.renderAgentClassText(allStoreRows, kind);
+      el("actorCardLede").textContent = (siblings.length ? siblings.join(", ") + " already carry their own copies. " : "")
+        + "This changes the next " + kind + " to arrive.";
+    } else {
+      area.value = window.tmct.page.renderAgentEditorText(allStoreRows, id);
+      el("actorCardLede").textContent = "This changes " + id + " alone.";
+    }
+  }
+
+  el("actorTabInstance").addEventListener("click", function () {
+    if (actorTab === "instance") return;
+    actorTab = "instance";
+    renderActorEditor();
+  });
+  el("actorTabClass").addEventListener("click", function () {
+    if (actorTab === "class") return;
+    actorTab = "class";
+    renderActorEditor();
+  });
+
+  function renderActorSuggestionPills() {
+    const box = el("actorEditorPills");
+    const area = el("actorEditorText");
+    const term = wordBeforeCursor(area.value, area.selectionStart);
+    if (!term || !window.tmct) { box.innerHTML = ""; return; }
+    const related = window.tmct.page.relatedForTerm ? window.tmct.page.relatedForTerm(allStoreRows, term) : null;
+    const chain = window.tmct.page.classAncestorChain ? window.tmct.page.classAncestorChain(term, allStoreRows) : [];
+    const seen = {};
+    seen[term] = true;
+    const out = [];
+    const push = function (label) { if (label && !seen[label]) { seen[label] = true; out.push(label); } };
+    if (related) {
+      related.synonyms.forEach(push);
+      related.related.forEach(function (r) { push(r.prefLabel); });
+    }
+    chain.slice(1).forEach(push);
+    box.innerHTML = out.slice(0, 8).map(function (s) {
+      return '<button type="button" class="pill" data-insert="' + esc(s) + '">' + esc(s) + "</button>";
+    }).join("");
+  }
+
+  el("actorEditorPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const area = el("actorEditorText");
+    const pos = area.selectionStart;
+    const word = wordBeforeCursor(area.value, pos);
+    const insert = btn.getAttribute("data-insert");
+    area.value = area.value.slice(0, pos - word.length) + insert + area.value.slice(pos);
+    const next = pos - word.length + insert.length;
+    area.setSelectionRange(next, next);
+    area.focus();
+    onActorEditorChanged();
+  });
+
+  let actorSuggestTimer = null;
+  let actorSyncTimer = null;
+  function scheduleActorSuggestions() { clearTimeout(actorSuggestTimer); actorSuggestTimer = setTimeout(renderActorSuggestionPills, 180); }
+  function scheduleActorSync() { clearTimeout(actorSyncTimer); actorSyncTimer = setTimeout(applyActorEditorText, 450); }
+  function onActorEditorChanged() { scheduleActorSuggestions(); scheduleActorSync(); }
+  el("actorEditorText").addEventListener("input", onActorEditorChanged);
+  el("actorEditorText").addEventListener("click", scheduleActorSuggestions);
+  el("actorEditorText").addEventListener("keyup", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].indexOf(e.key) !== -1) scheduleActorSuggestions();
+  });
+
+  // Redraws the label/mesh presentation and replays the CURRENT tick
+  // payload — never calls session.recast, unlike rebuildSceneFromEdit's own
+  // add/remove branch. A trait is not where anything stands, so a trait
+  // edit must never move a single placement on the board.
+  async function redrawAgentPresentation() {
+    await callScene("boot", {
+      propPlacements: props, assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+      agentPresentation: agentPresentationFrom(allStoreRows),
+    });
+    sendCameraToScene(camera);
+    callScene("applyTick", { agents: agentsById, items: itemsById, ecology: [] });
+  }
+
+  async function applyActorEditorText() {
+    if (!session) return;
+    const subject = actorEditSubject();
+    if (!subject) return;
+    const status = el("actorEditorStatus");
+    status.className = "edit-status pending";
+    status.textContent = "reading the square\\u2026";
+    const result = await serializeTick(function () { return session.applyAgentEdit(subject, el("actorEditorText").value); });
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
+    await redrawAgentPresentation();
+    if (result && result.unrecognized && result.unrecognized.length) {
+      status.className = "edit-status pending";
+      status.textContent = result.unrecognized.length + " line" + (result.unrecognized.length === 1 ? "" : "s")
+        + " not understood yet \\u2014 nothing is retracted until they are.";
+    } else {
+      status.className = "edit-status ok";
+      status.textContent = (result && (result.added || result.removed))
+        ? "synced \\u2014 " + result.added + " fact(s) written, " + result.removed + " retracted."
+        : "synced \\u2014 no change.";
+    }
   }
 
   // ---- booting ---------------------------------------------------------
