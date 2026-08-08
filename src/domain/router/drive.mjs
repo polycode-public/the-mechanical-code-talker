@@ -282,13 +282,31 @@ export async function runRecognition(tools, ctx) {
   };
 }
 
+/** A ctx carrying an observed trace also gets a `recognition` field on the
+ *  result: what the trace fits, or the reject class. Additive — it never
+ *  changes calls, refused, or why, so a caller that ignores it sees exactly
+ *  the loop result it saw before. */
+async function withRecognition(result, tools, ctx) {
+  if (!Array.isArray(ctx.trace) || !ctx.trace.length) return result;
+  const r = await runRecognition(tools, ctx);
+  return {
+    ...result,
+    recognition: {
+      inferredGoal: r.inferredGoal ?? null,
+      reject: r.reject === true,
+      ambiguousGoals: r.ambiguousGoals ?? null,
+      why: r.why,
+    },
+  };
+}
+
 /** The full drive: resolver/planner first; a refusal there falls through to
  *  the taught world-goal lane (runTaughtPlan, above), and only a request that
  *  is not a world goal escalates to the closed-world goal-reasoner. Mirrors
  *  test-benchmarks/agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
  *  test-benchmarks/agentbench/ dependency (test-benchmarks/agentbench/ is dev-only, never shipped). Returns a
  *  loopResult:
- *  `{ calls, refused, terminated, proof, why, driver, composed?, observed?, candidateResults? }`.
+ *  `{ calls, refused, terminated, proof, why, driver, composed?, observed?, candidateResults?, recognition? }`.
  *
  *  A C1 refusal that already carries `candidateResults` (the tied-candidate
  *  composer's enumerate-or-refuse answer) is TERMINAL — it stands as-is rather
@@ -298,15 +316,15 @@ export async function runRecognition(tools, ctx) {
  *  plainer refuse with no candidates at all). */
 export async function runCapabilityPlan(request, tools, ctx) {
   const c1 = await runResolverPlan(request, tools, ctx);
-  if (!c1.refused || c1.candidateResults) return c1;
+  if (!c1.refused || c1.candidateResults) return withRecognition(c1, tools, ctx);
   const taught = await runTaughtPlan(request, tools, ctx);
-  if (taught) return taught.refused ? { ...taught, c1Why: c1.why } : taught;
+  if (taught) return withRecognition(taught.refused ? { ...taught, c1Why: c1.why } : taught, tools, ctx);
   const c2 = await goalReason(request, tools, ctx, { driver: GOAL_DRIVER });
   // Both stages refused: carry the resolver/planner's own reason alongside the
   // goal-reasoner's so a caller can show why the direct route AND the
   // maintenance-goal route both declined,
   // rather than only the last (often less specific) of the two.
-  return c2.refused ? { ...c2, c1Why: c1.why } : c2;
+  return withRecognition(c2.refused ? { ...c2, c1Why: c1.why } : c2, tools, ctx);
 }
 
 /** Build a real `{ dispatch, resolve, graph, config }` context against a repo's

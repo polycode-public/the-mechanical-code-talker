@@ -29,6 +29,7 @@ import { resolveExtensions, mergedLexiconExtra, mergedLaneVocab, defaultCodeLane
 import { runTurn, hasSeededVocabulary, vocabExampleHint, codeDomainActive as codeDomainActiveOf } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
 import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
+import { resolveRecognitionConfig } from "../domain/router/recognize.mjs";
 import { resolveResearchConfig } from "./research.mjs";
 import { normalizeResearchChoice } from "../adapters/corpus/research-source.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
@@ -486,6 +487,9 @@ export async function createSession({
   // The typed discourse record ([discourse] max_referents caps it) — session-scoped
   // like the focus, threaded turn to turn, never persisted.
   let discourseRecord = emptyRecord(resolveDiscourseConfig(toml));
+  // The recognition trace cap ([recognition] max_trace) — resolved once per
+  // session, read by the surfaces that fold a trace back out of the store.
+  const recognitionConfig = resolveRecognitionConfig(toml);
   let closed = false;
 
   return {
@@ -516,7 +520,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

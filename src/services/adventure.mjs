@@ -15,6 +15,7 @@ import { loadLexicon, withProperNames, classify } from "../domain/grammar/lexico
 import { register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
+import { declaredGoals, recognizeGoal, traceOfWorldRows } from "../domain/router/recognize.mjs";
 import { compileDomain, precondHolds, roleBinding } from "../domain/domain.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, normFactTerm, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
@@ -22,6 +23,7 @@ import { COMPLETIONS_STORE, generateCompletion } from "./completions.mjs";
 import { parseEditorLine, planTaughtTriple } from "./adventure-editor.mjs";
 import { parseMudEditorLine, planTaughtMudTriple } from "./mud-editor.mjs";
 import { worldTeachTurn } from "./world-teach.mjs";
+import { expandWorldGoal } from "./adventure-autoplay.mjs";
 
 // ---- recognizers: the closed opening/stop set --------------------------------
 
@@ -2040,6 +2042,17 @@ async function worldOpennessAnswer(line, { memoryDir }) {
 const WORLD_WHERE_AM_I_RE = /^where\s+am\s+i(?:\s+now)?[?.!\s]*$/i;
 const WORLD_OPTIONS_RE = /^(?:what\s+can\s+i\s+do(?:\s+(?:here|now))?|what\s+are\s+my\s+options|what\s+(?:should|do)\s+i\s+do(?:\s+(?:here|now))?|what\s+now)[?.!\s]*$/i;
 const WORLD_QUEST_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:quest|goal|objective|mission|aim)|what\s+am\s+i\s+(?:trying\s+to\s+do|(?:supposed|meant)\s+to\s+do)|what\s+do\s+i\s+do\s+here)[?.!\s]*$/i;
+// "what am I doing" — the RECOGNITION question, and a different one from
+// WORLD_QUEST_RE's "what is my goal". That asks what the world declared; this
+// asks what THIS run's own moves fit. The two live side by side because the
+// answers can honestly disagree: a player heading somewhere the world never
+// marked has a real goal and no declared one.
+const WORLD_RECOGNIZE_RE = /^(?:what\s+am\s+i\s+doing(?:\s+(?:here|now))?|what\s+have\s+i\s+been\s+doing|what\s+was\s+i\s+doing)[?.!\s]*$/i;
+// "what is the housekeeper doing" — the same recognizer, over that character's
+// own @turnN rows. An NPC's scheduled move writes the same snapshot a player
+// move writes, so nothing here is NPC-specific beyond which actor's steps the
+// trace reads.
+const WORLD_RECOGNIZE_OTHER_RE = /^what(?:'s|\s+is|\s+are)\s+(?:the\s+)?(.+?)\s+doing(?:\s+(?:here|now))?[?.!\s]*$/i;
 // "who is here" — the room's cast, the question a shared world invites the
 // moment a second animal walks in. Answered from the same currently-in
 // placements the talk verb resolves against, so who is named is exactly who
@@ -2063,18 +2076,99 @@ const WORLD_KNOWN_FOOD_RE = new RegExp(
   "i",
 );
 
+// A recognition tie lists its survivors with a short Oxford-comma "or" join —
+// the same shape chat.mjs's own joinOr produces for a discourse tie, kept as a
+// small local copy rather than an import across the file boundary.
+const joinOr = (a) => (a.length > 2 ? `${a.slice(0, -1).join(", ")}, or ${a[a.length - 1]}`
+  : a.length === 2 ? `${a[0]} or ${a[1]}` : (a[0] ?? ""));
+
+/** One subject's own @turnN (or @epochE@turnN) rows out of a wider row set —
+ *  what traceOfWorldRows folds into a step list. traceOfWorldRows reads
+ *  whatever rows it is given; narrowing to one subject here is what keeps a
+ *  "what am I doing" trace from reading another actor's moves as its own. */
+function subjectSnapshotRows(rows, subject) {
+  return (rows || []).filter((row) => parseSnapshotSubject(row.subject)?.base === subject);
+}
+
+/** The world's own cast member `spoken` names, matched by plain id (worlds
+ *  name their cast in plain lowercase words — "housekeeper", "gardener" —
+ *  same as any other individual), or null when nobody in this world goes by
+ *  that name. */
+function resolveCastMemberByName(rows, state, spoken) {
+  const norm = String(spoken).trim().toLowerCase();
+  if (!norm) return null;
+  return worldIndividualNames(rows).find((id) => id.toLowerCase() === norm && isCastMember(rows, state, id)) ?? null;
+}
+
+/** `subject`'s room BEFORE any observed step — the base (unstamped) row a
+ *  world writes at turn 0, ignoring every later @turnN move. A recognition
+ *  plan has to start where the trace itself starts: expandWorldGoal's search
+ *  from the subject's CURRENT room would return only the few steps still
+ *  left to take, which a trace of the moves already made can never fit. */
+function subjectStartRoom(actionRows, subject) {
+  const baseRows = actionRows.filter((row) => !parseSnapshotSubject(row.subject));
+  return foldWorldState(baseRows).placements.get(subject)?.object ?? null;
+}
+
+/** The recognition surface's four outcomes — recognized, tied, reject, or
+ *  nothing observed yet — over `subject`'s own trace. `thirdPerson` renders
+ *  the same recognition in the third person for an NPC intent question
+ *  instead of the player's own "what am I doing". Only world and taught goals
+ *  are in play here (`tools: []` screens out the tool/maintenance goals a
+ *  world never declares), so "the goals this world declares" names what it
+ *  actually reads as declared, not the whole router's registry. */
+function recognitionOutcomeAnswer(subject, { actionRows, ruleRows, state, thirdPerson }) {
+  const trace = traceOfWorldRows(subjectSnapshotRows(actionRows, subject), { actor: subject });
+  if (!trace.length) {
+    return answer(
+      "you haven't done anything yet — make a move and ask again.",
+      `ADVENTURE — recognition aside: no observed step for ${subject} yet`,
+      { goal: "see what I'm recognized as doing" },
+    );
+  }
+  const goals = declaredGoals({ worldRows: actionRows, ruleRows }, { tools: [] });
+  const origin = subjectStartRoom(actionRows, subject);
+  const expand = (goal) => (origin ? expandWorldGoal(goal, { here: origin, exposedRows: actionRows, exposedState: state }) : []);
+  const r = recognizeGoal(trace, goals, { expand });
+  const note = `ADVENTURE — recognition aside: ${trace.length} observed step(s) against ${goals.length} declared goal(s); ${r.why}`;
+
+  if (r.goal) {
+    const target = r.goal.label.replace(/^carry /, "");
+    const text = thirdPerson
+      ? `the ${subject} is heading for ${target} — the last ${trace.length} moves it made are a subsequence of the route that gets there.`
+      : `you're heading for ${target} — your last ${trace.length} move${trace.length === 1 ? "" : "s"} ${trace.length === 1 ? "is" : "are"} a subsequence of the route that gets you there.`;
+    return answer(text, note, { goal: "see what I'm recognized as doing" });
+  }
+  if (r.reject) {
+    const text = thirdPerson
+      ? `nothing the ${subject} has done fits any of the ${goals.length} goals this world declares.`
+      : `nothing you've done so far fits any of the ${goals.length} goals this world declares. Say "what is my goal" to see what it does declare.`;
+    return answer(text, note, { miss: true, goal: "see what I'm recognized as doing" });
+  }
+  const labels = r.ambiguous.map((g) => g.label);
+  const text = thirdPerson
+    ? `what the ${subject} has done so far fits ${labels.length} goals equally well: ${joinOr(labels)}. A few more moves would tell them apart.`
+    : `what you've done so far fits ${labels.length} goals equally well: ${joinOr(labels)}. A few more moves would tell them apart, so I won't pick one.`;
+  return answer(text, note, { goal: "see what I'm recognized as doing" });
+}
+
 /** The in-game orientation asides, answered from the world fold: the player's
- *  room, the room's real affordances, and the world's objective. Null when the
- *  line is none of them, so an ordinary question keeps its lane. */
+ *  room, the room's real affordances, the world's objective, and what a
+ *  trace — the player's own, or a named character's — is recognized as
+ *  doing. Null when the line is none of them, so an ordinary question keeps
+ *  its lane. */
 async function worldContextAnswer(line, { memoryDir, actingSubject = "player" }) {
   const l = String(line).trim();
   const asksWhere = WORLD_WHERE_AM_I_RE.test(l);
   const asksOptions = WORLD_OPTIONS_RE.test(l);
   const asksQuest = WORLD_QUEST_RE.test(l);
   const asksWhoIsHere = WORLD_WHO_HERE_RE.test(l);
-  if (!asksWhere && !asksOptions && !asksQuest && !asksWhoIsHere) return null;
-  let rows;
-  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const asksRecognize = WORLD_RECOGNIZE_RE.test(l);
+  const recognizeOther = WORLD_RECOGNIZE_OTHER_RE.exec(l);
+  if (!asksWhere && !asksOptions && !asksQuest && !asksWhoIsHere && !asksRecognize && !recognizeOther) return null;
+  let memory;
+  try { memory = await loadMemory(memoryDir); } catch { return null; }
+  const rows = readFactRows(memory);
   const state = foldWorldState(worldActionRows(rows));
   const here = state.placements.get(actingSubject)?.object ?? null;
 
@@ -2102,6 +2196,27 @@ async function worldContextAnswer(line, { memoryDir, actingSubject = "player" })
       `ADVENTURE — options aside: the ${here}'s roomAffordances, the same list "look" appends`,
       { goal: "see what you can do here" },
     );
+  }
+
+  if (asksRecognize) {
+    const actionRows = worldActionRows(rows);
+    const ruleRows = readRuleRows(memory);
+    return recognitionOutcomeAnswer(actingSubject, { actionRows, ruleRows, state, thirdPerson: false });
+  }
+
+  if (recognizeOther) {
+    const spoken = recognizeOther[1].trim();
+    const resolved = resolveCastMemberByName(rows, state, spoken);
+    if (!resolved) {
+      return answer(
+        `there's nobody called "${spoken}" in this world.`,
+        `ADVENTURE — recognition aside: "${spoken}" resolves to no cast member this world names`,
+        { miss: true },
+      );
+    }
+    const actionRows = worldActionRows(rows);
+    const ruleRows = readRuleRows(memory);
+    return recognitionOutcomeAnswer(resolved, { actionRows, ruleRows, state, thirdPerson: true });
   }
 
   const objectiveId = rows.find((r) => r.predicate === "mgx:is-objective" && r.object === "true")?.subject ?? null;
