@@ -572,7 +572,8 @@ async function loadScenarioWorlds(names) {
   }
 }
 
-// The 13 hand-authored pages (index.html, help.html, the 11 about pages)
+// The hand-authored pages (index.html, help.html, and the about pages —
+// TRACKED_PAGES in scripts/site-pages.mjs is the source of truth)
 // carry a <!-- meta:begin -->/<!-- meta:end --> marker pair in their tracked
 // <head> in place of their own <title>/<meta name="description"> lines; this
 // fills the marker's interior fresh on every build, so a title/description

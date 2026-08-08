@@ -92,40 +92,18 @@ hot + 23 cold, no drift), and the versioned repository interface. Two spots coul
 to a test: the architecture diagram has no drift guard against the layer set, and the
 false-premise flag has no dedicated test file.
 
-**Forward — one claim is not backed.** "Security and supply chain" claims a nightly
-`npm audit` + OSV-Scanner CI job; `.gitlab-ci.yml` has no scheduled pipeline and no such job —
-SAST, secret detection, and provenance publishing are real, the nightly audit exists only in
-archived plan docs and an unscheduled local `npm run audit` script.
-
-**Reverse — shipped, tested, absent from README's narrative** (each verified in source and
-tests, not just differently worded):
-
-1. The typed discourse record (`src/domain/discourse.mjs`, 9 test files) — one config comment,
-   no prose; README never mentions follow-up/context-carrying questions at all.
-2. Goal recognition (`/goals`, `tmct plan --goals`, "what am I doing", NPC intent, the TOOL-9
-   rung) — unmentioned, and the bibliography's "tmct has no intent vocabulary" line now needs
-   a re-examination against it.
-3. Plan counterfactuals ("what if X started on peg-c", "why A instead of B").
-4. Filler-clause prefix stripping.
-5. Quantified locative teach (README covers quantified teaching generically, never the
-   locative case).
-6. `help.html` — a shipped, tracked page; README documents `/help` and `--help` but not the page.
-7. The sprites animation model (hover/turn/emote, random scenes, ontology trees with drawn
-   connectors) — README names the gallery and its fact count only.
-8. Adventure staff animation (the rendered turntable walk, distinct from the narrative
-   "moves on its own schedule" line).
-9. The research service — structural mentions only; no narrative section like every other
-   service gets.
-10. The P2P/WebRTC layer (three-peer mesh, replayed in CI against the live site) — zero
-    P2P/WebRTC/peer mentions in README. (`mud.html` itself was retired from the site build in
-    `7245ff0a`; the machinery ships through the surviving pages' share overlay.)
-11. `receipts.html` and `claims.html` — real, estate-tested pages, unmentioned.
-12. MUDIII's market-square and chapel-corner layouts — README names only the town square.
-
-**Stale number:** the repository-layout table says "the six about pages"; the build's own
-comment says 13 hand-authored pages including 11 about pages — though note the live site now
-ships 6 demo pages (the 2026-08-07 reduction), so the right fix should count what actually
-ships, not just update six to eleven.
+**Reverse direction and the one unbacked claim — found, then fixed the same day.** The audit
+surfaced twelve shipped, tested capabilities absent from README's narrative (the typed
+discourse record, goal recognition, plan counterfactuals, filler-clause stripping, quantified
+locative teach, help.html, the sprites animation model, adventure staff animation, the research
+service, the P2P/WebRTC sharing layer, receipts.html/claims.html, and MUDIII's other two
+layouts) plus one claim CI does not back (a nightly `npm audit`/OSV-Scanner job that exists
+nowhere in `.gitlab-ci.yml`). All twelve now have prose in their natural README sections, the
+security section states exactly what runs (SAST and secret detection per pipeline,
+provenance-signed publishing, an unscheduled local audit script), and the bibliography's
+"no intent vocabulary" line was reworded to stay true beside the shipped goal recognition
+(`71ecac4d`). The suspected stale about-page count turned out correct in README — the stale
+figure was the build script's own comment, fixed alongside.
 
 ## Site weight
 
