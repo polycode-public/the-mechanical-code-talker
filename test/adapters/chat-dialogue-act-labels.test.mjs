@@ -52,6 +52,18 @@ test("the honest miss labels autoNegative in the autoFeedback dimension, never a
   }
 });
 
+test("a grounded choice question labels choiceQuestion (task)", async () => {
+  const dir = await freshRepo();
+  try {
+    await turn("every whale is a mammal", { memoryDir: dir });
+    const r = await turn("is a whale a fish or a mammal", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.deepEqual(r.record.dialogueAct, { act: "choiceQuestion", dimension: "task" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a greeting labels initialGreeting (socialObligationsManagement)", async () => {
   const r = await turn("hi");
   assert.deepEqual(r.record.dialogueAct, { act: "initialGreeting", dimension: "socialObligationsManagement" });

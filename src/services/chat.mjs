@@ -62,6 +62,7 @@ import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
+import { splitChoiceQuestion } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3674,6 +3675,40 @@ async function isAnchorableTerm(term, lex, memoryDir, cache = null, graph = null
   return isCorpusAnchoredTerm(term, memoryDir, cache);
 }
 export { isAnchorableTerm };
+
+/** Per-option grounding for the closed multiple-choice lane (splitChoiceQuestion,
+ *  choice-question.mjs): for each option, looks for a stored Fact row whose
+ *  {subject, object} pair is {sourceTerm, option} in either direction, under
+ *  any predicate. This is PAIR-level grounding, not the term-level check
+ *  isAnchorableTerm runs above — almost every option answers "is this term
+ *  known at all", but only a stated relation between the source term and THAT
+ *  option decides a choice question, which is what this function tests.
+ *
+ *  Reads the same rows the rest of chat reads (factRows/factRowsCache), and
+ *  pulls the child pack for `sourceTerm` ONCE per turn, only when memory holds
+ *  no fact for it yet — the same childPackFactsForKey the learn-on-miss
+ *  cascade calls elsewhere in this file. Never pulls per option: seeding the
+ *  graph from the question's own distractors would ground every option for
+ *  free, which is a slow way to guess rather than an honest probe.
+ *
+ *  `chain` stays null on every entry here — a direct-edge probe only. A
+ *  bounded findIsaChain chase for an option with no direct edge is later work
+ *  (rung 3), which is why `graph` already rides this signature unused. */
+async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+  const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
+  let rows = await factRows(memoryDir, cache);
+  const hasSourceFacts = rows.some((f) => sourceVariants.has(f.subject) || sourceVariants.has(f.object));
+  if (!hasSourceFacts && memoryDir) {
+    const learned = await childPackFactsForKey(parsed.sourceTerm, { memoryDir, env, cache, synthesisBudget });
+    if (learned) rows = await factRows(memoryDir, cache);
+  }
+  return parsed.options.map((option) => {
+    const optionVariants = factTermVariants(normFactTermStatic, option.text);
+    const facts = rows.filter((f) => (sourceVariants.has(f.subject) && optionVariants.has(f.object))
+      || (sourceVariants.has(f.object) && optionVariants.has(f.subject)));
+    return { label: option.label, text: option.text, grounds: facts.length > 0, facts, chain: null };
+  });
+}
 
 /** The "both sides ungrounded" grounding NUDGE: reuses teachSuggestion's own
  *  "compute a hint, APPEND it to the existing honest-miss message, never
@@ -17533,6 +17568,64 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   }
 
   if (workingLine.startsWith("/")) return withLast(await runCommand(workingLine, ctx), "use a specific tool/command directly");
+  // CLOSED MULTIPLE-CHOICE — "is a whale a fish or a mammal", "A) ... B) ...".
+  // Recognized and answered ENTIRELY here, before the write boundary just
+  // below (assertTurn/bareTaxonomyTeach): a choice question's own object slot
+  // carries "or", and falling through would hand that slot to the teach-offer
+  // cascade, which reads it as a thing to be taught — the same failure mode
+  // TEMPORAL_COMPARISON_RE (runAsk, above) exists to dodge for its own shape.
+  // Placed here rather than beside the temporal lanes in runAsk (the closer
+  // stylistic precedent) because runAsk's own band sits AFTER this boundary —
+  // a choice question routed there would still pass through assertTurn first,
+  // resting the write-boundary guarantee on teachLane's own stand-down gates
+  // rather than on control flow. Every branch below resolves the turn; none
+  // falls through, so the boundary holds structurally.
+  {
+    const parsed = splitChoiceQuestion(workingLine);
+    if (parsed) {
+      const choiceGoal = "pick the option a stated relation grounds, among a closed set of alternatives";
+      const refMiss = (text) => {
+        note(trace, `goal: ${choiceGoal}`);
+        note(trace, `lane: splitChoiceQuestion — "${workingLine}" parsed as a ${parsed.shape} choice question but could not compose an answer`);
+        return withLast(plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal }), choiceGoal);
+      };
+      if (!parsed.sourceTerm) {
+        return refMiss(`I can't tell what these options are alternatives about — nothing in "${parsed.stem}" reads as a subject term to check them against.`);
+      }
+      const probed = await probeChoiceOptions(parsed, { memoryDir, env, cache: factRowsCache, graph, synthesisBudget });
+      const grounded = probed.filter((o) => o.grounds);
+      note(trace, `goal: ${choiceGoal}`);
+      if (grounded.length === 0) {
+        note(trace, `lane: splitChoiceQuestion — no stated relation between "${parsed.sourceTerm}" and any of ${probed.length} options; the honest miss, never a guess`);
+        return refMiss(`I don't know how "${parsed.sourceTerm}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
+      }
+      if (grounded.length > 1) {
+        // A tie is reported, never broken — whatever the grounded options'
+        // own edge weights, this branch fires on COUNT alone.
+        note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${parsed.sourceTerm}"; reported as a tie`);
+        const text = `More than one of those grounds: ${joinOr(grounded.map((o) => o.text))}. I have a stated relation from ${parsed.sourceTerm} to each, so nothing in what I hold picks between them.`;
+        const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
+        turn.lane = "ask-choice";
+        turn.detail = {
+          traversal: `${grounded.length} of ${probed.length} options grounded against "${parsed.sourceTerm}"`,
+          matches: grounded.flatMap((o) => o.facts),
+        };
+        return withLast(turn, choiceGoal);
+      }
+      const winner = grounded[0];
+      const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
+      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding fact`);
+      const text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
+      const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
+      turn.lane = "ask-choice";
+      turn.detail = {
+        traversal: `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`,
+        matches: winner.facts,
+        selectedLabel: winner.label,
+      };
+      return withLast(turn, choiceGoal);
+    }
+  }
   // Declarative ACE sentences ("every module is a artifact") ASSERT into tmct's
   // own memory and confirm — they are statements to remember, not graph queries.
   // Gated on memoryDir: only a session shell provides a write target, so a bare
