@@ -56,15 +56,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   phases S1 (topic reader) through S5 (corpus rows), each its own measured round. S5 also
   drops the duplicated `grammar.choice.several-ground` row in `grammar.jsonl` (same id twice,
   found during plan verification).
-- [ ] **News page field report (2026-08-09, deployed site)** — five parts, from live use:
-  (1) polls succeed (request log: USGS ok, Hacker News ok, Wikipedia featured ok at ~400KB) yet
-  FACTS.FROM-NEWS and GRAPH.SIZE stay 0 — the polled text barely reaches the graph; (2) "poll
-  now" gives no pressed feedback and the tab goes Page Unresponsive seconds after the click —
-  the payload is ingested synchronously on the main thread; (3) extraction emits subject-less
-  fragment cards ("has a population of 1,683,115" as a title); (4) the article list needs its
-  own scroll, a sort, and keyword filter pills — it currently runs the page off the screen;
-  (5) iterate locally until real, useful articles come back, with an e2e that clicks the live
-  buttons. In flight in a fix worktree.
+- [ ] **News page field report (2026-08-09, deployed site)** — code-complete and merged,
+  awaiting deployed-site verification on the next release. The tiles now render from a real
+  `stats()` read (they had no renderer at all); a poll no longer freezes the tab (ingest went
+  from ~16 folds per article to 2, with yields — longest main-thread block 12.4s down to
+  3.4s, held by an 8s e2e budget); clause fragments can no longer become stored terms or card
+  titles (`readsAsEntityTerm` guard); the feed scrolls in its own pane with sort and hub
+  filter pills; and two new e2e tests click poll-now for real, assert the page answers
+  mid-ingest and the tiles move. Remainder: the residual ~3s blocks are single `runTurn`
+  passes and `syllogise` rounds reached from `chat.mjs`/`news.mjs`, unchunkable from the
+  news slice; and each article still pays one initial fold because `ingestSnapshotFacts`
+  calls `ingestText` per article.
 - [ ] **A newsworthiness gate: news vs synthesized concepts** — a specific time period or
   monetary amount can be news; the *concept* of a time period, monetary unit or building never
   is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. The design
