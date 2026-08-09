@@ -767,7 +767,7 @@ function claimFigureBlock({ id, kicker, sentence, figureHtml, notMean, standard,
 function renderClaimsHtml({ blocks, plannerButton }) {
   const planner = blocks.planner;
   const proseBand = blocks["prose-band"];
-  const openbookqa = blocks.openbookqa;
+  const commonsenseqa = blocks.commonsenseqa;
 
   const plannerRows = Object.entries(planner.detail.domains).map(([domainName, d]) => `
           <tr>
@@ -806,12 +806,14 @@ function renderClaimsHtml({ blocks, plannerButton }) {
   });
 
   const l2 = claimFigureBlock({
-    id: "l2-openbookqa", kicker: "L2",
-    sentence: "With wordnet-xl already loaded, this many OpenBookQA questions get a grounded answer matching the gold choice.",
-    figureHtml: `<p class="claim-block-figure" data-source="results/claims/openbookqa.json#value">${fmtInt(openbookqa.value)}<span class="unit">of ${fmtInt(openbookqa.detail.sampleSize)} questions, wordnet-xl loaded</span></p>`,
-    notMean: `This is not a vocabulary gap. wordnet-xl is the largest corpus tmct ships, and it was already loaded before the first question was asked. The ask grammar answers questions shaped like &ldquo;what is X&rdquo;; a stem that asks for a cause or an effect has no matching shape to route to, so a bigger corpus does not move this number. Three of the stems it missed: ${openbookqa.detail.exampleStems.map((s) => q(s)).join(", ")}.`,
-    standard: "external input: the OpenBookQA sample, committed with a deterministic selection rule, not authored in this repository.",
-    jsonName: "openbookqa",
+    id: "l2-commonsenseqa", kicker: "L2",
+    sentence: "Asked a five-way commonsense multiple-choice question, tmct picks an option only when one grounds against the graph, and picks the right one this often.",
+    figureHtml: `<p class="claim-block-figure" data-source="results/claims/commonsenseqa.json#value">${fmtInt(commonsenseqa.value)}<span class="unit">of ${fmtInt(commonsenseqa.detail.sampleSize)} questions</span></p>
+        <p class="claim-block-figure-split"><span data-source="results/claims/commonsenseqa.json#detail.answered">${fmtInt(commonsenseqa.detail.answered)}</span> answered, <span data-source="results/claims/commonsenseqa.json#detail.refused">${fmtInt(commonsenseqa.detail.refused)}</span> refused, <span data-source="results/claims/commonsenseqa.json#detail.abstained">${fmtInt(commonsenseqa.detail.abstained)}</span> abstained.</p>
+        <p>Of the ${fmtInt(commonsenseqa.detail.sampleSize)} questions, <span data-source="results/claims/commonsenseqa.json#detail.sourceEdgePresent">${fmtInt(commonsenseqa.detail.sourceEdgePresent)}</span> had the answer stated in the graph at all; <span data-source="results/claims/commonsenseqa.json#detail.correctWhenSourceEdgePresent">${fmtInt(commonsenseqa.detail.correctWhenSourceEdgePresent)}</span> of those got picked. The gap between those two numbers is knowledge present but not selected. The rest is knowledge absent from the seed.</p>`,
+    notMean: `This is not a reasoning score. CommonsenseQA's distractors were pulled from ConceptNet on the same relation as the answer, so an option having an edge to the source concept is close to no evidence at all. A refusal here means several options grounded equally well and tmct reported the tie rather than breaking it. An abstention means nothing in the graph connected the question to any option. Neither is a wrong answer, and neither is dressed up as one. Three of the stems it missed: ${commonsenseqa.detail.exampleStems.map((s) => q(s)).join(", ")}.`,
+    standard: "external input: the CommonsenseQA dev split, authored outside this repository from ConceptNet, the same source the shipped corpus slice is cut from, selected by a committed deterministic rule and attributed in test-benchmarks/claims/commonsenseqa-sample.NOTICE.",
+    jsonName: "commonsenseqa", demoHref: "chat.html",
   });
 
   return `<!doctype html>
@@ -835,7 +837,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     <ol class="about-crumbs">
       <li><a href="#c7-planner">Hanoi planner</a></li>
       <li><a href="#l1-prose-band">Prose grounding</a></li>
-      <li><a href="#l2-openbookqa">OpenBookQA</a></li>
+      <li><a href="#l2-commonsenseqa">CommonsenseQA</a></li>
     </ol>
   </nav>
 
