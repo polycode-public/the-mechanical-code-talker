@@ -654,3 +654,94 @@ export function routeChoiceRelation(stem) {
   }
   return null;
 }
+
+// ---- stem topic candidates (S1) ----
+//
+// extractStemSourceTerm above reads ONE term off a fixed template shape, and
+// when the shape a stem actually has does not match the shape a template
+// expects, the capture lands in the wrong slot with nothing to catch it
+// (design survey section 2.2). stemTopicCandidates instead reads every phrase
+// in the stem that COULD name its topic, so the caller (chat.mjs's
+// chooseChoiceTopic) can pick among them by how much the graph itself knows
+// about each one, rather than by surface shape alone.
+
+/** Words that never name a question's topic: articles, pronouns, auxiliaries,
+ *  modals, wh-words, and the light verbs a stem uses to frame a question
+ *  ("find", "put", "get") rather than to name its subject. A closed set, in
+ *  the house style of every other table in this module. */
+export const STEM_TOPIC_STOPWORDS = new Set([
+  ...PRONOUN_TERMS,
+  ...PHRASE_BOUNDARY_WORDS,
+  "a", "an", "the", "some", "any", "few", "many", "several", "more", "most",
+  "my", "your", "his", "its", "our", "their",
+  "what", "which", "where", "when", "why", "how",
+  "find", "found", "put", "get", "keep", "store", "place", "buy", "locate",
+  "hide", "wear", "carry", "use", "take", "open", "cross", "need", "want",
+]);
+
+function stemTopicWords(text) {
+  return String(text ?? "").toLowerCase().split(/[^a-z'-]+/).filter(Boolean);
+}
+
+/** Every word any option's text carries — an option term is an answer
+ *  candidate, never the topic, so it is dropped from the stem's own
+ *  candidate list before the graph is ever asked about it. */
+function optionWordSet(options) {
+  const words = new Set();
+  for (const option of options ?? []) {
+    for (const w of stemTopicWords(option?.text)) words.add(w);
+  }
+  return words;
+}
+
+const isUsableTopicWord = (word, optionWords) =>
+  word.length > 2 && !STEM_TOPIC_STOPWORDS.has(word) && !optionWords.has(word);
+
+/**
+ * Every phrase in `stem` that could name what the question is about, in stem
+ * order, longest first at each position. Drops STEM_TOPIC_STOPWORDS members,
+ * words of two letters or fewer, and every word that also appears in an
+ * option — an option term is an answer candidate, never the topic.
+ *
+ * @param {string} stem
+ * @param {Array<{label: string, text: string}>} options
+ * @returns {Array<{ text: string, position: number, words: 1 | 2 }>}
+ */
+export function stemTopicCandidates(stem, options) {
+  const optionWords = optionWordSet(options);
+  const words = stemTopicWords(stem);
+  const candidates = [];
+  const seen = new Set();
+  words.forEach((word, i) => {
+    if (!isUsableTopicWord(word, optionWords)) return;
+    const next = words[i + 1];
+    if (next && isUsableTopicWord(next, optionWords)) {
+      const text = `${word} ${next}`;
+      if (!seen.has(text)) { seen.add(text); candidates.push({ text, position: i, words: 2 }); }
+    }
+    if (!seen.has(word)) { seen.add(word); candidates.push({ text: word, position: i, words: 1 }); }
+  });
+  return candidates;
+}
+
+/** The stem's other content terms once `topic` is taken out: the constraints
+ *  the question states beyond naming its subject. Same filtering as
+ *  stemTopicCandidates, minus the topic's own words. Phase S2 reads this.
+ *
+ * @param {string} stem
+ * @param {string} topic
+ * @param {Array<{label: string, text: string}>} options
+ * @returns {string[]}
+ */
+export function stemConstraintTerms(stem, topic, options) {
+  const optionWords = optionWordSet(options);
+  const topicWords = new Set(stemTopicWords(topic));
+  const terms = [];
+  const seen = new Set();
+  for (const word of stemTopicWords(stem)) {
+    if (!isUsableTopicWord(word, optionWords) || topicWords.has(word) || seen.has(word)) continue;
+    seen.add(word);
+    terms.push(word);
+  }
+  return terms;
+}

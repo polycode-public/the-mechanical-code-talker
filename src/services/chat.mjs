@@ -70,7 +70,7 @@ import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./n
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf } from "../domain/choice-question.mjs";
+import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf, stemTopicCandidates } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3793,6 +3793,45 @@ async function choiceWordnetTags(text) {
   for (const syn of synonyms) for (const v of factTermVariants(normFactTermStatic, syn)) tags.set(v, "wordnet");
   return tags;
 }
+/**
+ * Picks the one candidate the question is about: the candidate the graph
+ * holds the most facts about, counting rows where the term is the subject or
+ * the object under any predicate. Ties in that count go to the phrase
+ * extractStemSourceTerm captured (a structural read beats a graph count when
+ * the graph cannot separate), then to the longer phrase, then to the leftmost.
+ * Returns "" when no candidate is named in the store at all, which the lane
+ * reports as the no-topic miss it already has.
+ *
+ * Pure in the fact set: the same rows in any order give the same topic, the
+ * discipline sortFactIndividualsById already holds the store to.
+ *
+ * @returns {Promise<{ topic: string, salience: number, runnerUp: string }>}
+ */
+async function chooseChoiceTopic(candidates, { memoryDir, cache, templateCapture }) {
+  if (!candidates.length) return { topic: "", salience: 0, runnerUp: "" };
+  const rows = await factRows(memoryDir, cache);
+  const salienceOf = (text) => {
+    const variants = factTermVariants(normFactTermStatic, text);
+    let count = 0;
+    for (const f of rows) { if (variants.has(f.subject) || variants.has(f.object)) count += 1; }
+    return count;
+  };
+  const scored = candidates
+    .map((c) => ({ ...c, salience: salienceOf(c.text) }))
+    .sort((a, b) => {
+      if (b.salience !== a.salience) return b.salience - a.salience;
+      const aIsCapture = a.text === templateCapture;
+      const bIsCapture = b.text === templateCapture;
+      if (aIsCapture !== bIsCapture) return aIsCapture ? -1 : 1;
+      if (b.words !== a.words) return b.words - a.words;
+      return a.position - b.position;
+    });
+  const best = scored[0];
+  if (best.salience === 0) return { topic: "", salience: 0, runnerUp: "" };
+  const runnerUp = scored.find((c) => c.text !== best.text)?.text ?? "";
+  return { topic: best.text, salience: best.salience, runnerUp };
+}
+
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
   let rows = await factRows(memoryDir, cache);
@@ -18444,26 +18483,39 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         note(trace, `lane: splitChoiceQuestion — "${workingLine}" parsed as a ${parsed.shape} choice question but could not compose an answer`);
         return withLast(plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal }), choiceGoal);
       };
-      if (!parsed.sourceTerm) {
+      // The topic is read off a CANDIDATE LIST (stemTopicCandidates), not off
+      // a single fixed-shape template capture: extractStemSourceTerm's own
+      // capture (parsed.sourceTerm) survives only as chooseChoiceTopic's tie-
+      // break, because a template is right about a fronted "where would you
+      // find X" stem, exactly the stems where several candidates tie on
+      // salience. A stem naming no usable candidate, or naming several that
+      // the graph holds nothing about, both come back as "" here — the same
+      // no-topic miss either way.
+      const candidates = stemTopicCandidates(parsed.stem, parsed.options);
+      const { topic } = await chooseChoiceTopic(candidates, {
+        memoryDir, cache: factRowsCache, templateCapture: parsed.sourceTerm,
+      });
+      if (!topic) {
         return refMiss(`I can't tell what these options are alternatives about — nothing in "${parsed.stem}" reads as a subject term to check them against.`);
       }
-      const probed = await probeChoiceOptions(parsed, { memoryDir, env, cache: factRowsCache, graph, synthesisBudget });
+      const probed = await probeChoiceOptions({ ...parsed, sourceTerm: topic }, { memoryDir, env, cache: factRowsCache, graph, synthesisBudget });
       const grounded = probed.filter((o) => o.grounds);
       note(trace, `goal: ${choiceGoal}`);
       if (grounded.length === 0) {
-        note(trace, `lane: splitChoiceQuestion — no stated relation between "${parsed.sourceTerm}" and any of ${probed.length} options; the honest miss, never a guess`);
-        return refMiss(`I don't know how "${parsed.sourceTerm}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
+        note(trace, `lane: splitChoiceQuestion — no stated relation between "${topic}" and any of ${probed.length} options; the honest miss, never a guess`);
+        return refMiss(`I don't know how "${topic}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
       }
       if (grounded.length > 1) {
         // A tie is reported, never broken — whatever the grounded options'
         // own edge weights, this branch fires on COUNT alone.
-        note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${parsed.sourceTerm}"; reported as a tie`);
-        const text = `More than one of those grounds: ${joinOr(grounded.map((o) => o.text))}. I have a stated relation from ${parsed.sourceTerm} to each, so nothing in what I hold picks between them.`;
+        note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${topic}"; reported as a tie`);
+        const text = `More than one of those grounds: ${joinOr(grounded.map((o) => o.text))}. I have a stated relation from ${topic} to each, so nothing in what I hold picks between them.`;
         const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
         turn.lane = "ask-choice";
         turn.detail = {
-          traversal: `${grounded.length} of ${probed.length} options grounded against "${parsed.sourceTerm}"`,
+          traversal: `${grounded.length} of ${probed.length} options grounded against "${topic}"`,
           matches: grounded.flatMap((o) => (o.facts.length ? o.facts : o.chain || [])),
+          topic,
         };
         return withLast(turn, choiceGoal);
       }
@@ -18477,14 +18529,14 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         matches = winner.facts;
         hop = 1;
         matchedBy = fact.matchedBy;
-        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`;
+        traversalNote = `option "${winner.label}" grounded against "${topic}" via ${fact.predicate}`;
       } else {
         text = `${winner.text} — ${renderIsaChain(winner.chain)}.`;
         matches = winner.chain;
         hop = winner.chain.length;
-        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via a ${winner.chain.length}-hop isa chain`;
+        traversalNote = `option "${winner.label}" grounded against "${topic}" via a ${winner.chain.length}-hop isa chain`;
       }
-      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
+      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${topic}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
       const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
       turn.lane = "ask-choice";
       turn.detail = {
@@ -18492,6 +18544,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         matches,
         selectedLabel: winner.label,
         hop,
+        topic,
         ...(matchedBy ? { matchedBy } : {}),
       };
       return withLast(turn, choiceGoal);

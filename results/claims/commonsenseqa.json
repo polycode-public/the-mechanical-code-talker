@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T10:58:39.346Z",
-  "commit": "988a09e83e161a82b4e3c92623efdc394c6ea6a4",
+  "generatedAt": "2026-08-09T13:28:15.349Z",
+  "commit": "4ebdf416afc0e4fc6e748941a1832bd677c12ffb",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -17,7 +17,7 @@
     "corpus/conceptnet/slice.jsonl",
     "corpus/wordnet/wordnet-full.jsonl"
   ],
-  "value": 0,
+  "value": 4,
   "detail": {
     "sampleSize": 100,
     "bands": [
@@ -32,34 +32,34 @@
       "wordnet-xl"
     ],
     "seedFacts": 61724,
-    "answered": 14,
-    "correctOfAnswered": 0,
-    "refused": 13,
-    "abstained": 73,
+    "answered": 20,
+    "correctOfAnswered": 4,
+    "refused": 23,
+    "abstained": 57,
     "sourceEdgePresent": 30,
-    "correctWhenSourceEdgePresent": 0,
+    "correctWhenSourceEdgePresent": 1,
     "routedByRelation": 56,
-    "correctWhenRouted": 0,
+    "correctWhenRouted": 3,
     "byHop": {
       "1": {
-        "answered": 14,
-        "correct": 0
+        "answered": 20,
+        "correct": 4
       },
       "2": {
         "answered": 0,
         "correct": 0
       },
       "unreachable": {
-        "abstained": 73
+        "abstained": 57
       }
     },
     "matchedBy": {
-      "exact": 13,
+      "exact": 11,
       "lemma": 0,
-      "head-noun": 0,
-      "wordnet": 1
+      "head-noun": 6,
+      "wordnet": 3
     },
-    "abstainedUncued": 35,
+    "abstainedUncued": 26,
     "scorer": "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     "missedIds": [
       "001b0f5a841fd81d13fbe67c7c7179d6",
@@ -73,7 +73,6 @@
       "14d760e43728e9e4643c414627f2b596",
       "167d2cfa04bfaea0e0b5bac3598d5769",
       "194b66240f6fab75749c1e30ed09ea09",
-      "1be8ec824eb0c7218b6bc160fd191428",
       "1e939cc6fef999953d692b57caab254b",
       "2192c5c2145a6e03755ad89a02e64055",
       "23d97480fe45bace231503f8fc367a5b",
@@ -84,7 +83,6 @@
       "2f97a77d155cb99092e8a7c055737b03_1",
       "3163910d665c139a1f6f07d85803baba",
       "335b51bd3a8ada014bbe6754dcbd425f",
-      "3665b329f93f7c84edeabe394140f8d2",
       "39572e0ba1db51fa74f7fc2d90c5ec7f",
       "3c90a632f46aeab11fbb73aa59a33892",
       "3eb397b96b6c3a245c81ab30205943f1",
@@ -131,7 +129,6 @@
       "a7d51b753c2113d8b2dbd0ebb5375855_1",
       "aa4c5d2d348796b8d7fa324f27f4c34f",
       "abd30bab9b96f902fead5378d4f4a1e4",
-      "adbddc80b10bf25f09c6c2bee4e3c59b",
       "b0f7d7978ac41c465108a92660d70e84",
       "b4043bd1f65a8ad088e62042eca259c2",
       "b6b66d4519a84b8331ea55f84767e9df",
@@ -156,7 +153,6 @@
       "e5ebbe0ea4097bb197ac525b49108362",
       "e9389b08fdd17f14b148d498d6ff4dfe",
       "eacd87f297193033669a93160ae3776f",
-      "ec79ef747bb89281923edb89ba26786d",
       "ee8819b2da5453848c1cbb9d9c93403b",
       "f0d473701d52125dd055d23042de1b0d",
       "f2645d0ee8662b6553954cee7e77979e",
@@ -169,9 +165,9 @@
       "What do animals do when an enemy is approaching?"
     ],
     "abstainedUncuedExampleStems": [
-      "How might a automobile get off a freeway?",
-      "You stop and have food all around you, what are you?",
-      "A story about World War II would be set when?"
+      "A story about World War II would be set when?",
+      "The painter started to edge the room with tape, he always took extra care to make the lines clean and crisp when working with an what?",
+      "What do professors primarily do?"
     ]
   }
 }

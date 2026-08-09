@@ -356,6 +356,11 @@ Then the rig, chunked, section 10's protocol. Expected: `answered` about 21, `co
 about 7, `refused` about 29, `abstained` about 50. A round that lands 0 correct is a measured result
 and gets recorded as one.
 
+**Measured (S1):** `answered` 20, `correctOfAnswered` 4, `refused` 23, `abstained` 57,
+`sourceEdgePresent` 30, `correctWhenSourceEdgePresent` 1, `routedByRelation` 56,
+`correctWhenRouted` 3. Below the 21/7 projection on both counts. `results/claims/commonsenseqa.json`
+holds the full run.
+
 ---
 
 ## 5. Phase S2 — pull the evidence the constraints need

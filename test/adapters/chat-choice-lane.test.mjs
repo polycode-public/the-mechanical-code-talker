@@ -66,9 +66,27 @@ test("a choice question with several grounded options refuses and lists every on
   }
 });
 
-test("a choice question with no grounded option returns the miss naming the source term", async () => {
+test("a stem naming nothing the graph knows returns the no-topic miss", async () => {
   const dir = await freshRepo();
   try {
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /I can't tell what these options are alternatives about/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a choice question whose topic grounds against no option names that topic in the miss", async () => {
+  const dir = await freshRepo();
+  try {
+    // "magazine" (singular) carries a fact under a predicate that is
+    // grounding-eligible, so it is the topic — but nothing links it to any
+    // option, so the miss names it rather than falling back to the
+    // no-topic message.
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:hasProperty", object: "glossy", provenance: "corpus:test" },
+    ]);
     const r = await turn(MAGAZINE_Q, { memoryDir: dir });
     assert.equal(r.record.miss, true);
     assert.match(r.answer, /I don't know how "magazines" relates to any of doctor, bookstore, market, train station, or mortuary\./);
@@ -359,5 +377,68 @@ test("two grounded options tie and the lane picks neither, whatever their edge w
     assert.equal(r.detail.selectedLabel, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the topic reader (S1) ----
+
+const NAPKIN_PLATE_Q = "Where would you find a napkin near a plate?\nA) kitchen B) garage";
+
+test("the topic is the stem term the graph holds most facts about", async () => {
+  const dir = await freshRepo();
+  try {
+    // "plate" carries three facts, "napkin" one — extractStemSourceTerm's
+    // own template would have captured "napkin" (the placement verb's
+    // direct object), but salience outranks the template capture whenever
+    // the two candidates' counts actually differ.
+    await appendFacts(dir, [
+      { subject: "plate", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:madeOf", object: "ceramic", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:hasProperty", object: "round", provenance: "corpus:test" },
+      { subject: "napkin", predicate: "mgx:hasProperty", object: "soft", provenance: "corpus:test" },
+    ]);
+    const r = await turn(NAPKIN_PLATE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.topic, "plate");
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("two candidates with equal salience defer to the template capture", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "napkin", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:hasProperty", object: "round", provenance: "corpus:test" },
+    ]);
+    const r = await turn(NAPKIN_PLATE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.topic, "napkin");
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("feeding the same facts in two insertion orders picks the same topic", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    const facts = [
+      { subject: "plate", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:madeOf", object: "ceramic", provenance: "corpus:test" },
+      { subject: "napkin", predicate: "mgx:hasProperty", object: "soft", provenance: "corpus:test" },
+    ];
+    await appendFacts(dirA, facts);
+    await appendFacts(dirB, facts.slice().reverse());
+    const rA = await turn(NAPKIN_PLATE_Q, { memoryDir: dirA });
+    const rB = await turn(NAPKIN_PLATE_Q, { memoryDir: dirB });
+    assert.equal(rA.detail.topic, rB.detail.topic);
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
   }
 });

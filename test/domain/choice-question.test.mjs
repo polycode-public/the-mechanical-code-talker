@@ -7,6 +7,7 @@ import {
   CHOICE_SHAPES, CHOICE_MIN_OPTIONS, CHOICE_MAX_OPTIONS,
   splitChoiceQuestion, isChoiceQuestion, choiceDeclineReason,
   routeChoiceRelation, lemmaFoldVariants, headNounOf,
+  stemTopicCandidates, stemConstraintTerms,
 } from "../../src/domain/choice-question.mjs";
 
 const optionTexts = (parsed) => parsed.options.map((o) => o.text);
@@ -334,6 +335,45 @@ test("the head noun of a multi-word phrase is its last word", () => {
 
 test("a single-word phrase has no head noun to back off to", () => {
   assert.equal(headNounOf("restaurant"), "");
+});
+
+// ---- stem topic candidates (S1) ----
+
+test("a stem's topic candidates exclude every word that appears in an option", () => {
+  const options = [{ label: "A", text: "bookstore" }, { label: "B", text: "market" }];
+  const candidates = stemTopicCandidates("Where would you find a magazine near a bookstore?", options);
+  assert.ok(!candidates.some((c) => c.text.includes("bookstore")));
+  assert.ok(candidates.some((c) => c.text === "magazine"));
+});
+
+test("a stem's topic candidates keep two-word phrases ahead of their own first word", () => {
+  const options = [{ label: "A", text: "shop" }, { label: "B", text: "closet" }];
+  const candidates = stemTopicCandidates("Where do you store fast food restaurant supplies?", options);
+  const twoWordIndex = candidates.findIndex((c) => c.text === "fast food");
+  const oneWordIndex = candidates.findIndex((c) => c.text === "fast");
+  assert.ok(twoWordIndex !== -1 && oneWordIndex !== -1);
+  assert.ok(twoWordIndex < oneWordIndex);
+});
+
+test("a stem made only of stopwords yields no topic candidate", () => {
+  const options = [{ label: "A", text: "yes" }, { label: "B", text: "no" }];
+  assert.deepEqual(stemTopicCandidates("What do you do?", options), []);
+});
+
+test("constraint terms exclude the topic's own words", () => {
+  const options = [{ label: "A", text: "forest" }, { label: "B", text: "field" }];
+  const terms = stemConstraintTerms("Where can you find a snake in tall grass?", "snake", options);
+  assert.ok(!terms.includes("snake"));
+  assert.ok(terms.includes("tall"));
+  assert.ok(terms.includes("grass"));
+});
+
+test("the same stem twice yields the same candidate order", () => {
+  const options = [{ label: "A", text: "kitchen" }, { label: "B", text: "garage" }];
+  const stem = "Where is a kettle usually kept near the stove?";
+  const first = stemTopicCandidates(stem, options);
+  const second = stemTopicCandidates(stem, options);
+  assert.deepEqual(first, second);
 });
 
 // ---- the exported bounds are the numbers the tests above rely on ----
