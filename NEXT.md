@@ -68,13 +68,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. The design
   is landed as `PLAN_NEWS_FEED.md` phase 10 (traced cause: `research:` enrichment lookups
   enter the news window as if reported); execution is not yet dispatched.
-- [ ] **River-crossing field report (2026-08-09)** — the playing screen is not useful as
-  shipped: it needs play and pause driven by the planning engine's own plan (the 7-move ferry
-  sequence should animate the characters, steppable), the characters must be visibly rendered
-  and helpful on the main screen, and the focused agent's beliefs, plan and per-instance
-  imperatives (the "this cabbage" drive sentences from the editor) must show on the main
-  playing screen below the focused agent's chat window, not only inside the editor. In flight
-  in a fix worktree.
+- [ ] **River-crossing field report (2026-08-09)** — code-complete and merged, awaiting
+  deployed-site verification on the next release: play/pause/step now walk the planner's own
+  crossing positions (the page derives no move itself), a crossing board renders labelled
+  passenger chips moving bank to bank with the boat, and a focus panel below the chat shows
+  the followed agent's beliefs, numbered plan (played moves ticked) and per-instance
+  imperatives. A `[hidden]`-vs-author-CSS bug that kept grid panels on the river screen was
+  folded in. The chat box on that page still only speaks town-square vocabulary — that gap is
+  the already-open MUDIII chat-surface item, now more visible since the panel shows drives the
+  chat below it cannot answer about.
 - [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
