@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "5.0.1",
+  "tmctVersion": "5.0.27",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -82,6 +82,19 @@
         "height": 600
       },
       "sha256": "aabd84376f271ed6d907a2aefba810c6e8473f093ac93f27ade027881f9dd633"
+    },
+    {
+      "page": "news",
+      "file": "news.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "1817cc3ccc024d2027eb14e273dce09a598cb7b8143a28d5e5622e59dcc3f8ab"
     }
   ]
 }
