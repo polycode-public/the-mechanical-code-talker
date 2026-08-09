@@ -1,11 +1,12 @@
 # PLAN_CSQA_SELECTION.md — lift the CommonsenseQA number off zero: read the topic, then let a conjunction pick
 
-Status: DESIGN. Nothing in this plan is built. `PLAN_COMMON_SENSE_QA.md` delivered the lane, the
-fixture, the rig, the claims block and five rungs, and its last measured state is
-`results/claims/commonsenseqa.json`: 0 of 100 correct, 14 answered, 13 refused, 73 abstained, 30
-with the gold pair present in the graph, 0 of those 30 picked. That plan's own rungs measured
-routing, chain depth and three wording levers as flat. This plan starts from a per-item diagnosis of
-those 30 and attacks what the diagnosis actually found.
+Status: BUILT. S1 through S5 are landed and measured; `results/claims/commonsenseqa.json` holds the
+current run: 5 of 100 correct, 21 answered, 22 refused, 57 abstained, 30 with the gold pair present
+in the graph, 2 of those 30 picked, 1 tie separated (correctly). Each phase's own measured round is
+recorded in its section, below. `PLAN_COMMON_SENSE_QA.md` delivered the lane, the fixture, the rig
+and the claims block this plan builds on; its own rungs measured routing, chain depth and three
+wording levers as flat, and this plan started from a per-item diagnosis of the 30 those rungs left
+on the table.
 
 The finding in one line: the lane mostly never asks about the thing the question is about, and where
 it does ask, a single ConceptNet edge cannot tell the gold option from a distractor, because both

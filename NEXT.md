@@ -52,8 +52,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
-- [ ] **Lift the L2 CommonsenseQA number above zero** — `PLAN_CSQA_SELECTION.md` holds the design:
-  phases S1 (topic reader) through S5 (corpus rows), each its own measured round.
 - [ ] **Playtest 007 fixes** (`playtests/PLAYTEST_LOG_007.md` holds the transcript and analysis)
   — queued: the "response templates unavailable" leak on bare plural property statements; the
   singular/plural capability-teach parity gap; the "what type of X is <individual>" ask shape;
