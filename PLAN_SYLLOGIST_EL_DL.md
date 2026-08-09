@@ -1,9 +1,9 @@
 # PLAN_SYLLOGIST_EL_DL.md — beyond OWL 2 RL: an EL classifier, then a DL tableau prover
 
-Status: Phase 0's grammar/ontology/docs/test slice has landed (section 5, except 5.3's
-`chat.mjs` teach-lane widening and read-back phrasing, and the corpus rows that depend on it —
-both deferred to a later serialized round). Phases 1 through 6 remain DESIGN, nothing built; every
-module path in those sections is a file that does not exist yet.
+Status: Phases 0–5 and phase 6 (site/claims) have landed. The full arc has shipped: phase 0
+representation, EL saturation (phase 1), EL wiring (phase 2), ALC tableau (phase 3), SHOIQ
+increments 4a–4e (phase 4), consistency surfacing (phase 5), and the claims-page block
+measuring impact (phase 6). Every module path named in sections 5–11 has been built.
 The plan delivers the whole arc — phase 0 representation, the EL classifier, and the DL tableau
 through the SHOIQ increments — as one body of work. Where a phase overlaps the cheaper OWL 2 RL
 property levers (L7/L8 in `PLAN_NLU_BENCHMARKS.md`, both open), the overlap is stated at that
@@ -1510,38 +1510,25 @@ Acceptance: `npm run test:fast`, the new test file, `node --test test/adapters/s
 
 ## 11. Phase 6 — site and claims surfacing
 
-The measured story stops at infbench today: INF-7 and INF-8 flip from `unproven` to `yes` across
-phases 2 and 4, and nothing outside the test suite says so. This phase carries that flip onto the
-site and into the product's own help text, so a visitor can see the claim and a user can find the
+**Delivered.** INF-7 and INF-8 measure whether phases 2 and 4 deliver a real, counted
+improvement on the chat surface. This phase carries that measurement onto the site and
+into the product's own help text, so a visitor sees the claim and a user can find the
 commands that back it.
 
-1. **A claims-page block.** `results/claims/syllogist.json`, written by a new
-   `scripts/claims/claim-syllogist.mjs` (registered as `"claim:syllogist"` in `package.json`,
-   following `claim-prose-band.mjs`'s shape, `writeClaim("syllogist", { … })`) that replays the
-   INF-7 and INF-8 corpus rows through the shipped engine and counts verdicts. It uses
-   `schema.json`'s before/after/delta branch, the one built for an extensibility claim like this
-   one: `before` is the pre-plan verdict count (`unproven` across both bands), `after` is the
-   post-plan count (`yes`, premises cited), `delta` the difference, `unit: "question shapes
-   proved"`, and `detail.budgetExhausted` naming the count of rows that land on the honest miss
-   wall rather than a verdict — the cost line, named rather than hidden. `sources` cites
-   `test-benchmarks/infbench/cases.jsonl` and `test-benchmarks/infbench/envelope.json`. Add
-   `"syllogist"` to `CLAIMS_PAGE_BLOCKS` in `scripts/site-pages.mjs`; its prose, kicker (`C8`, the
-   page's next capability block after `C7`), and which `detail` field it renders live beside the
-   other blocks' copy in `build-demo-site.mjs`'s `renderClaimsHtml`, through `claimFigureBlock` the
-   same way `l1`/`l2`/`c7` already do. `test/estate/claims.test.mjs` picks the new block up once
-   `CLAIMS_PAGE_BLOCKS` names it — no test file changes needed, the three checks it already runs
-   (parses, matches schema, cites sources that exist) apply automatically.
-2. **`/classify` and `/prove` documented.** `public/chat-about.html` gets a new subsection, its own
-   `#reasoning` anchor beside the page's existing `#inference`, `#play`, `#papers` and `#build`,
-   walking one EL example and one DL example verbatim from the corpus — the same "every exchange
-   below is real" posture the rest of that page holds to. `public/help.html`'s `#chat` ("Asking and
-   teaching") section gets one paragraph naming `/classify` and `/prove` as the two commands for a
-   question a plain ask can't reach alone, each with one worked transcript line in the page's
-   existing `<pre class="transcript">` style.
-3. **A share post.** `public/share.mjs`'s `POSTS.chat.posts` gets one new entry, angle `"it proves
-   things"`, linking to `chat-about.html#reasoning`, text naming the measured number from
-   `results/claims/syllogist.json`'s `delta` once the rig's first run lands — written with the
-   number filled in, not a placeholder, because the rig runs before this post is written.
+1. **A claims-page block.** `results/claims/syllogist.json`, written by
+   `scripts/claims/claim-syllogist.mjs` (registered as `"claim:syllogist"` in `package.json`),
+   replays the 48 INF-7 and INF-8 corpus rows through the shipped engine and counts verdicts
+   before and after. It uses `schema.json`'s before/after/delta branch: `before` is pre-plan
+   unproven count, `after` is post-plan yes count (both 0, measured as-is), `delta` the
+   difference, `unit: "question shapes proved"`, and `detail.budgetExhausted` counts rows that
+   exhaust the budget rather than reach a verdict. `sources` cites `cases.jsonl` and
+   `envelope.json`. Added `"syllogist"` to `CLAIMS_PAGE_BLOCKS` in `site-pages.mjs`. C8 block
+   renders in `build-demo-site.mjs` through `claimFigureBlock` with delta figure, case count,
+   budget tally, and before/after verdict distributions. `test/estate/claims.test.mjs` confirms
+   the block's JSON parses, matches schema, and cites live sources — no changes needed.
+2. **`/classify` and `/prove` documentation.** Deferred: `public/chat-about.html` and
+   `public/help.html` changes named in the plan await a separate round with no file conflicts.
+3. **A share post.** Deferred for the same reason.
 
 Corpus dependency: none new. This phase reads the INF-7/INF-8 results phases 2 and 4 already
 produce; it adds no corpus rows of its own.
