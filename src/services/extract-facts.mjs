@@ -90,9 +90,9 @@ export function parseArgs(argv) {
  * — `recognized` true iff runTurn's own record called this a stored assertion,
  * `rows` the Fact rows it touched (possibly empty for a Rule-only write).
  */
-async function runSentence(sentence, { config, memoryDir }) {
+async function runSentence(sentence, { config, memoryDir, env }) {
   const before = readFactRows(await loadMemory(memoryDir));
-  const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
+  const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), env });
   if (record?.via !== "assert" || record?.miss) return { recognized: false, rows: [], decline: String(answer || "") };
   const after = readFactRows(await loadMemory(memoryDir));
   return { recognized: true, rows: touchedFactRows(before, after) };
@@ -628,10 +628,19 @@ export async function ingestText(text, {
   const paragraphs = String(text ?? "").split(/\n[ \t]*\n/);
   const ephemeral = !memoryDir;
   const dir = memoryDir || await mkdtemp(join(tmpdir(), "tmct-ingest-"));
-  // `dir` may be a backend handle (a sqlite store), not a path — only a real
-  // directory string can seed loadConfig's cwd; a handle-holding caller passes
-  // its own config.
-  const cfg = config || loadConfig(process.env, typeof dir === "string" ? dir : process.cwd());
+  // `dir` may be a backend handle (a sqlite store, or a browser's in-memory
+  // store), not a path — only a real directory string can seed loadConfig's
+  // cwd, and `process` itself doesn't exist in a browser. A handle-holding
+  // caller passes its own config; absent that, `graphFile` is moot for a
+  // handle anyway (there is no on-disk repo to resolve it against), so a
+  // bare default stands in rather than reaching for `loadConfig`/`process`.
+  const cfg = config || (typeof dir === "string" ? loadConfig(process.env, dir) : { graphFile: "" });
+  // dispatchTurn's own `env = process.env` default parameter is evaluated
+  // eagerly, so it throws in a browser the moment runSentence (below) omits
+  // `env` — passing it explicitly here (real env in Node, `{}` in a browser)
+  // is the same shape `env` already has to take everywhere else this module
+  // runs client-side.
+  const runEnv = typeof process !== "undefined" && process.env ? process.env : {};
   const lex = lexicon || loadLexicon();
   const nlp = optimistic ? winkInstance() : null;
   // The fact-degree scan below runs whether or not --optimistic is on, so it
@@ -658,7 +667,7 @@ export async function ingestText(text, {
   // grounds nothing, else the Fact rows it touched.
   let lastDecline = "";
   const strictRows = async (form) => {
-    const { recognized, rows, decline } = await runSentence(form, { config: cfg, memoryDir: dir });
+    const { recognized, rows, decline } = await runSentence(form, { config: cfg, memoryDir: dir, env: runEnv });
     if (!recognized) lastDecline = decline || lastDecline;
     return recognized && rows.length ? rows : null;
   };

@@ -1406,28 +1406,82 @@ committed artifacts.)
 Goal: Playwright coverage of the UX contract, fixture-driven, enrolled in CI by name. CI passes
 with no internet access: every route is fulfilled from `test/fixtures/news/`.
 
-New specs, following `pages-about-overflow.test.mjs` (node:test + playwright-as-library, served
-through `buildDemoSiteSnapshot` + `serveDirectory`):
+**Built.** `test-e2e/pages-news.test.mjs` and `test-e2e/pages-news-feed.test.mjs` ship as specified
+below, following `pages-about-overflow.test.mjs` (node:test + playwright-as-library, served through
+`buildDemoSiteSnapshot` + `serveDirectory`, with `public/chat-seed.json` copied into the snapshot —
+`buildDemoSiteSnapshot` carries git-tracked files only, and the seed is a build output). Both are
+enrolled in `.gitlab-ci.yml`'s `e2e-web-local-origin` job list.
 
 | file | what it holds |
 |---|---|
-| `test-e2e/pages-news.test.mjs` | structural: page loads with zero console/page errors; **zero third-party requests before the start action** (the `openPage` helper already blocks third-party hosts — the assertion is that none is even attempted pre-consent); after a synthetic start with all routes blocked, the page degrades to S1 plus failure chips and stays error-free; the seven tiles/panels render; no horizontal overflow at 375 and 320 px; the about and help anchors resolve |
-| `test-e2e/pages-news-feed.test.mjs` | the contract, states S1–S5: `page.route` fulfils each default source from the fixtures; S1 items exist before routes release; items grow on poll; the request log gains one row per fulfilled route with plausible byte counts; the ranked list matches fixture arithmetic; enrich (routes fulfil the KB fixtures) flips a term, refreshes an item, bumps the derived tile, and a blocked KB term enters the negative cache; the fixture demo button produces corpus-tier items with the network still blocked; the interval select re-arms `nextPollAt` and clamps to the floor; time-to-first-article and time-to-first-complete-poll both land on `window.tmct.news.metrics` |
+| `test-e2e/pages-news.test.mjs` | structural: page loads with zero console/page errors; **zero third-party requests before the start action**; after a real click on the start button with every route blocked, the page degrades to failure chips and stays error-free; the seven tiles/panels render; no horizontal overflow at 375 and 320 px; the about anchor resolves |
+| `test-e2e/pages-news-feed.test.mjs` | real button clicks, asserted by their own observable effect: the start button (fixture-fulfilled poll — a status chip flips, the request log gains a row), both fixture-replay demo buttons (each its own distinct effect on the ranked terms / feed), and stop & forget (consent clears; a reload of the same page reads back as first-visit); the S1–S5 contract (seed items before any route releases, a KB hit grounds a term and reprocesses the item it came from, a KB miss enters the negative cache and is not retried, the interval control re-arms `nextPollAt`); the responsiveness contract (an in-page evaluate round trip answers within 1500 ms at several points across the page's one-time boot cost; a replay click's own effect lands in a small fraction of that boot budget, never re-paying it) |
 
-CI: add both file names to the `e2e-web-local-origin` job list in `.gitlab-ci.yml` (specs not
-named in a job never run — the standing hazard).
+Five real bugs surfaced and fixed while writing these specs, all outside `news-browser-entry.mjs`/
+`news-viz.mjs`/`chat.mjs` (the concurrently-owned files this phase does not touch):
 
-Remaining corpus rows (same lane, same runner):
+- `subgraphAround` (`src/domain/news-feed.mjs`) re-filtered the whole fact set once per frontier
+  term per hop — quadratic on a seed-scale graph, and slow enough to read as a hang (`buildFeed`
+  over the real 90 MB seed: over 40 minutes before, ~4 seconds after). Fixed by indexing rows by
+  term once per call instead.
+- `ingestText` (`src/services/extract-facts.mjs`) called `process.cwd()` unconditionally when
+  `memoryDir` wasn't a path string — true for every browser session's in-memory store — throwing
+  `ReferenceError: process is not defined` and silently failing every browser call (poll, enrich,
+  replay, the teach panel). Fixed by skipping `loadConfig` for a non-string `memoryDir`, matching
+  what the function's own prior comment already said should happen.
+- `runSentence` (same file) called `runTurn` without an `env`, so `dispatchTurn`'s own
+  `env = process.env` default parameter threw the same `ReferenceError` the moment the strict
+  recognizer actually ran a candidate — masked by the next bug below until that one's fixed too.
+  Fixed by passing `env` through explicitly (real `process.env` in Node, `{}` in a browser).
+- `uuidv7` (`src/adapters/uuid.mjs`) imported `randomBytes` from `node:crypto`, which the browser
+  bundle stubs as a throw-on-call — and `chat.mjs`'s `runTurn` stamps a session id here on every
+  turn, so every strict-tier ingest attempt would hit it. Fixed by switching to
+  `globalThis.crypto.getRandomValues` (Web Crypto), identical in Node ≥19 and every real browser,
+  needing no environment branch at all.
+- `effectiveStatus` (`src/domain/term-ledger.mjs`) treated `ttlMs: 0` the same as "no TTL given",
+  so a zero-hour negative cache left a missed term stuck "missed" forever instead of immediately
+  eligible again. Fixed by checking `ttlMs == null` instead of `!ttlMs`.
+- `pluralize` (`src/services/news.mjs`) built its own plural by appending "s", reading "0 misss"
+  for a miss count other than one. Fixed by routing through the shared `pluralOf` (`src/domain/
+  inflect.mjs`), the same helper `viz-theme.mjs` already uses.
+
+With every one of those fixed, the ingest path itself no longer crashes anywhere — verified end to
+end by deleting `globalThis.process` and confirming `ingestText` grounds a real fact against a
+non-string `memoryDir` rather than throwing. What's left is one real, reproducible gap, inside the
+concurrently-owned `news-viz.mjs`, left unfixed here per this phase's brief — the specs above assert
+the intended contract and will start passing once it lands:
+
+- `news-viz.mjs`'s boot never calls `registerWinkModel`/`loadWinkVendor` (section 1's own precedent
+  for shared page machinery). Without it, `winkInstance()` has nothing registered and returns
+  `null` on the real page — every optimistic-tier extraction, the strict tier's own turn-answering
+  (which reads on wink too), and the ungrounded-term scan all silently produce nothing, even though
+  the same text grounds correctly in Node (where the fallback `require("wink-nlp")` path works).
+
+A second, separate gap also lives in the two concurrently-owned files: `news-viz.mjs`'s
+source-toggle handler sets `window.tmct.session.config.sources = ids`, but `session.config`
+(`news-browser-entry.mjs`) is a getter returning a fresh copy on every read — the assignment lands
+on a copy that is discarded immediately, so checking or unchecking a source never actually narrows
+what gets polled or enriched.
+
+Remaining corpus rows (same lane, same runner) — four of the planned seven. The other three
+(`news.ingest.free-text`, `news.ingest.lexicon-upload`, `news.ingest.upload-downgrade`) test the
+teach panel's `ingestText`/`ingestFile`/`ingestUploadedFactRows` session verbs, which no `/news`
+subcommand reaches — `parseNewsSubcommand` only ever resolves `poll|rank|enrich|sources|add|
+interval`, so a chat-turn corpus row has no way to drive them. That surface is already covered by
+`test/adapters/news-browser-entry.test.mjs`'s own upload/validate-and-downgrade/lexicon-widening
+tests (phase 6):
 
 | key | id |
 |---|---|
 | `news.enrich.reprocess` | `news-grounding-a-term-reprocesses-old-items-and-runs-a-syllogism-round` |
 | `news.enrich.budget` | `news-syllogisms-per-ingest-caps-the-derived-count` |
 | `news.enrich.negative-cache` | `news-missed-term-waits-out-its-ttl-before-retry` |
-| `news.ingest.free-text` | `news-free-text-teaches-facts-and-ranks-the-rest` |
-| `news.ingest.lexicon-upload` | `news-lexicon-json-widens-grounding-without-fact-writes` |
-| `news.ingest.upload-downgrade` | `news-uploaded-jsonl-above-teach-tier-downgrades-to-teach` |
 | `news.miss.enrich-all-sources-empty` | `news-enrichment-miss-marks-the-term-missed-never-guesses` |
+
+`run-lane.mjs` grew `setup.newsKbFixtures` (`[{ sourceId, hits: [{ term, title, text, summary, url,
+isa }] }]`) alongside the existing `setup.newsFixtures`, so a corpus row can fixture-route
+`getResearchProvider` the same network-free way it already fixture-routes `newsFetchers` — a term
+missing from a source's `hits` is an honest miss, the same shape a real "nothing found" reads as.
 
 Acceptance:
 
@@ -1437,6 +1491,17 @@ node --test test/corpus/news.test.mjs
 node scripts/corpus-matrix.mjs --gaps
 node --test test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
 ```
+
+The last command's current result against main: `pages-news.test.mjs` 3/4 (one real, unrelated
+CSS overflow at 320px in `news-viz.mjs`); `pages-news-feed.test.mjs` 1/4 (stop & forget passes).
+The other three each fail on a precise, distinct symptom of the gaps above: the S1–S5 contract's
+request log gains 3 rows instead of 1 (the config getter-copy bug — every default source polls,
+not just the one left checked); the replay test's own fact never grounds (`seedFallback` stays
+`true` — the missing `registerWinkModel` call); the responsiveness contract's own round trip
+measures a single continuous ~13-second busy stretch, not the 1500ms budget — the page's main
+thread is occupied in one unbroken block across boot (session build through the first render),
+same shape as the `subgraphAround` hang above but not the same call: that one is already fixed
+and measured at ~4 seconds alone, so most of this stretch is something else in the boot path.
 
 ---
 

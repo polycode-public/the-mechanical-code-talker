@@ -140,6 +140,16 @@ test("the negative-cache TTL expiry is pure: two now values give two answers, th
   assert.equal(ledger.terms.get("tariff").status, "missed");
 });
 
+test("a ttlMs of 0 is a real zero-hour TTL (immediately eligible again), not \"no TTL\"", () => {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["tariff", 1]]), "item-1", "2026-08-08T09:00:00Z");
+  markTerm(ledger, "tariff", "missed", "2026-08-08T09:00:00Z");
+
+  const immediatelyAfter = rankedTerms(ledger, { status: "pending", now: "2026-08-08T09:00:00Z", ttlMs: 0 });
+  assert.equal(immediatelyAfter.length, 1, "a zero-hour negative cache never holds a term back");
+  assert.equal(immediatelyAfter[0].term, "tariff");
+});
+
 test("ledgerPayload emits entries in ranking order and round-trips byte-identically", () => {
   const ledger = createTermLedger();
   bumpTerms(
