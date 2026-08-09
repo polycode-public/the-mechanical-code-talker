@@ -48,6 +48,7 @@ declines to emit.
 | 16 | *VERB is transitive* | `VERB rdf:type owl:TransitiveProperty` |
 | 17 | *VERB1 is the inverse of VERB2* | `VERB1 owl:inverseOf VERB2`, `VERB2 owl:inverseOf VERB1` — both directions |
 | 18 | *every N1 VERB only N2* | `N1 rdfs:subClassOf R`, `R` an `owl:allValuesFrom` restriction — universal restriction |
+| 19 | *VERB1 implies VERB2* | `VERB1 rdfs:subPropertyOf VERB2` — one direction only |
 
 ## Design notes
 

@@ -54,6 +54,7 @@ section 2:
 | VERB is transitive | `owl:TransitiveProperty` |
 | VERB1 is the inverse of VERB2 | `owl:inverseOf` (both directions) |
 | every N1 VERB only N2 | `owl:allValuesFrom` (universal restriction) |
+| VERB1 implies VERB2 | `rdfs:subPropertyOf` (one direction only) |
 
 Two flat-store conventions to know: an intersection (pattern 4) is stored as
 **repeated `owl:intersectionOf` triples** (the JSON fact store has no RDF

@@ -621,6 +621,7 @@ dact:apology a dact:CommunicativeFunction ;
 #                of VERB2
 #    pattern 18  every N1 VERB only N2         owl:Restriction + owl:onProperty +
 #                                              owl:allValuesFrom (universal restriction)
+#    pattern 19  VERB1 implies VERB2           rdfs:subPropertyOf, one direction
 #
 #    Flat-store stand-in: the JSON fact store has no RDF lists, so a pattern-4
 #    intersection is flattened to REPEATED owl:intersectionOf triples (one per
@@ -692,6 +693,13 @@ tmct:heart rdfs:subClassOf tmct:all-contains-valve .
 tmct:all-contains-valve a owl:Restriction ;
   owl:onProperty tmct:contains ;
   owl:allValuesFrom tmct:valve .
+
+# Pattern 19's term: rdfs:subPropertyOf is standard RDFS vocabulary (also
+# used in tmct's own meta-model alignment elsewhere in this file, a
+# different use, untouched by this row), so it needs no declaration of its
+# own, only this documentation example. One direction only — a subproperty
+# relation is directional, unlike pattern 17's owl:inverseOf.
+tmct:contains rdfs:subPropertyOf tmct:touches .
 
 # ---------------------------------------------------------------------------
 # 3. Software-entity classes — the lexicon's top-level nouns (lowercase lemma

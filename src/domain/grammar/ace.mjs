@@ -56,6 +56,7 @@ const PATTERN_BARE_EXISTENTIAL = "bareExistential";
 const PATTERN_TRANSITIVE_ROLE = "transitiveRole";
 const PATTERN_INVERSE_ROLE = "inverseRole";
 const PATTERN_UNIVERSAL = "universal";
+const PATTERN_SUB_PROPERTY_OF = "subPropertyOf";
 
 /** The pattern field's full domain, in the README's table order. */
 const PATTERNS = Object.freeze([
@@ -63,7 +64,7 @@ const PATTERNS = Object.freeze([
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
   PATTERN_CAPABILITY, PATTERN_UNION, PATTERN_COMPLEMENT, PATTERN_NEGATIVE_TYPE,
   PATTERN_ENUMERATION, PATTERN_DIFFERENT_FROM, PATTERN_BARE_EXISTENTIAL, PATTERN_TRANSITIVE_ROLE,
-  PATTERN_INVERSE_ROLE, PATTERN_UNIVERSAL,
+  PATTERN_INVERSE_ROLE, PATTERN_UNIVERSAL, PATTERN_SUB_PROPERTY_OF,
 ]);
 
 const DET = new Set(["a", "an", "the"]);
@@ -682,6 +683,20 @@ function parseInverseRole(lexicon, toks, lower) {
   ]);
 }
 
+/** Pattern 19 — "V1 implies V2" → rdfs:subPropertyOf from V1's minted
+ *  predicate to V2's minted predicate, one row, one direction — a
+ *  subproperty relation is directional, unlike pattern 17's owl:inverseOf.
+ *  Both sides accept the same 3sg-or-gerund fold patterns 16 and 17 already
+ *  share, through the same verbPredicateFromSurface. */
+function parseSubProperty(lexicon, toks, lower) {
+  const p1 = verbPredicateFromSurface(lexicon, lower[0]);
+  const p2 = verbPredicateFromSurface(lexicon, lower[2]);
+  if (!p1 || !p2) return null;
+  return hit(PATTERN_SUB_PROPERTY_OF, [], [
+    { subject: p1, predicate: "rdfs:subPropertyOf", object: p2, kind: "rdfs:subPropertyOf" },
+  ]);
+}
+
 /** Pattern 7 — "N1's N2 is VALUE" / "the N2 of N1 is VALUE": data or object
  *  property assertion per the possessive noun's DECLARED typing (undeclared
  *  typing defaults to data — a literal value is the honest floor). */
@@ -780,6 +795,10 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
   if (toks.length === 6 && lower[1] === "is" && lower[2] === "the" && lower[3] === "inverse" && lower[4] === "of") {
     const inverse = parseInverseRole(lexicon, toks, lower);
     if (inverse) return inverse;
+  }
+  if (toks.length === 3 && lower[1] === "implies") {
+    const subProperty = parseSubProperty(lexicon, toks, lower);
+    if (subProperty) return subProperty;
   }
   if (lower[0] === "everything" && lower[1] === "that") return parseComplement(lexicon, toks, lower);
   if (lower[0] === "every") return parseEvery(lexicon, toks, lower);

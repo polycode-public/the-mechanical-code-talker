@@ -5,6 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildTableauKb, canonicalKey, isSatisfiable, proveEntailment } from "../../src/domain/tableau.mjs";
+import { parseAce } from "../../src/domain/grammar/ace.mjs";
 
 const atom = (name) => ({ t: "atom", name });
 const someE = (r, c) => ({ t: "some", r, c });
@@ -118,4 +119,24 @@ test("a role with no declared hierarchy still matches only itself, exactly as be
   assert.equal(result.satisfiable, true);
   const children = result.model.nodes.filter((n) => n.parent === "heart");
   assert.equal(children.length, 2, "with no declared subPropertyOf, has and owning stay two distinct roles");
+});
+
+// ---- ACE pattern 19's taught row, read by the same KB reader --------------
+
+test("a taught ACE pattern-19 row ('containing implies touching') produces the same roleClosure shape as the hand-built subPropertyOf fixture", () => {
+  const taught = parseAce("containing implies touching");
+  const rows = taught.triples.map((t, i) => ({ id: `t${i}`, ...t }));
+  const kb = buildTableauKb(rows);
+  assert.deepEqual(kb.roleClosure.get("tmct:touches"), new Set(["tmct:touches", "tmct:contains"]));
+  assert.deepEqual(kb.roleClosure.get("tmct:contains"), new Set(["tmct:contains"]));
+});
+
+test("the taught pattern-19 row lets a taught contains-edge satisfy an existential over touches, the same way the hand-built fixture does", () => {
+  const taught = parseAce("containing implies touching");
+  const kb = buildTableauKb(taught.triples.map((t, i) => ({ id: `t${i}`, ...t })));
+  const query = andE([someE("tmct:contains", atom("valve")), someE("tmct:touches", atom("valve"))]);
+  const result = isSatisfiable(kb, [{ ind: "heart", expr: query, from: ["p1"] }]);
+  assert.equal(result.satisfiable, true);
+  const children = result.model.nodes.filter((n) => n.parent === "heart");
+  assert.equal(children.length, 1, "a contains-edge must satisfy the wider touches existential with no fresh successor");
 });
