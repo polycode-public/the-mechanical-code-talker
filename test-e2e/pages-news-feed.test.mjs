@@ -71,11 +71,12 @@ async function waitFor(page, predicate, { timeoutMs = READY_TIMEOUT_MS, pollMs =
   throw new Error(`${label} never became true within ${timeoutMs}ms`);
 }
 
-/** Serves one contemporary item ("A quokka is a marsupial.") from the
- *  wikimedia-featured mostread shape (section 4.1's real wire shape) —
- *  the same sentence pattern the corpus lane's own reprocess row proves
- *  synthesizes an optimistic fact and admits both "quokka" and "marsupial"
- *  to the fact-ungrounded-term ledger. */
+/** Serves one contemporary item from the wikimedia-featured mostread shape
+ *  (section 4.1's real wire shape). Its title carries two halves on purpose:
+ *  a copular sentence the ingest grammar reads (the poll's own fact, which
+ *  fact-grounds quokka on arrival), and a verbless fragment whose two terms
+ *  ("rottnest", "sightings") no triple can form from — those two are what
+ *  the fact-ungrounded ledger admits, and what enrichment then works. */
 async function routeWikimediaFeatured(page) {
   await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
     status: 200,
@@ -84,7 +85,7 @@ async function routeWikimediaFeatured(page) {
     body: JSON.stringify({
       mostread: {
         articles: [{
-          normalizedtitle: "A quokka is a marsupial.",
+          normalizedtitle: "A quokka is a marsupial. Rottnest sightings, wetlands, dry-season counts.",
           extract: "",
           wikibase_item: "",
           content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Quokka" } },
@@ -95,10 +96,10 @@ async function routeWikimediaFeatured(page) {
 }
 
 /** Serves Simple English Wikipedia's opensearch + REST summary round trip
- *  for exactly one term, "quokka" — every other opensearch query gets a
+ *  for exactly one term, "rottnest" — every other opensearch query gets a
  *  clean empty-suggestions reply, the honest "nothing found" shape a real
  *  miss reads as, so an enrichment attempt against any other pending term
- *  (here, "marsupial") resolves to a miss rather than a network error. */
+ *  (here, "sightings") resolves to a miss rather than a network error. */
 async function routeSimpleWikipediaOneHit(page) {
   let openSearchCalls = 0;
   await page.route("https://simple.wikipedia.org/**", (route) => {
@@ -107,13 +108,13 @@ async function routeSimpleWikipediaOneHit(page) {
     if (url.includes("action=opensearch")) {
       openSearchCalls += 1;
       const term = decodeURIComponent(new URL(url).searchParams.get("search") || "");
-      body = term === "quokka" ? JSON.stringify(["quokka", ["Quokka"], [""], [""]]) : JSON.stringify([term, [], [], []]);
+      body = term === "rottnest" ? JSON.stringify(["rottnest", ["Rottnest"], [""], [""]]) : JSON.stringify([term, [], [], []]);
     } else {
       body = JSON.stringify({
-        title: "Quokka",
-        extract: "A quokka is a herbivore.",
+        title: "Rottnest",
+        extract: "A rottnest is an island.",
         revision: "101",
-        content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Quokka" } },
+        content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Rottnest" } },
       });
     }
     return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body });
@@ -172,27 +173,38 @@ test("the start button click moves the page through S1-S5: seed items before any
     assert.equal(wikimediaRows[0].status, "ok", "a fulfilled route reads as a healthy poll");
     assert.equal(await page.locator("#requestLogBody tr").count(), 1, "the request log table itself gained the same one row");
 
-    // S3/S4: quokka (the KB hit) is now grounded; marsupial (the KB miss)
-    // is missed rather than guessed, and the ranked list still carries both
-    // terms with the count the single fixture item produced.
+    // S3/S4: quokka fact-grounded on arrival (the poll's own copular fact),
+    // so it never enters the ledger; the verbless fragment's two terms did.
+    // rottnest (the KB hit) grounds through enrichment; sightings (the KB
+    // miss) is missed rather than guessed.
     const ranked = await page.evaluate(() => window.tmct.session.rank({ limit: 20 }));
     const byTerm = new Map(ranked.map((r) => [r.term, r]));
-    assert.equal(byTerm.get("quokka")?.count, 1, `quokka ranks with count 1: ${JSON.stringify(ranked)}`);
-    assert.equal(byTerm.get("marsupial")?.count, 1, `marsupial ranks with count 1: ${JSON.stringify(ranked)}`);
+    assert.equal(byTerm.get("quokka"), undefined, `a term the poll itself grounded never enters the ledger: ${JSON.stringify(ranked)}`);
+    assert.equal(byTerm.get("rottnest")?.count, 1, `rottnest ranks with count 1: ${JSON.stringify(ranked)}`);
+    // Two passes read the fragment: the poll's own ingest, then the
+    // reprocess the rottnest grounding triggered — the ledger counts
+    // occurrences per processed sentence, so the still-missed term shows 2.
+    assert.equal(byTerm.get("sightings")?.count, 2, `sightings ranks with the two processed passes counted: ${JSON.stringify(ranked)}`);
 
     const health = await page.evaluate(() => window.tmct.session.health);
     assert.equal(health.find((h) => h.sourceId === "wikimedia-featured")?.lastStatus, "ok");
 
-    // The KB hit grounded quokka and reprocessed the item it came from —
-    // the feed now carries facts from BOTH the original poll fact and the
-    // KB article, in the same item.
+    // The feed now carries an item for each half of the fixture's own work:
+    // the poll's copular fact hubs a quokka item, and the KB enrichment's
+    // fact hubs a rottnest item of its own.
     const feedAfterEnrich = await page.evaluate(() => window.tmct.session.buildFeed());
+    const hubs = feedAfterEnrich.items.map((i) => i.hub);
+    // The quokka hub's presence is itself the poll fact's proof: only the
+    // windowed news fact can score quokka as a hub, and its two-hop
+    // subgraph then fills with the seed's own dense animal taxonomy, so no
+    // single row is guaranteed a slot under the item's row cap.
     const quokkaItem = feedAfterEnrich.items.find((it) => it.hub === "quokka");
-    assert.ok(quokkaItem, `a quokka item exists after enrichment: ${JSON.stringify(feedAfterEnrich.items.map((i) => i.hub))}`);
-    const quokkaFacts = await page.evaluate((ids) => window.tmct.session.factRows(ids), quokkaItem.factIds);
-    const quokkaObjects = quokkaFacts.map((f) => f.object);
-    assert.ok(quokkaObjects.includes("herbivore"), `the KB article's own fact reprocessed into the item: ${JSON.stringify(quokkaObjects)}`);
-    assert.ok(quokkaObjects.includes("marsupial"), `the original poll fact is still in the item: ${JSON.stringify(quokkaObjects)}`);
+    assert.ok(quokkaItem, `a quokka item exists from the poll's own fact: ${JSON.stringify(hubs)}`);
+    assert.equal(feedAfterEnrich.seedFallback, false, "the windowed news facts drive the feed, not the seed fallback");
+    const rottnestItem = feedAfterEnrich.items.find((it) => it.hub === "rottnest");
+    assert.ok(rottnestItem, `a rottnest item exists from the KB enrichment: ${JSON.stringify(hubs)}`);
+    const rottnestFacts = await page.evaluate((ids) => window.tmct.session.factRows(ids), rottnestItem.factIds);
+    assert.ok(rottnestFacts.map((f) => f.object).includes("island"), "the KB article's fact anchors its item");
 
     // Negative cache: a second enrich attempt does not re-query a term
     // already marked missed within its TTL.
@@ -202,7 +214,7 @@ test("the start button click moves the page through S1-S5: seed items before any
     // #controlsStatus back to "" once window.tmct.session.enrich() settles,
     // the one DOM signal the click actually leaves behind.
     await waitFor(page, () => document.getElementById("controlsStatus").textContent === "", { timeoutMs: 15000, pollMs: 1000, label: "the second enrich settling" });
-    assert.equal(kb.openSearchCallCount(), callsBeforeSecondEnrich, "marsupial is not re-queried while its negative-cache TTL holds");
+    assert.equal(kb.openSearchCallCount(), callsBeforeSecondEnrich, "sightings is not re-queried while its negative-cache TTL holds");
 
     // S5: the interval control re-arms nextPollAt and clamps below the floor.
     await page.selectOption("#pollInterval", "5");

@@ -26,18 +26,36 @@ function toMs(value) {
   return Number.isFinite(t) ? t : NaN;
 }
 
-const NEWS_WINDOW_PROVENANCE_RE = /^(news:|news-fixture:|research:)/;
+// The ingest seam wraps a caller's tag in its own audit prefix
+// (extracted:news-fixture:…, optimistic-extract:news:…), so the news tag is
+// matched at any segment boundary, never only at the front.
+const NEWS_WINDOW_PROVENANCE_RE = /(?:^|:)(?:news|news-fixture|research):/;
 
 /** Rows whose provenance carries a `news:`, `news-fixture:` or `research:`
  *  tag and whose observedAt (else createdAt) falls inside [now - windowMs,
  *  now]. Pure filter — `now` is the caller's clock reading, nothing here
  *  reads a live one. */
+/** A row's own observation moment: the top-level stamp when a caller set
+ *  one, else the latest per-assertion stamp the fold surfaces — readFactRows
+ *  keeps observedAt/createdAt on each assertion record, not on the row. */
+function rowObservedMs(row) {
+  const own = toMs(row.observedAt || "");
+  if (Number.isFinite(own)) return own;
+  let latest = NaN;
+  for (const a of row.assertions || []) {
+    const t = toMs(a.observedAt || a.createdAt || "");
+    if (Number.isFinite(t) && !(latest >= t)) latest = t;
+  }
+  if (Number.isFinite(latest)) return latest;
+  return toMs(row.createdAt || "");
+}
+
 export function newsWindowRows(rows, { now, windowMs }) {
   const nowMs = toMs(now);
   const startMs = nowMs - windowMs;
   return rows.filter((row) => {
     if (!NEWS_WINDOW_PROVENANCE_RE.test(String(row.provenance || ""))) return false;
-    const t = toMs(row.observedAt || row.createdAt || "");
+    const t = rowObservedMs(row);
     return Number.isFinite(t) && t >= startMs && t <= nowMs;
   });
 }

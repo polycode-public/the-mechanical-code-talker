@@ -215,6 +215,10 @@ export function createNewsSession({
   async function runPollCycle() {
     phase = "polling";
     const result = await pollNewsSources(ctx());
+    // The cycle's ingest writes through core appendFact directly, never the
+    // wrapping store, so the fold cache must drop here by hand.
+    foldedRows = null;
+    cache.rows = null;
     if (metrics.timeToFirstCompletePollMs === null) metrics.timeToFirstCompletePollMs = resolveNowMs() - bootMs;
     phase = "grounding";
     await noteFirstArticle();
@@ -224,6 +228,8 @@ export function createNewsSession({
   async function runEnrichCycle() {
     phase = "enriching";
     const result = await enrichTopTerms(ctx());
+    foldedRows = null;
+    cache.rows = null;
     phase = "idle";
     armTimer();
     return result;
@@ -298,6 +304,19 @@ export function createNewsSession({
       return { ok: true, id, format: result.format };
     },
 
+    /** The sources panel's checkbox path: replaces the enabled contemporary
+     *  and kb id sets in one call. `config` is only ever handed out as a
+     *  copy, so a real setter is the one way a toggle can narrow what the
+     *  next poll fetches. */
+    setSources(ids) {
+      const normalized = normalizeNewsSourceIds(ids);
+      const kindOf = new Map(newsSourceRecords().map((r) => [r.id, r.kind]));
+      config.sources = normalized.filter((id) => kindOf.get(id) !== "kb");
+      config.kbSources = normalized.filter((id) => kindOf.get(id) === "kb");
+      rebuildFetchers();
+      return { sources: [...config.sources], kbSources: [...config.kbSources] };
+    },
+
     /** Re-arms the poll timer at `minutes`, clamped to the same floor the
      *  service config enforces (0 disarms). */
     setInterval(minutes) {
@@ -311,8 +330,9 @@ export function createNewsSession({
     async ingestText(text, { fileLabel = "free-text" } = {}) {
       const nowVal = typeof now === "function" ? now() : now;
       const sourceTag = `teach:upload:${fileLabel}@${nowVal}`;
-      const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon });
+      const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal });
       cache.rows = null;
+      foldedRows = null;
       return { facts: result.extracted.length + result.optimistic.length, sentences: result.sentences };
     },
 
@@ -343,7 +363,8 @@ export function createNewsSession({
       }
       const downgraded = ingestUploadedFactRows(rows, { fileLabel: name || "upload", now: nowVal })
         .filter((r) => r.subject && r.predicate && r.object);
-      if (downgraded.length) { await appendFacts(memoryDir, downgraded); cache.rows = null; }
+      if (downgraded.length) { await appendFacts(memoryDir, downgraded); cache.rows = null;
+      foldedRows = null; }
       return { facts: downgraded.length, vocabAdded: 0, error: null };
     },
 
@@ -359,7 +380,7 @@ export function createNewsSession({
       for (const snapshot of items) {
         const text = [snapshot.title, snapshot.summary].filter(Boolean).join(". ");
         const sourceTag = `news-fixture:${sourceId}@${snapshot.id}`;
-        const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon });
+        const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal });
         const allFacts = [...result.extracted, ...result.optimistic];
         snapshot.factIds = allFacts.map((f) => factIdFor(normFactTerm(f.subject), normFactPredicate(f.predicate), normFactTerm(f.object)));
         factsTotal += allFacts.length;
@@ -371,6 +392,7 @@ export function createNewsSession({
         state.ledger = ledgerPayload(ledger);
       }
       if (factsTotal) cache.rows = null;
+      foldedRows = null;
       const existingIds = new Set(state.items.map((s) => s.id));
       state.items = [...state.items, ...items.filter((s) => !existingIds.has(s.id))];
       await noteFirstArticle();

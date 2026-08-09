@@ -619,7 +619,7 @@ function canonicalLines(facts, storeRows) {
  */
 export async function ingestText(text, {
   memoryDir = null, sourceTag = "text", optimistic = false,
-  canonical = false, config = null, lexicon = null,
+  canonical = false, config = null, lexicon = null, observedAt = "",
 } = {}) {
   // Paragraphs first (blank-line separated), so the pronoun carry never bridges
   // a topic break: a fresh paragraph clears the last-subject it would resolve
@@ -708,7 +708,7 @@ export async function ingestText(text, {
           for (const row of rows) {
             await appendFact(dir, {
               subject: row.subject, predicate: row.predicate, object: row.object,
-              provenance: tag, quantifier: row.quantifier || "",
+              provenance: tag, quantifier: row.quantifier || "", observedAt,
             });
             extracted.push({
               subject: row.subject, predicate: row.predicate, object: row.object,
@@ -726,7 +726,7 @@ export async function ingestText(text, {
         const tag = `optimistic-extract:${sourceTag}`;
         for (const t of candidates) {
           await appendFact(dir, {
-            subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag,
+            subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
           });
           optimisticFacts.push({ ...t, provenance: tag, sentence });
         }

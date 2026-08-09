@@ -366,7 +366,7 @@ async function ingestSnapshotFacts(ctx, snapshot) {
   const lex = lexicon || loadLexicon();
   const text = joinTitleAndSummary(snapshot.title, snapshot.summary);
   const sourceTag = `news:${snapshot.sourceId}@${snapshot.id}`;
-  const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon: lex });
+  const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon: lex, observedAt: nowVal });
   invalidateCache(cache);
 
   const allFacts = [...result.extracted, ...result.optimistic];

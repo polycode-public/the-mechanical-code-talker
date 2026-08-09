@@ -107,9 +107,10 @@ ${THEME_TOKENS_CSS}
   select, .urlinput { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
   .urlinput { flex: 1 1 12rem; min-width: 8rem; }
   .sources { display: flex; flex-direction: column; gap: .3rem; margin: .6rem 0; }
-  .sourcerow { display: flex; align-items: center; gap: .5rem; font-size: .78rem; padding: .25rem .1rem; }
+  .sourcerow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .78rem; padding: .25rem .1rem; min-width: 0; }
   .sourcerow.kb { opacity: .85; }
   .sourcename { min-width: 12rem; }
+  @media (max-width: 480px) { .sourcename { min-width: 0; } .sourcestatus { flex-basis: 100%; } }
   .sourcehome { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--corpus); }
   .sourcestatus { margin-left: auto; font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); }
   .reqlog { margin-bottom: 1rem; }
@@ -366,6 +367,10 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   }
 
   async function renderAll() {
+    // Chips and tiles are cheap synchronous text writes; they lead so a
+    // just-finished poll reads back immediately while the feed's own slower,
+    // yielding render catches up behind it.
+    renderSourcesPanel();
     await Promise.all([renderFeed(), renderRank(), renderRequestLog()]);
     renderSourcesPanel();
     window.tmct.news = Object.assign({}, window.tmct.news, {
@@ -379,20 +384,32 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   async function boot() {
     window.tmct.news = { phase: "seeding", metrics: { timeToFirstArticleMs: null, timeToFirstCompletePollMs: null }, nextPollAt: "" };
     appendLog("phase: seeding");
+    // The wink vendor is what lets ingested prose ground at all — without it
+    // every extract runs lexicon-blind and the whole enrich loop misses.
+    // Loaded alongside the seed, tolerated as absent the same way chat.html
+    // tolerates it, never blocking the page.
+    const winkLoad = (async function () {
+      try {
+        const mod = await Promise.race([
+          import("./vendor/wink.js"),
+          new Promise(function (resolve, reject) { setTimeout(function () { reject(new Error("wink vendor load timed out")); }, 20000); }),
+        ]);
+        window.tmct.page.registerWinkModel(function () { return { winkNLP: mod.winkNLP, model: mod.model }; });
+        appendLog("wink vendor loaded — prose grounding armed");
+      } catch (err) {
+        appendLog("wink vendor unavailable — prose grounding runs lexicon-blind");
+      }
+    })();
     const outcome = await loadSeedPayload(fetchWithProgress, "./chat-seed.json", SEED_QUERY, function () {});
     window.tmct.seed = { state: outcome.status.state, facts: outcome.status.facts };
+    await winkLoad;
     await window.tmct.open({ seedPayload: outcome.payload, vocabSeeded: Boolean(outcome.payload) });
-    window.tmct.news.phase = "seeded";
-    appendLog("phase: seeded");
-    await renderAll();
 
+    // Every control binds before the phase flips to "seeded": the first feed
+    // render is deliberately slow (it yields per card), and a click that
+    // lands in that window must already have its listener.
     const startBtn = el("newsStart");
-    const consented = window.tmct.session.consented;
-    startBtn.textContent = consented ? "poll now" : "start polling live sources";
-    if (consented) {
-      await window.tmct.session.start();
-      await renderAll();
-    }
+    startBtn.textContent = window.tmct.session.consented ? "poll now" : "start polling live sources";
 
     startBtn.addEventListener("click", async function () {
       startBtn.disabled = true;
@@ -425,7 +442,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     document.querySelectorAll("[data-source-toggle]").forEach(function (box) {
       box.addEventListener("change", function () {
         const ids = [].slice.call(document.querySelectorAll("[data-source-toggle]:checked")).map(function (b) { return b.value; });
-        window.tmct.session.config.sources = ids;
+        window.tmct.session.setSources(ids);
         renderSourcesPanel();
       });
     });
@@ -473,6 +490,14 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       el("teachStatus").textContent = "loaded " + file.name + " — press ingest";
       el("teachFile").dataset.name = file.name;
     });
+
+    window.tmct.news.phase = "seeded";
+    appendLog("phase: seeded");
+    await renderAll();
+    if (window.tmct.session.consented) {
+      await window.tmct.session.start();
+      await renderAll();
+    }
     el("teachIngest").addEventListener("click", async function () {
       const text = el("teachText").value;
       if (!text.trim()) return;
