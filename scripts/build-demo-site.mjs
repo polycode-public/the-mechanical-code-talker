@@ -790,7 +790,6 @@ function renderClaimsHtml({ blocks, plannerButton }) {
   const planner = blocks.planner;
   const proseBand = blocks["prose-band"];
   const commonsenseqa = blocks.commonsenseqa;
-  const syllogist = blocks.syllogist;
   const news = blocks.news;
 
   const plannerRows = Object.entries(planner.detail.domains).map(([domainName, d]) => `
@@ -843,17 +842,6 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     jsonName: "commonsenseqa", demoHref: "chat.html",
   });
 
-  const c8 = claimFigureBlock({
-    id: "c8-syllogist", kicker: "C8",
-    sentence: "A query the ask lane can't prove alone, /classify and /prove can sometimes close by reasoning through class expressions and disjunctions.",
-    figureHtml: `<p class="claim-block-figure" data-source="results/claims/syllogist.json#delta">+${fmtInt(syllogist.delta)}<span class="unit">${syllogist.unit}</span></p>
-        <p class="claim-block-figure-split">Of ${fmtInt(syllogist.detail.cases)} INF-7/INF-8 inference cases tested: before ${fmtInt(syllogist.before)}, after ${fmtInt(syllogist.after)}.</p>
-        <p>Budget exhausted on ${fmtInt(syllogist.detail.budgetExhausted)} cases. Committed verdicts: ${JSON.stringify(syllogist.detail.beforeVerdicts).replace(/[{}]/g, "").replace(/"/g, "").replace(/,/g, ", ")} → ${JSON.stringify(syllogist.detail.afterVerdicts).replace(/[{}]/g, "").replace(/"/g, "").replace(/,/g, ", ")}.</p>`,
-    notMean: `This measurement captures the current state as-is. INF-7/INF-8 are the benchmark cases that test whether phases 2 (EL wiring) and 4 (SHOIQ) of the plan deliver a real, counted improvement on the chat surface. The delta of 0 indicates the targeted verdicts have not yet shifted as the plan predicts.`,
-    standard: "measured through the shipped engine against test-benchmarks/infbench/cases.jsonl; 48 inference benchmark cases covering nested existentials, disjunctions, and cardinality clashes.",
-    jsonName: "syllogist", demoHref: "chat.html",
-  });
-
   const l3 = claimFigureBlock({
     id: "l3-news", kicker: "L3",
     sentence: "Replaying the shipped news and knowledge-base fixtures through the whole poll-to-feed loop, this much of the fetched text landed as a stored fact.",
@@ -887,7 +875,6 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <li><a href="#c7-planner">Hanoi planner</a></li>
       <li><a href="#l1-prose-band">Prose grounding</a></li>
       <li><a href="#l2-commonsenseqa">CommonsenseQA</a></li>
-      <li><a href="#c8-syllogist">Syllogist reasoning</a></li>
       <li><a href="#l3-news">News feed grounding</a></li>
     </ol>
   </nav>
@@ -898,7 +885,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <h1>Claims and limits</h1>
     </header>
 
-    <div class="claim-block-grid">${c7}${l1}${l2}${c8}${l3}
+    <div class="claim-block-grid">${c7}${l1}${l2}${l3}
     </div>
     ${bench}
 

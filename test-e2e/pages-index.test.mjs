@@ -70,8 +70,20 @@ test("the page carries one live demo box and no live page embeds", async () => {
   assert.equal([...html.matchAll(/<div id="tmct-demo">/g)].length, 1, "exactly one live demo box");
   assert.doesNotMatch(html, /<iframe/, "no page is embedded live in an iframe");
   assert.doesNotMatch(html, /<div id="tmct-chat"/, "the old live chat widget stays gone");
-  assert.doesNotMatch(html, /What an answer looks like/);
-  assert.doesNotMatch(html, /<pre class="transcript"/);
+  assert.doesNotMatch(html, /What an answer looks like/, "the old transcript section's heading stays gone");
+});
+
+test("the worked reasoning example sits between two feature plates and shows a real /prove transcript", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const beforeIt = html.indexOf('id="feature-chat"');
+  const start = html.indexOf('id="reasoning-example"');
+  const afterIt = html.indexOf('id="feature-news"');
+  assert.ok(beforeIt !== -1 && start !== -1 && afterIt !== -1, "the chat plate, the example, and the news plate are all on the page");
+  assert.ok(beforeIt < start && start < afterIt, "the example sits between two feature plates");
+  const section = html.slice(start, afterIt);
+  assert.match(section, /<pre class="transcript">/, "the example reads as a chat transcript, not prose");
+  assert.match(section, /\/prove is rex a dog/, "the example asks a real \\/prove question");
+  assert.match(section, /in every case — a cat or a dog — rex is a dog\./, "the example shows the engine's real by-cases verdict");
 });
 
 test("the showcase names the Polycode family projects and links to them", async () => {
