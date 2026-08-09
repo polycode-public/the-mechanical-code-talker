@@ -33,19 +33,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **`does X have Y` misses property inheritance through a taught `⊑` hop** — found live while
+  regenerating infbench for `PLAN_DL_ENGLISH_SURFACE.md`'s B3 (`reports/BENCHMARK_INFERENCE_5.0.28.md`),
+  pre-existing and unrelated to that plan's own changes. Example: teach "every argyle has a
+  receptacle", "e150.mjs is a argyle"; ask "does e150.mjs have a receptacle" — an honest miss
+  instead of the "yes" the stored someValuesFrom restriction plus the type assertion entail. 10 of
+  15 `b2PropertyInheritance` infbench rows (the `member` and `grandparent` variants) show this; the
+  `class-direct` variant (no individual involved) already passes. The gap sits in the `does X have
+  Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
+  ladder — a different code path from `PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
+  work.
 - [ ] **PLAN_SYLLOGIST_EL_DL.md — remaining phases** — paused at a clean seam; the plan doc
   states per-phase status. Landed: phases 0/0b, 1 (with `tmct classify` and `/classify`), 2 (EL
   wired into the ask lanes; E1/E2 answer end to end), 3 with 3b (`/prove`; E3/E4 answer end to
   end), 4a-4e (the full SHOIQ increment ladder), and 5 (consistency surfacing — `findTableauViolations`
   and a new `elUnsatisfiableClasses` run beside the cax-dw chase in chat and in `/memory verbose`).
-  The three open `inference.dl.*` corpus rows and the INF-8 ceiling markers are
-  `PLAN_DL_ENGLISH_SURFACE.md`'s, below. Next rounds: track 6 site/claims.
-- [ ] **PLAN_DL_ENGLISH_SURFACE.md — the whole plan** — DESIGN, nothing built. Track A adds the
-  two missing role-axiom teach frames (`owl:allValuesFrom`, `rdfs:subPropertyOf`) and the ABox
-  role reader `buildTableauKb` lacks, then lands the three open `inference.dl.*` rows as their
-  proof. Track B makes a missed yes/no question fall through to a bounded tableau proof, names a
-  by-cases answer's cases, and regenerates the infbench ceiling markers. Next rounds: A1-g/A1-k/A1-d
-  concurrently, then A2, A3, A4, then the serialized `chat.mjs` rounds B1 and B2, then B3.
+  Next rounds: track 6 site/claims.
 - [ ] **PLAN_NEWS_FEED.md — remaining phases** — landed: phases 0-6 (domain through the page,
   `/news` in chat and the CLI). Phases 7a/7b are built and green in worktree
   `agent-a7915144b53c56f2c` (branch of the same name), merge gated on one artifact: the

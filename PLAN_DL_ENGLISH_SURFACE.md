@@ -27,9 +27,23 @@ told apart from the ⊑-rule's own routine TBox-internalization disjunction by t
 conditions together (tracing to a real union/oneOf fact id, and every disjunct a bare atom or
 nominal — neither alone is reliable), and `proveByRefutation` surfaces the distinct disjuncts as
 a new `cases` field (capped at `MAX_PROVEN_CASES`, with the real count on `casesTotal`). Both
-`/prove` and the automatic fallback render it through one shared `renderProvedConclusion`. B3
-remains DESIGN, nothing built; every module path in section 10 marked "new" is a file or function
-that does not exist yet; every existing anchor below was read at HEAD.
+`/prove` and the automatic fallback render it through one shared `renderProvedConclusion`. B3 has
+landed: driving every INF-7/INF-8 case through the real chat arm before editing anything (section
+10's own discipline) found that `dlDisjunction` and `dlComplement` (12 rows) now answer for real —
+`unproven` → `yes`, ceiling field dropped — while `dlCardinalityClash` (8 rows) and
+`dlNominalEnumeration` (6 rows) measure unchanged, each for a specific, now-recorded reason rather
+than an assumption: `dlCardinalityClash`'s own query asks about the individual's own
+directly-asserted class, which chat answers through its direct-fact lookup before the isa ladder's
+miss cascade ever runs — the one place B1's ex-falso guard is wired in — so this query shape never
+reaches it; `dlNominalEnumeration`'s queried individual is never type-declared, so it routes
+through `proveSubsumption` rather than `proveEntailment`, and an unconstrained fresh individual
+satisfies both the positive and negative subsumption check — a genuine counter-model B1's own
+constitution renders as the unchanged miss, never a guess. INF-7 (14 rows) stays a ceiling too — its
+own gap (EL saturation for the "does X have Y" lane) is untouched by B1 — but its note text was
+stale in a different way (blaming ACE for declining a premise pattern 15 now teaches), corrected in
+the same pass, along with the two other stale note strings the plan named.
+`reports/BENCHMARK_INFERENCE_5.0.28.md` carries the full measurement. Every phase in this plan
+(A1 through B3) has now landed.
 
 `PLAN_SYLLOGIST_EL_DL.md` shipped a SHOIQ tableau. It proves transitive-role propagation, role
 hierarchies, nominals, qualified cardinality and inverse roles, with a test file per increment. Two
