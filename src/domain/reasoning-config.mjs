@@ -16,6 +16,13 @@ export const DEFAULT_REASONING_CONFIG = Object.freeze({
   proveSteps: 5000,
   proveBranches: 256,
   proveNodes: 512,
+  // The automatic /prove fallback's OWN, tighter budget — kept apart from
+  // prove_steps/branches/nodes above so raising the command's budget never
+  // slows every ordinary question that falls through to it on a miss.
+  askProveFallback: true,
+  askProveSteps: 1000,
+  askProveBranches: 64,
+  askProveNodes: 128,
 });
 
 // snake_case tmct.toml key -> camelCase internal key — mirrors game-config.mjs's own KEY_MAP tables.
@@ -28,6 +35,16 @@ const REASONING_KEY_MAP = Object.freeze({
   prove_steps: "proveSteps",
   prove_branches: "proveBranches",
   prove_nodes: "proveNodes",
+  ask_prove_steps: "askProveSteps",
+  ask_prove_branches: "askProveBranches",
+  ask_prove_nodes: "askProveNodes",
+});
+
+// The one boolean knob in this table — folded through clampBoolean, never
+// clampPositiveInt, because clampPositiveInt rejects 0 and would silently
+// restore the default the moment someone tried to set ask_prove_fallback = 0.
+const REASONING_BOOLEAN_KEY_MAP = Object.freeze({
+  ask_prove_fallback: "askProveFallback",
 });
 
 /** A positive-integer knob, clamped to its shipped default when the raw value
@@ -36,6 +53,13 @@ const REASONING_KEY_MAP = Object.freeze({
 function clampPositiveInt(raw, fallback) {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+/** A boolean knob, clamped to its shipped default when the raw value isn't
+ *  literally `true` or `false` — the same corrupt-value-degrades-to-default
+ *  contract clampPositiveInt gives every numeric knob. */
+function clampBoolean(raw, fallback) {
+  return typeof raw === "boolean" ? raw : fallback;
 }
 
 /**
@@ -51,6 +75,9 @@ export function resolveReasoningConfig(toml) {
   const out = { ...DEFAULT_REASONING_CONFIG };
   for (const [tomlKey, camelKey] of Object.entries(REASONING_KEY_MAP)) {
     if (raw[tomlKey] !== undefined) out[camelKey] = clampPositiveInt(raw[tomlKey], DEFAULT_REASONING_CONFIG[camelKey]);
+  }
+  for (const [tomlKey, camelKey] of Object.entries(REASONING_BOOLEAN_KEY_MAP)) {
+    if (raw[tomlKey] !== undefined) out[camelKey] = clampBoolean(raw[tomlKey], DEFAULT_REASONING_CONFIG[camelKey]);
   }
   return out;
 }

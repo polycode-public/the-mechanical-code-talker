@@ -132,6 +132,37 @@ function clampNonNegativeInt(value, fallback) {
 
 const CODE_REF_SHAPE = /[./\\#:@]/;
 
+/** Which terms count as named individuals, widened past a bare type
+ *  declaration: a term chained to an already TYPE-DECLARED individual by an
+ *  asserted relation (a `candidateRows` row — the same predicate-outside-the-
+ *  recognised-vocabulary test both buildTableauKb and extractTableauModule
+ *  apply before calling this) is itself a named individual too, one hop at a
+ *  time until nothing new is found. Without this, a chain of taught
+ *  relations between DECLARED PROPER NAMES that are never separately typed
+ *  ("GitHub is a module" types github; "GitHub contains GitLab; GitLab
+ *  contains Polycode" never types gitlab or polycode at all) reads its first
+ *  hop as an ABox edge and every later hop as a class-level relation between
+ *  two unrecognised terms — silently dropping the very edges a role-
+ *  hierarchy or transitive-role proof needs to walk. Seeded ONLY from
+ *  `seedNames` (never from a CODE_REF_SHAPE match) so a code-reference-looking
+ *  term related to an ordinary class never promotes that class to individual
+ *  status by chaining — CODE_REF_SHAPE stays its own, separate per-term test
+ *  at the `isIndividualTerm` call sites. Bounded by `candidateRows.length`
+ *  passes, and `candidateRows` is always already module-extracted (small)
+ *  rather than the raw store. Pure. */
+function chainedIndividualTerms(seedNames, candidateRows) {
+  const names = new Set(seedNames);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const r of candidateRows) {
+      if (names.has(r.subject) && !names.has(r.object)) { names.add(r.object); grew = true; }
+      if (names.has(r.object) && !names.has(r.subject)) { names.add(r.subject); grew = true; }
+    }
+  }
+  return names;
+}
+
 // ---- role hierarchy closure -------------------------------------------
 
 /** A memoized forward walk over `edges` ([[from, to], …]): returns a
@@ -165,24 +196,51 @@ function buildForwardWalk(edges) {
  *  edges count as that role's own edges under `rdfs:subPropertyOf` —
  *  every role at or below it in the hierarchy. `subPropertyEdges` is
  *  `[[sub, sup], …]`. Precomputed once per KB, so a rule reading "does this
- *  edge satisfy role X" is one Set lookup, not a walk. */
+ *  edge satisfy role X" is one Set lookup, not a walk. Every role name is
+ *  folded through `localRoleName` on the way in, so the closure is keyed and
+ *  valued in one canonical form regardless of whether a caller's role names
+ *  came from a term (already namespace-stripped, e.g. an owl:onProperty
+ *  object) or from an edge's own literal predicate (an asserted role
+ *  assertion's `r`, kept verbatim elsewhere for citation) — roleCountsAs
+ *  folds an edge's role the same way before ever consulting this map. */
 function buildRoleClosure(subPropertyEdges, roleNames) {
-  const subRolesOf = buildForwardWalk((subPropertyEdges || []).map(([sub, sup]) => [sup, sub]));
+  const edges = (subPropertyEdges || []).map(([sub, sup]) => [localRoleName(sub), localRoleName(sup)]);
+  const subRolesOf = buildForwardWalk(edges.map(([sub, sup]) => [sup, sub]));
   const closure = new Map();
-  for (const role of roleNames) closure.set(role, new Set([role, ...subRolesOf(role)]));
+  for (const role of roleNames) {
+    const key = localRoleName(role);
+    closure.set(key, new Set([key, ...subRolesOf(key)]));
+  }
   return closure;
 }
+
+/** An asserted ABox role edge's own `r` keeps its citation-facing spelling
+ *  verbatim (kb.roleAssertions, so a rendered answer can quote the real
+ *  predicate — "tmct:contains", not "contains"). Every role-AXIOM value
+ *  (owl:onProperty's object, rdfs:subPropertyOf's and owl:inverseOf's
+ *  subject/object, a transitive-property declaration's subject) is a TERM,
+ *  and every writer already strips a term's CURIE namespace before storage
+ *  (normFactTerm) — so the two spellings of the SAME role diverge unless
+ *  role-hierarchy/transitivity/inverse matching folds an edge's role through
+ *  the same normalization before comparing. */
+const localRoleName = (role) => normFactTerm(role);
 
 /** Does an edge labelled `edgeRole` satisfy a rule asking for `role`? True
  *  when they're the same role, or when `edgeRole` is a declared sub-role of
  *  `role` under the KB's precomputed role closure. With no closure entry for
  *  `role` (it never appeared in a stored `owl:onProperty` or
  *  `rdfs:subPropertyOf` row), only an exact match counts — the same
- *  behaviour every rule had before role hierarchies existed. */
+ *  behaviour every rule had before role hierarchies existed. Both arguments
+ *  are folded through `localRoleName` before comparing: `role` is usually
+ *  already-normalized (threaded from an axiom's own `expr.r`, itself read
+ *  from a stripped owl:onProperty object), but a hand-built KB with no
+ *  restriction at all may pass an edge's own literal spelling on both sides. */
 function roleCountsAs(kb, edgeRole, role) {
-  if (edgeRole === role) return true;
-  const counted = kb && kb.roleClosure ? kb.roleClosure.get(role) : null;
-  return counted ? counted.has(edgeRole) : false;
+  const normEdgeRole = localRoleName(edgeRole);
+  const normRole = localRoleName(role);
+  if (normEdgeRole === normRole) return true;
+  const counted = kb && kb.roleClosure ? kb.roleClosure.get(normRole) : null;
+  return counted ? counted.has(normEdgeRole) : false;
 }
 
 /** Every target a role-`role` edge from `nodeId` reaches, reading BOTH the
@@ -198,7 +256,7 @@ function roleEdgeTargets(branch, kb, nodeId, role) {
     if (e.from === nodeId && roleCountsAs(kb, e.r, role)) {
       targets.push({ to: e.to, fromFacts: e.fromFacts });
     } else if (e.to === nodeId) {
-      const inv = kb && kb.inverseOf ? kb.inverseOf.get(e.r) : null;
+      const inv = kb && kb.inverseOf ? kb.inverseOf.get(localRoleName(e.r)) : null;
       if (inv && roleCountsAs(kb, inv, role)) targets.push({ to: e.from, fromFacts: e.fromFacts });
     }
   }
@@ -227,6 +285,11 @@ export const DEFAULT_MODULE_HOPS = 4;
  *  size bound for termination, applied after sorting so truncation is
  *  deterministic rather than arrival-ordered. */
 export const MAX_ROLE_ASSERTIONS = 256;
+/** Caps how many distinct case-analysis disjuncts a proved verdict names —
+ *  a rendered-sentence bound, not a search bound: a proof that split fifty
+ *  ways should read as one sentence naming a count, never a paragraph.
+ *  Applied after the sort, so truncation is deterministic. */
+export const MAX_PROVEN_CASES = 6;
 
 // ---- identity: the UNA-lite merge machinery --------------------------------
 //
@@ -442,7 +505,10 @@ function cloneBranch(branch) {
       successorCount: node.successorCount,
     });
   }
-  return { nodes, edges: branch.edges.slice(), closed: false, clash: null, inequalityFrom: new Map(branch.inequalityFrom) };
+  return {
+    nodes, edges: branch.edges.slice(), closed: false, clash: null,
+    inequalityFrom: new Map(branch.inequalityFrom), choices: (branch.choices || []).slice(),
+  };
 }
 
 // ---- the expansion rules, fixed priority -----------------------------
@@ -540,6 +606,33 @@ function wouldClashFrom(node, expr) {
   return other ? other.from : null;
 }
 
+/** Is this disjunction a genuine case analysis — an owl:unionOf/owl:oneOf's
+ *  own unwrapped `orE(members)` — rather than the ⊑-rule's routine TBox
+ *  internalization (`mkAxiom`'s own `orE([notE(sub), sup])`, ALWAYS carrying
+ *  a top-level negated member and firing on every axiom, union or not)? The
+ *  two shapes are reliably told apart structurally, with no need to trace
+ *  back to which fact row minted the axiom: a routine internalization's
+ *  disjunct list always has at least one top-level `not`; a genuine
+ *  union/oneOf split — reached only once its OWN wrapping internalization
+ *  step has already fired and unwrapped it onto the node — never does. */
+/** Is this disjunction a genuine case analysis — an owl:unionOf/owl:oneOf's
+ *  own unwrapped `orE(members)` — rather than the ⊑-rule's routine TBox
+ *  internalization (`mkAxiom`'s own `orE([notE(sub), sup])`, which fires on
+ *  every axiom, union axioms included in BOTH directions, and is not a case
+ *  analysis)? Two conditions together, since either alone has a false
+ *  positive: `from` tracing to a real owl:unionOf/owl:oneOf fact id alone
+ *  still matches the union axiom's OWN internalization step (same `from`,
+ *  but a `¬union ∨ …`-shaped disjunct list); every member being a bare atom
+ *  or nominal alone still matches an unrelated axiom's internalization
+ *  after double-negation happens to cancel out a `not` tag. Together they
+ *  land on exactly the moment a union/oneOf's own members reach a node
+ *  unwrapped — the union's synthesized name has already been eliminated by
+ *  then, kept only in `from`'s provenance, never as a disjunct. */
+function isGenuineDisjunction(kb, cs, from) {
+  return from.some((id) => kb.unionOrOneOfIds && kb.unionOrOneOfIds.has(id))
+    && cs.every((c) => c.t === "atom" || c.t === "nom");
+}
+
 /** The disjunctive rule. Non-branching shortcuts first (a disjunct already
  *  present needs no branch; only one live disjunct needs no branch; zero
  *  live disjuncts closes the branch outright) — each is sound, since the
@@ -547,8 +640,11 @@ function wouldClashFrom(node, expr) {
  *  skip branches whose outcome is already decided. An eliminated disjunct's
  *  own clash provenance carries forward into whatever survives it, so a
  *  proof's premise set names the fact that ruled the alternative out, not
- *  just the axiom that offered it. */
-function applyOrRule(branch) {
+ *  just the axiom that offered it. A genuine (isGenuineDisjunction) firing
+ *  also returns `choice: { cs, from }` — the full disjunct list offered,
+ *  BEFORE elimination, so a proved conclusion can name every case it
+ *  reasoned over, not just the one that survived. */
+function applyOrRule(branch, kb) {
   for (const node of branch.nodes.values()) {
     for (const [key, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "or") continue;
@@ -561,19 +657,21 @@ function applyOrRule(branch) {
       const evaluated = cs.map((c) => ({ c, clashFrom: wouldClashFrom(node, c) }));
       const survivors = evaluated.filter((e) => e.clashFrom === null).map((e) => e.c);
       const eliminatedFrom = evaluated.filter((e) => e.clashFrom !== null).flatMap((e) => e.clashFrom);
+      const choice = isGenuineDisjunction(kb, cs, from) ? { cs, from } : null;
       if (survivors.length === 0) {
         return {
           kind: "clash",
           clash: { nodeId: node.id, keyA: canonicalKey(cs[0]), keyB: canonicalKey(toNNF(notE(cs[0]))), premises: sortedUnique([...from, ...eliminatedFrom]) },
+          choice,
         };
       }
       if (survivors.length === 1) {
         node.branchedOn.add(key);
         addLabel(node, survivors[0], [...from, ...eliminatedFrom]);
-        return { kind: "applied", touched: [node.id] };
+        return { kind: "applied", touched: [node.id], choice };
       }
       node.branchedOn.add(key);
-      return { kind: "split", node, from, disjuncts: survivors };
+      return { kind: "split", node, from, disjuncts: survivors, choice };
     }
   }
   return { kind: "none" };
@@ -711,9 +809,15 @@ function stepOnce(branch, kb) {
   const tbox_ = applyTboxRule(branch, kb);
   if (tbox_.applied) return afterTouch(branch, tbox_.touched);
 
-  const or_ = applyOrRule(branch);
+  const or_ = applyOrRule(branch, kb);
   if (or_.kind === "clash") return or_;
-  if (or_.kind === "applied") return afterTouch(branch, or_.touched);
+  if (or_.kind === "applied") {
+    // A single-survivor elimination never clones — the SAME branch keeps
+    // running, so its own choice list is the one true record of every
+    // genuine case this branch's proof actually reasoned through.
+    if (or_.choice) branch.choices.push(or_.choice);
+    return afterTouch(branch, or_.touched);
+  }
   if (or_.kind === "split") return or_;
 
   const atMost_ = applyAtMostRule(branch, kb);
@@ -764,7 +868,12 @@ function search(initialBranch, kb, opts) {
     for (;;) {
       const result = stepOnce(branch, kb);
       if (result.kind === "clash") {
-        closedClashes.push(result.clash);
+        // applyOrRule's own clash (every disjunct of a genuine union/oneOf
+        // split eliminated — the disjunction itself is what closes this
+        // branch) carries its own fresh choice on `result.choice`, on top
+        // of whatever this branch already accumulated from earlier firings.
+        const choices = result.choice ? [...branch.choices, result.choice] : branch.choices.slice();
+        closedClashes.push({ ...result.clash, choices });
         break;
       }
       if (result.kind === "applied") {
@@ -778,10 +887,11 @@ function search(initialBranch, kb, opts) {
         if (steps > maxSteps) return { status: "exhausted", reason: "steps", steps, branches: branchesOpened };
         const children = result.disjuncts.map((d) => {
           const clone = cloneBranch(branch);
+          if (result.choice) clone.choices.push(result.choice);
           const cnode = clone.nodes.get(result.node.id);
           addLabel(cnode, d, result.from);
           const clash = detectClash(cnode);
-          if (clash) { clone.closed = true; clone.clash = clash; }
+          if (clash) { clone.closed = true; clone.clash = { ...clash, choices: clone.choices.slice() }; }
           return clone;
         });
         for (let i = children.length - 1; i >= 0; i -= 1) {
@@ -799,7 +909,7 @@ function search(initialBranch, kb, opts) {
           const keepId = mergeNodes(clone, kb, a, b);
           const keepNode = clone.nodes.get(keepId);
           const clash = keepNode && detectClash(keepNode);
-          if (clash) { clone.closed = true; clone.clash = clash; }
+          if (clash) { clone.closed = true; clone.clash = { ...clash, choices: clone.choices.slice() }; }
           return clone;
         });
         for (let i = children.length - 1; i >= 0; i -= 1) {
@@ -855,7 +965,7 @@ function buildInitialBranch(kb, extraAssertions) {
     edges.push({ from: ra.a, r: ra.r, to: ra.b, fromFacts: ra.from.slice() });
   }
 
-  return { nodes, edges, closed: false, clash: null, inequalityFrom };
+  return { nodes, edges, closed: false, clash: null, inequalityFrom, choices: [] };
 }
 
 /** Is the KB plus the given assertions satisfiable? `extraAssertions` is
@@ -870,7 +980,7 @@ export function isSatisfiable(kb, extraAssertions = [], opts = {}) {
   // not just the ones the search loop discovers along the way.
   for (const node of branch.nodes.values()) {
     const clash = detectClash(node);
-    if (clash) { branch.closed = true; branch.clash = clash; break; }
+    if (clash) { branch.closed = true; branch.clash = { ...clash, choices: [] }; break; }
   }
   const result = search(branch, kb, opts);
   if (result.status === "exhausted") {
@@ -887,7 +997,22 @@ function proveByRefutation(kb, extraAssertions, opts) {
   if (result.satisfiable === null) return { status: "exhausted", reason: result.exhausted, steps: result.steps, branches: result.branches };
   if (result.satisfiable === false) {
     const premises = sortedUnique(result.closedClashes.flatMap((c) => c?.premises || []));
-    return { status: "proved", premises, steps: result.steps, branches: result.branches };
+    // The distinct case-analysis disjuncts every closed branch actually
+    // reasoned over — the union node's own genuine split (isGenuineDisjunction),
+    // never the ⊑-rule's routine internalization disjunction every proof
+    // passes through regardless of a union/oneOf premise. Deduped by
+    // canonicalKey (the SAME union offered on two different branches names
+    // its cases once), sorted for determinism, capped for readability.
+    const caseExprsByKey = new Map();
+    for (const clash of result.closedClashes) {
+      for (const choice of clash?.choices || []) {
+        for (const expr of choice.cs) caseExprsByKey.set(canonicalKey(expr), expr);
+      }
+    }
+    const sortedCaseKeys = [...caseExprsByKey.keys()].sort();
+    const cases = sortedCaseKeys.slice(0, MAX_PROVEN_CASES).map((k) => caseExprsByKey.get(k));
+    const casesTotal = sortedCaseKeys.length;
+    return { status: "proved", premises, cases, casesTotal, steps: result.steps, branches: result.branches };
   }
   return { status: "disproved", model: result.model, steps: result.steps, branches: result.branches };
 }
@@ -911,6 +1036,19 @@ export function proveEntailment(kb, subject, concept, opts = {}) {
  *  rendered answer. */
 export function proveSubsumption(kb, subClass, superClass, opts = {}) {
   const query = toNNF(andE([atom(subClass), notE(atom(superClass))]));
+  return proveByRefutation(kb, [{ ind: "fresh-0", expr: query, from: [] }], opts);
+}
+
+/** Class subsumption of a NEGATED superclass by refutation: does the KB
+ *  entail `subClass ⊑ ¬superClass`? Same fresh-individual technique as
+ *  proveSubsumption, asserting `subClass ⊓ superClass` (unsatisfiable ⟺ the
+ *  negation is entailed) rather than `subClass ⊓ ¬superClass`. The
+ *  class-level counterpart of calling proveEntailment with `notE(concept)`
+ *  directly — proveSubsumption's own signature takes a class name rather
+ *  than an arbitrary concept, so there is no concept argument to negate at
+ *  that call site. */
+export function proveSubsumptionOfNegation(kb, subClass, superClass, opts = {}) {
+  const query = toNNF(andE([atom(subClass), atom(superClass)]));
   return proveByRefutation(kb, [{ ind: "fresh-0", expr: query, from: [] }], opts);
 }
 
@@ -996,7 +1134,8 @@ export function buildTableauKb(rows) {
     const obj = String(r.object || "").toLowerCase();
     if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
   }
-  const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
+  const individualNames = chainedIndividualTerms(individualNamesFromType, roleAssertionCandidates);
+  const isIndividualTerm = (term) => individualNames.has(term) || CODE_REF_SHAPE.test(term);
 
   // An asserted role edge between two named individuals: any predicate
   // outside the recognised OWL/RDFS vocabulary, both of whose terms resolve
@@ -1131,9 +1270,19 @@ export function buildTableauKb(rows) {
   ])].sort();
   const namedIndividuals = new Set(individuals);
 
+  // Every owl:unionOf/owl:oneOf row's own fact id — how applyOrRule tells a
+  // genuine case-analysis disjunction (a union/oneOf's own unwrapped
+  // members) from the ⊑-rule's routine TBox-internalization disjunction,
+  // which every axiom (union axioms included, in BOTH directions) also
+  // fires and which must never be read as a case split.
+  const unionOrOneOfIds = new Set([
+    ...[...unionMembersOf.values()].flatMap((rows) => rows.map((r) => r.id)),
+    ...[...oneOfMembersOf.values()].flatMap((rows) => rows.map((r) => r.id)),
+  ]);
+
   return {
     axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure,
-    namedIndividuals, nominalIndividuals, differentFrom, inverseOf, roleAssertions,
+    namedIndividuals, nominalIndividuals, differentFrom, inverseOf, roleAssertions, unionOrOneOfIds,
   };
 }
 
@@ -1150,6 +1299,7 @@ function restrictKbToIndividual(kb, ind) {
     nominalIndividuals: kb.nominalIndividuals,
     differentFrom: kb.differentFrom,
     inverseOf: kb.inverseOf,
+    unionOrOneOfIds: kb.unionOrOneOfIds,
   };
 }
 
@@ -1220,7 +1370,9 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     const obj = String(r.object || "").toLowerCase();
     if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
   }
-  const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
+  const roleAssertionCandidateRows = list.filter((r) => !RECOGNISED_KB_PREDICATES.has(String(r.predicate).trim().toLowerCase()));
+  const individualNames = chainedIndividualTerms(individualNamesFromType, roleAssertionCandidateRows);
+  const isIndividualTerm = (term) => individualNames.has(term) || CODE_REF_SHAPE.test(term);
 
   for (const r of list) {
     const p = String(r.predicate).trim().toLowerCase();
@@ -1298,15 +1450,49 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     for (const other of roleAssertionEndpoints.get(term) || []) enqueue(other, hopBudget);
   }
 
+  // rolesUsed is compared below against a rdfs:subPropertyOf/owl:inverseOf/
+  // transitive-property row's own SUBJECT — a term, already namespace-stripped
+  // by every writer (normFactTerm) — so a role assertion's own predicate
+  // (kept verbatim elsewhere for citation) is normalized the same way
+  // buildTableauKb's own role-hierarchy matching is (see localRoleName there).
   const rolesUsed = new Set();
-  for (const [restriction, role] of onPropertyOf) if (included.has(restriction)) rolesUsed.add(role);
-  for (const r of roleAssertionRows) if (included.has(r.subject) || included.has(r.object)) rolesUsed.add(r.predicate);
+  for (const [restriction, role] of onPropertyOf) if (included.has(restriction)) rolesUsed.add(localRoleName(role));
+  for (const r of roleAssertionRows) if (included.has(r.subject) || included.has(r.object)) rolesUsed.add(localRoleName(r.predicate));
 
   return list.filter((r) => {
     if (included.has(r.subject) || included.has(r.object)) return true;
     const p = String(r.predicate).trim().toLowerCase();
-    if (p === "rdfs:subpropertyof" || p === "owl:inverseof") return rolesUsed.has(r.subject);
-    if (p === "rdf:type" && String(r.object).toLowerCase() === "transitiveproperty") return rolesUsed.has(r.subject);
+    if (p === "rdfs:subpropertyof" || p === "owl:inverseof") return rolesUsed.has(localRoleName(r.subject));
+    if (p === "rdf:type" && String(r.object).toLowerCase() === "transitiveproperty") return rolesUsed.has(localRoleName(r.subject));
     return false;
+  });
+}
+
+// The row shapes a plain subclass chase (the isa ladder, /classify,
+// /syllogise) never reads — moduleHasDlShape's own vocabulary, kept apart
+// from RECOGNISED_KB_PREDICATES above since that set also names shapes the
+// chases DO read (owl:onProperty, owl:someValuesFrom, owl:onClass,
+// rdfs:subClassOf, owl:disjointWith, rdf:type, mgxneg:subClassOf).
+const DL_SHAPE_PREDICATES = new Set([
+  "owl:unionof", "owl:complementof", "owl:oneof", "owl:allvaluesfrom",
+  "owl:mincardinality", "owl:maxcardinality", "owl:cardinality",
+  "rdfs:subpropertyof", "owl:inverseof",
+]);
+
+/** Does this module hold any axiom shape the plain subclass chases cannot
+ *  read? True when some row's predicate is owl:unionOf, owl:complementOf,
+ *  owl:oneOf, owl:allValuesFrom, a cardinality predicate, or a role axiom
+ *  (rdfs:subPropertyOf, owl:inverseOf, or a `rdf:type
+ *  owl:TransitiveProperty` declaration). Without one of these the tableau
+ *  can only redo the subclass walk the chases just finished, so running it
+ *  would spend a budget to reach the same miss they already reached —
+ *  this is the gate that keeps chat's automatic /prove fallback off the
+ *  ordinary hot path. Pure, no I/O. */
+export function moduleHasDlShape(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.some((r) => {
+    const p = String(r?.predicate || "").trim().toLowerCase();
+    if (DL_SHAPE_PREDICATES.has(p)) return true;
+    return p === "rdf:type" && String(r?.object || "").toLowerCase() === "transitiveproperty";
   });
 }

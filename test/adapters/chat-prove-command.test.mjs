@@ -54,7 +54,7 @@ test("/prove proves disjunction elimination (E3), citing the union, the subclass
     assert.match(answer, /rex is a pet/);
     assert.match(answer, /rex is not a cat/);
     assert.match(answer, /pet is a kind of cat-or-dog/);
-    assert.match(answer, /in every case, rex is a dog\./);
+    assert.match(answer, /in every case — a cat or a dog — rex is a dog\./);
     assert.equal(record.miss, false);
   } finally {
     await rm(dir, { recursive: true, force: true });

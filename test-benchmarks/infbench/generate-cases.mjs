@@ -795,13 +795,17 @@ function c2Inconsistent(rng) {
 // INF-7 — Constructed restriction (OWL 2 EL). Classify THROUGH class
 // expressions that were never declared as graph nodes — nested existentials
 // and existential chains — which needs EL saturation, a different algorithm
-// from forward-chaining. ACE has no bare-existential teach frame ("every heart
-// has a valve" is declined, exactly as "some Ns are Ns" is in b1Existential),
-// so — like that template — the premise is NOT lint()ed: the grammar declining
-// the sentence IS the setup, and any confident "yes" is a fabrication the probe
-// exists to catch. Ceiling markers until PLAN_SYLLOGIST_EL_DL.md Stage EL ships;
-// the honest floor today is a miss (unproven). Corpus/persona-clean nouns only,
-// so a "yes" can only come from EL saturation, never a seeded fact.
+// from forward-chaining. ACE's bare-existential teach frame (pattern 15)
+// stores both premises here fine — "every N1 has a N2" mints a
+// someValuesFrom restriction — so this is no longer about whether the
+// sentence can be TAUGHT. What is still missing is the query: the "does a
+// N1 have a N3" lane (DOES_HAVE_ASK_RE) answers a restriction's own DIRECT
+// filler, never a two-hop composition through an undeclared intermediate
+// class expression, and B1's automatic /prove fallback doesn't reach this
+// lane either — it only fires from the isa ladder's own miss. Ceiling
+// markers until PLAN_SYLLOGIST_EL_DL.md Stage EL ships; the honest floor
+// today is a miss (unproven). Corpus/persona-clean nouns only, so a "yes"
+// can only come from EL saturation, never a seeded fact.
 // ======================================================================
 const EL_CEILING = "OWL 2 EL saturation (Stage EL, PLAN_SYLLOGIST_EL_DL.md): classify through class expressions the graph never declared as nodes";
 
@@ -813,8 +817,9 @@ function elConstructedRestriction(rng) {
     const { picked, next } = pickClean(shuffled, cursor, 3);
     cursor = next;
     const [n1, n2, n3] = picked;
-    // n1 ⊑ ∃has.n2, n2 ⊑ n3 ⊢ n1 ⊑ ∃has.n3 (E1). The first premise is the
-    // undeclared restriction EL constructs; ACE declines it, so it is unlinted.
+    // n1 ⊑ ∃has.n2, n2 ⊑ n3 ⊢ n1 ⊑ ∃has.n3 (E1). Both premises store fine
+    // today (pattern 15's bare-existential frame); what the query still
+    // needs is EL saturation composing through the undeclared restriction.
     const premises = [`every ${n1} has a ${n2}`, `every ${n2} is a ${n3}`];
     const query = `does a ${n1} have a ${n3}`;
     cases.push(mkCase({
@@ -822,7 +827,7 @@ function elConstructedRestriction(rng) {
       arms: ["chat"], checkType: "isa",
       premises, query, expect: { verdict: "unproven", entailed: [] },
       ceiling: EL_CEILING,
-      note: "E1 (PLAN_SYLLOGIST_EL_DL.md): a nested existential the graph never declared as a node. ACE has no bare-existential teach frame, so 'every N has a N' is declined and the premise is unlinted (as in b1Existential) — the honest floor today is a miss, and only real EL saturation, never a seeded fact, could turn it into a yes.",
+      note: "E1 (PLAN_SYLLOGIST_EL_DL.md): a nested existential the graph never declared as a node. Both premises store today through pattern 15's bare-existential teach frame — the gap is no longer whether the sentence can be taught, but composing the two-hop query through the undeclared restriction, which needs real EL saturation the 'does X have Y' lane doesn't have.",
     }));
   }
   return cases;
@@ -844,7 +849,7 @@ function elExistentialChain(rng) {
       arms: ["chat"], checkType: "isa",
       premises, query, expect: { verdict: "unproven", entailed: [] },
       ceiling: EL_CEILING,
-      note: "E2 (PLAN_SYLLOGIST_EL_DL.md): composing two existentials through undeclared intermediate class expressions. Unlinted (ACE declines the bare existential); honest miss floor until Stage EL composes the chain.",
+      note: "E2 (PLAN_SYLLOGIST_EL_DL.md): composing two existentials through undeclared intermediate class expressions. Both premises store today through pattern 15's bare-existential frame; honest miss floor until Stage EL composes the chain.",
     }));
   }
   return cases;
@@ -854,16 +859,17 @@ function elExistentialChain(rng) {
 // INF-8 — Reasoning by cases (OWL 2 DL) and disjointness-sound proof. Case
 // analysis — disjunction elimination, complement classes — needs a tableau
 // with branching (⊔, ¬), the first tmct conclusions that require reasoning by
-// cases. ACE declines "or", "not" and complement frames (they are retraction
-// triggers / unparsed, exactly as PLAN_SYLLOGIST_EL_DL.md E3/E4 note), so those
-// premises are unlinted ceiling markers until Stage DL. The disjointness-proof-
-// soundness case is different: its premises ALL parse and it grades a LIVE
-// capability — the is-a ladder consults every stored owl:disjointWith ahead of
-// certifying a yes, so a subclass chain crossing a stored disjointness refuses
-// by naming both facts instead of laundering the contradiction as a proof.
+// cases. ACE's "or"/"not"/complement frames (patterns 9-11) all ship now,
+// and PLAN_DL_ENGLISH_SURFACE.md's B1 fallback lets a plain isa question
+// that misses every live chase fall through to a bounded automatic tableau
+// proof — so dlDisjunction/dlComplement below both measure real, gated on
+// their union/complement premise carrying a genuine DL shape. The
+// disjointness-proof-soundness case is a different, already-shipped
+// capability: its premises ALL parse and it grades a LIVE one — the is-a
+// ladder consults every stored owl:disjointWith ahead of certifying a yes,
+// so a subclass chain crossing a stored disjointness refuses by naming both
+// facts instead of laundering the contradiction as a proof.
 // ======================================================================
-const DL_DISJUNCTION_CEILING = "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation";
-const DL_COMPLEMENT_CEILING = "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation";
 
 function dlDisjunction(rng) {
   const cases = [];
@@ -875,16 +881,17 @@ function dlDisjunction(rng) {
     const [n1, n2, n3] = picked;
     const ind = mintIndividual();
     // every n1 is a n2 or a n3; ind is a n1; ind is not a n2 ⊢ ind is a n3 (E3).
-    // "or" and "not" are both declined by ACE, so the disjunction can't even be
-    // stated today — unlinted, honest miss floor.
+    // Both "or" (pattern 9) and "not" (individual-negative teach) store real
+    // triples today, and ind's own type ("ind is a n1") routes the plain
+    // question through the isa ladder's miss, gated to B1's automatic
+    // fallback — a real union-driven proof, verified live.
     const premises = [`every ${n1} is a ${n2} or a ${n3}`, `${ind} is a ${n1}`, `${ind} is not a ${n2}`];
     const query = `is ${ind} a ${n3}`;
     cases.push(mkCase({
       band: "INF-8", template: "dlDisjunction", variant: "disjunction-elimination",
       arms: ["chat"], checkType: "isa",
-      premises, query, expect: { verdict: "unproven", entailed: [] },
-      ceiling: DL_DISJUNCTION_CEILING,
-      note: "E3 (PLAN_SYLLOGIST_EL_DL.md): disjunction elimination — the first conclusion needing reasoning by cases. ACE declines both 'or' (no unionOf frame) and 'not' (a retraction trigger, not a negative assertion), so the knowledge can't be stated today, let alone used: an honest miss, unlinted.",
+      premises, query, expect: { verdict: "yes", entailed: [] },
+      note: "E3 (PLAN_SYLLOGIST_EL_DL.md): disjunction elimination — the first conclusion needing reasoning by cases. Every premise stores today (pattern 9's owl:unionOf frame, the individual-negative teach path), and the plain question falls through to B1's automatic /prove fallback: proved yes, citing the union it split on.",
     }));
   }
   return cases;
@@ -899,16 +906,17 @@ function dlComplement(rng) {
     cursor = next;
     const [n1, n2] = picked;
     const ind = mintIndividual();
-    // everything not-n1 is n2; ind is not n1 ⊢ ind is n2 (E4). complementOf is
-    // unrepresentable in the graph vocabulary today — unlinted miss floor.
+    // everything not-n1 is n2; ind is not n1 ⊢ ind is n2 (E4). Pattern 11's
+    // owl:complementOf frame stores the first premise today, and ind's own
+    // negative type ("ind is not n1") routes the plain question through the
+    // isa ladder's miss to B1's automatic fallback.
     const premises = [`everything that is not a ${n1} is a ${n2}`, `${ind} is not a ${n1}`];
     const query = `is ${ind} a ${n2}`;
     cases.push(mkCase({
       band: "INF-8", template: "dlComplement", variant: "complement",
       arms: ["chat"], checkType: "isa",
-      premises, query, expect: { verdict: "unproven", entailed: [] },
-      ceiling: DL_COMPLEMENT_CEILING,
-      note: "E4 (PLAN_SYLLOGIST_EL_DL.md): complement classes. complementOf does not exist in the graph vocabulary, so 'everything that is not X is Y' is unrepresentable — an honest miss, unlinted, until Stage DL.",
+      premises, query, expect: { verdict: "yes", entailed: [] },
+      note: "E4 (PLAN_SYLLOGIST_EL_DL.md): complement classes. Pattern 11's owl:complementOf frame stores 'everything that is not X is Y' today, and the plain question falls through to B1's automatic /prove fallback: proved yes as a single deduction, not a case split.",
     }));
   }
   return cases;
