@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T06:18:52.116Z",
-  "commit": "66385da2e0a2c7fd1509b81a990cdac00630b615",
+  "generatedAt": "2026-08-09T07:51:22.459Z",
+  "commit": "5a73b5582395c01b1bdf8db327a5600237405771",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -30,12 +30,12 @@
       "tier2-java",
       "wordnet-xl"
     ],
-    "seedFacts": 64371,
-    "answered": 1,
+    "seedFacts": 61724,
+    "answered": 14,
     "correctOfAnswered": 0,
-    "refused": 2,
-    "abstained": 97,
-    "sourceEdgePresent": 2,
+    "refused": 11,
+    "abstained": 75,
+    "sourceEdgePresent": 30,
     "correctWhenSourceEdgePresent": 0,
     "scorer": "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     "missedIds": [
