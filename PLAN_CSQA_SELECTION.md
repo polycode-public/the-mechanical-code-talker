@@ -516,6 +516,12 @@ Then the rig. Expected: `answered` about 27, `correctOfAnswered` about 10, `refu
 correct. The separated band is small, so a round that comes back level is a real possibility and gets
 recorded as one rather than retried with a different rule.
 
+**Measured (S3):** `answered` 21, `correctOfAnswered` 5, `refused` 22, `abstained` 57,
+`sourceEdgePresent` 30, `correctWhenSourceEdgePresent` 2. One tie separated (21 answered vs. S2's
+20) and it was correct (5 vs. S2's 4). Below the 27/10 projection — the separated band on this
+fixture is smaller than the oracle-topic measurement in section 2.6 predicted, consistent with
+S1's own topic reads already landing below their own projection.
+
 ---
 
 ## 7. Phase S4 — the rig columns and the claims block

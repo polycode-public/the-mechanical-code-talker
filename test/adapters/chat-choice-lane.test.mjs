@@ -541,3 +541,117 @@ test("a stem with more constraint terms than the budget pulls the first five in 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- constraint separation (S3) ----
+
+const SNAKE_GRASS_Q = "Where can you find a snake in tall grass?\nA) forest B) field";
+const SNAKE_TIE_FACTS = [
+  { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+  { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+];
+
+test("two options ground and only one meets a second term the stem names, so the lane answers", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.topic, "snake");
+    assert.deepEqual(r.detail.separatedBy, ["grass"]);
+    assert.equal(r.detail.runnerUpLabel, "B");
+    assert.match(r.answer, /^forest — snake is found in forest/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the answer names the runner-up and the constraint it failed", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.match(r.answer, /field/, "the runner-up is named");
+    assert.match(r.answer, /grass/, "the constraint the runner-up failed is named");
+    assert.match(r.answer, /nothing linking it to grass/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("two options meeting the same number of constraints stay a refusal", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "grass", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a leader satisfying no constraint at all stays a refusal", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, SNAKE_TIE_FACTS);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a heavier edge never breaks a tie on its own", async () => {
+  const dir = await freshRepo();
+  try {
+    // Different provenance heads carry different trust priors, and neither
+    // option satisfies a constraint term — the grounding edge's own weight
+    // must never stand in for a constraint separation.
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus-weak:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the same facts in two insertion orders separate the same way", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    const facts = [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ];
+    await appendFacts(dirA, facts);
+    await appendFacts(dirB, facts.slice().reverse());
+    const rA = await turn(SNAKE_GRASS_Q, { memoryDir: dirA });
+    const rB = await turn(SNAKE_GRASS_Q, { memoryDir: dirB });
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+    assert.equal(rA.detail.runnerUpLabel, rB.detail.runnerUpLabel);
+    assert.deepEqual(rA.detail.separatedBy, rB.detail.separatedBy);
+    assert.equal(rA.answer, rB.answer);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
+  }
+});

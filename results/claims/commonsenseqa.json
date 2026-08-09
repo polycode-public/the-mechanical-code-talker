@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T14:00:26.220Z",
-  "commit": "1b68c8b13127623fd88b1db3eb235d8a72cb263f",
+  "generatedAt": "2026-08-09T14:28:02.785Z",
+  "commit": "4eb008247c92e3acecd547e448bb956ba44d5c81",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -17,7 +17,7 @@
     "corpus/conceptnet/slice.jsonl",
     "corpus/wordnet/wordnet-full.jsonl"
   ],
-  "value": 4,
+  "value": 5,
   "detail": {
     "sampleSize": 100,
     "bands": [
@@ -32,14 +32,14 @@
       "wordnet-xl"
     ],
     "seedFacts": 61724,
-    "answered": 20,
-    "correctOfAnswered": 4,
-    "refused": 23,
+    "answered": 21,
+    "correctOfAnswered": 5,
+    "refused": 22,
     "abstained": 57,
     "sourceEdgePresent": 30,
-    "correctWhenSourceEdgePresent": 1,
+    "correctWhenSourceEdgePresent": 2,
     "routedByRelation": 56,
-    "correctWhenRouted": 3,
+    "correctWhenRouted": 4,
     "byHop": {
       "1": {
         "answered": 20,
@@ -81,7 +81,6 @@
       "2adbb4fc0d5249dc411dda433f378591",
       "2d3c9d3dff1a7a8253180cb3de1ceeea",
       "2f97a77d155cb99092e8a7c055737b03_1",
-      "3163910d665c139a1f6f07d85803baba",
       "335b51bd3a8ada014bbe6754dcbd425f",
       "39572e0ba1db51fa74f7fc2d90c5ec7f",
       "3c90a632f46aeab11fbb73aa59a33892",
