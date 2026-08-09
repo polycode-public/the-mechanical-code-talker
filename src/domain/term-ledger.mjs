@@ -59,7 +59,7 @@ const byRank = (a, b) => b.count - a.count || (a.term < b.term ? -1 : a.term > b
  *  "pending" here — the negative-cache expiry, computed fresh on every call
  *  from the arguments alone. The ledger itself is never mutated by this. */
 function effectiveStatus(entry, now, ttlMs) {
-  if (entry.status !== "missed" || now == null || !ttlMs) return entry.status;
+  if (entry.status !== "missed" || now == null || ttlMs == null) return entry.status;
   const missedAtMs = Date.parse(entry.missedAt);
   if (!Number.isFinite(missedAtMs)) return entry.status;
   const nowMs = typeof now === "number" ? now : Date.parse(now);
