@@ -1,4 +1,4 @@
-// planner-instances.mjs — the three taught puzzles claim-planner.mjs measures,
+// planner-instances.mjs — the four taught puzzles claim-planner.mjs measures,
 // and the one per-instance solve function every caller (that rig, and
 // claims-browser-entry.mjs's own "run it on this device" button) drives
 // through. Lives under surfaces/web because solvePlannerInstance itself
@@ -16,7 +16,9 @@
 // data/games/hanoi-3.txt and data/games/river.txt already exercise (the
 // action-signature, clearing-precondition, and action-effect sentences), so
 // nothing here is a new grammar shape — only new vocabulary and a new
-// instance shape.
+// instance shape. river reuses the same frames again, plus the
+// action-constraint one data/games/river.txt teaches for the wolf/goat/
+// cabbage pairing.
 //
 // blocksworld drops hanoi's "smaller than" comparative precondition: real
 // Blocksworld blocks are uniform, so any clear block may stack on any other
@@ -25,6 +27,14 @@
 // constraints only ever ADDS legal moves at each search step, which is why
 // both grow harder than hanoi at the same instance size — the search radius
 // shrinks. claim-planner.mjs measures how much.
+//
+// river scales the opposite way: growing its chain never makes the search
+// slower, it makes the puzzle itself unsolvable. A chain longer than three
+// has no first move that leaves every remaining neighbouring pair guarded,
+// so movesFromRules returns no legal moves at all from the opening state and
+// solvePlannerInstance reports a fast, correct miss rather than a slow
+// search — the honest-miss constitution applied to a domain's own shape,
+// not just to a search that ran out of budget.
 
 import { hanoiLessonSentences } from "../../domain/hanoi-lesson.mjs";
 import { createInMemoryStore } from "../../adapters/memory/core.mjs";
@@ -103,7 +113,57 @@ export function gripperInstanceSentences(ballCount = 3) {
   return sentences;
 }
 
-/** The three envelope columns claim-planner.mjs measures, and the
+/** The river-crossing domain's rule scaffolding alone: one farmer and a
+ *  chain of `passengerCount` classes, each with exactly one instance, where
+ *  every neighbouring pair in the chain may not be left together without
+ *  the farmer — the shipped wolf/goat/cabbage constraint
+ *  (data/games/river.txt) generalised past its fixed three. Every class
+ *  needs exactly one instance because the "may not be with … without"
+ *  constraint frame (src/services/chat.mjs's ACTION_CONSTRAINT_TEACH_RE)
+ *  binds each of its three trailing words to that class's sole member. Only
+ *  the chain's middle link can ever be ferried first without leaving two
+ *  neighbours together unguarded, which is why this family stops being
+ *  solvable once the chain outgrows three: `solvePlannerInstance` still
+ *  reports that honestly, as a fast miss rather than a shortened plan. */
+export function riverRuleSentences(passengerCount = 3) {
+  const n = Math.max(1, Math.floor(Number(passengerCount) || 1));
+  const chain = Array.from({ length: n }, (_, i) => `beast-${i + 1}`);
+  const sentences = [];
+  sentences.push("a passenger is a kind of game piece.");
+  sentences.push("a bank is a kind of place.");
+  for (const cls of chain) {
+    sentences.push(`${cls}-1 is a ${cls}.`);
+    sentences.push(`${cls}-1 is a passenger.`);
+  }
+  sentences.push("farmer-1 is a farmer.");
+  sentences.push("bank-east is a bank.");
+  sentences.push("bank-west is a bank.");
+  sentences.push("you can ferry a passenger onto a bank.");
+  sentences.push("you can ferry a farmer onto a bank.");
+  sentences.push("ferrying a passenger onto a bank makes the passenger stand on the target.");
+  sentences.push("ferrying a passenger onto a bank makes the farmer stand on the target.");
+  for (let i = 0; i < n - 1; i += 1) {
+    sentences.push(`to ferry a passenger onto a bank, the ${chain[i]} may not be with the ${chain[i + 1]} without the farmer.`);
+  }
+  return sentences;
+}
+
+/** riverRuleSentences(passengerCount) plus one solvable instance: every
+ *  chain member and the farmer start on bank-east, and the goal ferries
+ *  every passenger to bank-west — the same opening data/games/river.txt
+ *  teaches interactively, generalised to `passengerCount` members. */
+export function riverInstanceSentences(passengerCount = 3) {
+  const n = Math.max(1, Math.floor(Number(passengerCount) || 1));
+  const chain = Array.from({ length: n }, (_, i) => `beast-${i + 1}`);
+  const sentences = riverRuleSentences(n);
+  for (const cls of chain) sentences.push(`${cls}-1 stands on bank-east.`);
+  sentences.push("farmer-1 stands on bank-east.");
+  sentences.push("the goal is that every passenger stands on bank-west.");
+  sentences.push("solve it.");
+  return sentences;
+}
+
+/** The four envelope columns claim-planner.mjs measures, and the
  *  benchmark-this-device button offers a visitor. `unit` names what `size`
  *  counts; `instanceSentences(size)` is the full taught sequence a fresh
  *  session runs to solve one instance. */
@@ -111,6 +171,7 @@ export const PLANNER_DOMAINS = {
   hanoi: { unit: "disks", instanceSentences: hanoiLessonSentences },
   blocksworld: { unit: "blocks", instanceSentences: blocksworldInstanceSentences },
   gripper: { unit: "balls", instanceSentences: gripperInstanceSentences },
+  river: { unit: "passengers", instanceSentences: riverInstanceSentences },
 };
 
 /** Teach one fresh in-memory session domain's instance at `size` and solve

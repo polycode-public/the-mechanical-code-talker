@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   blocksworldRuleSentences, blocksworldInstanceSentences,
   gripperRuleSentences, gripperInstanceSentences,
+  riverRuleSentences, riverInstanceSentences,
   solvePlannerInstance,
 } from "../../scripts/claims/planner-domains.mjs";
 import { splitSentencesPreservingPaths } from "../../src/services/sentences.mjs";
@@ -92,4 +93,48 @@ test("solvePlannerInstance reaches hanoi's own shipped lesson through the same r
 
 test("solvePlannerInstance rejects an unknown domain name rather than silently returning nothing", async () => {
   await assert.rejects(() => solvePlannerInstance("nonexistent-domain", 3), /unknown domain/);
+});
+
+test("riverRuleSentences(3) declares one constraint per neighbouring pair in the chain", () => {
+  const sentences = riverRuleSentences(3);
+  assert.ok(sentences.includes("to ferry a passenger onto a bank, the beast-1 may not be with the beast-2 without the farmer."));
+  assert.ok(sentences.includes("to ferry a passenger onto a bank, the beast-2 may not be with the beast-3 without the farmer."));
+  assert.equal(sentences.filter((s) => s.includes("may not be with")).length, 2, "a 3-member chain has 2 neighbouring pairs");
+});
+
+test("riverRuleSentences: every entry is a single sentence ending in one terminator, for any passenger count", () => {
+  for (const sentence of riverRuleSentences(5)) {
+    assert.match(sentence, /^[^.]*\.$/, `"${sentence}" is not exactly one sentence`);
+  }
+});
+
+test("riverInstanceSentences: every chain member and the farmer start on bank-east, the goal targets bank-west, and solve comes last", () => {
+  const sentences = riverInstanceSentences(3);
+  assert.ok(sentences.includes("beast-1-1 stands on bank-east."));
+  assert.ok(sentences.includes("beast-2-1 stands on bank-east."));
+  assert.ok(sentences.includes("beast-3-1 stands on bank-east."));
+  assert.ok(sentences.includes("farmer-1 stands on bank-east."));
+  assert.equal(sentences.at(-1), "solve it.");
+  assert.equal(sentences.at(-2), "the goal is that every passenger stands on bank-west.");
+});
+
+test("solvePlannerInstance crosses the river in the classic 7-move optimum at the shipped size of 3 passengers, no declined sentence", async () => {
+  const result = await solvePlannerInstance("river", 3);
+  assert.equal(result.declined, null, JSON.stringify(result.declined));
+  assert.equal(result.solved, true);
+  assert.equal(result.moves, 7);
+});
+
+test("solvePlannerInstance reaches river through the same registry every other domain uses", async () => {
+  const result = await solvePlannerInstance("river", 1);
+  assert.equal(result.declined, null, JSON.stringify(result.declined));
+  assert.equal(result.solved, true);
+  assert.equal(result.moves, 1, "one passenger, no constraint, one crossing");
+});
+
+test("solvePlannerInstance reports an honest miss, never a decline, once the chain outgrows three passengers", async () => {
+  const result = await solvePlannerInstance("river", 4);
+  assert.equal(result.declined, null, JSON.stringify(result.declined));
+  assert.equal(result.solved, false);
+  assert.equal(result.moves, null);
 });

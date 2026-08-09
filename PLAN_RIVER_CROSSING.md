@@ -1,23 +1,27 @@
 # PLAN_RIVER_CROSSING.md — river-crossing puzzles on the MUDIII square, with every imperative externalised as a fact
 
-Status: R0-R5 shipped; R6-R8 paused on the operator's hold (waiting out the weekly usage
-cycle) and resume only on their word. Delivered and merged to `main`, each phase's own section
-carrying its "shipped" note: R0 the trait vocabulary (five `mgx:` predicates, ontology rows,
-phrase-table sentences), R1 `src/domain/agent-traits.mjs` (class-chain resolver, idempotent
-spawn copy), R2 the engine reading drives/vision/mass/drain from fact rows with the config
-fallback (ten-tick fixture tape byte-identical; spawn copies under `spawn:` provenance), R3
+Status: R0-R5 and R8's measurement half shipped; R6 and R7 in flight; R8's claims-page
+block waits on R6. Delivered and merged to `main`, each phase's own section carrying its
+"shipped" note: R0 the trait vocabulary (five `mgx:` predicates, ontology rows, phrase-table
+sentences), R1 `src/domain/agent-traits.mjs` (class-chain resolver, idempotent spawn copy),
+R2 the engine reading drives/vision/mass/drain from fact rows with the config fallback
+(ten-tick fixture tape byte-identical; spawn copies under `spawn:` provenance), R3
 `corpus/worlds/src/river-crossing.jsonl` plus `constraintsFromDrives` (the puzzle constraint
 derived from the same `mgx:consumes`/`mgx:guards` rows that drive the chase; 7-move optimum,
 one-legal-opening and honest-miss all pinned in `test/services/river-crossing.test.mjs`), R4
 the per-instance editor (`src/services/agent-editor.mjs`, the actor card's instance/class
 tabs on the existing `#agentSelect`; a class edit changes the next spawn, not standing
-instances), and R5 the belief and plan panels (`agentOutlook` in `src/services/mudiii-turn.mjs`
-over `predator-prey.mjs`'s new `planTownSquareTurn`, the decision half `runTownSquareTick`
-factors its effects out of; `beliefOriginOf` in `src/domain/agent-belief.mjs`; the page's
-`.outlook-panel`, recomputed on boot and after every world or actor edit, no turn spent).
-Still open: R6 the river scenario on the mudiii page plus site wiring, R7 e2e/corpus, R8 the
-planner-rig `river` domain, and (sequenced later still) the population-counting/boat-capacity
-puzzle variants.
+instances), R5 the belief and plan panels (`agentOutlook` in `src/services/mudiii-turn.mjs`
+over `predator-prey.mjs`'s `planTownSquareTurn`; `beliefOriginOf` in
+`src/domain/agent-belief.mjs`; the page's `.outlook-panel`, recomputed on boot and after
+every world or actor edit, no turn spent), and R8's measurement half
+(`riverRuleSentences`/`riverInstanceSentences` and `PLANNER_DOMAINS.river` in
+`src/surfaces/web/planner-instances.mjs`, `claim-planner.mjs`'s chunked sweep entry point,
+and the measured `results/claims/planner.json`: river solves the classic 3-passenger optimum
+under 1s and reports an honest miss at every larger size, crossing 10s at 182 passengers).
+Still open: R6 the river scenario on the mudiii page plus site wiring, R7 e2e/corpus, R8's
+claims-page block (waits on R6), and (sequenced later still) the
+population-counting/boat-capacity puzzle variants.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every phase
 names its module paths, data structures, function signatures, test files, corpus rows and acceptance
@@ -1261,32 +1265,34 @@ node --test test-e2e/pages-mudiii-river.test.mjs
 
 ## 12. Phase R8 — the claims rung
 
-The planner already has a measurement rig. `scripts/claims/claim-planner.mjs` grows an instance size
-per domain until the median solve time crosses ten seconds, running every timed instance in its own
-child process (`planner-worker.mjs`) so a runaway kills itself rather than the rig. The domains live in
-`src/surfaces/web/planner-instances.mjs` (`PLANNER_DOMAINS:110`, `solvePlannerInstance:127`), re-exported
-by `scripts/claims/planner-domains.mjs:9`, with `blocksworldRuleSentences:40` and
-`gripperRuleSentences:78` as the authoring pattern.
+**The measurement half is shipped.** `riverRuleSentences(passengerCount)` and
+`riverInstanceSentences(passengerCount)` (`src/surfaces/web/planner-instances.mjs`) generalise the
+wolf/goat/cabbage chain to an N-passenger consumes chain guarded by one farmer, and
+`PLANNER_DOMAINS.river` is wired the same way as hanoi/blocksworld/gripper. The chain stays
+solvable through 3 passengers (the classic 7-move optimum); past that, no first move can leave
+every neighbouring pair guarded, so `movesFromRules` finds nothing to try from the opening state
+and the search reports a fast, correct honest miss rather than slowing down toward one — proving
+there is no move still gets slower to enumerate as the chain grows, crossing 10 seconds at 182
+passengers in the committed run. `claim-planner.mjs` gained an entry-point guard
+(`main()`/`measureDomain`/`writeFinalClaim`, plus `sweep <domain> --out <path>` and `write
+<path...>` subcommands) so the four-domain sweep can run one domain per process; `npm run
+claim:planner` with no arguments still runs the original one-shot sweep. The committed
+`results/claims/planner.json` carries the measured numbers: river's largest solved under 1s is 3
+passengers, first over 10s is 182. `test/adapters/planner-domains.test.mjs` covers the generators
+and `solvePlannerInstance("river", …)` at 1, 3 and 4 passengers.
 
-R8 adds one domain and one claim:
+**Still open: the claims-page block.** A block stating the crossing optimum and the size at which
+it stops being fast, with the fixture provenance and the honest-miss framing
+(`scripts/site-pages.mjs`'s `CLAIMS_PAGE_BLOCKS`, `test/estate/claims.test.mjs` pinning it), waits
+on R6 per section 13's dependency table ("R8's block" is Wave 5, after R6 and R7). The measurement
+itself needed only R3.
 
-1. `riverRuleSentences(passengerCount)` and `riverInstanceSentences(passengerCount)` in
-   `planner-instances.mjs`, generalising the wolf/goat/cabbage chain to N passengers in a
-   consumes chain guarded by one farmer. Three passengers is the classic puzzle; the envelope is what
-   happens as the chain grows.
-2. `PLANNER_DOMAINS.river` wired the same way as the other three.
-3. A claims-page block, backed by the committed rig table, stating the crossing optimum the search
-   reaches and the size at which it stops being fast, with the fixture provenance and the honest-miss
-   framing. `scripts/site-pages.mjs`'s `CLAIMS_PAGE_BLOCKS` (`:108`) grows by one and
-   `test/estate/claims.test.mjs` pins it. The block lands in the same commit as the first committed rig
-   number, never before.
+Also still open: the "same puzzle, taught two ways" determinism claim section 7.3's bridge invites
+— `data/games/river.txt`'s hand-authored constraints and R3's derived ones producing identical
+plans at every size, which belongs in `test/services/river-crossing.test.mjs` rather than the
+claims page.
 
-A second measurement is worth the same rig and is the more interesting one: **the same puzzle, taught
-two ways.** `data/games/river.txt`'s hand-authored constraints and R3's derived ones must produce
-identical plans at every size. That is a determinism claim about the bridge in 7.3, and it belongs in
-`test/services/river-crossing.test.mjs` rather than the claims page.
-
-Acceptance:
+Acceptance (the measurement half):
 
 ```
 node --test test/adapters/planner-domains.test.mjs

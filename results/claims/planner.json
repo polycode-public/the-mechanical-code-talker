@@ -1,7 +1,7 @@
 {
   "name": "planner",
-  "generatedAt": "2026-08-08T18:11:58.451Z",
-  "commit": "6cea893e6ef3d89b95a0f4a4f641d057e58f5cd2",
+  "generatedAt": "2026-08-09T06:20:54.029Z",
+  "commit": "c3140ca876a236e2a66ad6f8ed0ddfcaa59b560f",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "disks",
@@ -24,7 +24,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 349.99,
+            "medianMs": 347.94,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -32,7 +32,7 @@
           },
           {
             "size": 4,
-            "medianMs": 355.04,
+            "medianMs": 355.18,
             "reps": 20,
             "solved": true,
             "moves": 15,
@@ -40,7 +40,7 @@
           },
           {
             "size": 5,
-            "medianMs": 382.83,
+            "medianMs": 458.33,
             "reps": 20,
             "solved": true,
             "moves": 31,
@@ -48,7 +48,7 @@
           },
           {
             "size": 7,
-            "medianMs": 510.06,
+            "medianMs": 637.76,
             "reps": 20,
             "solved": true,
             "moves": 127,
@@ -56,7 +56,7 @@
           },
           {
             "size": 9,
-            "medianMs": 882.6,
+            "medianMs": 1044.94,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -64,7 +64,7 @@
           },
           {
             "size": 12,
-            "medianMs": 1397.15,
+            "medianMs": 1485,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -72,7 +72,7 @@
           },
           {
             "size": 16,
-            "medianMs": 2618.23,
+            "medianMs": 2739.7,
             "reps": 20,
             "solved": false,
             "moves": null,
@@ -80,8 +80,8 @@
           },
           {
             "size": 22,
-            "medianMs": 6605.76,
-            "reps": 16,
+            "medianMs": 6718.7,
+            "reps": 18,
             "solved": false,
             "moves": null,
             "over": false
@@ -104,7 +104,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 310.94,
+            "medianMs": 315.39,
             "reps": 20,
             "solved": true,
             "moves": 3,
@@ -112,7 +112,7 @@
           },
           {
             "size": 4,
-            "medianMs": 315.49,
+            "medianMs": 346.24,
             "reps": 20,
             "solved": true,
             "moves": 4,
@@ -120,7 +120,7 @@
           },
           {
             "size": 5,
-            "medianMs": 382.17,
+            "medianMs": 377.78,
             "reps": 20,
             "solved": true,
             "moves": 5,
@@ -128,7 +128,7 @@
           },
           {
             "size": 7,
-            "medianMs": 365.21,
+            "medianMs": 378.93,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -136,7 +136,7 @@
           },
           {
             "size": 9,
-            "medianMs": 581.36,
+            "medianMs": 569.54,
             "reps": 20,
             "solved": true,
             "moves": 9,
@@ -144,8 +144,8 @@
           },
           {
             "size": 12,
-            "medianMs": 7179.39,
-            "reps": 15,
+            "medianMs": 7144.46,
+            "reps": 17,
             "solved": true,
             "moves": 12,
             "over": false
@@ -168,7 +168,7 @@
         "sizes": [
           {
             "size": 3,
-            "medianMs": 301.83,
+            "medianMs": 316.03,
             "reps": 20,
             "solved": true,
             "moves": 3,
@@ -176,7 +176,7 @@
           },
           {
             "size": 4,
-            "medianMs": 319.23,
+            "medianMs": 338.82,
             "reps": 20,
             "solved": true,
             "moves": 4,
@@ -184,7 +184,7 @@
           },
           {
             "size": 5,
-            "medianMs": 309.41,
+            "medianMs": 329.63,
             "reps": 20,
             "solved": true,
             "moves": 5,
@@ -192,7 +192,7 @@
           },
           {
             "size": 7,
-            "medianMs": 454.47,
+            "medianMs": 549.02,
             "reps": 20,
             "solved": true,
             "moves": 7,
@@ -200,7 +200,7 @@
           },
           {
             "size": 9,
-            "medianMs": 2317.84,
+            "medianMs": 2371.06,
             "reps": 20,
             "solved": true,
             "moves": 9,
@@ -218,6 +218,133 @@
         ],
         "largestUnder1s": 7,
         "firstOver10s": 12
+      },
+      "river": {
+        "unit": "passengers",
+        "sizes": [
+          {
+            "size": 3,
+            "medianMs": 319,
+            "reps": 20,
+            "solved": true,
+            "moves": 7,
+            "over": false
+          },
+          {
+            "size": 4,
+            "medianMs": 389.54,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 5,
+            "medianMs": 376.82,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 7,
+            "medianMs": 388.93,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 9,
+            "medianMs": 402.18,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 12,
+            "medianMs": 466.18,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 16,
+            "medianMs": 499.33,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 22,
+            "medianMs": 639.65,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 30,
+            "medianMs": 823.83,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 41,
+            "medianMs": 1080.99,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 55,
+            "medianMs": 1444.3,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 74,
+            "medianMs": 1920.3,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 100,
+            "medianMs": 3206.05,
+            "reps": 20,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 135,
+            "medianMs": 6376.21,
+            "reps": 19,
+            "solved": false,
+            "moves": null,
+            "over": false
+          },
+          {
+            "size": 182,
+            "medianMs": 10017.63,
+            "reps": 9,
+            "solved": false,
+            "moves": null,
+            "over": false
+          }
+        ],
+        "largestUnder1s": 3,
+        "firstOver10s": 182
       }
     }
   }
