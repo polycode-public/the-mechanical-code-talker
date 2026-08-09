@@ -47,9 +47,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
   into the browser page only, with no ask-lane grammar for those predicates. Both are new
   engine work if wanted; four planned corpus rows wait on them.
-- [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
-  for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
-  tripwire literals with a measured read.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a

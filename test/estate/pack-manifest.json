@@ -576,5 +576,8 @@
   "src/tools/memory-fallthrough.mjs",
   "src/tools/readme-docs.mjs",
   "src/tools/schema-docs.mjs",
-  "src/tools/server.mjs"
+  "src/tools/server.mjs",
+  "test-benchmarks/agentbench/README.md",
+  "test-benchmarks/agentbench/envelope-reader.mjs",
+  "test-benchmarks/agentbench/envelope.json"
 ]

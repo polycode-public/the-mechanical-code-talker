@@ -50,7 +50,8 @@
     "./memory": "./src/adapters/memory/core.mjs",
     "./repository-interface": "./src/adapters/repository-interface.mjs",
     "./conformance": "./src/tools/conformance.mjs",
-    "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs"
+    "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs",
+    "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs"
   },
   "files": [
     "bin/",
@@ -71,7 +72,9 @@
     "!corpus/wordnet/generate.mjs",
     "!corpus/namenet/generate.mjs",
     "data/",
-    "!data/sprites-large/"
+    "!data/sprites-large/",
+    "test-benchmarks/agentbench/envelope.json",
+    "test-benchmarks/agentbench/envelope-reader.mjs"
   ],
   "publishConfig": {
     "access": "public"
