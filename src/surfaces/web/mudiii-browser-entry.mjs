@@ -23,7 +23,7 @@ import {
   parseAgentEditorText, planAgentEditorSync, renderAgentEditorText, renderAgentClassText,
 } from "../../services/agent-editor.mjs";
 import { agentTraitsOf } from "../../domain/agent-traits.mjs";
-import { pillsForMudiii } from "../../services/mudiii-turn.mjs";
+import { pillsForMudiii, agentOutlook } from "../../services/mudiii-turn.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { classAncestorChain } from "../../domain/sprite-map.mjs";
 import { createTurnSession } from "./turn-session.mjs";
@@ -151,7 +151,8 @@ export function routeBetweenCells(factRows, fromCell, toCell) {
  *  (`runTownSquareTick`) and its conversation is a single shared dock.
  *
  *  Returns `{ memoryDir, codeGraph, graph, refreshGraph, turn, tick, board,
- *  snapshot, applyEdit, placeFood, driveAgent, recast }`.
+ *  snapshot, outlook, applyEdit, applyAgentEdit, placeFood, driveAgent,
+ *  recast }`.
  *
  *  `getTeachEnabled` is read fresh on every turn, so a visitor can tick the
  *  page's teach box mid-session and have the very next line read as a fact to
@@ -281,6 +282,15 @@ export async function createMudiiiSession(
     return { rows, state: foldTownSquareState(rows) };
   }
 
+  /** The belief and plan panels' own read path: every live agent's current
+   *  belief map and plan, computed from the store as it stands, with no turn
+   *  spent and no write — see agentOutlook (mudiii-turn.mjs). The page calls
+   *  this on boot and after every edit, world or actor, so both panels
+   *  recompute live without a tick ever running. */
+  async function outlook() {
+    return agentOutlook(memoryDir, { layout });
+  }
+
   /** The world editor's own store sync, reusing mud-editor.mjs UNCHANGED —
    *  it already round-trips `mgx:model`/`mgx:rotation` (a concurrent track
    *  added those), so nothing here is town-square-specific beyond the
@@ -343,6 +353,7 @@ export async function createMudiiiSession(
     recast,
     board,
     snapshot,
+    outlook,
     applyEdit,
     applyAgentEdit,
     placeFood,

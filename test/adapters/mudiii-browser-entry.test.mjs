@@ -98,6 +98,21 @@ test("session.tick() counts its own turns, and session.board() reports the same 
   assert.equal((await session.board()).turn, 2, "a resting read repeats the last turn played");
 });
 
+test("session.outlook() reads the belief and plan panels' own data, with no turn spent and no fact written", async () => {
+  const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1", "goblin-2"], epoch: 0 });
+  const before = readFactRows(await loadMemory(session.memoryDir));
+  const outlook = await session.outlook();
+  const after = readFactRows(await loadMemory(session.memoryDir));
+  assert.equal(after.length, before.length, "outlook() writes nothing to the store");
+  assert.equal(outlook.turn, 0, "the board is still at rest");
+  assert.deepEqual(Object.keys(outlook.agents).sort(), ["fox-1", "goblin-1", "goblin-2"]);
+  for (const id of Object.keys(outlook.agents)) {
+    assert.ok(outlook.agents[id].rung, `${id} carries a rung`);
+    assert.ok(Array.isArray(outlook.agents[id].plan));
+  }
+  assert.equal(outlook.puzzle, null, "the town-square world carries no ferry action");
+});
+
 test("a chat turn that runs a tick moves the count the page then reads back off the board", async () => {
   const session = await createMudiiiSession(worldPayload, { agents: ["fox-1", "goblin-1"], epoch: 0 });
   await session.tick();

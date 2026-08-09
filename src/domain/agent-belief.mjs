@@ -29,33 +29,55 @@ const cellIdOf = (x, y) => `cell-${x}-${y}`;
 
 const chebyshevSteps = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 
-/** Where `observerSubject` currently believes `targetSubject` to be, as an
- *  `{ x, y }` cell, or null for no belief at all.
+/** The one three-rung walk `believedCellOf` and `beliefOriginOf` both read,
+ *  so the cell a panel shows and the "how it knows" label beside it can never
+ *  disagree about which rung answered. Returns `{ origin, cell }` or null.
  *
- *  Four rungs, in order:
+ *  Three rungs, in order:
  *
  *  1. A target the board has removed (eaten, starved, hatched) is believed
  *     nowhere, and no told fact can put it back. A claim about an id that was
  *     never placed at all is a different case and still lands, which is what
  *     keeps deception working.
- *  2. Ground truth, when the target's real cell sits within `visionRadius`
- *     Chebyshev steps of `observerCell`.
- *  3. The newest told fact addressed to this observer about this target —
- *     `opts.toldFacts` rows shaped `{ subject, toAgent, cell, turn }`.
- *  4. Otherwise null.
+ *  2. Ground truth (`origin: "seen"`), when the target's real cell sits
+ *     within `visionRadius` Chebyshev steps of `observerCell`.
+ *  3. The newest told fact addressed to this observer about this target
+ *     (`origin: { told: turn }`) — `opts.toldFacts` rows shaped
+ *     `{ subject, toAgent, cell, turn }`. Otherwise null.
  *
  *  `state` is a folded world state: `.placements` (subject -> `{ cell }`) and
  *  `.removed` (a Set of subjects off the board). Pure. */
-export function believedCellOf(targetSubject, observerSubject, observerCell, state, opts = {}) {
+function believedRungOf(targetSubject, observerSubject, observerCell, state, opts = {}) {
   if (state.removed.has(targetSubject)) return null;
   const { visionRadius = DEFAULT_VISION_RADIUS, toldFacts = [] } = opts;
   const place = state.placements.get(targetSubject);
   const at = place ? cellCoordsOf(place.cell) : null;
-  if (at && chebyshevSteps(observerCell.x, observerCell.y, at.x, at.y) <= visionRadius) return at;
+  if (at && chebyshevSteps(observerCell.x, observerCell.y, at.x, at.y) <= visionRadius) {
+    return { origin: "seen", cell: at };
+  }
   const told = toldFacts
     .filter((f) => f.toAgent === observerSubject && f.subject === targetSubject)
     .sort((a, b) => (b.turn ?? 0) - (a.turn ?? 0))[0];
-  return told ? cellCoordsOf(told.cell) : null;
+  if (!told) return null;
+  const cell = cellCoordsOf(told.cell);
+  return cell ? { origin: { told: told.turn ?? 0 }, cell } : null;
+}
+
+/** Where `observerSubject` currently believes `targetSubject` to be, as an
+ *  `{ x, y }` cell, or null for no belief at all. See `believedRungOf` for
+ *  the three-rung walk this reads the cell half of. Pure. */
+export function believedCellOf(targetSubject, observerSubject, observerCell, state, opts = {}) {
+  return believedRungOf(targetSubject, observerSubject, observerCell, state, opts)?.cell ?? null;
+}
+
+/** Which rung answered `believedCellOf` for this exact call: `"seen"` when
+ *  the target sits within vision, `{ told: turn }` for the newest told fact
+ *  that answered, or null when the observer believes nothing. A belief
+ *  panel's own "how it knows" column reads this beside the cell
+ *  `believedCellOf` returns, off the same walk (`believedRungOf`), so the two
+ *  can never drift apart. Pure. */
+export function beliefOriginOf(targetSubject, observerSubject, observerCell, state, opts = {}) {
+  return believedRungOf(targetSubject, observerSubject, observerCell, state, opts)?.origin ?? null;
 }
 
 /** The nearest candidate (by believed Chebyshev distance) an observer has

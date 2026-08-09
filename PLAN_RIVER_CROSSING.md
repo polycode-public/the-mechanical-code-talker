@@ -1,6 +1,6 @@
 # PLAN_RIVER_CROSSING.md — river-crossing puzzles on the MUDIII square, with every imperative externalised as a fact
 
-Status: R0-R4 shipped; R5-R8 paused on the operator's hold (waiting out the weekly usage
+Status: R0-R5 shipped; R6-R8 paused on the operator's hold (waiting out the weekly usage
 cycle) and resume only on their word. Delivered and merged to `main`, each phase's own section
 carrying its "shipped" note: R0 the trait vocabulary (five `mgx:` predicates, ontology rows,
 phrase-table sentences), R1 `src/domain/agent-traits.mjs` (class-chain resolver, idempotent
@@ -8,12 +8,16 @@ spawn copy), R2 the engine reading drives/vision/mass/drain from fact rows with 
 fallback (ten-tick fixture tape byte-identical; spawn copies under `spawn:` provenance), R3
 `corpus/worlds/src/river-crossing.jsonl` plus `constraintsFromDrives` (the puzzle constraint
 derived from the same `mgx:consumes`/`mgx:guards` rows that drive the chase; 7-move optimum,
-one-legal-opening and honest-miss all pinned in `test/services/river-crossing.test.mjs`), and
-R4 the per-instance editor (`src/services/agent-editor.mjs`, the actor card's instance/class
+one-legal-opening and honest-miss all pinned in `test/services/river-crossing.test.mjs`), R4
+the per-instance editor (`src/services/agent-editor.mjs`, the actor card's instance/class
 tabs on the existing `#agentSelect`; a class edit changes the next spawn, not standing
-instances). Still open: R5 belief/plan panels, R6 the river scenario on the mudiii page plus
-site wiring, R7 e2e/corpus, R8 the planner-rig `river` domain, and (sequenced later still)
-the population-counting/boat-capacity puzzle variants.
+instances), and R5 the belief and plan panels (`agentOutlook` in `src/services/mudiii-turn.mjs`
+over `predator-prey.mjs`'s new `planTownSquareTurn`, the decision half `runTownSquareTick`
+factors its effects out of; `beliefOriginOf` in `src/domain/agent-belief.mjs`; the page's
+`.outlook-panel`, recomputed on boot and after every world or actor edit, no turn spent).
+Still open: R6 the river scenario on the mudiii page plus site wiring, R7 e2e/corpus, R8 the
+planner-rig `river` domain, and (sequenced later still) the population-counting/boat-capacity
+puzzle variants.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every phase
 names its module paths, data structures, function signatures, test files, corpus rows and acceptance
@@ -1040,6 +1044,33 @@ npm run demo:build
 ---
 
 ## 9. Phase R5 — beliefs and plans on the page, recalculated live
+
+**Shipped.** `src/domain/agent-belief.mjs` gains `beliefOriginOf`, sharing a private
+`believedRungOf` three-rung walk with `believedCellOf` so the cell a panel shows and its "how
+it knows" label can never disagree. `src/services/predator-prey.mjs`'s `runTownSquareTick`
+splits at the decision boundary: the new exported `planTownSquareTurn(rows, state, opts)`
+carries the fold-believe-decide half (everything `readLiveBoard` through the two `decide()`
+loops) and returns the answers a tick needs (`agents`, `rungs`, `traitRows`, a `beliefContext`
+bag) with none of a tick's effects; `runTownSquareTick` calls it and applies the ecology pass,
+the mass debit and the write exactly as before — the ten-tick fixture tape stays byte-identical
+and the swapped-cast fixture still passes with no code branch. `agentOutlook` in
+`src/services/mudiii-turn.mjs` runs that same derivation read-only (no layout given, no roster
+decided, so a caller after only the puzzle field gets one) and returns `{ turn, agents: { id: {
+rung, goal, belief, beliefOrigin, plan, traits } }, puzzle }`; `puzzle` solves the river-crossing
+world's own ferry action plus `constraintsFromDrives` against its fixed crossing goal, and stays
+null on any world (the town square, today) whose rule rows carry no ferry action. `session.
+outlook()` in `mudiii-browser-entry.mjs` is the page's read path onto it — no write, no turn.
+The page (`mudiii-viz.mjs`) gains an `.outlook-panel` beside the actor card: a belief table
+(a null belief renders "nothing seen, nothing told", never a blank cell) and a plan line for
+the followed actor, plus a puzzle-plan line naming a found plan's numbered moves or the honest
+miss. `refreshOutlook` re-fetches on boot, on entering edit mode, and after every world or actor
+edit; picking a new actor from the existing `#agentSelect` re-renders the already-fetched
+outlook, no new fetch. `test/domain/agent-belief.test.mjs`, `test/services/mudiii-turn.test.mjs`,
+`test/services/river-crossing.test.mjs`, `test/services/mudiii-viz.test.mjs` and
+`test/adapters/mudiii-browser-entry.test.mjs` cover the origin walk, the write-nothing/no-turn
+guarantee, two calls and two row orders folding to deep-equal outlooks, the river world's
+retract/widen-appetite/restore sequence returning the original seven moves byte-identically, and
+the panel markup and wiring.
 
 Goal: the selected actor's beliefs and its plan are visible, and both recompute on every edit without
 advancing a turn.

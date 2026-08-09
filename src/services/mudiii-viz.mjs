@@ -727,6 +727,15 @@ ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button 
     <div class="chatpills" id="actorEditorPills" aria-label="related words for the term before the cursor"></div>
     <p class="edit-status" id="actorEditorStatus" role="status"></p>
   </section>
+  <section class="outlook-panel" id="mudiiiOutlookPanel" aria-label="the followed actor's own beliefs and plan">
+    <h2>what it believes, and its plan</h2>
+    <table class="outlook-belief-table" id="outlookBeliefTable" aria-label="what the followed actor currently believes">
+      <caption>beliefs</caption>
+      <tbody id="outlookBeliefBody"></tbody>
+    </table>
+    <p class="outlook-plan" id="outlookPlanText" role="status"></p>
+    <p class="outlook-plan outlook-puzzle-plan" id="outlookPuzzlePlanText" role="status" hidden></p>
+  </section>
   <section class="mudiii-chat" aria-label="talk to the square">
     <div class="chatlog" id="chatLog" aria-live="polite"></div>
     <div class="log-popup" id="chatLogPopup" role="dialog" aria-label="the whole reply" hidden>
@@ -990,6 +999,18 @@ const MUDIII_STYLE = `
     border: 1px solid var(--square-stone-dark); border-radius: 3px; padding: .55rem .6rem;
   }
   #actorEditorText:disabled { opacity: .55; }
+
+  .outlook-panel {
+    display: none; flex-direction: column; gap: .45rem; margin-bottom: 1rem;
+    background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; min-width: 0;
+  }
+  body.editing .outlook-panel { display: flex; }
+  .outlook-panel h2 { margin: 0; font-size: .8rem; }
+  .outlook-belief-table { width: 100%; border-collapse: collapse; font-family: ${MONO_STACK}; font-size: .68rem; }
+  .outlook-belief-table caption { caption-side: top; text-align: left; font-size: .62rem; color: var(--square-stone-dark); padding-bottom: .2rem; }
+  .outlook-belief-table td { padding: .12rem .4rem .12rem 0; vertical-align: top; }
+  .outlook-plan { margin: 0; font-family: ${MONO_STACK}; font-size: .68rem; white-space: pre-wrap; color: var(--square-ink); }
 
   .mudiii-chat { background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px; box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; display: flex; flex-direction: column; gap: .5rem; }
   .chatlog { min-height: 8rem; max-height: 16rem; overflow-y: auto; }
@@ -1602,7 +1623,7 @@ function pageScript() {
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
     renderDriveRing();
-    if (editing) renderActorEditor();
+    if (editing) { renderActorEditor(); renderOutlookPanel(); }
     sendCameraToScene(camera);
   });
 
@@ -1764,6 +1785,7 @@ function pageScript() {
     renderSuggestionPills();
     renderEditPlacements();
     renderActorEditor();
+    await refreshOutlook();
   }
 
   function exitEditMode() {
@@ -1864,6 +1886,7 @@ function pageScript() {
         : "synced \\u2014 no change.";
     }
     renderEditPlacements();
+    await refreshOutlook();
   }
 
   // ---- actor card (per-instance edit) -------------------------------------
@@ -2009,6 +2032,66 @@ function pageScript() {
         ? "synced \\u2014 " + result.added + " fact(s) written, " + result.removed + " retracted."
         : "synced \\u2014 no change.";
     }
+    await refreshOutlook();
+  }
+
+  // ---- belief and plan panels: recomputed live, no turn spent ------------
+  // agentOutlook (mudiii-turn.mjs, reached through session.outlook()) is a
+  // pure read over the store as it stands — same rows, same outlook, byte
+  // for byte, whatever order they arrived in. Refreshed on boot and after
+  // every edit (world or actor); the follow select alone just re-renders the
+  // already-fetched outlook for whichever agent it now names, no new fetch.
+  let lastOutlook = null;
+
+  async function refreshOutlook() {
+    if (!session || !session.outlook) return;
+    lastOutlook = await session.outlook();
+    renderOutlookPanel();
+  }
+
+  function beliefOriginText(cell, origin) {
+    if (!cell) return "nothing seen, nothing told";
+    if (origin === "seen") return "seen";
+    if (origin && typeof origin === "object" && "told" in origin) return "told, turn " + origin.told;
+    return "seen";
+  }
+
+  function renderOutlookPanel() {
+    const id = el("agentSelect").value;
+    const body = el("outlookBeliefBody");
+    const planText = el("outlookPlanText");
+    const puzzleText = el("outlookPuzzlePlanText");
+    const entry = (lastOutlook && id) ? lastOutlook.agents[id] : null;
+    if (!entry) {
+      body.innerHTML = '<tr><td class="outlook-empty" colspan="3">Follow an agent above to see what it believes.</td></tr>';
+      planText.textContent = "";
+      puzzleText.hidden = true;
+      return;
+    }
+    const subjects = Object.keys(entry.belief).sort();
+    body.innerHTML = subjects.length
+      ? subjects.map(function (subject) {
+        const cell = entry.belief[subject];
+        const howText = beliefOriginText(cell, entry.beliefOrigin[subject]);
+        return '<tr><td class="mono">' + esc(subject) + '</td><td class="mono">' + esc(cell || "\\u2014") + "</td><td>" + esc(howText) + "</td></tr>";
+      }).join("")
+      : '<tr><td class="outlook-empty" colspan="3">' + esc(id) + " is alone on the board \\u2014 nothing else to believe anything about.</td></tr>";
+    const planLine = entry.plan.length ? entry.plan.join(" \\u2192 ") : "holding";
+    planText.textContent = id + "'s plan (" + entry.rung + "): " + planLine + " \\u2014 " + entry.goal;
+    const puzzle = lastOutlook.puzzle;
+    if (!puzzle) {
+      puzzleText.hidden = true;
+      puzzleText.textContent = "";
+    } else {
+      puzzleText.hidden = false;
+      if (puzzle.plan) {
+        const n = puzzle.plan.length;
+        const moveLines = puzzle.plan.map(function (a, i) { return "  " + (i + 1) + ". " + a.label; }).join("\\n");
+        puzzleText.textContent = "puzzle plan \\u2014 found " + n + " move" + (n === 1 ? "" : "s") + " (shortest):\\n" + moveLines;
+      } else {
+        puzzleText.textContent = "puzzle plan \\u2014 " + puzzle.miss;
+      }
+    }
   }
 
   // ---- booting ---------------------------------------------------------
@@ -2086,6 +2169,7 @@ function pageScript() {
     camera.selectedId = openingFollowId(opening.agents);
     applyTickResult(opening);
     renderAll();
+    await refreshOutlook();
     if (!prefersReducedMotion()) {
       autoOn = true;
       ensureTicker().play();
