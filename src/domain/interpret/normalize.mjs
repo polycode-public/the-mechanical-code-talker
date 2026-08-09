@@ -416,15 +416,71 @@ export function fillerClausePrefix(text) {
   return { prefix: m[0].trim(), remainder };
 }
 
+// ---- postponed-wh lead shapes: a fronted "what is X" isn't the only real
+// question lead. English also postpones the wh-word behind a declarative
+// clause ("... you will be doing what?", "The trucker plopped on the bench
+// ..., where did he arrive?"), fronts it behind one preposition ("In what
+// country ...?"), or inverts around it mid-sentence with no comma to split
+// on ("During a shark filled tornado where should you not be?"). Each shape
+// below is a closed, deterministic template read off the same QUESTION_LEAD_RE
+// word set the fronted check already uses, and every one requires the line
+// to actually end in "?" — a teach declarative that never ends with a
+// question mark can't trip any of them.
+const WH_WORD_SRC = "what|who|which|where|when|why|how";
+const AUX_WORD_SRC = "is|are|was|were|do|does|did|can|could|should|would|will|has|have|might|must";
+
+/** A bare wh-word, with an optional leading article, is the last word before
+ *  the closing "?": "... you will be doing what?", "... arrived at the
+ *  what?". The wh-word carries the whole question; everything ahead of it is
+ *  the declarative lead-in this stem shape favors. */
+const TRAILING_WH_LEAD_RE = new RegExp(`\\b(?:an?|the)?\\s*(?:${WH_WORD_SRC})\\s*\\?\\s*$`, "i");
+
+/** A single fronted preposition immediately ahead of a wh-word: "In what
+ *  country ...?", "From where would you ...?" — the preposition-fronted
+ *  reading of "what country ... in" / "where ... from". */
+const PREP_WH_LEAD_RE = new RegExp(`^(?:in|at|on|from|by|with|for|of|to|off)\\s+(?:${WH_WORD_SRC})\\b`, "i");
+
+/** A wh-word sits mid-sentence, immediately (past at most one subject
+ *  pronoun) ahead of an auxiliary/modal — the subject-aux inversion
+ *  signature of a real embedded question with no preceding comma to split
+ *  on: "... where should you not be?", "... where you can find marmot?". */
+const MID_WH_AUX_RE = new RegExp(
+  `\\b(?:${WH_WORD_SRC})\\s+(?:i|you|he|she|it|we|they)?\\s*(?:${AUX_WORD_SRC})\\b`, "i",
+);
+
+/** The line's LAST comma- or period-delimited clause opens with a
+ *  QUESTION_LEAD_RE word: "The trucker plopped on the bench ..., where did
+ *  he arrive?", "Bart entered his horse into the contest.  Where did he do
+ *  this?" — a declarative lead-in followed by the real question as its own
+ *  clause or sentence. */
+function lastClauseLeadsInterrogative(line) {
+  const clauses = line.split(/[.,]+/).map((c) => c.trim()).filter(Boolean);
+  const last = clauses[clauses.length - 1];
+  return Boolean(last && QUESTION_LEAD_RE.test(last));
+}
+
 /** QUESTION_LEAD_RE is anchored to the FIRST word, so a closed filler clause
  *  in front of a question moves the interrogative off word one and every
  *  write gate reads the line as a declarative. Peel once, then re-check the
- *  same question underneath. */
+ *  same question underneath. Beyond the fronted lead, a line that ends in
+ *  "?" also passes if it matches one of the postponed-wh shapes above —
+ *  checked against the first line only, since a caller building a
+ *  stem-then-options block (a closed multiple-choice question) appends the
+ *  options after a newline and the question mark lives at the end of the
+ *  stem, not the end of that block. */
 export function leadsInterrogative(text) {
   const line = String(text || "").trim();
   if (QUESTION_LEAD_RE.test(line)) return true;
   const peel = fillerClausePrefix(line);
-  return Boolean(peel && QUESTION_LEAD_RE.test(peel.remainder));
+  if (peel && QUESTION_LEAD_RE.test(peel.remainder)) return true;
+  const firstLine = line.split("\n")[0].trim();
+  if (!/\?\s*$/.test(firstLine)) return false;
+  return (
+    TRAILING_WH_LEAD_RE.test(firstLine)
+    || PREP_WH_LEAD_RE.test(firstLine)
+    || MID_WH_AUX_RE.test(firstLine)
+    || lastClauseLeadsInterrogative(firstLine)
+  );
 }
 
 /** Strippable leading framing clause: "since/[even] though/although/while/

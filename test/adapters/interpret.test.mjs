@@ -504,6 +504,70 @@ test("leadsInterrogative sees the question behind a filler clause that QUESTION_
   assert.equal(leadsInterrogative("what is a horse"), true);
 });
 
+// ---- postponed-wh lead shapes (interpret/normalize.mjs leadsInterrogative) ----
+// English postpones the wh-word behind a declarative lead-in as often as it
+// fronts it. Each shape below only fires when the line ends in "?".
+
+test("leadsInterrogative accepts a bare wh-word as the last word before the closing question mark", () => {
+  assert.equal(leadsInterrogative("Eating is part of living, but your body will be doing what?"), true);
+  assert.equal(leadsInterrogative("It was a long trip, so he stayed in a hotel when he arrived at the what?"), true);
+  // the same lead-in without a trailing question mark is ordinary prose
+  assert.equal(leadsInterrogative("your body will be doing something else."), false);
+});
+
+test("leadsInterrogative accepts a wh-word fronted behind a single preposition", () => {
+  assert.equal(leadsInterrogative("In what country are the most fast food restaurants?"), true);
+  assert.equal(leadsInterrogative("From where would you normally take a cup?"), true);
+  // the preposition without a wh-word right after it is untouched
+  assert.equal(leadsInterrogative("In the room the cat sleeps quietly."), false);
+});
+
+test("leadsInterrogative accepts a mid-sentence wh-word inverted around an auxiliary with no comma to split on", () => {
+  assert.equal(leadsInterrogative("During a shark filled tornado where should you not be?"), true);
+  assert.equal(leadsInterrogative("If you own a cat where is the last place you'd want to find it?"), true);
+  // a relative-clause "where" ahead of an ordinary declarative, no question mark
+  assert.equal(leadsInterrogative("The room where the cat sleeps is clean."), false);
+});
+
+test("leadsInterrogative accepts a trailing comma- or period-delimited clause that itself opens with a question-lead word", () => {
+  assert.equal(
+    leadsInterrogative("The trucker plopped on the bench with a sense of relief, where did he arrive?"),
+    true,
+  );
+  assert.equal(
+    leadsInterrogative("Bart entered his horse into the contest.  Where did he do this?"),
+    true,
+  );
+  // the same lead-in clause followed by a teach sentence, not a question
+  assert.equal(
+    leadsInterrogative("The trucker plopped on the bench with a sense of relief, water is a liquid."),
+    false,
+  );
+});
+
+test("leadsInterrogative still declines a statement that ends in a question mark but carries no question-lead word anywhere", () => {
+  assert.equal(leadsInterrogative("The cache stores recent results?"), false);
+});
+
+test("leadsInterrogative reads the postponed-wh shapes off the stem line of a stem-then-options block, not the options that follow it", () => {
+  assert.equal(
+    leadsInterrogative("The trucker plopped on the bench with a sense of relief, where did he arrive?\nA) home B) work C) school"),
+    true,
+  );
+  // the options line supplies the only trailing "?" in the earlier prototype
+  // risk case; the stem itself must carry it, or the block still declines
+  assert.equal(leadsInterrogative("The dog is happy\nA) yes B) no"), false);
+});
+
+test("leadsInterrogative declines a comma-then-clause stem whose final clause is a fragment rather than a real trailing sentence", () => {
+  // ends in a period, not a question mark, so none of the postponed-wh
+  // shapes are eligible even though the final clause opens with "what"
+  assert.equal(
+    leadsInterrogative("Sailors drive many different types of boats, what type of boat involves their namesake."),
+    false,
+  );
+});
+
 test("the ack preamble peels a counting aside only when a delimiter follows it", () => {
   assert.equal(applyPreambleFrames("one more, what is a horse"), "what is a horse");
   // no delimiter -> "one more" is the sentence's own quantifier, left intact
