@@ -127,8 +127,12 @@ test("a taught ACE pattern-19 row ('containing implies touching') produces the s
   const taught = parseAce("containing implies touching");
   const rows = taught.triples.map((t, i) => ({ id: `t${i}`, ...t }));
   const kb = buildTableauKb(rows);
-  assert.deepEqual(kb.roleClosure.get("tmct:touches"), new Set(["tmct:touches", "tmct:contains"]));
-  assert.deepEqual(kb.roleClosure.get("tmct:contains"), new Set(["tmct:contains"]));
+  // Role-closure keys are namespace-stripped the same way a stored role name
+  // always is (normFactTerm, at write time in the live pipeline) — parseAce's
+  // own raw "tmct:contains"/"tmct:touches" spellings fold to that same form
+  // here so a hand-built fixture and a taught row compare on equal footing.
+  assert.deepEqual(kb.roleClosure.get("touches"), new Set(["touches", "contains"]));
+  assert.deepEqual(kb.roleClosure.get("contains"), new Set(["contains"]));
 });
 
 test("the taught pattern-19 row lets a taught contains-edge satisfy an existential over touches, the same way the hand-built fixture does", () => {

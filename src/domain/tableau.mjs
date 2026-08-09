@@ -132,6 +132,37 @@ function clampNonNegativeInt(value, fallback) {
 
 const CODE_REF_SHAPE = /[./\\#:@]/;
 
+/** Which terms count as named individuals, widened past a bare type
+ *  declaration: a term chained to an already TYPE-DECLARED individual by an
+ *  asserted relation (a `candidateRows` row — the same predicate-outside-the-
+ *  recognised-vocabulary test both buildTableauKb and extractTableauModule
+ *  apply before calling this) is itself a named individual too, one hop at a
+ *  time until nothing new is found. Without this, a chain of taught
+ *  relations between DECLARED PROPER NAMES that are never separately typed
+ *  ("GitHub is a module" types github; "GitHub contains GitLab; GitLab
+ *  contains Polycode" never types gitlab or polycode at all) reads its first
+ *  hop as an ABox edge and every later hop as a class-level relation between
+ *  two unrecognised terms — silently dropping the very edges a role-
+ *  hierarchy or transitive-role proof needs to walk. Seeded ONLY from
+ *  `seedNames` (never from a CODE_REF_SHAPE match) so a code-reference-looking
+ *  term related to an ordinary class never promotes that class to individual
+ *  status by chaining — CODE_REF_SHAPE stays its own, separate per-term test
+ *  at the `isIndividualTerm` call sites. Bounded by `candidateRows.length`
+ *  passes, and `candidateRows` is always already module-extracted (small)
+ *  rather than the raw store. Pure. */
+function chainedIndividualTerms(seedNames, candidateRows) {
+  const names = new Set(seedNames);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const r of candidateRows) {
+      if (names.has(r.subject) && !names.has(r.object)) { names.add(r.object); grew = true; }
+      if (names.has(r.object) && !names.has(r.subject)) { names.add(r.subject); grew = true; }
+    }
+  }
+  return names;
+}
+
 // ---- role hierarchy closure -------------------------------------------
 
 /** A memoized forward walk over `edges` ([[from, to], …]): returns a
@@ -165,24 +196,51 @@ function buildForwardWalk(edges) {
  *  edges count as that role's own edges under `rdfs:subPropertyOf` —
  *  every role at or below it in the hierarchy. `subPropertyEdges` is
  *  `[[sub, sup], …]`. Precomputed once per KB, so a rule reading "does this
- *  edge satisfy role X" is one Set lookup, not a walk. */
+ *  edge satisfy role X" is one Set lookup, not a walk. Every role name is
+ *  folded through `localRoleName` on the way in, so the closure is keyed and
+ *  valued in one canonical form regardless of whether a caller's role names
+ *  came from a term (already namespace-stripped, e.g. an owl:onProperty
+ *  object) or from an edge's own literal predicate (an asserted role
+ *  assertion's `r`, kept verbatim elsewhere for citation) — roleCountsAs
+ *  folds an edge's role the same way before ever consulting this map. */
 function buildRoleClosure(subPropertyEdges, roleNames) {
-  const subRolesOf = buildForwardWalk((subPropertyEdges || []).map(([sub, sup]) => [sup, sub]));
+  const edges = (subPropertyEdges || []).map(([sub, sup]) => [localRoleName(sub), localRoleName(sup)]);
+  const subRolesOf = buildForwardWalk(edges.map(([sub, sup]) => [sup, sub]));
   const closure = new Map();
-  for (const role of roleNames) closure.set(role, new Set([role, ...subRolesOf(role)]));
+  for (const role of roleNames) {
+    const key = localRoleName(role);
+    closure.set(key, new Set([key, ...subRolesOf(key)]));
+  }
   return closure;
 }
+
+/** An asserted ABox role edge's own `r` keeps its citation-facing spelling
+ *  verbatim (kb.roleAssertions, so a rendered answer can quote the real
+ *  predicate — "tmct:contains", not "contains"). Every role-AXIOM value
+ *  (owl:onProperty's object, rdfs:subPropertyOf's and owl:inverseOf's
+ *  subject/object, a transitive-property declaration's subject) is a TERM,
+ *  and every writer already strips a term's CURIE namespace before storage
+ *  (normFactTerm) — so the two spellings of the SAME role diverge unless
+ *  role-hierarchy/transitivity/inverse matching folds an edge's role through
+ *  the same normalization before comparing. */
+const localRoleName = (role) => normFactTerm(role);
 
 /** Does an edge labelled `edgeRole` satisfy a rule asking for `role`? True
  *  when they're the same role, or when `edgeRole` is a declared sub-role of
  *  `role` under the KB's precomputed role closure. With no closure entry for
  *  `role` (it never appeared in a stored `owl:onProperty` or
  *  `rdfs:subPropertyOf` row), only an exact match counts — the same
- *  behaviour every rule had before role hierarchies existed. */
+ *  behaviour every rule had before role hierarchies existed. Both arguments
+ *  are folded through `localRoleName` before comparing: `role` is usually
+ *  already-normalized (threaded from an axiom's own `expr.r`, itself read
+ *  from a stripped owl:onProperty object), but a hand-built KB with no
+ *  restriction at all may pass an edge's own literal spelling on both sides. */
 function roleCountsAs(kb, edgeRole, role) {
-  if (edgeRole === role) return true;
-  const counted = kb && kb.roleClosure ? kb.roleClosure.get(role) : null;
-  return counted ? counted.has(edgeRole) : false;
+  const normEdgeRole = localRoleName(edgeRole);
+  const normRole = localRoleName(role);
+  if (normEdgeRole === normRole) return true;
+  const counted = kb && kb.roleClosure ? kb.roleClosure.get(normRole) : null;
+  return counted ? counted.has(normEdgeRole) : false;
 }
 
 /** Every target a role-`role` edge from `nodeId` reaches, reading BOTH the
@@ -198,7 +256,7 @@ function roleEdgeTargets(branch, kb, nodeId, role) {
     if (e.from === nodeId && roleCountsAs(kb, e.r, role)) {
       targets.push({ to: e.to, fromFacts: e.fromFacts });
     } else if (e.to === nodeId) {
-      const inv = kb && kb.inverseOf ? kb.inverseOf.get(e.r) : null;
+      const inv = kb && kb.inverseOf ? kb.inverseOf.get(localRoleName(e.r)) : null;
       if (inv && roleCountsAs(kb, inv, role)) targets.push({ to: e.from, fromFacts: e.fromFacts });
     }
   }
@@ -996,7 +1054,8 @@ export function buildTableauKb(rows) {
     const obj = String(r.object || "").toLowerCase();
     if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
   }
-  const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
+  const individualNames = chainedIndividualTerms(individualNamesFromType, roleAssertionCandidates);
+  const isIndividualTerm = (term) => individualNames.has(term) || CODE_REF_SHAPE.test(term);
 
   // An asserted role edge between two named individuals: any predicate
   // outside the recognised OWL/RDFS vocabulary, both of whose terms resolve
@@ -1220,7 +1279,9 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     const obj = String(r.object || "").toLowerCase();
     if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
   }
-  const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
+  const roleAssertionCandidateRows = list.filter((r) => !RECOGNISED_KB_PREDICATES.has(String(r.predicate).trim().toLowerCase()));
+  const individualNames = chainedIndividualTerms(individualNamesFromType, roleAssertionCandidateRows);
+  const isIndividualTerm = (term) => individualNames.has(term) || CODE_REF_SHAPE.test(term);
 
   for (const r of list) {
     const p = String(r.predicate).trim().toLowerCase();
@@ -1298,15 +1359,20 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     for (const other of roleAssertionEndpoints.get(term) || []) enqueue(other, hopBudget);
   }
 
+  // rolesUsed is compared below against a rdfs:subPropertyOf/owl:inverseOf/
+  // transitive-property row's own SUBJECT — a term, already namespace-stripped
+  // by every writer (normFactTerm) — so a role assertion's own predicate
+  // (kept verbatim elsewhere for citation) is normalized the same way
+  // buildTableauKb's own role-hierarchy matching is (see localRoleName there).
   const rolesUsed = new Set();
-  for (const [restriction, role] of onPropertyOf) if (included.has(restriction)) rolesUsed.add(role);
-  for (const r of roleAssertionRows) if (included.has(r.subject) || included.has(r.object)) rolesUsed.add(r.predicate);
+  for (const [restriction, role] of onPropertyOf) if (included.has(restriction)) rolesUsed.add(localRoleName(role));
+  for (const r of roleAssertionRows) if (included.has(r.subject) || included.has(r.object)) rolesUsed.add(localRoleName(r.predicate));
 
   return list.filter((r) => {
     if (included.has(r.subject) || included.has(r.object)) return true;
     const p = String(r.predicate).trim().toLowerCase();
-    if (p === "rdfs:subpropertyof" || p === "owl:inverseof") return rolesUsed.has(r.subject);
-    if (p === "rdf:type" && String(r.object).toLowerCase() === "transitiveproperty") return rolesUsed.has(r.subject);
+    if (p === "rdfs:subpropertyof" || p === "owl:inverseof") return rolesUsed.has(localRoleName(r.subject));
+    if (p === "rdf:type" && String(r.object).toLowerCase() === "transitiveproperty") return rolesUsed.has(localRoleName(r.subject));
     return false;
   });
 }
