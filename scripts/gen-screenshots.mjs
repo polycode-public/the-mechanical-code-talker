@@ -8,7 +8,7 @@
 // never a build left over from an earlier session. Run via `npm run
 // gen:screenshots`.
 import { createHash } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -33,11 +33,14 @@ const MUDIII_BUSY_TURN_THRESHOLD = 12;
 // rather than mid-step: the scene eases a one-cell move over 250ms.
 const SCENE_SETTLE_MS = 1_200;
 const MUDIII_READY_TIMEOUT_MS = 60_000;
+// news.html builds its first feed items from the chat seed, which is a
+// 90 MB artifact the page has to fetch and index before an item exists.
+const NEWS_READY_TIMEOUT_MS = 120_000;
 const MUDIII_BUSY_TIMEOUT_MS = 60_000;
 
 // Same order as DEMO_PAGES in site-pages.mjs, which is also the order the
 // home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "ledger", "plan", "mudiii", "adventure", "sprites"];
+const PAGE_ORDER = ["chat", "ledger", "plan", "mudiii", "adventure", "sprites", "news"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -55,6 +58,25 @@ const READY_CHECKS = {
   ),
   ledger: (page) => page.locator(".dash").waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   sprites: (page) => page.locator(".card").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
+  news: async (page) => {
+    // The page starves both requestAnimationFrame and the injected pollers
+    // while it streams and indexes the seed, so every waitFor variant times
+    // out even though the items are provably rendered — a plain
+    // sleep-then-evaluate loop is the one sampling path that answers.
+    const deadline = Date.now() + NEWS_READY_TIMEOUT_MS;
+    let ready = false;
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(2000);
+      ready = await page.evaluate(() => {
+        const el = document.querySelector("#feed .item");
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      if (ready) break;
+    }
+    if (!ready) throw new Error("news feed item never rendered within NEWS_READY_TIMEOUT_MS");
+  },
   // mudiii.html runs a live three.js animation loop and keeps fetching models
   // from the moment it boots, so "networkidle" (used by every ready check
   // above via the default in capturePage) would never resolve — see
@@ -113,7 +135,7 @@ const READY_CHECKS = {
 // uses "networkidle" in its own file, so it alone keeps the wait style its
 // own test already trusts, because its live animation loop and rolling model
 // fetches mean the network never truly goes idle.
-const GOTO_WAIT_UNTIL = { mudiii: "load" };
+const GOTO_WAIT_UNTIL = { mudiii: "load", news: "load" };
 
 /** Read a PNG's pixel dimensions straight out of its IHDR chunk (bytes 16-23,
  *  big-endian width then height) — the only two fields this file needs, so
@@ -129,10 +151,10 @@ async function capturePage(browser, origin, name) {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
   try {
-    await page.route("**/*", (route) => {
-      if (route.request().url().startsWith(origin)) return route.continue();
-      return route.abort();
-    });
+    // A predicate route intercepts only third-party URLs, so same-origin
+    // fetches (the 90 MB chat seed among them) stream uninstrumented —
+    // proxying them through interception starves seed-dependent pages.
+    await page.route((url) => !url.href.startsWith(origin), (route) => route.abort());
     await page.goto(`${origin}/${name}.html`, { waitUntil: GOTO_WAIT_UNTIL[name] ?? "networkidle" });
     await READY_CHECKS[name](page);
     await page.waitForTimeout(SETTLE_MS);
@@ -148,6 +170,9 @@ async function main() {
   mkdirSync(outDir, { recursive: true });
 
   const siteDir = buildDemoSiteSnapshot();
+  // The snapshot carries only tracked files plus the build's own outputs;
+  // the chat seed is neither, and the news plate needs a seeded feed.
+  cpSync(join(repoRoot, "public", "chat-seed.json"), join(siteDir, "chat-seed.json"));
   const server = await serveDirectory(siteDir);
   const browser = await chromium.launch();
   const pages = [];

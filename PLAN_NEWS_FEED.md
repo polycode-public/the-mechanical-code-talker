@@ -1337,6 +1337,15 @@ Goal: every touchpoint a generated demo page owes the estate. Split 7a (authored
 sitemap, head meta, SW precache and OG wiring through the existing generators (section 1); the
 items below are the genuinely per-page surfaces.
 
+**7a built.** All seven items below ship. `"news"` sits second in `DEMO_PAGES`, right after
+`"chat"`, so news.html is Plate II and every plate after it renumbered (sprites III, ledger IV,
+plan V, mudiii VI, adventure VII); the capability matrix gained a `news.html` row holding the
+"Search backed" focus cell, and chat's own cell there is now a plain tick. `npm run demo:build`
+renders `news.html` and `news-about.html` clean, and `sitemap.xml` carries 18 locs. The two
+count pins 7b owns (`site-meta.test.mjs`'s page/sitemap count, `og-images.test.mjs`'s image
+count) still read the pre-7a value of 16 and fail on the moved count, same for
+`screenshots.test.mjs` on the missing `news.png`, exactly as scoped to 7b above.
+
 **7a — authored:**
 
 1. `scripts/site-pages.mjs`: `"news"` into `DEMO_PAGES`; `DEMO_PAGE_META.news = { title:
