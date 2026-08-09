@@ -417,9 +417,10 @@ test("renderMudiiiHtml: the follow control closes while the board plays, driven 
   assert.ok(onRender, "the ticker's onRender is in the page script");
   assert.match(onRender[1], /playBtn\.setAttribute\("aria-pressed", state\.playing/,
     "the play control reads the ticker's own state");
-  assert.match(onRender[1], /el\("agentSelect"\)\.disabled = state\.playing;/,
-    "the follow control reads that same state, so the two can never disagree");
-  assert.match(onRender[1], /el\("agentSelectHint"\)\.hidden = !state\.playing;/);
+  assert.match(onRender[1], /const lockFollow = state\.playing && !isPuzzle\(\);/,
+    "the follow control reads that same state, so the two can never disagree — and stays open on a board that rebuilds no dropdown as it plays");
+  assert.match(onRender[1], /el\("agentSelect"\)\.disabled = lockFollow;/);
+  assert.match(onRender[1], /el\("agentSelectHint"\)\.hidden = !lockFollow;/);
   assert.doesNotMatch(
     /el\("agentSelect"\)\.addEventListener\("change"[\s\S]*?\n  \}/.exec(html)[0],
     /playing|autoOn/,
@@ -707,13 +708,59 @@ test("renderMudiiiHtml: the outlook panel is refreshed on boot, after every worl
   assert.match(html, /session\.outlook\(\)/, "refreshOutlook reads the session's own outlook() read path, not a fabricated one");
   const boot = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(boot);
-  assert.match(boot[1], /renderAll\(\);\s*await refreshOutlook\(\);/, "boot refreshes the panel once the opening board is drawn");
+  assert.match(boot[1], /renderAll\(\);[\s\S]*?await refreshOutlook\(\);/, "boot refreshes the panel once the opening board is drawn");
   const applyEditor = /async function applyEditorText\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(applyEditor);
   assert.match(applyEditor[1], /await refreshOutlook\(\);/, "a world edit refreshes the panel");
   const applyActorEditor = /async function applyActorEditorText\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(applyActorEditor);
   assert.match(applyActorEditor[1], /await refreshOutlook\(\);/, "an actor edit refreshes the panel");
+});
+
+test("renderMudiiiHtml: the crossing board takes the 3D stage's place on a puzzle scenario, and each is hidden by attribute where the other belongs", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /id="sceneStage"[^>]*data-hide-when-puzzle/, "the chase's 3D stage steps aside for a world with no grid");
+  assert.match(html, /id="riverStage"[^>]*data-show-when-puzzle/, "and the crossing board is what stands there instead");
+  assert.match(html, /id="riverChipsLeft"/);
+  assert.match(html, /id="riverChipsBoat"/, "the boat holds chips of its own, so a passenger reads as aboard mid-crossing");
+  assert.match(html, /id="riverChipsRight"/);
+  assert.match(html, /id="riverProgress"/);
+  assert.match(html, /id="riverMoveText"/, "the board names the move it just played");
+  // An author display rule beats the browser's own [hidden] rule, so the
+  // sheet has to restate it or a hidden panel keeps its box.
+  assert.match(html, /\.scene-stage\[hidden\] \{ display: none; \}/);
+  assert.match(html, /\.map-panel\[hidden\]/);
+  assert.match(html, /\.hud-row\[hidden\]/);
+});
+
+test("renderMudiiiHtml: playback only walks the positions the planner handed back, and never derives a move of its own", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const playOne = /async function playOneRiverMove\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(playOne, "one crossing is one named function");
+  assert.match(playOne[1], /riverPlan\[step - 1\]\.target/, "the move played is the plan's own next action");
+  assert.match(playOne[1], /riverTravellersFor\(step\)/, "and who is aboard is the difference between two positions the plan already carries");
+  assert.doesNotMatch(playOne[1], /movesFromRules|findActionPath|session\./,
+    "nothing here re-searches or asks the engine for a move");
+  const adopt = /function adoptPuzzlePlan\(puzzle\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(adopt);
+  assert.match(adopt[1], /riverMove = 0;/, "a different crossing rewinds playback rather than holding a position in a plan that no longer exists");
+  const refresh = /async function refreshOutlook\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.match(refresh[1], /adoptPuzzlePlan\(lastOutlook\.puzzle\)/, "and an edit's own outlook refresh is where that happens");
+});
+
+test("renderMudiiiHtml: the followed agent's beliefs, plan and imperatives sit on the playing screen and hide only in edit mode", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /id="mudiiiFocusPanel"/);
+  assert.match(html, /id="focusBeliefs"/);
+  assert.match(html, /id="focusPlanText"/);
+  assert.match(html, /id="focusImperatives"/);
+  assert.match(html, /body\.editing \.focus-panel \{ display: none; \}/, "the edit view has its own copies, so this one steps aside there");
+  assert.match(html, /\n  \.focus-panel \{\s*\n\s*display: flex;/, "and it is on screen the rest of the time, unlike the actor card's own display: none default");
+  const imperatives = /function renderFocusImperatives\(id\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(imperatives);
+  assert.match(imperatives[1], /renderAgentEditorText/, "the drive sentences are the actor editor's own per-instance text, inherited class lines included");
+  const chat = /function sendCommand\(line\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.match(chat[1], /await refreshStoreRows\(\);/, "a taught line can change a drive, so the panel re-reads the store after a turn");
 });
 
 test("renderMudiiiHtml: a null belief renders as the stated gap, never as a blank cell", () => {

@@ -826,6 +826,30 @@ test("agentOutlook's puzzle plan reads the shipped river-crossing world the same
   assert.equal(outlook.puzzle.miss, null);
 });
 
+test("agentOutlook's puzzle plan carries one who-stands-where map per position, opening arrangement first", async () => {
+  const world = loadWorld(worldsPackDir(), "river-crossing");
+  const memoryDir = createInMemoryStore();
+  await appendFacts(memoryDir, world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:river-crossing" })));
+  for (const rule of world.rules) {
+    await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:river-crossing" });
+  }
+  const { puzzle } = await agentOutlook(memoryDir, {});
+  assert.equal(puzzle.places.length, puzzle.plan.length + 1, "one more position than there are moves between them");
+  assert.equal(puzzle.goalPlace, "bank-west");
+  assert.deepEqual(puzzle.places[0], {
+    "cabbage-1": "bank-east", "farmer-1": "bank-east", "fox-1": "bank-east", "goat-1": "bank-east",
+  }, "everyone opens on the east bank");
+  assert.deepEqual(puzzle.places[puzzle.places.length - 1], {
+    "cabbage-1": "bank-west", "farmer-1": "bank-west", "fox-1": "bank-west", "goat-1": "bank-west",
+  }, "and the last position is the goal the search was given");
+  // Every move changes exactly the passengers its own action names, and the
+  // ferryman crosses on all seven.
+  const movers = puzzle.places.slice(1).map((after, i) => Object.keys(after)
+    .filter((id) => puzzle.places[i][id] !== after[id]).sort());
+  assert.ok(movers.every((ids) => ids.includes("farmer-1")), "the farmer rows every crossing");
+  assert.deepEqual(movers[0], ["farmer-1", "goat-1"], "the goat and the farmer make the first crossing");
+});
+
 test("agentOutlook's puzzle plan reports the honest miss, never a shortened plan, once no farmer can cover every appetite", async () => {
   const world = loadWorld(worldsPackDir(), "river-crossing");
   const memoryDir = createInMemoryStore();
@@ -837,4 +861,5 @@ test("agentOutlook's puzzle plan reports the honest miss, never a shortened plan
   const outlook = await agentOutlook(memoryDir, {});
   assert.equal(outlook.puzzle.plan, null, "no crossing sequence survives three mutually exclusive pairs guarded by one farmer");
   assert.match(outlook.puzzle.miss, /no plan found within \d+ moves/);
+  assert.equal(outlook.puzzle.places.length, 1, "a miss still names where everyone stands, and nowhere they might have gone");
 });

@@ -6,6 +6,13 @@
 // live-redraws that plan with no turn spent: retracting it widens the
 // search, restoring it and adding a second appetite exhausts every legal
 // opening, and undoing both returns the original crossing byte-identically.
+//
+// The playing screen itself is the other half: play walks the crossing the
+// planner found one move at a time with the passengers drawn on their banks
+// and aboard the boat, pause holds where it stopped, step takes a single
+// crossing, reset puts everyone back, and the panel under the chat shows
+// whichever passenger is followed — its beliefs, the plan, and the drive
+// sentences it inherits from its class.
 // Mirrors pages-mudiii.test.mjs's own fixture setup and assertion style.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
@@ -122,6 +129,43 @@ async function enterEditMode(page) {
   await page.waitForFunction(() => document.body.classList.contains("editing"), null, { timeout: READY_TIMEOUT_MS });
 }
 
+const OPENING_BANKS = Object.freeze({
+  "cabbage-1": "bank-east", "farmer-1": "bank-east", "fox-1": "bank-east", "goat-1": "bank-east",
+});
+
+/** Where every passenger is drawn right now, read off the board's own chips:
+ *  `{ "goat-1": "bank-west", ... }`, with "boat" for anyone aboard. */
+const readBanks = (page) => page.$$eval(
+  ".river-chip",
+  (chips) => Object.fromEntries(chips.map((chip) => [chip.dataset.passenger, chip.dataset.place])),
+);
+
+const readBoard = (page) => page.evaluate(() => ({
+  progress: document.querySelector("#riverProgress")?.textContent ?? "",
+  move: document.querySelector("#riverMoveText")?.textContent ?? "",
+  boat: document.querySelector("#riverBoat")?.getAttribute("data-at") ?? "",
+  playing: document.querySelector("#autoToggle")?.getAttribute("aria-pressed") ?? "",
+}));
+
+/** Poll `read` until `accepts` takes its answer. A sleep-then-read loop
+ *  rather than waitForFunction: the crossing runs its own timers and a
+ *  planner re-search can hold the main thread, and this reports the last
+ *  reading it saw when it gives up instead of a bare timeout. */
+async function readUntil(page, read, accepts, { timeout = SYNC_TIMEOUT_MS, interval = 120 } = {}) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  for (;;) {
+    last = await read(page);
+    if (accepts(last)) return last;
+    if (Date.now() > deadline) {
+      throw new Error(`gave up waiting on the crossing; last reading was ${JSON.stringify(last)}`);
+    }
+    await new Promise((resolve) => { setTimeout(resolve, interval); });
+  }
+}
+
+const movesPlayed = (board) => Number((/move (\d+) of/.exec(board.progress) ?? [0, -1])[1]);
+
 test("the river scenario opens paused with zero console or page errors, naming its four passengers on the follow control", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
@@ -233,8 +277,144 @@ test("editing the fox's own appetite for the goat live-redraws the crossing plan
   }
 });
 
+test("the crossing board opens with all four passengers on the near bank, and the 3D chase stage gives way to it", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+
+    assert.equal(await page.locator("#riverStage").isVisible(), true, "the crossing board is the playing screen here");
+    assert.equal(await page.locator("#sceneStage").isVisible(), false, "the chase's 3D stage steps aside for a world with no grid");
+    assert.equal(await page.locator("#mapPanel").isVisible(), false, "and so does the overhead map of a square that does not exist");
+
+    assert.deepEqual(await readBanks(page), OPENING_BANKS, "everyone starts on the east bank");
+    const board = await readBoard(page);
+    assert.equal(board.progress, "move 0 of 7", "the board names which of the seven moves it is on");
+    assert.match(board.move, /nobody has crossed yet/i);
+    assert.equal(board.boat, "left", "the boat is moored on the near bank");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error drawing the crossing board");
+  } finally {
+    await context.close();
+  }
+});
+
+test("play executes the planner's moves, the passengers cross bank by bank, and pause holds the boat where it stopped", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+
+    await page.locator("#autoToggle").click();
+    // The first crossing takes the goat over: that is move one of the plan
+    // the panel already printed, played rather than re-derived here.
+    const afterFirst = await readUntil(page, readBanks, (banks) => banks["goat-1"] === "bank-west");
+    assert.equal(afterFirst["farmer-1"], "bank-west", "the farmer rows, so the farmer crosses with the goat");
+    assert.equal(afterFirst["fox-1"], "bank-east", "the fox stays put — it was never on this crossing");
+
+    await readUntil(page, readBoard, (board) => movesPlayed(board) >= 3);
+    await page.locator("#autoToggle").click();
+    const held = await readUntil(
+      page, readBoard,
+      (board) => board.playing === "false" && board.boat !== "crossing",
+    );
+    const heldBanks = await readBanks(page);
+    assert.ok(movesPlayed(held) >= 3 && movesPlayed(held) < 7, `paused part-way through, at ${held.progress}`);
+    assert.ok(
+      Object.values(heldBanks).filter((place) => place === "bank-west").length >= 2,
+      `at least two passengers are across when it stops: ${JSON.stringify(heldBanks)}`,
+    );
+
+    // A paused crossing is a still one: nothing lands after the click.
+    await new Promise((resolve) => { setTimeout(resolve, 1500); });
+    assert.deepEqual(await readBoard(page), held, "a paused board holds the move it stopped on");
+    assert.deepEqual(await readBanks(page), heldBanks, "and holds everyone exactly where they stood");
+
+    // Play again from where it was held, and it finishes the crossing.
+    await page.locator("#autoToggle").click();
+    const finished = await readUntil(page, readBoard, (board) => movesPlayed(board) === 7, { timeout: 30_000 });
+    assert.match(finished.move, /everyone is across/i);
+    assert.deepEqual(await readBanks(page), {
+      "cabbage-1": "bank-west", "farmer-1": "bank-west", "fox-1": "bank-west", "goat-1": "bank-west",
+    }, "the seventh move lands everybody on the west bank");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error playing, pausing and resuming the crossing");
+  } finally {
+    await context.close();
+  }
+});
+
+test("step takes one crossing on its own, and reset puts everyone back on the opening bank", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+
+    await page.locator("#stepBtn").click();
+    const afterOne = await readUntil(page, readBoard, (board) => movesPlayed(board) === 1 && board.boat !== "crossing");
+    assert.match(afterOne.move, /last move: ferry goat-1 onto bank-west/);
+    assert.deepEqual(await readBanks(page), {
+      "cabbage-1": "bank-east", "farmer-1": "bank-west", "fox-1": "bank-east", "goat-1": "bank-west",
+    }, "one step is one crossing, no more");
+
+    await page.locator("#stepBtn").click();
+    const afterTwo = await readUntil(page, readBoard, (board) => movesPlayed(board) === 2 && board.boat !== "crossing");
+    assert.match(afterTwo.move, /last move: ferry farmer-1 onto bank-east/, "the farmer rows back alone");
+
+    await page.locator("#resetBtn").click();
+    await readUntil(page, readBoard, (board) => movesPlayed(board) === 0);
+    assert.deepEqual(await readBanks(page), OPENING_BANKS, "reset is the opening arrangement again");
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "and it hands the board back stopped");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error stepping and resetting the crossing");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the panel under the chat carries the followed passenger's beliefs, the plan and its inherited drives, and follows a new pick mid-crossing", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+    assert.equal(await page.locator("#mudiiiFocusPanel").isVisible(), true, "it sits on the playing screen, not behind the edit button");
+
+    await page.selectOption("#agentSelect", "cabbage-1");
+    assert.equal(await page.locator("#focusWho").textContent(), "cabbage-1");
+    const cabbageDrives = await page.locator("#focusImperatives").textContent();
+    assert.match(cabbageDrives, /# inherited from cabbage/, "the class the instance inherits from is named");
+    assert.match(cabbageDrives, /# cabbage evades goat\./, "including the drive that makes the puzzle a puzzle");
+
+    const planText = await page.locator("#focusPlanText").textContent();
+    assert.match(planText, /1\. ferry goat-1 onto bank-west/, "the crossing the planner found, from its first move");
+    assert.match(planText, /7\. ferry goat-1 onto bank-west/, "to its last");
+
+    // The river world has no vision model, so the belief column states that
+    // rather than drawing an invented row per passenger.
+    assert.match(await page.locator("#focusBeliefs").textContent(), /keeps no belief map/i);
+
+    await page.locator("#stepBtn").click();
+    await readUntil(page, readBoard, (board) => movesPlayed(board) === 1 && board.boat !== "crossing");
+    assert.match(
+      await page.locator("#focusPlanText").textContent(),
+      /✓ 1\. ferry goat-1 onto bank-west/,
+      "a played move is marked off in the plan the panel shows",
+    );
+
+    // Swapping who is followed mid-crossing repopulates the panel from the
+    // new passenger's own rows.
+    await page.selectOption("#agentSelect", "fox-1");
+    assert.equal(await page.locator("#focusWho").textContent(), "fox-1");
+    assert.match(await page.locator("#focusImperatives").textContent(), /# fox eats goat\./);
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error reading the followed passenger's own panel");
+  } finally {
+    await context.close();
+  }
+});
+
 for (const width of PHONE_WIDTHS) {
-  test(`the river scenario's actor card and outlook panel have no horizontal overflow at ${width}px`, async () => {
+  test(`the river scenario's crossing board, actor card and outlook panel have no horizontal overflow at ${width}px`, async () => {
     const context = await browser.newContext({ viewport: { width, height: 812 } });
     const page = await context.newPage();
     await page.route("**/*", (route) => {
@@ -254,16 +434,23 @@ for (const width of PHONE_WIDTHS) {
         { timeout: READY_TIMEOUT_MS },
       );
       await openRiverScenario(page);
-      await enterEditMode(page);
       await page.selectOption("#agentSelect", "farmer-1");
 
-      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      const measure = () => page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
         clientWidth: document.documentElement.clientWidth,
       }));
+      const playing = await measure();
       assert.ok(
-        scrollWidth <= clientWidth + 1,
-        `the river scenario's edit view is ${scrollWidth}px wide inside a ${clientWidth}px viewport`,
+        playing.scrollWidth <= playing.clientWidth + 1,
+        `the river scenario's playing screen is ${playing.scrollWidth}px wide inside a ${playing.clientWidth}px viewport`,
+      );
+
+      await enterEditMode(page);
+      const editing = await measure();
+      assert.ok(
+        editing.scrollWidth <= editing.clientWidth + 1,
+        `the river scenario's edit view is ${editing.scrollWidth}px wide inside a ${editing.clientWidth}px viewport`,
       );
     } finally {
       await context.close();
