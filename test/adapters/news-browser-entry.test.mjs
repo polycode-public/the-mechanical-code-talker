@@ -174,15 +174,15 @@ test("buildFeed's items carry background/backgroundParagraph once the newsworthi
   session.destroy();
 });
 
-test("the seed-only feed carries the seed label until the first poll completes", async () => {
+test("the seed-only feed reads back empty until the first report arrives — a seed fact alone is never a card", async () => {
   const { prefs } = memoryPrefs();
   const session = createNewsSession({ prefs, fetchImpl: neverFetch(), now: FIXED_NOW });
   // A row with no news/news-fixture/research provenance — the shape a real
   // chat-seed.json row carries.
   await appendFacts(session.memoryDir, [{ subject: "owl", predicate: "rdf:type", object: "bird", provenance: "corpus:seed" }]);
   const feed = await session.buildFeed();
-  assert.equal(feed.seedFallback, true, "a graph with no news/research rows falls back to the seed-wide feed");
-  assert.ok(feed.items.some((it) => it.hub === "owl"), "the seed fact itself becomes a feed item");
+  assert.deepEqual(feed.items, [], "nothing has been reported yet");
+  assert.equal(feed.seedFallback, false, "the seed fallback has retired from the feed path");
   session.destroy();
 });
 

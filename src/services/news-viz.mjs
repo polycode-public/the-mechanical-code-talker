@@ -247,7 +247,7 @@ ${NEWS_STYLE}
     </div>
     <div class="pills" id="feedPills" aria-label="Filter the feed by key term"></div>
     <div class="feed" id="feed" tabindex="0">
-      <div class="empty" id="feedEmpty">no news items yet — the seed graph builds the first ones once it finishes loading.</div>
+      <div class="empty" id="feedEmpty">no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.</div>
     </div>
   </section>
 
@@ -371,9 +371,10 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   let feedItems = [];
   const cardsByItemId = new Map();
   const activePillTerms = new Set();
-  // What an empty feed says. It starts as the pre-poll line and becomes the
-  // purge line once "stop & forget" has emptied the graph of articles.
-  let emptyFeedText = "no news items yet — the seed graph builds the first ones once it finishes loading.";
+  // What an empty feed says: this line before a poll, or after one that
+  // reported nothing newsworthy; the purge line once "stop & forget" has
+  // emptied the graph of articles.
+  let emptyFeedText = "no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.";
 
   const MAX_PILLS = 12;
 

@@ -37,7 +37,7 @@ import { ingestText, setIngestYield } from "../../services/extract-facts.mjs";
 import { isNewsProvenance } from "../../domain/news-feed.mjs";
 import {
   resolveNewsConfig, createNewsState, pollNewsSources, enrichTopTerms, buildFeed,
-  ingestUploadedFactRows, isVocabGroundedTerm,
+  ingestUploadedFactRows, isVocabGroundedTerm, filterRankedTermEntries,
 } from "../../services/news.mjs";
 import { rankedTerms, ledgerFromPayload, bumpTerms, ledgerPayload } from "../../domain/term-ledger.mjs";
 import {
@@ -361,10 +361,17 @@ export function createNewsSession({
       return store.readFactRows(memory).filter((r) => wanted.has(r.id));
     },
 
+    // filterRankedTermEntries can shrink the ledger's own limited slice, so
+    // this asks for more than the display wants and trims afterward — the
+    // panel's own count stays full even when a class term or a bare
+    // quantity filters out.
     async rank({ limit = 20 } = {}) {
       const nowVal = typeof now === "function" ? now() : now;
       const ledger = ledgerFromPayload(state.ledger);
-      return rankedTerms(ledger, { limit, now: nowVal, ttlMs: config.negativeCacheTtlHours * 3600000 });
+      const raw = rankedTerms(ledger, { limit: limit * 4, now: nowVal, ttlMs: config.negativeCacheTtlHours * 3600000 });
+      const memory = await store.loadMemory(memoryDir);
+      const rows = store.readFactRows(memory);
+      return filterRankedTermEntries(rows, raw).slice(0, limit);
     },
 
     /** Add-by-URL: its own one-off preflight fetch, independent of the poll

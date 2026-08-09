@@ -124,3 +124,15 @@ test("renderNewsHtml: a card's collapsed background line renders only when backg
   assert.match(html, /what the graph already knew/, "the collapsed line's own label is present");
   assert.match(html, /item\.backgroundParagraph\s*\?/, "the block is conditional on the item actually carrying background content");
 });
+
+test("renderNewsHtml: the empty feed state names what the feed actually shows and how to fill it, never the retired seed-fallback line", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /id="feedEmpty"[^>]*>no news yet/, "the feed pane's own empty state carries the entity-anchored design copy");
+  assert.ok(!html.includes("the seed graph builds the first ones"), "the concept-card fallback's own line has retired with it");
+});
+
+test("renderNewsHtml: the empty state hides itself the moment a card is on screen, whether from a first render or a later poll", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /emptyEl\.hidden\s*=\s*shown\.length\s*>\s*0/, "paintFeed hides #feedEmpty whenever any card matches the active filters");
+  assert.match(html, /el\("feedEmpty"\)\.hidden\s*=\s*true/, "a card appended straight off a poll also hides the empty state on its own");
+});

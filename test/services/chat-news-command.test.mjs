@@ -34,7 +34,7 @@ function stubFetcher(sourceId, rawItems) {
   };
 }
 
-test("/news with no state shows the feed built from the seeded graph", async () => {
+test("/news with no state shows the honest empty line — a seed-only graph reports nothing", async () => {
   const dir = await tmpRepo();
   try {
     await appendFacts(dir, [
@@ -42,7 +42,7 @@ test("/news with no state shows the feed built from the seeded graph", async () 
       { subject: "otter", predicate: "mgx:hasA", object: "webbed foot", provenance: "corpus:test" },
     ]);
     const { answer, record } = await runTurn("/news", { memoryDir: dir, env: { TMCT_NO_SEED: "1" } });
-    assert.match(answer, /otter/);
+    assert.match(answer, /no news items yet/);
     assert.equal(record.miss, false);
   } finally {
     await rm(dir, { recursive: true, force: true });

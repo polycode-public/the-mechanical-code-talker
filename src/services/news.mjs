@@ -41,9 +41,9 @@
 // section 3). Network lives in the adapters this module is handed, never
 // inside it.
 
-import { normFactTerm, normFactPredicate, factIdFor, sha256Bytes } from "../domain/hash.mjs";
+import { normFactTerm, normFactPredicate, factIdFor } from "../domain/hash.mjs";
 import {
-  newsWindowRows, scoreHubs, subgraphAround, buildTermAdjacency, renderNewsParagraph, buildNewsItems, evictNewsFacts,
+  newsWindowRows, renderNewsParagraph, buildNewsItems, evictNewsFacts,
   conceptTerms, isQuantityTerm,
 } from "../domain/news-feed.mjs";
 import {
@@ -259,80 +259,27 @@ function joinTitleAndSummary(title, summary) {
   return `${t}${SENTENCE_END_RE.test(t) ? " " : ". "}${s}`;
 }
 
-function sha256HexPrefix(str, nBytes) {
-  const bytes = sha256Bytes(str);
-  let hex = "";
-  for (let i = 0; i < nBytes; i += 1) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
-}
-
 function toMs(value) {
   if (typeof value === "number") return value;
   const t = Date.parse(value);
   return Number.isFinite(t) ? t : NaN;
 }
 
-const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-
-function tierOfRows(rows) {
-  if (!rows.length) return "";
-  let strongest = rows[0];
-  for (const row of rows) {
-    if (Number(row.trust ?? 0) > Number(strongest.trust ?? 0)) strongest = row;
-  }
-  const kinds = Array.isArray(strongest.sourceTypes) ? strongest.sourceTypes : [];
-  return kinds[0] || "";
-}
-
-function collectItemSources(subgraphRows, sourcesByFactId) {
-  const seen = new Set();
-  const sources = [];
-  for (const row of subgraphRows) {
-    const src = sourcesByFactId.get(row.id);
-    if (!src) continue;
-    const key = src.url || src.title || "";
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    sources.push({ title: src.title || "", url: src.url || "", name: src.name || "" });
-  }
-  return sources;
-}
-
-/** The item-assembly buildNewsItems runs internally, exposed here so
- *  buildFeed's seed-only fallback (S1: score hubs over the WHOLE graph, not
- *  just news/research-tagged rows) can reuse the same shape without widening
- *  buildNewsItems's own, already-pinned window contract.
- *
- *  The newsworthiness gate's test 2 only (PLAN_NEWS_FEED.md section 17.6): a
- *  seed-only graph carries no news rows at all, so tests 1 (reported) and 3
- *  (anchored) have nothing to read — every candidate would fail them
- *  trivially and empty the page, which is exactly the fallback exists to
- *  prevent. Dropping class and bare-quantity terms still holds: neither ever
- *  makes a good card title, seed graph or not. */
-function assembleNewsItems(rows, windowRows, { now, limit, sourcesByFactId }) {
+/** The ranked-terms panel's own display filter (PLAN_NEWSWORTHINESS.md
+ *  section 3): a bare class object or a bare quantity is never a useful
+ *  "unknown word" entry. The concept-card fallback used to drop both from
+ *  its own candidate list before it retired from the feed path; this is
+ *  where that filter lives now, so the panel stops leading with bare
+ *  classes too. */
+export function filterRankedTermEntries(rows, entries) {
   const concepts = conceptTerms(rows);
-  const candidates = scoreHubs(rows, windowRows, { limit: Infinity })
-    .filter(({ term }) => !concepts.has(term) && !isQuantityTerm(term));
-  const hubs = candidates.slice(0, limit);
-  const adjacency = buildTermAdjacency(rows);
-  const items = hubs.map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term, { adjacency });
-    const factIds = subgraphRows.map((r) => r.id).sort();
-    return {
-      id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,
-      hub: term,
-      factIds,
-      changedCount: changed,
-      builtAt: now,
-      paragraph: renderNewsParagraph(term, subgraphRows),
-      tier: tierOfRows(subgraphRows),
-      sources: collectItemSources(subgraphRows, sourcesByFactId),
-      background: [],
-      backgroundParagraph: "",
-    };
-  });
-  return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));
+  return entries.filter(({ term }) => !concepts.has(term) && !isQuantityTerm(term));
 }
+
+// filterRankedTermEntries can shrink the ledger's own limited slice, so both
+// rank() call sites ask the ledger for more than the display wants and trim
+// afterward — the display count stays full even when some entries filter out.
+const RANK_OVERFETCH = 4;
 
 function buildSourcesByFactId(items) {
   const map = new Map();
@@ -772,25 +719,29 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
 // feed
 // ---------------------------------------------------------------------------
 
-/** Reads the current fact rows and builds the feed. On a seed-only graph
- *  (nothing news/research-tagged yet) scoreHubs falls back to whole-graph
- *  degree so the first paint is never empty — the caller renders every item
- *  in that state with the seed label until pollNewsSources runs once. */
+/** Reads the current fact rows and builds the feed: every hub that passes
+ *  the newsworthiness gate's test E or test A (PLAN_NEWSWORTHINESS.md
+ *  section 2), nothing else. A seed-only graph — or any graph where no
+ *  reported row anchors anything new — answers `items: []`; the page renders
+ *  its own designed empty state for that case rather than falling back to
+ *  concept cards off the whole graph. `seedFallback` stays in the shape at
+ *  `false` for one release so an existing consumer does not break.
+ *
+ *  `newName` is a display-only badge (never a gate): true when the lexicon
+ *  has no everyday-noun reading for the hub, computed here rather than in
+ *  buildNewsItems because the domain layer carries no lexicon. */
 export async function buildFeed(ctx) {
-  const { memoryDir, store, config, state, now } = ctx;
+  const { memoryDir, store, config, state, now, lexicon } = ctx;
   const nowVal = resolveNow(now);
   const memory = await store.loadMemory(memoryDir);
   const rows = store.readFactRows(memory);
   const sourcesByFactId = buildSourcesByFactId(state.items);
   const windowMs = config.windowHours * 3600000;
 
-  let items = buildNewsItems(rows, { now: nowVal, windowMs, limit: config.itemCap, sourcesByFactId });
-  let seedFallback = false;
-  if (!items.length) {
-    items = assembleNewsItems(rows, rows, { now: nowVal, limit: config.itemCap, sourcesByFactId });
-    seedFallback = items.length > 0;
-  }
-  return { items, seedFallback, builtAt: nowVal };
+  const lex = lexicon || loadLexicon();
+  const items = buildNewsItems(rows, { now: nowVal, windowMs, limit: config.itemCap, sourcesByFactId })
+    .map((item) => ({ ...item, newName: !isVocabGroundedTerm(lex, item.hub) }));
+  return { items, seedFallback: false, builtAt: nowVal };
 }
 
 // ---------------------------------------------------------------------------
@@ -841,10 +792,13 @@ function renderFeedText(feed, focus) {
     .join("\n");
 }
 
-function renderRankText(ctx) {
+async function renderRankText(ctx) {
   const nowVal = resolveNow(ctx.now);
   const ledger = ledgerFromPayload(ctx.state.ledger);
-  const entries = rankedTerms(ledger, { limit: 20, now: nowVal, ttlMs: ctx.config.negativeCacheTtlHours * 3600000 });
+  const raw = rankedTerms(ledger, { limit: 20 * RANK_OVERFETCH, now: nowVal, ttlMs: ctx.config.negativeCacheTtlHours * 3600000 });
+  const memory = await ctx.store.loadMemory(ctx.memoryDir);
+  const rows = ctx.store.readFactRows(memory);
+  const entries = filterRankedTermEntries(rows, raw).slice(0, 20);
   if (!entries.length) return "no fact-ungrounded terms yet — poll a source or teach something first.";
   return entries
     .map((e, i) => `${i + 1}. ${e.term} (${e.count}) — ${e.vocabGrounded ? "parseable but knowledge-free" : "unknown word"}`)
@@ -929,7 +883,7 @@ export async function newsTurn(line, ctx) {
     if (!ctx.config.sources.length) return { text: "no sources enabled — nothing to poll.", miss: true };
     return renderPollResult(await pollNewsSources(ctx));
   }
-  if (req.kind === "rank") return { text: renderRankText(ctx), miss: false };
+  if (req.kind === "rank") return { text: await renderRankText(ctx), miss: false };
   if (req.kind === "enrich") return renderEnrichResult(await enrichTopTerms(ctx));
   if (req.kind === "sources") return { text: renderSourcesText(ctx), miss: false };
   if (req.kind === "add") return handleAddSource(ctx, req.url);
