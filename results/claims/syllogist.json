@@ -1,0 +1,31 @@
+{
+  "name": "syllogist",
+  "generatedAt": "2026-08-09T06:20:18.553Z",
+  "commit": "9607b05f263b1c01c7cdfcf59f2b4fea346058d5",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "question shapes proved",
+  "threshold": {
+    "direction": "min",
+    "value": -2
+  },
+  "sources": [
+    "scripts/claims/claim-syllogist.mjs",
+    "test-benchmarks/infbench/cases.jsonl",
+    "test-benchmarks/infbench/envelope.json"
+  ],
+  "before": 0,
+  "after": 0,
+  "delta": 0,
+  "detail": {
+    "cases": 48,
+    "budgetExhausted": 0,
+    "beforeVerdicts": {
+      "unproven": 48
+    },
+    "afterVerdicts": {
+      "unproven": 40,
+      "inconsistent": 8
+    }
+  }
+}
