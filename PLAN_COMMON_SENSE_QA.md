@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. The five rungs R1–R5 remain.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage) is built and measured. R2–R5 remain.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1023,6 +1023,38 @@ Every rung re-runs the same committed fixture and moves the same JSON. Section 1
 counts as landing.
 
 ### 10.1 Rung 1 — seed coverage
+
+**Built and measured.** `corpus/conceptnet/commonsenseqa-seed.mjs`, the `filter-dump.mjs`/`CONCEPTNET_PREFER`
+changes, the re-cut `slice.jsonl`, `corpus/conceptnet/manifest.json` and its
+`test/estate/corpus-manifests.test.mjs` extension all landed. The re-cut moved from 44,827 edges
+(65% `/r/RelatedTo`) to 30,250, with the relational tail up by an order of magnitude —
+`mgx:atLocation` 641 to 4,500, `mgx:causes` 18 to 1,193, `mgx:desires` 9 to 453,
+`mgx:motivatedByGoal` 25 to 219, `mgx:hasSubevent` 42 to 1,762 — because the widened seed set now
+fills the whole 4.5 MB budget with mappable relations where `RelatedTo` used to fill most of it.
+`MAX_BYTES` did not need to rise; the re-probe sequence stayed green without it.
+
+The re-probe surfaced two real findings past the two the plan named. First, seven ConceptNet
+Verbosity-game description hints stored as `/r/IsA` (`dog` to `chap`, `example_of_pet`,
+`faithful_companion`, `good_friend`, `loyal_friend`, `mans_best_friend`, `nice_friend`) — none
+reachable before this round, since `dog` carried no ConceptNet edges at all — went into
+`quality-filter.mjs`'s `DENIED_ROWS`, the same mechanism `beta IsA programming_language` used.
+Second, and unrelated to the corpus itself: the digest layer's own provenance-chip classifier
+(`provenanceChipFor`, `src/services/chat-page-viz.mjs`) only recognized a flat citation's singular
+`"(source: X)"` shape, never a digest read-back's plural `"(sources: X; Y; Z)"` line — latent since
+the digest layer shipped, unreachable until "what is a dog" (the canonical vocabulary example)
+carried enough facts to cross the digest paragraph's own threshold. Fixed there, with two new tests.
+The `dog is a kind of animal (source: corpus:human)` pin the plan named did flip, to the digest
+paragraph's own phrasing citing one of dog's five surviving classes (canine, domestic animal, four
+legged animal, mammal, pet) — every e2e assertion pinned to the old flat line now accepts any of the
+five rather than one arbitrary winner. `quokka`/`trelvox` stayed clean misses; neither is a
+CommonsenseQA train-split concept.
+
+Re-measured against the fixture (chunked foreground slices, one persisted seeded repo, merged): before
+1/2/97 (answered/refused/abstained), `sourceEdgePresent` 2, `correctOfAnswered` 0; after 14/11/75,
+`sourceEdgePresent` 30, `correctOfAnswered` still 0. `sourceEdgePresent` clearing the child pack's own
+22-of-100 reference point is the rung's whole point: coverage moved, selection did not, exactly the
+two-different-rungs split section 2.3 forecast. Threshold stays `{ min, 0 }` — unchanged, since
+`value` itself did not rise.
 
 **Model tier: Sonnet.** A corpus re-cut with a determinism guard behind it.
 

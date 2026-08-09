@@ -54,12 +54,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (route interception, wait style, viewport and the seed serving are all ruled out
   individually; the remaining suspect is interaction between them — pick up from
   `/tmp/tmct-7b-*.log`). Then: 8 e2e + CI enrolment, 9 rig + claims.
-- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — landed: F0-F3, the broadened
-  `extractStemSourceTerm`, and the widened `leadsInterrogative` gate (fixture reach 50 → 95
-  of 100 stems; aggregate unchanged at 1 answered / 2 refused / 97 abstained because the
-  stem extractor's six templates all expect a fronted wh-word — the postponed-wh extraction
-  is the measured next rung, recorded in the plan). Next rounds: that extraction, F4
-  claims-block swap, F5 removal + corpus rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
+- [ ] **PLAN_COMMON_SENSE_QA.md — rungs R2-R5** — F0-F5 and R1 are landed. Next: R2 relation
+  routing, R3 inference depth, R4 wording levers (R2-R4 serialized on `chat.mjs`), R5 the
+  abstained band.
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
