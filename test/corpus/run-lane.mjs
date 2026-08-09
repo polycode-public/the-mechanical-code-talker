@@ -159,6 +159,14 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
           flag("setup.newsFixtures: must be an array of {sourceId, items: [{title[, guid][, url][, summary][, publishedAt]}]} objects");
         }
       }
+      if (s.newsKbFixtures !== undefined) {
+        const validHit = (h) => h && typeof h === "object" && isNonEmptyString(h.term)
+          && (isNonEmptyString(h.title) || isNonEmptyString(h.text) || isNonEmptyString(h.summary) || isNonEmptyString(h.isa));
+        if (!Array.isArray(s.newsKbFixtures) || !s.newsKbFixtures.every((fx) => fx && typeof fx === "object"
+          && isNonEmptyString(fx.sourceId) && Array.isArray(fx.hits) && fx.hits.every(validHit))) {
+          flag("setup.newsKbFixtures: must be an array of {sourceId, hits: [{term[, title][, text][, summary][, url][, isa]}]} objects — an empty hits array is a source that always misses");
+        }
+      }
     }
   }
   return problems;
@@ -170,26 +178,50 @@ function fixturePath(fixture) {
   return path.resolve(REPO_ROOT, "test", "fixtures", fixture);
 }
 
-/** `setup.newsFixtures` -> a `/news` providers set (news.mjs's own ctx.providers
- *  shape) whose fetchers serve literal, committed items instead of a real
- *  network fetch — the network-free way a corpus row exercises `/news poll`.
- *  Each source id's fetcher hands back its configured items exactly once
- *  (a second poll in the same row reads as "nothing new", the same as a real
- *  source with no fresh content). */
-function newsProvidersFromFixtures(newsFixtures) {
-  const newsFetchers = new Map();
-  for (const fx of newsFixtures) {
-    let served = false;
-    newsFetchers.set(fx.sourceId, {
-      id: fx.sourceId,
-      async fetchItems() {
-        if (served) return { items: [], bytes: 0 };
-        served = true;
-        return { items: normalizeFeedItems(fx.sourceId, fx.items, { now: new Date().toISOString() }), bytes: 0 };
+/** `setup.newsFixtures`/`setup.newsKbFixtures` -> a `/news` providers set
+ *  (news.mjs's own ctx.providers shape), network-free.
+ *
+ *  `newsFixtures` build `newsFetchers`: each source id's fetcher hands back
+ *  its configured items exactly once (a second poll in the same row reads as
+ *  "nothing new", the same as a real source with no fresh content).
+ *
+ *  `newsKbFixtures` (`[{ sourceId, hits: [{ term, title, text, summary, url,
+ *  isa }] }]`) build `getResearchProvider`: a term not present in its
+ *  source's `hits` is an honest miss (`lookup` resolves null), the same
+ *  shape a real KB source's "nothing found" reads as. `getResearchProvider`
+ *  is attached whenever either fixture kind is given, even with no KB hits
+ *  configured at all — an enrichment turn in that row then reads as every
+ *  source missing, never a research provider silently absent. */
+function newsProvidersFromFixtures(newsFixtures, newsKbFixtures) {
+  const providers = {};
+  if (newsFixtures?.length) {
+    const newsFetchers = new Map();
+    for (const fx of newsFixtures) {
+      let served = false;
+      newsFetchers.set(fx.sourceId, {
+        id: fx.sourceId,
+        async fetchItems() {
+          if (served) return { items: [], bytes: 0 };
+          served = true;
+          return { items: normalizeFeedItems(fx.sourceId, fx.items, { now: new Date().toISOString() }), bytes: 0 };
+        },
+      });
+    }
+    providers.newsFetchers = newsFetchers;
+  }
+  if (newsFixtures?.length || newsKbFixtures?.length) {
+    const hitsBySource = new Map((newsKbFixtures ?? []).map((fx) => [fx.sourceId, fx.hits]));
+    providers.getResearchProvider = ({ source } = {}) => ({
+      name: source,
+      origin: "https://fixture.invalid",
+      provenanceTag: (term) => `research:${source}:${term}`,
+      async lookup(term) {
+        const hits = hitsBySource.get(source) ?? [];
+        return hits.find((h) => h.term === term) ?? null;
       },
     });
   }
-  return { newsFetchers };
+  return providers;
 }
 
 function assertExpectation(exp, turn, rowId, preds = predicates, allTurns = []) {
@@ -229,7 +261,9 @@ export async function runChatRow(row, preds = predicates) {
       env: { ...(setup.seed ? {} : { TMCT_NO_SEED: "1" }), ...(setup.env ?? {}) },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
-      ...(setup.newsFixtures?.length ? { newsProviders: newsProvidersFromFixtures(setup.newsFixtures) } : {}),
+      ...(setup.newsFixtures?.length || setup.newsKbFixtures?.length
+        ? { newsProviders: newsProvidersFromFixtures(setup.newsFixtures, setup.newsKbFixtures) }
+        : {}),
     };
     if (setup.config !== undefined) {
       const toml = typeof setup.config === "string" ? setup.config : stringifyToml(setup.config);

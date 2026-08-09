@@ -7,3 +7,10 @@
 export function writesNoFacts(result) {
   return Array.isArray(result?.factsTouched) && result.factsTouched.length === 0;
 }
+
+/** The whole answer does NOT mention `pattern` — the negative-cache check: a
+ *  term parked inside its TTL never resurfaces in a later enrich cycle's
+ *  report, not even as a fresh miss. */
+export function answerLacks(result, pattern) {
+  return !new RegExp(String(pattern)).test(String(result?.answer ?? ""));
+}
