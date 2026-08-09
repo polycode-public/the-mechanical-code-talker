@@ -617,6 +617,12 @@ npm run corpus:matrix:gaps
 node --test "test/estate/*.test.mjs"
 ```
 
+**Measured (S5):** grammar 350/350 (11 grammar.choice.* rows across 10 unique keys), test:fast
+222/222, estate 108/108. `corpus:matrix:gaps` no longer lists `grammar.choice` — the level-refuses
+row is its negative case. `topic-read` and `constraint-separated` use `setup.teach`;
+`grammar.choice.honest-miss` (an existing row, re-probed in S3) uses `setup.facts` instead, because
+its topic term isn't a lexicon word the teach path recognizes on its own.
+
 ---
 
 ## 9. What this plan does not try, and why the measurement says so
