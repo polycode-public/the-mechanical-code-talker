@@ -1389,9 +1389,19 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     }
   }
 
+  // Memoized by CONNECTED COMPONENT, not by term: subClassOf is followed as an
+  // undirected edge here, so every term in one taxonomy component shares the
+  // exact same reachable set. Caching a fresh Set per term (one BFS each) costs
+  // O(component² ) Sets on a component of size V — a natural-language IsA graph
+  // routinely converges on a few hub terms ("thing", "object"), so cache/its
+  // ~9,700-term component alone once allocated ~9,700 separate ~9,700-entry
+  // Sets. Populating the cache for every member of a freshly-computed Set with
+  // that SAME Set reference makes every later call an O(1) hit instead of a
+  // fresh O(V) BFS, so the whole extraction pays for the component once.
   const subClosureCache = new Map();
   function subClosure(term) {
-    if (subClosureCache.has(term)) return subClosureCache.get(term);
+    const cached = subClosureCache.get(term);
+    if (cached) return cached;
     const seen = new Set();
     const stack = [...(subUp.get(term) || []), ...(subDown.get(term) || [])];
     while (stack.length) {
@@ -1402,6 +1412,7 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
       for (const next of subDown.get(n) || []) if (!seen.has(next)) stack.push(next);
     }
     subClosureCache.set(term, seen);
+    for (const member of seen) if (!subClosureCache.has(member)) subClosureCache.set(member, seen);
     return seen;
   }
 
