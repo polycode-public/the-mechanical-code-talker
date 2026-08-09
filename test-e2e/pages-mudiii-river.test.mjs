@@ -21,7 +21,9 @@ import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
-const READY_TIMEOUT_MS = 30_000;
+// Generous because a deployed-origin boot pays CDN latency on top of the
+// seed's own indexing, and has been measured crossing 30s.
+const READY_TIMEOUT_MS = 60_000;
 const SYNC_TIMEOUT_MS = 20_000;
 const PHONE_WIDTHS = [375, 320];
 
@@ -72,14 +74,22 @@ async function openMudiiiPage() {
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
 
   await page.goto(`${server.origin}/mudiii.html`, { waitUntil: "networkidle" });
-  await page.waitForFunction(
-    () => document.querySelector("#chatInput") && !document.querySelector("#chatInput").disabled,
-    null,
+  // Sleep-then-read rather than waitForFunction: boot indexing can starve
+  // the rAF ticks waitForFunction polls on, reporting a timeout on a page
+  // that is merely busy (readUntil's own comment has the full account).
+  await readUntil(
+    page,
+    (p) => p.evaluate(() => {
+      const input = document.querySelector("#chatInput");
+      return Boolean(input && !input.disabled);
+    }),
+    (ready) => ready === true,
     { timeout: READY_TIMEOUT_MS },
   );
-  await page.waitForFunction(
-    () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true",
-    null,
+  await readUntil(
+    page,
+    (p) => p.evaluate(() => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true"),
+    (ready) => ready === true,
     { timeout: READY_TIMEOUT_MS },
   );
   return { context, page, consoleErrors, failedRequests };
@@ -115,9 +125,10 @@ async function openRiverScenario(page) {
     select.value = String(index);
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  await page.waitForFunction(
-    () => /puzzle/i.test(document.querySelector("#sceneStatus")?.textContent || ""),
-    null,
+  await readUntil(
+    page,
+    (p) => p.evaluate(() => /puzzle/i.test(document.querySelector("#sceneStatus")?.textContent || "")),
+    (ready) => ready === true,
     { timeout: READY_TIMEOUT_MS },
   );
 }
