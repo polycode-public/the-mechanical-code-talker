@@ -585,6 +585,11 @@ node --test "test/estate/*.test.mjs"
 npm run check:links
 ```
 
+**Measured (S4):** value unchanged at 5/100 (S4 adds columns, it changes no decision).
+`topicRead` 92, `topicIsQuestionConcept` 31, `separated` 1, `correctWhenSeparated` 1, `refusedTie`
+22. The built claims page carries all five new `data-source` attributes; estate 108/108,
+check:links OK.
+
 ---
 
 ## 8. Phase S5 — the corpus rows

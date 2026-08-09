@@ -91,6 +91,7 @@ test("a choice question whose topic grounds against no option names that topic i
     const r = await turn(MAGAZINE_Q, { memoryDir: dir });
     assert.equal(r.record.miss, true);
     assert.match(r.answer, /I don't know how "magazines" relates to any of doctor, bookstore, market, train station, or mortuary\./);
+    assert.equal(r.detail.topic, "magazines", "the topic the lane read is on the record, even though the turn is a miss");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

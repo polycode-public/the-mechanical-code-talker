@@ -18579,10 +18579,12 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     const parsed = splitChoiceQuestion(workingLine);
     if (parsed) {
       const choiceGoal = "pick the option a stated relation grounds, among a closed set of alternatives";
-      const refMiss = (text) => {
+      const refMiss = (text, extraDetail = null) => {
         note(trace, `goal: ${choiceGoal}`);
         note(trace, `lane: splitChoiceQuestion — "${workingLine}" parsed as a ${parsed.shape} choice question but could not compose an answer`);
-        return withLast(plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal }), choiceGoal);
+        const turn = plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal });
+        if (extraDetail) turn.detail = { ...turn.detail, ...extraDetail };
+        return withLast(turn, choiceGoal);
       };
       // The topic is read off a CANDIDATE LIST (stemTopicCandidates), not off
       // a single fixed-shape template capture: extractStemSourceTerm's own
@@ -18604,7 +18606,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       note(trace, `goal: ${choiceGoal}`);
       if (grounded.length === 0) {
         note(trace, `lane: splitChoiceQuestion — no stated relation between "${topic}" and any of ${probed.length} options; the honest miss, never a guess`);
-        return refMiss(`I don't know how "${topic}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
+        return refMiss(`I don't know how "${topic}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`, { topic });
       }
       if (grounded.length > 1) {
         // The stem's OTHER content terms are constraints the question stated
