@@ -10581,9 +10581,17 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
  *  factAnswer's "what do you know about X" KNOW_ABOUT form): everything remembered
  *  that mentions X on either side. */
 const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|say)\s+(?:you|me|us)?\s*about\s+(.+?)[?.!\s]*$/i;
-/** "what kind of thing is an X" — the subject-side membership phrasing the grammar
- *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
-const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** "what kind of thing is an X" / "what type of creature is X" — the
+ *  subject-side membership phrasing the grammar doesn't parse: reports X's
+ *  OWN remembered type (falling back to X's members). "kind" and "type" both
+ *  lead (English uses them interchangeably here); the qualifier noun between
+ *  "kind/type of" and "is/are" is OPTIONAL and, when present, captured
+ *  separately (group 1) rather than restricted to a closed generic set — "a
+ *  creature"/"an animal" reads exactly like the bare "thing"/"class" the
+ *  original five-word set already covered, since the qualifier only narrows
+ *  how the question reads (see this function's own qualifier-confirmation
+ *  block below), never which shapes the regex accepts. */
+const KIND_OF_RE = /^what\s+(?:kind|type)\s+of\s+(?:an?\s+)?([\w-]+(?:\s+[\w-]+)?)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 /** "does every <N1> have at least <m> <N2>" — cardinality monotonicity: a
  *  class's OWN declared exactly/min cardinality restriction proves "at least
  *  m" for any queried m <= n (src/domain/syllogise.mjs's proveCardinalityAtLeast). */
@@ -12280,8 +12288,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
   // article) does, for every term alike.
   let term = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
   let kindOf = false;
+  let qualifier = null;
   const mk = q.match(KIND_OF_RE);
-  if (mk) { term = mk[1]; kindOf = true; }
+  if (mk) { qualifier = mk[1] ? mk[1].trim() : null; term = mk[2]; kindOf = true; }
   else if (!term && !envelope?.parsed) {
     const m = q.match(/^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
     if (m) term = m[1];
@@ -12294,6 +12303,23 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     ? (subjectHits.length ? subjectHits : objectHits)
     : (objectHits.length ? objectHits : subjectHits);
   if (!hits.length) return null;
+  // The qualifier noun ("creature" in "what type of creature is john") never
+  // gates the answer — it narrows how the question reads, the same way
+  // grammar.resolve.type-word-describes-subject's "the Store class" narrows
+  // presentation without excluding an answer. When the answered type is
+  // ALSO directly taught as a kind of the qualifier ("pig rdfs:subClassOf
+  // creature"), that confirming fact rides along with the answer; when no
+  // such fact is known, the plain type answer stands on its own — never a
+  // fabricated confirmation, and never a refusal over a qualifier word the
+  // store simply hasn't linked yet.
+  if (qualifier && hits === subjectHits) {
+    const qualifierVariants = factTermVariants(normFactTerm, qualifier);
+    const bridgeFor = (hit) => isa.find((g) => g.subject === hit.object && qualifierVariants.has(g.object));
+    const confirmed = hits.map((hit) => ({ hit, bridge: bridgeFor(hit) })).find(({ bridge }) => bridge);
+    if (confirmed) {
+      return { text: `${renderFactLine(confirmed.hit)} — ${renderFactLine(confirmed.bridge)}`, replace: true };
+    }
+  }
   return renderMany(hits);
 }
 
