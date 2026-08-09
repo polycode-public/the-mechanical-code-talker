@@ -1,7 +1,11 @@
 # PLAN_DL_ENGLISH_SURFACE.md — let plain English reach the tableau: the role-axiom teach frames, and `/prove` on a miss
 
-Status: DESIGN. Nothing here is built. Every module path marked "new" is a file or function that does
-not exist yet; every existing anchor below was read at HEAD.
+Status: Phase A1's grammar, tableau reader and ontology/docs have landed (section 4, sub-tracks
+A1-g/A1-k/A1-d) — pattern 18, `allE`, the `owl:allValuesFrom` KB reader and module-extraction
+follow, and the EL normalizer skip. A1's own `renderUniversalRestrictionLine` read-back (4.3) rides
+the shared `chat.mjs` read-back round with A2 (section 12), not this round. Phases A2 through B3
+remain DESIGN, nothing built; every module path in those sections marked "new" is a file or
+function that does not exist yet; every existing anchor below was read at HEAD.
 
 `PLAN_SYLLOGIST_EL_DL.md` shipped a SHOIQ tableau. It proves transitive-role propagation, role
 hierarchies, nominals, qualified cardinality and inverse roles, with a test file per increment. Two
