@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T10:39:26.247Z",
-  "commit": "1f4bca9dee49e442ac81dddb4542cc9662ab4138",
+  "generatedAt": "2026-08-09T10:58:39.346Z",
+  "commit": "988a09e83e161a82b4e3c92623efdc394c6ea6a4",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -59,6 +59,7 @@
       "head-noun": 0,
       "wordnet": 1
     },
+    "abstainedUncued": 35,
     "scorer": "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     "missedIds": [
       "001b0f5a841fd81d13fbe67c7c7179d6",
@@ -166,6 +167,11 @@
       "Eating is part of living, but your body doesn't use it all and the next day you will be doing what?",
       "How might a automobile get off a freeway?",
       "What do animals do when an enemy is approaching?"
+    ],
+    "abstainedUncuedExampleStems": [
+      "How might a automobile get off a freeway?",
+      "You stop and have food all around you, what are you?",
+      "A story about World War II would be set when?"
     ]
   }
 }

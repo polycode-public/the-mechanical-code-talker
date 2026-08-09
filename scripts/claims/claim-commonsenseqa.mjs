@@ -108,6 +108,8 @@ export async function runSample(items, memoryDir, graph) {
   let correctWhenRouted = 0;
   const byHop = { 1: { answered: 0, correct: 0 }, 2: { answered: 0, correct: 0 }, unreachable: { abstained: 0 } };
   const matchedBy = { exact: 0, lemma: 0, "head-noun": 0, wordnet: 0 };
+  let abstainedUncued = 0;
+  const abstainedUncuedStems = [];
   const missedIds = [];
   const missedStems = [];
   for (const item of items) {
@@ -117,10 +119,19 @@ export async function runSample(items, memoryDir, graph) {
     const selectedLabel = result?.detail?.selectedLabel;
     const isMiss = result?.record?.miss === true;
     const ok = scoresCorrect(selectedLabel, item.answerKey);
+    // routeChoiceRelation reads only the STEM the splitter itself would see —
+    // the same shape probeChoiceOptions routes on, so this is what the lane
+    // actually routed, not a re-derivation from the fixture's own text.
+    const parsedStem = splitChoiceQuestion(questionFor(item))?.stem ?? item.question.stem;
+    const routed = routeChoiceRelation(parsedStem) !== null;
 
     if (isMiss) {
       abstained += 1;
       byHop.unreachable.abstained += 1;
+      if (!routed) {
+        abstainedUncued += 1;
+        abstainedUncuedStems.push(item.question.stem);
+      }
     } else if (typeof selectedLabel === "string") {
       answered += 1;
       // hop is 1 for a direct edge, 2 for a chain (probeChoiceOptions,
@@ -148,11 +159,7 @@ export async function runSample(items, memoryDir, graph) {
       if (ok) correctWhenSourceEdgePresent += 1;
     }
 
-    // routeChoiceRelation reads only the STEM the splitter itself would see —
-    // the same shape probeChoiceOptions routes on, so this count is what the
-    // lane actually routed, not a re-derivation from the fixture's own text.
-    const parsedStem = splitChoiceQuestion(questionFor(item))?.stem ?? item.question.stem;
-    if (routeChoiceRelation(parsedStem)) {
+    if (routed) {
       routedByRelation += 1;
       if (ok) correctWhenRouted += 1;
     }
@@ -161,7 +168,8 @@ export async function runSample(items, memoryDir, graph) {
     correct, answered, refused, abstained,
     sourceEdgePresent, correctWhenSourceEdgePresent,
     routedByRelation, correctWhenRouted,
-    byHop, matchedBy, missedIds, missedStems,
+    byHop, matchedBy, abstainedUncued, abstainedUncuedStems,
+    missedIds, missedStems,
   };
 }
 
@@ -184,9 +192,11 @@ export function buildClaimDetail(items, bands, result) {
     correctWhenRouted: result.correctWhenRouted,
     byHop: result.byHop,
     matchedBy: result.matchedBy,
+    abstainedUncued: result.abstainedUncued,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),
+    abstainedUncuedExampleStems: result.abstainedUncuedStems.slice(0, 3),
   };
 }
 

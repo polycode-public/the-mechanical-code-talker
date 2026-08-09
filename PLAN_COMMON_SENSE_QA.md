@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage), R2 (relation routing), R3 (inference depth) and R4 (the wording levers) are built and measured. R5 remains.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. All five rungs — R1 (seed coverage), R2 (relation routing), R3 (inference depth), R4 (the wording levers) and R5 (the abstained band) — are built and measured.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1378,6 +1378,27 @@ behaviour and is what the abstained column reports.
 **What rung 5 delivers.** A `detail.abstainedUncued` count (abstained questions whose stem matched no
 relation route), the three real stems quoted above read from the run rather than authored, and the
 claims block copy that names the band. Nothing else.
+
+**Built and measured.** `runSample` (`scripts/claims/claim-commonsenseqa.mjs`) now computes
+`routeChoiceRelation` once per item and reuses it for both `routedByRelation` (rung 2) and this
+rung's count, so the two never drift against each other. `detail.abstainedUncued` and
+`detail.abstainedUncuedExampleStems` (the first three, in fixture order, read from the run) land in
+the rig payload. `scripts/build-demo-site.mjs`'s L2 block gains a fourth paragraph naming the band,
+its count, and its three real stems, each figure carrying its own `data-source` citation.
+
+Measured against the rung 4 seed (chunked foreground slices, one persisted seeded repo, merged):
+`abstained` stayed 73 (unchanged — this rung measures and narrates, it does not touch the engine),
+`abstainedUncued` reads 35 of those 73 — the stem named no relation cue at all, so
+`routeChoiceRelation` never had anything to route. The three real examples this run surfaced:
+
+- "How might a automobile get off a freeway?"
+- "You stop and have food all around you, what are you?"
+- "A story about World War II would be set when?"
+
+These differ from the plan's own illustrative examples above (drawn during the design survey, before
+rung 1's re-cut seed existed) — the contract is "read from the run", not "match the design doc", and
+the design doc's examples stay as a record of what motivated this rung, not a pin on today's output.
+Threshold stays `{ min, 0 }`, unchanged, since `value` did not move.
 
 ---
 
