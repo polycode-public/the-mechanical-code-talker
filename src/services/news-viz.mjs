@@ -50,14 +50,8 @@ function barPanelHtml(label, id) {
   </div>`;
 }
 
-/** The one fenced region carrying every third-party URL this page ever
- *  names: the source registry's own homepage links (a plain reference list,
- *  not a fetch) and the embedded registry JSON the source-toggle script
- *  reads to build its checkbox list and its fetch targets. Nothing fetches
- *  merely because this markup rendered — the toggles arm what start() is
- *  allowed to poll, they never poll themselves. */
-function sourcesConfigBlockHtml() {
-  const rows = NEWS_SOURCE_RECORDS.map((r) => {
+function sourceRowsHtml(kind) {
+  return NEWS_SOURCE_RECORDS.filter((r) => (kind === "kb" ? r.kind === "kb" : r.kind !== "kb")).map((r) => {
     const cls = r.kind === "kb" ? "kb" : "contemporary";
     return `<label class="sourcerow ${cls}" data-source-id="${escapeHtml(r.id)}">
       <input type="checkbox" data-source-toggle value="${escapeHtml(r.id)}" ${r.enabledByDefault ? "checked" : ""}>
@@ -66,9 +60,24 @@ function sourcesConfigBlockHtml() {
       <span class="sourcestatus" data-source-status>not yet polled</span>
     </label>`;
   }).join("");
+}
+
+/** The one fenced region carrying every third-party URL this page ever
+ *  names, in two groups the visitor can tell apart: the news feeds a poll
+ *  fetches, and the reference works enrichment looks unknown terms up in. A
+ *  reference work is never polled — ticking it arms the lookup, nothing
+ *  else. Nothing fetches merely because this markup rendered. */
+function sourcesConfigBlockHtml() {
   return `<!-- sources:start -->
   <div class="sources" id="sourcesConfig" aria-label="News sources">
-    ${rows}
+    <h2 class="tile-label" id="pollRosterLabel">news feeds — polled when you press start or poll once</h2>
+    <div class="sourcegroup" id="pollRoster" aria-labelledby="pollRosterLabel">
+      ${sourceRowsHtml("contemporary")}
+    </div>
+    <h2 class="tile-label" id="lookupRosterLabel">reference works — looked up to explain a term, never polled</h2>
+    <div class="sourcegroup" id="lookupRoster" aria-labelledby="lookupRosterLabel">
+      ${sourceRowsHtml("kb")}
+    </div>
   </div>
   <script type="application/json" id="newsSourceRecordsJson">${embedJson(NEWS_SOURCE_RECORDS)}</script>
   <!-- sources:end -->`;
@@ -112,6 +121,8 @@ ${THEME_TOKENS_CSS}
   select, .urlinput { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
   .urlinput { flex: 1 1 12rem; min-width: 8rem; }
   .sources { display: flex; flex-direction: column; gap: .3rem; margin: .6rem 0; }
+  .sources h2 { margin: .6rem 0 .1rem; }
+  .sourcegroup { display: flex; flex-direction: column; gap: .3rem; }
   .sourcerow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .78rem; padding: .25rem .1rem; min-width: 0; }
   .sourcerow.kb { opacity: .85; }
   .sourcename { min-width: 12rem; }
@@ -196,6 +207,8 @@ ${NEWS_STYLE}
 
   <div class="controls" id="controls">
     <button type="button" class="btn primary" id="newsStart">start polling live sources</button>
+    <button type="button" class="btn" id="pollOnce">poll once</button>
+    <button type="button" class="btn" id="stopPolling" disabled>stop polling</button>
     <label class="mono" for="pollInterval">poll every</label>
     <select id="pollInterval">
       <option value="0">off</option>
@@ -358,6 +371,9 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   let feedItems = [];
   const cardsByItemId = new Map();
   const activePillTerms = new Set();
+  // What an empty feed says. It starts as the pre-poll line and becomes the
+  // purge line once "stop & forget" has emptied the graph of articles.
+  let emptyFeedText = "no news items yet — the seed graph builds the first ones once it finishes loading.";
 
   const MAX_PILLS = 12;
 
@@ -413,7 +429,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     if (!shown.length) {
       emptyEl.textContent = feedItems.length
         ? "no article matches the terms you picked — unpick a pill to see the rest."
-        : "no news items yet — the seed graph builds the first ones once it finishes loading.";
+        : emptyFeedText;
     }
     el("feedCount").textContent = shown.length === feedItems.length
       ? (feedItems.length + " article" + (feedItems.length === 1 ? "" : "s"))
@@ -542,46 +558,95 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       button.disabled = false;
       button.removeAttribute("aria-busy");
     }
+    // "stop polling" is live whenever there is something to stop: a press
+    // still in flight, a cycle running, or a timer armed for the next one.
+    // The press counter leads the session's own busy flag — a click must be
+    // able to stop the cycle it just started, from the same tick.
+    let pressesInFlight = 0;
+    function syncStopPolling() {
+      const session = window.tmct.session;
+      el("stopPolling").disabled = !(pressesInFlight > 0 || (session && (session.busy || session.nextPollAt)));
+    }
     function followPhase(label) {
       el("controlsStatus").textContent = label;
-      const id = setInterval(function () { el("controlsStatus").textContent = window.tmct.session.phase + "…"; }, 400);
-      return function () { clearInterval(id); el("controlsStatus").textContent = ""; };
+      const id = setInterval(function () {
+        el("controlsStatus").textContent = window.tmct.session.phase + "…";
+        syncStopPolling();
+      }, 400);
+      return function () { clearInterval(id); el("controlsStatus").textContent = ""; syncStopPolling(); };
     }
 
-    startBtn.addEventListener("click", async function () {
-      markBusy(startBtn, "polling…");
-      const stopFollowing = followPhase("polling…");
+    /** One press that fetches: the button reads back busy at once, the
+     *  status line follows the phase, and everything re-renders after. */
+    async function runFetchingPress(button, busyLabel, idleLabel, work) {
+      markBusy(button, busyLabel);
+      pressesInFlight += 1;
+      syncStopPolling();
+      const stopFollowing = followPhase(busyLabel);
       try {
-        await window.tmct.session.start();
+        await work();
       } finally {
+        pressesInFlight -= 1;
         stopFollowing();
-        markIdle(startBtn, "poll now");
+        markIdle(button, idleLabel);
+        syncStopPolling();
       }
       await renderAll();
+    }
+
+    startBtn.addEventListener("click", function () {
+      return runFetchingPress(startBtn, "polling…", "poll now", function () { return window.tmct.session.start(); });
     });
 
-    el("stopForget").addEventListener("click", function () {
-      window.tmct.session.revokeConsent();
-      startBtn.textContent = "start polling live sources";
-      appendLog("stopped and forgot the start preference — this page reads as first-visit next load");
+    el("pollOnce").addEventListener("click", function () {
+      const pollOnceBtn = el("pollOnce");
+      return runFetchingPress(pollOnceBtn, "polling…", "poll once", function () { return window.tmct.session.pollOnce(); });
+    });
+
+    el("stopPolling").addEventListener("click", function () {
+      const result = window.tmct.session.stopPolling();
+      el("controlsStatus").textContent = result.wasRunning ? "stopping…" : "polling stopped";
+      appendLog(result.wasRunning
+        ? "stopping — the running cycle finishes the article it is on and stops there"
+        : "polling stopped — no cycle was running, the next scheduled poll is cancelled");
+      syncStopPolling();
+      renderSourcesPanel();
+    });
+
+    // The button stays busy until the purge is finished on screen as well as
+    // in the store, so "enabled again" really does mean "the articles are
+    // gone" rather than "the store call returned".
+    el("stopForget").addEventListener("click", async function () {
+      const stopForgetBtn = el("stopForget");
+      markBusy(stopForgetBtn, "forgetting…");
+      try {
+        const result = await window.tmct.session.revokeConsent();
+        const removed = (result && result.factsRemoved) || 0;
+        startBtn.textContent = "start polling live sources";
+        feedItems = [];
+        cardsByItemId.clear();
+        activePillTerms.clear();
+        el("feed").querySelectorAll(".item").forEach(function (n) { n.remove(); });
+        emptyFeedText = "the articles are gone — press start or poll once to gather news again.";
+        renderPills();
+        paintFeed();
+        appendLog("stopped and forgot: " + removed + " fact(s) from news dropped, articles cleared, this page reads as first-visit next load");
+        await renderAll();
+      } finally {
+        markIdle(stopForgetBtn, "stop & forget");
+        syncStopPolling();
+      }
     });
 
     el("pollInterval").addEventListener("change", function (ev) {
       const minutes = window.tmct.session.setInterval(Number(ev.target.value));
       ev.target.value = String(minutes);
+      syncStopPolling();
     });
 
-    el("enrichNow").addEventListener("click", async function () {
+    el("enrichNow").addEventListener("click", function () {
       const enrichBtn = el("enrichNow");
-      markBusy(enrichBtn, "enriching…");
-      const stopFollowing = followPhase("enriching…");
-      try {
-        await window.tmct.session.enrich();
-      } finally {
-        stopFollowing();
-        markIdle(enrichBtn);
-      }
-      await renderAll();
+      return runFetchingPress(enrichBtn, "enriching…", "enrich now", function () { return window.tmct.session.enrich(); });
     });
 
     document.querySelectorAll("[data-source-toggle]").forEach(function (box) {
@@ -639,9 +704,11 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     window.tmct.news.phase = "seeded";
     appendLog("phase: seeded");
     await renderAll();
+    syncStopPolling();
     if (returningVisit) {
       await window.tmct.session.start();
       await renderAll();
+      syncStopPolling();
     }
     el("teachIngest").addEventListener("click", async function () {
       const text = el("teachText").value;

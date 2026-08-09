@@ -30,15 +30,16 @@ const HACKER_NEWS_MIN_INTERVAL_MS = 250;
 const HACKER_NEWS_ITEM_CAP = 10;
 
 /** The ten browser-verified sources from the probe rounds (section 4.1 and
- *  4.2): three contemporary defaults (Wikimedia featured, Hacker News, USGS
- *  quakes), two contemporary selectables (NYT World, Wikinews); three
+ *  4.2): five contemporary news feeds, every one of them polled by default
+ *  (Wikimedia featured, Hacker News, USGS quakes, NYT World, Wikinews); three
  *  knowledge-base defaults (Simple English Wikipedia, Wikidata, Wiktionary),
  *  two knowledge-base selectables (DBpedia Lookup, English Wikipedia). The
  *  `kind: "kb"` records describe the knowledge-base sources for the
  *  registry/config/health surfaces; their actual lookups run through the
  *  existing research-source seam (getResearchProvider in wikipedia-live.mjs),
  *  not through createNewsFetcher below — a knowledge-base source is a
- *  targeted term lookup, not a feed to poll. */
+ *  targeted term lookup, not a feed to poll, so an enabled kb record arms
+ *  enrichment and never adds a poll target. */
 export const NEWS_SOURCE_RECORDS = Object.freeze([
   {
     id: "wikimedia-featured",
@@ -86,9 +87,7 @@ export const NEWS_SOURCE_RECORDS = Object.freeze([
     licence: "personal use with attribution",
     browserVerified: "2026-08-08",
     minIntervalMs: DEFAULT_MIN_INTERVAL_MS,
-    // The licence terms (personal, non-commercial, with attribution) sit
-    // awkwardly on a source that would fetch without the user asking first.
-    enabledByDefault: false,
+    enabledByDefault: true,
   },
   {
     id: "wikinews-published",
@@ -101,8 +100,8 @@ export const NEWS_SOURCE_RECORDS = Object.freeze([
     browserVerified: "2026-08-08",
     minIntervalMs: DEFAULT_MIN_INTERVAL_MS,
     // Wikinews' own lead story announces the Wikimedia Foundation closing
-    // it; shipped selectable so its health row can tell users when it goes.
-    enabledByDefault: false,
+    // it; its health row is what tells users the day it goes.
+    enabledByDefault: true,
   },
   {
     id: "simple-wikipedia",
@@ -166,7 +165,12 @@ export const NEWS_SOURCE_RECORDS = Object.freeze([
   },
 ]);
 
-export const DEFAULT_NEWS_SOURCE_IDS = Object.freeze(["wikimedia-featured", "hacker-news", "usgs-quakes"]);
+/** The poll roster a fresh session starts with: news feeds only. */
+export const DEFAULT_NEWS_SOURCE_IDS = Object.freeze([
+  "wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published",
+]);
+/** The lookup roster enrichment walks when a term will not ground. These are
+ *  reference works, never polled for news. */
 export const DEFAULT_NEWS_KB_IDS = Object.freeze(["simple-wikipedia", "wikidata", "wiktionary"]);
 
 const registry = new Map(NEWS_SOURCE_RECORDS.map((record) => [record.id, record]));

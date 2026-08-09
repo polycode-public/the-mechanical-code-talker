@@ -11,7 +11,10 @@ import {
 import { normalizeConfig, mergeEffective } from "../../src/adapters/toml-config.mjs";
 
 test("NEWS_DEFAULTS carries the shipped defaults, sources and kb_sources included", () => {
-  assert.deepEqual([...NEWS_DEFAULTS.sources], ["wikimedia-featured", "hacker-news", "usgs-quakes"]);
+  assert.deepEqual(
+    [...NEWS_DEFAULTS.sources],
+    ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"],
+  );
   assert.deepEqual([...NEWS_DEFAULTS.kbSources], ["simple-wikipedia", "wikidata", "wiktionary"]);
   assert.equal(NEWS_DEFAULTS.pollMinutes, 15);
   assert.equal(NEWS_DEFAULTS.itemCap, 30);

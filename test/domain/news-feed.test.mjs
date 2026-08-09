@@ -120,7 +120,7 @@ test("renderNewsParagraph groups identity first, then relations in table order, 
   // where mgx:atLocation precedes mgx:causes.
   assert.equal(
     paragraph,
-    "ceasefire is a diplomatic process and event. ceasefire is found in geneva. ceasefire causes criticism and relief. Around it: relief is temporary.",
+    "ceasefire is a diplomatic process and an event. ceasefire is found in geneva. ceasefire causes criticism and relief. Around it: relief is temporary.",
   );
 });
 
@@ -370,7 +370,7 @@ test("renderNewsParagraph's reportedIds option keeps the identity sentence from 
   ];
   const reportedIds = new Set(["fact:2"]); // only the geneva relation was reported
   const paragraph = renderNewsParagraph("ceasefire", rows, { reportedIds });
-  assert.equal(paragraph, "ceasefire is a event. ceasefire is found in geneva.");
+  assert.equal(paragraph, "ceasefire is an event. ceasefire is found in geneva.");
   assert.ok(!paragraph.includes("criticism"), "a relation from a non-reported row is dropped");
 });
 

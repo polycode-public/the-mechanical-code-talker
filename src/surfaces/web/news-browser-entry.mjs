@@ -9,12 +9,13 @@
 // all over the SAME library contract the CLI's `tmct news` verb runs.
 //
 // The one rule every method below honours: NOTHING here calls a fetcher
-// before `start()` (or a returning visit's own `start()` replay) is called.
-// `poll()`/`enrich()` are consent-gated the same way; `addSource()` performs
-// its own one-off preflight fetch because pasting a URL and pressing "add" is
-// itself the explicit action authorising that one request; `replayFixture()`
-// never touches the network at all — it re-runs the exact ingest pipeline
-// over an already-downloaded fixture body.
+// until the visitor presses something. `start()` (or a returning visit's own
+// `start()` replay) is the press that also arms the recurring timer;
+// `poll()`/`pollOnce()`/`enrich()`/`addSource()` each run one round of
+// requests on their own press and schedule nothing, the same reasoning that
+// lets pasting a URL and pressing "add" authorise its own preflight;
+// `replayFixture()` never touches the network at all — it re-runs the exact
+// ingest pipeline over an already-downloaded fixture body.
 //
 // The start-consent PREFERENCE (which localStorage key, and whether to persist
 // at all) is a page concern, not this session's — the same split
@@ -121,14 +122,13 @@ function fixtureRawItems(format, body) {
 
 /**
  * The graph-growing session over the real news capability (news.mjs), pure
- * except for the fetches `start()`/`poll()`/`enrich()`/`addSource()`
- * themselves trigger — every one of them consent-gated, `addSource()` by its
- * own one-off preflight rather than the poll cycle's consent.
+ * except for the fetches `start()`/`poll()`/`pollOnce()`/`enrich()`/
+ * `addSource()` themselves trigger — each one a press the visitor made.
  *
- * Returns `{ memoryDir, phase, consented, metrics, nextPollAt, config,
- * requestLog, health, start, poll, enrich, buildFeed, stats, rank, addSource,
- * setInterval, ingestText, ingestFile, replayFixture, revokeConsent,
- * destroy }`.
+ * Returns `{ memoryDir, phase, consented, busy, metrics, nextPollAt, config,
+ * requestLog, health, start, poll, pollOnce, stopPolling, enrich, buildFeed,
+ * stats, rank, addSource, setInterval, ingestText, ingestFile, replayFixture,
+ * revokeConsent, destroy }`.
  */
 export function createNewsSession({
   seedPayload = null, vocabSeeded = false, fetchImpl = null, now = isoNow,
@@ -176,6 +176,17 @@ export function createNewsSession({
 
   let phase = "seeded"; // the page-level "seeding" state (S0) precedes this session existing at all
   let timer = null;
+  // Set by revokeConsent, cleared by the next action that puts content back.
+  // While it holds, buildFeed answers with nothing rather than falling back to
+  // the seed graph: a visitor who pressed "stop & forget" asked for an empty
+  // feed, and seed-derived cards in its place read as articles that survived
+  // the purge.
+  let forgotten = false;
+  // Raised by stopPolling(), lowered when the next cycle starts. The ingest
+  // loops read it at their own awaited yield points, so a stop lands between
+  // whole articles and never half-way through folding one.
+  let stopRequested = false;
+  let cycleRunning = false;
   const bootMs = resolveNowMs();
   const metrics = { timeToFirstArticleMs: null, timeToFirstCompletePollMs: null };
   let nextPollAt = "";
@@ -199,7 +210,7 @@ export function createNewsSession({
   };
 
   function ctx() {
-    return { memoryDir, store, cache, lexicon, config, state, providers, now };
+    return { memoryDir, store, cache, lexicon, config, state, providers, now, shouldAbort: () => stopRequested };
   }
 
   function clearTimer() {
@@ -212,7 +223,7 @@ export function createNewsSession({
     if (!consented || !config.pollMinutes) return;
     const delayMs = config.pollMinutes * 60000;
     nextPollAt = new Date(resolveNowMs() + delayMs).toISOString();
-    timer = setTimeout(() => { runPollCycle().then(runEnrichCycle).catch(() => {}); }, delayMs);
+    timer = setTimeout(() => { runCycle({ armNext: true }).catch(() => {}); }, delayMs);
   }
 
   async function noteFirstArticle() {
@@ -222,6 +233,8 @@ export function createNewsSession({
   }
 
   async function runPollCycle() {
+    forgotten = false;
+    cycleRunning = true;
     phase = "polling";
     const result = await pollNewsSources(ctx());
     // The cycle's ingest writes through core appendFact directly, never the
@@ -234,14 +247,33 @@ export function createNewsSession({
     return result;
   }
 
-  async function runEnrichCycle() {
+  async function runEnrichCycle({ armNext = true } = {}) {
+    forgotten = false;
+    cycleRunning = true;
     phase = "enriching";
     const result = await enrichTopTerms(ctx());
     foldedRows = null;
     cache.rows = null;
     phase = "idle";
-    armTimer();
+    cycleRunning = false;
+    if (armNext) armTimer();
     return result;
+  }
+
+  /** One poll-then-enrich pass, with the stop flag lowered first so a cycle
+   *  the visitor asked for is never cancelled by an older stop. `armNext`
+   *  false runs the pass without scheduling another — what "poll once"
+   *  means. */
+  async function runCycle({ armNext } = {}) {
+    stopRequested = false;
+    try {
+      const poll = await runPollCycle();
+      const enrich = await runEnrichCycle({ armNext });
+      return { poll, enrich };
+    } finally {
+      cycleRunning = false;
+      stopRequested = false;
+    }
   }
 
   return {
@@ -261,25 +293,51 @@ export function createNewsSession({
     async start() {
       consented = true;
       prefStore.set(prefKey, "on");
-      const pollResult = await runPollCycle();
-      const enrichResult = await runEnrichCycle();
-      return { poll: pollResult, enrich: enrichResult };
+      return runCycle({ armNext: true });
     },
 
-    /** A manual "poll now" — still consent-gated: never fires before
-     *  start() has run at least once this session. */
+    /** One poll cycle, now, on its own: the click IS the authorisation for
+     *  that one round of requests, the same way addSource's own preflight
+     *  is. It never records the start preference and never schedules
+     *  another, so "poll once" really does mean once. */
     async poll() {
-      if (!consented) return { fetched: 0, newItems: 0, failures: 0, evicted: 0, facts: 0, derived: 0, sources: [] };
-      return runPollCycle();
+      stopRequested = false;
+      try {
+        return await runPollCycle();
+      } finally {
+        cycleRunning = false;
+        stopRequested = false;
+      }
     },
 
-    /** A manual "enrich now" — same consent gate as poll(). */
+    /** One poll-then-enrich pass on demand, scheduling nothing after it. */
+    async pollOnce() {
+      return runCycle({ armNext: false });
+    },
+
+    /** A manual "enrich now": one lookup round over the terms the feed could
+     *  not ground, scheduling nothing after it. */
     async enrich() {
-      if (!consented) return { enriched: [], missed: [], facts: 0, derived: 0 };
-      return runEnrichCycle();
+      stopRequested = false;
+      return runEnrichCycle({ armNext: false });
     },
 
-    async buildFeed() { return buildFeed(ctx()); },
+    /** Stops polling: the recurring timer is cancelled, and a cycle already
+     *  running abandons at its next yield point — between whole articles,
+     *  never part-way through folding one, so nothing half-ingested lands. */
+    stopPolling() {
+      stopRequested = true;
+      clearTimer();
+      return { wasRunning: cycleRunning };
+    },
+
+    /** True while a poll or enrich cycle is mid-flight. */
+    get busy() { return cycleRunning; },
+
+    async buildFeed() {
+      if (forgotten) return { items: [], seedFallback: false, builtAt: typeof now === "function" ? now() : now };
+      return buildFeed(ctx());
+    },
 
     /** The two whole-graph counts the dashboard shows: every fact the store
      *  holds, and the subset a news, fixture-replay or research ingest
@@ -349,6 +407,7 @@ export function createNewsSession({
     /** The teach panel's free-text path: prose ingested under this upload's
      *  own teach tag, the same tier a typed teach turn earns. */
     async ingestText(text, { fileLabel = "free-text" } = {}) {
+      forgotten = false;
       const nowVal = typeof now === "function" ? now() : now;
       const sourceTag = `teach:upload:${fileLabel}@${nowVal}`;
       const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal });
@@ -364,6 +423,7 @@ export function createNewsSession({
      *  through ingestUploadedFactRows's validate-and-downgrade before they
      *  land, so an uploaded row can never claim trust it did not earn. */
     async ingestFile({ name, text, kind } = {}) {
+      forgotten = false;
       const nowVal = typeof now === "function" ? now() : now;
       const resolvedKind = kind || (/\.jsonl$/i.test(name || "") ? "jsonl" : /\.json$/i.test(name || "") ? "json" : "prose");
       if (resolvedKind === "prose") {
@@ -394,6 +454,7 @@ export function createNewsSession({
      *  provenance (the corpus-tier demo path) rather than `news:` — never a
      *  network call, so it works with the network fully blocked. */
     async replayFixture(sourceId, { format, body } = {}) {
+      forgotten = false;
       const nowVal = typeof now === "function" ? now() : now;
       const raw = fixtureRawItems(format, body);
       const items = normalizeFeedItems(sourceId, raw, { now: nowVal });
@@ -420,19 +481,46 @@ export function createNewsSession({
       return { items: items.length, facts: factsTotal };
     },
 
-    /** Clears the start-consent preference and stops the timer — the next
-     *  load of this page reads back as first-visit, exactly as if start()
-     *  had never been pressed. */
-    revokeConsent() {
+    /** Forgets everything this session gathered: the start-consent
+     *  preference, the poll timer, every article snapshot, the term ledger,
+     *  the health and request logs, and every fact a news, fixture-replay or
+     *  enrichment ingest wrote into the graph. The next load of this page
+     *  reads back as first-visit, and the feed here and now is empty — a
+     *  visitor who pressed this asked for the articles to go, not just the
+     *  preference. The seed graph itself is untouched. */
+    async revokeConsent() {
       consented = false;
+      forgotten = true;
+      stopRequested = true;
       prefStore.remove(prefKey);
       clearTimer();
       phase = "seeded";
+
+      const nowVal = typeof now === "function" ? now() : now;
+      const memory = await store.loadMemory(memoryDir);
+      const newsFactIds = store.readFactRows(memory)
+        .filter((row) => isNewsProvenance(row.provenance))
+        .map((row) => row.id);
+      if (newsFactIds.length) await store.removeFacts(memoryDir, newsFactIds, { retractedAt: nowVal });
+
+      const fresh = createNewsState();
+      state.items = fresh.items;
+      state.ledger = fresh.ledger;
+      state.health = fresh.health;
+      state.requestLog = fresh.requestLog;
+      state.metrics = fresh.metrics;
+      state.lastPollAt = "";
+      state.lastEnrichAt = "";
+      metrics.timeToFirstArticleMs = null;
+      metrics.timeToFirstCompletePollMs = null;
+      cache.rows = null;
+      foldedRows = null;
+      return { factsRemoved: newsFactIds.length };
     },
 
-    /** Stops the poll timer without touching consent — a test's own
-     *  teardown, and a page's own unload hook. */
-    destroy() { clearTimer(); },
+    /** Stops the poll timer and any running cycle without touching consent —
+     *  a test's own teardown, and a page's own unload hook. */
+    destroy() { stopRequested = true; clearTimer(); },
   };
 }
 

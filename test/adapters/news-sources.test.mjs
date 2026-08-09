@@ -48,13 +48,27 @@ function textResponse(text, { status = 200, headers = {} } = {}) {
 
 // ---- the registry ----------------------------------------------------------
 
-test("the shipped registry carries ten records, three contemporary defaults and three kb defaults", () => {
+test("the shipped registry carries ten records: every news feed polls by default, and the kb defaults are the three lookup sources", () => {
   assert.equal(NEWS_SOURCE_RECORDS.length, 10);
-  assert.deepEqual([...DEFAULT_NEWS_SOURCE_IDS], ["wikimedia-featured", "hacker-news", "usgs-quakes"]);
+  assert.deepEqual(
+    [...DEFAULT_NEWS_SOURCE_IDS],
+    ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"],
+  );
+  assert.deepEqual(
+    NEWS_SOURCE_RECORDS.filter((r) => r.kind === "contemporary").map((r) => r.id),
+    [...DEFAULT_NEWS_SOURCE_IDS],
+    "the poll roster is every contemporary record the registry ships, none held back",
+  );
   assert.deepEqual([...DEFAULT_NEWS_KB_IDS], ["simple-wikipedia", "wikidata", "wiktionary"]);
   for (const id of DEFAULT_NEWS_SOURCE_IDS) assert.equal(recordFor(id).enabledByDefault, true, id);
   for (const id of DEFAULT_NEWS_KB_IDS) assert.equal(recordFor(id).enabledByDefault, true, id);
   for (const record of NEWS_SOURCE_RECORDS) assert.ok(record.url.startsWith("https://"), `${record.id} is not https`);
+});
+
+test("no reference work is a poll target: every kb record stays out of the poll roster", () => {
+  for (const record of NEWS_SOURCE_RECORDS.filter((r) => r.kind === "kb")) {
+    assert.ok(!DEFAULT_NEWS_SOURCE_IDS.includes(record.id), `${record.id} is polled`);
+  }
 });
 
 test("every non-Hacker-News record keeps the shared 2s courtesy floor; Hacker News alone runs lower", () => {
