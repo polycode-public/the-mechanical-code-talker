@@ -1,10 +1,11 @@
 # PLAN_NEWSWORTHINESS.md — entity-anchored news: a card needs a name the graph just learned, or a fresh fact about a name it holds
 
-Status: DESIGN. Nothing in this plan is built. It succeeds `archive/PLAN_NEWS_FEED.md`'s phase 10
-(the reported/background/derived banding, shipped in 5.0.35) and replaces that phase's seed
-fallback. The operator's field report on the live 5.0.35 feed motivates it: the fallback still
-serves corpus concept cards ("purse", "finding information", "entertaining", "drawer", "cars"),
-and a reader already knows what a drawer is. That is not news.
+Status: BUILT. Phases N0-N4 are landed and measured (build markers under each phase, section 5).
+It succeeds `archive/PLAN_NEWS_FEED.md`'s phase 10 (the reported/background/derived banding,
+shipped in 5.0.35) and replaces that phase's seed fallback. The operator's field report on the
+live 5.0.35 feed motivated it: the fallback served corpus concept cards ("purse", "finding
+information", "entertaining", "drawer", "cars"), and a reader already knows what a drawer is.
+That was not news.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every
 phase names its module paths, function signatures, test files and acceptance commands. Phases
@@ -111,6 +112,13 @@ fallback leaves the feed pane entirely:
 Tests in `test/domain/news-feed.test.mjs`: seed-provenance rows populate the set; news and
 research rows never do; a multi-word term is read whole; the empty graph yields the empty set.
 
+**Build marker.** Landed together with N1 (one rewrite of `newsworthyHubs` needed both reads in
+place at once). `priorTerms` excludes a `news:`/`news-fixture:` row even when its own tag
+resolves to the `corpus` `SOURCE_PRIOR` kind — `news-fixture:` scores there so a demo replay
+never outranks a live claim (`memory/trust.mjs`), not because a fixture row is prior knowledge
+for the very term it is reporting; without this a Kumamoto fixture replay poisons its own term
+into `priorTerms` and can never pass test E. 5 new tests, 35 pre-existing unaffected.
+
 ### N1 — the two tests replace the anchor heuristic (Sonnet)
 
 `newsworthyHubs` (`src/domain/news-feed.mjs`) is rewritten around section 2's tests E and A,
@@ -120,6 +128,18 @@ lands as `item.newName: boolean`, display-only.
 
 Tests: each borderline row of section 4 becomes a unit test with a fixture-scale fact set; the
 Q-id anchor path takes a stubbed enrichment row.
+
+**Build marker.** Two adaptations the section 2 text did not anticipate, both delta from the
+codebase moving under the plan: `readsAsEntityTerm` lives in `services/extract-facts.mjs`, and
+domain never imports services, so a domain-local `looksLikeEntityTerm` covers the lexical half
+(word-count cap, leading-fragment-word reject) — the same rule `readsAsEntityTerm` itself falls
+back to with no wink engine wired in. `newsworthyHubs`/`buildNewsItems` also gained an optional
+`readsAsEntityTerm` parameter so `buildFeed` (which already imports `extract-facts.mjs`) can
+thread the real, wink-backed check through — a plain lexical check cannot tell a malformed
+extraction's predicate remainder from a real name when both read as a grammatically plausible
+noun phrase, and test A gained the same shape check test E already had, since a bad triple's
+subject has nothing else in test A's own anchor to catch it. 8 new tests, 47 pre-existing
+unaffected.
 
 ### N2 — the fallback leaves the feed (Sonnet)
 
@@ -132,20 +152,87 @@ Tests: `test/services/news-service.test.mjs` pins the empty-feed shape on a seed
 `test/services/news-viz.test.mjs` pins the empty-state markup and its disappearance after a
 fixture poll.
 
+**Build marker.** `assembleNewsItems`, `tierOfRows`, `collectItemSources` and their now-unused
+imports removed with the fallback. Each item also gains `newName: boolean` (display-only,
+computed in `buildFeed` rather than `buildNewsItems` — the domain layer has no lexicon either).
+The ranked-terms filter landed as an exported `filterRankedTermEntries(rows, entries)`, threaded
+through `news.mjs`'s chat-lane `renderRankText` (now async) and `news-browser-entry.mjs`'s
+`session.rank()`, both over-fetching from the ledger and trimming after the filter so the display
+count stays full. One downstream test outside this phase's file ownership needed a one-line
+assertion update as a direct, intended consequence (`test/services/chat-news-command.test.mjs`'s
+`/news` pin against a seed-only graph — the honest empty line replaces a seed concept card; no
+`chat.mjs` source touched). 114/114 green across `news-service.test.mjs`, `news-viz.test.mjs`,
+`news-browser-entry.test.mjs`, `chat-news-command.test.mjs` and `news-exports.test.mjs` combined.
+
 ### N3 — end-to-end pins on the operator's own examples (Sonnet)
 
 `test-e2e/pages-news-feed.test.mjs` gains: on first paint with the seed graph and no poll, the
 feed pane shows the empty state and zero cards (no card headed by "purse", "drawer", "cars",
 "finding information" or "entertaining" — assert by absence of any `corpus`-tier card, not by
-enumerating strings); after the recorded Wikimedia fixture polls, the Kumamoto population item
-renders and no corpus-tier card joins it. Sleep-then-evaluate waits, `waitUntil: "load"`, seed
-copied into the snapshot, predicate routes — the standing Playwright rules for this page.
+enumerating strings); after a route-mocked poll of "Kumamoto has a population of 1738000" the
+Kumamoto item renders and no corpus-tier card joins it; a poll that fetches successfully but
+reports nothing still yields the empty state, never a fallback. Sleep-then-evaluate waits,
+`waitUntil: "load"`, seed copied into the snapshot, predicate routes — the standing Playwright
+rules for this page.
+
+**Build marker.** The whole file's pre-existing suite assumed the retired fallback (a card on
+first paint, `seedFallback` flags on every assertion) and needed rewriting alongside the new
+pin, not just an addition beside it. Three real bugs turned up writing it, all fixed (see N1's
+own marker for the first):
+- `news-viz.mjs`'s request-log table had no word-break, so a real polled URL row could push the
+  page wider than a 320px viewport — invisible before because the retired fallback always had
+  cards but never a request-log row before any narrow-viewport check ran. Fixed with
+  `table-layout: fixed` and `overflow-wrap` on its cells.
+- `#feedEmpty` starts un-hidden in the static markup before any JS runs, so checking its
+  visibility as a "render finished" signal fires instantly, before the seed has even started
+  fetching — a bug in this phase's own new code, not a regression. Fixed by reading
+  `#feedCount`'s own text landing instead (empty until `paintFeed`'s first real write), in this
+  file and in `scripts/gen-screenshots.mjs`'s own news ready check, which had the identical bug
+  and would have captured a pre-seed blank marketing plate.
+- `news-viz.mjs`'s empty-feed copy now reverts to its default text once a poll runs (start or
+  poll once), rather than keeping "the articles are gone" indefinitely after a purge a later poll
+  answered with nothing.
+
+A named delta, not a bug: the recorded Wikimedia demo-replay fixture (`nyt-world.rss.xml`,
+`wikimedia-featured.json`, section 4.1's shipped wire shapes) never carries a population-style
+sentence — the "recorded Wikimedia fixture" language above describes a route-mocked live poll
+this file already builds elsewhere for other tests (`routeWikimediaFeatured`'s own quokka
+population fact), extended with a dedicated Kumamoto route rather than a change to the committed
+fixture files. 8/8 e2e tests green (~256s, background run).
 
 ### N4 — measure and record (Haiku)
 
 Run the recorded fixtures through the gate and record, in this file's build markers: candidates
 per fixture, how many pass E, how many pass A, what fell to the empty state. Update the STATUS.md
 news row when the numbers land. Publish the numbers as measured, whatever they are.
+
+**Build marker.** Measured by replaying each shipped demo fixture (`test/fixtures/news/`, via
+`replayFixture`, `news-fixture:` provenance) through the real ingest pipeline and the real seed
+graph, one fixture per process (a shared `seedPayload` object across sibling sessions in one
+process was found to leak session state between them — a diagnostic-script artifact, not a
+product path, since the real page only ever opens one session per load).
+
+| case | candidate terms | pass E | pass A | pass both | hubs (feed items) | feed empty? |
+|---|--:|--:|--:|--:|--:|---|
+| seed graph, no poll | 0 | 0 | 0 | 0 | 0 | yes |
+| `wikimedia-featured.json` | 0 | 0 | 0 | 0 | 0 | yes |
+| `nyt-world.rss.xml` | 6 | 4 | 2 | 1 | 5 | no |
+
+`wikimedia-featured.json`'s own two sentences ("Ceasefire negotiations are talks aimed at
+halting armed conflict between parties.", "A tariff is a tax imposed on imported goods and
+services.") are both identity-only — background under `classifyNewsRow` regardless of the gate,
+so `reported` is empty and nothing is even a candidate. This matches N3's own e2e pin for the
+same fixture (`afterWikipedia.items` is `[]`).
+
+`nyt-world.rss.xml`'s 5 hubs: `ceasefire terms`, `officials`, `talks` read as genuine entities
+from its "Talks Resume Over Ceasefire Terms" item. `back to the link` and `normalizefeeditems`
+are extraction of the fixture's OWN test-scaffolding sentence ("An item with no guid tag, so
+normalizeFeedItems falls back to the link.") — this fixture's fourth item exists to test
+`feed-normalize.mjs`'s guid-fallback path, not to read as real news prose, and the gate has no
+way to distinguish meta-commentary about the parser from a report once both are grammatically
+well-formed. Recorded as measured, not filtered: fixing it is an `extract-facts.mjs` or
+fixture-content question, outside this phase's file ownership, and changing the fixture's own
+content risks the guid-fallback test it exists for.
 
 ## 6. Concurrency
 
