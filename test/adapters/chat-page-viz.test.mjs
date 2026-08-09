@@ -78,6 +78,16 @@ test("provenanceChipFor: an answer with no citation and no assert via carries no
   assert.equal(provenanceChipFor("I don't do arithmetic — I answer questions about a code graph or taught facts.", { miss: false, via: "template" }, provBucketFor), null);
 });
 
+test("provenanceChipFor: a digest read-back's plural, semicolon-joined \"(sources: ...)\" line reads the same as one \"(source: ...)\" per citation", () => {
+  const answer = "A dog is a mammal.\n\n(sources: corpus:conceptnet /r/IsA; corpus:conceptnet /r/AtLocation)\nSay 'show the facts' for all 12 stored facts.";
+  assert.equal(provenanceChipFor(answer, { miss: false, via: "fact" }, provBucketFor), "corpus");
+});
+
+test("provenanceChipFor: a digest source line carrying a taught citation among corpus ones still falls through to corpus, matching the singular-citation rule", () => {
+  const answer = "A rex is a dog.\n\n(sources: teach:chat:abc@2026-01-01T00:00:00.000Z; corpus:conceptnet /r/IsA)\nSay 'show the facts' for all 3 stored facts.";
+  assert.equal(provenanceChipFor(answer, { miss: false, via: "fact" }, provBucketFor), "corpus");
+});
+
 // ---- renderChatHtml: page structure -----------------------------------
 
 test("renderChatHtml: mounts the chat engine bundle by a same-origin relative path only", () => {

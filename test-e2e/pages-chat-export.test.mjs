@@ -102,13 +102,20 @@ test("export downloads a Markdown transcript in the shared session-log shape, ev
     // Every turn's own needle, in order — the fenced block means a role
     // label no longer prefixes the reply, so each needle is the turn's own
     // content (the question, or a phrase from its answer).
-    const turns = ["> what is a dog", "dog is a kind of animal", "> every zorbnug is a dog", "noted", "> what is a zorblatt", "I don't know \"zorblatt\" yet"];
+    const turns = ["> what is a dog", "> every zorbnug is a dog", "noted", "> what is a zorblatt", "I don't know \"zorblatt\" yet"];
     let cursor = -1;
     for (const needle of turns) {
       const at = md.indexOf(needle, cursor + 1);
       assert.ok(at > cursor, `"${needle}" appears, after the previous turn (index ${at})`);
       cursor = at;
     }
+    const dogAt = md.indexOf("> what is a dog");
+    const zorbnugAt = md.indexOf("> every zorbnug is a dog");
+    assert.match(
+      md.slice(dogAt, zorbnugAt),
+      /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i,
+      "turn 1's answer grounds dog's class, between the question and the next turn",
+    );
     // No closing session-end marker — the export can happen mid-conversation.
     assert.ok(!/session end/.test(md), "an export carries no session-end line — the session hasn't closed");
   } finally {
