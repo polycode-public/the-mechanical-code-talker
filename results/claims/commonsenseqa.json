@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T09:38:29.056Z",
-  "commit": "9c8d3f1b6abff1a7aff8f68d13d69938fda71d24",
+  "generatedAt": "2026-08-09T10:39:26.247Z",
+  "commit": "1f4bca9dee49e442ac81dddb4542cc9662ab4138",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -14,7 +14,8 @@
     "test-benchmarks/claims/commonsenseqa-sample.NOTICE",
     "scripts/claims/claim-commonsenseqa.mjs",
     "corpus/child/manifest.json",
-    "corpus/conceptnet/slice.jsonl"
+    "corpus/conceptnet/slice.jsonl",
+    "corpus/wordnet/wordnet-full.jsonl"
   ],
   "value": 0,
   "detail": {
@@ -33,8 +34,8 @@
     "seedFacts": 61724,
     "answered": 14,
     "correctOfAnswered": 0,
-    "refused": 11,
-    "abstained": 75,
+    "refused": 13,
+    "abstained": 73,
     "sourceEdgePresent": 30,
     "correctWhenSourceEdgePresent": 0,
     "routedByRelation": 56,
@@ -49,8 +50,14 @@
         "correct": 0
       },
       "unreachable": {
-        "abstained": 75
+        "abstained": 73
       }
+    },
+    "matchedBy": {
+      "exact": 13,
+      "lemma": 0,
+      "head-noun": 0,
+      "wordnet": 1
     },
     "scorer": "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     "missedIds": [

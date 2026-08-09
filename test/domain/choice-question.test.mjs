@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   CHOICE_SHAPES, CHOICE_MIN_OPTIONS, CHOICE_MAX_OPTIONS,
   splitChoiceQuestion, isChoiceQuestion, choiceDeclineReason,
-  routeChoiceRelation,
+  routeChoiceRelation, lemmaFoldVariants, headNounOf,
 } from "../../src/domain/choice-question.mjs";
 
 const optionTexts = (parsed) => parsed.options.map((o) => o.text);
@@ -303,6 +303,37 @@ test("a used-for-cued stem routes to the UsedFor family", () => {
 
 test("a stem naming no relation at all routes to null", () => {
   assert.equal(routeChoiceRelation("How did the man feel?"), null);
+});
+
+// ---- lemma normalization (rung 4) ----
+
+test("a regular gerund folds back to its base form", () => {
+  const variants = lemmaFoldVariants("getting full");
+  assert.ok(variants.has("get full"));
+});
+
+test("a regular past-tense verb folds back to its base form", () => {
+  const variants = lemmaFoldVariants("she reduced it");
+  assert.ok(variants.has("she reduce it"));
+});
+
+test("a doubled-consonant gerund folds back without the doubled letter", () => {
+  const variants = lemmaFoldVariants("stopping");
+  assert.ok(variants.has("stop"));
+});
+
+test("a phrase with no regular -ing or -ed inflection yields no fold", () => {
+  assert.deepEqual([...lemmaFoldVariants("bookstore")], []);
+});
+
+// ---- head-noun backoff (rung 4) ----
+
+test("the head noun of a multi-word phrase is its last word", () => {
+  assert.equal(headNounOf("fast food restaurant"), "restaurant");
+});
+
+test("a single-word phrase has no head noun to back off to", () => {
+  assert.equal(headNounOf("restaurant"), "");
 });
 
 // ---- the exported bounds are the numbers the tests above rely on ----

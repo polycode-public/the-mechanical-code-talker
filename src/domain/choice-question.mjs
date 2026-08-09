@@ -18,6 +18,7 @@
 // that declines whenever a candidate option itself reads as a second,
 // embedded question ("is it a bird or is it a plane").
 import { leadsInterrogative, QUESTION_LEAD_RE } from "./interpret/normalize.mjs";
+import { gerundOf, pastOf } from "./inflect.mjs";
 
 /** The recognized shapes. Frozen so a caller can switch on the value
  *  without inventing its own string. */
@@ -587,6 +588,60 @@ export const CHOICE_RELATION_ROUTES = Object.freeze([
     cue: /\b(used for|used to|use for)\b/i,
   },
 ]);
+
+// ---- lemma normalization (rung 4, lever 1) ----
+//
+// An option's surface form and a stored edge's surface form differ in
+// regular inflection ("getting full" against an edge to "get full"). Reverse
+// inflection is ambiguous by nature ("having" could come from "hav" or
+// "have"), so every candidate base is SELF-VERIFIED against inflect.mjs's
+// own forward rules before it counts — a candidate survives only when
+// running it back through gerundOf/pastOf reproduces the exact word it came
+// from. No new inflection rule is invented here; this only reverses the
+// existing regular -ing/-ed ones. Plural -s/-es stays out of scope: chat.mjs's
+// own factTermVariants already folds that at the noun level.
+
+function gerundBaseCandidates(word) {
+  if (!word.endsWith("ing") || word.length <= 4) return [];
+  const stem = word.slice(0, -3);
+  const candidates = new Set([stem, stem.slice(0, -1), `${stem}e`]);
+  return [...candidates].filter((c) => c.length > 1 && gerundOf(c) === word);
+}
+
+function pastBaseCandidates(word) {
+  if (!word.endsWith("ed") || word.length <= 3) return [];
+  const candidates = new Set([word.slice(0, -1), word.slice(0, -2), word.slice(0, -2).slice(0, -1)]);
+  if (word.endsWith("ied")) candidates.add(`${word.slice(0, -3)}y`);
+  return [...candidates].filter((c) => c.length > 1 && pastOf(c) === word);
+}
+
+/** Every phrase reachable from `text` by lemmatizing exactly one word's
+ *  regular -ing/-ed inflection back to its base form — "getting full" ->
+ *  "get full", "she reduced it" untouched (no word survives self-
+ *  verification as a genuine -ing/-ed inflection). */
+export function lemmaFoldVariants(text) {
+  const words = String(text ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const variants = new Set();
+  words.forEach((word, i) => {
+    for (const base of [...gerundBaseCandidates(word), ...pastBaseCandidates(word)]) {
+      variants.add([...words.slice(0, i), base, ...words.slice(i + 1)].join(" "));
+    }
+  });
+  return variants;
+}
+
+// ---- head-noun backoff (rung 4, lever 2) ----
+
+/** The head noun of a multi-word phrase — its LAST word, the house style's
+ *  own head-final assumption ("fast food restaurant" -> "restaurant", "train
+ *  station" -> "station"). Returns "" for a single-word phrase: there is
+ *  nothing to back off to when the phrase already IS its own head. Bounded
+ *  and closed on purpose — the head only, never every sub-phrase — so the
+ *  caller stays a single, cheap fallback pass rather than a fuzzy search. */
+export function headNounOf(text) {
+  const words = String(text ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? words[words.length - 1] : "";
+}
 
 /** Reads the relation family a stem's own wording names, first cue wins.
  *  Returns null when no route's cue matches, which the caller reads as "no

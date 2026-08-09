@@ -279,6 +279,70 @@ test("the same chain facts taught in either insertion order produce the same ans
   }
 });
 
+// ---- wording levers (rung 4) ----
+
+test("a plural option matches a singular edge, tagged as an exact-fold match", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "farm", predicate: "mgx:hasA", object: "cow", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a farm cows or a horse", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.matchedBy, "exact");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a gerund option matches a base-form edge, tagged as a lemma match", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "dog", predicate: "mgx:hasSubevent", object: "get full", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a dog getting full or chewing", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.matchedBy, "lemma");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a multi-word option matches its head noun only after the full phrase misses", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:atLocation", object: "restaurant", provenance: "corpus:test" },
+    ]);
+    const r = await turn("Where would you find a magazine?\nA) fast food restaurant B) doctor", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.matchedBy, "head-noun");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a WordNet-expanded match is labelled as such in the turn detail", async () => {
+  const dir = await freshRepo();
+  try {
+    // "car" <-> "automobile" is a real committed wordnet-full.jsonl synonym
+    // pair — neither exact nor lemma nor head-noun backoff reaches it.
+    await appendFacts(dir, [
+      { subject: "garage", predicate: "mgx:atLocation", object: "automobile", provenance: "corpus:test" },
+    ]);
+    const r = await turn("Where would you find a garage?\nA) car B) house", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.matchedBy, "wordnet");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("two grounded options tie and the lane picks neither, whatever their edge weights", async () => {
   const dir = await freshRepo();
   try {

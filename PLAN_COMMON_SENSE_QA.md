@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage), R2 (relation routing) and R3 (inference depth) are built and measured. R4–R5 remain.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage), R2 (relation routing), R3 (inference depth) and R4 (the wording levers) are built and measured. R5 remains.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1295,6 +1295,18 @@ That last one is the read-time determinism check `CLAUDE.md` requires of any res
 store, and `sortFactIndividualsById` is the precedent it names.
 
 ### 10.4 Rung 4 — the wording gap
+
+**Built and measured, three levers, one measured round each.**
+
+| lever | mechanism | before -> after (answered/refused/abstained) | `correctOfAnswered` | what moved |
+|---|---|---|---|---|
+| lemma normalization | `lemmaFoldVariants` (choice-question.mjs): a self-verifying reverse of `inflect.mjs`'s regular -ing/-ed rules, tried on the option text before the exact match | 14/11/75 -> 14/11/75 | 0 -> 0 | nothing; no answered item's gap this round was a gerund/past-tense mismatch |
+| head-noun backoff | `headNounOf` (choice-question.mjs): a multi-word option that finds nothing under the full phrase retries under its last word alone | 14/11/75 -> 13/13/74 | 0 -> 0 | the partition, not correctness: one item's previously-sole grounded option gained a second grounded option once its head noun was tried, so a single answer became a tie, and one previously-abstained item gained its first grounded option the same way |
+| WordNet expansion | `choiceWordnetTags` (chat.mjs): a one-hop lookup into `corpus/wordnet/wordnet-full.jsonl`'s own `/r/Synonym` edges, tried only when the first two levers find nothing, loaded and cached once per process | 13/13/74 -> 14/13/73 | 0 -> 0 | one previously-abstained item now answers (wrong option, so `correctOfAnswered` stays 0); `detail.matchedBy.wordnet` reads 1 |
+
+Each round ran the full chunked-foreground re-measurement before the next lever landed, so every row above is the actual delta that lever alone produced against the round immediately before it. `detail.matchedBy` closes at `{ exact: 13, lemma: 0, "head-noun": 0, wordnet: 1 }` — one honest wrinkle worth recording: the head-noun lever visibly moved the partition (13->13/74->13 shift) without ever appearing in `matchedBy`, because `matchedBy` only tags the WINNING match in an answered item, and the head-noun round's effect landed entirely inside ties and a still-abstained-then-not item, never as a sole winner. The column is accurate to what it defines; it just does not show every lever's full reach.
+
+None of the three levers raised `value` (still 0) or improved `correctOfAnswered`. Threshold stays `{ min, 0 }`, unchanged.
 
 **Model tier: Sonnet.** Owns `src/domain/choice-question.mjs` and one function in `chat.mjs`.
 

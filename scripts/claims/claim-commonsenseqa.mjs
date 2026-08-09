@@ -27,6 +27,7 @@ export const SOURCES = [
   "scripts/claims/claim-commonsenseqa.mjs",
   "corpus/child/manifest.json",
   "corpus/conceptnet/slice.jsonl",
+  "corpus/wordnet/wordnet-full.jsonl",
 ];
 
 /**
@@ -106,6 +107,7 @@ export async function runSample(items, memoryDir, graph) {
   let routedByRelation = 0;
   let correctWhenRouted = 0;
   const byHop = { 1: { answered: 0, correct: 0 }, 2: { answered: 0, correct: 0 }, unreachable: { abstained: 0 } };
+  const matchedBy = { exact: 0, lemma: 0, "head-noun": 0, wordnet: 0 };
   const missedIds = [];
   const missedStems = [];
   for (const item of items) {
@@ -123,12 +125,16 @@ export async function runSample(items, memoryDir, graph) {
       answered += 1;
       // hop is 1 for a direct edge, 2 for a chain (probeChoiceOptions,
       // rung 3); a hop the schema does not name (there is none today) is
-      // dropped rather than guessed at.
+      // dropped rather than guessed at. matchedBy is set only on the
+      // direct-edge path (probeChoiceOptions, rung 4) — a chain answer has
+      // no wording lever to attribute, so it is left out of this tally.
       const hop = result?.detail?.hop;
       if (hop === 1 || hop === 2) {
         byHop[hop].answered += 1;
         if (ok) byHop[hop].correct += 1;
       }
+      const matchedByTag = result?.detail?.matchedBy;
+      if (matchedByTag && matchedByTag in matchedBy) matchedBy[matchedByTag] += 1;
     } else refused += 1;
 
     if (ok) correct += 1;
@@ -155,7 +161,7 @@ export async function runSample(items, memoryDir, graph) {
     correct, answered, refused, abstained,
     sourceEdgePresent, correctWhenSourceEdgePresent,
     routedByRelation, correctWhenRouted,
-    byHop, missedIds, missedStems,
+    byHop, matchedBy, missedIds, missedStems,
   };
 }
 
@@ -177,6 +183,7 @@ export function buildClaimDetail(items, bands, result) {
     routedByRelation: result.routedByRelation,
     correctWhenRouted: result.correctWhenRouted,
     byHop: result.byHop,
+    matchedBy: result.matchedBy,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),
