@@ -223,13 +223,24 @@ function readStemNounPhrase(words) {
   return out.join(" ");
 }
 
+/** Strips every leading determiner in a run ("the most fast food
+ *  restaurants" -> "fast food restaurants"), not just the first — a
+ *  quantifier stacked on an article is ordinary English, not a special
+ *  case. */
+function stripLeadingDeterminers(phrase) {
+  let out = phrase;
+  let m;
+  while ((m = LEADING_DETERMINER_RE.exec(out))) out = out.slice(m[0].length);
+  return out;
+}
+
 /** Strips a leading determiner, then reads a noun phrase — "" when the
  *  phrase would open on a pronoun or a boundary word, since neither ever
  *  names a source term. Stops at the first comma, so an option-like list
  *  ("a magazine, paper or gum") reads only its first member. */
 function captureStemNounPhrase(tailText) {
   const [beforeComma] = String(tailText).split(",", 1);
-  const stripped = beforeComma.replace(LEADING_DETERMINER_RE, "");
+  const stripped = stripLeadingDeterminers(beforeComma);
   const words = stripped.trim().toLowerCase().split(/[^a-z'-]+/).filter(Boolean);
   if (words.length === 0 || PRONOUN_TERMS.has(words[0]) || PHRASE_BOUNDARY_WORDS.has(words[0])) return "";
   return readStemNounPhrase(words);
@@ -291,6 +302,115 @@ const wantToSourceTerm = (stem) => {
   return captureStemNounPhrase(m[2]) || m[1].toLowerCase();
 };
 
+// ---- postponed and mid-sentence wh-shapes ----
+//
+// leadsInterrogative (normalize.mjs) widened its gate to recognize four
+// stem shapes where the wh-word is not the stem's own first word. Passing
+// that gate only says the stem is a real question — it says nothing about
+// where the source term sits inside it, so each shape needs its own
+// extraction template here too. Every template below reads a closed, fixed
+// vocabulary (the same PHRASE_BOUNDARY_WORDS/PREP_WORDS/PRONOUN_TERMS the
+// fronted templates already use) and returns "" rather than guessing when
+// nothing structured is there to read.
+
+// A subordinator or preposition opening the clause ahead of a mid-sentence
+// wh-word ("During a shark filled tornado where...") is framing, not the
+// source term itself.
+const SUBORDINATOR_LEAD_RE = /^(?:during|while|when|if|after|before|despite|though|although|because|since|as|without|about|for|in|on|at|with)\s+/i;
+
+const BACKWARD_SCAN_STOP_WORDS = new Set([...PHRASE_BOUNDARY_WORDS, "be", "been"]);
+
+/** Reads the noun phrase after the first preposition found in `text` — the
+ *  locative-object reading a declarative lead clause usually wants
+ *  ("plopped on the bench" -> "bench") over its own grammatical subject.
+ *  Returns "" when the clause has no preposition to anchor on. */
+function captureLocativeNounPhrase(text) {
+  const words = String(text).trim().toLowerCase().split(/[^a-z'-]+/).filter(Boolean);
+  const idx = words.findIndex((w) => PREP_WORDS.has(w));
+  if (idx === -1 || idx === words.length - 1) return "";
+  return captureStemNounPhrase(words.slice(idx + 1).join(" "));
+}
+
+/** Reads a short noun phrase backward from the end of `leadText`, skipping
+ *  any boundary words trailing off the very end, then collecting content
+ *  words until the next boundary word, pronoun, or the start of the text.
+ *  Used only when the wh-word is the stem's own last word, where nothing
+ *  marks the start of the noun phrase the way a template's cue word
+ *  normally does. */
+function captureTrailingNounPhrase(leadText) {
+  const words = String(leadText).trim().toLowerCase().split(/[^a-z'-]+/).filter(Boolean);
+  let end = words.length;
+  while (end > 0 && BACKWARD_SCAN_STOP_WORDS.has(words[end - 1])) end -= 1;
+  const out = [];
+  let i = end - 1;
+  while (i >= 0 && out.length < 3) {
+    const word = words[i];
+    if (BACKWARD_SCAN_STOP_WORDS.has(word) || PRONOUN_TERMS.has(word)) break;
+    out.unshift(word);
+    i -= 1;
+  }
+  if (out.length === 0) return "";
+  const stripped = stripLeadingDeterminers(out.join(" "));
+  const strippedWords = stripped.split(/\s+/).filter(Boolean);
+  if (strippedWords.length === 0 || PRONOUN_TERMS.has(strippedWords[0])) return "";
+  return stripped;
+}
+
+// "In what country are the most fast food restaurants?", "From where do
+// aliens arrive?" — a wh-word fronted behind a single preposition, either
+// carrying its own noun ("what country") or bare ("where"). The clause
+// after the auxiliary/copula is where the source term sits.
+const PREP_WH_FRONTED_CAPTURE_RE = new RegExp(
+  "^(?:in|at|on|from|by|with|for|of|to|off)\\s+"
+  + "(?:(?:what|which)\\s+[a-z][\\w'-]*|where|when|why|how|who)\\s+"
+  + "(?:is|are|was|were|do|does|did|can|could|should|would|will|has|have|might|must)\\s+(.+?)[?.!]*$", "i",
+);
+const prepWhFrontedSourceTerm = (stem) => {
+  const m = PREP_WH_FRONTED_CAPTURE_RE.exec(stem);
+  return m ? captureStemNounPhrase(m[1]) : "";
+};
+
+// "During a shark filled tornado where should you not be?" — the wh-word
+// sits mid-sentence, immediately ahead of an auxiliary, with no comma to
+// split on. The source term sits in the clause ahead of the wh-word; a
+// stem where the wh-word is already the first word captures an empty lead
+// here and falls through, since that shape is the fronted templates' own.
+// A lead that itself carries a comma is the trailing-clause shape's own
+// territory instead, so this declines rather than reading across the join.
+const MID_SENTENCE_WH_AUX_CAPTURE_RE = new RegExp(
+  "^(.*?)\\b(?:what|who|which|where|when|why|how)\\s+(?:i|you|he|she|it|we|they)?\\s*"
+  + "(?:is|are|was|were|do|does|did|can|could|should|would|will|has|have|might|must)\\b", "i",
+);
+const midSentenceWhAuxSourceTerm = (stem) => {
+  const m = MID_SENTENCE_WH_AUX_CAPTURE_RE.exec(stem);
+  if (!m || !m[1].trim() || m[1].includes(",")) return "";
+  return captureStemNounPhrase(m[1].replace(SUBORDINATOR_LEAD_RE, ""));
+};
+
+// "The trucker plopped on the bench with a sense of relief, where did he
+// arrive?" — the stem's last comma- or period-delimited clause opens with
+// a question-lead word; the source term sits in the declarative clause(s)
+// ahead of it. A stem with no such split (one clause only) falls through,
+// since there is no "earlier" clause to read.
+const trailingClauseAfterPunctuationSourceTerm = (stem) => {
+  const clauses = stem.split(/[.,]+/).map((c) => c.trim()).filter(Boolean);
+  if (clauses.length < 2) return "";
+  const last = clauses[clauses.length - 1];
+  if (!QUESTION_LEAD_RE.test(last)) return "";
+  const lead = clauses.slice(0, -1).join(" ");
+  return captureLocativeNounPhrase(lead) || captureStemNounPhrase(lead);
+};
+
+// "... you will be doing what?", "... arrived at the what?" — a bare
+// wh-word, with an optional leading article, is the stem's own last word
+// before the closing "?". Nothing marks where the source term starts, so
+// this reads backward from the wh-word for the nearest content phrase.
+const TRAILING_BARE_WH_CAPTURE_RE = /^(.*?)\b(?:an?|the)?\s*(?:what|who|which|where|when|why|how)\s*\?\s*$/i;
+const trailingBareWhSourceTerm = (stem) => {
+  const m = TRAILING_BARE_WH_CAPTURE_RE.exec(stem);
+  return m ? captureTrailingNounPhrase(m[1]) : "";
+};
+
 // Note: a leading "A/An/The <subject> ..." shape is not among these
 // templates. coreParse gates every input on leadsInterrogative before this
 // module ever runs, and that gate's QUESTION_LEAD_RE never accepts a line
@@ -304,6 +424,10 @@ function extractStemSourceTerm(stem) {
     || whereCopulaSourceTerm(stem)
     || trailingOfClauseSourceTerm(stem)
     || wantToSourceTerm(stem)
+    || prepWhFrontedSourceTerm(stem)
+    || midSentenceWhAuxSourceTerm(stem)
+    || trailingClauseAfterPunctuationSourceTerm(stem)
+    || trailingBareWhSourceTerm(stem)
   );
 }
 

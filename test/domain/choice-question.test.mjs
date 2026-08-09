@@ -212,6 +212,58 @@ test("a stem with no recognized cue at all still parses, with an empty source te
   assert.equal(parsed.sourceTerm, "");
 });
 
+// ---- stem source-term extraction: postponed and mid-sentence wh-shapes ----
+
+test("a wh-word fronted behind a single preposition reads the clause after its auxiliary", () => {
+  const text = "In what habitat do bears normally live?\nA) forest B) desert";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "bears");
+});
+
+test("a bare wh-word fronted behind a preposition still reads the clause after its auxiliary", () => {
+  const text = "From where do aliens arrive?\nA) space B) ocean";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "aliens arrive");
+});
+
+test("a wh-word inverted around an auxiliary mid-sentence reads the clause ahead of it", () => {
+  const text = "During a shark filled tornado where should you not be?\nA) inside B) outside";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "shark filled tornado");
+});
+
+test("a trailing clause opening with a question-lead word reads the declarative clause ahead of the comma", () => {
+  const text = "The trucker plopped on the bench with a sense of relief, where did he arrive?\nA) station B) airport";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "bench");
+});
+
+test("a trailing clause with no locative preposition falls back to its own leading subject", () => {
+  const text = "Stark was just having fun, and he wasn't hurting anyone. What might have he been doing?\nA) dancing B) sleeping";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "stark");
+});
+
+test("a bare trailing wh-word reads backward for the nearest content phrase", () => {
+  const text = "The next day you will be doing what?\nA) sleeping B) eating";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "doing");
+});
+
+test("a bare trailing wh-word past a preposition reads the noun phrase ahead of it", () => {
+  const text = "It brought her a great deal of what?\nA) joy B) money";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "great deal");
+});
+
+test("a mid-sentence wh-word already fronted at the stem's own start yields no postponed match", () => {
+  const text = "How are the conditions for someone who is living in a homeless shelter?\nA) good B) bad";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "");
+});
+
+test("a single clause with no comma or period has no earlier clause to read for the trailing-clause template", () => {
+  const text = "Where could a sloth live?\nA) tree B) desert";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "");
+});
+
+test("a two-clause stem whose last clause is not itself a question falls through to the bare trailing-wh template", () => {
+  const text = "A beaver is known for building prowess, their supplies come from where?\nA) forest B) river";
+  assert.equal(splitChoiceQuestion(text).sourceTerm, "supplies come");
+});
+
 // ---- the exported bounds are the numbers the tests above rely on ----
 
 test("the exported option bounds match what the option-count declines test against", () => {
