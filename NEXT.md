@@ -29,27 +29,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`does X have Y` misses property inheritance through a taught `⊑` hop** — found live while
-  regenerating infbench for `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B3 (`reports/BENCHMARK_INFERENCE_5.0.28.md`),
-  pre-existing and unrelated to that plan's own changes. Example: teach "every argyle has a
-  receptacle", "e150.mjs is a argyle"; ask "does e150.mjs have a receptacle" — an honest miss
-  instead of the "yes" the stored someValuesFrom restriction plus the type assertion entail. 10 of
-  15 `b2PropertyInheritance` infbench rows (the `member` and `grandparent` variants) show this; the
-  `class-direct` variant (no individual involved) already passes. The gap sits in the `does X have
-  Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
-  ladder — a different code path from `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
-  work. Playtest 007 (turn 14) widens the scope: taught capability
-  (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
-  "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
-  Playtest 027 (turn 26) adds the plain-property shape: "animal is alive" (corpus) plus
-  "pig is a kind of animal" leaves "are pigs alive" a miss. In flight in the playtest-027
-  fixes worktree.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
   world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
-  into the browser page only, with no ask-lane grammar for those predicates. Both are new
-  engine work if wanted; four planned corpus rows wait on them.
+  into the browser page only, with no ask-lane grammar for those predicates. Operator said go
+  (2026-08-09); four planned corpus rows wait on it. In flight in a chat.mjs worktree.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
   next tuning cycle, each its own measured round:
@@ -65,13 +50,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   them), each crossing tweening as playback walks the plan; the 2D chip board stays as the
   no-WebGL fallback. Remainder: `mudiii-about.html`'s copy still describes the town square
   only — it should mention the crossing and the direct link.
-- [ ] **mudiii scenario by query parameter, river as a top-level demo** — code-complete and
-  merged, pending deployed verification: `mudiii.html?scenario=river` boots the scenario
-  directly (slug-matched, silent fallback on unknown), and index.html carries a river
-  showcase band linking to it. Flagged for an operator call: the link is a showcase band, not
-  an eighth claim-grid cell, because the grid is pinned one cell per demo PAGE (own about
-  page, screenshot, og image) and the river is a scenario inside mudiii.html — promote it to
-  a full demo page if wanted.
+- [ ] **mudiii scenario by query parameter, river as a top-level demo** — the query parameter
+  is code-complete and merged (`mudiii.html?scenario=river`, slug-matched, silent fallback on
+  unknown). Operator decided the link's shape (2026-08-09): one extra demo-list entry deep-
+  linking to `mudiii.html?scenario=river` alongside the existing mudiii and adventure
+  entries, with its own social share posts but the SHARED mudiii about page — no new claims
+  block, no new screenshot (a different perspective on the same demo, not a new capability).
+  The stopgap showcase band retires when the entry lands. Queued behind the mudiii-about
+  copy worktree (same site files).
 - [ ] **News page controls follow-up (2026-08-09 second field report)** — code-complete and
   merged, pending deployed verification: (1) "stop & forget" now retracts every news/research
   row, resets the session and card cache, and holds an emptied feed on screen; (2) the poll
@@ -89,25 +75,23 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
   dispatched; N2 sequences after the news-controls worktree merges (same files).
 - [ ] **Playtest 027 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_027.md`
-  holds the transcript and analysis) — queued, in flight in a chat.mjs worktree: (1) taught have-facts must
-  round-trip through "how many X does Y have" (taught "dog has 4 legs", the count ask still
-  missed — digits and number words both); (2) "X is what" inversion routes to the what-is
-  lane ("a dog is what" missed while "what is a dog" answered), with an adjective-qualified
-  subject ("a female dog is what") falling back to the head noun honestly; (3) modal
-  property asks "can/could X be Y" reach the same stored fact "are X Y" already reads
-  ("are animals alive" yes, "can animals be alive" missed); (4) the ground-nothing miss
-  hint must name the subject actually asked about, not always suggest "what is a dog".
-  Candidates recorded in the log, not queued: possessive "a dogs name", compound-noun
-  "human name", and the backwards instance teach "a human name is john". the `/news` lane assessment found the
+  holds the transcript and analysis) — code-complete and merged, pending deployed
+  verification: count asks read the quantity off taught have-facts (digits and number
+  words); "X is what" rewrites into the what-is lane, with an adjective-qualified subject
+  answering the head noun honestly; "can/could X be Y" reads the property and capability
+  facts the plain ask reads; the ground-nothing hint names the asked subject; and the
+  one-hop `⊑` inheritance gap is closed across property, capability and does-have lanes
+  (all 20 infbench b2PropertyInheritance rows now pass, from 5). Candidates recorded in the
+  log, not queued: possessive "a dogs name", compound-noun "human name", and the backwards
+  instance teach "a human name is john".
+- [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
   carries a real three-turn `/news` transcript between the news and sprites plates, pinned in
   the index spec. Remainder: the standalone `tmct news` CLI verb defaults to `poll` while the
-  in-chat `/news` defaults to showing the feed — a real divergence no test pins; pin it or
-  reconcile it.
-- [ ] **bedrock-meter pins tmct 5.0.25 exactly** — a consumer taking both bedrock-meter and a
-  newer tmct gets two tmct copies; a caret range or peerDependency shape on bedrock-meter's side
-  needs a shared decision.
+  in-chat `/news` defaults to showing the feed — a real divergence no test pins; resolve by
+  PINNING both defaults as intended behavior (no CLI change), per the coordinator's stated
+  default unless the operator asks to reconcile instead.
 
 ## Discipline
 

@@ -53,7 +53,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
-import { loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, readsAsIndividualName, CODE_REF_SHAPE } from "../domain/grammar/lexicon.mjs";
+import { loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, readsAsIndividualName, numberOf, CODE_REF_SHAPE } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import {
   REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
@@ -8846,6 +8846,85 @@ function apposedFactTerm(term, rows, normFactTerm) {
  *  factReadBack(...)` — never both). */
 const CAN_ASK_RE = /^(?:can|could)\s+(all\s+|every\s+)?(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
 const DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+/** "how many legs does a dog have" and its plural sibling "how many legs do
+ *  dogs have" — the COUNT surface of the same possession facts DOES_HAVE_ASK_RE
+ *  reads back. Both auxiliaries in one shape: the singular/plural fold happens
+ *  on the terms (factTermVariants), so the auxiliary carries no meaning here. */
+const HOW_MANY_HAVE_ASK_RE = /^how\s+many\s+(.+?)\s+(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have[?.!\s]*$/i;
+/** The two spellings a possession fact lands under: the corpus mints mgx:hasA,
+ *  the teach lane tmct:has. Every possession reader searches both. */
+const HAS_PREDICATES = new Set(["mgx:hasA", "tmct:has"]);
+
+/** "can a pig be alive" / "could animals be alive" — the modal surface of the
+ *  plain "are pigs alive" property question. CAN_ASK_RE's own single-word verb
+ *  slot cannot read this shape (it binds "pig be" as the subject and "alive" as
+ *  the verb), so the modal-plus-copula spelling gets its own closed template
+ *  and reaches the property facts the plain question already answers from,
+ *  plus the taught capability spelling ("animals can be alive", stored as
+ *  mgx:capableOf "be alive"). */
+const CAN_BE_PROPERTY_ASK_RE = /^(?:can|could)\s+(?:all\s+|every\s+)?(?:an?\s+|the\s+)?(.+?)\s+be\s+([a-z][\w-]*)[?.!\s]*$/i;
+
+/** Whether a STORED term names the same thing as one of a query term's
+ *  variants. factTermVariants only ever folds toward the singular, so a fact
+ *  taught in the plural ("animals can be alive" stores the subject "animals")
+ *  is invisible to a singular query unless the stored side folds too. Both
+ *  sides fold here. */
+function termInVariants(normFactTerm, variants, term) {
+  if (variants.has(term)) return true;
+  for (const v of factTermVariants(normFactTerm, term)) if (variants.has(v)) return true;
+  return false;
+}
+
+/** The facts backing a property claim about a subject: the subject's own
+ *  property fact, or ONE stored subclass/type hop to a parent that carries it.
+ *  Returns the facts to cite in reading order (the membership first, then the
+ *  property), or null when nothing stored says it. One hop, so a two-step
+ *  taxonomy stays a miss rather than a guess — every fact in the answer is one
+ *  the store really holds, and the caller cites all of them. */
+function propertyPremises(rows, subjectVariants, adjective, normFactTerm) {
+  const carriesProperty = (f) => (f.predicate === HAS_PROPERTY_PREDICATE && normFactTerm(f.object) === adjective)
+    || (f.predicate === `tmct:${adjective}` && f.object === "true");
+  const isSubject = (variants, f) => termInVariants(normFactTerm, variants, f.subject);
+  const direct = rows.find((f) => isSubject(subjectVariants, f) && carriesProperty(f));
+  if (direct) return [direct];
+  for (const step of rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isSubject(subjectVariants, f))) {
+    const parentVariants = factTermVariants(normFactTerm, step.object);
+    const inherited = rows.find((f) => isSubject(parentVariants, f) && carriesProperty(f));
+    if (inherited) return [step, inherited];
+  }
+  return null;
+}
+
+/** The capability twin of propertyPremises, over the same one stored hop: a
+ *  taught "animals can be alive" plus "a pig is an animal" answers "can a pig
+ *  be alive", citing both. The stored object keeps the bare infinitive it was
+ *  taught with ("be alive"), so the caller passes the variants it wants
+ *  matched rather than a single spelling. */
+function capabilityPremises(rows, subjectVariants, objectVariants, normFactTerm) {
+  const carriesCapability = (f) => f.predicate === "mgx:capableOf" && objectVariants.has(normFactTerm(f.object));
+  const isSubject = (variants, f) => termInVariants(normFactTerm, variants, f.subject);
+  const direct = rows.find((f) => isSubject(subjectVariants, f) && carriesCapability(f));
+  if (direct) return [direct];
+  for (const step of rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isSubject(subjectVariants, f))) {
+    const parentVariants = factTermVariants(normFactTerm, step.object);
+    const inherited = rows.find((f) => isSubject(parentVariants, f) && carriesCapability(f));
+    if (inherited) return [step, inherited];
+  }
+  return null;
+}
+/** The teach lane stores "a dog has 4 legs" as ONE object string — "4 legs",
+ *  quantity and part together — so a count question has to split the quantity
+ *  back off the front to answer it. `numberOf` (the grammar lexicon's own
+ *  closed table) decides what reads as a quantity, which is why "4 legs" and
+ *  "two eyes" answer the same way. An object with no leading quantity ("a
+ *  tail") returns null and the count reader declines, leaving the plain
+ *  possession readers to answer it. */
+function quantifiedPossession(object) {
+  const m = String(object ?? "").trim().match(/^([\w-]+)\s+(\S.*)$/);
+  if (!m) return null;
+  const count = numberOf(m[1]);
+  return count === null ? null : { count, part: m[2] };
+}
 /** The class-level existential sibling of DOES_HAVE_ASK_RE for a verb OTHER
  *  than "have" — "does a heart contain a hinge". A someValuesFrom
  *  restriction (taught, or EL-entailed by /classify) never cares which
@@ -9271,8 +9350,14 @@ function withDeducedGoal(res, envelope, query) {
  *  the miss names `/classify` — the one command that can compose further
  *  ("/syllogise" is never offered here, since its plain scm-sco chase never
  *  touches a class expression) — or, with no restriction on the subject at
- *  all, plain null so the caller's own miss cascade stands unchanged. */
-async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fillerVariants, subjectWord = null) {
+ *  all, plain null so the caller's own miss cascade stands unchanged.
+ *
+ *  `chainPremises` are the isa-family facts a caller already walked to reach
+ *  these subject variants — an individual's type assertion, and any further
+ *  subclass steps above it. They are cited ahead of the restriction's own
+ *  premises so the answer shows the whole route it took, not just the last
+ *  step of it. */
+async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fillerVariants, subjectWord = null, chainPremises = []) {
   const { ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("../domain/syllogise.mjs");
   const rows = await factRows(memoryDir, cache);
   const onPropertyOf = new Map();
@@ -9299,7 +9384,7 @@ async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fill
       .map((id) => byId.get(id))
       .filter((r) => r && r.predicate === SUBCLASS_PREDICATE);
     const cited = premises.length ? premises : [hit];
-    return { text: `yes — ${cited.map(renderFactLine).join("; ")}`, replace: true };
+    return { text: `yes — ${[...chainPremises, ...cited].map(renderFactLine).join("; ")}`, replace: true };
   }
   if (subjectRestrictions.length && subjectWord) {
     return {
@@ -9977,6 +10062,27 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     };
   }
 
+  // (b-pre) "can a pig be alive" — the modal surface of the plain "are pigs
+  // alive" property question. It runs ahead of every reader below because two
+  // of them claim the shape and answer the wrong question with it: (b0)'s
+  // derived "can be" marker looks for a capability fact whose object is the
+  // bare property (the teach lane stores the infinitive, "be alive"), and
+  // CAN_ASK_RE's single-word verb slot binds "pig be" as the subject. Both
+  // stored spellings of the claim are searched here — the property fact the
+  // plain question reads, and the taught capability fact — and each search
+  // lifts one stored subclass/type hop, so a pig inherits what animals carry,
+  // with the membership cited beside the property. Nothing stored either way
+  // declines and the readers below get their ordinary turn.
+  const canBe = positiveQuestionSurface(q).match(CAN_BE_PROPERTY_ASK_RE);
+  if (canBe) {
+    const canBeSubject = factTermVariants(normFactTerm, canBe[1]);
+    const property = canBe[2].toLowerCase();
+    const canBeRows = await factRows(memoryDir, cache);
+    const canBePremises = propertyPremises(canBeRows, canBeSubject, property, normFactTerm)
+      ?? capabilityPremises(canBeRows, canBeSubject, new Set([`be ${property}`, property]), normFactTerm);
+    if (canBePremises) return { text: `yes — ${canBePremises.map(renderFactLine).join("; ")}`, replace: true };
+  }
+
   // (b0) Derived forward yes/no readers — FORWARD_YESNO_MARKERS, one per
   // renderable relation. Runs BEFORE the isa lane because ISA_ASK_RE's lazy
   // subject otherwise swallows these shapes whole ("is a wheel part of a
@@ -10099,6 +10205,27 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     return capabilityBaseRateReply(can[2], can[3], facts);
   }
 
+  // (b2a-count) "how many legs does a dog have" — the count surface of the
+  // possession facts (b2b) reads back, over the SAME predicates and the same
+  // singular/plural fold. The stored object carries the quantity inside it
+  // ("dog has 4 legs"), so the reader splits it off with quantifiedPossession
+  // and matches only the part tail against what was asked. The answer leads
+  // with the count and cites the fact it came from; a possession fact with no
+  // quantity in it, or no possession fact at all, declines here so the honest
+  // miss stands.
+  const howManyHave = q.match(HOW_MANY_HAVE_ASK_RE);
+  if (howManyHave) {
+    const partVariants = factTermVariants(normFactTerm, howManyHave[1]);
+    const countSubj = factTermVariants(normFactTerm, howManyHave[2]);
+    const countFacts = await memoryFacts(memoryDir);
+    const quantifiedHit = countFacts
+      .map((f) => ({ fact: f, quantified: HAS_PREDICATES.has(f.predicate) && countSubj.has(f.subject) ? quantifiedPossession(f.object) : null }))
+      .find(({ quantified }) => quantified && [...factTermVariants(normFactTerm, quantified.part)].some((v) => partVariants.has(v)));
+    if (quantifiedHit) {
+      return { text: `${quantifiedHit.quantified.count} — ${renderFactLine(quantifiedHit.fact)}`, replace: true };
+    }
+  }
+
   // (b2b) "does a dog have a tail" — yes iff a remembered possession fact
   // says so: the forward yes/no mirror of WHAT_HAS_RE below, with the same
   // single-hit lookup and "never a guessed no" discipline as CAN_ASK_RE
@@ -10111,7 +10238,6 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   if (doesHave) {
     const subj = factTermVariants(normFactTerm, doesHave[1]);
     const obj = factTermVariants(normFactTerm, doesHave[2]);
-    const HAS_PREDICATES = new Set(["mgx:hasA", "tmct:has"]);
     const facts = await memoryFacts(memoryDir);
     const hasHit = (subjectSet) => facts.find(
       (f) => HAS_PREDICATES.has(f.predicate) && subjectSet.has(f.subject) && obj.has(f.object),
@@ -10145,11 +10271,22 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
           if (liftSeen.has(step.object)) continue;
           liftSeen.add(step.object);
           const nextChain = [...chain, step];
-          const lifted = hasHit(factTermVariants(normFactTerm, step.object));
+          const liftedTerms = factTermVariants(normFactTerm, step.object);
+          const lifted = hasHit(liftedTerms);
           if (lifted) {
             return { text: `yes — ${[...nextChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
           }
-          nextFrontier.push({ terms: factTermVariants(normFactTerm, step.object), chain: nextChain });
+          // A class-level "every argyle has a receptacle" is stored as a
+          // someValuesFrom restriction, not a flat possession triple, so the
+          // same walk has to look for that shape at every step it reaches —
+          // otherwise an individual placed in the class ("e150.mjs is a
+          // argyle") inherits nothing. The walked isa steps are cited beside
+          // the restriction's own premises. `subjectWord` stays null here so
+          // the mid-walk "/classify" nudge never fires: the walk is still
+          // going, and the direct call below owns that miss.
+          const liftedRestriction = await restrictionExistentialHit(memoryDir, cache, liftedTerms, obj, null, nextChain);
+          if (liftedRestriction) return liftedRestriction;
+          nextFrontier.push({ terms: liftedTerms, chain: nextChain });
         }
       }
       if (!nextFrontier.length) break;
@@ -12195,6 +12332,15 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           replace: true,
         };
       }
+      // A property the subject doesn't carry itself can still be carried by a
+      // class it belongs to: "a pig is an animal" plus "animals are alive"
+      // answers "are pigs alive". One stored hop, and BOTH facts go on the
+      // line — the membership and the property — so the answer asserts nothing
+      // the store doesn't already hold. A two-step taxonomy stays a miss here.
+      const inheritedProperty = propertyPremises(rows, subjVariants, adjective, normFactTerm);
+      if (inheritedProperty) {
+        return { text: `yes — ${inheritedProperty.map(renderFactLine).join("; ")}`, replace: true };
+      }
       // No property hit — but a bare "is X Y" (no article) is exactly the
       // same claim as "is X a Y" would have been had the user included the
       // article (ISA_ASK_RE's own territory, above): the canonical syllogism
@@ -12913,6 +13059,28 @@ function unknownVocabTermOffer(term) {
       ? `"${remember}"`
       : null;
   return `I don't know "${term}" yet — teach me directly${example ? `, e.g. ${example}` : ` (e.g. "remember <name> is ${article} <thing>")`}.`;
+}
+
+/** The head noun's answer for an adjective-qualified phrase the store holds
+ *  nothing under — "female dog" answers for "dog", with the phrase named as
+ *  unheld so the adjective is never silently dropped. Closed to exactly the
+ *  two-word shape whose first word the lexicon calls an adjective and whose
+ *  second it calls a noun, and it only ever returns text when the head noun
+ *  really resolves; anything else is null and the caller's own dead-end
+ *  stands. The envelope is deliberately NOT passed on: it was parsed from the
+ *  question about the full phrase, and metaTermOf would read the phrase back
+ *  out of it and re-ask the question that just missed. */
+async function adjectiveQualifiedHeadAnswer(term, { memoryDir, biasByBundle = {}, cache = null, graph = null, lexicon = null }) {
+  const words = String(term ?? "").trim().toLowerCase().split(/\s+/);
+  if (words.length !== 2) return null;
+  const [modifier, head] = words;
+  const lex = lexicon || loadLexicon();
+  if (!lookupAdjective(lex, modifier) || !lookupNoun(lex, head)) return null;
+  const headQuery = `what is ${indefiniteArticleFor(head)} ${head}`;
+  const hit = (await factAnswer(memoryDir, headQuery, null, true, biasByBundle, cache))
+    ?? (await factReadBack(memoryDir, headQuery, null, true, graph, null, biasByBundle, cache));
+  if (!hit || hit.miss || !hit.text) return null;
+  return `I have nothing under "${term}". Here's what I know about ${indefiniteArticleFor(head)} ${head}:\n${hit.text}`;
 }
 
 /** The curated SEON definition to PREFER for a "what is a <lexicon term>", or null.
@@ -14844,7 +15012,13 @@ const ARCH_OVERVIEW_PHRASES = [
   new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
 ];
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint: sessionVocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
+  // The session-wide hint names a term this session can PROVE resolves; when
+  // the question itself named a subject the lexicon knows, the hint names that
+  // instead, so a miss on "how many eyes does a human have" points at "human"
+  // rather than at the stock example. Computed once per turn, and every
+  // dead-end below reads it through this one binding.
+  const vocabHint = namedSubjectVocabHint(query, sessionVocabHint, lexicon);
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
   // the honest-miss tail below points a browser/adventure miss at the teach
@@ -16380,7 +16554,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
           // nothing but a loose association still gets the "teach me" offer
           // rather than being silently counted as already known.
           const known = hasNonWeakGrounding(await factRows(memoryDir, cache), variants);
-          if (!known) teachOffer = unknownVocabTermOffer(cleanTerm);
+          if (!known) {
+            // An adjective-qualified phrase the store has never heard of still
+            // has a head noun it may know all about: "what is a female dog"
+            // (and its inverted twin "a female dog is what") answers for "dog"
+            // and says the graph holds nothing under "female dog", so the
+            // adjective is never silently dropped. Only on a REAL hit for the
+            // head noun; with nothing there either, the ordinary teach-offer
+            // stands.
+            const headFallback = await adjectiveQualifiedHeadAnswer(cleanTerm, { memoryDir, biasByBundle, cache, graph, lexicon });
+            if (headFallback) {
+              answer = headFallback;
+              via = "fact";
+              recordMiss = false;
+              note(trace, "lane: (4x) ADJECTIVE-QUALIFIED HEAD NOUN — the full phrase grounded nothing, so the answer is the head noun's, with the phrase named as unheld");
+            } else {
+              teachOffer = unknownVocabTermOffer(cleanTerm);
+            }
+          }
         }
       }
     }
@@ -17901,6 +18092,24 @@ function rewriteVocabOpener(line, { adventureLive = false } = {}) {
   return null;
 }
 
+/** The INVERTED vocabulary question — "a dog is what?", "dogs are what". It
+ *  asks exactly what "what is a dog" asks, with the wh-word left where the
+ *  answer would go, so it rewrites to the canonical form here, once, before
+ *  any dispatch lane sees the text. The determiner is carried through as
+ *  typed, since the vocabulary lane already reads the term with or without one.
+ *  A pronoun or demonstrative subject is excluded: "that is what" is a
+ *  conversational fragment, not a question about a term. Question mark
+ *  optional — the word order is the whole signal. */
+const INVERTED_WHATIS_RE = /^(an?|the)?\s*([a-z][\w'-]*(?:\s+[a-z][\w'-]*)*)\s+(?:is|are)\s+what\s*[?.!]*$/i;
+const INVERTED_WHATIS_PRONOUN_SUBJECT_RE = /^(?:it|this|that|these|those|they|them|he|she|we|you|i|there|here|so|then|and|but|which|who|what|where|when|why|how)$/i;
+function rewriteInvertedWhatIs(line) {
+  const m = String(line || "").trim().match(INVERTED_WHATIS_RE);
+  if (!m) return null;
+  const phrase = m[2].trim();
+  if (INVERTED_WHATIS_PRONOUN_SUBJECT_RE.test(phrase.split(/\s+/)[0])) return null;
+  return `what is ${m[1] ? `${m[1].toLowerCase()} ` : ""}${phrase}`;
+}
+
 /** The ESL missing-"does" yes/no — "dog have tail?": subject + bare
  *  have/has + object, question mark REQUIRED (the "?" is the whole signal;
  *  without it the line is a declarative and belongs to the teach path).
@@ -18218,7 +18427,8 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
   const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
   const preRewriteLine = rewriteEntryPointQuestion(indirectLine) || rewriteProveThat(indirectLine)
-    || rewriteVocabOpener(indirectLine, { adventureLive: Boolean(planState?.adventure) }) || indirectLine;
+    || rewriteVocabOpener(indirectLine, { adventureLive: Boolean(planState?.adventure) })
+    || rewriteInvertedWhatIs(indirectLine) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
@@ -19026,6 +19236,42 @@ export async function hasSeededVocabulary(repo) {
  *  that. This clause is threaded through runAsk as `vocabHint` and reused by
  *  every dead-end that needs to name an exit, so one split here covers them
  *  all rather than each miss carrying its own copy. */
+/** The stock vocabulary example, rewritten to name the subject THIS question
+ *  asked about. A miss on "how many eyes does a human have" that recommends
+ *  "what is a dog" answers a question nobody asked; naming "human" points at
+ *  the term the user already has in mind, and the next turn is one they meant
+ *  to type. The subject comes from a CLOSED list of question shapes — the same
+ *  regexes the readers themselves match on, read at call time so each is
+ *  already initialised — and only counts when the lexicon knows the head word,
+ *  so a garbled parse can never put nonsense inside the offered example. With
+ *  no readable subject, or a subject that IS the stock term, the hint comes
+ *  back exactly as the session computed it. */
+function namedSubjectVocabHint(query, hint, lexicon = null) {
+  const STOCK = '"what is a dog"';
+  if (!hint || !hint.includes(STOCK)) return hint;
+  const q = normalizeQuery(String(query ?? "")).trim();
+  const readers = [
+    { re: HOW_MANY_HAVE_ASK_RE, group: 2 },
+    { re: DOES_HAVE_ASK_RE, group: 1 },
+    { re: CAN_BE_PROPERTY_ASK_RE, group: 1 },
+    { re: CAN_ASK_RE, group: 2 },
+    { re: DO_VERB_ASK_RE, group: 2 },
+    { re: IS_ADJECTIVE_YESNO_RE, group: 1 },
+    { re: BARE_WHATIS_RE, group: 1 },
+  ];
+  let lex = lexicon;
+  for (const { re, group } of readers) {
+    const raw = q.match(re)?.[group]?.trim();
+    if (!raw) continue;
+    const word = singularizeSurface(raw.toLowerCase().split(/\s+/).pop());
+    if (!word || word === "dog") continue;
+    if (!lex) lex = loadLexicon();
+    if (!lookupNoun(lex, word)) continue;
+    return hint.replace(STOCK, `"what is ${indefiniteArticleFor(word)} ${word}"`);
+  }
+  return hint;
+}
+
 export function vocabExampleHint(seeded, uiContext = "cli") {
   if (seeded) return 'Try "what is a dog" for general vocabulary.';
   return uiContext === "browser"
