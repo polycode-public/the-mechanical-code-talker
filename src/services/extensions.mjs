@@ -50,8 +50,15 @@ const TIER2_EMPTY_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
 // The definitional-band-first predicate order for the ConceptNet seed (re-declared,
-// not imported, to keep this module off chat.mjs's heavy graph).
-const CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
+// not imported, to keep this module off chat.mjs's heavy graph). The five
+// relational predicates after the definitional backbone are the ones a
+// commonsense multiple-choice question keys on (atLocation, causes, desires,
+// motivatedByGoal, hasSubevent) — ranked ahead of the rest so the band cap
+// buys them before it buys more RelatedTo.
+const CONCEPTNET_PREFER = [
+  "rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf",
+  "mgx:atLocation", "mgx:causes", "mgx:desires", "mgx:motivatedByGoal", "mgx:hasSubevent",
+];
 
 /** The shipped defaults — a FRESH object per call, so a caller can never
  *  accidentally mutate a module-level singleton. */

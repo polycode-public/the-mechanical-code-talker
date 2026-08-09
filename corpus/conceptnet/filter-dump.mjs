@@ -32,6 +32,7 @@
 
 import { createInterface } from "node:readline";
 import { SEED_TERMS, CANONICAL_RELS, FILTERED_RELS, bareEnTerm } from "./fetch-slice.mjs";
+import { COMMONSENSEQA_SEED_TERMS } from "./commonsenseqa-seed.mjs";
 import { loadMap } from "../../src/adapters/corpus/conceptnet.mjs";
 
 const MAX_BYTES = 4_500_000; // committed-slice budget (hard cap 5 MB), grown for the ~40k tier-1 target
@@ -92,7 +93,11 @@ const EXTRA_SEEDS = [
   "semaphore", "mutex", "deadlock", "scheduler", "interrupt", "syscall",
   "daemon", "multitasking", "buffer", "pipe",
 ];
-const SEEDS = new Set([...SEED_TERMS, ...EXTRA_SEEDS]);
+// CommonsenseQA's train-split question concepts, a third seed source unioned
+// in beside the tech/software terms above so the committed slice can carry a
+// relational edge between a commonsense question's source concept and its
+// answer, not just the software-domain vocabulary SEED_TERMS/EXTRA_SEEDS cover.
+const SEEDS = new Set([...SEED_TERMS, ...EXTRA_SEEDS, ...COMMONSENSEQA_SEED_TERMS]);
 const termOf = (uri) => uri.slice("/c/en/".length);
 
 /**
