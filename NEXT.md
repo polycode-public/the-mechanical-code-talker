@@ -38,15 +38,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   wired into the ask lanes; E1/E2 answer end to end), 3 with 3b (`/prove`; E3/E4 answer end to
   end), 4a-4e (the full SHOIQ increment ladder), and 5 (consistency surfacing — `findTableauViolations`
   and a new `elUnsatisfiableClasses` run beside the cax-dw chase in chat and in `/memory verbose`).
-  Checked this round: `/prove` alone doesn't lift the infbench INF-8 `dlDisjunction`/`dlComplement`
-  ceiling markers — infbench's chat arm drives the plain question with no `/prove` prefix, so the
-  ceiling stays until `/prove` becomes an automatic ask-lane fallback (or the harness routes those
-  cases through it explicitly); the plan's own phase-4 section records the check. Of phase 4's own
-  five `inference.dl.*` corpus rows, enumeration and cardinality-clash landed; transitive-role,
-  role-hierarchy and inverse-role wait on vocabulary no ACE pattern or teach-lane frame writes yet
-  (`owl:allValuesFrom`, `rdfs:subPropertyOf`, and an asserted ABox role fact between two named
-  individuals respectively — the plan's own phase-4 section records the check). Next rounds: those
-  three corpus rows once their vocabulary lands, track 6 site/claims.
+  The three open `inference.dl.*` corpus rows and the INF-8 ceiling markers are
+  `PLAN_DL_ENGLISH_SURFACE.md`'s, below. Next rounds: track 6 site/claims.
+- [ ] **PLAN_DL_ENGLISH_SURFACE.md — the whole plan** — DESIGN, nothing built. Track A adds the
+  two missing role-axiom teach frames (`owl:allValuesFrom`, `rdfs:subPropertyOf`) and the ABox
+  role reader `buildTableauKb` lacks, then lands the three open `inference.dl.*` rows as their
+  proof. Track B makes a missed yes/no question fall through to a bounded tableau proof, names a
+  by-cases answer's cases, and regenerates the infbench ceiling markers. Next rounds: A1-g/A1-k/A1-d
+  concurrently, then A2, A3, A4, then the serialized `chat.mjs` rounds B1 and B2, then B3.
 - [ ] **PLAN_NEWS_FEED.md — remaining phases** — paused before phase 4. Landed: phases 0-3 and
   5 (domain, fixtures, adapters, store, service, CLI verb). Next rounds: phase 4 chat wiring (a
   `chat.mjs` round; also carries the strict-tier provenance nuance recorded in the plan's phase
