@@ -1,8 +1,9 @@
 # PLAN_NEWS_FEED.md — a news dashboard over the graph: contemporary sources, grounding, enrichment, and a feed of what changed
 
-Status: phase 0 and phase 1 (the pure domain modules — section 7, section 8) are built and
-tested. Every other module path below that is not marked "ships today" is a file that does not
-exist yet.
+Status: complete. Phases 0 through 9 are built and tested — domain, adapters, the news service,
+chat wiring, the CLI verb, the page, site integration, e2e coverage, and the measurement rig
+with its claims block. Every module path this plan names exists and is tested; section 16
+carries the rig's first measured numbers.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every
 phase names its module paths, data structures, function signatures, config knobs, test files,
@@ -1447,21 +1448,15 @@ Five real bugs surfaced and fixed while writing these specs, all outside `news-b
 
 With every one of those fixed, the ingest path itself no longer crashes anywhere — verified end to
 end by deleting `globalThis.process` and confirming `ingestText` grounds a real fact against a
-non-string `memoryDir` rather than throwing. What's left is one real, reproducible gap, inside the
-concurrently-owned `news-viz.mjs`, left unfixed here per this phase's brief — the specs above assert
-the intended contract and will start passing once it lands:
-
-- `news-viz.mjs`'s boot never calls `registerWinkModel`/`loadWinkVendor` (section 1's own precedent
-  for shared page machinery). Without it, `winkInstance()` has nothing registered and returns
-  `null` on the real page — every optimistic-tier extraction, the strict tier's own turn-answering
-  (which reads on wink too), and the ungrounded-term scan all silently produce nothing, even though
-  the same text grounds correctly in Node (where the fallback `require("wink-nlp")` path works).
-
-A second, separate gap also lives in the two concurrently-owned files: `news-viz.mjs`'s
-source-toggle handler sets `window.tmct.session.config.sources = ids`, but `session.config`
-(`news-browser-entry.mjs`) is a getter returning a fresh copy on every read — the assignment lands
-on a copy that is discarded immediately, so checking or unchecking a source never actually narrows
-what gets polled or enriched.
+non-string `memoryDir` rather than throwing. Two further gaps this phase found in the
+concurrently-owned `news-viz.mjs`/`news-browser-entry.mjs` — the boot never calling
+`registerWinkModel`, so nothing ever grounded on the real page, and a source-toggle handler
+writing into `session.config`'s throwaway getter copy instead of a real `setSources` verb — were
+left for those files' own owner rather than fixed here, and landed fixed afterward along with
+three more the strict specs surfaced (every control now binds before the phase flips, ingested
+facts carry `observedAt` so the feed window reads real assertions instead of always falling back
+to the seed, and the session fold cache invalidates on every ingest path). `pages-news.test.mjs`
+and `pages-news-feed.test.mjs` are green with that landed.
 
 Remaining corpus rows (same lane, same runner) — four of the planned seven. The other three
 (`news.ingest.free-text`, `news.ingest.lexicon-upload`, `news.ingest.upload-downgrade`) test the
@@ -1492,16 +1487,7 @@ node scripts/corpus-matrix.mjs --gaps
 node --test test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
 ```
 
-The last command's current result against main: `pages-news.test.mjs` 3/4 (one real, unrelated
-CSS overflow at 320px in `news-viz.mjs`); `pages-news-feed.test.mjs` 1/4 (stop & forget passes).
-The other three each fail on a precise, distinct symptom of the gaps above: the S1–S5 contract's
-request log gains 3 rows instead of 1 (the config getter-copy bug — every default source polls,
-not just the one left checked); the replay test's own fact never grounds (`seedFallback` stays
-`true` — the missing `registerWinkModel` call); the responsiveness contract's own round trip
-measures a single continuous ~13-second busy stretch, not the 1500ms budget — the page's main
-thread is occupied in one unbroken block across boot (session build through the first render),
-same shape as the `subgraphAround` hang above but not the same call: that one is already fixed
-and measured at ~4 seconds alone, so most of this stretch is something else in the boot path.
+The last command's result: `pages-news.test.mjs` and `pages-news-feed.test.mjs` both green.
 
 ---
 
@@ -1509,6 +1495,39 @@ and measured at ~4 seconds alone, so most of this stretch is something else in t
 
 Goal: the measurement rig ships with the feature, not after it. It answers, with committed
 numbers, the question every claim about this page will need.
+
+**Built.** `scripts/news-rig.mjs` ships as specified below: it seeds a standard `tmct init`
+store, wires every one of the five committed contemporary fixtures and four of the five
+committed knowledge-base fixtures (Simple English Wikipedia, Wikidata, Wiktionary, DBpedia
+Lookup — English Wikipedia carries no enrichment wiring of its own, section 10.2's
+`KB_SOURCE_TO_RESEARCH_CHOICE` table) behind the real adapters through injected `fetchImpl`
+stubs, and runs the actual service loop (`pollNewsSources` → `enrichTopTerms` → `buildFeed`)
+against a fixed clock. `runNewsRig()` is exported so `test/services/news-rig.test.mjs` (8
+tests) can call it directly rather than shelling out; `main()` writes `reports/NEWS_RIG.md`
+and `results/claims/news.json` and is guarded behind the standard `process.argv[1]` entry-point
+check so importing the module for its measurement function never has a file-writing side
+effect. Two of the four `test/fixtures/news/kb-*.json` files this round finally puts to use
+(`kb-simple-wikipedia.json`, `kb-english-wikipedia.json`) were missing the `revision` field
+`createWikipediaLiveProvider`'s row validation requires, and `kb-wikidata.json` was missing
+`lastrevid` the same way — phase 0/2's authored samples predate any consumer that would have
+caught the gap. Fixed in the same commit as the rig that finally exercises them; no existing
+test referenced any of the three files before this round, so nothing else moved.
+
+The first measured run: **42.86% strict grounding, 52.38% optimistic**, over the 21 sentences
+the five contemporary fixtures carry — higher than L1's prose-band claim (18.65% strict), not
+lower as this section originally predicted before the rig existed to check it. The reason is
+the fixture set itself, not the engine: phase 0's own text already says the contemporary
+fixtures are "authored samples matching each format's real field shapes rather than trims of
+the recorded probe output," and an author's sample sentences lean toward the clean copula shape
+("A tariff is a tax imposed on imported goods and services.") the strict recognizer reads well.
+The enrichment round tried 8 pending terms against the wired knowledge-base fixtures and
+grounded none of them: those fixtures are each keyed to one demonstration term ("heart") never
+mentioned by the contemporary fixtures' own vocabulary (ceasefire, tariff, an earthquake place
+name, a Show HN title), so every attempt this round reads as an honest miss into the negative
+cache — the same shape a real source finding nothing reads as. `reports/NEWS_RIG.md` carries
+the full per-source breakdown and this reasoning; the claims block (`l3-news`, `results/claims
+/news.json`) states it on the claims page, and `public/share.mjs`'s "the number" post carries
+the two published figures.
 
 **The six metrics**, produced by `cycleMetrics` (section 10.2) and accumulated in
 `state.metrics`:
@@ -1531,17 +1550,17 @@ reproducible on any machine — the same posture as the benchmark reports. The f
 run's table lands in `reports/NEWS_RIG.md` and its headline number back-fills the share post
 placeholder (phase 7a.6).
 
-**Expectations, set here so nobody is surprised:** the prose band measured 18.65% **strict**
+**Expectations, set here before the rig ran:** the prose band measured 18.65% **strict**
 grounding on Simple English Wikipedia sentences (its optimistic count is zero on that band, so
-the two columns read the same there); contemporary news prose is denser with unknown names, so
-both columns will likely read lower here. Publishing strict and optimistic as separate columns,
-with strict as the headline, means a lower number here never reads as a moved goalpost against
-the prose band's own strict-only 18.65%. The page is designed to read as alive and useful at
-roughly 10% strict grounding: the feed shows facts-with-sources rather than article summaries
-(section 8.3), the ungrounded panel turns the misses into the visible work queue, and the
-default source choices lean toward already-groundable vocabulary (Wikimedia extracts with
-Q-ids; Hacker News titles against the seeded code bands). The rig is what turns that design
-intent into a measured claim.
+the two columns read the same there); the prediction was that contemporary news prose, denser
+with unknown names, would read lower here. The rig's own first run did not confirm that — see
+the "Built" note above for the measured number and why it landed where it did. Publishing
+strict and optimistic as separate columns, with strict as the headline, means either direction
+of surprise stays visible rather than reading as a moved goalpost. The design intent underneath
+the prediction still holds regardless of which way the number lands: the feed shows
+facts-with-sources rather than article summaries (section 8.3), the ungrounded panel turns the
+misses into the visible work queue, and the default source choices lean toward already-groundable
+vocabulary (Wikimedia extracts with Q-ids; Hacker News titles against the seeded code bands).
 
 **The claims block**: one admission-standard block on the claims page, backed by the rig table
 in `reports/NEWS_RIG.md`, pinned by `test/estate/claims.test.mjs` (`CLAIMS_PAGE_BLOCKS` grows
