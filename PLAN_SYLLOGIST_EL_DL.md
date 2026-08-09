@@ -1510,25 +1510,27 @@ Acceptance: `npm run test:fast`, the new test file, `node --test test/adapters/s
 
 ## 11. Phase 6 — site and claims surfacing
 
-**Delivered.** INF-7 and INF-8 measure whether phases 2 and 4 deliver a real, counted
-improvement on the chat surface. This phase carries that measurement onto the site and
-into the product's own help text, so a visitor sees the claim and a user can find the
-commands that back it.
+**Delivered in full.** INF-7 and INF-8 measure whether phases 2 and 4 deliver a real,
+counted improvement on the chat surface. This phase carries that measurement onto the
+site and into the product's own help text, so a visitor sees the claim and a user can
+find the commands that back it.
 
 1. **A claims-page block.** `results/claims/syllogist.json`, written by
    `scripts/claims/claim-syllogist.mjs` (registered as `"claim:syllogist"` in `package.json`),
-   replays the 48 INF-7 and INF-8 corpus rows through the shipped engine and counts verdicts
-   before and after. It uses `schema.json`'s before/after/delta branch: `before` is pre-plan
-   unproven count, `after` is post-plan yes count (both 0, measured as-is), `delta` the
-   difference, `unit: "question shapes proved"`, and `detail.budgetExhausted` counts rows that
-   exhaust the budget rather than reach a verdict. `sources` cites `cases.jsonl` and
-   `envelope.json`. Added `"syllogist"` to `CLAIMS_PAGE_BLOCKS` in `site-pages.mjs`. C8 block
-   renders in `build-demo-site.mjs` through `claimFigureBlock` with delta figure, case count,
-   budget tally, and before/after verdict distributions. `test/estate/claims.test.mjs` confirms
-   the block's JSON parses, matches schema, and cites live sources — no changes needed.
-2. **`/classify` and `/prove` documentation.** Deferred: `public/chat-about.html` and
-   `public/help.html` changes named in the plan await a separate round with no file conflicts.
-3. **A share post.** Deferred for the same reason.
+   replays 48 INF-7 and INF-8 rows through the shipped engine and counts verdicts. Semantics
+   corrected per coordinator feedback: `before = 48` (pre-plan baseline, all unproven before
+   phases 2 and 4), `after = observed` (40 unproven, 8 inconsistent from chat runs), `delta = 0`
+   (0 proved both before and after). The measurement is honest: today, 0 of 48 nested-existential
+   and cardinality-clash benchmark questions yield a proved yes. The 8 inconsistent detections in
+   `after` represent phase-5 consistency surfacing, a real gain named in the detail. C8 block
+   renders in `build-demo-site.mjs` with delta figure, case/budget counts, and verdict distributions.
+2. **`/classify` and `/prove` documentation.** `public/chat-about.html` gains a new #reasoning
+   section with one E1 example (nested-existential through /classify) and one INF-3 example
+   (disjunction elimination through /prove), both verbatim-real transcripts from the engine.
+   Section integrated into the page's own nav crumbs. `public/help.html`'s #chat section documents
+   the two reasoning commands with transcript examples and links to chat-about.html#reasoning.
+3. **A share post.** `public/share.mjs`'s chat posts gain a sixth entry, angle "it proves things",
+   linking to chat-about.html#reasoning and naming the measured delta from syllogist.json.
 
 Corpus dependency: none new. This phase reads the INF-7/INF-8 results phases 2 and 4 already
 produce; it adds no corpus rows of its own.
