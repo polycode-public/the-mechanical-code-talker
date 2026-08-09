@@ -1,7 +1,7 @@
 {
   "name": "syllogist",
-  "generatedAt": "2026-08-09T06:20:18.553Z",
-  "commit": "9607b05f263b1c01c7cdfcf59f2b4fea346058d5",
+  "generatedAt": "2026-08-09T08:45:57.566Z",
+  "commit": "7b7fb9399e6c5659496925730ddde1190148c6aa",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "question shapes proved",
@@ -15,8 +15,8 @@
     "test-benchmarks/infbench/envelope.json"
   ],
   "before": 0,
-  "after": 0,
-  "delta": 0,
+  "after": 12,
+  "delta": 12,
   "detail": {
     "cases": 48,
     "budgetExhausted": 0,
@@ -24,7 +24,8 @@
       "unproven": 48
     },
     "afterVerdicts": {
-      "unproven": 40,
+      "unproven": 28,
+      "yes": 12,
       "inconsistent": 8
     }
   }

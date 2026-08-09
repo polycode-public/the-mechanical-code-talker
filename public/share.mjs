@@ -43,7 +43,7 @@ const POSTS = {
       { angle: "try a question", to: "index.html?q=what%20calls%20Task",
         text: "The box on this page runs the real engine on a real code graph, live in your browser, primed with a question. Type your own over the top of it." },
       { angle: "it proves things", to: "chat-about.html#reasoning",
-        text: "Beyond retrieval and inheritance chains, /classify saturates class restrictions through EL completion rules, and /prove checks yes/no entailments by DL tableau refutation. Today, 0 of 48 nested-existential and cardinality-clash benchmark questions yield a proved yes — the path is open for future phases." },
+        text: "Ask a plain yes/no question the cheap lanes miss and it falls through to a real DL tableau proof: 12 of the 48 hardest benchmark questions now come back as a proved yes with premises cited, 8 more report the contradiction hiding in their own premises, and a proof that runs out of budget stays an honest miss." },
     ],
   },
   news: {
