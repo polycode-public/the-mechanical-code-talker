@@ -120,6 +120,22 @@ test("the river-crossing puzzle has its own link, straight onto the scenario mud
   assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
 });
 
+test("the research example sits between the sprites and ledger feature plates and shows a real research-lane transcript", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const beforeIt = html.indexOf('id="feature-sprites"');
+  const start = html.indexOf('id="research-example"');
+  const afterIt = html.indexOf('id="feature-ledger"');
+  assert.ok(beforeIt !== -1 && start !== -1 && afterIt !== -1, "the sprites plate, the example, and the ledger plate are all on the page");
+  assert.ok(beforeIt < start && start < afterIt, "the example sits between two feature plates");
+  const section = html.slice(start, afterIt);
+  assert.match(section, /<pre class="transcript">/, "the example reads as a chat transcript, not prose");
+  assert.match(section, /tmct&gt; what is an aardvark/, "the example asks a real research-grounded question");
+  assert.match(section, /tmct&gt; research aardvark/, "the example runs a real research command");
+  assert.match(section, /aardvark is a kind of mammal/, "the example shows the engine's real isa synthesis");
+  assert.match(section, /https:\/\/simple\.wikipedia\.org\/wiki\/Aardvark\?oldid=\d+/, "the example cites the exact Wikipedia URL it read");
+  assert.match(section, /The aardvark is a mammal from Africa/, "the example quotes the wiki passage it read");
+});
+
 test("the showcase names the Polycode family projects and links to them", async () => {
   const html = await readFile(INDEX, "utf8");
   const showcase = html.slice(html.indexOf('<section class="showcase">'), html.indexOf("<footer>"));

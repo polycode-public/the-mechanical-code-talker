@@ -479,6 +479,25 @@ Goal (inferred): Surface or work the news feed built over this graph.</pre>
     </figure>
   </section>
 
+  <div class="copy" id="research-example">
+    <h2>Grounding a question from Wikipedia</h2>
+    <p>
+      A term the graph has never seen gets an honest miss. Ask it to research
+      the topic and it fetches Simple English Wikipedia, reads the article's
+      opening passage, and stores what it can ground as a fact, cited back to
+      the page it read. This is a real exchange with the engine, run before
+      this page was built, not a mockup.
+    </p>
+    <pre class="transcript"><span class="you">tmct&gt; what is an aardvark</span>
+I don't know "aardvark" yet — teach me directly, e.g. "aardvark is an &lt;thing&gt;" or "remember aardvark is an &lt;thing&gt;".
+<span class="you">tmct&gt; research aardvark</span>
+aardvark — The aardvark is a mammal from Africa; its name means "earth pig" in the language Afrikaans. It is the only living member in its order, though some fossil genera have been found (source: research article "Aardvark", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Aardvark?oldid=10916573)
+stored 1 fact from "Aardvark". queued 3 linked topics: Africa, Afrikaans, Binomial nomenclature — "research next" fetches the next one (the page's play button does this for you).
+<span class="you">tmct&gt; what is an aardvark</span>
+i learned: aardvark is a kind of mammal (source: research:aardvark@0)</pre>
+    <p class="source-note">More on where a live Wikipedia read's trust tier comes from on <a href="./chat-about.html#inference">chat-about.html</a>.</p>
+  </div>
+
   <section class="feature flip" id="feature-ledger">
     <div class="feature-copy">
       <h2>Facts as RDF/OWL triples</h2>
