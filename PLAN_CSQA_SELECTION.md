@@ -1,6 +1,6 @@
 # PLAN_CSQA_SELECTION.md — lift the CommonsenseQA number off zero: read the topic, then let a conjunction pick
 
-Status: DESIGN. Nothing in this plan is built. `PLAN_COMMON_SENSE_QA.md` delivered the lane, the
+Status: DESIGN. Nothing in this plan is built. `archive/PLAN_COMMON_SENSE_QA.md` delivered the lane, the
 fixture, the rig, the claims block and five rungs, and its last measured state is
 `results/claims/commonsenseqa.json`: 0 of 100 correct, 14 answered, 13 refused, 73 abstained, 30
 with the gold pair present in the graph, 0 of those 30 picked. That plan's own rungs measured
@@ -79,7 +79,7 @@ own probe uses a different subject term, and that difference is most of this pla
 
 ### 1.4 What the five rungs measured
 
-`PLAN_COMMON_SENSE_QA.md` sections 10.1 to 10.5 record each rung's own before-and-after on the same
+`archive/PLAN_COMMON_SENSE_QA.md` sections 10.1 to 10.5 record each rung's own before-and-after on the same
 fixture. Nothing here re-litigates them; they are the reason this plan looks where it does.
 
 | rung | what it changed | measured effect |
@@ -170,7 +170,7 @@ the subject, which is the best any topic reader could ever do, and score it:
 A perfect topic read plus today's evidence rule scores 1 of 100. The average tie holds 2.8 grounded
 options. That is the fixture working as designed: CommonsenseQA's distractors were pulled from
 ConceptNet on the same relation as the answer, so a single pair edge is close to no evidence, exactly
-as `PLAN_COMMON_SENSE_QA.md` section 2.3 predicted before any of it was built.
+as `archive/PLAN_COMMON_SENSE_QA.md` section 2.3 predicted before any of it was built.
 
 ### 2.6 The discriminator search
 
@@ -213,7 +213,7 @@ against more of the question than an option that answers one.
 
 ## 3. The constitution
 
-These bind every phase. They restate `PLAN_COMMON_SENSE_QA.md` section 3 where it holds and sharpen
+These bind every phase. They restate `archive/PLAN_COMMON_SENSE_QA.md` section 3 where it holds and sharpen
 the tie rule, which is the one this plan touches.
 
 - **No LLM in the product path.** Unchanged, and it is the reason the discriminator search in section
@@ -617,7 +617,7 @@ here so a later round starts from the number rather than the idea.
   and moves correctness by nothing.
 
 What would move the abstained band is a different question from selection, and
-`PLAN_COMMON_SENSE_QA.md` section 10.5 already names the two research horizons behind it (affective
+`archive/PLAN_COMMON_SENSE_QA.md` section 10.5 already names the two research horizons behind it (affective
 and evaluative inference; situation and script inference). Nothing here changes that band.
 
 ---
@@ -631,7 +631,7 @@ phase. A fixture change is its own decision with its own commit.
 New evidence goes in `detail`; the top-level `value` stays `correctOfAnswered`.
 
 **How to run it.** The rig seeds 61,724 facts before the first question, which takes several minutes,
-so a phase measures the way `PLAN_COMMON_SENSE_QA.md`'s own rungs did: seed one persisted store once,
+so a phase measures the way `archive/PLAN_COMMON_SENSE_QA.md`'s own rungs did: seed one persisted store once,
 run the fixture in foreground chunks of 25 under the 600s cap, tee every chunk, merge the per-item
 outcomes through the rig's own exported `buildClaimDetail`, and write once. The rig's exports
 (`loadFixture`, `questionFor`, `seedInitXlBands`, `runSample`, `buildClaimDetail`,
@@ -667,7 +667,7 @@ set in two orders, demand the same answer.
 | `AUTO_SYNTHESIS_BUDGET` | existing, `src/services/chat.mjs:12914` | Already governs the learn-on-miss pull the constraint pull rides on. Extended in reach, not replaced. |
 
 **No new `tmct.toml` section.** Nothing here has a user-facing tuning surface, and a `[choice]`
-section would be config for its own sake. `PLAN_COMMON_SENSE_QA.md` section 12 made the same call for
+section would be config for its own sake. `archive/PLAN_COMMON_SENSE_QA.md` section 12 made the same call for
 the same reason.
 
 ---
@@ -684,7 +684,7 @@ the same reason.
 
 **What serializes.** S1, S2 and S3 all touch `src/services/chat.mjs` and run one at a time, in that
 order. Each is its own measured round, and a round that bundles two phases cannot say which one paid,
-the same one-lever discipline `PLAN_COMMON_SENSE_QA.md` section 10.4 used for the wording levers.
+the same one-lever discipline `archive/PLAN_COMMON_SENSE_QA.md` section 10.4 used for the wording levers.
 
 **Cross-plan serialization.** `src/services/chat.mjs` has one queue across every plan, not one per
 plan. No two `chat.mjs` rounds from any plan run concurrently. `NEXT.md`'s merge note applies to all
@@ -733,7 +733,7 @@ worktree has no `corpus/worlds/`, no `corpus/sprites/` and no ask bundle, so eve
 
 ## 14. Not in this plan
 
-- The abstained band. `PLAN_COMMON_SENSE_QA.md` section 10.5 holds it and names its two research
+- The abstained band. `archive/PLAN_COMMON_SENSE_QA.md` section 10.5 holds it and names its two research
   horizons.
 - More seed coverage. The 14 answered-wrong questions in section 2.3 need edges the seed does not
   hold, which is R1's axis and a separate decision about corpus size.

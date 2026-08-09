@@ -346,7 +346,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
 
 Beyond L8, the reasoning ladder leaves this plan's scope entirely: OWL 2 EL
 classification and DL tableau reasoning are a rebuild, not a lever — designed separately
-in `PLAN_SYLLOGIST_EL_DL.md`.
+in `archive/PLAN_SYLLOGIST_EL_DL.md`.
 
 ## Visible thinking: rendering the proof and the plan
 
@@ -368,7 +368,7 @@ neither moves a leaderboard number directly — same honest annotation as L7/L8.
   1.0) ⊨ dog ⊑ animal (entailed, 0.86)". Everything it needs exists; only the lane and
   the template rendering are new. Scope grows with the ladder: taxonomic answers first,
   rule-frame applications when L8 lands ("john bornIn italy" + "people born in italy
-  are italian" ⊨ "john is italian"), case-split proofs via `PLAN_SYLLOGIST_EL_DL.md`'s
+  are italian" ⊨ "john is italian"), case-split proofs via `archive/PLAN_SYLLOGIST_EL_DL.md`'s
   `/prove`.
 - **W2 — planner consumption of `taught:` capability records ("how can I build X?",
   days-to-weeks).** `src/domain/router/planner.mjs` already does HTN decomposition with a POP

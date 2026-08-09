@@ -6,7 +6,7 @@ This page is generated from the reports committed in `reports/`, the root `PLAN_
 `README.md`, and the most recent pipeline on `main` — see the `refresh-status` skill
 (`.claude/skills/refresh-status/SKILL.md`) for the refresh recipe. It does not re-run anything itself.
 
-**Measured tree: 3.0.3. Repo now at 5.0.25.** On 2026-08-08 `reports/` was cut to the two files
+**Measured tree: 3.0.3. Repo now at 5.0.32.** On 2026-08-08 `reports/` was cut to the two files
 a living skill regenerates (`4f9e8d52`): the CEFR English report and the page-weights report.
 The other twenty report docs — every other axis ever measured (AGENT, AGI, CODE_INDEX,
 CODE_SYNTHESIS, CONVERSATION, INFERENCE, INGEST, RESEARCH, the summaries, the playtests) — are
@@ -17,14 +17,18 @@ counterfactuals). Treat it as "true as of 3.0.3", not "true today", until a re-j
 the delta-judging cache seeded at 3.0.3 (`test-benchmarks/chatbench/verdict-cache.json`) exists
 to make that re-judge cheap.
 
-## Last CI pipeline: every consumer surface exercised, all green
+## Last CI pipeline: every consumer surface exercised, one failure
 
-[Pipeline #2743964157](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2743964157),
-sha `ffbb757b`, 2026-08-08, **26/26 jobs green** in 22m 29s wall-clock — the fullest job set CI
-defines, because this push's diff (the README capability fixes plus a build-script comment)
-matched `e2e:heavy`'s path rules, so the heavy tier (a full `demo:build`, an uncapped ConceptNet
-seed, an export/import round trip) ran alongside everything below. The tree it verified carries
-all of 2026-08-08's landed work.
+[Pipeline #2745251534](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2745251534),
+sha `4ebdf416`, 2026-08-09, **25/26 jobs green** in 18m 16s wall-clock — the fullest job set CI
+defines, because this push's diff matched `e2e:heavy`'s path rules, so the heavy tier (a full
+`demo:build`, an uncapped ConceptNet seed, an export/import round trip) ran alongside everything
+below. `deploy:website` and `publish:npm` both succeeded — this is the pipeline behind the site
+now serving version 5.0.32.
+
+`e2e-web-local-origin` failed: 8 tests error with `ENOENT: no such file or directory, lstat
+'.../public/chat-seed.json'` — a build artifact the news-feed specs in that job expect wasn't
+present. Nothing else in the run failed.
 
 Jobs grouped by stage, mapped to the consumer surface each one exercises:
 
@@ -38,7 +42,7 @@ Jobs grouped by stage, mapped to the consumer surface each one exercises:
 | site-ready | `site:ready` | the CDN provably serves this exact commit before the deployed matrix runs |
 | e2e (deployed) | `e2e:deployed:shell`, `e2e:deployed:pages`, `e2e:deployed:pages-timing`, `e2e:deployed:mesh`, `capture:hero` | every shipped page, the timing-sensitive flows, and the three-peer P2P mesh — all against `https://tmct.polycode.co.uk`, not a local build |
 
-Longest job: `e2e:deployed:pages` at 7m 40s. No defined job was absent from this run.
+Longest job: `e2e:deployed:pages` at 9m 31s. No defined job was absent from this run.
 
 ## The benchmark axes
 
@@ -64,18 +68,18 @@ verdict cache can re-judge cheaply.
 
 ## The design docs: what's delivered, what's next, what's a research horizon
 
-Root `PLAN_*.md` docs, enumerated fresh. Delivered plans retire to `archive/` (three did on
-2026-08-08: PLAN_HELP, PLAN_FILLER_AND_COUNTERFACTUALS, PLAN_DISCOURSE_AND_RECOGNITION —
-delivered in full, TOOL-9 included). A `backlog/` directory holds 14 parked plans — a third
-lifecycle state beside root (live) and `archive/` (delivered/retired) — not tabulated here.
+Root `PLAN_*.md` docs, enumerated fresh. Delivered plans retire to `archive/` (four did on
+2026-08-09: PLAN_SYLLOGIST_EL_DL, PLAN_DL_ENGLISH_SURFACE, PLAN_COMMON_SENSE_QA,
+PLAN_RIVER_CROSSING — each verified by code inspection and against the deployed 5.0.32 site
+before the move). A `backlog/` directory holds 14 parked plans — a third lifecycle state beside
+root (live) and `archive/` (delivered/retired) — not tabulated here.
 
 | plan | goal | delivered | design horizon (known engineering) | research horizon (open problem) |
 |---|---|---|---|---|
-| `PLAN_NEWS_FEED.md` | a `news.html` dashboard plus a core news capability: poll contemporary sources on a page timer, ground what's found, rank what doesn't ground, enrich from knowledge-base sources, render a paraphrased fact feed — one library contract behind chat, TUI, CLI, JS import | nothing — DESIGN, written and twice revised 2026-08-08 with browser-verified source probes | the whole arc, phases 0–9, specified to Sonnet-implementable depth; plus its own named deferrals (server-side relay, retraction UX, story-identity dedupe, a structural-thinness ranking signal) | entity linking/disambiguation beyond the shipped Wikidata Q-id short-circuit — the plan names the wikification literature and lands ambiguity on the cited top result until a tier is designed |
+| `PLAN_NEWS_FEED.md` | a `news.html` dashboard plus a core news capability: poll contemporary sources on a page timer, ground what's found, rank what doesn't ground, enrich from knowledge-base sources, render a paraphrased fact feed — one library contract behind chat, TUI, CLI, JS import | phases 0–9 built and tested: domain, adapters, the news service, chat wiring, the CLI verb, the page, site integration, e2e coverage, and the measurement rig with its claims block | phase 10, the newsworthiness gate: a fact row's provenance family (`news:`/`news-fixture:`/`research:`) currently admits `research:` enrichment lookups into the news window as if a source had reported them, so a looked-up concept definition reaches the feed; designed, not yet built | entity linking/disambiguation beyond the shipped Wikidata Q-id short-circuit — the plan names the wikification literature and lands ambiguity on the cited top result until a tier is designed |
 | `PLAN_NLU_BENCHMARKS.md` | score tmct against CLINC150 and HWU64 with a deterministic harness-only matcher, and feed confirmed gaps back as levers and corpus rows | nothing committed — a 2026-07-15 spike measured tier-1 arms but its scripts are not in-repo | steps 0–5 (ground truth, baseline, matcher, both runs, failure taxonomy); levers L1–L6; L7/L8 (RL property completion, Horn generalization — L8's stratified negation-as-failure needs its own design pass but the technique is precedented); W1/W2 | the far end of the "why" spectrum: contested historiography, defaults, counterfactuals, competing narratives — the plan names defeasible logic and argumentation frameworks as candidate literatures with no settled deterministic engineering today |
 | `PLAN_PUBLISH.md` | publication readiness for the site and repo, then the launch | every engineering task (T1–T7, T10, T11a/b, T15) and all four manual items shipped; the receipts page delivered under `archive/PLAN_RECEIPTS.md` | launch sequencing only — announcement timing (the ELIZA 60th-anniversary cycle), Show HN, direct submissions, conference talks (NodeConf EU CFP closes 2026-09-01) | — |
-| `PLAN_SYLLOGIST_EL_DL.md` | beyond the shipped OWL 2 RL kernels: an EL saturation classifier, then an ALC→SHOIQ tableau prover (`/prove`), closing six worked examples that miss today | nothing — DESIGN, rewritten whole-arc 2026-08-08 and revised same day (`987f02bf`: UNA-lite identity, KB module extraction, inverse roles, site surfacing) | the whole arc, phases 0–6, specified to Sonnet-implementable depth; batch materialisation of tableau case-split conclusions is design-horizon with the JTMS groundwork as its named starting point | four named horizons, each in the project's own template (problem, candidate literatures, honest miss until designed): arithmetic/datatypes; n-ary events and time; defaults-and-exceptions *reasoning* (storage already shipped); full FOL/probability/induction |
-| `PLAN_COMMON_SENSE_QA.md` | swap the claims stack from OpenBookQA to CommonsenseQA end to end (closed multiple-choice lane, committed fixture and rig against the default seed, claims block, OpenBookQA removal) and climb five measured rungs off zero — deterministic gold-key scoring, no judge model on this axis | nothing — DESIGN, written 2026-08-08 with measured relation frequencies and scratch-projected rung yields recorded as forecasts | the whole arc: the floor (lane + fixture + rig + block + removal) and rungs 1–4 (seed coverage re-cut from the train split, relation routing, inference depth via the closure, wording levers), all Sonnet/Haiku-tiered | the abstained band (rung 5): CommonsenseQA's soft situational-judgment tail has no settled deterministic engineering; the plan keeps it visible as the block's abstained column rather than claiming a path |
+| `PLAN_CSQA_SELECTION.md` | lift the CommonsenseQA number off zero: `archive/PLAN_COMMON_SENSE_QA.md` left the lane at 0 of 100 correct, 30 of 100 with the gold pair present in the graph and 0 of those 30 picked; this plan reads the question's topic first, then lets a conjunction of constraints pick among grounded options | nothing — DESIGN, written from a per-item diagnosis of the 30 grounded-but-unpicked rows | the whole arc: phases S1 (topic reader) through S5 (corpus rows), each its own measured round, all Sonnet/Haiku-tiered | the abstained band: `archive/PLAN_COMMON_SENSE_QA.md` section 10.5 already names the two research horizons behind it (affective and evaluative inference; situation and script inference); this plan doesn't change that band |
 
 ## README audit: claims vs. reality
 

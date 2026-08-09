@@ -635,7 +635,7 @@ tmct:has a owl:ObjectProperty ;
   rdfs:label "has" ;
   rdfs:comment "The generic possession property pattern-5 cardinality restrictions constrain (every module has at least 1 test)." .
 
-# Patterns 10-16's five new terms (phase 0 of PLAN_SYLLOGIST_EL_DL.md). Two of
+# Patterns 10-16's five new terms (phase 0 of archive/PLAN_SYLLOGIST_EL_DL.md). Two of
 # the five follow the SAME flat-store convention as owl:intersectionOf above:
 # the JSON fact store has no RDF lists, so owl:unionOf and owl:oneOf flatten to
 # REPEATED rows, one per member, on a readable deterministic node — e.g. a
@@ -679,7 +679,7 @@ tmct:red owl:differentFrom tmct:yellow .
 
 tmct:contains a owl:TransitiveProperty .
 
-# Pattern 17's term (increment 4e of PLAN_SYLLOGIST_EL_DL.md), declared the
+# Pattern 17's term (increment 4e of archive/PLAN_SYLLOGIST_EL_DL.md), declared the
 # same way as the six terms above: owl: is standard OWL 2 vocabulary, so it
 # needs no declaration of its own, only this documentation example. Both
 # directions are stored, unlike owl:differentFrom's one-direction storage.
