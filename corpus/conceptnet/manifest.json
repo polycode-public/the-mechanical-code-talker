@@ -1,0 +1,51 @@
+{
+  "built": "2026-08-09",
+  "dump": {
+    "url": "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz",
+    "mirror": "https://github.com/commonsense/conceptnet5/wiki/Downloads",
+    "version": "5.7.0",
+    "sha256": "accd65fe94038584295574ddc26e1500c1919c8c4532bf771811cafd0948af7e"
+  },
+  "seed": {
+    "files": [
+      "corpus/conceptnet/fetch-slice.mjs",
+      "corpus/conceptnet/filter-dump.mjs",
+      "corpus/conceptnet/commonsenseqa-seed.mjs"
+    ]
+  },
+  "files": [
+    {
+      "file": "slice.jsonl",
+      "bytes": 4271438,
+      "sha256": "ac8d8e14f0c078115e56f68a3cbebed0c1c25d70c7e561b2383edc5def24b0ab"
+    }
+  ],
+  "counts": {
+    "edges": 30250,
+    "relations": {
+      "/r/IsA": 11722,
+      "/r/AtLocation": 4500,
+      "/r/RelatedTo": 4422,
+      "/r/HasSubevent": 1762,
+      "/r/CapableOf": 1557,
+      "/r/HasPrerequisite": 1388,
+      "/r/UsedFor": 1241,
+      "/r/Causes": 1193,
+      "/r/HasProperty": 481,
+      "/r/Desires": 453,
+      "/r/HasA": 339,
+      "/r/CausesDesire": 305,
+      "/r/MotivatedByGoal": 219,
+      "/r/Antonym": 146,
+      "/r/HasFirstSubevent": 103,
+      "/r/HasLastSubevent": 96,
+      "/r/PartOf": 91,
+      "/r/DistinctFrom": 72,
+      "/r/ReceivesAction": 70,
+      "/r/CreatedBy": 36,
+      "/r/Synonym": 26,
+      "/r/MadeOf": 18,
+      "/r/DefinedAs": 10
+    }
+  }
+}

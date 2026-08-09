@@ -79,6 +79,17 @@ export const DENIED_ROWS = new Set([
   "/r/IsA /c/en/beta /c/en/programming_language",
   "/r/IsA /c/en/psi /c/en/software",
   "/r/Antonym /c/en/letter /c/en/email",
+  // Verbosity-game description hints ConceptNet stored as /r/IsA, not classes
+  // ("a dog is a loyal friend" describes dog, it doesn't classify it) —
+  // canine/domestic_animal/four_legged_animal/mammal/pet stay, chap/
+  // example_of_pet/the four "friend"/"companion" objects go.
+  "/r/IsA /c/en/dog /c/en/chap",
+  "/r/IsA /c/en/dog /c/en/example_of_pet",
+  "/r/IsA /c/en/dog /c/en/faithful_companion",
+  "/r/IsA /c/en/dog /c/en/good_friend",
+  "/r/IsA /c/en/dog /c/en/loyal_friend",
+  "/r/IsA /c/en/dog /c/en/mans_best_friend",
+  "/r/IsA /c/en/dog /c/en/nice_friend",
 ]);
 
 /** Why this row is noise, or null to keep it. Pure function of the row shape. */

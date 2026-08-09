@@ -17,7 +17,9 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
   (published 2019-07-03).
 - **Retrieved + filtered:** 2026-07-04; **regrown to the ~40k tier-1 target on
   2026-07-05** (same dump, same licence) by widening the tech-seed domain and
-  raising the size budget — see "Growing the slice" below.
+  raising the size budget — see "Growing the slice" below; **re-cut on
+  2026-08-09** to add CommonsenseQA's train-split concepts as a third seed
+  source — see "Adding the CommonsenseQA seed" below.
 - **Why the dump, not the API:** the public API (`api.conceptnet.io`) was
   hard-down (HTTP 502 from its nginx front-end on every request across ~15
   attempts over 10+ minutes on 2026-07-04), so the slice was stream-filtered
@@ -34,15 +36,20 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
    mapped in `src/adapters/corpus/conceptnet-map.toml`), minus three filtered by
    policy: `/r/EtymologicallyRelatedTo`, `/r/EtymologicallyDerivedFrom`,
    `/r/ExternalURL` (etymology noise and link-outs — no consumer in tmct).
-3. **Tech-domain seed terms**: at least one endpoint's bare term is in the
-   tech seed list — the ~90-term base `SEED_TERMS` exported from
-   `fetch-slice.mjs` (software, computer, program, code, module, function,
-   database, server, network, bug, test, file, memory, algorithm, keyboard,
-   programmer, repository, commit, …) **plus** the ~230-term `EXTRA_SEEDS`
-   growth list in `filter-dump.mjs` (programming languages, frameworks, data
-   structures, cloud/infra, protocols, tools, ML — python, java, docker,
-   kubernetes, git, neural_network, tcp, kernel, hashtable, …), added
-   2026-07-05 to reach the ~40k tier-1 target while staying in the tech domain.
+3. **Seed terms**: at least one endpoint's bare term is in one of three seed
+   lists — the ~90-term tech base `SEED_TERMS` exported from `fetch-slice.mjs`
+   (software, computer, program, code, module, function, database, server,
+   network, bug, test, file, memory, algorithm, keyboard, programmer,
+   repository, commit, …); the ~230-term `EXTRA_SEEDS` tech growth list in
+   `filter-dump.mjs` (programming languages, frameworks, data structures,
+   cloud/infra, protocols, tools, ML — python, java, docker, kubernetes, git,
+   neural_network, tcp, kernel, hashtable, …), added 2026-07-05 to reach the
+   ~40k tier-1 target while staying in the tech domain; and the 2,151-term
+   `COMMONSENSEQA_SEED_TERMS` list in `commonsenseqa-seed.mjs` (every distinct
+   `question_concept` in CommonsenseQA's train split — dog, magazine,
+   bookstore, restaurant, …), added 2026-08-09 so the slice can carry a
+   relational edge between a commonsense question's source concept and its
+   answer.
 4. **Dedupe** by `(start, rel, end)`, keeping the higher weight.
 5. **Size budget** (committed slice ≤ 5 MB; target ~4.3 MB), **two-tier**:
    assertions whose relation maps to an ACE-OWL pattern (`ace != "none"` in
@@ -103,35 +110,68 @@ curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-asse
 node corpus/conceptnet/quality-filter.mjs --in-place corpus/conceptnet/slice.jsonl
 ```
 
-## Row counts (regrown slice, 2026-07-05)
+## Adding the CommonsenseQA seed (2026-08-09)
 
-**44,947 clean assertions, 4,220,629 bytes** — the quality-filtered committed
-slice (raw filter-dump output was 45,633 rows / 4,308,850 bytes; 34,074,917 dump
-lines scanned; 45,633 unique en→en seed assertions matched = 6,670 mappable +
-38,963 `ace="none"`; ALL kept under the 4.5 MB budget, then 686 noise rows cut).
-30 of the 31 non-filtered canonical relations are present; **6,255 seedable
-(`ace≠none`) facts**:
+`corpus/conceptnet/manifest.json` (built on the `corpus/child/manifest.json`
+model) pins the dump, the three seed files and the committed slice's byte
+count, sha256 and per-relation counts — a re-cut that drifts fails
+`test/estate/corpus-manifests.test.mjs` rather than landing silently, the same
+guard `corpus/child/` already had and `corpus/conceptnet/` did not.
+
+Adding `COMMONSENSEQA_SEED_TERMS` widened the matched candidate set from
+45,633 to 603,217 unique en→en assertions (520,899 of them mappable, `ace !=
+"none"`), which is now larger than the 4.5 MB budget on its own — so the
+budget-trim tier that used to spend leftover space on `ace="none"` rows
+(`RelatedTo`, `HasContext`, `DerivedFrom`, `FormOf`, …) mostly stopped
+reaching them: mappable rows alone fill the budget. `CONCEPTNET_PREFER` in
+`src/services/extensions.mjs` gained the five relational predicates a
+commonsense question keys on (`atLocation`, `causes`, `desires`,
+`motivatedByGoal`, `hasSubevent`), ranked after the definitional backbone,
+which is a separate stage (`scripts/build-chat-seed.mjs`'s band-cap spend) —
+`filter-dump.mjs`'s own tier/weight order decides what ships in the committed
+slice.
+
+## Row counts (CommonsenseQA-seeded re-cut, 2026-08-09)
+
+**30,250 clean assertions, 4,271,438 bytes** — the quality-filtered committed
+slice (raw filter-dump output was 31,575 rows / 4,499,981 bytes; 34,074,917
+dump lines scanned; 603,217 unique en→en seed assertions matched = 520,899
+mappable + 82,318 `ace="none"`; 31,575 mappable rows fit the 4.5 MB budget,
+0 `ace="none"` rows did; then 1,325 noise rows cut — 1,318 by shape, plus 7
+`DENIED_ROWS` entries, all newly reachable now that `dog` is seeded:
+Verbosity-game description hints ConceptNet stored as `/r/IsA` rather than
+real classes (`dog IsA chap`, `example_of_pet`, `faithful_companion`,
+`good_friend`, `loyal_friend`, `mans_best_friend`, `nice_friend`) — the digest
+layer's rarity-favouring scorer (`src/domain/digest/select.mjs`) picked
+whichever of these was rarest across the store as the "most informative"
+class for a plain "what is a dog", one at a time, each denial surfacing the
+next; `canine`/`domestic_animal`/`four_legged_animal`/`mammal`/`pet` are
+genuine classes and stay).
 
 | Relation | Rows | | Relation | Rows |
 |---|---|---|---|---|
-| `/r/RelatedTo` | 29016 | | `/r/HasSubevent` | 42 |
-| `/r/HasContext` | 4376 | | `/r/DistinctFrom` | 32 |
-| `/r/IsA` | 4173 | | `/r/HasProperty` | 30 |
-| `/r/DerivedFrom` | 3388 | | `/r/ReceivesAction` | 27 |
-| `/r/Synonym` | 1126 | | `/r/MotivatedByGoal` | 26 |
-| `/r/AtLocation` | 642 | | `/r/MadeOf` | 20 |
-| `/r/FormOf` | 528 | | `/r/Causes` | 18 |
-| `/r/UsedFor` | 378 | | `/r/CreatedBy` | 15 |
-| `/r/CapableOf` | 231 | | `/r/CausesDesire` | 13 |
-| `/r/MannerOf` | 230 | | `/r/Desires` | 9 |
-| `/r/PartOf` | 196 | | `/r/HasLastSubevent` | 8 |
-| `/r/Antonym` | 155 | | `/r/HasFirstSubevent` | 7 |
-| `/r/HasPrerequisite` | 108 | | `/r/LocatedNear` | 3 |
-| `/r/SimilarTo` | 102 | | `/r/DefinedAs` | 2 |
-| `/r/HasA` | 45 | | `/r/SymbolOf` | 1 |
+| `/r/IsA` | 11722 | | `/r/HasFirstSubevent` | 103 |
+| `/r/AtLocation` | 4500 | | `/r/HasLastSubevent` | 96 |
+| `/r/RelatedTo` | 4422 | | `/r/PartOf` | 91 |
+| `/r/HasSubevent` | 1762 | | `/r/DistinctFrom` | 72 |
+| `/r/CapableOf` | 1557 | | `/r/ReceivesAction` | 70 |
+| `/r/HasPrerequisite` | 1388 | | `/r/CreatedBy` | 36 |
+| `/r/UsedFor` | 1241 | | `/r/Synonym` | 26 |
+| `/r/Causes` | 1193 | | `/r/MadeOf` | 18 |
+| `/r/HasProperty` | 481 | | `/r/DefinedAs` | 10 |
+| `/r/Desires` | 453 | | | |
+| `/r/HasA` | 339 | | | |
+| `/r/CausesDesire` | 305 | | | |
+| `/r/MotivatedByGoal` | 219 | | | |
+| `/r/Antonym` | 146 | | | |
 
-Absent from the slice (nothing matched the seed terms): `/r/ObstructedBy` — it
-still has a mapping row, so a regenerated slice that surfaces it stays covered.
+Absent from this cut: `/r/FormOf`, `/r/HasContext` and `/r/DerivedFrom` are
+`ace="none"` by design (lexicon/domain-tag material, not world knowledge) and
+got none of the budget now that mappable rows alone fill it; `/r/MannerOf`,
+`/r/SimilarTo`, `/r/LocatedNear`, `/r/SymbolOf` and `/r/ObstructedBy` are
+mappable but lost the weight-descending cut within the budget. Every one of
+them still has a mapping row, so a regenerated slice that surfaces one stays
+covered.
 
 ## How to regenerate / extend
 
@@ -146,11 +186,15 @@ curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-asse
 ```
 
 To extend the domain, add seed terms to `EXTRA_SEEDS` in `filter-dump.mjs` (the
-dump route that produces the committed slice) or `SEED_TERMS` in
-`fetch-slice.mjs` (the API route) and re-run. `npm test` guards the contract:
-every relation present in the slice must have a row in
-`src/adapters/corpus/conceptnet-map.toml` (drift guard), en→en shape and the ≤ 5 MB
-budget are asserted, and the seeding path is exercised end-to-end.
+dump route that produces the committed slice), `SEED_TERMS` in
+`fetch-slice.mjs` (the API route), or `COMMONSENSEQA_SEED_TERMS` in
+`commonsenseqa-seed.mjs` (the CommonsenseQA train-split concepts), and re-run.
+After a re-cut, regenerate `manifest.json`'s byte count, sha256 and per-
+relation counts too — `test/estate/corpus-manifests.test.mjs` fails on drift
+against the committed pin. `npm test` guards the rest of the contract: every
+relation present in the slice must have a row in
+`src/adapters/corpus/conceptnet-map.toml` (drift guard), en→en shape and the
+≤ 5 MB budget are asserted, and the seeding path is exercised end-to-end.
 
 ## Consumers
 
