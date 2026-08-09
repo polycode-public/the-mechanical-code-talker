@@ -37,10 +37,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - [ ] a negation-scope filter
   - [ ] the temporal-window boundary in commit counting
   - [ ] growing the under-covered C2 relative-embedded census cell
-- [ ] **Pin the `tmct news` vs `/news` default divergence** — the standalone CLI verb defaults
-  to `poll` while the in-chat `/news` defaults to showing the feed; both are intended, neither
-  is test-pinned on the CLI side. Pin both defaults as they stand (no behavior change). In
-  flight in a worktree.
+- [ ] **The CLI `tmct news` verb can't actually poll and ignores its toml config** — found
+  while pinning the verb's default (the pin itself is landed: bare `tmct news` polls, bare
+  in-chat `/news` shows the feed, both test-pinned). A genuinely separate defect, promoted
+  deliberately: the verb's `newsTurn` call wires no `providers`, so every enabled source
+  resolves to "no-fetcher" and a CLI poll always fetches zero; and `bin/tmct.mjs` passes
+  `toml?.news` into `resolveNewsConfig`, which unwraps `.news` again itself, so a
+  `tmct.toml [news]` table is never honored (verified live: `sources = []` changed nothing).
+  Fix both together: wire the CLI verb's default fetchers the way the browser page wires
+  its providers, and pass `resolveNewsConfig(toml)` the shape it expects.
 - [ ] **news.html's marketing screenshot now captures the empty state** — since the
   newsworthiness gate landed, the seed alone never heads a card, so the capture pipeline
   photographs the designed empty feed. Operator content call: keep the honest empty plate, or
