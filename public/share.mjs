@@ -144,6 +144,21 @@ const POSTS = {
         text: "Give the fox a second appetite no single farmer can cover and the river crossing reports no plan found. Never a shortcut standing in for a real crossing." },
     ],
   },
+  river: {
+    title: "The river-crossing puzzle, planned and played",
+    posts: [
+      { angle: "what it is", to: "mudiii.html?scenario=river",
+        text: "The classic wolf-goat-cabbage puzzle, played by a fox and a farmer instead. A bounded search works out the seven crossings, and the stage plays them one at a time." },
+      { angle: "the same rule as the town square", to: "mudiii-about.html#what",
+        text: "One fact, mgx:consumes, says the fox eats the goat. It is the same predicate that sends a fox after a goblin on the town square, so editing it changes both scenes at once." },
+      { angle: "no plan found, not a shortcut", to: "mudiii-about.html#inference",
+        text: "Push the puzzle past what one farmer can watch and the search comes back with no plan found, rather than a crossing that quietly drops a passenger." },
+      { angle: "how it is put together", to: "mudiii-about.html#build",
+        text: "The same tick engine as the town square, driven by the same drive facts, laid out on a fixed river bank instead of a free-roaming square." },
+      { angle: "watch the crossing", to: "mudiii-about.html#shots",
+        text: "The boat crossing back and forth, the near and far bank filling and emptying one passenger at a time as the plan plays out." },
+    ],
+  },
 };
 
 const COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];

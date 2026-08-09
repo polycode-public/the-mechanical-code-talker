@@ -120,6 +120,16 @@ test("the river-crossing puzzle has its own link, straight onto the scenario mud
   assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
 });
 
+test("the river-crossing card carries its own info link and share button, sharing mudiii's about page", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const start = html.indexOf('<section class="showcase" id="river-puzzle">');
+  const band = html.slice(start, html.indexOf("</section>", start));
+  assert.match(band, /<a class="card-btn" href="\.\/mudiii-about\.html">/, "About points at the shared mudiii about page, not a new one");
+  assert.match(band, /<button class="card-btn share-btn" type="button" data-share-demo="river">/, "the Share button names its own share-target key");
+  const labels = [...band.matchAll(/<span class="sr-only">(About|Share) /g)].length;
+  assert.equal(labels, 2, "both the info link and the share button carry an accessible name");
+});
+
 test("the research example sits between the sprites and ledger feature plates and shows a real research-lane transcript", async () => {
   const html = await readFile(INDEX, "utf8");
   const beforeIt = html.indexOf('id="feature-sprites"');
@@ -210,7 +220,12 @@ test("the shared stylesheet carries the neutral palette and rounded-sans type, n
 
 test("every claim card carries an info link to its about page and a share button naming its demo", async () => {
   const html = await readFile(INDEX, "utf8");
-  const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
+  // Scoped to the claim-grid section's own closing tag, not as far as
+  // capabilities: the showcase bands sitting between them (the river card
+  // among them) carry their own info link and share button and must not be
+  // swept into this count.
+  const gridStart = html.indexOf('<div class="claim-grid">');
+  const grid = html.slice(gridStart, html.indexOf("</section>", gridStart));
   const infoHrefs = [...grid.matchAll(/<a class="card-btn" href="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(infoHrefs, PAGE_ORDER.map((p) => `./${aboutPageOf(p)}`));
   const shared = [...grid.matchAll(/data-share-demo="([^"]+)"/g)].map((m) => m[1]);
@@ -347,18 +362,36 @@ test("every share post targets a real page, and every deep link a real anchor", 
 test("a share post's query parameter is only used where the target page reads one", async () => {
   const share = await readFile(publicFile("share.mjs"), "utf8");
   const parameterised = [...share.matchAll(/to: "([^"]*\?[^"]*)"/g)].map((m) => m[1]);
+  // Two pages read a query parameter off a share link: index.html primes the
+  // live demo box, and mudiii.html picks its opening scenario.
+  const readers = {
+    "index.html": {
+      content: () => readFile(publicFile("demo-ui.mjs"), "utf8"),
+      pattern: (key) => new RegExp(`params\\.(get|has)\\("${key}"\\)`),
+    },
+    "mudiii.html": {
+      content: () => readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8"),
+      pattern: () => /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/,
+    },
+  };
   for (const target of parameterised) {
     const [name, query] = target.split("?");
-    assert.equal(name, "index.html", `${target} carries a parameter, and index.html is the only page that reads one`);
+    const reader = readers[name];
+    assert.ok(reader, `${target} carries a parameter, and only index.html and mudiii.html read one`);
     const key = new URLSearchParams(query).keys().next().value;
-    const reader = await readFile(publicFile("demo-ui.mjs"), "utf8");
-    assert.match(reader, new RegExp(`params\\.(get|has)\\("${key}"\\)`), `demo-ui.mjs actually reads ?${key}`);
+    const content = await reader.content();
+    assert.match(content, reader.pattern(key), `${name} actually reads ?${key}`);
   }
 });
 
-test("every demo carries at least five share posts, each on its own angle and its own target", async () => {
+// The river-crossing card is not a demo page (no about page or screenshot of
+// its own), but it carries a share button like the demo pages do, so its
+// share.mjs block is held to the same shape.
+const SHARE_KEYS = [...PAGE_ORDER, "river"];
+
+test("every share button target carries at least five share posts, each on its own angle and its own target", async () => {
   const share = await readFile(publicFile("share.mjs"), "utf8");
-  for (const page of PAGE_ORDER) {
+  for (const page of SHARE_KEYS) {
     const key = /^[a-z]+$/.test(page) ? `  ${page}: {` : `  "${page}": {`;
     const start = share.indexOf(key);
     assert.ok(start !== -1, `share.mjs carries posts for ${page}`);

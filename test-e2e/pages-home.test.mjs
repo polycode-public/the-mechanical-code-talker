@@ -244,6 +244,30 @@ test("the river-crossing card opens mudiii on that scenario in a new tab", async
   }
 });
 
+test("the river-crossing card offers an info link to mudiii's about page and its own share sheet", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const info = page.locator('#river-puzzle a.card-btn');
+    assert.equal(await info.getAttribute("href"), "./mudiii-about.html", "About shares mudiii's own about page rather than a new one");
+    assert.match(await info.innerText(), /^About /, "the info link has a readable name, not a bare icon");
+
+    const share = page.locator('#river-puzzle button.share-btn');
+    assert.equal(await share.getAttribute("data-share-demo"), "river", "the share button names its own share-target key");
+    await share.click();
+    const sheet = page.locator("dialog.share-sheet");
+    await sheet.waitFor({ state: "visible" });
+    const posts = sheet.locator(".share-post");
+    const count = await posts.count();
+    assert.ok(count >= 5, `expected at least five river posts, found ${count}`);
+    const texts = await posts.locator(".share-text").allInnerTexts();
+    assert.equal(new Set(texts).size, texts.length, "each river post says something different");
+    await sheet.locator(".share-close").click();
+    await sheet.waitFor({ state: "hidden" });
+  } finally {
+    await context.close();
+  }
+});
+
 test("the plan link card leads to a real replay of the solved game", async () => {
   const { context, page } = await openPage("plan.html");
   try {

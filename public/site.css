@@ -324,6 +324,13 @@ footer {
   color: var(--taught);
 }
 
+/* A showcase card that also carries an info link and a share control (the
+   river-crossing card is the one so far). Unlike .claim-cell's cards, a
+   showcase-card has no bottom pill to share a line with, so the actions sit
+   in their own row under the card rather than pinned over a corner of it. */
+.showcase-cell { display: flex; flex-direction: column; gap: 0.6rem; }
+.showcase-actions { display: flex; gap: 0.4rem; justify-content: flex-end; }
+
 /* ---- per-card actions: an info link and a share control -------------------------
    .claim is itself a link, so these two cannot sit inside it. The cell wraps both
    and positions the actions over the card's bottom-right corner, where .claim-page's

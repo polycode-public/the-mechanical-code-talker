@@ -51,14 +51,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   them), each crossing tweening as playback walks the plan; the 2D chip board stays as the
   no-WebGL fallback. Remainder: `mudiii-about.html`'s copy still describes the town square
   only — it should mention the crossing and the direct link.
-- [ ] **mudiii scenario by query parameter, river as a top-level demo** — the query parameter
-  is code-complete and merged (`mudiii.html?scenario=river`, slug-matched, silent fallback on
-  unknown). Operator decided the link's shape (2026-08-09): one extra demo-list entry deep-
-  linking to `mudiii.html?scenario=river` alongside the existing mudiii and adventure
-  entries, with its own social share posts but the SHARED mudiii about page — no new claims
-  block, no new screenshot (a different perspective on the same demo, not a new capability).
-  The stopgap showcase band retires when the entry lands. Queued behind the mudiii-about
-  copy worktree (same site files).
 - [ ] **News page controls follow-up (2026-08-09 second field report)** — code-complete and
   merged, pending deployed verification: (1) "stop & forget" now retracts every news/research
   row, resets the session and card cache, and holds an emptied feed on screen; (2) the poll
