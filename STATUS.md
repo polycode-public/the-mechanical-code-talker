@@ -68,18 +68,16 @@ verdict cache can re-judge cheaply.
 
 ## The design docs: what's delivered, what's next, what's a research horizon
 
-Root `PLAN_*.md` docs, enumerated fresh. Delivered plans retire to `archive/` (four did on
+Root `PLAN_*.md` docs, enumerated fresh. Delivered plans retire to `archive/` (six did on
 2026-08-09: PLAN_SYLLOGIST_EL_DL, PLAN_DL_ENGLISH_SURFACE, PLAN_COMMON_SENSE_QA,
-PLAN_RIVER_CROSSING — each verified by code inspection and against the deployed 5.0.32 site
-before the move). A `backlog/` directory holds 14 parked plans — a third lifecycle state beside
+PLAN_RIVER_CROSSING, then PLAN_NEWS_FEED and PLAN_CSQA_SELECTION — each verified by code
+inspection and against the deployed site, 5.0.32 and 5.0.35 respectively, before the move). A `backlog/` directory holds 14 parked plans — a third lifecycle state beside
 root (live) and `archive/` (delivered/retired) — not tabulated here.
 
 | plan | goal | delivered | design horizon (known engineering) | research horizon (open problem) |
 |---|---|---|---|---|
-| `PLAN_NEWS_FEED.md` | a `news.html` dashboard plus a core news capability: poll contemporary sources on a page timer, ground what's found, rank what doesn't ground, enrich from knowledge-base sources, render a paraphrased fact feed — one library contract behind chat, TUI, CLI, JS import | phases 0–9 built and tested: domain, adapters, the news service, chat wiring, the CLI verb, the page, site integration, e2e coverage, and the measurement rig with its claims block | phase 10, the newsworthiness gate: a fact row's provenance family (`news:`/`news-fixture:`/`research:`) currently admits `research:` enrichment lookups into the news window as if a source had reported them, so a looked-up concept definition reaches the feed; designed, not yet built | entity linking/disambiguation beyond the shipped Wikidata Q-id short-circuit — the plan names the wikification literature and lands ambiguity on the cited top result until a tier is designed |
 | `PLAN_NLU_BENCHMARKS.md` | score tmct against CLINC150 and HWU64 with a deterministic harness-only matcher, and feed confirmed gaps back as levers and corpus rows | nothing committed — a 2026-07-15 spike measured tier-1 arms but its scripts are not in-repo | steps 0–5 (ground truth, baseline, matcher, both runs, failure taxonomy); levers L1–L6; L7/L8 (RL property completion, Horn generalization — L8's stratified negation-as-failure needs its own design pass but the technique is precedented); W1/W2 | the far end of the "why" spectrum: contested historiography, defaults, counterfactuals, competing narratives — the plan names defeasible logic and argumentation frameworks as candidate literatures with no settled deterministic engineering today |
 | `PLAN_PUBLISH.md` | publication readiness for the site and repo, then the launch | every engineering task (T1–T7, T10, T11a/b, T15) and all four manual items shipped; the receipts page delivered under `archive/PLAN_RECEIPTS.md` | launch sequencing only — announcement timing (the ELIZA 60th-anniversary cycle), Show HN, direct submissions, conference talks (NodeConf EU CFP closes 2026-09-01) | — |
-| `PLAN_CSQA_SELECTION.md` | lift the CommonsenseQA number off zero: `archive/PLAN_COMMON_SENSE_QA.md` left the lane at 0 of 100 correct, 30 of 100 with the gold pair present in the graph and 0 of those 30 picked; this plan reads the question's topic first, then lets a conjunction of constraints pick among grounded options | nothing — DESIGN, written from a per-item diagnosis of the 30 grounded-but-unpicked rows | the whole arc: phases S1 (topic reader) through S5 (corpus rows), each its own measured round, all Sonnet/Haiku-tiered | the abstained band: `archive/PLAN_COMMON_SENSE_QA.md` section 10.5 already names the two research horizons behind it (affective and evaluative inference; situation and script inference); this plan doesn't change that band |
 
 ## README audit: claims vs. reality
 
