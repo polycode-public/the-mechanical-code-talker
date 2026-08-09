@@ -1,8 +1,8 @@
 # PLAN_NEWS_FEED.md — a news dashboard over the graph: contemporary sources, grounding, enrichment, and a feed of what changed
 
-Status: phase 0 and phase 1 (the pure domain modules — section 7, section 8) are built and
-tested. Every other module path below that is not marked "ships today" is a file that does not
-exist yet.
+Status: every phase below carries its own build marker. Phases 0-8 are landed, phase 9 is in
+flight, and phase 10 is new design. A module path in an unbuilt phase, and not marked "ships
+today", is a file that does not exist yet.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every
 phase names its module paths, data structures, function signatures, config knobs, test files,
@@ -566,6 +566,8 @@ research provenance groups today.
   paragraph,             // template paraphrase, section 8.3
   tier,                  // the strongest prior kind among the window facts, for the chip
   sources: [],           // { title, url, name } from the snapshots behind the window facts
+  background: [],        // (phase 10) the card's non-reported fact ids, sorted
+  backgroundParagraph,   // (phase 10) the same template over those rows, "" when there are none
 }
 ```
 
@@ -1564,7 +1566,210 @@ node --test test/estate/claims.test.mjs
 
 ---
 
-## 17. Concurrency and model tiers
+## 17. Phase 10 — the newsworthiness gate
+
+Goal: decide from what a fact row actually carries which terms may head a feed card. The rule in
+one line: **a card reports what a contemporary source said inside the window, and everything the
+graph looked up, inferred or already held is background.**
+
+The concept of a kilometre is not news. A measured area of 7,409 square kilometres, reported this
+week and sourced, is. This phase turns that difference into a filter over observable row fields.
+
+### 17.1 Why concept cards reach the feed today
+
+`buildFeed` scores hubs over `newsWindowRows`, and that filter admits three provenance families:
+`news:`, `news-fixture:` and `research:` (`NEWS_WINDOW_PROVENANCE_RE` in
+`src/domain/news-feed.mjs`). The enrichment loop writes `research:<source>:<term>` rows with a
+fresh `observedAt` every time it looks a term up, so a definition fetched to close a grounding gap
+enters the window as though a source had reported it. That is where "kilometre — kilometre is a
+unit" comes from. It is a Simple English Wikipedia definition, stamped this minute because the
+lookup happened this minute.
+
+Two other paths feed the same symptom. `subgraphAround` walks two hops over the whole graph, so a
+card's closing "Around it" sentence can be a seeded class row with nothing contemporary about it
+("migrants … decision is a kind of result"). And on an unpolled graph `buildFeed` falls through to
+`assembleNewsItems(rows, rows, …)`, which ranks the seed's best-connected concepts ("city", "boy",
+"mountain") and labels them as seed items.
+
+### 17.2 The axes, weighed
+
+| axis | what a row actually carries | verdict |
+|---|---|---|
+| instance vs class | `appendFact` normalises every subject and object through `normFactTerm`, which lower-cases. Capitalisation is gone by the time a row exists | **refined.** Proper-noun detection cannot be read off a fact row, so use the graph's own labelling instead: a term used as the *object* of `rdf:type` or `rdfs:subClassOf` anywhere in the graph is a class by the graph's own account ("unit", "city", "result", "building"). Original-case display text stays available on the snapshot (`state.items[].title`) when a card wants a label |
+| datedness | `rowObservedMs` reads the row's own `observedAt`, else the latest per-assertion stamp, else `createdAt` | **accepted, with one correction.** The stamp says when tmct learned the fact, not when the event happened. A lookup dates itself. Datedness counts alongside provenance and does no work alone |
+| event-shaped predicates | `FACT_PREDICATE_PHRASES` is a ConceptNet-shaped relation set (`mgx:causes`, `mgx:hasSubevent`, `mgx:atLocation`). "fire causes smoke" and "the quake caused damage" take the same predicate | **rejected as a positive signal.** The identity pair (`rdf:type`, `rdfs:subClassOf`) is kept as a negative one: those two say what a thing is, which stays true whoever reported it |
+| provenance | one string per row, parsed by `provenanceTagToSource`; the news families are matched at any segment boundary, so `optimistic-extract:news:…` counts | **accepted, and it does most of the work.** `news:`/`news-fixture:` are reports. `research:` is enrichment tmct asked for. `entailed:` is inference. Corpus, seed, teach, ace and upload tags are prior knowledge. Moving `research:` out of hub selection is the single change that removes most of today's concept cards |
+| specificity markers | digits survive normalisation: "7,409 square kilometres", "magnitude 5.4", "q3 2026", "2026-08-08" | **accepted as an anchor**, for a term the graph already knew. On its own it would promote any headline that mentions a number |
+| the subject is a synthesised hub | the provenance head is `entailed:`, or the row carries a non-empty `environments`/`justification` from a syllogise round | **accepted** as its own band. The graph derived it, so nobody reported it |
+| quantifier | `row.quantifier`, set to "every"/"all"/"each" for a universal | **accepted** as a small negative signal. A universal states a law about a class |
+
+### 17.3 The definition
+
+Two steps: band every row, then admit hubs.
+
+**Step one, the row band.** Pure, and a function of the row plus `now` alone.
+
+```js
+export function classifyNewsRow(row, { now, windowMs })
+// "reported" | "background" | "derived"
+```
+
+Rules in order, first hit wins:
+
+1. `derived` when the provenance head is `entailed:`, or the row carries a non-empty
+   `environments` or `justification`.
+2. `background` when the predicate is `rdf:type` or `rdfs:subClassOf` (or their `mgxneg:`/`owl:`
+   negative twins).
+3. `background` when `row.quantifier` names a universal.
+4. `background` when the provenance carries no `news:` or `news-fixture:` segment. Corpus, seed,
+   teach, ace, upload and `research:` rows all land here.
+5. `background` when `rowObservedMs(row)` is not finite, or falls outside
+   `[now - windowMs, now]`.
+6. `reported` otherwise.
+
+**Step two, the three tests a hub must pass.** Every one reads the fact set and `now`, nothing
+else.
+
+1. **Reported.** At least one `reported` row names the term as subject or object. This is also the
+   term's `changedCount`, so the selection score counts reports rather than lookups.
+2. **Not a class, and not a quantity.** The term is absent from `conceptTerms(rows)` (the class
+   objects of step one's identity predicates), and it is not itself a bare number, date or
+   quantity phrase. A date is when a card happened, and an amount is what it says, so neither
+   heads one.
+3. **Anchored.** Either the window introduced the term (no row naming it sits outside the window,
+   and none carries a corpus, seed or teach tag), or one of its `reported` rows joins it to
+   something that is itself window-new or carries a digit run. This is the test that separates a
+   named individual the news brought in from a concept the seed already held.
+
+A term passing all three heads a card. Everything else stays in the graph and shows up as
+background.
+
+### 17.4 Where the concept synthesis goes
+
+It stays on the card, one layer down, and it stays answerable everywhere else it already is.
+
+- **On the card.** `splitCardRows` divides a card's two-hop sub-graph into its `reported` rows and
+  the rest. The paragraph (section 8.3) keeps its identity sentence from any row, because "what is
+  this thing" is the first question a reader has. Its relation sentences and its closing "Around
+  it" sentence draw from `reported` rows only. The background rows render as a second, collapsed
+  line under the paragraph, labelled "what the graph already knew", with the same template and the
+  same fact list underneath. A reader can see the synthesis; nobody mistakes it for a report.
+- **Off the feed, on every other surface.** A concept that heads no card is still the answer to
+  "what is a kilometre" in chat, still a node in `ledger.html`, still a row in the ranked-terms
+  panel, which is where enrichment progress belongs. The panel is the honest place for "the graph
+  learned a definition today", because that is what the panel is for.
+- **The dropped alternative.** A separate background feed alongside the news feed would double the
+  page's reading surface to show rows the card already carries. The collapsed line costs nothing
+  and sits next to the report it explains.
+
+### 17.5 Borderline cases, decided
+
+| case | verdict | which test decides |
+|---|---|---|
+| a specific monetary amount ("£4.2bn in the quarter", reported) | renders inside a card; anchors a seeded hub | reported + anchored (digit run) |
+| "monetary unit" / "pound sterling is a currency" (enrichment) | background line, no card | reported (research tag) and not-a-class |
+| a specific week or quarter ("q3 2026", reported) | renders inside a card; heads none | not-a-quantity |
+| "time period" as a concept | background line, no card | not-a-class |
+| a named building event ("the shard, fire, reported today") | card, hub "the shard" | all three; window-new term |
+| "building" as a class | background line, no card | not-a-class (it is an `rdf:type` object) |
+| an earthquake magnitude row (USGS: place, magnitude 5.4, time) | card, hub is the place term | reported + anchored (digit run); "earthquake" is a class and heads nothing |
+| a corpus concept a news item happens to mention ("bridge") | background on the card of the thing the item was about | anchored fails: the term is seeded and the report attaches nothing new to it |
+| a news source that reports a definition ("a kilometre is 1,000 metres") | background line, no card | identity predicate, whoever reported it |
+
+### 17.6 Implementation sketch
+
+**The gate lives in `src/domain/news-feed.mjs`.** It stays pure, and it stays a function of the
+fact set plus `now`, so the CRDT order-independence check in
+`test/domain/news-feed.test.mjs` covers it unchanged.
+
+```js
+export function classifyNewsRow(row, { now, windowMs })         // 17.3 step one
+export function reportedRows(rows, { now, windowMs })           // the "reported" subset
+export function conceptTerms(rows)                              // Set of class-used terms
+export function isQuantityTerm(term)                            // the whole term is a number/date/amount
+export function hasQuantityMarker(term)                         // the term contains a digit run
+export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6 })
+// -> [{ term, changed }], the three tests applied, sorted changed desc then term asc, capped
+export function splitCardRows(subgraphRows, reportedIds)        // -> { reported, background }
+export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = {})
+```
+
+`buildNewsItems` is the function that gates the feed. It calls `reportedRows` where it calls
+`newsWindowRows` today, then `newsworthyHubs` where it calls `scoreHubs`, then passes the reported
+id set into `renderNewsParagraph` and `splitCardRows`. `newsWindowRows` and `scoreHubs` keep their
+current behaviour and their phase 1 tests; the gate narrows downstream of them rather than
+rewriting them. `renderNewsParagraph`'s new option defaults to `null`, meaning "treat every row as
+renderable", so its existing callers and pins do not move.
+
+**Section 6.6's item grows two fields**, both derived from `splitCardRows`: `background` (the
+background fact ids, sorted) and `backgroundParagraph` (the same template over those rows, empty
+when there are none). Item identity still hashes the hub plus the full `factIds` set, so a card
+whose background grows still refreshes in place.
+
+**`src/services/news.mjs` changes in two places.** `assembleNewsItems`, the seed-fallback twin,
+applies test 2 only: it drops class terms and quantity terms from its hub list, because tests 1
+and 3 need news rows that a seed-only graph has none of. `renderFeedText` prints the background
+line after the paragraph when one exists.
+
+**When zero hubs pass**, `buildFeed` behaves exactly as it does today. `buildNewsItems` returns an
+empty list, the seed fallback runs, `seedFallback` is `true`, and every card renders with the
+existing "(from the seed graph — start to poll live sources)" label. The gate never empties the
+page, and a suppressed feed says it is showing the seed graph rather than dressing a concept as a
+report. `src/services/news-viz.mjs` renders the collapsed background line and is otherwise
+untouched, which keeps this phase off the page track's files.
+
+### 17.7 What the gate catches, and what it will get wrong
+
+The gate catches the whole class of cards the feed shows today: enrichment definitions
+(`research:`), seeded class rows, syllogism output, universals, and identity rows under any tag.
+It admits a card only when a contemporary source reported something inside the window about a term
+that is either new to the graph or newly measured.
+
+Three misclassifications are expected, and each lands on the seed-fallback behaviour above rather
+than on a guess:
+
+- **A real story about a well-known seeded entity.** A report about "london" that attaches no
+  number and no new term fails test 3, so it shows as background on whichever card the item did
+  anchor, and shows nothing of its own when the item anchored nothing.
+- **A report written entirely in class-level language.** "Flooding is a kind of natural disaster",
+  published today by a live source, bands as background under rule 2 whatever its date says.
+- **A definition dressed as a measurement.** A reported row that carries digits but states a
+  standing fact ("a marathon is 42.195 kilometres") anchors a seeded hub and can head a card.
+
+Newsworthiness is an open research problem. Two literatures are worth reading before designing a
+stronger tier: news values (Galtung and Ruge 1965, and Harcup and O'Neill's revisions), and
+first-story detection in the topic-detection-and-tracking line, which scores an item against what
+the stream has already said rather than against a term's own fields. Either rides on top of this
+gate, since both need a candidate set and this is what produces one.
+
+### 17.8 Phase 10 tests
+
+| file | what it holds |
+|---|---|
+| `test/domain/news-feed.test.mjs` | one case per band rule, each on a single row: `entailed:` bands `derived`; an `rdf:type` row under a `news:` tag bands `background`; a universal quantifier bands `background`; a `research:` row inside the window bands `background`; a `news:` row with no readable stamp bands `background`; a fresh `news:` relation row bands `reported`. Then the three hub tests: a window holding only `research:` definitions of "kilometre" yields zero hubs; adding one `news:`-tagged `kumamoto prefecture` population row yields exactly one hub, and it is `kumamoto prefecture`; a class term never hubs even when a reported row names it; a bare date or amount never hubs; a seeded term hubs only when a reported row attaches a digit run or a window-new term to it. Determinism: the gated builder still returns byte-identical items when the same rows arrive in two different orders |
+| `test/services/news-service.test.mjs` | `buildFeed` over the recorded Wikimedia and USGS fixtures replayed through `replayFixture`: every card carries at least one reported fact id; no card's hub is a term whose rows are all corpus, seed or research provenance; the Kumamoto item is present with its source link; `background`/`backgroundParagraph` carry the class rows the paragraph dropped. Seed-fallback pin: on an unpolled seed graph `buildFeed` still returns items with `seedFallback === true`, and none of them hubs on a class term |
+| `test/corpus/news.jsonl` | two rows, same lane and runner as phase 8's four |
+| `test-e2e/pages-news-feed.test.mjs` | after the fixture-replay click, no rendered card heading matches a seed-only concept ("kilometre", "city", "boy", "mountain"), the Kumamoto card renders with its source link, and its background line is present and collapsed |
+
+| key | id |
+|---|---|
+| `news.feed.concept-suppressed` | `news-a-class-term-never-heads-a-feed-card` |
+| `news.feed.reported-card` | `news-a-reported-fact-heads-its-own-card-with-its-sources` |
+
+### 17.9 Phase 10 acceptance
+
+```
+npm run test:fast
+node --test test/domain/news-feed.test.mjs
+node --test test/services/news-service.test.mjs
+node --test test/corpus/news.test.mjs
+node scripts/corpus-matrix.mjs --gaps
+node --test test-e2e/pages-news-feed.test.mjs
+```
+
+---
+
+## 18. Concurrency and model tiers
 
 One owner per file per round. Anything touching `src/services/chat.mjs` serializes.
 
@@ -1581,16 +1786,20 @@ One owner per file per round. Anything touching `src/services/chat.mjs` serializ
 | 7b site mechanical | `public/og/news.png`, `public/screenshots/*`, `test/estate/site-meta.test.mjs`, `home-page-links.test.mjs`, screenshot manifest | 7a | Haiku |
 | 8 e2e + corpus rest | `test-e2e/pages-news*.test.mjs`, `.gitlab-ci.yml` job lists, remaining `test/corpus/news.jsonl` rows | 4, 6, 7a | Sonnet |
 | 9 rig + claims | `scripts/news-rig.mjs`, `reports/NEWS_RIG.md`, `test/services/news-rig.test.mjs`, the claims block + `test/estate/claims.test.mjs`, the share-post number | 3 (runnable), 7a (block lands) | Sonnet |
+| 10 newsworthiness gate | `src/domain/news-feed.mjs`, `test/domain/news-feed.test.mjs`, the `buildFeed`/`assembleNewsItems`/`renderFeedText` block in `src/services/news.mjs`, `test/services/news-service.test.mjs`, two `test/corpus/news.jsonl` rows, the background line in `src/services/news-viz.mjs` and one `test-e2e/pages-news-feed.test.mjs` case | 3, 6, 8 | Sonnet |
 
 **What runs concurrently.** Wave 1: tracks 0, 1 and 2 launch together (2 stubs the two parser
 exports it needs until 0 merges, or simply starts with the store and KB files). Wave 2: track 3
 alone once 0–2 merge. Wave 3: tracks 4, 5, 6 and 9's rig runner together — disjoint files, all
 consuming 3's exports, which this document fixes. Wave 4: 7a with 8's spec drafting; 7b after
 7a's merge; 8's CI enrolment and screenshot-dependent assertions last; 9's claims block in the
-same commit as the first committed rig report.
+same commit as the first committed rig report. Wave 5: track 10 alone, after 3, 6 and 8 have
+merged, because it edits files all three own.
 
 **What serializes.** Track 4 owns every `chat.mjs`-adjacent file and runs alone in its wave.
-Track 7a owns `build-demo-site.mjs` and `index.html`; nothing else may touch them.
+Track 7a owns `build-demo-site.mjs` and `index.html`; nothing else may touch them. Track 10 runs
+alone in its own wave for the same reason: it reaches into `news.mjs`, `news-viz.mjs` and the e2e
+spec, which tracks 3, 6 and 8 each own while they are open.
 
 **Model tiers.** Sonnet everywhere the code is new but the design is fixed here; the two
 genuinely subtle spots both live in track 3 (re-process idempotence and the deterministic feed)
@@ -1606,7 +1815,7 @@ surface grew a verb) and the e2e tier are the coordinator's post-merge job.
 
 ---
 
-## 18. Costs and risks
+## 19. Costs and risks
 
 - **Feed drift.** Publishers change formats, retire feeds, and condition their CORS on the
   client — Reuters and AP were already gone by probe time, Wikinews announced its own closure,
@@ -1638,7 +1847,7 @@ surface grew a verb) and the e2e tier are the coordinator's post-merge job.
 
 ---
 
-## 19. Not in this plan
+## 20. Not in this plan
 
 - A server-side poller, push updates, a CORS relay, or any hosted backend. The page is static;
   an operator who wants no-CORS sources in a browser runs their own relay and adds it by URL —
