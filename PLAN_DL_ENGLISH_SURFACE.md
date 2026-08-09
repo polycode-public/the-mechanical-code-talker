@@ -14,8 +14,16 @@ route — role-hierarchy/transitivity matching compared an asserted edge's liter
 against a role axiom's namespace-stripped term spelling, so a role reaching the tableau only through
 a real taught relation never matched its own declaration; section 6's own text below still describes
 the reader as originally landed; the fix and the corpus rows are section 12's read-back round and A4.
-Phase B1 through B3 remain DESIGN, nothing built; every module path in those sections marked "new"
-is a file or function that does not exist yet; every existing anchor below was read at HEAD.
+Phase B1 has landed: the automatic `/prove` fallback (`autoProveFallback`, `src/services/chat.mjs`),
+gated on `moduleHasDlShape` (`src/domain/tableau.mjs`), two-sided and proved-only, with its ex-falso
+guard and its own `[reasoning]` knobs (`ask_prove_fallback`/`ask_prove_steps`/`ask_prove_branches`/
+`ask_prove_nodes`, `src/domain/reasoning-config.mjs`). Building it surfaced the same asserted-edge
+role-matching gap A4 did, this time in `extractTableauModule`'s own structural walk: an individual
+reached only through its own `rdf:type` edge (rather than through the asked class itself) never
+pulled in that class's union/restriction rows, now fixed by seeding the module with the subject's
+own types too, the same discipline `findWiderConsistencyClash` already used. B2 and B3 remain
+DESIGN, nothing built; every module path in section 9 marked "new" is a file or function that does
+not exist yet; every existing anchor below was read at HEAD.
 
 `PLAN_SYLLOGIST_EL_DL.md` shipped a SHOIQ tableau. It proves transitive-role propagation, role
 hierarchies, nominals, qualified cardinality and inverse roles, with a test file per increment. Two
