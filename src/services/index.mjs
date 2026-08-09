@@ -68,11 +68,13 @@ export { generateCompletion, createCompletionsGraphAdapter } from "./completions
 // The news capability: scheduled multi-source ingestion, occurrence-ranked
 // grounding gaps, KB enrichment and the fact-churn feed builder — one
 // library contract every surface (news.html, chat's `/news`, the CLI verb,
-// a JS import) consumes the same way.
+// a JS import) consumes the same way. The `./news` subpath (news-exports.mjs)
+// carries this same contract plus the built-in fetchers and courtesy gate,
+// reachable without the chat/grammar engine this "." entry also pulls in.
 export {
   resolveNewsConfig, parseNewsRequest, pollNewsSources, ingestNewsSnapshot,
   enrichTopTerms, reprocessAfterGrounding, isVocabGroundedTerm, isFactGroundedTerm,
-  ingestUploadedFactRows, buildFeed, newsTurn,
+  ingestUploadedFactRows, buildFeed, newsTurn, cycleMetrics, createNewsState,
 } from "./news.mjs";
 export { buildNewsItems } from "../domain/news-feed.mjs";
 export { rankedTerms } from "../domain/term-ledger.mjs";

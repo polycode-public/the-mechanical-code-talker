@@ -494,6 +494,7 @@
   "src/services/mudiii-scene.mjs",
   "src/services/mudiii-turn.mjs",
   "src/services/mudiii-viz.mjs",
+  "src/services/news-exports.mjs",
   "src/services/news-viz.mjs",
   "src/services/news.mjs",
   "src/services/p2p-room.mjs",
