@@ -67,13 +67,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   interrupted lookup returns to pending, never the negative cache); (4) enrichment prose now
   goes through `ingestText` and renders through the same paraphrase templates as articles
   ("rottnest has a lighthouse", not one bald isa edge).
-- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — design landed:
-  `PLAN_NEWSWORTHINESS.md` defines news as an entity-anchored novelty event (test E: a
-  reported row names a non-class term absent from the graph's prior corpus/reference/teach
-  terms; test A: a fresh anchored assertion about a known entity), kills the concept-card
-  fallback in favour of a designed empty state, and decides the borderline cases ("apple"
-  without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
-  dispatched; N2 sequences after the news-controls worktree merges (same files).
+- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — code-complete
+  and merged, pending deployed verification: `newsworthyHubs` now passes only entity-anchored
+  novelty (test E new entity / test A fresh anchored assertion), the concept-card fallback is
+  gone (a seed-only graph or an empty poll shows the designed honest empty state — measured:
+  seed graph 0 hubs, the Wikimedia fixture 0 of 0 candidates, the NYT fixture 5 hubs of 6
+  candidates), and concepts keep the ranked-terms panel and background lines. Two flags:
+  the NYT fixture's own test-scaffolding sentence yields two spurious hubs (fixture-content
+  matter, recorded as measured); and the marketing screenshot for news.html will now capture
+  the empty state, since the seed alone never heads a card — an operator content call on
+  whether that is the right plate.
 - [ ] **index.html gains a wiki-backed worked example** — between "The sprite library" and
   the Facts as "RDF/OWL triples" sections, in the existing worked-example style: a real
   research exchange (e.g. "what is an aardvark") showing the engine search Wikipedia,
