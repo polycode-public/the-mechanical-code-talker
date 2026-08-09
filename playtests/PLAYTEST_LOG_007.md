@@ -1,126 +1,125 @@
-tmct playtest 007 — a typo on a VERB_SYNONYMS word itself is not fuzzy-repaired
-================================================================================
+tmct playtest 007 — an operator's own pig-and-leaves session, replayed as findings
+==================================================================================
 
-tmct version under test: 2.7.10
+tmct version under test: 5.0.26 (operator session 2285fb9f, 2026-08-08 22:03)
 
-Area: the adventure game (Ashcombe Hall) — the imperative grammar's fuzzy typo-repair
-tier, probed against a typo on a recognised synonym word rather than a bare closed verb.
+Area: the teach/ask loop an unscripted visitor actually walks — property and
+capability teaching across singular/plural surface forms, type questions about
+a taught individual, and read-back grammar on plural subjects.
 
-Axes explored this iteration: a full win-condition playthrough of Ashcombe Hall using
-only the new verbs (`have a look at`, `pick up`, `talk to`, etc. — no dead ends found);
-whether a typo on a multi-word idiom's own lead word ("hav a look at") or a single-word
-synonym ("pikc the lamp") gets repaired the same way a typo on a bare closed verb
-("lookl", "got south") already does.
+Axes explored: has-a inheritance through a taught type (works); type-of asks
+with a class qualifier; bare plural property statements; capability teach in
+both numbers; capability inheritance through a taught subclass edge; plural
+subject folding at teach time; adjective-qualified have-asks.
 
-Axes still untouched: none identified this round beyond the fix's own scope.
+The session, verbatim
+---------------------
 
-Probe recipe:
-```bash
-SCRATCH=$(mktemp -d)
-node bin/tmct.mjs init --repo "$SCRATCH" >/dev/null
-printf 'play ashcombe hall\nhav a look at the desk\n/exit\n' \
-  | node bin/tmct.mjs chat --repo "$SCRATCH" --plain
-printf 'play ashcombe hall\npikc the lamp\n/exit\n' \
-  | node bin/tmct.mjs chat --repo "$SCRATCH" --plain
-```
+### turn 1 — a pig has a tail
+noted — remembered 1 fact: pig tmct:has tail
 
-test: a typo on a synonym word (bare or idiom-lead) falls through entirely
-============================================================================
+### turn 2 — john is a pig
+noted — remembered: john is a pig
 
-Expectations
-------------
+### turn 3 — does john have a tail
+yes — you told me: john is a pig; you told me: pig tmct:has tail
 
-When the following prompts were entered:
-```log
-tmct> hav a look at the desk
-tmct> pikc the lamp
-```
+### turn 4 — what type of creature is john
+I couldn't ground that in anything I know. Try "what is a dog" for general vocabulary.
 
-Expected: the same bounded, distance-1 fuzzy repair that already catches a typo on a
-bare closed verb ("lookl" -> "look", "got south" -> "go south") also catches a typo on
-a recognised SYNONYM word, whether that synonym is one token ("pick") or the leading
-word of a multi-word idiom ("have" in "have a look at") — reading the line as the
-corrected command, exactly as the existing bare-verb repair already announces itself.
+### turn 5 — a creature is any living thing that can move on its own
+I couldn't ground that in anything I know.
 
-Actual: both fell through entirely to the generic conversational miss ("I couldn't
-read that as a question I can answer...") — not even an honest per-room decline, let
-alone a repaired command.
+### turn 6 — the defenition of a creature is any living thing that can move on its own
+I couldn't ground that in anything I know.
 
-Result
-------
+### turn 7 — what is a creature
+creature is a kind of organism → living thing → whole (source: corpus:human-large /r/IsA)
 
-Fail
+### turn 8 — is a pig a creature
+I can't confirm that — nothing I remember says pig is a creature. I do know: pig is a
+kind of animal. If it's true, teach me: "pig is a kind of creature".
 
-Play test session log
-----------------------
+### turn 9 — pig is a kind of creature
+noted — remembered 1 fact: pig rdfs:subClassOf creature
 
-```txt
-tmct> play ashcombe hall
-the adventure begins. You are in the study of Ashcombe Hall. ...
+### turn 10 — is a pig alive
+I don't have a fact saying a pig is alive.
 
-tmct> hav a look at the desk
-I'm tmct — a deterministic, offline chat assistant (no LLM). Try "what is a dog" for
-general vocabulary. /memory for what I remember.
-For code structure (imports, calls, definitions) point me at a repo: `--repo <path>`,
-or try the shipped example `npm run example:mini`. tmct reads graphs; it doesn't index
-code itself.
-```
+### turn 11 — a pig is an animal
+noted — remembered 1 fact: pig rdfs:subClassOf animal
 
-```txt
-tmct> play ashcombe hall
-the adventure begins. ...
+### turn 12 — animals are alive
+response templates unavailable — ask a question, or /help for commands.
 
-tmct> pikc the lamp
-I'm tmct — a deterministic, offline chat assistant (no LLM). Try "what is a dog" for
-general vocabulary. /memory for what I remember.
-```
+### turn 13 — animals can be alive
+noted — remembered: animals can be alive
 
-Fix
----
+### turn 14 — can a pig be alive
+I can't confirm that — nothing I remember says pig can be alive.
 
-`src/domain/grammar/ace.mjs`'s `resolveImperativeVerb` fuzzy tier only ever fuzzy-matched
-the leading token against `VERB_FUZZY_CANDIDATES` — the CANONICAL verb targets
-(`take`/`drop`/`talk`/`examine`/...) — never the recognised SYNONYM surface words
-themselves (`pick`, `grab`, `have`, `check`, `chat`, `converse`, ...). A synonym word only
-ever appears as a `VERB_SYNONYMS` map key (or the first word of one), so a typo on it had
-nothing to repair against at all.
+### turn 15 — a pig can be alive
+I couldn't ground that in anything I know.
 
-Split the old single function into `exactImperativeVerb` (the three deterministic tiers:
-multi-word prefix, bare verb, one-word synonym — unchanged) and a `resolveImperativeVerb`
-that tries the exact tiers first, then fuzzy-corrects the LEADING TOKEN against
-`VERB_SURFACE_WORDS` (every bare verb plus every `VERB_SYNONYMS` key's own first word) and
-retries `exactImperativeVerb` with the corrected token substituted in. Retrying the exact
-tiers (rather than jumping straight to a canonical verb) means the multi-word prefix loop
-still runs on the corrected phrase — "hav a look at" repairs to "have a look at" and still
-consumes the whole idiom, not just a bare-verb guess. The existing `NEVER_FUZZY_VERB`
-exemption (walk/wake/make) is checked before any fuzzy repair is attempted, same as before.
+### turn 16 — Remember: a pig can be alive
+I couldn't store that — I remember facts in the shape "every X is a Y".
 
-Regression: `test/adapters/grammar-imperative.test.mjs` gains a case covering a bare-synonym
-typo ("pikc"), an idiom-lead-word typo ("hav"), and an idiom-lead-word typo repaired via a
-different real word ("chekc" -> "check"); `games/adventure` gains
-`adv-typo-on-synonym-surface-word`. A genuinely ambiguous typo ("tak", equidistant from
-"take" and "talk") was checked directly and correctly still declines rather than guessing —
-the existing tie-break in `fuzzyMatchInSet` isn't touched by this fix.
+### turn 17 — what is alive
+tree is alive (source: corpus:conceptnet /r/HasProperty)
 
-Retest
-======
+### turn 18 — does a tree have leaves
+yes — tree has leaf (source: corpus:human /r/HasA)
 
-Retest result
--------------
+### turn 19 — leaves are green
+response templates unavailable — ask a question, or /help for commands.
 
-Pass
+### turn 20 — Remember: leaves are green
+noted — remembered: leaves is green
 
-Retest session log
--------------------
+### turn 21 — do trees have green leaves?
+I couldn't ground that in anything I know.
 
-```txt
-tmct> hav a look at the desk
-(reading that as "examine desk") Desk is a furniture. Desk is fixed in the study.
+What worked
+-----------
 
-Goal (inferred): Take a closer look at the desk.
+Turns 1-3 are the product promise working end to end: two taught facts chain
+into a cited yes. Turn 7's corpus chase, turn 8's honest miss with both the
+counter-fact and the exact teach phrasing, and turn 18's corpus read are all
+the design behaving as written.
 
-tmct> pikc the lamp
-(reading that as "take lamp") you take the lamp. ...
+Findings and the fixes queued
+-----------------------------
 
-Goal (inferred): Carry the lamp.
-```
+1. **"response templates unavailable" leaks on bare plural property
+   statements** (turns 12, 19: "animals are alive", "leaves are green"). An
+   internal failure string is not an answer. The statement should either
+   teach a property fact or decline in the house voice naming what shape
+   would land. QUEUED.
+
+2. **Capability and property facts never inherit through a taught subclass
+   edge** (turn 14: "animals can be alive" + "a pig is an animal" stored,
+   "can a pig be alive" misses). The same one-hop gap NEXT.md already holds
+   for `does X have Y` restriction inheritance — that item's scope now
+   covers capability (`mgx:capableOf`) and property reads too. QUEUED (as
+   the widened existing item).
+
+3. **Singular capability teach declines where the plural teaches** (turn 15
+   "a pig can be alive" vs turn 13 "animals can be alive"). One surface
+   family, two outcomes. QUEUED.
+
+4. **"what type/kind of X is <individual>" never reads the taught type**
+   (turn 4: john's type was taught two turns earlier). The qualifier noun
+   swallows the parse. QUEUED.
+
+5. **A plural teach subject stores unfolded** (turn 20 stores and reads
+   back "leaves is green" instead of folding to "leaf"), which also blocks
+   turn 21's composition against "tree has leaf". QUEUED.
+
+6. **No definitional teach frame** (turns 5-6: "a creature is any living
+   thing that can move on its own"). A genus-plus-gloss frame (creature ⊑
+   living-thing, gloss kept as prose) is a design candidate, not a quick
+   fix. RECORDED as a candidate, not queued.
+
+7. **Adjective-qualified have-asks don't compose** (turn 21 "do trees have
+   green leaves" over "tree has leaf" + "leaf is green"). Real composition
+   work across two facts. RECORDED as a candidate, not queued.

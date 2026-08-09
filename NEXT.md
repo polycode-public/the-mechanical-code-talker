@@ -38,7 +38,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `class-direct` variant (no individual involved) already passes. The gap sits in the `does X have
   Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
   ladder — a different code path from `PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
-  work.
+  work. Playtest 007 (turn 14) widens the scope: taught capability
+  (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
+  "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
@@ -53,7 +55,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
-- [ ] **Archive the delivered plan docs and refresh STATUS.md** — once phase 9 lands:
+- [ ] **Claims page: retire the C8 reasoning block; index.html gains a worked example** — drop
+  the C8 block ("A query the ask lane can't prove alone, /classify and /prove can sometimes
+  close...") from claims.html, and instead put a worked reasoning example on index.html in the
+  chat-example style, placed between two feature plates to break the screenshot run up.
+- [ ] **A plan to lift the L2 CommonsenseQA number above zero** — the block reads 0 of 100
+  correct with 30 answers present in the graph and 0 of those 30 picked: selection, not
+  coverage, is now the whole gap (rungs R2-R5 measured routing, chains and wording levers all
+  flat). A design wave is drafting the plan; its survey starts from the rungs' own measured
+  dead ends in `PLAN_COMMON_SENSE_QA.md`.
+- [ ] **Playtest 007 fixes** (`playtests/PLAYTEST_LOG_007.md` holds the transcript and analysis)
+  — queued: the "response templates unavailable" leak on bare plural property statements; the
+  singular/plural capability-teach parity gap; the "what type of X is <individual>" ask shape;
+  plural teach subjects storing unfolded ("leaves is green"). Candidates recorded in the log,
+  not queued: a definitional teach frame, and adjective-qualified have-ask composition.
+- [ ] **Archive the delivered plan docs and refresh STATUS.md** — after each plan's work is verified by code inspection AND on the deployed site:
   `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md`,
   `PLAN_RIVER_CROSSING.md` and `PLAN_NEWS_FEED.md` are delivered end to end and move to
   `archive/` with their live references repointed; STATUS.md's plan table resynthesizes via
