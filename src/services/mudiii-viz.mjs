@@ -552,10 +552,11 @@ export function agentCardMarkup(slot) {
  *  puzzle }]` — a page given none is the one-square case and ships no
  *  dropdown, the same rule mud-viz.mjs's own renderMudHtml follows. `puzzle`
  *  is true for a scenario with no town-square layout of its own (the
- *  river-crossing puzzle): no roster is minted, no tick ever runs, and the
- *  page shows the actor card and the outlook panel's puzzle plan in place of
- *  the chase HUD (see this file's own pageScript, `data-hide-when-puzzle`).
- *  `assetManifest` is
+ *  river-crossing puzzle): no roster is minted and no tick ever runs, so the
+ *  crossing board takes the 3D stage's place and the deck's play/step/reset
+ *  controls walk the plan the search found rather than driving a simulation
+ *  (see this file's own pageScript, `data-hide-when-puzzle` and
+ *  `data-show-when-puzzle`). `assetManifest` is
  *  data/mudiii-assets.json's own `assets` rows, embedded as page data and
  *  resolved client-side by `propPlacementsFrom` — this is the one parameter
  *  mud-viz.mjs's renderMudHtml has no equivalent of, because mud.html has no
@@ -618,10 +619,10 @@ ${PILL_COMPLETE_CSS}
   <div class="deck-row">
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
-        <button type="button" class="deck-play" id="autoToggle" aria-pressed="false" data-hide-when-puzzle>&#9654; play</button>
-        <button type="button" id="stepBtn" data-hide-when-puzzle>step</button>
+        <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
+        <button type="button" id="stepBtn">step</button>
         <span class="deck-hint" id="stepHint" hidden>pause to step</span>
-        <button type="button" id="resetBtn" data-hide-when-puzzle>reset</button>
+        <button type="button" id="resetBtn">reset</button>
 ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which town square to play">
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
@@ -629,7 +630,7 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount" data-hide-when-puzzle>turns: 0</span>
       </div>
-      <p class="deck-hint mudiii-puzzle-note" id="puzzleNote" hidden>This scenario is a solved-by-search puzzle, not a chase: nothing moves on its own. Follow one of the four passengers below to see its own facts, and the plan panel to see the crossing itself.</p>
+      <p class="deck-hint mudiii-puzzle-note" id="puzzleNote" data-show-when-puzzle hidden>This scenario is a puzzle the planner solves by search. Press play to watch it ferry the passengers one move at a time, pause to hold the boat where it is, and step to take a single crossing. Follow any passenger to read its own beliefs, plan and drives below.</p>
       <div class="deck-body">
         <div class="deck-panels">
           <div class="deck-stack deck-stack-1">
@@ -701,12 +702,35 @@ ${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">
       </div>
     </section>
   </div>
-  <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions">
+  <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions" data-hide-when-puzzle>
     <canvas id="sceneCanvas"></canvas>
     <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows" hidden>
 ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(DIR_GLYPH[point])}</button></span>`).join("\n")}
     </div>
     <p class="scene-status" id="sceneStatus" role="status"></p>
+  </section>
+  <section class="river-stage" id="riverStage" aria-label="the crossing, as the plan plays it" data-show-when-puzzle hidden>
+    <div class="river-head">
+      <span class="river-title">the crossing</span>
+      <span class="mono river-progress" id="riverProgress"></span>
+    </div>
+    <div class="river-board" id="riverBoard">
+      <section class="river-bank" id="riverBankLeft" aria-label="the near bank">
+        <h3 class="river-bank-name" id="riverBankLeftName"></h3>
+        <div class="river-chips" id="riverChipsLeft"></div>
+      </section>
+      <div class="river-water">
+        <div class="river-boat" id="riverBoat" data-at="left" aria-label="the boat">
+          <span class="river-boat-label mono">boat</span>
+          <div class="river-chips" id="riverChipsBoat"></div>
+        </div>
+      </div>
+      <section class="river-bank" id="riverBankRight" aria-label="the far bank">
+        <h3 class="river-bank-name" id="riverBankRightName"></h3>
+        <div class="river-chips" id="riverChipsRight"></div>
+      </section>
+    </div>
+    <p class="river-move mono" id="riverMoveText" role="status"></p>
   </section>
   <div class="edit-stage" id="mudiiiEditStage" aria-label="the square's own facts, in plain sentences">
     <section class="edit-text" aria-label="the world's facts as editable sentences">
@@ -759,6 +783,23 @@ ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button 
           inputHtml: '<input id="chatInput" type="text" placeholder="@fox the goblin is east" aria-label="type a command" disabled>',
         })}
       </form>
+    </div>
+  </section>
+  <section class="focus-panel" id="mudiiiFocusPanel" aria-label="what the followed agent believes, plans and is driven by">
+    <h2>following <span class="mono" id="focusWho"></span></h2>
+    <div class="focus-cols">
+      <section class="focus-col">
+        <h3>beliefs</h3>
+        <div class="focus-body" id="focusBeliefs"></div>
+      </section>
+      <section class="focus-col">
+        <h3>plan</h3>
+        <pre class="focus-body mono" id="focusPlanText"></pre>
+      </section>
+      <section class="focus-col">
+        <h3>imperatives</h3>
+        <pre class="focus-body mono" id="focusImperatives"></pre>
+      </section>
     </div>
   </section>
   <div class="hud-row" id="hudRow" aria-label="every agent's own status" data-hide-when-puzzle></div>
@@ -1019,6 +1060,81 @@ const MUDIII_STYLE = `
   .outlook-belief-table td { padding: .12rem .4rem .12rem 0; vertical-align: top; }
   .outlook-plan { margin: 0; font-family: ${MONO_STACK}; font-size: .68rem; white-space: pre-wrap; color: var(--square-ink); }
 
+  /* The crossing board: two banks with the water between them, standing in
+     for the 3D square on a scenario that has no grid to draw. The boat is
+     absolutely placed inside the water so one CSS transition carries it —
+     and everyone aboard it — from bank to bank. */
+  .river-stage {
+    display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem;
+    background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; min-width: 0;
+  }
+  .river-stage[hidden] { display: none; }
+  body.editing .river-stage { display: none; }
+  .river-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .river-title { font-family: ${DISPLAY_STACK}; font-size: 1rem; }
+  .river-progress { font-size: .68rem; color: var(--square-stone-dark); }
+  .river-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 1.1fr) minmax(0, 1fr); gap: .5rem; align-items: stretch; }
+  .river-bank {
+    background: rgba(124,154,91,.32); border: 1px solid var(--square-stone-dark); border-radius: 3px;
+    padding: .4rem .45rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; min-height: 7rem;
+  }
+  .river-bank-name { margin: 0; color: var(--square-stone-dark); }
+  .river-water {
+    position: relative; border: 1px solid var(--square-stone-dark); border-radius: 3px; min-height: 7rem;
+    background: repeating-linear-gradient(180deg, rgba(94,140,178,.55) 0 6px, rgba(120,166,201,.55) 6px 12px);
+  }
+  .river-boat {
+    position: absolute; top: 50%; left: 6%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: .2rem;
+    background: var(--square-thatch); border: 1px solid var(--square-stone-dark); border-radius: 3px;
+    padding: .3rem .35rem; min-width: 3.4rem;
+    transition: left .4s ease;
+  }
+  .river-boat[data-at="right"] { left: 94%; }
+  .river-boat[data-at="crossing"] { left: 50%; }
+  .river-boat-label { font-size: .5rem; text-transform: uppercase; letter-spacing: .1em; color: var(--parchment); }
+  .river-chips { display: flex; flex-wrap: wrap; gap: .25rem; align-content: flex-start; }
+  .river-chip {
+    display: inline-flex; align-items: center; gap: .22rem;
+    background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 99px;
+    padding: .12rem .42rem .12rem .3rem;
+  }
+  .river-chip-glyph { font-style: normal; font-size: .85rem; line-height: 1; }
+  .river-chip-name { font-size: .58rem; letter-spacing: .02em; }
+  .river-chip-empty { font-size: .68rem; font-style: italic; color: var(--square-stone-dark); }
+  .river-move { margin: 0; font-size: .68rem; color: var(--square-ink); min-height: 1.2em; }
+  @media (prefers-reduced-motion: reduce) { .river-boat { transition: none; } }
+
+  /* What the followed agent believes, plans and is driven by, on the playing
+     screen itself rather than only behind the edit button. */
+  .focus-panel {
+    display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem;
+    background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; min-width: 0;
+  }
+  body.editing .focus-panel { display: none; }
+  .focus-panel h2 { margin: 0; font-size: .8rem; }
+  .focus-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+  .focus-col { min-width: 0; display: flex; flex-direction: column; gap: .25rem; }
+  .focus-body {
+    margin: 0; font-size: .66rem; line-height: 1.5; color: var(--square-ink);
+    background: rgba(255,255,255,.5); border: 1px solid rgba(89,80,63,.35); border-radius: 3px;
+    padding: .4rem .45rem; min-height: 4.5rem; max-height: 13rem; overflow: auto;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .focus-line { margin: 0 0 .12rem; }
+  .focus-empty { font-style: italic; color: var(--square-stone-dark); }
+  .focus-plan-done { color: var(--square-stone-dark); }
+  .focus-plan-now { color: #9A5B12; font-weight: 600; }
+
+  /* An author display rule outranks the browser's own [hidden] { display:
+     none }, so anything this page hides by attribute has to say so at a
+     specificity of its own — a hidden map panel, HUD row, control stack or
+     slider otherwise keeps its flex box and stays on screen. */
+  .deck-stack[hidden], .deck-slider[hidden], .deck-teach[hidden], .camera-mode[hidden],
+  .map-panel[hidden], .hud-row[hidden], .scene-stage[hidden] { display: none; }
+
   .mudiii-chat { background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px; box-shadow: 0 2px 0 rgba(0,0,0,.18); padding: .7rem .8rem; display: flex; flex-direction: column; gap: .5rem; }
   .chatlog { min-height: 8rem; max-height: 16rem; overflow-y: auto; }
   .chatlog > * { margin: 0 0 .32rem; }
@@ -1164,9 +1280,10 @@ function pageScript() {
   const isPuzzle = function () { return scenario().puzzle === true; };
   function applyPuzzleVisibility() {
     const puzzle = isPuzzle();
-    const nodes = document.querySelectorAll("[data-hide-when-puzzle]");
-    for (let i = 0; i < nodes.length; i += 1) nodes[i].hidden = puzzle;
-    el("puzzleNote").hidden = !puzzle;
+    const hideWhenPuzzle = document.querySelectorAll("[data-hide-when-puzzle]");
+    for (let i = 0; i < hideWhenPuzzle.length; i += 1) hideWhenPuzzle[i].hidden = puzzle;
+    const showWhenPuzzle = document.querySelectorAll("[data-show-when-puzzle]");
+    for (let i = 0; i < showWhenPuzzle.length; i += 1) showWhenPuzzle[i].hidden = !puzzle;
   }
   // Every numbered instance a puzzle world's own facts place — fox-1, goat-1,
   // cabbage-1, farmer-1 for the river crossing — read straight off rdf:type
@@ -1181,6 +1298,171 @@ function pageScript() {
     return Array.from(ids).sort();
   }
   let puzzleActorIds = [];
+
+  // ---- the crossing, played back move by move ------------------------------
+  // The planner finds the whole crossing before anything moves (see
+  // mudiii-turn.mjs's riverPuzzleOutlook, reached through session.outlook()),
+  // and hands back one "who stands where" map per position it passes through.
+  // Playback here only walks that list: play steps through it on a timer,
+  // pause holds wherever it stopped, step takes a single crossing. Nothing
+  // below decides a move — every move on the board is one the search found.
+  const RIVER_GLYPHS = {
+    farmer: "\\uD83E\\uDDD1\\u200D\\uD83C\\uDF3E", goat: "\\uD83D\\uDC10",
+    fox: "\\uD83E\\uDD8A", cabbage: "\\uD83E\\uDD6C",
+  };
+  const RIVER_CROSSING_MS = 420;
+  let riverPlan = [];
+  let riverPlaces = [];
+  let riverBanks = [];
+  // How many moves of the plan have been played. The boat and every passenger
+  // are drawn from riverPlaces[riverMove], so this one number is the whole
+  // playback position.
+  let riverMove = 0;
+  // The crossing in flight: { to, travellers }, or null while the boat is
+  // moored. Only ever set between two positions the plan already contains.
+  let riverAfloat = null;
+  let riverPlanKey = "";
+
+  /** Take on whatever crossing the planner currently finds. Returns true when
+   *  that is a DIFFERENT crossing from the one being played — an edit to a
+   *  drive redraws the plan, and playback has to go back to the opening
+   *  arrangement rather than carry a position from a plan that no longer
+   *  exists. */
+  function adoptPuzzlePlan(puzzle) {
+    const plan = (puzzle && puzzle.plan) || [];
+    const key = plan.map(function (a) { return a.label; }).join("|") + "#" + ((puzzle && puzzle.miss) || "");
+    if (key === riverPlanKey) return false;
+    riverPlanKey = key;
+    riverPlan = plan;
+    riverPlaces = (puzzle && puzzle.places) || [];
+    riverBanks = riverBanksFrom(riverPlaces, puzzle && puzzle.goalPlace);
+    riverMove = 0;
+    riverAfloat = null;
+    return true;
+  }
+
+  /** The two shores, near one first: every place the passengers ever stand,
+   *  sorted, with the goal place moved to the far side so the crossing always
+   *  reads left to right. */
+  function riverBanksFrom(places, goalPlace) {
+    const seen = {};
+    (places || []).forEach(function (position) {
+      Object.keys(position).forEach(function (id) { seen[position[id]] = true; });
+    });
+    const all = Object.keys(seen).sort();
+    if (goalPlace && all.indexOf(goalPlace) !== -1) {
+      return all.filter(function (place) { return place !== goalPlace; }).concat([goalPlace]);
+    }
+    return all;
+  }
+
+  function riverPositionNow() { return riverPlaces[riverMove] || riverPlaces[0] || {}; }
+
+  /** Everyone whose place changes on move "step" (1-based) — the boat's own
+   *  passengers for that crossing, read off the two positions rather than
+   *  guessed from the action's subject, so a companion the rules carry along
+   *  is aboard too. */
+  function riverTravellersFor(step) {
+    const before = riverPlaces[step - 1] || {};
+    const after = riverPlaces[step] || {};
+    return Object.keys(after).filter(function (id) { return before[id] !== after[id]; }).sort();
+  }
+
+  /** Whoever crosses on every single move — the one rowing. Null when no
+   *  single passenger does, and then the boat simply follows the last move's
+   *  target instead. */
+  function riverFerrymanId() {
+    if (!riverPlan.length) return null;
+    let common = riverTravellersFor(1);
+    for (let step = 2; step <= riverPlan.length; step += 1) {
+      const travellers = riverTravellersFor(step);
+      common = common.filter(function (id) { return travellers.indexOf(id) !== -1; });
+    }
+    return common.length === 1 ? common[0] : null;
+  }
+
+  function riverBoatPlace() {
+    const ferryman = riverFerrymanId();
+    if (ferryman) return riverPositionNow()[ferryman] || riverBanks[0] || null;
+    if (riverMove > 0) return riverPlan[riverMove - 1].target;
+    return riverBanks[0] || null;
+  }
+
+  function riverGlyphFor(id) {
+    const kind = roleOfAgentId(id);
+    return RIVER_GLYPHS[kind] || kind.slice(0, 1).toUpperCase();
+  }
+
+  function riverChipHtml(id, place) {
+    return '<span class="river-chip" data-passenger="' + esc(id) + '" data-place="' + esc(place) + '">'
+      + '<i class="river-chip-glyph" aria-hidden="true">' + riverGlyphFor(id) + "</i>"
+      + '<span class="river-chip-name mono">' + esc(id) + "</span></span>";
+  }
+
+  function renderRiverBoard() {
+    if (!isPuzzle()) return;
+    const position = riverPositionNow();
+    const aboard = {};
+    (riverAfloat ? riverAfloat.travellers : []).forEach(function (id) { aboard[id] = true; });
+    const ids = Object.keys(position).sort();
+    const nearBank = riverBanks[0] || null;
+    const farBank = riverBanks[1] || null;
+    const bankHtml = function (bank) {
+      const html = ids.filter(function (id) { return position[id] === bank && !aboard[id]; })
+        .map(function (id) { return riverChipHtml(id, bank); }).join("");
+      return html || '<span class="river-chip-empty">empty</span>';
+    };
+    el("riverBankLeftName").textContent = nearBank || "near bank";
+    el("riverBankRightName").textContent = farBank || "far bank";
+    el("riverChipsLeft").innerHTML = nearBank ? bankHtml(nearBank) : "";
+    el("riverChipsRight").innerHTML = farBank ? bankHtml(farBank) : "";
+    el("riverChipsBoat").innerHTML = Object.keys(aboard).sort()
+      .map(function (id) { return riverChipHtml(id, "boat"); }).join("");
+
+    const moored = riverAfloat ? "crossing" : (riverBoatPlace() === farBank ? "right" : "left");
+    el("riverBoat").setAttribute("data-at", moored);
+
+    const total = riverPlan.length;
+    el("riverProgress").textContent = total
+      ? "move " + riverMove + " of " + total
+      : "no crossing found";
+    if (riverAfloat) {
+      el("riverMoveText").textContent = "crossing to " + riverAfloat.to + ": "
+        + riverAfloat.travellers.join(", ") + " aboard.";
+    } else if (riverMove > 0) {
+      el("riverMoveText").textContent = "last move: " + riverPlan[riverMove - 1].label
+        + (riverMove === total ? " \\u2014 everyone is across." : ".");
+    } else {
+      el("riverMoveText").textContent = total
+        ? "nobody has crossed yet. Press play."
+        : "the planner found no crossing for these drives.";
+    }
+  }
+
+  /** One crossing: the travellers board, the boat carries them over, and the
+   *  position the plan already computed lands. Nothing is decided here. */
+  async function playOneRiverMove() {
+    if (riverMove >= riverPlan.length) return null;
+    const step = riverMove + 1;
+    riverAfloat = { to: riverPlan[step - 1].target, travellers: riverTravellersFor(step) };
+    renderRiverBoard();
+    if (!prefersReducedMotion()) await wait(RIVER_CROSSING_MS);
+    riverAfloat = null;
+    riverMove = step;
+    renderRiverBoard();
+    renderFocusPanel();
+    return { move: riverMove };
+  }
+
+  function rewindRiverPlayback() {
+    autoOn = false;
+    if (ticker) { ticker.pause(); ticker = null; }
+    riverMove = 0;
+    riverAfloat = null;
+    renderRiverBoard();
+    renderFocusPanel();
+    showStopped();
+  }
 
   // ---- roster minting -----------------------------------------------------
   // The page asks for a COUNT and names the ids it is about to get back: the
@@ -1233,7 +1515,9 @@ function pageScript() {
   let editing = false;
   let ticker = null;
 
-  function hasNext() { return globalTurn < maxTurns; }
+  // A puzzle plays its plan out, so what is left to play is what is left of
+  // the plan; a chase plays until the turn budget runs out.
+  function hasNext() { return isPuzzle() ? riverMove < riverPlan.length : globalTurn < maxTurns; }
   const wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
   const liveWait = function () { return wait(delayMs); };
 
@@ -1298,6 +1582,7 @@ function pageScript() {
   }
 
   async function runOneTick() {
+    if (isPuzzle()) return playOneRiverMove();
     return serializeTick(async function () {
       if (!session) return null;
       const result = await session.tick();
@@ -1317,10 +1602,13 @@ function pageScript() {
         playBtn.textContent = state.playing ? "\\u23F8 pause" : "\\u25B6 play";
         // The follow control reads the ticker's own state, never a second
         // "am I playing" the page keeps for itself, so the two can never
-        // disagree. It closes while the board plays because a redraw lands
-        // on top of the open dropdown and loses the pick.
-        el("agentSelect").disabled = state.playing;
-        el("agentSelectHint").hidden = !state.playing;
+        // disagree. It closes while a chase board plays because a redraw
+        // lands on top of the open dropdown and loses the pick. A puzzle
+        // rebuilds no dropdown as it plays, so it stays open and the panel
+        // below follows whoever is picked mid-crossing.
+        const lockFollow = state.playing && !isPuzzle();
+        el("agentSelect").disabled = lockFollow;
+        el("agentSelectHint").hidden = !lockFollow;
         // Step reads the same ticker state for the same reason: a hand-driven
         // turn while the board plays itself lands in the middle of one.
         el("stepBtn").disabled = state.playing || state.animating;
@@ -1349,6 +1637,10 @@ function pageScript() {
       appendChat("a", res.answer);
       applyTickResult(board);
       renderAll();
+      // A taught line can change a drive, and a drive is what the plan and the
+      // imperatives are made of, so both are re-read after every turn.
+      await refreshStoreRows();
+      await refreshOutlook();
       return res;
     });
   }
@@ -1654,7 +1946,7 @@ function pageScript() {
     camera = { mode: mode, selectedId: id, status: null };
     renderCameraButtons();
     renderDriveRing();
-    if (editing) { renderActorEditor(); renderOutlookPanel(); }
+    if (editing) { renderActorEditor(); renderOutlookPanel(); } else renderFocusPanel();
     sendCameraToScene(camera);
   });
 
@@ -1693,7 +1985,19 @@ function pageScript() {
   function wireDeck() {
     el("autoToggle").addEventListener("click", function () {
       if (!session) return;
-      autoOn = !autoOn;
+      // The control reads its own drawn state, which the ticker writes, so a
+      // run that ended on its own (a crossing played to the last move) is
+      // still read as stopped rather than as playing.
+      const playing = el("autoToggle").getAttribute("aria-pressed") === "true";
+      // Play on a finished crossing starts it again from the opening
+      // arrangement instead of reading as a dead control.
+      if (!playing && isPuzzle() && !hasNext()) {
+        riverMove = 0;
+        riverAfloat = null;
+        renderRiverBoard();
+        renderFocusPanel();
+      }
+      autoOn = !playing;
       if (autoOn) ensureTicker().play(); else ensureTicker().pause();
     });
     el("delaySlider").addEventListener("input", function () {
@@ -1824,6 +2128,8 @@ function pageScript() {
     document.body.classList.remove("editing");
     el("editModeBtn").textContent = "edit";
     el("editModeBtn").setAttribute("aria-pressed", "false");
+    renderFocusPanel();
+    renderRiverBoard();
   }
 
   // The lateral SKOS neighbourhood plus the vertical is-a chain for whatever
@@ -2077,7 +2383,15 @@ function pageScript() {
   async function refreshOutlook() {
     if (!session || !session.outlook) return;
     lastOutlook = await session.outlook();
+    if (isPuzzle()) {
+      // An edit to a drive redraws the crossing, so playback goes back to the
+      // opening arrangement rather than holding a position in a plan that no
+      // longer exists.
+      if (adoptPuzzlePlan(lastOutlook.puzzle)) rewindRiverPlayback();
+      else renderRiverBoard();
+    }
     renderOutlookPanel();
+    renderFocusPanel();
   }
 
   function beliefOriginText(cell, origin) {
@@ -2128,6 +2442,76 @@ function pageScript() {
         puzzleText.textContent = "puzzle plan \\u2014 " + puzzle.miss;
       }
     }
+  }
+
+  // ---- the followed agent, on the playing screen --------------------------
+  // The same three readings the edit view carries — what it believes, what it
+  // plans, and the drive sentences it is acting on — sitting under the chat so
+  // a player can watch them move without leaving the game. Beliefs and plan
+  // come off the live tick payload (agentsById), which already carries both,
+  // so a chase board costs no extra engine call per turn; the imperatives are
+  // the actor editor's own per-instance text, inherited class lines included.
+  function renderFocusPanel() {
+    const id = el("agentSelect").value;
+    el("focusWho").textContent = id || "nobody yet";
+    renderFocusBeliefs(id);
+    renderFocusPlan(id);
+    renderFocusImperatives(id);
+  }
+
+  function renderFocusBeliefs(id) {
+    const box = el("focusBeliefs");
+    const entry = id ? agentsById[id] : null;
+    if (!id) {
+      box.innerHTML = '<span class="focus-empty">Follow an agent above.</span>';
+      return;
+    }
+    if (!entry) {
+      box.innerHTML = '<span class="focus-empty">this scenario keeps no belief map \\u2014 nothing here is seen or told.</span>';
+      return;
+    }
+    const subjects = Object.keys(entry.belief || {}).sort();
+    box.innerHTML = subjects.length
+      ? subjects.map(function (subject) {
+        return '<div class="focus-line">' + esc(believedFactSentence(subject, entry.belief[subject])) + "</div>";
+      }).join("")
+      : '<span class="focus-empty">' + esc(id) + " is alone on the board \\u2014 nothing else to believe anything about.</span>";
+  }
+
+  function renderFocusPlan(id) {
+    const box = el("focusPlanText");
+    const puzzle = lastOutlook && lastOutlook.puzzle;
+    if (puzzle) {
+      if (!puzzle.plan) { box.textContent = puzzle.miss; return; }
+      box.innerHTML = puzzle.plan.map(function (action, i) {
+        const step = i + 1;
+        const inFlight = riverAfloat && step === riverMove + 1;
+        const cls = inFlight ? "focus-plan-now" : (step <= riverMove ? "focus-plan-done" : "");
+        const mark = inFlight ? "\\u25B8" : (step <= riverMove ? "\\u2713" : "\\u00B7");
+        return '<span class="' + cls + '">' + mark + " " + step + ". " + esc(action.label) + "</span>";
+      }).join("\\n");
+      return;
+    }
+    const entry = id ? agentsById[id] : null;
+    if (!entry) { box.textContent = "nothing planned yet."; return; }
+    const plan = (entry.plan && entry.plan.length) ? entry.plan.join(" \\u2192 ") : "holding";
+    box.textContent = plan + "\\n" + (entry.goal || "");
+  }
+
+  function renderFocusImperatives(id) {
+    const box = el("focusImperatives");
+    const render = window.tmct && window.tmct.page && window.tmct.page.renderAgentEditorText;
+    if (!id || !render || !allStoreRows.length) { box.textContent = ""; return; }
+    box.textContent = render(allStoreRows, id);
+  }
+
+  // The imperatives read the whole store, which only edit mode used to load.
+  // Refreshed on boot, on a follow change and after a chat turn — never per
+  // tick, because a drive is not something a turn moves.
+  async function refreshStoreRows() {
+    if (!session || !session.snapshot) return;
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
   }
 
   // ---- booting ---------------------------------------------------------
@@ -2189,9 +2573,13 @@ function pageScript() {
     if (seq !== bootSeq) return;
     camera.selectedId = puzzleActorIds[0] || null;
     renderAll();
+    await refreshStoreRows();
+    if (seq !== bootSeq) return;
     await refreshOutlook();
+    if (seq !== bootSeq) return;
+    renderFocusPanel();
     showStopped();
-    setSceneStatus("this scenario is a puzzle, not a chase \\u2014 follow one of the four passengers below, and its own plan panel shows the crossing.");
+    setSceneStatus("this scenario is a puzzle, not a chase \\u2014 press play to watch the planner ferry everyone across, and follow any passenger to read what drives it.");
   }
 
   let bootSeq = 0;
@@ -2239,7 +2627,11 @@ function pageScript() {
     camera.selectedId = openingFollowId(opening.agents);
     applyTickResult(opening);
     renderAll();
+    await refreshStoreRows();
+    if (seq !== bootSeq) return;
     await refreshOutlook();
+    if (seq !== bootSeq) return;
+    renderFocusPanel();
     if (!prefersReducedMotion()) {
       autoOn = true;
       ensureTicker().play();
@@ -2261,10 +2653,14 @@ function pageScript() {
     if (ticker) { ticker.pause(); ticker = null; }
     expandedAgents.clear();
     const s = scenario();
-    // No control ever calls this on a puzzle scenario (resetBtn hides itself
-    // via data-hide-when-puzzle), but a puzzle world has nothing to re-cast
-    // either way, so re-booting is the correct answer if this is reached.
-    if (s.puzzle) return boot();
+    // A puzzle has no cast to re-mint. Reset there means the opening
+    // arrangement again: playback rewinds to before the first crossing and
+    // the world's own facts, edits included, stand untouched.
+    if (s.puzzle) {
+      rewindRiverPlayback();
+      setSceneStatus("back to the opening arrangement \\u2014 press play to watch the crossing again.");
+      return;
+    }
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
     cast = foxes.concat(goblins);
@@ -2287,6 +2683,7 @@ function pageScript() {
     renderCameraButtons();
     renderDriveRing();
     renderChatPills();
+    renderFocusPanel();
     el("globalTurnCount").textContent = "turns: " + globalTurn;
   }
 

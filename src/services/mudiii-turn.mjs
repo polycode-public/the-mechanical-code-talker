@@ -536,6 +536,17 @@ async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_
 const RIVER_CROSSING_ACTION = "ferry onto";
 const RIVER_CROSSING_GOAL = [{ universal: true, term: "passenger", predicate: "currently-in", object: "bank-west" }];
 
+/** Who stands where, in one plain `{ individual: place }` map, read off a
+ *  planner state's own rows. The state carries one row per individual under
+ *  the domain's dynamic predicates, so this is a straight transcription — no
+ *  predicate is privileged, and a puzzle with a different position predicate
+ *  reads the same way. Pure. */
+function placesInState(state) {
+  const places = {};
+  for (const row of state || []) places[row.subject] = row.object;
+  return places;
+}
+
 /** The river-crossing puzzle's own plan, recomputed from `rows`/`ruleRows` as
  *  they stand right now: the world's own action rules plus whatever
  *  action-constraint rows the drive facts themselves imply
@@ -543,11 +554,18 @@ const RIVER_CROSSING_GOAL = [{ universal: true, term: "passenger", predicate: "c
  *  data/games/river.txt. Null on a world whose rule rows carry no "ferry
  *  onto" action-signature, or whose action domain does not carry a
  *  "passenger" class the goal can quantify over. Returns `{ moves, plan,
- *  miss }`: `moves` is every legal move from the CURRENT position (the empty
- *  list when nothing may move), `plan` is the found action sequence or null,
- *  `miss` is null when a plan was found and the stated reason otherwise — a
- *  budget decline as well as an exhausted search, never a shortened plan
- *  either way. Pure. */
+ *  places, goalPlace, miss }`: `moves` is every legal move from the CURRENT
+ *  position (the empty list when nothing may move), `plan` is the found action
+ *  sequence or null, `miss` is null when a plan was found and the stated reason
+ *  otherwise — a budget decline as well as an exhausted search, never a
+ *  shortened plan either way.
+ *
+ *  `places` is what a player watches the plan through: one `{ individual:
+ *  place }` map per position the plan passes through, opening arrangement
+ *  first, so `places[k]` is where everyone stands after `k` moves and
+ *  `places.length` is `plan.length + 1`. A miss still carries the opening
+ *  arrangement alone, so a board can be drawn for a puzzle with no crossing.
+ *  `goalPlace` names where the goal wants the passengers. Pure. */
 function riverPuzzleOutlook(rows, ruleRows) {
   const hasFerryAction = (ruleRows || []).some((r) => r.kind === "action-signature" && r.name === RIVER_CROSSING_ACTION);
   if (!hasFerryAction) return null;
@@ -561,13 +579,27 @@ function riverPuzzleOutlook(rows, ruleRows) {
   }
   const start = stateFromFacts(rows, domain);
   const moves = movesFromRules(start, domain).map((m) => m.action.label);
+  const opening = [placesInState(start)];
+  const goalPlace = RIVER_CROSSING_GOAL[0].object;
   const maxDepth = DEFAULT_GAME_CONFIG.planning.maxDepth;
   try {
     const found = findActionPath(start, isGoal, (s) => movesFromRules(s, domain), { maxDepth, stateKey: stateKeyFor });
-    return { moves, plan: found ? found.actions : null, miss: found ? null : `no plan found within ${maxDepth} moves` };
+    return {
+      moves,
+      plan: found ? found.actions : null,
+      places: found ? found.states.map(placesInState) : opening,
+      goalPlace,
+      miss: found ? null : `no plan found within ${maxDepth} moves`,
+    };
   } catch (err) {
     if (!(err instanceof PlanBudgetError)) throw err;
-    return { moves, plan: null, miss: `action grounding count ${err.groundings} exceeds the budget of ${err.budget}` };
+    return {
+      moves,
+      plan: null,
+      places: opening,
+      goalPlace,
+      miss: `action grounding count ${err.groundings} exceeds the budget of ${err.budget}`,
+    };
   }
 }
 

@@ -165,9 +165,10 @@ export function routeBetweenCells(factRows, fromCell, toCell) {
  *  `outlook`/`applyEdit`/`applyAgentEdit` for it, the same way it does for a
  *  square; `tick`, `driveAgent`, `recast` and `board` never get anything real
  *  to do without a layout, so they answer with the same "nothing moved" shape
- *  a resting board would rather than throwing — the page simply never wires
- *  its play/step/drive controls to a puzzle scenario (see mudiii-viz.mjs's
- *  `puzzle` flag). */
+ *  a resting board would rather than throwing. A puzzle page's own play and
+ *  step controls never reach them either: they walk the crossing `outlook`
+ *  already found, one position at a time (see mudiii-viz.mjs's `puzzle`
+ *  flag). */
 export async function createMudiiiSession(
   worldPayload, { agents = [], epoch = 0, getTeachEnabled = () => false } = {},
 ) {
