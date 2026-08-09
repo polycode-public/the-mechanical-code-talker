@@ -2848,6 +2848,10 @@ const SUBCLASS_PREDICATE = "rdfs:subClassOf";
 // direct-write teach paths below stay in that family without re-typing the
 // CURIE string at each call site.
 const TYPE_PREDICATE = "rdf:type";
+// Role-hierarchy declaration — ACE pattern 19's own emitted predicate
+// (grammar/ace.mjs's parseSubProperty), named here for the same reason
+// SUBCLASS_PREDICATE and TYPE_PREDICATE are.
+const SUB_PROPERTY_OF_PREDICATE = "rdfs:subPropertyOf";
 // HAS_A_PREDICATE (imported from memory/core.mjs, the canonical home) keeps
 // generalVerbTeach's "has"/"have" special case in the same family ConceptNet's
 // /r/HasA corpus facts already use, rather than minting a redundant mgx:has.
@@ -7664,14 +7668,25 @@ const WORLD_INTERNAL_PREDICATES = new Set([
   "mgx:is-container", "mgx:is-open",
 ]);
 
-/** A `<role> rdf:type owl:TransitiveProperty` declaration is role scaffolding,
- *  not a fact about the role a reader wants listed back in English — it never
- *  renders as a plain fact line, the same discipline that keeps the
- *  restriction scaffolding predicates (owl:onProperty, owl:someValuesFrom, …)
- *  out of FACT_PREDICATE_PHRASES. */
-function isTransitivePropertyDeclaration(f) {
-  return f.predicate === TYPE_PREDICATE && f.object === "transitiveproperty";
+/** A role-axiom declaration — `<role> rdf:type owl:TransitiveProperty` or
+ *  `<role> rdfs:subPropertyOf <role>` — is role scaffolding, not a fact about
+ *  the role a reader wants listed back in English. Neither ever renders as a
+ *  plain fact line, the same discipline that keeps the restriction scaffolding
+ *  predicates (RESTRICTION_SCAFFOLDING_PREDICATES, below) out of the describe
+ *  lane. */
+function isRoleScaffoldingDeclaration(f) {
+  return (f.predicate === TYPE_PREDICATE && f.object === "transitiveproperty")
+    || f.predicate === SUB_PROPERTY_OF_PREDICATE;
 }
+
+/** A restriction node's own internal edges — which property it restricts
+ *  (owl:onProperty) and which filler it restricts to (owl:someValuesFrom,
+ *  owl:allValuesFrom) — name the restriction's SHAPE, not a fact about the
+ *  role or the filler a reader wants listed back. Neither ever renders as a
+ *  plain fact line in the describe lane. */
+const RESTRICTION_SCAFFOLDING_PREDICATES = new Set([
+  "owl:onProperty", "owl:someValuesFrom", "owl:allValuesFrom",
+]);
 
 /** The world PLACEMENT predicates carry curated phrases above so they render as
  *  English, but they must stay OUT of the query-marker families derived from
@@ -7715,6 +7730,15 @@ function baseVerbSurface(verb) {
   if (/[a-z]ies$/i.test(w) && !/[aeiou]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
   if (/(?:s|x|z|ch|sh|o)es$/i.test(w)) return w.slice(0, -2);
   return w.replace(/s$/i, "");
+}
+/** The gerund surface of a 3sg-minted role predicate — "contains" -> "containing",
+ *  "touches" -> "touching" — the naive INVERSE of the "-ing"-stripping fold
+ *  verbPredicateFromSurface (ace.mjs) already accepts alongside a 3sg surface
+ *  when parsing patterns 16, 17 and 19. Same accepted naive-morphology trade
+ *  thirdPersonSingularSurface/baseVerbSurface already make. */
+function gerundVerbSurface(verb) {
+  const base = baseVerbSurface(verb);
+  return /[^aeiou]e$/i.test(base) && base.length > 2 ? `${base.slice(0, -1)}ing` : `${base}ing`;
 }
 function predicatePhrase(predicate) {
   if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
@@ -7824,6 +7848,14 @@ function citationProvenance(provenance) {
  *  applies here instead. Provenance stays VERBATIM in every case. */
 function renderFactLine(f) {
   const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
+  // A rdfs:subPropertyOf row relates two PREDICATES, not two things — factPhrase
+  // would compose the raw CURIE ("contains rdfs:subPropertyOf touches"), so this
+  // shape gets its own dedicated line ahead of the provenance-keyed framing below,
+  // the same way renderUnionLine/renderEnumerationLine read as a definition
+  // rather than a first-person claim regardless of who taught it.
+  if (f.predicate === SUB_PROPERTY_OF_PREDICATE) {
+    return `${gerundVerbSurface(f.subject)} implies ${gerundVerbSurface(f.object)}${cite}`;
+  }
   // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
   // natural frames — both are things the operator SAID, so both read first-person.
   if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
@@ -7872,7 +7904,23 @@ function renderEnumerationLine(cls, members) {
   const plural = thirdPersonSingularSurface(String(cls || "").replace(/-/g, " "));
   return `the ${plural} are exactly ${list}${cite}`;
 }
-export { renderUnionLine, renderEnumerationLine };
+
+/** A universal restriction's stored triples read back as ONE sentence rather
+ *  than the restriction node's raw scaffolding rows: "every heart contains
+ *  only valves (source: …)". `node` is the `<parent> rdfs:subClassOf
+ *  <restriction>` fact row (the parent and the citation both come from it);
+ *  `rows` are the restriction node's own rows, from which its owl:onProperty
+ *  role and owl:allValuesFrom filler are read — order-independent, the same
+ *  way renderUnionLine/renderEnumerationLine are. Pure — takes the fact rows,
+ *  returns one line. */
+function renderUniversalRestrictionLine(node, rows) {
+  const onProperty = rows.find((r) => r.predicate === "owl:onProperty");
+  const allValuesFrom = rows.find((r) => r.predicate === "owl:allValuesFrom");
+  const cite = node.provenance ? ` (source: ${citationProvenance(node.provenance)})` : "";
+  const filler = thirdPersonSingularSurface(String(allValuesFrom?.object || "").replace(/-/g, " "));
+  return `every ${node.subject} ${onProperty?.object || ""} only ${filler}${cite}`;
+}
+export { renderUnionLine, renderEnumerationLine, renderUniversalRestrictionLine };
 
 const SENSE_CITE_RE = / \(source: [^)]*\)$/;
 
@@ -9346,7 +9394,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // and mechanics predicates are dropped so "what is the letter" never reads
     // back where it's hidden or that it's the objective (WORLD_INTERNAL_PREDICATES).
     const subjectHits = (await factRows(memoryDir, cache))
-      .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate) && !isTransitivePropertyDeclaration(f));
+      .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate)
+        && !isRoleScaffoldingDeclaration(f) && !RESTRICTION_SCAFFOLDING_PREDICATES.has(f.predicate));
     // Matched through normFactPredicate, so a fact stored under a minted
     // spelling of the same relation ("mgx:used-for", from the participle
     // teach frame, in a store written before the spellings converged) is
@@ -9981,7 +10030,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // objective, and those datatype internals render as garbled non-English
     // besides. The adventure's own where/openness readers answer the legitimate
     // in-game questions from the world fold.
-    hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate) && !isTransitivePropertyDeclaration(f));
+    hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate)
+      && !isRoleScaffoldingDeclaration(f) && !RESTRICTION_SCAFFOLDING_PREDICATES.has(f.predicate));
     // A corpus-weak-only result set (every hit resolved ONLY through
     // ConceptNet's /r/RelatedTo tier) still composes its hedged "possibly"
     // lines below exactly as before — this reader's whole job is showing

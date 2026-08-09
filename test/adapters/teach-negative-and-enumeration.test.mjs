@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runTurn, renderUnionLine, renderEnumerationLine } from "../../src/services/chat.mjs";
+import { runTurn, renderUnionLine, renderEnumerationLine, renderUniversalRestrictionLine } from "../../src/services/chat.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-teach-negative-"));
@@ -138,6 +138,48 @@ test("owl:TransitiveProperty never renders as a plain fact line in the describe 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("owl:allValuesFrom stays out of the plain fact-line describe lane", async () => {
+  const dir = await tmpRepo();
+  try {
+    await runTurn("every heart contains only valves", { memoryDir: dir, sessionId: "avf-suppressed" });
+    const { answer } = await runTurn("what do you know about contains", { memoryDir: dir, sessionId: "avf-suppressed" });
+    assert.doesNotMatch(answer, /allvaluesfrom/i);
+    assert.doesNotMatch(answer, /onproperty/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rdfs:subPropertyOf stays out of the plain fact-line describe lane and renders through its own line", async () => {
+  const dir = await tmpRepo();
+  try {
+    await runTurn("containing implies touching", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    const described = await runTurn("what do you know about contains", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    assert.doesNotMatch(described.answer, /subpropertyof/i);
+
+    await runTurn("every module touches only units", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    await runTurn("GitHub is a module", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    await runTurn("GitHub contains GitLab", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    const proved = await runTurn("/prove is GitLab a unit", { memoryDir: dir, sessionId: "subproperty-suppressed" });
+    assert.match(proved.answer, /^yes —/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("renderUniversalRestrictionLine composes one sentence from the parent row and the restriction node's own rows, regardless of row order", () => {
+  const node = { subject: "heart", predicate: "rdfs:subClassOf", object: "all-contains-valve", provenance: "ace:chat:s1@2026-01-01T00:00:00.000Z" };
+  const rowsA = [
+    { subject: "all-contains-valve", predicate: "owl:onProperty", object: "contains" },
+    { subject: "all-contains-valve", predicate: "owl:allValuesFrom", object: "valve" },
+    { subject: "all-contains-valve", predicate: "rdf:type", object: "restriction" },
+  ];
+  const rowsB = [...rowsA].reverse();
+  const line = renderUniversalRestrictionLine(node, rowsA);
+  assert.equal(line, "every heart contains only valves (source: ace:chat:s1@2026-01-01T00:00:00.000Z)");
+  assert.equal(line, renderUniversalRestrictionLine(node, rowsB));
 });
 
 test("renderUnionLine composes one sentence from the parent row and the sorted member rows", () => {
