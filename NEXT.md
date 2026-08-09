@@ -39,31 +39,29 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
   ladder — a different code path from `PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
   work.
-- [ ] **PLAN_SYLLOGIST_EL_DL.md — remaining phases** — paused at a clean seam; the plan doc
-  states per-phase status. Landed: phases 0/0b, 1 (with `tmct classify` and `/classify`), 2 (EL
-  wired into the ask lanes; E1/E2 answer end to end), 3 with 3b (`/prove`; E3/E4 answer end to
-  end), 4a-4e (the full SHOIQ increment ladder), and 5 (consistency surfacing — `findTableauViolations`
-  and a new `elUnsatisfiableClasses` run beside the cax-dw chase in chat and in `/memory verbose`).
-  Next rounds: track 6 site/claims.
-- [ ] **PLAN_NEWS_FEED.md — remaining phases** — landed: phases 0-6 (domain through the page,
-  `/news` in chat and the CLI). Phases 7a/7b are built and green in worktree
-  `agent-a7915144b53c56f2c` (branch of the same name), merge gated on one artifact: the
-  news.png home-plate screenshot — the capture harness times out waiting for `#feed .item`
-  visibility even though the page provably reaches 30 items in 10s under a plain probe
-  (route interception, wait style, viewport and the seed serving are all ruled out
-  individually; the remaining suspect is interaction between them — pick up from
-  `/tmp/tmct-7b-*.log`). Then: 8 e2e + CI enrolment, 9 rig + claims.
+- [ ] **PLAN_NEWS_FEED.md — phase 9, in flight** — phases 0-8 are landed and the page's UX
+  contract is pinned green end to end (`test-e2e/pages-news.test.mjs`,
+  `pages-news-feed.test.mjs`). Phase 9 (the fixture rig, `reports/NEWS_RIG.md`, the claims
+  block, the share-post number) is running in a worktree sub-agent and closes the plan.
+- [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
+  the plan-ladder remainder `PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
+  a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
+  world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
+  into the browser page only, with no ask-lane grammar for those predicates. Both are new
+  engine work if wanted; four planned corpus rows wait on them.
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
-- [ ] **PLAN_RIVER_CROSSING.md — R7 e2e/corpus** — R0-R6 and R8 are shipped (see the plan's
-  Status header for the delivered detail). R7's e2e spec and corpus rows are the phase left.
-  The Wikipedia variants needing population counting and boat capacity sequence later still.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
+- [ ] **Archive the delivered plan docs and refresh STATUS.md** — once phase 9 lands:
+  `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md`,
+  `PLAN_RIVER_CROSSING.md` and `PLAN_NEWS_FEED.md` are delivered end to end and move to
+  `archive/` with their live references repointed; STATUS.md's plan table resynthesizes via
+  the `refresh-status` skill (its syllogist row still reads DESIGN).
 
 ## Discipline
 
