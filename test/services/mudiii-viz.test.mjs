@@ -379,7 +379,7 @@ test("renderMudiiiHtml: a reset draws its own cast and leaves it stopped, so the
 
 test("renderMudiiiHtml: step advances exactly one whole turn, through the same ticker play uses", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /<button type="button" id="stepBtn">step<\/button>/, "the deck carries a step control beside play");
+  assert.match(html, /<button type="button" id="stepBtn"[^>]*>step<\/button>/, "the deck carries a step control beside play");
   assert.match(html, /<span class="deck-hint" id="stepHint" hidden>pause to step<\/span>/);
   const wired = /el\("stepBtn"\)\.addEventListener\("click", function \(\) \{([\s\S]*?)\n    \}\)/.exec(html);
   assert.ok(wired, "the step button is wired");

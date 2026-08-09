@@ -53,7 +53,8 @@
       <p>A goblin can walk straight into a fox it has not spotted. That is not a bug and it is not scripted. The goblin's plan was computed against what the goblin believed, and the fox was not in it.</p>
       <p>Click the square to drop food and watch the goblins' plans change on the next tick. Address one by name in chat and tell it something, true or false, and watch it act on that instead.</p>
       <p>Three cameras: follow one character, see through its eyes, or look down on the whole board. A top-down map panel shows what is actually there, so you can compare it against what any one character believes.</p>
-      <p>Three boards ship: a twelve by twelve square with one fox and three goblins, a ten by ten market row with stall lanes to corner a goblin in, and a fourteen by fourteen chapel yard with open ground and two foxes.</p>
+      <p>Three chase boards ship: a twelve by twelve square with one fox and three goblins, a ten by ten market row with stall lanes to corner a goblin in, and a fourteen by fourteen chapel yard with open ground and two foxes.</p>
+      <p>A fourth scenario in the same dropdown is not a chase at all: the classic wolf-goat-cabbage river crossing, played here with a fox in the wolf's part (no CC0 wolf model exists yet, and the class name is a fact, so a rename costs nothing when one does). It is a logic puzzle solved by search rather than watched as a fight, and it opens paused, with nothing left to chance.</p>
       <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
@@ -100,6 +101,7 @@ told the goblin-1 the crumb-9 is at cell-6-7</pre>
       <p><strong>The board.</strong> Cells are named, distance is Chebyshev, and the prop vocabulary decides what blocks movement: blacksmith, bush, cart, fence, house, inn, oak, stall, well.</p>
       <p><strong>Where the cast comes from.</strong> A town-square world ships the board only. The engine mints the characters onto it at seeded cells at start, so the opening cast is derived from the layout rather than read from the world's rows.</p>
       <p><strong>What you can change.</strong> Talking to a character writes a real addressed fact. It is read back through the belief function on the next tick, exactly like something the character saw. Which means you can lie to it.</p>
+      <p><strong>The river crossing.</strong> A farmer must ferry a fox, a goat and a cabbage across a river one at a time, never leaving the fox alone with the goat or the goat alone with the cabbage. Nothing here is a JS rule written for this one puzzle. The fox's appetite for the goat is a fact, <code>fox eats goat</code>, the same predicate that makes a fox chase a goblin on the chase boards. The "may not be left alone" constraint is derived from that fact and from who guards whom, not authored a second time. Follow one of the four passengers and its own card shows the plan a bounded search found: the classic seven crossings, goat first and goat last. Delete the fox's appetite for the goat in the card and the plan redraws itself shorter, live, with no turn spent. Give the fox a second appetite no single farmer can cover and the panel reports that no plan was found, never a shortened one standing in for a real answer.</p>
       <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
@@ -111,6 +113,7 @@ told the goblin-1 the crumb-9 is at cell-6-7</pre>
       <p><code>src/services/mudiii-viz.mjs</code> builds the page shell and <code>src/services/mudiii-scene.mjs</code> holds the three-dimensional scene: model loading, the camera update, the render loop and click handling. The models are listed in <code>data/mudiii-assets.json</code>.</p>
       <p>The three.js vendor bundle is built inside this page's own build step rather than beside the shared assets, because it is the only page that loads it. A build with no town-square world skips the compile entirely.</p>
       <p>One ticker drives the whole simulation, through a serial queue, so every character's turn lands in a defined order.</p>
+      <p><code>src/domain/agent-traits.mjs</code> holds the drive vocabulary every class and instance reads: what it pursues, evades, consumes and guards, walked up the class chain so an instance can override its species and a spawn copies its class's rows onto itself. The same file derives the river crossing's constraint from those rows rather than a hand-authored rule. The plan itself is <code>src/domain/planning.mjs</code>'s bounded search over the action domain <code>src/domain/domain.mjs</code> compiles, the same machinery the <a href="./plan-about.html">Hanoi page</a> runs.</p>
       <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
@@ -123,17 +126,21 @@ told the goblin-1 the crumb-9 is at cell-6-7</pre>
         <li>Ghallab, Nau and Traverso, <em>Automated Planning and Acting</em>, 2016.<span class="ref-note">Planning and acting as one loop. Here it runs once per character per tick.</span></li>
         <li>Steel and Ho, <em>Planning and Execution using Partial Decision</em>, 1993; Steel and Alami (eds.), <em>Recent Advances in AI Planning</em> (ECP'97), LNCS.<span class="ref-note">Planning when you do not know everything, kept in <code>docs/references/planning/STEEL_AND_HO.md</code>.</span></li>
         <li>Molineaux, Klenk and Aha, on goal driven autonomy, 2010; Cox, &ldquo;Perpetual Self-Aware Cognitive Agents&rdquo;, <em>AI Magazine</em> 28(1), 2007, pp. 32&ndash;45.<span class="ref-note">Dropping a goal that has stopped making sense, which is what the ladder does every tick.</span></li>
-        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">A character that believes nothing about a fox is not asserting there is no fox.</span></li>
+        <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978.<span class="ref-note">A character that believes nothing about a fox is not asserting there is no fox. The same open-world reading is why the river crossing reports no plan found rather than guessing one.</span></li>
+        <li>Chow, &ldquo;On optimum recognition error and reject tradeoff&rdquo;, <em>IEEE Trans. Information Theory</em> 16(1), 1970.<span class="ref-note">The literature's name for a refusal is abstention. The river crossing's panel abstains for the same reason tmct's chat lane does: nothing found, not a score under a threshold.</span></li>
+        <li>Alcuin of York, <em>Propositiones ad Acuendos Juvenes</em>, c. 800&ndash;810.<span class="ref-note">The oldest known statement of the wolf, goat and cabbage crossing, among the earliest river-crossing puzzles on record.</span></li>
       </ul>
       <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
     <section class="about-section" id="credits">
       <h2>Credits and further reading</h2>
+      <p>The name is homage, not succession. Roy Trubshaw wrote the first MUD on Essex University's own machine in 1978, and Richard Bartle, a fellow Essex student, took it over in 1980 and built out most of its world; MUD2, their 1985 successor, is still live. tmct is a deterministic, text-first world engine, squarely in the tradition they founded, but this page is not affiliated with, or endorsed by, Trubshaw, Bartle, MUSE Ltd, or either of their games. The rig conventions this square's characters use, and the practical debt for how to draw and animate a small cast of them at all, are borrowed from a sibling project, world-of-claudecraft.</p>
       <p>Assets and related pages.</p>
       <ul class="refs">
         <li><code>public/models/CREDITS.md</code>, the credits for every three-dimensional model on the square.</li>
         <li>three.js, bundled first party as <code>vendor/three.js</code> and loaded only by this page.</li>
+        <li><a href="https://en.wikipedia.org/wiki/MUD1">MUD1</a> and <a href="https://en.wikipedia.org/wiki/MUD2">MUD2</a>, Trubshaw and Bartle's own games, on Wikipedia.</li>
         <li><a href="./plan-about.html">Classical AI planning</a>, for the search every character calls each tick.</li>
         <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a> for the full bibliography.</li>
       </ul>

@@ -481,7 +481,15 @@ const MUDIII_SCENARIO_LABELS = {
   "town-square": "town square (12x12)",
   "town-square-market": "market row (10x10, stall lanes to corner a goblin in)",
   "town-square-chapel": "chapel yard (14x14, open ground)",
+  "river-crossing": "river crossing (fox, goat, cabbage and a farmer)",
 };
+
+// The river-crossing puzzle carries no town-square layout of its own (section
+// 10 of PLAN_RIVER_CROSSING.md): its four passengers are placed by the
+// world's own facts rather than minted by a roster, and nothing about it is a
+// grid an animal walks around. This is only the fallback board size the 3D
+// scene draws its empty floor at when a page opens on that scenario.
+const RIVER_CROSSING_GRID_SIZE = 6;
 
 // The world payload every game page embeds: one shipped world's real
 // facts+rules, read through the same Node worlds-pack provider the CLI itself
@@ -546,7 +554,7 @@ async function loadScenarioWorlds(names) {
 // a build with no town-square world in the pack should not pay an 800 KB
 // compile for a page it is not going to write.
 {
-  const worlds = await loadScenarioWorlds(["town-square", "town-square-market", "town-square-chapel"]);
+  const worlds = await loadScenarioWorlds(["town-square", "town-square-market", "town-square-chapel", "river-crossing"]);
   if (!worlds.length) {
     console.log("no town-square worlds found in the worlds pack — the mudiii demo has no world to embed, so this is a heads-up, not a build failure");
   } else {
@@ -566,19 +574,33 @@ async function loadScenarioWorlds(names) {
     // cells, so there is no cast in the pack to read. The ids here are the
     // ones startTownSquareGame will mint, so the deck and the HUD can draw the
     // opening cast before the first turn runs.
+    //
+    // The river-crossing puzzle has no layout (layoutNamed returns null for
+    // it — it is not a town square) and needs no minted cast either: its four
+    // passengers are already placed by the world's own facts. An empty agents
+    // list is the honest opening roster for a world nobody's engine casts.
     const castOf = (worldPayload) => {
-      const { cast } = layoutNamed(worldPayload.name);
+      const layout = layoutNamed(worldPayload.name);
+      if (!layout) return [];
+      const { cast } = layout;
       return [
         ...Array.from({ length: cast.predators }, (_, i) => ({ id: `${MUDIII_ROLES.predator.idPrefix}-${i + 1}`, role: "predator" })),
         ...Array.from({ length: cast.prey }, (_, i) => ({ id: `${MUDIII_ROLES.prey.idPrefix}-${i + 1}`, role: "prey" })),
       ];
     };
-    const scenarios = worlds.map((worldPayload) => ({
-      label: MUDIII_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
-      worldPayload,
-      agents: castOf(worldPayload),
-      gridSize: layoutNamed(worldPayload.name).gridSize,
-    }));
+    const scenarios = worlds.map((worldPayload) => {
+      const layout = layoutNamed(worldPayload.name);
+      return {
+        label: MUDIII_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+        worldPayload,
+        agents: castOf(worldPayload),
+        gridSize: layout ? layout.gridSize : RIVER_CROSSING_GRID_SIZE,
+        // No roster, no ticking, no chase: the page shows this scenario's own
+        // actor card and puzzle plan instead of the fox/goblin HUD. See
+        // mudiii-viz.mjs's pageScript for what this flag turns on and off.
+        puzzle: !layout,
+      };
+    });
     const mudiiiPath = join(SITE, "mudiii.html");
     await writeF(mudiiiPath, injectMetaHead(renderMudiiiHtml({
       worldPayload: scenarios[0].worldPayload,
@@ -776,6 +798,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
             <td data-source="results/claims/planner.json#detail.domains.${domainName}.largestUnder1s">${fmtInt(d.largestUnder1s)} ${escapeHtml(d.unit)}</td>
             <td data-source="results/claims/planner.json#detail.domains.${domainName}.firstOver10s">${fmtInt(d.firstOver10s)} ${escapeHtml(d.unit)}</td>
           </tr>`).join("");
+  const river = planner.detail.domains.river;
   const c7 = claimFigureBlock({
     id: "c7-planner", kicker: "C7",
     sentence: `tmct solves a taught Hanoi puzzle in under a second up to this many disks.`,
@@ -784,7 +807,8 @@ function renderClaimsHtml({ blocks, plannerButton }) {
           <thead><tr><th>domain</th><th>largest under 1s</th><th>first over 10s</th></tr></thead>
           <tbody>${plannerRows}
           </tbody>
-        </table>`,
+        </table>
+        <p class="claim-block-sentence">The river row is the classic wolf-goat-cabbage crossing, played here with a fox (<a href="./mudiii.html">mudiii.html</a>'s fourth scenario), scaled past the three passengers the classic puzzle names: it still solves the classic optimum at <span data-source="results/claims/planner.json#detail.domains.river.largestUnder1s">${fmtInt(river.largestUnder1s)} passengers</span> under a second, and the search first runs past 10 seconds at <span data-source="results/claims/planner.json#detail.domains.river.firstOver10s">${fmtInt(river.firstOver10s)} passengers</span> — not because the search slows down looking, but because past that size no first move can leave every guarded pair covered, so it reports the honest miss straight away and the slowdown is the miss itself getting more expensive to state, never a shortened plan standing in for a real one.</p>`,
     notMean: `The search does not scale without bound. Past the "largest under 1s" size, each domain eventually runs over 10 seconds and is killed by its own timeout rather than left to search indefinitely. See the "first over 10s" column above.`,
     standard: "the scaling wall sets the denominator here, and you can recheck it yourself with the device button below.",
     jsonName: "planner", demoHref: "plan.html",

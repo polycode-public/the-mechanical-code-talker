@@ -23,10 +23,6 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-*(Footnote, not an open item: `mudiii.html` shipped 2026-08-03 and is deployed; the
-`world-of-claudecraft` and MUD1/MUD2 credit placement rides PLAN_RIVER_CROSSING.md's site
-phase. An optional email to Richard Bartle remains the operator's call.)*
-
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
@@ -60,11 +56,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
-- [ ] **PLAN_RIVER_CROSSING.md — R5-R8, paused on the operator's hold** — R0-R4 are shipped
-  (see the plan's Status header for the delivered detail). R5 belief/plan panels, R6 the
-  river scenario on the mudiii page + site wiring, R7 e2e/corpus, R8 the planner-rig river
-  domain resume only when the operator says so (weekly usage cycle). The Wikipedia variants
-  needing population counting and boat capacity sequence later still.
+- [ ] **PLAN_RIVER_CROSSING.md — R7 e2e/corpus** — R0-R6 and R8 are shipped (see the plan's
+  Status header for the delivered detail). R7's e2e spec and corpus rows are the phase left.
+  The Wikipedia variants needing population counting and boat capacity sequence later still.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
