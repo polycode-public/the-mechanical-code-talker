@@ -32,7 +32,8 @@
 import { createInMemoryStore, applySeedPayload, loadMemory, readFactRows, appendFacts, removeFacts, normFactTerm, normFactPredicate } from "../../adapters/memory/core.mjs";
 import { factIdFor } from "../../domain/hash.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
-import { ingestText } from "../../services/extract-facts.mjs";
+import { ingestText, setIngestYield } from "../../services/extract-facts.mjs";
+import { isNewsProvenance } from "../../domain/news-feed.mjs";
 import {
   resolveNewsConfig, createNewsState, pollNewsSources, enrichTopTerms, buildFeed,
   ingestUploadedFactRows, isVocabGroundedTerm,
@@ -125,14 +126,22 @@ function fixtureRawItems(format, body) {
  * own one-off preflight rather than the poll cycle's consent.
  *
  * Returns `{ memoryDir, phase, consented, metrics, nextPollAt, config,
- * requestLog, health, start, poll, enrich, buildFeed, rank, addSource,
+ * requestLog, health, start, poll, enrich, buildFeed, stats, rank, addSource,
  * setInterval, ingestText, ingestFile, replayFixture, revokeConsent,
  * destroy }`.
  */
 export function createNewsSession({
   seedPayload = null, vocabSeeded = false, fetchImpl = null, now = isoNow,
-  prefs = null, prefKey = NEWS_START_PREF_KEY,
+  prefs = null, prefKey = NEWS_START_PREF_KEY, yieldToHost,
 } = {}) {
+  // Grounding one article is seconds of straight-line work, and the page has
+  // only the one thread. A macrotask between candidates lets it paint, answer
+  // a click and keep the "polling…" affordance honest instead of going
+  // unresponsive mid-poll. A Node caller gets no yield and pays nothing.
+  setIngestYield(yieldToHost === undefined
+    ? (typeof document === "undefined" ? null : () => new Promise((resolve) => setTimeout(resolve, 0)))
+    : yieldToHost);
+
   const memoryDir = createInMemoryStore();
   applySeedPayload(memoryDir, seedPayload);
 
@@ -271,6 +280,18 @@ export function createNewsSession({
     },
 
     async buildFeed() { return buildFeed(ctx()); },
+
+    /** The two whole-graph counts the dashboard shows: every fact the store
+     *  holds, and the subset a news, fixture-replay or research ingest
+     *  contributed. Read off the same provenance rule the feed window uses,
+     *  so a tile and the feed can never disagree about what came from news. */
+    async stats() {
+      const memory = await store.loadMemory(memoryDir);
+      const rows = store.readFactRows(memory);
+      let fromNews = 0;
+      for (const row of rows) if (isNewsProvenance(row.provenance)) fromNews += 1;
+      return { graphSize: rows.length, factsFromNews: fromNews };
+    },
 
     /** The fact rows behind a set of ids — a feed item's own `factIds`,
      *  expanded so the page's `<details>` fact list can show each one as a

@@ -104,6 +104,11 @@ ${THEME_TOKENS_CSS}
   .btn:hover { color: var(--ink); border-color: var(--ink); }
   .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .btn.ghost { border-color: transparent; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+  .btn[disabled] { opacity: .55; cursor: progress; }
+  .btn[aria-busy="true"] { opacity: .55; cursor: progress; }
+  .btn[aria-busy="true"]::after { content: ""; display: inline-block; width: .5em; height: .5em; margin-left: .45em; border-radius: 50%; background: currentColor; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .btn[aria-busy="true"]::after { animation: none; opacity: .7; } }
   select, .urlinput { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
   .urlinput { flex: 1 1 12rem; min-width: 8rem; }
   .sources { display: flex; flex-direction: column; gap: .3rem; margin: .6rem 0; }
@@ -117,7 +122,16 @@ ${THEME_TOKENS_CSS}
   .reqlog table { width: 100%; border-collapse: collapse; font-family: ${MONO_STACK}; font-size: .7rem; }
   .reqlog th, .reqlog td { text-align: left; padding: .2rem .4rem; border-bottom: 1px solid var(--line); }
   .reqlog tbody:empty::after { content: "no requests yet — nothing has fetched before you press start"; }
-  .feed { display: flex; flex-direction: column; gap: .7rem; margin-bottom: 1.2rem; }
+  .feedwrap { margin-bottom: 1.2rem; }
+  .feedbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .45rem; }
+  .feedbar label { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .feedcount { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-left: auto; }
+  .pills { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .5rem; }
+  .pill { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: .15rem .6rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill:hover { color: var(--ink); border-color: var(--ink); }
+  .pill[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .feed { display: flex; flex-direction: column; gap: .7rem; max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; padding-right: .25rem; }
+  @media (max-width: 480px) { .feedcount { margin-left: 0; flex-basis: 100%; } .feed { max-height: 70vh; } }
   .item { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; }
   .item .hub { font-weight: 700; font-size: 1.05rem; }
   .item .tier { font-family: ${MONO_STACK}; font-size: .64rem; padding: .05rem .5rem; border-radius: 99px; border: 1px solid var(--line); margin-left: .5rem; }
@@ -206,8 +220,20 @@ ${NEWS_STYLE}
     </table>
   </section>
 
-  <section class="feed" id="feed" aria-label="News feed">
-    <div class="empty" id="feedEmpty">no news items yet — the seed graph builds the first ones once it finishes loading.</div>
+  <section class="feedwrap" aria-label="News feed">
+    <div class="feedbar">
+      <label for="feedSort">sort</label>
+      <select id="feedSort">
+        <option value="newest" selected>newest first</option>
+        <option value="facts">most facts first</option>
+        <option value="changed">most changed first</option>
+      </select>
+      <span class="feedcount" id="feedCount" aria-live="polite"></span>
+    </div>
+    <div class="pills" id="feedPills" aria-label="Filter the feed by key term"></div>
+    <div class="feed" id="feed" tabindex="0">
+      <div class="empty" id="feedEmpty">no news items yet — the seed graph builds the first ones once it finishes loading.</div>
+    </div>
   </section>
 
   <section class="teach" id="teachPanel">
@@ -324,13 +350,80 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     }).join("");
   }
 
-  async function renderFeed() {
+  // The last built feed and one rendered card per item, so a sort change or a
+  // pill toggle re-orders what is already on screen instead of rebuilding
+  // every card's fact list from the store again.
+  let feedItems = [];
+  const cardsByItemId = new Map();
+  const activePillTerms = new Set();
+
+  const MAX_PILLS = 12;
+
+  function itemMatchesActivePills(item) {
+    if (!activePillTerms.size) return true;
+    const haystack = (item.hub + " " + item.paragraph).toLowerCase();
+    for (const term of activePillTerms) {
+      if (item.hub === term || haystack.indexOf(term) !== -1) return true;
+    }
+    return false;
+  }
+
+  function sortedFeedItems() {
+    const mode = el("feedSort").value;
+    const items = feedItems.slice();
+    if (mode === "facts") items.sort((a, b) => b.factIds.length - a.factIds.length || (a.hub < b.hub ? -1 : 1));
+    else if (mode === "changed") items.sort((a, b) => b.changedCount - a.changedCount || (a.hub < b.hub ? -1 : 1));
+    return items;
+  }
+
+  function renderPills() {
+    const pillsEl = el("feedPills");
+    const terms = feedItems
+      .slice()
+      .sort((a, b) => b.changedCount - a.changedCount || (a.hub < b.hub ? -1 : 1))
+      .map((it) => it.hub)
+      .slice(0, MAX_PILLS);
+    for (const term of [...activePillTerms]) if (terms.indexOf(term) === -1) activePillTerms.delete(term);
+    pillsEl.innerHTML = terms.map((term) =>
+      '<button type="button" class="pill" data-pill-term="' + esc(term) + '" aria-pressed="'
+      + (activePillTerms.has(term) ? "true" : "false") + '">' + esc(term) + '</button>',
+    ).join("");
+    pillsEl.querySelectorAll("[data-pill-term]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const term = btn.getAttribute("data-pill-term");
+        if (activePillTerms.has(term)) activePillTerms.delete(term); else activePillTerms.add(term);
+        btn.setAttribute("aria-pressed", activePillTerms.has(term) ? "true" : "false");
+        paintFeed();
+      });
+    });
+  }
+
+  function paintFeed() {
     const feedEl = el("feed");
     const emptyEl = el("feedEmpty");
-    const feed = await window.tmct.session.buildFeed();
     feedEl.querySelectorAll(".item").forEach((n) => n.remove());
-    if (!feed.items.length) { emptyEl.hidden = false; setTile("tileFeedItems", 0, "nothing yet"); return; }
-    emptyEl.hidden = true;
+    const shown = sortedFeedItems().filter(itemMatchesActivePills);
+    for (const item of shown) {
+      const card = cardsByItemId.get(item.id);
+      if (card) feedEl.appendChild(card);
+    }
+    emptyEl.hidden = shown.length > 0;
+    if (!shown.length) {
+      emptyEl.textContent = feedItems.length
+        ? "no article matches the terms you picked — unpick a pill to see the rest."
+        : "no news items yet — the seed graph builds the first ones once it finishes loading.";
+    }
+    el("feedCount").textContent = shown.length === feedItems.length
+      ? (feedItems.length + " article" + (feedItems.length === 1 ? "" : "s"))
+      : (shown.length + " of " + feedItems.length + " articles");
+  }
+
+  async function renderFeed() {
+    const feedEl = el("feed");
+    const feed = await window.tmct.session.buildFeed();
+    feedItems = feed.items;
+    cardsByItemId.clear();
+    feedEl.querySelectorAll(".item").forEach((n) => n.remove());
     for (const item of feed.items) {
       // One yield per card keeps the page clickable while a long feed renders.
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -344,9 +437,20 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
         + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
         + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + '</p>' : "")
         + '<details class="facts"><summary>' + item.factIds.length + ' facts</summary>' + facts + '</details>';
-      feedEl.appendChild(card);
+      cardsByItemId.set(item.id, card);
+      // Each card shows the moment it is built; the paint below re-orders and
+      // filters what is already on screen.
+      if (itemMatchesActivePills(item)) { el("feedEmpty").hidden = true; feedEl.appendChild(card); }
     }
+    renderPills();
+    paintFeed();
     setTile("tileFeedItems", feed.items.length, feed.seedFallback ? "from the seed graph" : "live");
+  }
+
+  async function renderGraphTiles() {
+    const stats = await window.tmct.session.stats();
+    setTile("tileFactsFromNews", stats.factsFromNews, stats.factsFromNews ? "polled, replayed or enriched" : "nothing ingested yet");
+    setTile("tileGraphSize", stats.graphSize, "facts in this session's graph");
   }
 
   async function renderRank() {
@@ -371,7 +475,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     // just-finished poll reads back immediately while the feed's own slower,
     // yielding render catches up behind it.
     renderSourcesPanel();
-    await Promise.all([renderFeed(), renderRank(), renderRequestLog()]);
+    await Promise.all([renderFeed(), renderRank(), renderRequestLog(), renderGraphTiles()]);
     renderSourcesPanel();
     window.tmct.news = Object.assign({}, window.tmct.news, {
       phase: window.tmct.session.phase,
@@ -409,15 +513,44 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     // render is deliberately slow (it yields per card), and a click that
     // lands in that window must already have its listener.
     const startBtn = el("newsStart");
-    startBtn.textContent = window.tmct.session.consented ? "poll now" : "start polling live sources";
+    // Read once, here. The first render below takes a while, a visitor can
+    // press start inside it, and that press grants consent — so re-reading
+    // the flag afterwards to decide whether to replay a returning visit's
+    // poll would poll a second time on top of the one already running.
+    const returningVisit = window.tmct.session.consented;
+    startBtn.textContent = returningVisit ? "poll now" : "start polling live sources";
+
+    el("feedSort").addEventListener("change", paintFeed);
+
+    // A poll can run for a while, so the button reads back its own state the
+    // moment it is pressed and the status line follows the session's phase
+    // until it settles.
+    function markBusy(button, label) {
+      button.dataset.idleLabel = button.textContent;
+      button.textContent = label;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+    }
+    function markIdle(button, label) {
+      button.textContent = label || button.dataset.idleLabel || button.textContent;
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
+    function followPhase(label) {
+      el("controlsStatus").textContent = label;
+      const id = setInterval(function () { el("controlsStatus").textContent = window.tmct.session.phase + "…"; }, 400);
+      return function () { clearInterval(id); el("controlsStatus").textContent = ""; };
+    }
 
     startBtn.addEventListener("click", async function () {
-      startBtn.disabled = true;
-      el("controlsStatus").textContent = "polling…";
-      await window.tmct.session.start();
-      startBtn.textContent = "poll now";
-      startBtn.disabled = false;
-      el("controlsStatus").textContent = "";
+      markBusy(startBtn, "polling…");
+      const stopFollowing = followPhase("polling…");
+      try {
+        await window.tmct.session.start();
+      } finally {
+        stopFollowing();
+        markIdle(startBtn, "poll now");
+      }
       await renderAll();
     });
 
@@ -433,9 +566,15 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     });
 
     el("enrichNow").addEventListener("click", async function () {
-      el("controlsStatus").textContent = "enriching…";
-      await window.tmct.session.enrich();
-      el("controlsStatus").textContent = "";
+      const enrichBtn = el("enrichNow");
+      markBusy(enrichBtn, "enriching…");
+      const stopFollowing = followPhase("enriching…");
+      try {
+        await window.tmct.session.enrich();
+      } finally {
+        stopFollowing();
+        markIdle(enrichBtn);
+      }
       await renderAll();
     });
 
@@ -494,7 +633,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     window.tmct.news.phase = "seeded";
     appendLog("phase: seeded");
     await renderAll();
-    if (window.tmct.session.consented) {
+    if (returningVisit) {
       await window.tmct.session.start();
       await renderAll();
     }

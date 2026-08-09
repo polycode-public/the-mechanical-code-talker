@@ -56,7 +56,7 @@ import { basename, join, resolve } from "node:path";
 import { runTurn, uuidv7, stripLeadingDiscourseAdverb } from "./chat.mjs";
 import { beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences.mjs";
-import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendFact, removeFacts } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 import { normFactTerm } from "../domain/hash.mjs";
@@ -86,16 +86,28 @@ export function parseArgs(argv) {
 
 /**
  * Run one already-split sentence through runTurn against `memoryDir`, and
- * report the Fact rows THIS turn actually touched. Returns { recognized, rows }
- * — `recognized` true iff runTurn's own record called this a stored assertion,
- * `rows` the Fact rows it touched (possibly empty for a Rule-only write).
+ * report the Fact rows THIS turn actually touched. Returns { recognized, rows,
+ * afterRows } — `recognized` true iff runTurn's own record called this a
+ * stored assertion, `rows` the Fact rows it touched (possibly empty for a
+ * Rule-only write), `afterRows` the post-turn fold when one was taken.
+ *
+ * `beforeRows` is the caller's already-folded view of the store. Folding is
+ * the single most expensive thing an ingest does — three quarters of a second
+ * on a browser-sized graph — so the caller threads one fold from sentence to
+ * sentence instead of paying a fresh one per candidate.
  */
-async function runSentence(sentence, { config, memoryDir, env }) {
-  const before = readFactRows(await loadMemory(memoryDir));
+async function runSentence(sentence, { config, memoryDir, env, beforeRows }) {
+  const before = beforeRows || readFactRows(await loadMemory(memoryDir));
+  if (ingestYield) await ingestYield();
   const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), env });
-  if (record?.via !== "assert" || record?.miss) return { recognized: false, rows: [], decline: String(answer || "") };
+  // Only an assert turn can have written a Fact, so only an assert turn earns
+  // the post-turn fold; every other turn hands the caller's own view straight
+  // back untouched.
+  if (record?.via !== "assert") return { recognized: false, rows: [], afterRows: before, decline: String(answer || "") };
+  if (ingestYield) await ingestYield();
   const after = readFactRows(await loadMemory(memoryDir));
-  return { recognized: true, rows: touchedFactRows(before, after) };
+  if (record?.miss) return { recognized: false, rows: [], afterRows: after, decline: String(answer || "") };
+  return { recognized: true, rows: touchedFactRows(before, after), afterRows: after };
 }
 
 /** The recognizer's own words for why it turned a sentence down, when it named
@@ -551,6 +563,66 @@ export function clauseCandidates(sentence, { nlp } = {}) {
   return out;
 }
 
+// A stored term names a thing. These words open a predicate remainder or a new
+// clause, so a term that STARTS with one is the tail of a sentence a recognizer
+// frame over-read, never an entity — "has a population of 1,683,115" and "and
+// killed his two grandparents" are both that shape, and both surface as a feed
+// card's own title once they reach the graph.
+const FRAGMENT_LEAD_WORDS = new Set([
+  "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
+  "that", "which", "who", "whom", "whose", "if", "when", "then", "also", "however",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+  "do", "does", "did", "can", "could", "will", "would", "should", "may", "might", "must",
+  "of", "in", "on", "at", "for", "to", "with", "from", "by", "as", "into", "onto",
+  "over", "under", "after", "before", "between", "during", "about", "near", "through",
+  "against", "among", "within", "without", "per",
+]);
+// Longest a stored term may run. Real multi-word entities are short compounds
+// ("string instrument", "american guitarist"); past this a "term" is a clause
+// the split lost the subject of.
+const MAX_TERM_WORDS = 6;
+// The tags a MULTI-WORD term's leading token may not carry — the POS reading
+// of the same rule FRAGMENT_LEAD_WORDS states lexically, so an unlisted verb
+// ("killed", "borders") is caught the same way a listed auxiliary is. A
+// one-word term is exempt: a bare verb is a perfectly good object for a
+// capability or relation fact ("a cell is capable of grow"), and a single word
+// is never the clause fragment this rule exists to catch.
+const FRAGMENT_LEAD_TAGS = new Set(["VERB", "AUX", "ADP", "CCONJ", "SCONJ", "PART"]);
+
+/** Does `term` read as a thing's name rather than a clause fragment? Bounds
+ *  the word count and rejects a leading conjunction, auxiliary or preposition.
+ *  Used to keep an over-read recognizer frame's predicate remainder out of the
+ *  graph, where it would otherwise hub a feed card. */
+export function readsAsEntityTerm(term, nlp) {
+  const text = String(term ?? "").trim();
+  if (!text) return false;
+  const words = text.split(/\s+/);
+  if (words.length > MAX_TERM_WORDS) return false;
+  const first = words[0].toLowerCase().replace(/^[^a-z0-9]+/, "");
+  if (!first) return false;
+  if (FRAGMENT_LEAD_WORDS.has(first)) return false;
+  if (words.length === 1) return true;
+  const engine = nlp === undefined ? winkInstance() : nlp;
+  if (!engine) return true;
+  try {
+    const pos = engine.readDoc(text).tokens().out(engine.its.pos);
+    if (pos.length && FRAGMENT_LEAD_TAGS.has(pos[0])) return false;
+  } catch { /* an untaggable term falls back to the lexical rule above */ }
+  return true;
+}
+
+const readsAsEntityFact = (fact, nlp) => readsAsEntityTerm(fact.subject, nlp) && readsAsEntityTerm(fact.object, nlp);
+
+// A host that shares one thread with a UI hands the thread back through this;
+// a Node run leaves it unset and pays nothing.
+let ingestYield = null;
+
+/** Sets the function `ingestText` awaits between sentences so a browser can
+ *  paint and answer input while a long article grounds. Pass null to clear. */
+export function setIngestYield(fn) {
+  ingestYield = typeof fn === "function" ? fn : null;
+}
+
 // The pronoun subjects a bounded carry substitutes with the paragraph's last
 // grounded subject. Ingest only — a chat turn resolves "it"/"they" against the
 // live focus, never a stale paragraph carry.
@@ -663,13 +735,41 @@ export async function ingestText(text, {
   // landed.
   const cleanedSentences = [];
 
+  // One fold, threaded through every candidate below. A fold costs about a
+  // second on a browser-sized graph and the old shape paid two per candidate,
+  // which is what made a poll block the page for minutes.
+  let currentRows = readFactRows(await loadMemory(dir));
+  // Facts this call has already written its own tag onto. Their provenance in
+  // `currentRows` is a tag behind, so a later sentence would otherwise read
+  // them back as freshly touched; skipping them is what a re-fold would have
+  // said, without the re-fold.
+  const taggedIds = new Set();
+
   // One recognized read of some text form: null when the strict recognizer
-  // grounds nothing, else the Fact rows it touched.
+  // grounds nothing, else the Fact rows it touched. A row whose subject or
+  // object reads as a clause fragment rather than an entity is retracted here
+  // — the recognizer has already written it by the time this sees it — and
+  // the sentence falls through to the optimistic tier instead.
   let lastDecline = "";
   const strictRows = async (form) => {
-    const { recognized, rows, decline } = await runSentence(form, { config: cfg, memoryDir: dir, env: runEnv });
-    if (!recognized) lastDecline = decline || lastDecline;
-    return recognized && rows.length ? rows : null;
+    if (ingestYield) await ingestYield();
+    const knownIds = new Set(currentRows.map((r) => r.id));
+    const { recognized, rows, afterRows, decline } = await runSentence(form, {
+      config: cfg, memoryDir: dir, env: runEnv, beforeRows: currentRows,
+    });
+    currentRows = afterRows;
+    if (!recognized) { lastDecline = decline || lastDecline; return null; }
+    const fresh = rows.filter((row) => !taggedIds.has(row.id));
+    const kept = fresh.filter((row) => readsAsEntityFact(row, termNlp));
+    if (kept.length !== fresh.length) {
+      const retractIds = fresh.filter((row) => !kept.includes(row) && !knownIds.has(row.id)).map((row) => row.id);
+      if (retractIds.length) {
+        await removeFacts(dir, retractIds);
+        const retracted = new Set(retractIds);
+        currentRows = currentRows.filter((row) => !retracted.has(row.id));
+      }
+    }
+    return kept.length ? kept : null;
   };
 
   try {
@@ -714,26 +814,35 @@ export async function ingestText(text, {
               subject: row.subject, predicate: row.predicate, object: row.object,
               provenance: tag, quantifier: row.quantifier || "", sentence,
             });
+            taggedIds.add(row.id);
           }
           continue;
         }
         const ungrounded = ungroundedTermsIn(lastDecline);
         if (ungrounded) for (const term of ungrounded) ungroundedTerms.add(term);
         if (!optimistic) continue;
-        const candidates = optimisticTriples(cleaned, { lexicon: lex, nlp });
+        const candidates = optimisticTriples(cleaned, { lexicon: lex, nlp }).filter((t) => readsAsEntityFact(t, termNlp));
         if (!candidates.length) continue;
         optimisticSentences += 1;
         const tag = `optimistic-extract:${sourceTag}`;
         for (const t of candidates) {
-          await appendFact(dir, {
+          const written = await appendFact(dir, {
             subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
           });
           optimisticFacts.push({ ...t, provenance: tag, sentence });
+          taggedIds.add(written.id);
         }
       }
     }
 
-    const finalRows = readFactRows(await loadMemory(dir));
+    // The fact-degree scan below only reads each row's subject and object, so
+    // the threaded fold plus this call's own writes answers it exactly.
+    // `canonical` prices every endpoint's degree instead, which needs the
+    // store's real row set.
+    if (ingestYield) await ingestYield();
+    const finalRows = canonical
+      ? readFactRows(await loadMemory(dir))
+      : currentRows.concat(extracted, optimisticFacts);
     // ungroundedCounts widens the legacy ungroundedTerms rule (a lexicon-miss
     // named in a decline) to the fact-degree rule: every term with zero fact
     // rows, lexicon-known or not. ungroundedTerms stays a subset by
