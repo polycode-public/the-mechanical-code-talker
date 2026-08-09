@@ -41,6 +41,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   work. Playtest 007 (turn 14) widens the scope: taught capability
   (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
   "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
+  Playtest 008 (turn 26) adds the plain-property shape: "animal is alive" (corpus) plus
+  "pig is a kind of animal" leaves "are pigs alive" a miss. In flight in the playtest-008
+  fixes worktree.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
@@ -85,7 +88,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   fallback in favour of a designed empty state, and decides the borderline cases ("apple"
   without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
   dispatched; N2 sequences after the news-controls worktree merges (same files).
-- [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
+- [ ] **Playtest 008 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_008.md`
+  in flight) — queued, in flight in a chat.mjs worktree: (1) taught have-facts must
+  round-trip through "how many X does Y have" (taught "dog has 4 legs", the count ask still
+  missed — digits and number words both); (2) "X is what" inversion routes to the what-is
+  lane ("a dog is what" missed while "what is a dog" answered), with an adjective-qualified
+  subject ("a female dog is what") falling back to the head noun honestly; (3) modal
+  property asks "can/could X be Y" reach the same stored fact "are X Y" already reads
+  ("are animals alive" yes, "can animals be alive" missed); (4) the ground-nothing miss
+  hint must name the subject actually asked about, not always suggest "what is a dog".
+  Candidates recorded in the log, not queued: possessive "a dogs name", compound-noun
+  "human name", and the backwards instance teach "a human name is john". the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
   carries a real three-turn `/news` transcript between the news and sprites plates, pinned in
