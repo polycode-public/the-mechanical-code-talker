@@ -270,8 +270,15 @@ function hasWikidataQidAnchor(term, rows) {
  *  anchored assertion about an entity the graph already holds). `rows` is
  *  the WHOLE fact set (conceptTerms and priorTerms both read prior knowledge
  *  from it, not just the reported window). `prior`, when the caller already
- *  computed it (buildNewsItems does), is reused rather than recomputed. */
-export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6, adjacency = null, prior = null } = {}) {
+ *  computed it (buildNewsItems does), is reused rather than recomputed.
+ *  `readsAsEntityTerm`, when the caller supplies one, replaces
+ *  looksLikeEntityTerm — the services layer's own readsAsEntityTerm
+ *  (extract-facts.mjs) adds a wink POS-tag check this domain-local default
+ *  cannot, since domain never imports services; buildFeed (news.mjs) wires
+ *  it through because it already imports that module for ingestText. */
+export function newsworthyHubs(rows, reported, {
+  now, windowMs, limit = 6, adjacency = null, prior = null, readsAsEntityTerm = looksLikeEntityTerm,
+} = {}) {
   const concepts = conceptTerms(rows);
   const priorSet = prior ?? priorTerms(rows);
 
@@ -293,12 +300,20 @@ export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6, adjac
 
   function passesEntityTest(term) {
     if (concepts.has(term) || isQuantityTerm(term)) return false;
-    if (!looksLikeEntityTerm(term)) return false;
+    if (!readsAsEntityTerm(term)) return false;
     return isNovelTerm(term, priorSet);
   }
 
+  // Section 2's own text lists no entity-shape check for test A (it reads a
+  // "known entity" as already established), but a malformed extraction's
+  // predicate remainder can BE a reported row's subject too, with nothing
+  // else in test A's own three-way anchor to catch it — a recognizer frame
+  // split across a bad triple ("bang" subject, "thong shooting" object) is
+  // its own novel co-term as far as test A's own anchor reads. The same
+  // shape check test E already needs closes that gap for test A as well.
   function passesFreshAssertionTest(term) {
     if (concepts.has(term) || isQuantityTerm(term)) return false;
+    if (!readsAsEntityTerm(term)) return false;
     const subjRows = subjectRowsByTerm.get(term);
     if (!subjRows || !subjRows.length) return false;
     if (hasWikidataQidAnchor(term, rows)) return true;
@@ -502,12 +517,14 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
  *  two-hop sub-graph then splits into its own `reported`/`background` rows,
  *  so a card's paragraph draws from what was reported and its collapsed
  *  `backgroundParagraph` draws from what the graph already knew. */
-export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map() } = {}) {
+export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm } = {}) {
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
   const adjacency = buildTermAdjacency(rows);
   const prior = priorTerms(rows);
-  const hubs = newsworthyHubs(rows, reported, { now, windowMs, limit, adjacency, prior });
+  const hubOptions = { now, windowMs, limit, adjacency, prior };
+  if (readsAsEntityTerm) hubOptions.readsAsEntityTerm = readsAsEntityTerm;
+  const hubs = newsworthyHubs(rows, reported, hubOptions);
   const items = hubs.map(({ term, changed }) => {
     const subgraphRows = subgraphAround(rows, term, { adjacency });
     const factIds = subgraphRows.map((r) => r.id).sort();

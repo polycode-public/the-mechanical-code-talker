@@ -136,3 +136,11 @@ test("renderNewsHtml: the empty state hides itself the moment a card is on scree
   assert.match(html, /emptyEl\.hidden\s*=\s*shown\.length\s*>\s*0/, "paintFeed hides #feedEmpty whenever any card matches the active filters");
   assert.match(html, /el\("feedEmpty"\)\.hidden\s*=\s*true/, "a card appended straight off a poll also hides the empty state on its own");
 });
+
+test("renderNewsHtml: start and poll once both revert the empty state to its default copy, so a poll that reports nothing after a purge never keeps showing the purge line", () => {
+  const html = renderNewsHtml();
+  const startHandler = html.slice(html.indexOf("startBtn.addEventListener"), html.indexOf("el(\"pollOnce\").addEventListener"));
+  const pollOnceHandler = html.slice(html.indexOf("el(\"pollOnce\").addEventListener"), html.indexOf("el(\"stopPolling\").addEventListener"));
+  assert.match(startHandler, /emptyFeedText\s*=\s*DEFAULT_EMPTY_FEED_TEXT/, "start reverts the empty-feed copy before its own press runs");
+  assert.match(pollOnceHandler, /emptyFeedText\s*=\s*DEFAULT_EMPTY_FEED_TEXT/, "poll once reverts the empty-feed copy before its own press runs");
+});

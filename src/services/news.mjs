@@ -59,7 +59,7 @@ import {
 } from "../adapters/corpus/news-sources.mjs";
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
-import { ingestText } from "./extract-facts.mjs";
+import { ingestText, readsAsEntityTerm } from "./extract-facts.mjs";
 
 export { NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS };
 
@@ -739,8 +739,9 @@ export async function buildFeed(ctx) {
   const windowMs = config.windowHours * 3600000;
 
   const lex = lexicon || loadLexicon();
-  const items = buildNewsItems(rows, { now: nowVal, windowMs, limit: config.itemCap, sourcesByFactId })
-    .map((item) => ({ ...item, newName: !isVocabGroundedTerm(lex, item.hub) }));
+  const items = buildNewsItems(rows, {
+    now: nowVal, windowMs, limit: config.itemCap, sourcesByFactId, readsAsEntityTerm,
+  }).map((item) => ({ ...item, newName: !isVocabGroundedTerm(lex, item.hub) }));
   return { items, seedFallback: false, builtAt: nowVal };
 }
 

@@ -400,6 +400,21 @@ test("buildNewsItems' background/backgroundParagraph carry the relation the gate
   assert.equal(item.backgroundParagraph, "ceasefire is found in geneva.");
 });
 
+test("newsworthyHubs and buildNewsItems take an injected readsAsEntityTerm, so a caller with a stronger (wink-backed) check can reject a candidate the domain-local default would allow", () => {
+  const rows = [row("fact:1", "bang", "mgx:bua", "thong shooting")];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+
+  const withDefault = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(withDefault.some((h) => h.term === "bang"), "the domain-local lexical check alone admits it");
+
+  const rejectBang = (term) => term !== "bang";
+  const withInjected = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR, readsAsEntityTerm: rejectBang });
+  assert.ok(!withInjected.some((h) => h.term === "bang"), "the injected check overrides the domain-local default");
+
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6, readsAsEntityTerm: rejectBang });
+  assert.ok(!items.some((it) => it.hub === "bang"), "buildNewsItems threads the same injected check down to the gate");
+});
+
 // ---- priorTerms / isNovelTerm (PLAN_NEWSWORTHINESS.md N0) ------------------
 
 test("priorTerms collects subject and object terms from corpus, corpusWeak, reference and teach rows only", () => {
