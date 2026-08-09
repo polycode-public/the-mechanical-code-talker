@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   CHOICE_SHAPES, CHOICE_MIN_OPTIONS, CHOICE_MAX_OPTIONS,
   splitChoiceQuestion, isChoiceQuestion, choiceDeclineReason,
+  routeChoiceRelation,
 } from "../../src/domain/choice-question.mjs";
 
 const optionTexts = (parsed) => parsed.options.map((o) => o.text);
@@ -262,6 +263,46 @@ test("a single clause with no comma or period has no earlier clause to read for 
 test("a two-clause stem whose last clause is not itself a question falls through to the bare trailing-wh template", () => {
   const text = "A beaver is known for building prowess, their supplies come from where?\nA) forest B) river";
   assert.equal(splitChoiceQuestion(text).sourceTerm, "supplies come");
+});
+
+// ---- relation routing ----
+
+test("a where-cued stem routes to the AtLocation family", () => {
+  const route = routeChoiceRelation("Where would you keep a book?");
+  assert.equal(route.family, "AtLocation");
+  assert.deepEqual(route.predicates, ["mgx:atLocation", "mgx:locatedNear"]);
+});
+
+test("an another-word-for stem routes to the IsA/Synonym/HasProperty family", () => {
+  assert.equal(routeChoiceRelation("What is another word for happy?").family, "IsA/Synonym/HasProperty");
+});
+
+test("a before-cued stem routes to the HasPrerequisite/HasSubevent family", () => {
+  assert.equal(routeChoiceRelation("What must you do before you can drive a car?").family, "HasPrerequisite/HasSubevent");
+});
+
+test("a want-cued stem routes to the Desires/MotivatedByGoal family", () => {
+  assert.equal(routeChoiceRelation("Why did the man want to eat?").family, "Desires/MotivatedByGoal");
+});
+
+test("a causes-cued stem routes to the Causes family", () => {
+  assert.equal(routeChoiceRelation("What causes a fire?").family, "Causes");
+});
+
+test("a part-of-cued stem routes to the PartOf/HasA/MadeOf family", () => {
+  assert.equal(routeChoiceRelation("What is a wheel part of?").family, "PartOf/HasA/MadeOf");
+});
+
+test("a capable-of-cued stem routes to the CapableOf family", () => {
+  assert.equal(routeChoiceRelation("What is a dog capable of?").family, "CapableOf");
+});
+
+test("a used-for-cued stem routes to the UsedFor family", () => {
+  assert.equal(routeChoiceRelation("What is a hammer used for?").family, "UsedFor");
+});
+
+test("a stem naming no relation at all routes to null", () => {
+  assert.equal(routeChoiceRelation("How did the man feel?"), null);
 });
 
 // ---- the exported bounds are the numbers the tests above rely on ----

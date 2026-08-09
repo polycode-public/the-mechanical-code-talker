@@ -526,3 +526,76 @@ export function isChoiceQuestion(text) {
 export function choiceDeclineReason(text) {
   return coreParse(text).reason;
 }
+
+// ---- relation routing ----
+//
+// The direct-edge probe in chat.mjs's probeChoiceOptions accepts an edge
+// under any predicate, which is close to no evidence when CommonsenseQA's
+// distractors sit on the same relation as the gold answer (section 2.3 of
+// the design survey). Routing narrows the accepted edge set to the relation
+// family the stem itself names, before the graph is even touched — a closed
+// cue table, not a general parser, matching the house style of every other
+// table in this module.
+//
+// Ordered by measured cue yield on the committed fixture (section 10.2):
+// AtLocation cues the most stems by a wide margin, so it is tried first.
+// First cue that matches wins; a stem matching none routes to null, which
+// the caller reads as "no relation named" and falls back to any-predicate
+// matching for that question.
+export const CHOICE_RELATION_ROUTES = Object.freeze([
+  {
+    family: "AtLocation",
+    predicates: Object.freeze(["mgx:atLocation", "mgx:locatedNear"]),
+    cue: /\b(where|located|location)\b/i,
+  },
+  {
+    family: "IsA/Synonym/HasProperty",
+    predicates: Object.freeze(["rdfs:subClassOf", "mgx:synonym", "mgx:hasProperty"]),
+    // Narrower than a bare "what is a ...?" lead on purpose — that shape
+    // matches almost any noun question ("what is a dog capable of?",
+    // "what is a hammer used for?"), which would shadow every other family.
+    cue: /\b(kind of|type of|another word for|same as|synonym)\b/i,
+  },
+  {
+    family: "HasPrerequisite/HasSubevent",
+    predicates: Object.freeze(["mgx:hasPrerequisite", "mgx:hasSubevent", "mgx:hasFirstSubevent", "mgx:hasLastSubevent"]),
+    cue: /\b(before|after|first|next|then|once you|in order to)\b/i,
+  },
+  {
+    family: "Desires/MotivatedByGoal",
+    predicates: Object.freeze(["mgx:desires", "mgx:motivatedByGoal", "mgx:causesDesire"]),
+    cue: /\b(want\w*|desire\w*|motivat\w*)\b/i,
+  },
+  {
+    family: "Causes",
+    predicates: Object.freeze(["mgx:causes", "mgx:causesDesire"]),
+    cue: /\b(cause\w*|result(?:s|ed)? in|leads? to|led to)\b/i,
+  },
+  {
+    family: "PartOf/HasA/MadeOf",
+    predicates: Object.freeze(["mgx:partOf", "mgx:hasA", "mgx:madeOf"]),
+    cue: /\b(part of|made of|has a|have a)\b/i,
+  },
+  {
+    family: "CapableOf",
+    predicates: Object.freeze(["mgx:capableOf", "mgxneg:capableOf"]),
+    cue: /\b(capable of|able to)\b/i,
+  },
+  {
+    family: "UsedFor",
+    predicates: Object.freeze(["mgx:usedFor"]),
+    cue: /\b(used for|used to|use for)\b/i,
+  },
+]);
+
+/** Reads the relation family a stem's own wording names, first cue wins.
+ *  Returns null when no route's cue matches, which the caller reads as "no
+ *  relation named" — the probe then falls back to any-predicate matching.
+ *  @returns {null | { family: string, predicates: string[] }} */
+export function routeChoiceRelation(stem) {
+  const text = String(stem ?? "");
+  for (const route of CHOICE_RELATION_ROUTES) {
+    if (route.cue.test(text)) return { family: route.family, predicates: [...route.predicates] };
+  }
+  return null;
+}

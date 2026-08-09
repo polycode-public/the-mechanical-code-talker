@@ -16,6 +16,7 @@ import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { resolveExtensions, seedActiveCorpusEntries } from "../../src/services/extensions.mjs";
 import { initXlBands, SEED_BAND_CAPS } from "../build-chat-seed.mjs";
+import { splitChoiceQuestion, routeChoiceRelation } from "../../src/domain/choice-question.mjs";
 import { writeClaim, defaultHardware, ROOT } from "./lib.mjs";
 
 export const FIXTURE_PATH = join(ROOT, "test-benchmarks", "claims", "commonsenseqa-sample.jsonl");
@@ -102,6 +103,8 @@ export async function runSample(items, memoryDir, graph) {
   let abstained = 0;
   let sourceEdgePresent = 0;
   let correctWhenSourceEdgePresent = 0;
+  let routedByRelation = 0;
+  let correctWhenRouted = 0;
   const missedIds = [];
   const missedStems = [];
   for (const item of items) {
@@ -124,10 +127,20 @@ export async function runSample(items, memoryDir, graph) {
       sourceEdgePresent += 1;
       if (ok) correctWhenSourceEdgePresent += 1;
     }
+
+    // routeChoiceRelation reads only the STEM the splitter itself would see —
+    // the same shape probeChoiceOptions routes on, so this count is what the
+    // lane actually routed, not a re-derivation from the fixture's own text.
+    const parsedStem = splitChoiceQuestion(questionFor(item))?.stem ?? item.question.stem;
+    if (routeChoiceRelation(parsedStem)) {
+      routedByRelation += 1;
+      if (ok) correctWhenRouted += 1;
+    }
   }
   return {
     correct, answered, refused, abstained,
     sourceEdgePresent, correctWhenSourceEdgePresent,
+    routedByRelation, correctWhenRouted,
     missedIds, missedStems,
   };
 }
@@ -147,6 +160,8 @@ export function buildClaimDetail(items, bands, result) {
     abstained: result.abstained,
     sourceEdgePresent: result.sourceEdgePresent,
     correctWhenSourceEdgePresent: result.correctWhenSourceEdgePresent,
+    routedByRelation: result.routedByRelation,
+    correctWhenRouted: result.correctWhenRouted,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),

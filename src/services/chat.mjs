@@ -70,7 +70,7 @@ import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./n
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { splitChoiceQuestion } from "../domain/choice-question.mjs";
+import { splitChoiceQuestion, routeChoiceRelation } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3705,7 +3705,17 @@ export { isAnchorableTerm };
  *
  *  `chain` stays null on every entry here — a direct-edge probe only. A
  *  bounded findIsaChain chase for an option with no direct edge is later work
- *  (rung 3), which is why `graph` already rides this signature unused. */
+ *  (rung 3), which is why `graph` already rides this signature unused.
+ *
+ *  ROUTING (rung 2): `routeChoiceRelation` (choice-question.mjs) reads the
+ *  relation family the STEM itself names — "where" cues AtLocation, "part of"
+ *  cues PartOf/HasA/MadeOf, and so on, a closed cue table ordered by measured
+ *  yield on the committed fixture. When a route fires, an edge only grounds
+ *  an option if its predicate is IN that family — an edge under some other
+ *  predicate is no longer "a stated relation", it is the WRONG stated
+ *  relation, and the whole point of routing is to stop counting that as
+ *  evidence. A stem naming no relation at all (routeChoiceRelation returns
+ *  null) falls back to the unrouted any-predicate probe, unchanged. */
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
   let rows = await factRows(memoryDir, cache);
@@ -3714,10 +3724,12 @@ async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthe
     const learned = await childPackFactsForKey(parsed.sourceTerm, { memoryDir, env, cache, synthesisBudget });
     if (learned) rows = await factRows(memoryDir, cache);
   }
+  const route = routeChoiceRelation(parsed.stem);
   return parsed.options.map((option) => {
     const optionVariants = factTermVariants(normFactTermStatic, option.text);
-    const facts = rows.filter((f) => (sourceVariants.has(f.subject) && optionVariants.has(f.object))
+    let facts = rows.filter((f) => (sourceVariants.has(f.subject) && optionVariants.has(f.object))
       || (sourceVariants.has(f.object) && optionVariants.has(f.subject)));
+    if (route) facts = facts.filter((f) => route.predicates.includes(f.predicate));
     return { label: option.label, text: option.text, grounds: facts.length > 0, facts, chain: null };
   });
 }

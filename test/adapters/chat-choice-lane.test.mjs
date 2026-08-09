@@ -152,6 +152,55 @@ test("the lane's miss is not rewritten by the generic grammar wall", async () =>
   }
 });
 
+// ---- relation routing (rung 2) ----
+
+test("an option connected only by the wrong relation family does not ground once the stem routes", async () => {
+  const dir = await freshRepo();
+  try {
+    // MAGAZINE_Q's "where" routes to AtLocation — a usedFor edge is a
+    // stated relation, but the WRONG one, so it must not count as grounding.
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:usedFor", object: "bookstore", provenance: "corpus:test" },
+    ]);
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /I don't know how "magazines" relates to any of/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option connected by the routed relation family still grounds", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:atLocation", object: "bookstore", provenance: "corpus:test" },
+    ]);
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "B");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a stem naming no relation still probes every predicate", async () => {
+  const dir = await freshRepo();
+  try {
+    // "What do beavers use to build dams?" names no relation family at all
+    // (routeChoiceRelation returns null), so an edge under any predicate
+    // still grounds, unchanged from before routing.
+    await appendFacts(dir, [
+      { subject: "beavers", predicate: "mgx:capableOf", object: "teeth", provenance: "corpus:test" },
+    ]);
+    const r = await turn("What do beavers use to build dams?\nA) teeth B) claws", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("two grounded options tie and the lane picks neither, whatever their edge weights", async () => {
   const dir = await freshRepo();
   try {

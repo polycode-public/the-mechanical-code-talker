@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage) is built and measured. R2–R5 remain.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage) and R2 (relation routing) are built and measured. R3–R5 remain.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1149,6 +1149,26 @@ reference point for what a CommonsenseQA-seeded cut off the same dump can reach,
 the number rather than describing it.
 
 ### 10.2 Rung 2 — relation routing
+
+**Built and measured.** `CHOICE_RELATION_ROUTES` and `routeChoiceRelation(stem)` landed in
+`choice-question.mjs`, an eight-family cue table ordered AtLocation first (the highest measured cue
+yield), then IsA/Synonym/HasProperty, HasPrerequisite/HasSubevent, Desires/MotivatedByGoal, Causes,
+PartOf/HasA/MadeOf, CapableOf, UsedFor. `probeChoiceOptions` reads the route off the parsed stem and,
+when one fires, keeps only facts whose predicate is in that family before deciding whether an option
+grounds; an unrouted stem still probes every predicate, unchanged. `detail.routedByRelation` and
+`detail.correctWhenRouted` landed in the rig payload, computed straight off `routeChoiceRelation`
+applied to each item's own parsed stem.
+
+Re-measured (chunked foreground slices, one persisted seeded repo, merged): before 14/11/75
+(answered/refused/abstained), `sourceEdgePresent` 30, `correctOfAnswered` 0; after 14/11/75,
+`sourceEdgePresent` 30, `correctOfAnswered` still 0, `routedByRelation` 56, `correctWhenRouted` 0.
+Every outcome column came back byte-identical to rung 1. The route fired on 56 of the 100 questions
+and changed no verdict: on this seed, whenever a stem's own cue names a relation family, the edges the
+probe already found for that pair already sit under a predicate in that family — the rung 1 seed cut
+was built off the same relation vocabulary the cue table routes to, so narrowing rarely has anything
+to exclude. Routing is real (56 questions now carry a named family, and the two new columns are
+populated from the run) but it moved nothing measurable this round. Threshold stays `{ min, 0 }`,
+unchanged, since `value` did not rise.
 
 **Model tier: Sonnet.** Serialized on `chat.mjs`.
 
