@@ -1252,8 +1252,8 @@ Rendering, through the existing template machinery and nothing new:
   Nothing was guessed.` Mark the turn `miss: true` and tag the record so chatbench and infbench can
   count budget misses separately from parse misses.
 
-`/prove` stays an explicit command in phase 3. Only after infbench and chatbench show it safe does it
-become an automatic fallback on an ask-lane miss. That promotion is its own increment.
+`/prove` stays an explicit command in phase 3. `PLAN_DL_ENGLISH_SURFACE.md` owns its promotion to an
+automatic ask-lane fallback.
 
 **Delivered.** The question parse reuses `ISA_ASK_RE`, the same "is X a Y" grammar the plain isa
 ask lane already reads, rather than a second parser — `/prove is rex a dog` and `/prove is a stone
@@ -1440,11 +1440,11 @@ own row exercising `/prove <question>` against the chat surface, the same shape 
 
 | key | id | status |
 |---|---|---|
-| `inference.dl.transitive-role` | `inference-dl-transitive-role-propagates-a-universal` | open |
-| `inference.dl.role-hierarchy` | `inference-dl-subproperty-lets-a-restriction-reach-a-narrower-role` | open |
+| `inference.dl.transitive-role` | `inference-dl-transitive-role-propagates-a-universal` | `PLAN_DL_ENGLISH_SURFACE.md` |
+| `inference.dl.role-hierarchy` | `inference-dl-subproperty-lets-a-restriction-reach-a-narrower-role` | `PLAN_DL_ENGLISH_SURFACE.md` |
 | `inference.dl.enumeration` | `inference-dl-closed-enumeration-answers-a-provable-no` | **delivered** |
 | `inference.dl.cardinality-clash` | `inference-dl-min-max-clash-names-both-premises` | **delivered** |
-| `inference.dl.inverse-role` | `inference-dl-inverse-role-answers-from-the-recorded-inverse-edge` | open |
+| `inference.dl.inverse-role` | `inference-dl-inverse-role-answers-from-the-recorded-inverse-edge` | `PLAN_DL_ENGLISH_SURFACE.md` |
 
 **Delivered.** The enumeration row teaches "the metals are exactly copper, iron and tin" and asks
 `/prove is bronze a metal`, a real subsumption question the tableau disproves over the taught
@@ -1452,35 +1452,15 @@ closed enumeration. The cardinality-clash row reuses E5's own premises and asks 
 wheel`: since beryl's own class is unsatisfiable (the min/max clash), the tableau proves anything
 asked of it by refutation, citing both restrictions — the "names both premises" the id promises.
 
-The other three stay open, checked directly against the shipped grammar rather than assumed: each
-needs vocabulary no ACE pattern or teach-lane frame writes today. Transitive-role's own ∀-rule
-(4a) only propagates a taught `owl:allValuesFrom` restriction, and no pattern mints one — verified
-directly: a taught existential chain composed through a declared-transitive role answers through
-`/classify`/the EL ask lane, never through `/prove`, because the tableau's own transitivity handling
-never composes two existential edges the way EL's CR7 does. Role-hierarchy needs
-`rdfs:subPropertyOf`, and `src/services/chat.mjs`'s own scm-svf1 comment already names it
-ACE-unreachable. Inverse-role needs an asserted ABox role fact between two named individuals, the
-same gap 4e's own delivered note names for its motivating example. Each waits on whichever ACE
-pattern or teach-lane frame lands the missing shape first.
+The other three need `owl:allValuesFrom`, `rdfs:subPropertyOf` and an ABox role reader.
+`PLAN_DL_ENGLISH_SURFACE.md` owns all three and lands the rows as its own acceptance proof.
 
 Acceptance for each increment: `npm run test:fast`, that increment's test file, all of
 `test/adapters/tableau-*.test.mjs`, and `node --test test/corpus/inference.test.mjs`.
 
-**Checked this round, after `/prove` landed:** `DL_DISJUNCTION_CEILING` and `DL_COMPLEMENT_CEILING`
-stay in `test-benchmarks/infbench/generate-cases.mjs`. `inference.dl.disjunction` and
-`inference.dl.complement` (section 8.8) prove E3/E4 through `/prove` directly, driven exactly like
-infbench's own `driveChat` (`test-benchmarks/infbench/run.mjs`) drives a case: teach every premise,
-then send `caseDef.query` as the next chat turn — except `driveChat` sends the plain question
-("is rex a dog" / "is a stone a terrestrial") with no `/prove` prefix, since `/prove` stays an
-explicit command rather than an automatic ask-lane fallback (section 8.7's own text). Run the same
-plain question through a real session after teaching E3's and E4's premises and it returns the same
-honest miss it returned before `/prove` existed — checked directly, not assumed. So the ceiling
-holds: flipping `dlDisjunction`/`dlComplement`'s expected verdicts now would commit a corpus that
-claims a capability the chat surface's plain-question path doesn't have. It lifts once `/prove`
-becomes that automatic fallback (section 8.7's own named next increment), or once infbench's harness
-routes these specific cases through `/prove` explicitly. `DL_CARDINALITY_CLASH_CEILING` and
-`DL_NOMINAL_ENUMERATION_CEILING` are untouched this round — out of this round's scope, still waiting
-on their own corpus rows above.
+The four INF-8 ceiling markers in `test-benchmarks/infbench/generate-cases.mjs` hold while `/prove`
+stays an explicit command, because infbench's `driveChat` sends the plain question with no prefix.
+`PLAN_DL_ENGLISH_SURFACE.md` owns the fallback that lifts them and the regeneration that follows.
 
 ---
 
