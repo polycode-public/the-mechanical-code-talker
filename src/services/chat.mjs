@@ -70,7 +70,7 @@ import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./n
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf } from "../domain/choice-question.mjs";
+import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf, stemTopicCandidates, stemConstraintTerms } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3793,6 +3793,133 @@ async function choiceWordnetTags(text) {
   for (const syn of synonyms) for (const v of factTermVariants(normFactTermStatic, syn)) tags.set(v, "wordnet");
   return tags;
 }
+/**
+ * Picks the one candidate the question is about: the candidate the graph
+ * holds the most facts about, counting rows where the term is the subject or
+ * the object under any predicate. Ties in that count go to the phrase
+ * extractStemSourceTerm captured (a structural read beats a graph count when
+ * the graph cannot separate), then to the longer phrase, then to the leftmost.
+ * Returns "" when no candidate is named in the store at all, which the lane
+ * reports as the no-topic miss it already has.
+ *
+ * Pure in the fact set: the same rows in any order give the same topic, the
+ * discipline sortFactIndividualsById already holds the store to.
+ *
+ * @returns {Promise<{ topic: string, salience: number, runnerUp: string }>}
+ */
+async function chooseChoiceTopic(candidates, { memoryDir, cache, templateCapture }) {
+  if (!candidates.length) return { topic: "", salience: 0, runnerUp: "" };
+  const rows = await factRows(memoryDir, cache);
+  const salienceOf = (text) => {
+    const variants = factTermVariants(normFactTermStatic, text);
+    let count = 0;
+    for (const f of rows) { if (variants.has(f.subject) || variants.has(f.object)) count += 1; }
+    return count;
+  };
+  const scored = candidates
+    .map((c) => ({ ...c, salience: salienceOf(c.text) }))
+    .sort((a, b) => {
+      if (b.salience !== a.salience) return b.salience - a.salience;
+      const aIsCapture = a.text === templateCapture;
+      const bIsCapture = b.text === templateCapture;
+      if (aIsCapture !== bIsCapture) return aIsCapture ? -1 : 1;
+      if (b.words !== a.words) return b.words - a.words;
+      return a.position - b.position;
+    });
+  const best = scored[0];
+  if (best.salience === 0) return { topic: "", salience: 0, runnerUp: "" };
+  const runnerUp = scored.find((c) => c.text !== best.text)?.text ?? "";
+  return { topic: best.text, salience: best.salience, runnerUp };
+}
+
+/**
+ * Pulls the child pack once per constraint term, so the constraint check in
+ * the tie branch has rows to read. Bounded three ways: at most
+ * CHOICE_CONSTRAINT_PULL_BUDGET terms per turn, in stemConstraintTerms order;
+ * nothing pulled for a term memory already holds a fact for; nothing pulled
+ * for any option term, ever — terms reaching here already went through
+ * stemConstraintTerms' own option-word filter, the same discipline
+ * probeChoiceOptions' own docblock states for the topic pull.
+ *
+ * @returns {Promise<string[]>} the terms actually pulled, for the trace note
+ */
+async function pullChoiceConstraintFacts(terms, { memoryDir, env, cache, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+  const pulled = [];
+  if (!memoryDir) return pulled;
+  for (const term of terms.slice(0, CHOICE_CONSTRAINT_PULL_BUDGET)) {
+    const rows = await factRows(memoryDir, cache);
+    const variants = factTermVariants(normFactTermStatic, term);
+    const hasFact = rows.some((f) => variants.has(f.subject) || variants.has(f.object));
+    if (hasFact) continue;
+    const learned = await childPackFactsForKey(term, { memoryDir, env, cache, synthesisBudget });
+    if (learned) pulled.push(term);
+  }
+  return pulled;
+}
+
+/** Every constraint term the graph links `option`'s own term to, each with
+ *  the ONE fact row that proves it (first match in `rows`' own order, which
+ *  is already canonical — the store sorts fact individuals by content-
+ *  addressed id, so this reads the same regardless of insertion order).
+ *  Unrouted, either direction: this is not the topic probe's grounding
+ *  check, it is "does the graph also connect this option to something else
+ *  the question said", and section 2.6 of the design survey found that rule
+ *  only under any predicate. */
+function choiceOptionSatisfiedConstraints(option, constraintTerms, rows) {
+  const optionVariants = factTermVariants(normFactTermStatic, option.text);
+  const satisfied = [];
+  for (const term of constraintTerms) {
+    const termVariants = factTermVariants(normFactTermStatic, term);
+    const fact = rows.find((f) => (optionVariants.has(f.subject) && termVariants.has(f.object))
+      || (optionVariants.has(f.object) && termVariants.has(f.subject)));
+    if (fact) satisfied.push({ term, fact });
+  }
+  return satisfied;
+}
+
+/**
+ * Splits a tie by how much of the question each grounded option answers.
+ * `satisfied` is the constraint terms the graph links that option to, each
+ * with the fact row that proves it, so the answer can cite them. Returns
+ * null when no option is strictly ahead, or when the leader satisfies
+ * nothing — both of which stay refusals. The ties-never-broken rule this
+ * answers to: a pick is made only against MORE satisfied constraints, never
+ * a strength ordering over any single piece of evidence.
+ *
+ * @returns {null | {
+ *   winner: { label, text, facts, chain, satisfied: Array<{ term, fact }> },
+ *   runnerUp: { label, text, satisfied: Array<{ term, fact }> },
+ *   missedByRunnerUp: string[],
+ * }}
+ */
+function separateChoiceTie(grounded, constraintTerms, rows) {
+  if (!constraintTerms.length) return null;
+  const scored = grounded.map((option) => ({
+    option,
+    satisfied: choiceOptionSatisfiedConstraints(option, constraintTerms, rows),
+  }));
+  const bestCount = Math.max(...scored.map((s) => s.satisfied.length));
+  if (bestCount === 0) return null;
+  const leaders = scored.filter((s) => s.satisfied.length === bestCount);
+  if (leaders.length > 1) return null;
+  const winner = leaders[0];
+  const runnerUp = scored
+    .filter((s) => s.option.label !== winner.option.label)
+    .reduce((best, cur) => {
+      if (!best) return cur;
+      if (cur.satisfied.length > best.satisfied.length) return cur;
+      if (cur.satisfied.length === best.satisfied.length && cur.option.label < best.option.label) return cur;
+      return best;
+    }, null);
+  const runnerUpTerms = new Set(runnerUp.satisfied.map((s) => s.term));
+  const missedByRunnerUp = winner.satisfied.map((s) => s.term).filter((term) => !runnerUpTerms.has(term));
+  return {
+    winner: { label: winner.option.label, text: winner.option.text, facts: winner.option.facts, chain: winner.option.chain, satisfied: winner.satisfied },
+    runnerUp: { label: runnerUp.option.label, text: runnerUp.option.text, satisfied: runnerUp.satisfied },
+    missedByRunnerUp,
+  };
+}
+
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
   let rows = await factRows(memoryDir, cache);
@@ -12982,6 +13109,14 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
 // materialisation, not the whole-store maintenance job /syllogise runs.
 const AUTO_SYNTHESIS_BUDGET = 12;
 
+// Caps how many child-pack pulls one tied choice-question turn may spend on
+// the stem's own constraint terms (pullChoiceConstraintFacts, above). Five
+// covers every constraint term a CommonsenseQA stem carries after stopword
+// filtering; the cap is what stops a long stem from turning one turn into a
+// bulk import. A constant rather than config: it bounds work per turn, which
+// is a design decision, not a preference.
+const CHOICE_CONSTRAINT_PULL_BUDGET = 5;
+
 /** The `[reasoning]` knobs for a classification pass rooted at `memoryDir` —
  *  the repo's own `tmct.toml` when it sets one, the shipped defaults
  *  otherwise. `resolveReasoningConfig` wants the NORMALIZED sparse pass-
@@ -17421,6 +17556,11 @@ const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.
 // deliberately not the resolver's longer numbered ambiguity format.
 const joinOr = (a) => (a.length > 2 ? `${a.slice(0, -1).join(", ")}, or ${a[a.length - 1]}`
   : a.length === 2 ? `${a[0]} or ${a[1]}` : (a[0] ?? ""));
+// Same Oxford-comma join as joinOr, "and" for a list every member of which
+// holds at once (the constraint terms a runner-up failed to satisfy), not a
+// set of alternatives.
+const joinAnd = (a) => (a.length > 2 ? `${a.slice(0, -1).join(", ")}, and ${a[a.length - 1]}`
+  : a.length === 2 ? `${a[0]} and ${a[1]}` : (a[0] ?? ""));
 
 /** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
  *  plain turn whose `detail.pending` carries what's still unseen (null when the batch
@@ -18524,31 +18664,84 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     const parsed = splitChoiceQuestion(workingLine);
     if (parsed) {
       const choiceGoal = "pick the option a stated relation grounds, among a closed set of alternatives";
-      const refMiss = (text) => {
+      const refMiss = (text, extraDetail = null) => {
         note(trace, `goal: ${choiceGoal}`);
         note(trace, `lane: splitChoiceQuestion — "${workingLine}" parsed as a ${parsed.shape} choice question but could not compose an answer`);
-        return withLast(plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal }), choiceGoal);
+        const turn = plainTurn(workingLine, text, { via: "miss", miss: true, focus, goal: choiceGoal });
+        if (extraDetail) turn.detail = { ...turn.detail, ...extraDetail };
+        return withLast(turn, choiceGoal);
       };
-      if (!parsed.sourceTerm) {
+      // The topic is read off a CANDIDATE LIST (stemTopicCandidates), not off
+      // a single fixed-shape template capture: extractStemSourceTerm's own
+      // capture (parsed.sourceTerm) survives only as chooseChoiceTopic's tie-
+      // break, because a template is right about a fronted "where would you
+      // find X" stem, exactly the stems where several candidates tie on
+      // salience. A stem naming no usable candidate, or naming several that
+      // the graph holds nothing about, both come back as "" here — the same
+      // no-topic miss either way.
+      const candidates = stemTopicCandidates(parsed.stem, parsed.options);
+      const { topic } = await chooseChoiceTopic(candidates, {
+        memoryDir, cache: factRowsCache, templateCapture: parsed.sourceTerm,
+      });
+      if (!topic) {
         return refMiss(`I can't tell what these options are alternatives about — nothing in "${parsed.stem}" reads as a subject term to check them against.`);
       }
-      const probed = await probeChoiceOptions(parsed, { memoryDir, env, cache: factRowsCache, graph, synthesisBudget });
+      const probed = await probeChoiceOptions({ ...parsed, sourceTerm: topic }, { memoryDir, env, cache: factRowsCache, graph, synthesisBudget });
       const grounded = probed.filter((o) => o.grounds);
       note(trace, `goal: ${choiceGoal}`);
       if (grounded.length === 0) {
-        note(trace, `lane: splitChoiceQuestion — no stated relation between "${parsed.sourceTerm}" and any of ${probed.length} options; the honest miss, never a guess`);
-        return refMiss(`I don't know how "${parsed.sourceTerm}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
+        note(trace, `lane: splitChoiceQuestion — no stated relation between "${topic}" and any of ${probed.length} options; the honest miss, never a guess`);
+        return refMiss(`I don't know how "${topic}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`, { topic });
       }
       if (grounded.length > 1) {
+        // The stem's OTHER content terms are constraints the question stated
+        // beyond naming its topic — pulled here, not at the topic probe
+        // above, because they only matter once a tie needs something to
+        // separate on. Never pulled for an option term (stemConstraintTerms'
+        // own filter already excludes those).
+        const constraintTerms = stemConstraintTerms(parsed.stem, topic, parsed.options);
+        await pullChoiceConstraintFacts(constraintTerms, { memoryDir, env, cache: factRowsCache, synthesisBudget });
+        const rowsAfterPull = await factRows(memoryDir, factRowsCache);
+        // Separate on constraints, never on strength: separateChoiceTie only
+        // picks when exactly one option satisfies STRICTLY MORE of the
+        // stem's other content terms than every rival — a level count, a
+        // zero count, or more than one option level all stay a refusal.
+        const separated = separateChoiceTie(grounded, constraintTerms, rowsAfterPull);
+        if (separated) {
+          const { winner, runnerUp, missedByRunnerUp } = separated;
+          const groundingFact = winner.facts.length > 0 ? winner.facts.slice().sort((a, b) => b.trust - a.trust)[0] : null;
+          const groundingClause = groundingFact
+            ? `${factPhrase(groundingFact)} (source: ${citationProvenance(groundingFact.provenance)})`
+            : renderIsaChain(winner.chain);
+          const constraintClause = winner.satisfied
+            .map(({ term, fact }) => `the question also says ${term}, which ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)})`)
+            .join("; ");
+          const text = `${winner.text} — ${groundingClause}, and ${constraintClause}. The other option that `
+            + `grounds is ${runnerUp.text}, and I hold nothing linking it to ${joinAnd(missedByRunnerUp)}.`;
+          note(trace, `lane: splitChoiceQuestion — "${winner.label}" satisfies ${winner.satisfied.length} constraint term(s) the runner-up "${runnerUp.label}" does not; separated, not a broken tie`);
+          const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
+          turn.lane = "ask-choice";
+          turn.detail = {
+            traversal: `option "${winner.label}" separated from a ${grounded.length}-way tie against "${topic}" by ${winner.satisfied.length} constraint term(s)`,
+            matches: [...(groundingFact ? [groundingFact] : winner.chain), ...winner.satisfied.map((s) => s.fact)],
+            selectedLabel: winner.label,
+            topic,
+            separatedBy: winner.satisfied.map((s) => s.term),
+            runnerUpLabel: runnerUp.label,
+          };
+          return withLast(turn, choiceGoal);
+        }
         // A tie is reported, never broken — whatever the grounded options'
-        // own edge weights, this branch fires on COUNT alone.
-        note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${parsed.sourceTerm}"; reported as a tie`);
-        const text = `More than one of those grounds: ${joinOr(grounded.map((o) => o.text))}. I have a stated relation from ${parsed.sourceTerm} to each, so nothing in what I hold picks between them.`;
+        // own edge weights, this branch fires on COUNT alone (or on a level
+        // constraint count above, which is the same rule at a finer grain).
+        note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${topic}"; reported as a tie`);
+        const text = `More than one of those grounds: ${joinOr(grounded.map((o) => o.text))}. I have a stated relation from ${topic} to each, so nothing in what I hold picks between them.`;
         const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
         turn.lane = "ask-choice";
         turn.detail = {
-          traversal: `${grounded.length} of ${probed.length} options grounded against "${parsed.sourceTerm}"`,
+          traversal: `${grounded.length} of ${probed.length} options grounded against "${topic}"`,
           matches: grounded.flatMap((o) => (o.facts.length ? o.facts : o.chain || [])),
+          topic,
         };
         return withLast(turn, choiceGoal);
       }
@@ -18562,14 +18755,14 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         matches = winner.facts;
         hop = 1;
         matchedBy = fact.matchedBy;
-        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`;
+        traversalNote = `option "${winner.label}" grounded against "${topic}" via ${fact.predicate}`;
       } else {
         text = `${winner.text} — ${renderIsaChain(winner.chain)}.`;
         matches = winner.chain;
         hop = winner.chain.length;
-        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via a ${winner.chain.length}-hop isa chain`;
+        traversalNote = `option "${winner.label}" grounded against "${topic}" via a ${winner.chain.length}-hop isa chain`;
       }
-      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
+      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${topic}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
       const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
       turn.lane = "ask-choice";
       turn.detail = {
@@ -18577,6 +18770,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         matches,
         selectedLabel: winner.label,
         hop,
+        topic,
         ...(matchedBy ? { matchedBy } : {}),
       };
       return withLast(turn, choiceGoal);

@@ -52,10 +52,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
-- [ ] **Lift the L2 CommonsenseQA number above zero** — `PLAN_CSQA_SELECTION.md` holds the design:
-  phases S1 (topic reader) through S5 (corpus rows), each its own measured round. S5 also
-  drops the duplicated `grammar.choice.several-ground` row in `grammar.jsonl` (same id twice,
-  found during plan verification).
 - [ ] **News page field report (2026-08-09, deployed site)** — fixed and live at 5.0.34
   (pipeline green at the deployed sha; the button-clicking specs are structurally local-only,
   so live confirmation is an operator re-test). The tiles now render from a real

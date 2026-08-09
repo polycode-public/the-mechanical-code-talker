@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { runTurn, WALL_MISS_RE } from "../../src/services/chat.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { registerChildPackProvider } from "../../src/adapters/corpus/child-pack.mjs";
 
 const NO_CHILD_PACK_ENV = { TMCT_CHILD_PACK_DIR: fileURLToPath(new URL("../fixtures/no-such-child-pack", import.meta.url)) };
 
@@ -66,12 +67,31 @@ test("a choice question with several grounded options refuses and lists every on
   }
 });
 
-test("a choice question with no grounded option returns the miss naming the source term", async () => {
+test("a stem naming nothing the graph knows returns the no-topic miss", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn(MAGAZINE_Q, { memoryDir: dir });
     assert.equal(r.record.miss, true);
+    assert.match(r.answer, /I can't tell what these options are alternatives about/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a choice question whose topic grounds against no option names that topic in the miss", async () => {
+  const dir = await freshRepo();
+  try {
+    // "magazine" (singular) carries a fact under a predicate that is
+    // grounding-eligible, so it is the topic — but nothing links it to any
+    // option, so the miss names it rather than falling back to the
+    // no-topic message.
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:hasProperty", object: "glossy", provenance: "corpus:test" },
+    ]);
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, true);
     assert.match(r.answer, /I don't know how "magazines" relates to any of doctor, bookstore, market, train station, or mortuary\./);
+    assert.equal(r.detail.topic, "magazines", "the topic the lane read is on the record, even though the turn is a miss");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -359,5 +379,280 @@ test("two grounded options tie and the lane picks neither, whatever their edge w
     assert.equal(r.detail.selectedLabel, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the topic reader (S1) ----
+
+const NAPKIN_PLATE_Q = "Where would you find a napkin near a plate?\nA) kitchen B) garage";
+
+test("the topic is the stem term the graph holds most facts about", async () => {
+  const dir = await freshRepo();
+  try {
+    // "plate" carries three facts, "napkin" one — extractStemSourceTerm's
+    // own template would have captured "napkin" (the placement verb's
+    // direct object), but salience outranks the template capture whenever
+    // the two candidates' counts actually differ.
+    await appendFacts(dir, [
+      { subject: "plate", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:madeOf", object: "ceramic", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:hasProperty", object: "round", provenance: "corpus:test" },
+      { subject: "napkin", predicate: "mgx:hasProperty", object: "soft", provenance: "corpus:test" },
+    ]);
+    const r = await turn(NAPKIN_PLATE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.topic, "plate");
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("two candidates with equal salience defer to the template capture", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "napkin", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:hasProperty", object: "round", provenance: "corpus:test" },
+    ]);
+    const r = await turn(NAPKIN_PLATE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.topic, "napkin");
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("feeding the same facts in two insertion orders picks the same topic", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    const facts = [
+      { subject: "plate", predicate: "mgx:atLocation", object: "kitchen", provenance: "corpus:test" },
+      { subject: "plate", predicate: "mgx:madeOf", object: "ceramic", provenance: "corpus:test" },
+      { subject: "napkin", predicate: "mgx:hasProperty", object: "soft", provenance: "corpus:test" },
+    ];
+    await appendFacts(dirA, facts);
+    await appendFacts(dirB, facts.slice().reverse());
+    const rA = await turn(NAPKIN_PLATE_Q, { memoryDir: dirA });
+    const rB = await turn(NAPKIN_PLATE_Q, { memoryDir: dirB });
+    assert.equal(rA.detail.topic, rB.detail.topic);
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
+  }
+});
+
+// ---- constraint-term child-pack pull (S2) ----
+
+// One word, letters only: the store folds a fact's object through
+// normFactTerm (lowercase, non-word runs become spaces), so a marker with an
+// underscore or a mixed case would never compare equal to what lands on disk.
+const markerObjectOf = (term) => `zzzmarker${term}`;
+
+/** A canned child-pack provider: lookup(term) hands back one fact under the
+ *  term's own name, subject === term, so a caller can tell a pull actually
+ *  reached the pack (the marker object shows up in the store afterward)
+ *  apart from a pull that never happened (it does not). Terms with no entry
+ *  read as a pack miss, the ordinary null. */
+function cannedChildPack(terms) {
+  const byTerm = new Map(terms.map((t) => [t, markerObjectOf(t)]));
+  return {
+    lookup: async (term) => {
+      const marker = byTerm.get(term);
+      return marker ? { term, facts: [{ subject: term, predicate: "mgx:hasProperty", object: marker }] } : null;
+    },
+  };
+}
+
+test("a constraint term already in memory is not pulled again", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+      { subject: "tall", predicate: "mgx:hasProperty", object: "height", provenance: "corpus:test" },
+    ]);
+    registerChildPackProvider(cannedChildPack(["tall", "grass"]));
+    try {
+      const r = await turn("Where can you find a snake in tall grass?\nA) forest B) field", { memoryDir: dir, env: {} });
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      assert.ok(rows.some((f) => f.object === markerObjectOf("grass")), "grass had no fact yet, so it was pulled");
+      assert.ok(!rows.some((f) => f.object === markerObjectOf("tall")), "tall already had a fact, so it was not pulled again");
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option term is never pulled, even when it names a pack term", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    registerChildPackProvider(cannedChildPack(["forest"]));
+    try {
+      // "forest" names both the stem's own trailing clause and option A —
+      // stemConstraintTerms drops every option word, so it never reaches
+      // pullChoiceConstraintFacts at all, pack entry or not.
+      const r = await turn("Where can you find a snake near a forest?\nA) forest B) field", { memoryDir: dir, env: {} });
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      assert.ok(!rows.some((f) => f.object === markerObjectOf("forest")), "an option term is never pulled from the child pack");
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a stem with more constraint terms than the budget pulls the first five in stem order", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const terms = ["tall", "green", "wet", "cold", "old", "dry", "soggy", "grass"];
+    registerChildPackProvider(cannedChildPack(terms));
+    try {
+      const r = await turn(
+        "Where can you find a tall green wet cold old dry snake near soggy grass?\nA) forest B) field",
+        { memoryDir: dir, env: {} },
+      );
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      const pulled = terms.filter((t) => rows.some((f) => f.object === markerObjectOf(t)));
+      assert.deepEqual(pulled, ["tall", "green", "wet", "cold", "old"]);
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- constraint separation (S3) ----
+
+const SNAKE_GRASS_Q = "Where can you find a snake in tall grass?\nA) forest B) field";
+const SNAKE_TIE_FACTS = [
+  { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+  { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+];
+
+test("two options ground and only one meets a second term the stem names, so the lane answers", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.topic, "snake");
+    assert.deepEqual(r.detail.separatedBy, ["grass"]);
+    assert.equal(r.detail.runnerUpLabel, "B");
+    assert.match(r.answer, /^forest — snake is found in forest/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the answer names the runner-up and the constraint it failed", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.match(r.answer, /field/, "the runner-up is named");
+    assert.match(r.answer, /grass/, "the constraint the runner-up failed is named");
+    assert.match(r.answer, /nothing linking it to grass/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("two options meeting the same number of constraints stay a refusal", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "grass", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a leader satisfying no constraint at all stays a refusal", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, SNAKE_TIE_FACTS);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a heavier edge never breaks a tie on its own", async () => {
+  const dir = await freshRepo();
+  try {
+    // Different provenance heads carry different trust priors, and neither
+    // option satisfies a constraint term — the grounding edge's own weight
+    // must never stand in for a constraint separation.
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus-weak:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const r = await turn(SNAKE_GRASS_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, undefined);
+    assert.match(r.answer, /More than one of those grounds/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the same facts in two insertion orders separate the same way", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    const facts = [
+      ...SNAKE_TIE_FACTS,
+      { subject: "grass", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+    ];
+    await appendFacts(dirA, facts);
+    await appendFacts(dirB, facts.slice().reverse());
+    const rA = await turn(SNAKE_GRASS_Q, { memoryDir: dirA });
+    const rB = await turn(SNAKE_GRASS_Q, { memoryDir: dirB });
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+    assert.equal(rA.detail.runnerUpLabel, rB.detail.runnerUpLabel);
+    assert.deepEqual(rA.detail.separatedBy, rB.detail.separatedBy);
+    assert.equal(rA.answer, rB.answer);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
   }
 });

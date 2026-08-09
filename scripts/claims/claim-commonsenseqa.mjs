@@ -109,6 +109,10 @@ export async function runSample(items, memoryDir, graph) {
   const byHop = { 1: { answered: 0, correct: 0 }, 2: { answered: 0, correct: 0 }, unreachable: { abstained: 0 } };
   const matchedBy = { exact: 0, lemma: 0, "head-noun": 0, wordnet: 0 };
   let abstainedUncued = 0;
+  let topicRead = 0;
+  let topicIsQuestionConcept = 0;
+  let separated = 0;
+  let correctWhenSeparated = 0;
   const abstainedUncuedStems = [];
   const missedIds = [];
   const missedStems = [];
@@ -124,6 +128,19 @@ export async function runSample(items, memoryDir, graph) {
     // actually routed, not a re-derivation from the fixture's own text.
     const parsedStem = splitChoiceQuestion(questionFor(item))?.stem ?? item.question.stem;
     const routed = routeChoiceRelation(parsedStem) !== null;
+    // topic/separatedBy are read off the run, never re-derived: chooseChoiceTopic
+    // and separateChoiceTie (chat.mjs) are the only things that know which
+    // candidate actually got picked and which tie actually got split.
+    const topic = result?.detail?.topic;
+    if (topic) {
+      topicRead += 1;
+      if (normFactTerm(topic) === normFactTerm(item.question.question_concept)) topicIsQuestionConcept += 1;
+    }
+    const separatedBy = result?.detail?.separatedBy;
+    if (Array.isArray(separatedBy) && separatedBy.length) {
+      separated += 1;
+      if (ok) correctWhenSeparated += 1;
+    }
 
     if (isMiss) {
       abstained += 1;
@@ -169,6 +186,7 @@ export async function runSample(items, memoryDir, graph) {
     sourceEdgePresent, correctWhenSourceEdgePresent,
     routedByRelation, correctWhenRouted,
     byHop, matchedBy, abstainedUncued, abstainedUncuedStems,
+    topicRead, topicIsQuestionConcept, separated, correctWhenSeparated,
     missedIds, missedStems,
   };
 }
@@ -193,6 +211,11 @@ export function buildClaimDetail(items, bands, result) {
     byHop: result.byHop,
     matchedBy: result.matchedBy,
     abstainedUncued: result.abstainedUncued,
+    topicRead: result.topicRead,
+    topicIsQuestionConcept: result.topicIsQuestionConcept,
+    separated: result.separated,
+    correctWhenSeparated: result.correctWhenSeparated,
+    refusedTie: result.refused,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),

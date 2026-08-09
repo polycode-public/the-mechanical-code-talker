@@ -1,11 +1,12 @@
 # PLAN_CSQA_SELECTION.md — lift the CommonsenseQA number off zero: read the topic, then let a conjunction pick
 
-Status: DESIGN. Nothing in this plan is built. `archive/PLAN_COMMON_SENSE_QA.md` delivered the lane, the
-fixture, the rig, the claims block and five rungs, and its last measured state is
-`results/claims/commonsenseqa.json`: 0 of 100 correct, 14 answered, 13 refused, 73 abstained, 30
-with the gold pair present in the graph, 0 of those 30 picked. That plan's own rungs measured
-routing, chain depth and three wording levers as flat. This plan starts from a per-item diagnosis of
-those 30 and attacks what the diagnosis actually found.
+Status: BUILT. S1 through S5 are landed and measured; `results/claims/commonsenseqa.json` holds the
+current run: 5 of 100 correct, 21 answered, 22 refused, 57 abstained, 30 with the gold pair present
+in the graph, 2 of those 30 picked, 1 tie separated (correctly). Each phase's own measured round is
+recorded in its section, below. `archive/PLAN_COMMON_SENSE_QA.md` delivered the lane, the fixture,
+the rig and the claims block this plan builds on; its own rungs measured routing, chain depth and
+three wording levers as flat, and this plan started from a per-item diagnosis of the 30 those rungs
+left on the table.
 
 The finding in one line: the lane mostly never asks about the thing the question is about, and where
 it does ask, a single ConceptNet edge cannot tell the gold option from a distractor, because both
@@ -356,6 +357,11 @@ Then the rig, chunked, section 10's protocol. Expected: `answered` about 21, `co
 about 7, `refused` about 29, `abstained` about 50. A round that lands 0 correct is a measured result
 and gets recorded as one.
 
+**Measured (S1):** `answered` 20, `correctOfAnswered` 4, `refused` 23, `abstained` 57,
+`sourceEdgePresent` 30, `correctWhenSourceEdgePresent` 1, `routedByRelation` 56,
+`correctWhenRouted` 3. Below the 21/7 projection on both counts. `results/claims/commonsenseqa.json`
+holds the full run.
+
 ---
 
 ## 5. Phase S2 — pull the evidence the constraints need
@@ -412,6 +418,10 @@ node --test test/adapters/chat-choice-lane.test.mjs
 node --test test/adapters/chat-child-lane.test.mjs
 node --test "test/estate/*.test.mjs"
 ```
+
+**Measured (S2):** `answered` 20, `correctOfAnswered` 4, `refused` 23, `abstained` 57 — identical to
+S1. Expected: the pull only enriches the store on a tie, and nothing yet reads what it pulled; S3 is
+what turns the pulled facts into a decision.
 
 ---
 
@@ -507,6 +517,12 @@ Then the rig. Expected: `answered` about 27, `correctOfAnswered` about 10, `refu
 correct. The separated band is small, so a round that comes back level is a real possibility and gets
 recorded as one rather than retried with a different rule.
 
+**Measured (S3):** `answered` 21, `correctOfAnswered` 5, `refused` 22, `abstained` 57,
+`sourceEdgePresent` 30, `correctWhenSourceEdgePresent` 2. One tie separated (21 answered vs. S2's
+20) and it was correct (5 vs. S2's 4). Below the 27/10 projection — the separated band on this
+fixture is smaller than the oracle-topic measurement in section 2.6 predicted, consistent with
+S1's own topic reads already landing below their own projection.
+
 ---
 
 ## 7. Phase S4 — the rig columns and the claims block
@@ -570,6 +586,11 @@ node --test "test/estate/*.test.mjs"
 npm run check:links
 ```
 
+**Measured (S4):** value unchanged at 5/100 (S4 adds columns, it changes no decision).
+`topicRead` 92, `topicIsQuestionConcept` 31, `separated` 1, `correctWhenSeparated` 1, `refusedTie`
+22. The built claims page carries all five new `data-source` attributes; estate 108/108,
+check:links OK.
+
 ---
 
 ## 8. Phase S5 — the corpus rows
@@ -596,6 +617,12 @@ node scripts/corpus-matrix.mjs
 npm run corpus:matrix:gaps
 node --test "test/estate/*.test.mjs"
 ```
+
+**Measured (S5):** grammar 350/350 (11 grammar.choice.* rows across 10 unique keys), test:fast
+222/222, estate 108/108. `corpus:matrix:gaps` no longer lists `grammar.choice` — the level-refuses
+row is its negative case. `topic-read` and `constraint-separated` use `setup.teach`;
+`grammar.choice.honest-miss` (an existing row, re-probed in S3) uses `setup.facts` instead, because
+its topic term isn't a lexicon word the teach path recognizes on its own.
 
 ---
 
