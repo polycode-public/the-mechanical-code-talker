@@ -69,11 +69,29 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   singular/plural capability-teach parity gap; the "what type of X is <individual>" ask shape;
   plural teach subjects storing unfolded ("leaves is green"). Candidates recorded in the log,
   not queued: a definitional teach frame, and adjective-qualified have-ask composition.
+- [ ] **News page field report (2026-08-09, deployed site)** — five parts, from live use:
+  (1) polls succeed (request log: USGS ok, Hacker News ok, Wikipedia featured ok at ~400KB) yet
+  FACTS.FROM-NEWS and GRAPH.SIZE stay 0 — the polled text barely reaches the graph; (2) "poll
+  now" gives no pressed feedback and the tab goes Page Unresponsive seconds after the click —
+  the payload is ingested synchronously on the main thread; (3) extraction emits subject-less
+  fragment cards ("has a population of 1,683,115" as a title); (4) the article list needs its
+  own scroll, a sort, and keyword filter pills — it currently runs the page off the screen;
+  (5) iterate locally until real, useful articles come back, with an e2e that clicks the live
+  buttons. In flight in a fix worktree.
+- [ ] **A newsworthiness gate: news vs synthesized concepts** — a specific time period or
+  monetary amount can be news; the *concept* of a time period, monetary unit or building never
+  is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. A design
+  wave is drafting the gate into `PLAN_NEWS_FEED.md`: a testable definition of what the feed
+  may show as news, and where concept-level synthesis belongs instead.
+- [ ] **News through the chat surface** — assess the consumer surface: how a chat user reaches
+  the news feed (`/news` lane), pin it in a test, and show it on index.html. Waits on the
+  chat.mjs slot (playtest-fixes agent) and the index.html slot (claims/index rework) freeing.
 - [ ] **Archive the delivered plan docs and refresh STATUS.md** — after each plan's work is verified by code inspection AND on the deployed site:
-  `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md`,
-  `PLAN_RIVER_CROSSING.md` and `PLAN_NEWS_FEED.md` are delivered end to end and move to
-  `archive/` with their live references repointed; STATUS.md's plan table resynthesizes via
-  the `refresh-status` skill (its syllogist row still reads DESIGN).
+  `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md` and
+  `PLAN_RIVER_CROSSING.md` are delivered end to end and move to `archive/` with their live
+  references repointed; STATUS.md's plan table resynthesizes via the `refresh-status` skill
+  (its syllogist row still reads DESIGN). `PLAN_NEWS_FEED.md` left this list — the field
+  report above reopens it.
 
 ## Discipline
 
