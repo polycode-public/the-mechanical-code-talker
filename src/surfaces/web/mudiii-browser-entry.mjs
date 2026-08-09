@@ -156,15 +156,26 @@ export function routeBetweenCells(factRows, fromCell, toCell) {
  *
  *  `getTeachEnabled` is read fresh on every turn, so a visitor can tick the
  *  page's teach box mid-session and have the very next line read as a fact to
- *  store rather than a command to run. */
+ *  store rather than a command to run.
+ *
+ *  A world `layoutNamed` holds no layout for — the river-crossing puzzle,
+ *  PLAN_RIVER_CROSSING.md's R6 — is not a town square: it has no grid, no
+ *  roster and no chase, only a fixed cast of passengers the world's own facts
+ *  already place. This session still opens the store and answers
+ *  `outlook`/`applyEdit`/`applyAgentEdit` for it, the same way it does for a
+ *  square; `tick`, `driveAgent`, `recast` and `board` never get anything real
+ *  to do without a layout, so they answer with the same "nothing moved" shape
+ *  a resting board would rather than throwing — the page simply never wires
+ *  its play/step/drive controls to a puzzle scenario (see mudiii-viz.mjs's
+ *  `puzzle` flag). */
 export async function createMudiiiSession(
   worldPayload, { agents = [], epoch = 0, getTeachEnabled = () => false } = {},
 ) {
-  // Every engine call is layout-scoped: the world pack ships the BOARD, and
-  // the layout carries the geometry plus the cast counts the engine mints the
-  // animals from. Resolved once here so no call site has to remember it.
+  // Every engine call for a chase board is layout-scoped: the world pack
+  // ships the BOARD, and the layout carries the geometry plus the cast counts
+  // the engine mints the animals from. Resolved once here so no call site has
+  // to remember it. Null for a puzzle world (see the header above).
   const layout = layoutNamed(worldPayload.name);
-  if (!layout) throw new Error(`createMudiiiSession: no town-square layout named "${worldPayload.name}"`);
 
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
@@ -174,9 +185,11 @@ export async function createMudiiiSession(
   for (const rule of worldPayload.rules || []) {
     await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
   }
-  await startTownSquareGame(memoryDir, {
-    layout, epoch, ...townSquareRosterArgs(agents, (id) => roleOfId(id)),
-  });
+  if (layout) {
+    await startTownSquareGame(memoryDir, {
+      layout, epoch, ...townSquareRosterArgs(agents, (id) => roleOfId(id)),
+    });
+  }
 
   // The slot holds one game at a time, and the lane a line reaches is decided
   // by which key is in it. This session's world is a town square, so the slot
@@ -208,11 +221,20 @@ export async function createMudiiiSession(
     },
   });
 
+  /** The empty tick/board payload a layout-less puzzle world answers with:
+   *  nothing minted, nothing moved, nothing to show that a resting board's
+   *  own shape does not already say plainly. */
+  const emptyBoardPayload = () => ({
+    turn: 0, epoch: 0, agents: {}, items: {}, ecology: [], rungs: {}, activeWebs: [],
+  });
+
   /** ONE whole-world step (`runTownSquareTick`) — every live agent moves,
    *  the ecology pass runs, and the result names what happened this turn.
    *  The engine counts the turns; the result's own `turn` is what a page
-   *  displays. */
+   *  displays. A puzzle world has no roster to move, so this is a no-op for
+   *  one: the page never wires its play/step controls to such a scenario. */
   async function tick() {
+    if (!layout) return emptyBoardPayload();
     return runTownSquareTick(memoryDir, { layout });
   }
 
@@ -228,6 +250,7 @@ export async function createMudiiiSession(
    *  the board — still advances the world, and that agent decides for itself
    *  this turn rather than freezing. */
   async function driveAgent(agentId, direction) {
+    if (!layout) return { ...emptyBoardPayload(), driven: { agent: agentId, direction: String(direction ?? ""), accepted: false, from: null, cell: null, facing: null } };
     const state = foldTownSquareState(readFactRows(await loadMemory(memoryDir)));
     const standing = state.removed.has(agentId) ? null : state.placements.get(agentId);
     const facing = state.facing.get(agentId)?.value ?? DEFAULT_FACING;
@@ -260,6 +283,7 @@ export async function createMudiiiSession(
    *  `agents` sizes the new cast the same way `createMudiiiSession`'s own
    *  roster does; `epoch` defaults to one past whatever the store is on. */
   async function recast({ agents: nextAgents = [], epoch: nextEpoch = null } = {}) {
+    if (!layout) return emptyBoardPayload();
     await recastTownSquare(memoryDir, {
       layout, epoch: nextEpoch, ...townSquareRosterArgs(nextAgents, (id) => roleOfId(id)),
     });
@@ -270,8 +294,11 @@ export async function createMudiiiSession(
    *  turn spent. A page opens a session and then draws THIS — otherwise its
    *  first sight of where anything stands is the first tick, and every mesh
    *  sits unplaced until the visitor presses play. `ecology` is empty and
-   *  `turn` is the last tick played (0 on a fresh board). */
+   *  `turn` is the last tick played (0 on a fresh board). A puzzle world has
+   *  no roster, so this is the same empty shape `tick` answers with — the
+   *  page reads its passengers straight off the world's own facts instead. */
   async function board() {
+    if (!layout) return emptyBoardPayload();
     return townSquareBoard(memoryDir, { layout });
   }
 
@@ -286,9 +313,11 @@ export async function createMudiiiSession(
    *  belief map and plan, computed from the store as it stands, with no turn
    *  spent and no write — see agentOutlook (mudiii-turn.mjs). The page calls
    *  this on boot and after every edit, world or actor, so both panels
-   *  recompute live without a tick ever running. */
+   *  recompute live without a tick ever running. A puzzle world passes no
+   *  layout: agentOutlook then answers `agents: {}` and still computes
+   *  `puzzle`, which is the only field a scenario with no roster ever had. */
   async function outlook() {
-    return agentOutlook(memoryDir, { layout });
+    return agentOutlook(memoryDir, layout ? { layout } : {});
   }
 
   /** The world editor's own store sync, reusing mud-editor.mjs UNCHANGED —
@@ -314,8 +343,11 @@ export async function createMudiiiSession(
 
   /** Places one player-placed food item, with player provenance rather than
    *  the world tag — the same "who put that there?" grounding
-   *  test/fixtures/mudiii-ticks.json's turn-8 `place-food` event names. */
+   *  test/fixtures/mudiii-ticks.json's turn-8 `place-food` event names.
+   *  Nothing to place on a board with no grid, so a puzzle world refuses
+   *  rather than reaching into a layout that is not there. */
   async function placeFood(opts) {
+    if (!layout) return { placed: false };
     return engPlaceFood(memoryDir, { layout, ...opts });
   }
 

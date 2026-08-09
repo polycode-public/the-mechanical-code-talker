@@ -548,9 +548,14 @@ export function agentCardMarkup(slot) {
  *  `worldPayload` is `{ name, facts, rules, opening }`, the same shape every
  *  other viz page's world payload takes. `agents` is the roster this page
  *  may cast from, `[{ id, role }]` (role is "predator" or "prey" — see
- *  MUDIII_ROLES). `scenarios` is `[{ label, worldPayload, agents, gridSize }]`
- *  — a page given none is the one-square case and ships no dropdown, the
- *  same rule mud-viz.mjs's own renderMudHtml follows. `assetManifest` is
+ *  MUDIII_ROLES). `scenarios` is `[{ label, worldPayload, agents, gridSize,
+ *  puzzle }]` — a page given none is the one-square case and ships no
+ *  dropdown, the same rule mud-viz.mjs's own renderMudHtml follows. `puzzle`
+ *  is true for a scenario with no town-square layout of its own (the
+ *  river-crossing puzzle): no roster is minted, no tick ever runs, and the
+ *  page shows the actor card and the outlook panel's puzzle plan in place of
+ *  the chase HUD (see this file's own pageScript, `data-hide-when-puzzle`).
+ *  `assetManifest` is
  *  data/mudiii-assets.json's own `assets` rows, embedded as page data and
  *  resolved client-side by `propPlacementsFrom` — this is the one parameter
  *  mud-viz.mjs's renderMudHtml has no equivalent of, because mud.html has no
@@ -613,28 +618,29 @@ ${PILL_COMPLETE_CSS}
   <div class="deck-row">
     <section class="deck" aria-label="simulation controls">
       <div class="deck-controls">
-        <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
-        <button type="button" id="stepBtn">step</button>
+        <button type="button" class="deck-play" id="autoToggle" aria-pressed="false" data-hide-when-puzzle>&#9654; play</button>
+        <button type="button" id="stepBtn" data-hide-when-puzzle>step</button>
         <span class="deck-hint" id="stepHint" hidden>pause to step</span>
-        <button type="button" id="resetBtn">reset</button>
+        <button type="button" id="resetBtn" data-hide-when-puzzle>reset</button>
 ${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which town square to play">
 ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
         </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
-        <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
+        <span class="mono deck-turns" id="globalTurnCount" data-hide-when-puzzle>turns: 0</span>
       </div>
+      <p class="deck-hint mudiii-puzzle-note" id="puzzleNote" hidden>This scenario is a solved-by-search puzzle, not a chase: nothing moves on its own. Follow one of the four passengers below to see its own facts, and the plan panel to see the crossing itself.</p>
       <div class="deck-body">
         <div class="deck-panels">
           <div class="deck-stack deck-stack-1">
-            <label class="deck-slider">foxes
+            <label class="deck-slider" data-hide-when-puzzle>foxes
               <input type="range" id="playerCountSlider" min="0" max="${PLAYER_COUNTS.length - 1}" step="1"
                      value="${Math.max(0, PLAYER_COUNTS.indexOf(DEFAULT_PLAYER_COUNT))}"
                      list="playerCountTicks" aria-valuetext="${DEFAULT_PLAYER_COUNT} foxes">
               <datalist id="playerCountTicks">${PLAYER_COUNTS.map((n, i) => `<option value="${i}" label="${n}"></option>`).join("")}</datalist>
               <span class="mono" id="playerCountValue">${DEFAULT_PLAYER_COUNT}</span>
             </label>
-            <label class="deck-slider">goblins
+            <label class="deck-slider" data-hide-when-puzzle>goblins
               <input type="range" id="npcCountSlider" min="${NPC_COUNT_MIN}" max="${NPC_COUNT_MAX}" step="1"
                      value="${DEFAULT_NPC_COUNT}"
                      list="npcCountTicks" aria-valuetext="${DEFAULT_NPC_COUNT} goblins">
@@ -652,7 +658,7 @@ ${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">
             </label>
             <span class="deck-hint" id="agentSelectHint" hidden>pause to swap</span>
           </div>
-          <div class="deck-stack deck-stack-2">
+          <div class="deck-stack deck-stack-2" data-hide-when-puzzle>
             <label class="deck-slider">delay
               <input type="range" id="delaySlider" min="80" max="2000" step="20" value="${DEFAULT_DELAY_MS}">
               <span class="mono" id="delayValue">${DEFAULT_DELAY_MS}ms</span>
@@ -667,7 +673,7 @@ ${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">
               <button type="button" data-mode="overhead" aria-pressed="false">overhead</button>
             </div>
           </div>
-          <div class="deck-stack deck-stack-3">
+          <div class="deck-stack deck-stack-3" data-hide-when-puzzle>
             <button type="button" class="pill affordance" id="foodPill" data-command="place food" aria-pressed="false">place food</button>
             <label class="deck-teach" title="With this on, a sentence like &quot;The fox is at cell-3-4.&quot; writes a fact into the square instead of running as a command.">
               <input type="checkbox" id="teachToggle">
@@ -675,7 +681,7 @@ ${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">
             </label>
           </div>
         </div>
-        <section class="map-panel" id="mapPanel" aria-label="the town square, from above">
+        <section class="map-panel" id="mapPanel" aria-label="the town square, from above" data-hide-when-puzzle>
           <div class="map-panel-head">
             <span class="map-panel-title">the square, from above</span>
             <span class="mono map-panel-turn" id="mapPanelTurn">turn 0</span>
@@ -755,7 +761,7 @@ ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button 
       </form>
     </div>
   </section>
-  <div class="hud-row" id="hudRow" aria-label="every agent's own status"></div>
+  <div class="hud-row" id="hudRow" aria-label="every agent's own status" data-hide-when-puzzle></div>
 </main>
 <script>
 const MUDIII_PAGE_DATA = ${pageData};
@@ -830,6 +836,7 @@ const MUDIII_STYLE = `
   .deck-select:disabled:hover { border-color: var(--square-stone-dark); }
   .deck-hint { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--square-stone-dark); }
   .deck-hint[hidden] { display: none; }
+  .mudiii-puzzle-note { text-transform: none; letter-spacing: normal; font-size: .78rem; font-family: ${SANS_STACK}; margin: 0 0 .6rem; }
   .deck-play { background: var(--square-ink) !important; color: var(--parchment); border-color: var(--square-ink) !important; padding: .38rem 1.1rem !important; }
   .deck-play[aria-pressed="true"] { background: var(--square-accent) !important; border-color: var(--square-accent) !important; color: var(--square-ink); }
   .deck-turns { margin-left: auto; font-size: .74rem; color: var(--square-stone-dark); background: var(--square-stone-dark); background: rgba(43,35,24,.9); color: var(--square-accent); border-radius: 2px; padding: .1rem .5rem; }
@@ -1150,6 +1157,30 @@ function pageScript() {
   let scenarioIndex = 0;
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
   const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
+  // A puzzle scenario (the river crossing) carries no town-square layout —
+  // no roster, no ticking, no chase — so its four passengers never populate
+  // agentsById the way a minted cast does. hide-when-puzzle marks every
+  // control that means nothing without one.
+  const isPuzzle = function () { return scenario().puzzle === true; };
+  function applyPuzzleVisibility() {
+    const puzzle = isPuzzle();
+    const nodes = document.querySelectorAll("[data-hide-when-puzzle]");
+    for (let i = 0; i < nodes.length; i += 1) nodes[i].hidden = puzzle;
+    el("puzzleNote").hidden = !puzzle;
+  }
+  // Every numbered instance a puzzle world's own facts place — fox-1, goat-1,
+  // cabbage-1, farmer-1 for the river crossing — read straight off rdf:type
+  // rows rather than a roster the engine minted, because a puzzle world has
+  // no roster. Any world's numbered individuals match this, so a later
+  // puzzle scenario needs no new code here, only its own worldPayload.
+  function puzzleActorIdsFrom(facts) {
+    const ids = new Set();
+    (facts || []).forEach(function (f) {
+      if (f && f.predicate === "rdf:type" && /-\\d+$/.test(f.subject)) ids.add(f.subject);
+    });
+    return Array.from(ids).sort();
+  }
+  let puzzleActorIds = [];
 
   // ---- roster minting -----------------------------------------------------
   // The page asks for a COUNT and names the ids it is about to get back: the
@@ -1610,7 +1641,7 @@ function pageScript() {
   // ---- follow dropdown and camera mode ------------------------------------
   function renderAgentSelect() {
     const select = el("agentSelect");
-    const ids = Object.keys(agentsById).sort();
+    const ids = isPuzzle() ? puzzleActorIds : Object.keys(agentsById).sort();
     const current = camera.selectedId;
     select.innerHTML = ids.map(function (id) {
       return '<option value="' + esc(id) + '"' + (id === current ? " selected" : "") + '>' + esc(id) + "</option>";
@@ -1732,13 +1763,13 @@ function pageScript() {
     var presentedPredicates = { "mgx:display-name": true, "mgx:model": true };
     (rows || []).forEach(function (row) {
       if (!row || !row.subject || row.subject.indexOf("@") !== -1) return;
-      if (row.predicate === "rdf:type" && /-\d+$/.test(row.subject)) {
+      if (row.predicate === "rdf:type" && /-\\d+$/.test(row.subject)) {
         kinds[row.object] = true;
         instanceIds[row.subject] = true;
         return;
       }
       if (!presentedPredicates[row.predicate]) return;
-      if (/-\d+$/.test(row.subject)) instanceIds[row.subject] = true;
+      if (/-\\d+$/.test(row.subject)) instanceIds[row.subject] = true;
       else kinds[row.subject] = true;
     });
     var byKind = {};
@@ -2056,6 +2087,12 @@ function pageScript() {
     return "seen";
   }
 
+  // The belief-and-plan half needs a followed agent's own tick entry; the
+  // puzzle-plan half needs only lastOutlook.puzzle, which agentOutlook
+  // computes whether or not any agent has one (see mudiii-turn.mjs's
+  // agentOutlook) — a puzzle scenario carries no roster, so its followed
+  // passenger never has a belief entry, and the puzzle plan would never show
+  // if the two stayed behind the same early return.
   function renderOutlookPanel() {
     const id = el("agentSelect").value;
     const body = el("outlookBeliefBody");
@@ -2065,20 +2102,19 @@ function pageScript() {
     if (!entry) {
       body.innerHTML = '<tr><td class="outlook-empty" colspan="3">Follow an agent above to see what it believes.</td></tr>';
       planText.textContent = "";
-      puzzleText.hidden = true;
-      return;
+    } else {
+      const subjects = Object.keys(entry.belief).sort();
+      body.innerHTML = subjects.length
+        ? subjects.map(function (subject) {
+          const cell = entry.belief[subject];
+          const howText = beliefOriginText(cell, entry.beliefOrigin[subject]);
+          return '<tr><td class="mono">' + esc(subject) + '</td><td class="mono">' + esc(cell || "\\u2014") + "</td><td>" + esc(howText) + "</td></tr>";
+        }).join("")
+        : '<tr><td class="outlook-empty" colspan="3">' + esc(id) + " is alone on the board \\u2014 nothing else to believe anything about.</td></tr>";
+      const planLine = entry.plan.length ? entry.plan.join(" \\u2192 ") : "holding";
+      planText.textContent = id + "'s plan (" + entry.rung + "): " + planLine + " \\u2014 " + entry.goal;
     }
-    const subjects = Object.keys(entry.belief).sort();
-    body.innerHTML = subjects.length
-      ? subjects.map(function (subject) {
-        const cell = entry.belief[subject];
-        const howText = beliefOriginText(cell, entry.beliefOrigin[subject]);
-        return '<tr><td class="mono">' + esc(subject) + '</td><td class="mono">' + esc(cell || "\\u2014") + "</td><td>" + esc(howText) + "</td></tr>";
-      }).join("")
-      : '<tr><td class="outlook-empty" colspan="3">' + esc(id) + " is alone on the board \\u2014 nothing else to believe anything about.</td></tr>";
-    const planLine = entry.plan.length ? entry.plan.join(" \\u2192 ") : "holding";
-    planText.textContent = id + "'s plan (" + entry.rung + "): " + planLine + " \\u2014 " + entry.goal;
-    const puzzle = lastOutlook.puzzle;
+    const puzzle = lastOutlook && lastOutlook.puzzle;
     if (!puzzle) {
       puzzleText.hidden = true;
       puzzleText.textContent = "";
@@ -2126,6 +2162,38 @@ function pageScript() {
     el("stepHint").hidden = true;
   }
 
+  // A puzzle scenario's own boot: no roster to mint, no cast to seed, and no
+  // ticking ever starts. The four passengers a puzzle world places are read
+  // straight off its own facts (puzzleActorIdsFrom), the actor card and the
+  // outlook panel work exactly as they do for a chase board's followed
+  // agent, and the plan panel is the whole point — refreshOutlook() below
+  // computes it the same way it always does.
+  async function bootPuzzle(seq, s) {
+    cast = [];
+    props = [];
+    puzzleActorIds = puzzleActorIdsFrom((s.worldPayload && s.worldPayload.facts) || []);
+    const opened = await window.tmct.open(s.worldPayload, {
+      agents: [],
+      epoch: 0,
+      getTeachEnabled: function () { return el("teachToggle").checked; },
+    });
+    if (seq !== bootSeq) return;
+    session = opened;
+    agentsById = {};
+    itemsById = {};
+    el("chatInput").disabled = false;
+    await callScene("boot", {
+      propPlacements: [], assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
+      agentPresentation: {},
+    });
+    if (seq !== bootSeq) return;
+    camera.selectedId = puzzleActorIds[0] || null;
+    renderAll();
+    await refreshOutlook();
+    showStopped();
+    setSceneStatus("this scenario is a puzzle, not a chase \\u2014 follow one of the four passengers below, and its own plan panel shows the crossing.");
+  }
+
   let bootSeq = 0;
   async function boot() {
     const seq = bootSeq += 1;
@@ -2138,6 +2206,8 @@ function pageScript() {
     deferredSceneCamera = null;
     expandedAgents.clear();
     const s = scenario();
+    applyPuzzleVisibility();
+    if (s.puzzle) return bootPuzzle(seq, s);
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
     cast = foxes.concat(goblins);
@@ -2191,6 +2261,10 @@ function pageScript() {
     if (ticker) { ticker.pause(); ticker = null; }
     expandedAgents.clear();
     const s = scenario();
+    // No control ever calls this on a puzzle scenario (resetBtn hides itself
+    // via data-hide-when-puzzle), but a puzzle world has nothing to re-cast
+    // either way, so re-booting is the correct answer if this is reached.
+    if (s.puzzle) return boot();
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
     cast = foxes.concat(goblins);
