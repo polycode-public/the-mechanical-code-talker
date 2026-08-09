@@ -9,6 +9,7 @@ import { sha256Bytes, normFactTerm } from "./hash.mjs";
 import { FACT_PREDICATE_PHRASES, predicatePhrase, factSentence } from "./fact-phrase.mjs";
 import { STOP_SET } from "./hub-terms.mjs";
 import { articleFor } from "./digest/words.mjs";
+import { provenanceTagToSource } from "./memory/trust.mjs";
 
 export const NEWS_HUB_HOPS = 2; // fixed by design, not a knob
 
@@ -94,11 +95,6 @@ const UNIVERSAL_QUANTIFIERS = new Set(["every", "all", "each"]);
 // lookup is something the graph asked for, not something a source reported.
 const REPORT_PROVENANCE_RE = /(?:^|:)(?:news|news-fixture):/;
 
-// A term the anchoring test (newsworthyHubs, below) must treat as prior
-// knowledge — matched at any segment boundary, including after a " | "
-// union, so a row folded from two assertions counts if either one does.
-const CORPUS_OR_TEACH_SEGMENT_RE = /(?:^|:|\|\s*)(?:corpus|teach):/;
-
 const hasNonEmptyArray = (value) => Array.isArray(value) && value.length > 0;
 
 // The provenance HEAD is the first whitespace-delimited token — the same cut
@@ -148,6 +144,46 @@ export function conceptTerms(rows) {
   return terms;
 }
 
+// The SOURCE_PRIOR kinds a term counts as prior knowledge under
+// (src/domain/memory/trust.mjs) — a seed corpus pack, a taught fact, a
+// curated reference article. `referenceLive` (a live research: lookup) is
+// deliberately absent: an enrichment lookup is something a hub candidate
+// earned by already being a candidate, not knowledge the graph held before
+// any report arrived (PLAN_NEWSWORTHINESS.md section 1.1).
+const PRIOR_KNOWLEDGE_SOURCE_KINDS = new Set(["corpus", "corpusWeak", "reference", "provider", "teach"]);
+
+/** Every subject and object term (term-whole — a two-word phrase is one
+ *  entry, never two) touched by a row whose provenance parses to a
+ *  PRIOR_KNOWLEDGE_SOURCE_KINDS kind. A REPORT row (`news:`/`news-fixture:`,
+ *  REPORT_PROVENANCE_RE above) is excluded even when its own tag happens to
+ *  resolve to the `corpus` kind — `news-fixture:` scores there so a demo
+ *  replay never outranks a live claim (memory/trust.mjs), not because a
+ *  fixture item is knowledge the graph held before its own report arrived; a
+ *  row can never be prior knowledge for the very term it is reporting. Pure
+ *  over `rows`; a caller building the entity gate memoises the result the
+ *  same way buildTermAdjacency already is. */
+export function priorTerms(rows) {
+  const prior = new Set();
+  for (const row of rows) {
+    if (REPORT_PROVENANCE_RE.test(String(row.provenance || ""))) continue;
+    const kind = provenanceTagToSource(row.provenance)?.kind;
+    if (!kind || !PRIOR_KNOWLEDGE_SOURCE_KINDS.has(kind)) continue;
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    if (s) prior.add(s);
+    if (o) prior.add(o);
+  }
+  return prior;
+}
+
+/** True when `term` never appears in `prior` — priorTerms' own absence
+ *  check, taken term-whole. */
+export function isNovelTerm(term, prior) {
+  const t = normFactTerm(term);
+  if (!t) return false;
+  return prior instanceof Set ? !prior.has(t) : !new Set(prior).has(t);
+}
+
 const BARE_NUMBER_RE = /^-?[£$€]?\d[\d,]*(?:\.\d+)?%?$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}(-\d{2})?$/;
 const QUARTER_RE = /^q[1-4]\s+\d{4}$/i;
@@ -175,57 +211,106 @@ export function hasQuantityMarker(term) {
   return /\d/.test(String(term ?? ""));
 }
 
-/** scoreHubs's gated twin: from `reported` rows only, counts terms (subject
- *  and object, STOP_SET removed) as `changed`, then keeps a term only when it
- *  passes all three hub tests (PLAN_NEWS_FEED.md section 17.3, step two):
- *  reported (it is why the term is a candidate at all), not a class or a bare
- *  quantity, and anchored — either the window introduced the term outright,
- *  or one of its own reported rows joins it to something window-new or
- *  carrying a digit run. `rows` is the WHOLE fact set (conceptTerms and the
- *  anchoring test both read prior knowledge from it, not just the window). */
-export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6, adjacency = null } = {}) {
-  const adj = adjacency ?? buildTermAdjacency(rows);
-  const concepts = conceptTerms(rows);
-  const nowMs = toMs(now);
-  const startMs = nowMs - windowMs;
+// The clause-fragment lead words a candidate term's own first word may not
+// be — the lexical half of services/extract-facts.mjs's own
+// readsAsEntityTerm, duplicated here (not imported) because the domain layer
+// never imports from services, a boundary this module's own header states.
+// It is also exactly what that function itself falls back to when no wink
+// engine is wired in, so this is a real, already-shipped code path, not an
+// approximation of one — a caller that DOES wire wink in front of the news
+// gate is free to filter a candidate further before it ever reaches here.
+const ENTITY_TERM_MAX_WORDS = 6;
+const ENTITY_FRAGMENT_LEAD_WORDS = new Set([
+  "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
+  "that", "which", "who", "whom", "whose", "if", "when", "then", "also", "however",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+  "do", "does", "did", "can", "could", "will", "would", "should", "may", "might", "must",
+  "of", "in", "on", "at", "for", "to", "with", "from", "by", "as", "into", "onto",
+  "over", "under", "after", "before", "between", "during", "about", "near", "through",
+  "against", "among", "within", "without", "per",
+]);
 
-  function isWindowNewTerm(term) {
-    const idxs = adj.byTerm.get(term);
-    if (!idxs || !idxs.length) return false;
-    for (const idx of idxs) {
-      const row = rows[idx];
-      const t = rowObservedMs(row);
-      if (!(Number.isFinite(t) && t >= startMs && t <= nowMs)) return false;
-      if (CORPUS_OR_TEACH_SEGMENT_RE.test(String(row.provenance || ""))) return false;
-    }
-    return true;
+/** Does `term` read as a thing's name rather than a clause fragment? Bounds
+ *  the word count and rejects a leading conjunction, auxiliary or
+ *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2). */
+function looksLikeEntityTerm(term) {
+  const text = String(term ?? "").trim();
+  if (!text) return false;
+  const words = text.split(/\s+/);
+  if (words.length > ENTITY_TERM_MAX_WORDS) return false;
+  const first = words[0].toLowerCase().replace(/^[^a-z0-9]+/, "");
+  return Boolean(first) && !ENTITY_FRAGMENT_LEAD_WORDS.has(first);
+}
+
+// The Wikidata research provenance tag (researchSourceTag in
+// adapters/corpus/research-source.mjs: `research:wikidata:<term>`) and the
+// folded shape a Wikidata item id takes once normFactTerm lower-cases it —
+// test A's Q-id anchor (PLAN_NEWSWORTHINESS.md section 1.1). No shipped
+// source stores a raw item id as a fact's object today (wikidata-live.mjs
+// resolves every claim to an English label before it reaches the graph), so
+// this reads real data the day a caller stores one directly.
+const WIKIDATA_RESEARCH_PROVENANCE_RE = /(?:^|:)research:wikidata:/;
+const WIKIDATA_QID_TERM_RE = /^q[1-9]\d*$/;
+
+function hasWikidataQidAnchor(term, rows) {
+  for (const row of rows) {
+    if (!WIKIDATA_RESEARCH_PROVENANCE_RE.test(String(row.provenance || ""))) continue;
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    if (s === term && WIKIDATA_QID_TERM_RE.test(o)) return true;
+    if (o === term && WIKIDATA_QID_TERM_RE.test(s)) return true;
   }
+  return false;
+}
+
+/** The newsworthiness gate (PLAN_NEWSWORTHINESS.md section 2): from
+ *  `reported` rows only, counts terms (subject and object, STOP_SET removed)
+ *  as `changed`, then keeps a term only when it passes test E (a new
+ *  entity — absent from `priorTerms(rows)`, term-whole) or test A (a fresh,
+ *  anchored assertion about an entity the graph already holds). `rows` is
+ *  the WHOLE fact set (conceptTerms and priorTerms both read prior knowledge
+ *  from it, not just the reported window). `prior`, when the caller already
+ *  computed it (buildNewsItems does), is reused rather than recomputed. */
+export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6, adjacency = null, prior = null } = {}) {
+  const concepts = conceptTerms(rows);
+  const priorSet = prior ?? priorTerms(rows);
 
   const counts = new Map();
-  const anchors = new Map();
+  const subjectRowsByTerm = new Map();
   for (const row of reported) {
     const s = normFactTerm(row.subject);
     const o = normFactTerm(row.object);
-    for (const [term, other] of [[s, o], [o, s]]) {
+    for (const term of [s, o]) {
       if (!term || STOP_SET.has(term)) continue;
       counts.set(term, (counts.get(term) || 0) + 1);
-      let others = anchors.get(term);
-      if (!others) anchors.set(term, (others = new Set()));
-      if (other) others.add(other);
     }
+    if (s && !STOP_SET.has(s)) {
+      let subjRows = subjectRowsByTerm.get(s);
+      if (!subjRows) subjectRowsByTerm.set(s, (subjRows = []));
+      subjRows.push(row);
+    }
+  }
+
+  function passesEntityTest(term) {
+    if (concepts.has(term) || isQuantityTerm(term)) return false;
+    if (!looksLikeEntityTerm(term)) return false;
+    return isNovelTerm(term, priorSet);
+  }
+
+  function passesFreshAssertionTest(term) {
+    if (concepts.has(term) || isQuantityTerm(term)) return false;
+    const subjRows = subjectRowsByTerm.get(term);
+    if (!subjRows || !subjRows.length) return false;
+    if (hasWikidataQidAnchor(term, rows)) return true;
+    return subjRows.some((row) => {
+      const object = normFactTerm(row.object);
+      return hasQuantityMarker(row.object) || (object && isNovelTerm(object, priorSet));
+    });
   }
 
   const hubs = [];
   for (const [term, changed] of counts) {
-    if (concepts.has(term) || isQuantityTerm(term)) continue;
-    let anchored = isWindowNewTerm(term);
-    if (!anchored) {
-      for (const other of anchors.get(term) ?? []) {
-        if (hasQuantityMarker(other) || isWindowNewTerm(other)) { anchored = true; break; }
-      }
-    }
-    if (!anchored) continue;
-    hubs.push({ term, changed });
+    if (passesEntityTest(term) || passesFreshAssertionTest(term)) hubs.push({ term, changed });
   }
 
   return hubs
@@ -421,7 +506,8 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
   const adjacency = buildTermAdjacency(rows);
-  const hubs = newsworthyHubs(rows, reported, { now, windowMs, limit, adjacency });
+  const prior = priorTerms(rows);
+  const hubs = newsworthyHubs(rows, reported, { now, windowMs, limit, adjacency, prior });
   const items = hubs.map(({ term, changed }) => {
     const subgraphRows = subgraphAround(rows, term, { adjacency });
     const factIds = subgraphRows.map((r) => r.id).sort();
