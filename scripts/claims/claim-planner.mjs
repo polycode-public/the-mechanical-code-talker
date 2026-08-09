@@ -1,11 +1,14 @@
 // claim-planner.mjs — the tractability envelope: how far the taught planner
 // (a bounded breadth-first search over `findActionPath`, src/domain/
-// planning.mjs) reaches before an instance stops being fast, for three
+// planning.mjs) reaches before an instance stops being fast, for four
 // domains taught in English the way data/games/hanoi-3.txt teaches Hanoi.
 // Hanoi is the shipped lesson (src/domain/hanoi-lesson.mjs); blocksworld and
 // gripper are authored here from test-benchmarks/claims/blocksworld-rules.txt
 // and gripper-rules.txt, the same closed teach frames, scaled by
-// planner-domains.mjs beside this file.
+// planner-domains.mjs beside this file. river reuses data/games/river.txt's
+// own frames, scaled the same way, and for it "stops being fast" often means
+// "stops being solvable" — see planner-instances.mjs's own header for why
+// that is the domain's shape, not a rig defect.
 //
 // For each domain the rig grows the instance size (a disk/block/ball count)
 // and solves a fresh instance at each size, until the solve time's median
@@ -33,7 +36,8 @@
 // stops the run immediately and names the sentence.
 
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writeClaim } from "./lib.mjs";
@@ -111,7 +115,7 @@ function runIsolatedInstance(domainName, size) {
  *  list on time alone (null when the sweep never saw one). Throws
  *  PlannerDeclineError the moment any teach sentence at any size is
  *  declined, rather than folding a mis-teach into the timing data. */
-function measureDomain(domainName) {
+export function measureDomain(domainName) {
   const { unit } = PLANNER_DOMAINS[domainName];
   const sizes = [];
   let size = START_SIZE;
@@ -152,37 +156,107 @@ function measureDomain(domainName) {
   return { unit, sizes, largestUnder1s, firstOver10s };
 }
 
-const domains = {};
-for (const name of Object.keys(PLANNER_DOMAINS)) {
-  console.log(`claim:planner — sweeping ${name}`);
-  domains[name] = measureDomain(name);
+/** Every domain's envelope, keyed by name — the shape both the single-shot
+ *  sweep and the chunked "sweep one domain, write later" path converge on
+ *  before writeClaim runs. */
+function sweepAllDomains() {
+  const domains = {};
+  for (const name of Object.keys(PLANNER_DOMAINS)) {
+    console.log(`claim:planner — sweeping ${name}`);
+    domains[name] = measureDomain(name);
+  }
+  return domains;
 }
 
-if (domains.hanoi.largestUnder1s == null) {
-  throw new Error("claim:planner — hanoi never solved an instance under 1s; the headline value has nothing to report");
+/** Writes results/claims/planner.json from a complete `{ domainName:
+ *  envelope }` map — one entry per PLANNER_DOMAINS key, no more and no
+ *  fewer, so a merge that dropped a domain fails loudly rather than
+ *  shipping a partial claim. The headline value stays hanoi's own
+ *  largest-under-1s, unchanged by how many other domains ride alongside it. */
+export function writeFinalClaim(domains) {
+  const missing = Object.keys(PLANNER_DOMAINS).filter((name) => !domains[name]);
+  if (missing.length) {
+    throw new Error(`claim:planner — missing envelope(s) for ${missing.join(", ")}; every domain in PLANNER_DOMAINS must be measured before writing`);
+  }
+  if (domains.hanoi.largestUnder1s == null) {
+    throw new Error("claim:planner — hanoi never solved an instance under 1s; the headline value has nothing to report");
+  }
+
+  const value = domains.hanoi.largestUnder1s;
+
+  const record = writeClaim("planner", {
+    value,
+    unit: "disks",
+    pack: "shipped",
+    threshold: { direction: "min", value },
+    sources: [
+      "test-benchmarks/claims/blocksworld-rules.txt",
+      "test-benchmarks/claims/gripper-rules.txt",
+    ],
+    detail: {
+      hardwareNote: "measured on the machine that ran this claim; the receipts machine's numbers (test-benchmarks/receipts/receipts.json) are canonical wherever they exist for a shared metric",
+      repBudgetMs: REP_BUDGET_MS,
+      runTimeoutMs: RUN_TIMEOUT_MS,
+      domains,
+    },
+  });
+
+  console.log(`Planner claim written: hanoi solves ${value} disks under 1s.`);
+  for (const [name, envelope] of Object.entries(domains)) {
+    const last = envelope.sizes.at(-1);
+    console.log(`  ${name}: largest under 1s = ${envelope.largestUnder1s ?? "none"} ${envelope.unit}, first over 10s = ${envelope.firstOver10s ?? "not reached"} ${envelope.unit} (swept to ${last.size}, ${last.medianMs}ms median over ${last.reps} run(s))`);
+  }
+  return record;
 }
 
-const value = domains.hanoi.largestUnder1s;
+/** CLI entry point, split so a caller can run one domain's sweep per
+ *  process rather than paying the whole ~12-15 minute measurement in one
+ *  foreground call:
+ *
+ *    node claim-planner.mjs sweep <domainName> --out <path>   // one domain's envelope -> JSON file
+ *    node claim-planner.mjs write <path...>                   // merge saved envelopes, writeClaim
+ *    node claim-planner.mjs                                   // the original one-shot sweep
+ *
+ *  The saved envelope file's own basename is read back as the domain name
+ *  on write, so the two subcommands only agree by filename, not by a
+ *  second manifest to keep in sync. */
+export async function main(argv = process.argv.slice(2)) {
+  const [cmd, ...rest] = argv;
 
-writeClaim("planner", {
-  value,
-  unit: "disks",
-  pack: "shipped",
-  threshold: { direction: "min", value },
-  sources: [
-    "test-benchmarks/claims/blocksworld-rules.txt",
-    "test-benchmarks/claims/gripper-rules.txt",
-  ],
-  detail: {
-    hardwareNote: "measured on the machine that ran this claim; the receipts machine's numbers (test-benchmarks/receipts/receipts.json) are canonical wherever they exist for a shared metric",
-    repBudgetMs: REP_BUDGET_MS,
-    runTimeoutMs: RUN_TIMEOUT_MS,
-    domains,
-  },
-});
+  if (cmd === "sweep") {
+    const domainName = rest[0];
+    if (!domainName || !PLANNER_DOMAINS[domainName]) {
+      throw new Error(`claim:planner sweep: unknown domain "${domainName}" (know: ${Object.keys(PLANNER_DOMAINS).join(", ")})`);
+    }
+    const outFlagAt = rest.indexOf("--out");
+    const outPath = outFlagAt >= 0 ? rest[outFlagAt + 1] : null;
+    if (!outPath) throw new Error("claim:planner sweep: --out <path> is required");
 
-console.log(`Planner claim written: hanoi solves ${value} disks under 1s.`);
-for (const [name, envelope] of Object.entries(domains)) {
-  const last = envelope.sizes.at(-1);
-  console.log(`  ${name}: largest under 1s = ${envelope.largestUnder1s ?? "none"} ${envelope.unit}, first over 10s = ${envelope.firstOver10s ?? "not reached"} ${envelope.unit} (swept to ${last.size}, ${last.medianMs}ms median over ${last.reps} run(s))`);
+    console.log(`claim:planner — sweeping ${domainName}`);
+    const envelope = measureDomain(domainName);
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, `${JSON.stringify(envelope, null, 2)}\n`);
+    console.log(`claim:planner sweep: wrote ${outPath}`);
+    return;
+  }
+
+  if (cmd === "write") {
+    if (rest.length === 0) throw new Error("claim:planner write: pass one or more saved envelope JSON paths");
+    const domains = {};
+    for (const path of rest) {
+      const name = basename(path, ".json");
+      domains[name] = JSON.parse(readFileSync(path, "utf8"));
+    }
+    writeFinalClaim(domains);
+    return;
+  }
+
+  writeFinalClaim(sweepAllDomains());
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
 }
