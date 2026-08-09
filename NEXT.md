@@ -69,15 +69,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   an eighth claim-grid cell, because the grid is pinned one cell per demo PAGE (own about
   page, screenshot, og image) and the river is a scenario inside mudiii.html — promote it to
   a full demo page if wanted.
-- [ ] **News page controls follow-up (2026-08-09 second field report)** — four parts, in
-  flight in a fix worktree: (1) "stop & forget" must purge the articles, not just the start
-  preference; (2) the default-enabled source roster should be actual news feeds (Wikimedia
-  featured, Hacker News, USGS, NYT World, Wikinews) with the reference/KB sources (Simple
-  English Wikipedia, Wikidata, Wiktionary, DBpedia, English Wikipedia) reserved for
-  enrichment rather than polling; (3) an always-present "poll once" button, plus a "stop
-  polling" control that halts the running "start polling live sources" state; (4) "enrich
-  now" output must read like the articles do — through the paraphrasing sentence templates,
-  not raw rows.
+- [ ] **News page controls follow-up (2026-08-09 second field report)** — code-complete and
+  merged, pending deployed verification: (1) "stop & forget" now retracts every news/research
+  row, resets the session and card cache, and holds an emptied feed on screen; (2) the poll
+  roster defaults to all five contemporary feeds with the reference works grouped separately
+  as lookup-only; (3) `poll once` (always present, no consent preference written) and
+  `stop polling` (cancels the timer, aborts an in-flight cycle at its next yield point — an
+  interrupted lookup returns to pending, never the negative cache); (4) enrichment prose now
+  goes through `ingestText` and renders through the same paraphrase templates as articles
+  ("rottnest has a lighthouse", not one bald isa edge).
 - [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — design landed:
   `PLAN_NEWSWORTHINESS.md` defines news as an entity-anchored novelty event (test E: a
   reported row names a non-class term absent from the graph's prior corpus/reference/teach
