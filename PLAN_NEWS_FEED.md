@@ -1,9 +1,8 @@
 # PLAN_NEWS_FEED.md — a news dashboard over the graph: contemporary sources, grounding, enrichment, and a feed of what changed
 
-Status: phases 0 through 9 are built and tested — domain, adapters, the news service, chat
-wiring, the CLI verb, the page, site integration, e2e coverage, and the measurement rig with
-its claims block; section 16 carries the rig's first measured numbers. Phase 10, the
-newsworthiness gate (section 17), is designed and not yet built.
+Status: phases 0 through 10 are built and tested — domain, adapters, the news service, chat
+wiring, the CLI verb, the page, site integration, e2e coverage, the measurement rig with its
+claims block, and the newsworthiness gate; section 16 carries the rig's first measured numbers.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every
 phase names its module paths, data structures, function signatures, config knobs, test files,
@@ -1607,6 +1606,31 @@ graph looked up, inferred or already held is background.**
 
 The concept of a kilometre is not news. A measured area of 7,409 square kilometres, reported this
 week and sourced, is. This phase turns that difference into a filter over observable row fields.
+
+**Built.** `classifyNewsRow`, `reportedRows`, `conceptTerms`, `isQuantityTerm`, `hasQuantityMarker`,
+`newsworthyHubs` and `splitCardRows` ship in `src/domain/news-feed.mjs` exactly as sketched in
+section 17.6; `buildNewsItems` calls `reportedRows`/`newsworthyHubs` where it called
+`newsWindowRows`/`scoreHubs`, both of which keep their own behaviour and tests unchanged.
+`renderNewsParagraph` takes the `reportedIds` option. `src/services/news.mjs`'s `assembleNewsItems`
+(the seed fallback) applies the class/quantity test only, and `renderFeedText` prints the
+background line. `src/services/news-viz.mjs` renders it as a collapsed `<details>` under the
+paragraph. Tested by `test/domain/news-feed.test.mjs` (35 tests total, 19 of them the gate),
+`test/services/news-service.test.mjs` (20 tests, one a full gate-over-real-ingest integration
+check), `test/services/news-viz.test.mjs` (11 tests, one a markup pin for the collapsed line),
+`test/adapters/news-browser-entry.test.mjs` (12 tests, one over a real session) and
+`test-e2e/pages-news-feed.test.mjs`.
+
+Two deltas from the design as written. First, the acceptance table's "kumamoto prefecture
+population row" is a hand-built test row, not a shipped fixture — no such fixture exists, and the
+two hub tests it names are exactly the two synthetic `newsworthyHubs` tests in
+`test/domain/news-feed.test.mjs`. Second, the two committed contemporary fixtures
+(`wikimedia-featured.json`'s "tariff"/"ceasefire" extracts, `usgs-quakes.geojson`'s titles) only
+ever ground an identity fact or nothing at all through the current strict/optimistic grammar, so
+replaying them exercises the gate's SUPPRESSION half cleanly (both e2e fixture-replay scenarios
+assert exactly that) but cannot demonstrate a card actually forming — the service-level
+integration test and the S1-S5 e2e scenario's own inline Wikimedia route both add one realistic
+"X has a population of N" sentence, the same shape a genuine report takes, to prove the admission
+half over the real pipeline.
 
 ### 17.1 Why concept cards reach the feed today
 

@@ -67,11 +67,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   passes and `syllogise` rounds reached from `chat.mjs`/`news.mjs`, unchunkable from the
   news slice; and each article still pays one initial fold because `ingestSnapshotFacts`
   calls `ingestText` per article.
-- [ ] **A newsworthiness gate: news vs synthesized concepts** — a specific time period or
-  monetary amount can be news; the *concept* of a time period, monetary unit or building never
-  is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. The design
-  is landed as `PLAN_NEWS_FEED.md` phase 10 (traced cause: `research:` enrichment lookups
-  enter the news window as if reported); execution is not yet dispatched.
 - [ ] **River-crossing field report (2026-08-09)** — code-complete and merged, awaiting
   deployed-site verification on the next release: play/pause/step now walk the planner's own
   crossing positions (the page derives no move itself), a crossing board renders labelled

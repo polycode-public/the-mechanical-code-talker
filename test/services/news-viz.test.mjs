@@ -87,3 +87,10 @@ test("renderNewsHtml: the sources block lists every registered source once, togg
     assert.match(html, new RegExp(`data-source-id="${id}"`), `source "${id}" has a toggle row`);
   }
 });
+
+test("renderNewsHtml: a card's collapsed background line renders only when backgroundParagraph is non-empty, labelled 'what the graph already knew'", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /details class="background"/, "the collapsed background block's own markup is in the inline script");
+  assert.match(html, /what the graph already knew/, "the collapsed line's own label is present");
+  assert.match(html, /item\.backgroundParagraph\s*\?/, "the block is conditional on the item actually carrying background content");
+});

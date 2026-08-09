@@ -77,11 +77,15 @@ async function waitFor(page, predicate, { timeoutMs = READY_TIMEOUT_MS, pollMs =
 }
 
 /** Serves one contemporary item from the wikimedia-featured mostread shape
- *  (section 4.1's real wire shape). Its title carries two halves on purpose:
- *  a copular sentence the ingest grammar reads (the poll's own fact, which
- *  fact-grounds quokka on arrival), and a verbless fragment whose two terms
- *  ("rottnest", "sightings") no triple can form from — those two are what
- *  the fact-ungrounded ledger admits, and what enrichment then works. */
+ *  (section 4.1's real wire shape). Its title carries three halves on
+ *  purpose: a copular sentence the ingest grammar reads but the
+ *  newsworthiness gate bands background (an identity fact, PLAN_NEWS_FEED.md
+ *  section 17.3 rule 2 — "what a thing is", never a report); a relation
+ *  sentence carrying a fresh measurement, which the gate DOES admit and is
+ *  what actually fact-grounds and hubs quokka; and a verbless fragment whose
+ *  two terms ("rottnest", "sightings") no triple can form from — those two
+ *  are what the fact-ungrounded ledger admits, and what enrichment then
+ *  works. */
 async function routeWikimediaFeatured(page) {
   await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
     status: 200,
@@ -90,7 +94,7 @@ async function routeWikimediaFeatured(page) {
     body: JSON.stringify({
       mostread: {
         articles: [{
-          normalizedtitle: "A quokka is a marsupial. Rottnest sightings, wetlands, dry-season counts.",
+          normalizedtitle: "A quokka is a marsupial. Quokka has a population of 12000. Rottnest sightings, wetlands, dry-season counts.",
           extract: "",
           wikibase_item: "",
           content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Quokka" } },
@@ -129,10 +133,17 @@ async function routeSimpleWikipediaOneHit(page) {
 
 /** Serves the mostread shape a live Wikipedia featured poll returns: several
  *  articles whose extracts run past one clause each. Two of them ground a
- *  clean class fact; the other two carry the shapes that used to lose their
- *  subject on the way in — a trailing "It has a geographic area of …" and a
- *  bare "The gunman had earlier killed …" — whose predicate remainders once
- *  reached the graph as terms and titled a card of their own. */
+ *  clean class fact (background, under the newsworthiness gate); the other
+ *  two carry the shapes that used to lose their subject on the way in — a
+ *  trailing "It has a geographic area of …" and a bare "The gunman had
+ *  earlier killed …" — whose predicate remainders once reached the graph as
+ *  terms and titled a card of their own. The Quokka article also carries a
+ *  relation sentence with a fresh measurement: with every article here an
+ *  identity fact or ungrounded prose, nothing would pass the gate at all, and
+ *  the feed would fall back to scoring the whole seeded graph instead of
+ *  this poll's own content — exactly the false-positive class the gate
+ *  exists to catch, just relocated to the fallback path a poll should never
+ *  need. */
 async function routeWikimediaArticleSet(page) {
   const article = (title, extract) => ({
     normalizedtitle: title,
@@ -149,7 +160,7 @@ async function routeWikimediaArticleSet(page) {
       mostread: {
         articles: [
           article("Tariff", "A tariff is a tax imposed on imported goods and services."),
-          article("Quokka", "A quokka is a marsupial. Rottnest sightings, wetlands, dry-season counts."),
+          article("Quokka", "A quokka is a marsupial. Quokka has a population of 12000. Rottnest sightings, wetlands, dry-season counts."),
           article("Nonthaburi Province", "Nonthaburi Province is a province of Thailand. It has a geographic area of 7,409 square kilometres (2,861 sq mi) and a population of 1,683,115."),
           article("Bang Bua Thong shooting", "The gunman had earlier killed his two grandparents in Bang Bua Thong prior to the shooting."),
         ],
@@ -249,22 +260,27 @@ test("the start button click moves the page through S1-S5: seed items before any
     const health = await page.evaluate(() => window.tmct.session.health);
     assert.equal(health.find((h) => h.sourceId === "wikimedia-featured")?.lastStatus, "ok");
 
-    // The feed now carries an item for each half of the fixture's own work:
-    // the poll's copular fact hubs a quokka item, and the KB enrichment's
-    // fact hubs a rottnest item of its own.
+    // The newsworthiness gate (PLAN_NEWS_FEED.md section 17): the poll's own
+    // "quokka is a marsupial" sentence and the KB enrichment's "rottnest is
+    // an island" sentence are BOTH identity facts, and the KB one also
+    // carries research: provenance — background either way, never a card of
+    // their own. The population sentence is what actually hubs quokka.
     const feedAfterEnrich = await page.evaluate(() => window.tmct.session.buildFeed());
     const hubs = feedAfterEnrich.items.map((i) => i.hub);
-    // The quokka hub's presence is itself the poll fact's proof: only the
-    // windowed news fact can score quokka as a hub, and its two-hop
-    // subgraph then fills with the seed's own dense animal taxonomy, so no
-    // single row is guaranteed a slot under the item's row cap.
     const quokkaItem = feedAfterEnrich.items.find((it) => it.hub === "quokka");
-    assert.ok(quokkaItem, `a quokka item exists from the poll's own fact: ${JSON.stringify(hubs)}`);
+    assert.ok(quokkaItem, `a quokka item exists from the poll's own population fact: ${JSON.stringify(hubs)}`);
     assert.equal(feedAfterEnrich.seedFallback, false, "the windowed news facts drive the feed, not the seed fallback");
-    const rottnestItem = feedAfterEnrich.items.find((it) => it.hub === "rottnest");
-    assert.ok(rottnestItem, `a rottnest item exists from the KB enrichment: ${JSON.stringify(hubs)}`);
-    const rottnestFacts = await page.evaluate((ids) => window.tmct.session.factRows(ids), rottnestItem.factIds);
-    assert.ok(rottnestFacts.map((f) => f.object).includes("island"), "the KB article's fact anchors its item");
+    assert.ok(!hubs.includes("rottnest"), `an identity-only, research-tagged fact never heads its own card: ${JSON.stringify(hubs)}`);
+    // quokka is already a densely-connected seeded animal (several identity
+    // classes, dozens of taxonomy facts), so which identity class opens the
+    // paragraph and which rows survive the item's own row cap both depend on
+    // content-addressed id order, not on anything this test pins. What IS
+    // pinned: the poll's own population fact is what made quokka a hub at
+    // all, so it survives into the reported paragraph, and the seed's own
+    // dense taxonomy is large enough that some of it always gets collapsed.
+    assert.match(quokkaItem.paragraph, /population/, "the poll's own reported fact is in the card's own paragraph");
+    assert.ok(quokkaItem.background.length > 0, "the seed's own dense taxonomy around quokka rides as background, not as the card's reported content");
+    assert.ok(quokkaItem.backgroundParagraph.length > 0, "the collapsed line renders over that background");
 
     // Negative cache: a second enrich attempt does not re-query a term
     // already marked missed within its TTL.
@@ -298,22 +314,29 @@ test("both fixture demo buttons replay their own recorded sample as corpus-tier 
     assert.equal(await page.evaluate(() => window.tmct.session.requestLog.length), 0, "neither replay button has fired yet");
 
     // "replay recorded Wikipedia sample": a real click, asserted by the
-    // page's own status text and by a grounded fact the fixture's own
-    // "A tariff is a tax..." extract licenses (test/fixtures/news/
-    // wikimedia-featured.json), landing under corpus-tier trust.
+    // page's own status text and by the fixture's own "A tariff is a tax..."
+    // extract (test/fixtures/news/wikimedia-featured.json) actually
+    // grounding a fact. That fact is an identity statement, though — under
+    // the newsworthiness gate (PLAN_NEWS_FEED.md section 17) an identity fact
+    // never heads a card, whoever reported it, so the feed stays on the seed
+    // fallback rather than promoting a definition to a report.
+    const rankBeforeWikipedia = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
     await page.locator("#replayWikipedia").click();
     await waitFor(page, () => document.getElementById("controlsStatus").textContent === "replayed wikimedia-featured", { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the Wikipedia replay button's own effect" });
     assert.deepEqual(pageErrors, [], "replaying the Wikipedia fixture never throws");
 
+    const rankAfterWikipedia = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
+    // "negotiations" is unique to this fixture's own "Ceasefire negotiations"
+    // extract — the NYT fixture below mentions "ceasefire" too (a different
+    // headline), so this is the term that actually distinguishes THIS click's
+    // own effect rather than one the two fixtures' prose happens to share.
+    assert.ok(
+      rankAfterWikipedia.some((r) => r.term === "negotiations") && rankAfterWikipedia.length > rankBeforeWikipedia.length,
+      `the Wikipedia replay's own fixture prose ("Ceasefire negotiations are talks...") reaches the ledger: before=${JSON.stringify(rankBeforeWikipedia)} after=${JSON.stringify(rankAfterWikipedia)}`,
+    );
     const afterWikipedia = await page.evaluate(() => window.tmct.session.buildFeed());
-    // A real news-fixture-tagged row now sits inside the window, so the feed
-    // leaves the seed-only fallback for real windowed hub scoring — the
-    // signal that actually distinguishes "the replay landed real facts"
-    // from "nothing changed", where the item count would not.
-    assert.equal(afterWikipedia.seedFallback, false, "a landed fixture-replay fact takes the feed out of the seed fallback");
-    const tariffItem = afterWikipedia.items.find((it) => it.hub === "tariff");
-    assert.ok(tariffItem, `the Wikipedia replay grounds a tariff item: ${JSON.stringify(afterWikipedia.items.map((i) => i.hub))}`);
-    assert.equal(tariffItem.tier, "corpus", "the replayed item carries corpus-tier trust, never live trust");
+    assert.equal(afterWikipedia.seedFallback, true, "an identity-only report grounds a fact but never heads a card, so nothing takes the feed off the seed fallback");
+    assert.ok(!afterWikipedia.items.some((it) => it.hub === "tariff"), `an identity-only, fixture-tagged fact never heads its own card: ${JSON.stringify(afterWikipedia.items.map((i) => i.hub))}`);
 
     // "replay recorded NYT sample": a second, independent click, whose own
     // effect (test/fixtures/news/nyt-world.rss.xml's own "ceasefire"/

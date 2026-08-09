@@ -139,6 +139,8 @@ ${THEME_TOKENS_CSS}
   .item .paragraph { margin: .4rem 0; }
   .item .sources-links { font-size: .74rem; color: var(--muted); }
   .item details.facts summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--corpus); cursor: pointer; }
+  .item details.background summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
+  .item details.background p { margin: .35rem 0 0; color: var(--muted); }
   .item .factrow { font-family: ${MONO_STACK}; font-size: .68rem; padding: .15rem 0; border-bottom: 1px dotted var(--line); }
   .item .facttriple { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); padding-left: .6rem; }
   .empty { color: var(--muted); font-size: .85rem; border: 1px dashed var(--line); border-radius: 6px; padding: .8rem 1rem; }
@@ -432,9 +434,13 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       const seedTag = feed.seedFallback ? '<span class="seedtag">from the seed graph — start to poll live sources</span>' : "";
       const sourcesText = item.sources.map((s) => esc(s.title || s.url)).join(", ");
       const facts = await factListHtml(item.factIds);
+      const background = item.backgroundParagraph
+        ? '<details class="background"><summary>what the graph already knew</summary><p>' + esc(item.backgroundParagraph) + '</p></details>'
+        : "";
       card.innerHTML =
         '<span class="hub">' + esc(item.hub) + '</span><span class="tier">' + esc(item.tier || "unranked") + '</span>' + seedTag
         + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
+        + background
         + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + '</p>' : "")
         + '<details class="facts"><summary>' + item.factIds.length + ' facts</summary>' + facts + '</details>';
       cardsByItemId.set(item.id, card);

@@ -8,6 +8,13 @@ import {
   buildNewsItems,
   renderNewsParagraph,
   evictNewsFacts,
+  classifyNewsRow,
+  reportedRows,
+  conceptTerms,
+  isQuantityTerm,
+  hasQuantityMarker,
+  newsworthyHubs,
+  splitCardRows,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -212,4 +219,181 @@ test("evictNewsFacts orders oldest observedAt first, ties by id, and stops once 
   assert.deepEqual(evictNewsFacts(rows, { cap: 4 }), []);
   assert.deepEqual(evictNewsFacts(rows, { cap: 2 }), ["fact:a", "fact:b"]);
   assert.deepEqual(evictNewsFacts(rows, { cap: 3 }), ["fact:a"]);
+});
+
+// ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ----------------
+
+test("classifyNewsRow bands a syllogised row derived, whether by its provenance head or a non-empty justification", () => {
+  const entailed = row("fact:1", "module", "rdfs:subClassOf", "part", { provenance: "entailed:rdfs-sco" });
+  assert.equal(classifyNewsRow(entailed, { now: NOW, windowMs: 6 * HOUR }), "derived");
+
+  const justified = row("fact:2", "module", "rdfs:subClassOf", "part", {
+    provenance: "news:src@i1", justification: [["fact:a", "fact:b"]],
+  });
+  assert.equal(classifyNewsRow(justified, { now: NOW, windowMs: 6 * HOUR }), "derived");
+});
+
+test("classifyNewsRow bands an identity row background under a news: tag, whoever reported it", () => {
+  const identity = row("fact:1", "tariff", "rdf:type", "tax", { provenance: "news:wikimedia-featured@1" });
+  assert.equal(classifyNewsRow(identity, { now: NOW, windowMs: 6 * HOUR }), "background");
+});
+
+test("classifyNewsRow bands a universal-quantifier row background", () => {
+  const universal = row("fact:1", "spider", "mgx:hasA", "eight legs", { quantifier: "every" });
+  assert.equal(classifyNewsRow(universal, { now: NOW, windowMs: 6 * HOUR }), "background");
+});
+
+test("classifyNewsRow bands a research: row background even inside the window — enrichment is a lookup, never a report", () => {
+  const looked_up = row("fact:1", "kilometre", "mgx:hasProperty", "one thousand metres", { provenance: "research:simple-wikipedia:kilometre" });
+  assert.equal(classifyNewsRow(looked_up, { now: NOW, windowMs: 6 * HOUR }), "background");
+});
+
+test("classifyNewsRow bands a news: row background when its stamp is unreadable or outside the window", () => {
+  const noStamp = row("fact:1", "ceasefire", "mgx:causes", "relief", { observedAt: "" });
+  assert.equal(classifyNewsRow(noStamp, { now: NOW, windowMs: 6 * HOUR }), "background");
+
+  const stale = row("fact:2", "ceasefire", "mgx:causes", "relief", { observedAt: "2020-01-01T00:00:00Z" });
+  assert.equal(classifyNewsRow(stale, { now: NOW, windowMs: 6 * HOUR }), "background");
+});
+
+test("classifyNewsRow bands a fresh news: relation row reported", () => {
+  const fresh = row("fact:1", "ceasefire", "mgx:causes", "relief");
+  assert.equal(classifyNewsRow(fresh, { now: NOW, windowMs: 6 * HOUR }), "reported");
+});
+
+test("reportedRows keeps only the rows classifyNewsRow bands reported", () => {
+  const rows = [
+    row("fact:1", "ceasefire", "mgx:causes", "relief"),
+    row("fact:2", "tariff", "rdf:type", "tax", { provenance: "news:wikimedia-featured@1" }),
+    row("fact:3", "kilometre", "mgx:hasProperty", "unit", { provenance: "research:simple-wikipedia:kilometre" }),
+  ];
+  assert.deepEqual(reportedRows(rows, { now: NOW, windowMs: 6 * HOUR }).map((r) => r.id), ["fact:1"]);
+});
+
+test("newsworthyHubs: a window holding only research: definitions of a term yields zero hubs", () => {
+  const rows = [row("fact:1", "kilometre", "rdfs:subClassOf", "unit", { provenance: "research:simple-wikipedia:kilometre" })];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  assert.deepEqual(reported, []);
+  assert.deepEqual(newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR }), []);
+});
+
+test("newsworthyHubs: adding one news:-tagged population row yields exactly one hub, the reporting subject, never its own bare number", () => {
+  const rows = [
+    row("fact:1", "kilometre", "rdfs:subClassOf", "unit", { provenance: "research:simple-wikipedia:kilometre" }),
+    row("fact:2", "kumamoto prefecture", "mgx:hasProperty", "1738000", { provenance: "news:wikimedia-featured@kumamoto" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.deepEqual(hubs, [{ term: "kumamoto prefecture", changed: 1 }]);
+});
+
+test("newsworthyHubs never hubs a class term, even when a reported row names it", () => {
+  const rows = [
+    row("fact:1", "mont blanc", "rdf:type", "mountain", { provenance: "corpus:test" }),
+    row("fact:2", "avalanche", "mgx:atLocation", "mountain"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(terms.includes("avalanche"), `avalanche is a plain reported term: ${JSON.stringify(terms)}`);
+  assert.ok(!terms.includes("mountain"), `mountain is a class object of an identity row and never hubs: ${JSON.stringify(terms)}`);
+});
+
+test("newsworthyHubs never hubs a bare date or a bare amount, even when a reported row names it and it is otherwise anchored", () => {
+  const rows = [
+    row("fact:1", "q3 2026", "mgx:hasProperty", "record profit"),
+    row("fact:2", "acme corp", "mgx:hasProperty", "42000000"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(!terms.includes("q3 2026"), `a bare quarter never hubs: ${JSON.stringify(terms)}`);
+  assert.ok(!terms.includes("42000000"), `a bare number never hubs: ${JSON.stringify(terms)}`);
+  assert.ok(terms.includes("record profit"), `the non-quantity side of the same row still hubs: ${JSON.stringify(terms)}`);
+  assert.ok(terms.includes("acme corp"), `the non-quantity side of the same row still hubs: ${JSON.stringify(terms)}`);
+});
+
+test("newsworthyHubs never anchors a seeded term on a report that attaches nothing new to it", () => {
+  const rows = [
+    row("seed:1", "london", "rdf:type", "city", { provenance: "corpus:seed", observedAt: "2020-01-01T00:00:00Z" }),
+    row("seed:2", "england", "rdf:type", "country", { provenance: "corpus:seed", observedAt: "2020-01-01T00:00:00Z" }),
+    row("fact:1", "london", "mgx:atLocation", "england"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(!hubs.some((h) => h.term === "london"), "both sides of the report are prior knowledge — nothing anchors london");
+});
+
+test("newsworthyHubs anchors a seeded term once a reported row attaches a digit run to it", () => {
+  const rows = [
+    row("seed:1", "london", "rdf:type", "city", { provenance: "corpus:seed", observedAt: "2020-01-01T00:00:00Z" }),
+    row("fact:1", "london", "mgx:hasProperty", "9 million residents"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "london"), "a digit-run measurement anchors the seeded term");
+});
+
+test("newsworthyHubs anchors a seeded term once a reported row joins it to a genuinely window-new term", () => {
+  const rows = [
+    row("seed:1", "london", "rdf:type", "city", { provenance: "corpus:seed", observedAt: "2020-01-01T00:00:00Z" }),
+    row("fact:1", "london", "mgx:atLocation", "olympic stadium"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "london"), "a window-new neighbour anchors the seeded term");
+});
+
+test("isQuantityTerm and hasQuantityMarker test different questions: IS a quantity vs CARRIES a digit run", () => {
+  for (const t of ["7,409", "2026-08-08", "q3 2026", "1,683,115"]) assert.equal(isQuantityTerm(t), true, t);
+  for (const t of ["kumamoto prefecture", "monetary unit", "avalanche"]) assert.equal(isQuantityTerm(t), false, t);
+  assert.equal(hasQuantityMarker("9 million residents"), true);
+  assert.equal(hasQuantityMarker("magnitude 5.4 earthquake"), true);
+  assert.equal(hasQuantityMarker("olympic stadium"), false);
+});
+
+test("splitCardRows divides a two-hop sub-graph into its reported rows and everything else", () => {
+  const subgraphRows = [
+    row("fact:1", "ceasefire", "mgx:causes", "relief"),
+    row("fact:2", "relief", "rdf:type", "emotion"),
+  ];
+  const { reported, background } = splitCardRows(subgraphRows, new Set(["fact:1"]));
+  assert.deepEqual(reported.map((r) => r.id), ["fact:1"]);
+  assert.deepEqual(background.map((r) => r.id), ["fact:2"]);
+});
+
+test("renderNewsParagraph's reportedIds option keeps the identity sentence from any row, but relations and the closing sentence from reported rows only", () => {
+  const rows = [
+    row("fact:1", "ceasefire", "rdf:type", "event", { provenance: "corpus:test" }),
+    row("fact:2", "ceasefire", "mgx:atLocation", "geneva"),
+    row("fact:3", "ceasefire", "mgx:causes", "criticism", { provenance: "research:wikipedia:ceasefire" }),
+  ];
+  const reportedIds = new Set(["fact:2"]); // only the geneva relation was reported
+  const paragraph = renderNewsParagraph("ceasefire", rows, { reportedIds });
+  assert.equal(paragraph, "ceasefire is a event. ceasefire is found in geneva.");
+  assert.ok(!paragraph.includes("criticism"), "a relation from a non-reported row is dropped");
+});
+
+test("buildNewsItems' gated builder still returns byte-identical items when derived, background and reported rows arrive in two different orders", () => {
+  const rows = [
+    row("fact:1", "ceasefire", "mgx:causes", "relief"),
+    row("fact:2", "relief", "rdf:type", "emotion", { provenance: "corpus:test" }),
+    row("fact:3", "ceasefire", "rdfs:subClassOf", "process", { provenance: "entailed:rdfs-sco" }),
+  ];
+  const opts = { now: NOW, windowMs: 6 * HOUR, limit: 6 };
+  const forward = buildNewsItems(rows, opts);
+  const shuffled = [rows[2], rows[0], rows[1]];
+  const backward = buildNewsItems(shuffled, opts);
+  assert.equal(JSON.stringify(forward), JSON.stringify(backward));
+});
+
+test("buildNewsItems' background/backgroundParagraph carry the relation the gate dropped from the card's own paragraph", () => {
+  const rows = [
+    row("fact:1", "ceasefire", "mgx:causes", "relief"),
+    row("fact:2", "ceasefire", "mgx:atLocation", "geneva", { provenance: "research:wikipedia:ceasefire" }),
+  ];
+  const [item] = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 });
+  assert.deepEqual(item.background, ["fact:2"]);
+  assert.equal(item.paragraph, "ceasefire causes relief.");
+  assert.equal(item.backgroundParagraph, "ceasefire is found in geneva.");
 });
