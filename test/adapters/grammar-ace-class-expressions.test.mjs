@@ -1,7 +1,7 @@
-// grammar/ace.mjs tests — patterns 10 through 18, the class-expression and
-// role vocabulary phase 0 (and the universal-restriction frame after it) add
-// beside the original 9 (grammar-ace.test.mjs keeps those). Pattern numbers
-// refer to docs/references/schemas/ace-owl-fragment.md's table.
+// grammar/ace.mjs tests — patterns 10 through 19, the class-expression and
+// role vocabulary phase 0 (and the universal-restriction and subproperty
+// frames after it) add beside the original 9 (grammar-ace.test.mjs keeps
+// those). Pattern numbers refer to docs/references/schemas/ace-owl-fragment.md's table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseAce } from "../../src/domain/grammar/ace.mjs";
@@ -307,4 +307,44 @@ test("pattern 18: 'every N1 VERB a N2' (no 'only') still routes to pattern 15 un
     ["tmct:some-contains-valve", "owl:someValuesFrom", "tmct:valve"],
     ["tmct:heart", "rdfs:subClassOf", "tmct:some-contains-valve"],
   ]);
+});
+
+test("pattern 19: 'V1 implies V2' (gerund surface) → rdfs:subPropertyOf, one row", () => {
+  const r = parseAce("containing implies touching");
+  assert.equal(r.pattern, "subPropertyOf");
+  assert.deepEqual(r.residue, []);
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:contains", predicate: "rdfs:subPropertyOf", object: "tmct:touches", kind: "rdfs:subPropertyOf" },
+  ]);
+});
+
+test("pattern 19: the 3sg surface on both sides reaches the same predicates as the gerund", () => {
+  const gerund = parseAce("containing implies touching");
+  const thirdPerson = parseAce("contains implies touches");
+  assert.deepEqual(thirdPerson.triples, gerund.triples);
+});
+
+test("pattern 19: a declared override on the subject side wins ('belonging' mints mgx:partOf)", () => {
+  const r = parseAce("belonging implies containing");
+  assert.deepEqual(r.triples, [
+    { subject: "mgx:partOf", predicate: "rdfs:subPropertyOf", object: "tmct:contains", kind: "rdfs:subPropertyOf" },
+  ]);
+});
+
+test("pattern 19: a declared override on the object side wins ('belonging' mints mgx:partOf)", () => {
+  const r = parseAce("containing implies belonging");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:contains", predicate: "rdfs:subPropertyOf", object: "mgx:partOf", kind: "rdfs:subPropertyOf" },
+  ]);
+});
+
+test("pattern 19: only one direction is stored — the reverse row is never minted", () => {
+  const r = parseAce("containing implies touching");
+  const reverse = r.triples.find((t) => t.subject === "tmct:touches" && t.object === "tmct:contains");
+  assert.equal(reverse, undefined);
+});
+
+test("pattern 19: an undeclared verb on either side declines, nothing stored", () => {
+  assert.equal(parseAce("zorbnaxing implies touching"), null);
+  assert.equal(parseAce("containing implies zorbnaxing"), null);
 });

@@ -2,8 +2,9 @@
 // expansion rule (exercised through the public isSatisfiable/proveEntailment/
 // proveSubsumption surface, never through a private helper), subset blocking
 // terminating a self-referential existential, the branch stack exploring its
-// lexicographically first disjunct first, and every budget honestly missing
-// rather than guessing when it runs out.
+// lexicographically first disjunct first, every budget honestly missing
+// rather than guessing when it runs out, and an asserted ABox role edge
+// seeding the branch the ∀/∃-rules read from.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildTableauKb, canonicalKey, findTableauViolations, isSatisfiable, proveEntailment, proveSubsumption } from "../../src/domain/tableau.mjs";
@@ -187,6 +188,39 @@ test("findTableauViolations: the subjects argument narrows which individuals get
   ]);
   assert.deepEqual(findTableauViolations(kb, ["fido"]), []);
   assert.equal(findTableauViolations(kb, ["rex"]).length, 1);
+});
+
+// ---- ABox role assertions: seeded edges ------------------------------------
+
+test("a seeded role assertion creates both endpoint nodes and an edge, with no query at all", () => {
+  const kb = buildTableauKb([{ id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "sessions.mjs" }]);
+  const result = isSatisfiable(kb, []);
+  assert.equal(result.satisfiable, true);
+  assert.ok(findNode(result.model, "chat.mjs"));
+  assert.ok(findNode(result.model, "sessions.mjs"));
+  assert.deepEqual(result.model.edges, [
+    { from: "chat.mjs", r: "tmct:dependsOn", to: "sessions.mjs", fromFacts: ["f1"] },
+  ]);
+});
+
+test("the ∀-rule propagates its filler across a seeded role-assertion edge", () => {
+  const kb = buildTableauKb([{ id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "sessions.mjs" }]);
+  const query = { t: "all", r: "tmct:dependsOn", c: atom("well-tested") };
+  const result = isSatisfiable(kb, [{ ind: "chat.mjs", expr: query, from: ["p1"] }]);
+  assert.equal(result.satisfiable, true);
+  assert.ok(hasLabel(findNode(result.model, "sessions.mjs"), atom("well-tested")));
+});
+
+test("the ∃-rule reuses a seeded role-assertion edge as a witness instead of minting a fresh successor", () => {
+  const kb = buildTableauKb([
+    { id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "sessions.mjs" },
+    { id: "f2", subject: "sessions.mjs", predicate: "rdf:type", object: "module" },
+  ]);
+  const query = { t: "some", r: "tmct:dependsOn", c: atom("module") };
+  const result = isSatisfiable(kb, [{ ind: "chat.mjs", expr: query, from: ["p1"] }]);
+  assert.equal(result.satisfiable, true);
+  const freshSuccessors = result.model.nodes.filter((n) => n.parent === "chat.mjs");
+  assert.equal(freshSuccessors.length, 0, "the seeded edge to sessions.mjs already witnesses the existential; no fresh successor should be minted");
 });
 
 test("findTableauViolations: a budget too small to detect a real clash reports nothing rather than a false clean bill", () => {

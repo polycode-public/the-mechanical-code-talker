@@ -1,12 +1,13 @@
 // tableau-inverse.test.mjs — owl:inverseOf: ACE pattern 17's triple
-// emission, the inverse-aware ∃/∀/≤ rule handling, and pairwise blocking
+// emission, the inverse-aware ∃/∀/≤ rule handling, pairwise blocking
 // (Horrocks & Sattler) terminating a mutually-referential loop that plain
 // equality blocking would mishandle once a role and its inverse can both be
-// walked.
+// walked, and the motivating example proved both through nominal merging
+// and through a directly asserted ABox role edge.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseAce } from "../../src/domain/grammar/ace.mjs";
-import { buildTableauKb, canonicalKey, isSatisfiable, proveSubsumption, toNNF } from "../../src/domain/tableau.mjs";
+import { buildTableauKb, canonicalKey, isSatisfiable, proveEntailment, proveSubsumption, toNNF } from "../../src/domain/tableau.mjs";
 
 const atom = (name) => ({ t: "atom", name });
 const nom = (ind) => ({ t: "nom", ind });
@@ -185,6 +186,23 @@ test("motivating example: an asserted 'contains' edge between two named individu
     { ind: "myValve", expr: toNNF(notE(someE("mgx:partOf", nom("myHeart")))), from: ["p2"] },
   ]);
   assert.equal(result.satisfiable, false, "myValve cannot consistently NOT be mgx:partOf myHeart once myHeart contains it");
+});
+
+test("the 4e motivating example, proved from a directly asserted relation rather than through nominals: teach one contains edge, declare the inverse, and the belongs direction reads off it", () => {
+  // The motivating example above needed owl:oneOf to pin an edge onto two
+  // SPECIFIC named individuals, because buildTableauKb had no ABox relation
+  // reader yet — the only way to plant "myHeart contains myValve" was to
+  // fake it through nominal merging. Now the edge comes straight from a
+  // stored role-assertion row, no oneOf trick needed to create it.
+  const kb = buildTableauKb([
+    { id: "f1", subject: "myHeart", predicate: "rdf:type", object: "heart" },
+    { id: "f2", subject: "myValve", predicate: "rdf:type", object: "valve" },
+    { id: "f3", subject: "myHeart", predicate: "contains", object: "myValve" },
+    { id: "f4", subject: "contains", predicate: "owl:inverseOf", object: "mgx:partOf" },
+  ]);
+  assert.deepEqual(kb.roleAssertions, [{ a: "myHeart", r: "contains", b: "myValve", from: ["f3"] }]);
+  const result = proveEntailment(kb, "myValve", someE("mgx:partOf", atom("heart")));
+  assert.equal(result.status, "proved", "myValve must be provably part of SOME heart, read entirely off the reversed contains edge");
 });
 
 // ---- order-independence and budgets ----------------------------------------

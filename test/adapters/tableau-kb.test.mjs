@@ -1,7 +1,8 @@
 // tableau-kb.test.mjs — buildTableauKb: mapping every stored row shape it
-// reads onto a TBox axiom or an ABox assertion, telling an individual from a
-// class (including the meta-vocabulary carve-out and the punning case), and
-// skipping what an ALC-only KB can't yet represent rather than guessing at it.
+// reads onto a TBox axiom, an ABox assertion or an ABox role edge, telling an
+// individual from a class (including the meta-vocabulary carve-out and the
+// punning case), and skipping what an ALC-only KB can't yet represent rather
+// than guessing at it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildTableauKb, canonicalKey, proveEntailment, proveSubsumption, toNNF } from "../../src/domain/tableau.mjs";
@@ -170,4 +171,47 @@ test("a class-level disjointness plus complement proves a class subsumption", ()
   ]);
   const result = proveSubsumption(kb, "stone", "terrestrial");
   assert.equal(result.status, "proved");
+});
+
+// ---- ABox role assertions ---------------------------------------------------
+
+test("an asserted relation between two individuals reads as a role assertion citing its fact id", () => {
+  const kb = buildTableauKb([
+    { id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "sessions.mjs" },
+  ]);
+  assert.deepEqual(kb.roleAssertions, [
+    { a: "chat.mjs", r: "tmct:dependsOn", b: "sessions.mjs", from: ["f1"] },
+  ]);
+  assert.deepEqual(kb.individuals, ["chat.mjs", "sessions.mjs"]);
+});
+
+test("a class-level relation, neither side a named individual, does not read as a role assertion", () => {
+  const kb = buildTableauKb([{ id: "f1", subject: "human", predicate: "mgx:capableOf", object: "think" }]);
+  assert.deepEqual(kb.roleAssertions, []);
+});
+
+test("a relation naming one individual and one class does not read as a role assertion", () => {
+  const kb = buildTableauKb([{ id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "module" }]);
+  assert.deepEqual(kb.roleAssertions, []);
+});
+
+test("the roleAssertions cap truncates deterministically, keeping the sorted-first rows", () => {
+  const rows = [];
+  for (let i = 0; i < 300; i += 1) {
+    const n = String(i).padStart(3, "0");
+    rows.push({ id: `f${i}`, subject: `node-${n}.mjs`, predicate: "tmct:linksTo", object: "hub.mjs" });
+  }
+  const kb = buildTableauKb(rows);
+  assert.equal(kb.roleAssertions.length, 256);
+  assert.equal(kb.roleAssertions[0].a, "node-000.mjs");
+  assert.equal(kb.roleAssertions[255].a, "node-255.mjs");
+});
+
+test("order-independence: two input orders of role-assertion rows give byte-identical roleAssertions", () => {
+  const rowsA = [
+    { id: "f1", subject: "chat.mjs", predicate: "tmct:dependsOn", object: "sessions.mjs" },
+    { id: "f2", subject: "sessions.mjs", predicate: "tmct:dependsOn", object: "hash.mjs" },
+  ];
+  const rowsB = [...rowsA].reverse();
+  assert.deepEqual(buildTableauKb(rowsA).roleAssertions, buildTableauKb(rowsB).roleAssertions);
 });

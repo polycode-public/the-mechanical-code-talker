@@ -42,6 +42,7 @@ working vocabulary note, not a copy of the specs.
 | `owl:oneOf` | OWL 2 | enumeration — "the N1 N2s are exactly M1, M2 and M3" (repeated rows, one per member) |
 | `owl:differentFrom` | OWL 2 | individual inequality — "PROPERNAME1 is not PROPERNAME2", and the pairwise closure an enumeration mints among its own members |
 | `owl:TransitiveProperty` | OWL 2 | role transitivity — "VERB is transitive" (as the object of `rdf:type` on the verb's minted predicate) |
+| `rdfs:subPropertyOf` | RDFS | role hierarchy — "VERB1 implies VERB2", one direction only |
 
 Notes:
 

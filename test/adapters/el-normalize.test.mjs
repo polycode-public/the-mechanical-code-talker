@@ -5,6 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeElTBox, TOP, BOT } from "../../src/domain/el-classify.mjs";
+import { parseAce } from "../../src/domain/grammar/ace.mjs";
 
 const row = (id, s, p, o) => ({ id: `fact:${id}`, subject: s, predicate: p, object: o, trust: 1 });
 
@@ -133,6 +134,14 @@ test("a role subproperty declaration normalizes to a sub role axiom", () => {
   const { roleAxioms, roles } = normalizeElTBox(rows);
   assert.deepEqual(roleAxioms, [{ kind: "sub", sub: "loves", sup: "cares-about", from: ["fact:1"] }]);
   assert.deepEqual([...roles].sort(), ["cares-about", "loves"]);
+});
+
+test("a taught ACE pattern-19 row ('containing implies touching') normalizes to the same sub role axiom shape", () => {
+  const taught = parseAce("containing implies touching");
+  const rows = taught.triples.map((t, i) => row(String(i + 1), t.subject, t.predicate, t.object));
+  const { roleAxioms, roles } = normalizeElTBox(rows);
+  assert.deepEqual(roleAxioms, [{ kind: "sub", sub: "tmct:contains", sup: "tmct:touches", from: ["fact:1"] }]);
+  assert.deepEqual([...roles].sort(), ["tmct:contains", "tmct:touches"]);
 });
 
 test("truncated is false when the row count is within budget", () => {

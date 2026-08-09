@@ -2,7 +2,9 @@
 // signature-connected slice a real question restricts the store to before
 // buildTableauKb ever sees it, so a step/branch/node budget means something
 // against a real corpus instead of exhausting on TBox internalization before
-// an interesting rule fires.
+// an interesting rule fires. Covers both structural edges (subClassOf,
+// restriction fillers, union/complement/oneOf membership) and asserted ABox
+// role edges between two named individuals.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { extractTableauModule } from "../../src/domain/tableau.mjs";
@@ -128,6 +130,50 @@ test("a role axiom naming a role an included restriction uses is always included
   const extracted = new Set(extractTableauModule(rows, ["heart"], { hops: 4 }).map(rowKey));
   assert.ok(extracted.has("r4"), "the transitive-role axiom for a used role must be included");
   assert.ok(!extracted.has("r5"), "a role axiom for an unrelated role must not be pulled in");
+});
+
+// ---- ABox role assertions ---------------------------------------------------
+
+test("a role-assertion row is kept when the seed is the object side, not just the subject, and the far endpoint's own facts are reached", () => {
+  const rows = [
+    { id: "t1", subject: "hub", predicate: "rdf:type", object: "module" },
+    { id: "t2", subject: "spoke", predicate: "rdf:type", object: "module" },
+    { id: "e1", subject: "hub", predicate: "tmct:contains", object: "spoke" },
+  ];
+  const extracted = new Set(extractTableauModule(rows, ["spoke"], { hops: 4 }).map(rowKey));
+  assert.ok(extracted.has("e1"), "the role-assertion row must be kept when only its object is the seed");
+  assert.ok(extracted.has("t1"), "the far endpoint (hub, the subject side) is reached and its own facts are included too");
+});
+
+test("a chain of role-assertion edges longer than the hop budget still extracts — each edge re-seeds its own walk", () => {
+  const chain = ["m0", "m1", "m2", "m3", "m4", "m5"];
+  const rows = chain.map((m) => ({ id: `type-${m}`, subject: m, predicate: "rdf:type", object: "module" }));
+  for (let i = 0; i < chain.length - 1; i += 1) {
+    rows.push({ id: `edge${i}`, subject: chain[i], predicate: "tmct:contains", object: chain[i + 1] });
+  }
+  const extracted = new Set(extractTableauModule(rows, ["m0"], { hops: 2 }).map(rowKey));
+  for (const r of rows) assert.ok(extracted.has(r.id), `expected ${r.id} (deep in the role-assertion chain) in the extracted module`);
+});
+
+test("a class-level relation does not reseed its far endpoint's own walk — only a role assertion between two individuals does", () => {
+  const rows = [
+    { id: "c1", subject: "human", predicate: "mgx:capableOf", object: "think" },
+    { id: "c2", subject: "think", predicate: "rdfs:subClassOf", object: "cognition" },
+  ];
+  const extracted = new Set(extractTableauModule(rows, ["human"], { hops: 4 }).map(rowKey));
+  assert.ok(extracted.has("c1"), "c1 itself is kept regardless — its subject IS the seed");
+  assert.ok(!extracted.has("c2"), "human/think are not declared individuals, so 'think' is never reseeded as a role-assertion endpoint");
+});
+
+test("a role-hierarchy row for a role that only appears via a role-assertion edge is still pulled into the module", () => {
+  const rows = [
+    { id: "t1", subject: "hub", predicate: "rdf:type", object: "module" },
+    { id: "t2", subject: "spoke", predicate: "rdf:type", object: "module" },
+    { id: "e1", subject: "hub", predicate: "tmct:contains", object: "spoke" },
+    { id: "h1", subject: "tmct:contains", predicate: "rdfs:subPropertyOf", object: "tmct:touches" },
+  ];
+  const extracted = new Set(extractTableauModule(rows, ["hub"], { hops: 4 }).map(rowKey));
+  assert.ok(extracted.has("h1"), "the role-hierarchy row for a role used only via a role assertion must still be pulled into the module");
 });
 
 test("preserves the input row order in its output", () => {

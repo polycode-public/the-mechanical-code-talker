@@ -223,6 +223,10 @@ export const DEFAULT_PROVE_NODES = 512;
  *  module never sees, so the caller pairs this with entailedTrustFrom. */
 export const TABLEAU_RULE_CONFIDENCE = 0.95;
 export const DEFAULT_MODULE_HOPS = 4;
+/** Caps how many asserted ABox role edges one KB admits — a data-structure
+ *  size bound for termination, applied after sorting so truncation is
+ *  deterministic rather than arrival-ordered. */
+export const MAX_ROLE_ASSERTIONS = 256;
 
 // ---- identity: the UNA-lite merge machinery --------------------------------
 //
@@ -839,7 +843,19 @@ function buildInitialBranch(kb, extraAssertions) {
     inequalityFrom.set(key, existing ? sortedUnique([...existing, ...pair.from]) : sortedUnique(pair.from));
   }
 
-  return { nodes, edges: [], closed: false, clash: null, inequalityFrom };
+  // An asserted ABox role edge — the only source of a branch edge besides
+  // the ∃/≥-rules' own generated successors. Pushed in the KB's own sorted
+  // order (buildTableauKb sorts roleAssertions by subject/predicate/object
+  // before returning), so the branch is byte-identical whatever order the
+  // underlying rows arrived in.
+  const edges = [];
+  for (const ra of kb.roleAssertions || []) {
+    ensureNode(ra.a);
+    ensureNode(ra.b);
+    edges.push({ from: ra.a, r: ra.r, to: ra.b, fromFacts: ra.from.slice() });
+  }
+
+  return { nodes, edges, closed: false, clash: null, inequalityFrom };
 }
 
 /** Is the KB plus the given assertions satisfiable? `extraAssertions` is
@@ -906,10 +922,24 @@ function describeClashKind(clash) {
   return `complement:${clash.keyA}~${clash.keyB}`;
 }
 
+// The closed OWL/RDFS vocabulary buildTableauKb's own predicate dispatch
+// recognises (lower-cased, matching the `p` this file always compares
+// against). Shared with extractTableauModule so both agree on what counts
+// as a role assertion — any row whose predicate is NOT in this set — rather
+// than drifting into two separate definitions of "recognised vocabulary".
+const RECOGNISED_KB_PREDICATES = new Set([
+  "owl:onproperty", "owl:somevaluesfrom", "owl:allvaluesfrom", "owl:onclass",
+  "owl:mincardinality", "owl:maxcardinality", "owl:cardinality",
+  "rdfs:subclassof", "owl:disjointwith", "rdf:type", "mgxneg:subclassof",
+  "owl:unionof", "owl:complementof", "rdfs:subpropertyof", "owl:differentfrom",
+  "owl:oneof", "owl:inverseof",
+]);
+
 /** Build the tableau knowledge base from a row set — on a real question,
  *  the output of extractTableauModule, never the raw store. Pure. Returns
  *  { axioms, assertions, roles, individuals, transitiveRoles, roleClosure,
- *  namedIndividuals, nominalIndividuals, differentFrom, inverseOf }. */
+ *  namedIndividuals, nominalIndividuals, differentFrom, inverseOf,
+ *  roleAssertions }. */
 export function buildTableauKb(rows) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && r.subject && r.predicate) : [];
 
@@ -929,6 +959,7 @@ export function buildTableauKb(rows) {
   const subPropertyRows = [];
   const differentFromRows = [];
   const inverseOfRows = [];
+  const roleAssertionCandidates = [];
 
   const pushMap = (map, key, value) => {
     if (!map.has(key)) map.set(key, []);
@@ -957,6 +988,7 @@ export function buildTableauKb(rows) {
     else if (p === "owl:differentfrom") differentFromRows.push(r);
     else if (p === "owl:oneof") pushMap(oneOfMembersOf, r.subject, r);
     else if (p === "owl:inverseof") inverseOfRows.push(r);
+    else roleAssertionCandidates.push(r);
   }
 
   const individualNamesFromType = new Set();
@@ -965,6 +997,20 @@ export function buildTableauKb(rows) {
     if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
   }
   const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
+
+  // An asserted role edge between two named individuals: any predicate
+  // outside the recognised OWL/RDFS vocabulary, both of whose terms resolve
+  // as individuals — a class-level relation ("human mgx:capableOf think")
+  // is not read as an ABox edge. Classification waits for
+  // individualNamesFromType above to exist, so candidates are collected in
+  // the predicate-dispatch pass and filtered here, in a second pass. Sorted
+  // by subject, then predicate, then object, and capped AFTER sorting so
+  // truncation is deterministic rather than arrival-ordered.
+  const roleAssertions = roleAssertionCandidates
+    .filter((r) => isIndividualTerm(r.subject) && isIndividualTerm(r.object))
+    .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object))
+    .slice(0, MAX_ROLE_ASSERTIONS)
+    .map((r) => ({ a: r.subject, r: r.predicate, b: r.object, from: [r.id] }));
 
   const mkAxiom = (sub, sup, from) => ({ sub, sup, from: sortedUnique(from), disjunction: toNNF(orE([notE(sub), sup])) });
 
@@ -1065,6 +1111,7 @@ export function buildTableauKb(rows) {
 
   const roles = new Set();
   for (const { object } of onPropertyOf.values()) roles.add(object);
+  for (const ra of roleAssertions) roles.add(ra.r);
 
   const subPropertyEdges = subPropertyRows
     .map((r) => [r.subject, r.object])
@@ -1078,12 +1125,15 @@ export function buildTableauKb(rows) {
     a.from.join(",").localeCompare(b.from.join(",")));
   assertions.sort((a, b) => a.ind.localeCompare(b.ind) || canonicalKey(a.expr).localeCompare(canonicalKey(b.expr)));
 
-  const individuals = [...new Set(assertions.map((a) => a.ind))].sort();
+  const individuals = [...new Set([
+    ...assertions.map((a) => a.ind),
+    ...roleAssertions.flatMap((ra) => [ra.a, ra.b]),
+  ])].sort();
   const namedIndividuals = new Set(individuals);
 
   return {
     axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure,
-    namedIndividuals, nominalIndividuals, differentFrom, inverseOf,
+    namedIndividuals, nominalIndividuals, differentFrom, inverseOf, roleAssertions,
   };
 }
 
@@ -1094,6 +1144,7 @@ function restrictKbToIndividual(kb, ind) {
     roles: kb.roles,
     individuals: [ind],
     transitiveRoles: kb.transitiveRoles,
+    roleAssertions: kb.roleAssertions,
     roleClosure: kb.roleClosure,
     namedIndividuals: kb.namedIndividuals,
     nominalIndividuals: kb.nominalIndividuals,
@@ -1136,10 +1187,15 @@ function addToSetMap(map, key, value) {
  *  Reaching a term through a restriction's filler edge re-seeds that term's
  *  own walk at the full hop budget, so a chain of restrictions extends the
  *  module without an unbounded hop count; a union/complement/oneOf
- *  membership edge simply spends one hop. The returned rows are every row
- *  whose subject or object lands in the resulting signature, plus any role
- *  axiom naming a role an included restriction uses. Pure, no I/O. Returns
- *  the restricted row array, in the input's own row order. */
+ *  membership edge simply spends one hop. An asserted ABox role edge
+ *  (buildTableauKb's own role-assertion reader test: a predicate outside
+ *  the recognised OWL/RDFS vocabulary, both terms individuals) reseeds its
+ *  far endpoint's own walk the same way a restriction filler does — a chain
+ *  of asserted edges extends the module without an unbounded hop count
+ *  either. The returned rows are every row whose subject or object lands in
+ *  the resulting signature, plus any role axiom naming a role an included
+ *  restriction or role assertion uses. Pure, no I/O. Returns the restricted
+ *  row array, in the input's own row order. */
 export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HOPS } = {}) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && r.subject && r.predicate) : [];
   const hopBudget = clampNonNegativeInt(hops, DEFAULT_MODULE_HOPS);
@@ -1155,6 +1211,16 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
   const memberComplements = new Map();
   const oneOfMembers = new Map();
   const memberOneOf = new Map();
+  const roleAssertionRows = [];         // { subject, predicate, object } — same reader test as buildTableauKb
+  const roleAssertionEndpoints = new Map(); // term -> Set(other endpoint), both directions
+
+  const individualNamesFromType = new Set();
+  for (const r of list) {
+    if (String(r.predicate).trim().toLowerCase() !== "rdf:type") continue;
+    const obj = String(r.object || "").toLowerCase();
+    if (!META_TYPE_OBJECTS.has(obj)) individualNamesFromType.add(r.subject);
+  }
+  const isIndividualTerm = (term) => CODE_REF_SHAPE.test(term) || individualNamesFromType.has(term);
 
   for (const r of list) {
     const p = String(r.predicate).trim().toLowerCase();
@@ -1164,6 +1230,11 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     else if (p === "owl:unionof") { addToSetMap(unionMembers, r.subject, r.object); addToSetMap(memberUnions, r.object, r.subject); }
     else if (p === "owl:complementof") { complementPair.set(r.subject, r.object); addToSetMap(memberComplements, r.object, r.subject); }
     else if (p === "owl:oneof") { addToSetMap(oneOfMembers, r.subject, r.object); addToSetMap(memberOneOf, r.object, r.subject); }
+    else if (!RECOGNISED_KB_PREDICATES.has(p) && isIndividualTerm(r.subject) && isIndividualTerm(r.object)) {
+      roleAssertionRows.push(r);
+      addToSetMap(roleAssertionEndpoints, r.subject, r.object);
+      addToSetMap(roleAssertionEndpoints, r.object, r.subject);
+    }
   }
 
   const subClosureCache = new Map();
@@ -1218,10 +1289,18 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     for (const c of memberComplements.get(term) || []) enqueue(c, hopsLeft - 1);
     for (const m of oneOfMembers.get(term) || []) enqueue(m, hopsLeft - 1);
     for (const c of memberOneOf.get(term) || []) enqueue(c, hopsLeft - 1);
+
+    // A role-assertion edge reseeds its far endpoint's own walk, the same
+    // discipline a restriction chain gets — otherwise a question about one
+    // end of an asserted edge extracts a module that does not contain the
+    // edge, and the far endpoint's own facts (its type, its restrictions)
+    // never enter the module either.
+    for (const other of roleAssertionEndpoints.get(term) || []) enqueue(other, hopBudget);
   }
 
   const rolesUsed = new Set();
   for (const [restriction, role] of onPropertyOf) if (included.has(restriction)) rolesUsed.add(role);
+  for (const r of roleAssertionRows) if (included.has(r.subject) || included.has(r.object)) rolesUsed.add(r.predicate);
 
   return list.filter((r) => {
     if (included.has(r.subject) || included.has(r.object)) return true;
