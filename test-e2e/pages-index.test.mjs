@@ -86,6 +86,23 @@ test("the worked reasoning example sits between two feature plates and shows a r
   assert.match(section, /in every case — a cat or a dog — rex is a dog\./, "the example shows the engine's real by-cases verdict");
 });
 
+test("the news example sits between the news and sprites feature plates and shows a real /news transcript", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const beforeIt = html.indexOf('id="feature-news"');
+  const start = html.indexOf('id="news-example"');
+  const afterIt = html.indexOf('id="feature-sprites"');
+  assert.ok(beforeIt !== -1 && start !== -1 && afterIt !== -1, "the news plate, the example, and the sprites plate are all on the page");
+  assert.ok(beforeIt < start && start < afterIt, "the example sits between two feature plates");
+  const section = html.slice(start, afterIt);
+  assert.match(section, /<pre class="transcript">/, "the example reads as a chat transcript, not prose");
+  assert.match(section, /<span class="you">\/news<\/span>/, "the example runs a real \\/news turn with no polled state");
+  assert.match(section, /no news items yet — poll a source or teach something first\./, "the example shows the engine's real empty-state reply");
+  assert.match(section, /<span class="you">\/news poll<\/span>/, "the example runs a real \\/news poll turn");
+  assert.match(section, /polled 1 source: 2 new items, 1 fact stored, 0 derived, 0 failures, 0 evicted\./, "the example shows the engine's real poll report");
+  assert.match(section, /<span class="you">\/news rank<\/span>/, "the example runs a real \\/news rank turn");
+  assert.match(section, /1\. wombat \(2\) — unknown word/, "the example shows the engine's real ranked ungrounded-term list");
+});
+
 test("the showcase names the Polycode family projects and links to them", async () => {
   const html = await readFile(INDEX, "utf8");
   const showcase = html.slice(html.indexOf('<section class="showcase">'), html.indexOf("<footer>"));
