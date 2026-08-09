@@ -9118,6 +9118,36 @@ function storeMightHaveDlShape(rows) {
     return p === "rdf:type" && String(r?.object || "").toLowerCase() === "transitiveproperty";
   });
 }
+
+/** TRACK B2: the English phrase naming a proved case-split's own disjuncts
+ *  — "a cat or a dog" — from tableau.mjs's own `cases` (a proved result's
+ *  distinct owl:unionOf/owl:oneOf disjuncts, deduped, sorted, capped at
+ *  MAX_PROVEN_CASES) and `casesTotal` (the real count before the cap). Once
+ *  the real count outruns the cap, names the count instead of listing
+ *  beyond it, rather than silently truncating the sentence. Each case is a
+ *  concept-expression atom or nominal (tableau.mjs's own shape), so its
+ *  display term is `.name` or `.ind` respectively. */
+function renderCasesPhrase(cases, casesTotal) {
+  if (casesTotal > cases.length) return `one of ${casesTotal} possibilities`;
+  return cases
+    .map((c) => (c.t === "nom" ? c.ind : c.name))
+    .map((term) => `${indefiniteArticleFor(term)} ${term}`)
+    .join(" or ");
+}
+
+/** The proved-verdict conclusion clause both `/prove` and the automatic
+ *  fallback render: "so X is a Y." for a single deduction, or "in every
+ *  case — <cases> — X is a Y." once `result.cases` names a genuine
+ *  case analysis the proof actually reasoned through — never the ⊑-rule's
+ *  own routine TBox-internalization disjunction, which every proof passes
+ *  through regardless of a union/oneOf premise and which tableau.mjs's own
+ *  `isGenuineDisjunction` already excludes from `cases`. `negate` renders
+ *  the negative form the store-entailed-negation path needs. */
+function renderProvedConclusion(result, subjectWord, classWord, { negate = false } = {}) {
+  const predicate = negate ? `is not a ${classWord}` : `is a ${classWord}`;
+  if (!result.cases || !result.cases.length) return `so ${subjectWord} ${predicate}.`;
+  return `in every case — ${renderCasesPhrase(result.cases, result.casesTotal)} — ${subjectWord} ${predicate}.`;
+}
 async function autoProveFallback(memoryDir, cache, allRows, subjectWord, subjCandidates, objVariants, classWord) {
   // storeMightHaveDlShape already ruled out "nothing DL-shaped anywhere in
   // the store" without paying tableau.mjs's own first-load parse cost — see
@@ -9161,17 +9191,14 @@ async function autoProveFallback(memoryDir, cache, allRows, subjectWord, subjCan
     }
   }
 
-  const renderProvedCite = (result) => {
-    const premiseRows = result.premises.map((id) => byId.get(id)).filter(Boolean);
-    return { cited: premiseRows.map(renderFactLine).join("; "), caseSplit: premiseRows.some((r) => r.predicate === "owl:unionOf" || r.predicate === "owl:oneOf") };
-  };
+  const renderProvedCite = (result) => result.premises.map((id) => byId.get(id)).filter(Boolean).map(renderFactLine).join("; ");
 
   const positive = isIndividual
     ? proveEntailment(kb, subjectTerm, { t: "atom", name: classTerm }, proveOpts)
     : proveSubsumption(kb, subjectTerm, classTerm, proveOpts);
   if (positive.status === "proved") {
-    const { cited, caseSplit } = renderProvedCite(positive);
-    const conclusion = caseSplit ? `in every case, ${subjectWord} is a ${classWord}.` : `so ${subjectWord} is a ${classWord}.`;
+    const cited = renderProvedCite(positive);
+    const conclusion = renderProvedConclusion(positive, subjectWord, classWord);
     return { text: `yes — ${cited}; ${conclusion}`, replace: true };
   }
   if (positive.status === "exhausted") return { budgetExhausted: true };
@@ -9183,8 +9210,9 @@ async function autoProveFallback(memoryDir, cache, allRows, subjectWord, subjCan
     : proveSubsumptionOfNegation(kb, subjectTerm, classTerm, proveOpts);
   if (negative.status === "exhausted") return { budgetExhausted: true };
   if (negative.status !== "proved") return null;
-  const { cited } = renderProvedCite(negative);
-  return { text: `no — ${cited}; so ${subjectWord} is not a ${classWord}.`, replace: true };
+  const cited = renderProvedCite(negative);
+  const conclusion = renderProvedConclusion(negative, subjectWord, classWord, { negate: true });
+  return { text: `no — ${cited}; ${conclusion}`, replace: true };
 }
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
@@ -16623,9 +16651,10 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
         // A case-split conclusion (the ⊔-rule fired on a genuine owl:unionOf
         // or owl:oneOf premise, not just the ⊑-rule's own routine
         // TBox-internalization disjunction, which every proof passes
-        // through) reads as reasoning by cases, not a single deduction.
-        const caseSplit = premiseRows.some((r) => r.predicate === "owl:unionOf" || r.predicate === "owl:oneOf");
-        const conclusion = caseSplit ? `in every case, ${subjectWord} is a ${classWord}.` : `so ${subjectWord} is a ${classWord}.`;
+        // through) reads as reasoning by cases, not a single deduction, and
+        // names the cases it split on (result.cases, tableau.mjs's own
+        // isGenuineDisjunction filter).
+        const conclusion = renderProvedConclusion(result, subjectWord, classWord);
         return mk(`yes — ${cited}; ${conclusion}`);
       }
       if (result.status === "disproved") {

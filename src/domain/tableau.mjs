@@ -285,6 +285,11 @@ export const DEFAULT_MODULE_HOPS = 4;
  *  size bound for termination, applied after sorting so truncation is
  *  deterministic rather than arrival-ordered. */
 export const MAX_ROLE_ASSERTIONS = 256;
+/** Caps how many distinct case-analysis disjuncts a proved verdict names —
+ *  a rendered-sentence bound, not a search bound: a proof that split fifty
+ *  ways should read as one sentence naming a count, never a paragraph.
+ *  Applied after the sort, so truncation is deterministic. */
+export const MAX_PROVEN_CASES = 6;
 
 // ---- identity: the UNA-lite merge machinery --------------------------------
 //
@@ -500,7 +505,10 @@ function cloneBranch(branch) {
       successorCount: node.successorCount,
     });
   }
-  return { nodes, edges: branch.edges.slice(), closed: false, clash: null, inequalityFrom: new Map(branch.inequalityFrom) };
+  return {
+    nodes, edges: branch.edges.slice(), closed: false, clash: null,
+    inequalityFrom: new Map(branch.inequalityFrom), choices: (branch.choices || []).slice(),
+  };
 }
 
 // ---- the expansion rules, fixed priority -----------------------------
@@ -598,6 +606,33 @@ function wouldClashFrom(node, expr) {
   return other ? other.from : null;
 }
 
+/** Is this disjunction a genuine case analysis — an owl:unionOf/owl:oneOf's
+ *  own unwrapped `orE(members)` — rather than the ⊑-rule's routine TBox
+ *  internalization (`mkAxiom`'s own `orE([notE(sub), sup])`, ALWAYS carrying
+ *  a top-level negated member and firing on every axiom, union or not)? The
+ *  two shapes are reliably told apart structurally, with no need to trace
+ *  back to which fact row minted the axiom: a routine internalization's
+ *  disjunct list always has at least one top-level `not`; a genuine
+ *  union/oneOf split — reached only once its OWN wrapping internalization
+ *  step has already fired and unwrapped it onto the node — never does. */
+/** Is this disjunction a genuine case analysis — an owl:unionOf/owl:oneOf's
+ *  own unwrapped `orE(members)` — rather than the ⊑-rule's routine TBox
+ *  internalization (`mkAxiom`'s own `orE([notE(sub), sup])`, which fires on
+ *  every axiom, union axioms included in BOTH directions, and is not a case
+ *  analysis)? Two conditions together, since either alone has a false
+ *  positive: `from` tracing to a real owl:unionOf/owl:oneOf fact id alone
+ *  still matches the union axiom's OWN internalization step (same `from`,
+ *  but a `¬union ∨ …`-shaped disjunct list); every member being a bare atom
+ *  or nominal alone still matches an unrelated axiom's internalization
+ *  after double-negation happens to cancel out a `not` tag. Together they
+ *  land on exactly the moment a union/oneOf's own members reach a node
+ *  unwrapped — the union's synthesized name has already been eliminated by
+ *  then, kept only in `from`'s provenance, never as a disjunct. */
+function isGenuineDisjunction(kb, cs, from) {
+  return from.some((id) => kb.unionOrOneOfIds && kb.unionOrOneOfIds.has(id))
+    && cs.every((c) => c.t === "atom" || c.t === "nom");
+}
+
 /** The disjunctive rule. Non-branching shortcuts first (a disjunct already
  *  present needs no branch; only one live disjunct needs no branch; zero
  *  live disjuncts closes the branch outright) — each is sound, since the
@@ -605,8 +640,11 @@ function wouldClashFrom(node, expr) {
  *  skip branches whose outcome is already decided. An eliminated disjunct's
  *  own clash provenance carries forward into whatever survives it, so a
  *  proof's premise set names the fact that ruled the alternative out, not
- *  just the axiom that offered it. */
-function applyOrRule(branch) {
+ *  just the axiom that offered it. A genuine (isGenuineDisjunction) firing
+ *  also returns `choice: { cs, from }` — the full disjunct list offered,
+ *  BEFORE elimination, so a proved conclusion can name every case it
+ *  reasoned over, not just the one that survived. */
+function applyOrRule(branch, kb) {
   for (const node of branch.nodes.values()) {
     for (const [key, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "or") continue;
@@ -619,19 +657,21 @@ function applyOrRule(branch) {
       const evaluated = cs.map((c) => ({ c, clashFrom: wouldClashFrom(node, c) }));
       const survivors = evaluated.filter((e) => e.clashFrom === null).map((e) => e.c);
       const eliminatedFrom = evaluated.filter((e) => e.clashFrom !== null).flatMap((e) => e.clashFrom);
+      const choice = isGenuineDisjunction(kb, cs, from) ? { cs, from } : null;
       if (survivors.length === 0) {
         return {
           kind: "clash",
           clash: { nodeId: node.id, keyA: canonicalKey(cs[0]), keyB: canonicalKey(toNNF(notE(cs[0]))), premises: sortedUnique([...from, ...eliminatedFrom]) },
+          choice,
         };
       }
       if (survivors.length === 1) {
         node.branchedOn.add(key);
         addLabel(node, survivors[0], [...from, ...eliminatedFrom]);
-        return { kind: "applied", touched: [node.id] };
+        return { kind: "applied", touched: [node.id], choice };
       }
       node.branchedOn.add(key);
-      return { kind: "split", node, from, disjuncts: survivors };
+      return { kind: "split", node, from, disjuncts: survivors, choice };
     }
   }
   return { kind: "none" };
@@ -769,9 +809,15 @@ function stepOnce(branch, kb) {
   const tbox_ = applyTboxRule(branch, kb);
   if (tbox_.applied) return afterTouch(branch, tbox_.touched);
 
-  const or_ = applyOrRule(branch);
+  const or_ = applyOrRule(branch, kb);
   if (or_.kind === "clash") return or_;
-  if (or_.kind === "applied") return afterTouch(branch, or_.touched);
+  if (or_.kind === "applied") {
+    // A single-survivor elimination never clones — the SAME branch keeps
+    // running, so its own choice list is the one true record of every
+    // genuine case this branch's proof actually reasoned through.
+    if (or_.choice) branch.choices.push(or_.choice);
+    return afterTouch(branch, or_.touched);
+  }
   if (or_.kind === "split") return or_;
 
   const atMost_ = applyAtMostRule(branch, kb);
@@ -822,7 +868,12 @@ function search(initialBranch, kb, opts) {
     for (;;) {
       const result = stepOnce(branch, kb);
       if (result.kind === "clash") {
-        closedClashes.push(result.clash);
+        // applyOrRule's own clash (every disjunct of a genuine union/oneOf
+        // split eliminated — the disjunction itself is what closes this
+        // branch) carries its own fresh choice on `result.choice`, on top
+        // of whatever this branch already accumulated from earlier firings.
+        const choices = result.choice ? [...branch.choices, result.choice] : branch.choices.slice();
+        closedClashes.push({ ...result.clash, choices });
         break;
       }
       if (result.kind === "applied") {
@@ -836,10 +887,11 @@ function search(initialBranch, kb, opts) {
         if (steps > maxSteps) return { status: "exhausted", reason: "steps", steps, branches: branchesOpened };
         const children = result.disjuncts.map((d) => {
           const clone = cloneBranch(branch);
+          if (result.choice) clone.choices.push(result.choice);
           const cnode = clone.nodes.get(result.node.id);
           addLabel(cnode, d, result.from);
           const clash = detectClash(cnode);
-          if (clash) { clone.closed = true; clone.clash = clash; }
+          if (clash) { clone.closed = true; clone.clash = { ...clash, choices: clone.choices.slice() }; }
           return clone;
         });
         for (let i = children.length - 1; i >= 0; i -= 1) {
@@ -857,7 +909,7 @@ function search(initialBranch, kb, opts) {
           const keepId = mergeNodes(clone, kb, a, b);
           const keepNode = clone.nodes.get(keepId);
           const clash = keepNode && detectClash(keepNode);
-          if (clash) { clone.closed = true; clone.clash = clash; }
+          if (clash) { clone.closed = true; clone.clash = { ...clash, choices: clone.choices.slice() }; }
           return clone;
         });
         for (let i = children.length - 1; i >= 0; i -= 1) {
@@ -913,7 +965,7 @@ function buildInitialBranch(kb, extraAssertions) {
     edges.push({ from: ra.a, r: ra.r, to: ra.b, fromFacts: ra.from.slice() });
   }
 
-  return { nodes, edges, closed: false, clash: null, inequalityFrom };
+  return { nodes, edges, closed: false, clash: null, inequalityFrom, choices: [] };
 }
 
 /** Is the KB plus the given assertions satisfiable? `extraAssertions` is
@@ -928,7 +980,7 @@ export function isSatisfiable(kb, extraAssertions = [], opts = {}) {
   // not just the ones the search loop discovers along the way.
   for (const node of branch.nodes.values()) {
     const clash = detectClash(node);
-    if (clash) { branch.closed = true; branch.clash = clash; break; }
+    if (clash) { branch.closed = true; branch.clash = { ...clash, choices: [] }; break; }
   }
   const result = search(branch, kb, opts);
   if (result.status === "exhausted") {
@@ -945,7 +997,22 @@ function proveByRefutation(kb, extraAssertions, opts) {
   if (result.satisfiable === null) return { status: "exhausted", reason: result.exhausted, steps: result.steps, branches: result.branches };
   if (result.satisfiable === false) {
     const premises = sortedUnique(result.closedClashes.flatMap((c) => c?.premises || []));
-    return { status: "proved", premises, steps: result.steps, branches: result.branches };
+    // The distinct case-analysis disjuncts every closed branch actually
+    // reasoned over — the union node's own genuine split (isGenuineDisjunction),
+    // never the ⊑-rule's routine internalization disjunction every proof
+    // passes through regardless of a union/oneOf premise. Deduped by
+    // canonicalKey (the SAME union offered on two different branches names
+    // its cases once), sorted for determinism, capped for readability.
+    const caseExprsByKey = new Map();
+    for (const clash of result.closedClashes) {
+      for (const choice of clash?.choices || []) {
+        for (const expr of choice.cs) caseExprsByKey.set(canonicalKey(expr), expr);
+      }
+    }
+    const sortedCaseKeys = [...caseExprsByKey.keys()].sort();
+    const cases = sortedCaseKeys.slice(0, MAX_PROVEN_CASES).map((k) => caseExprsByKey.get(k));
+    const casesTotal = sortedCaseKeys.length;
+    return { status: "proved", premises, cases, casesTotal, steps: result.steps, branches: result.branches };
   }
   return { status: "disproved", model: result.model, steps: result.steps, branches: result.branches };
 }
@@ -1203,9 +1270,19 @@ export function buildTableauKb(rows) {
   ])].sort();
   const namedIndividuals = new Set(individuals);
 
+  // Every owl:unionOf/owl:oneOf row's own fact id — how applyOrRule tells a
+  // genuine case-analysis disjunction (a union/oneOf's own unwrapped
+  // members) from the ⊑-rule's routine TBox-internalization disjunction,
+  // which every axiom (union axioms included, in BOTH directions) also
+  // fires and which must never be read as a case split.
+  const unionOrOneOfIds = new Set([
+    ...[...unionMembersOf.values()].flatMap((rows) => rows.map((r) => r.id)),
+    ...[...oneOfMembersOf.values()].flatMap((rows) => rows.map((r) => r.id)),
+  ]);
+
   return {
     axioms, assertions, roles: [...roles].sort(), individuals, transitiveRoles, roleClosure,
-    namedIndividuals, nominalIndividuals, differentFrom, inverseOf, roleAssertions,
+    namedIndividuals, nominalIndividuals, differentFrom, inverseOf, roleAssertions, unionOrOneOfIds,
   };
 }
 
@@ -1222,6 +1299,7 @@ function restrictKbToIndividual(kb, ind) {
     nominalIndividuals: kb.nominalIndividuals,
     differentFrom: kb.differentFrom,
     inverseOf: kb.inverseOf,
+    unionOrOneOfIds: kb.unionOrOneOfIds,
   };
 }
 

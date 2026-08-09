@@ -3,11 +3,14 @@
 // subsumption proof's fresh individual never leaks into the KB's own
 // individuals or a rendered premise, the premise union for a case-split
 // proof names every fact the case analysis actually used, a satisfiable KB
-// disproves with a counter-model, and feeding the same rows in two orders
-// gives the byte-identical answer.
+// disproves with a counter-model, feeding the same rows in two orders gives
+// the byte-identical answer, and a proved verdict's `cases` field names the
+// real owl:unionOf/owl:oneOf disjuncts it reasoned over — never the
+// ⊑-rule's own routine TBox-internalization disjunction every proof passes
+// through regardless of a union premise.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTableauKb, canonicalKey, proveEntailment, proveSubsumption, TABLEAU_RULE_CONFIDENCE } from "../../src/domain/tableau.mjs";
+import { buildTableauKb, canonicalKey, proveEntailment, proveSubsumption, TABLEAU_RULE_CONFIDENCE, MAX_PROVEN_CASES } from "../../src/domain/tableau.mjs";
 
 const atom = (name) => ({ t: "atom", name });
 
@@ -111,4 +114,51 @@ test("a case-split proof's premise union spans every branch the case analysis ac
   const result = proveEntailment(kb, "sprocket", atom("mechanism"));
   assert.equal(result.status, "proved");
   for (const id of ["c1", "c2", "c3", "c4", "c5", "c6"]) assert.ok(result.premises.includes(id), `expected ${id} among the case-split premises`);
+  assert.deepEqual([...result.cases].sort((a, b) => canonicalKey(a).localeCompare(canonicalKey(b))), [atom("lever"), atom("spring")]);
+});
+
+test("a union-driven proof (E3) returns its disjuncts in cases", () => {
+  const kb = buildTableauKb(e3Rows());
+  const result = proveEntailment(kb, "rex", atom("dog"));
+  assert.equal(result.status, "proved");
+  assert.deepEqual(result.cases, [atom("cat"), atom("dog")]);
+  assert.equal(result.casesTotal, 2);
+});
+
+test("a proof with no genuine split (E4) returns an empty cases even though the ⊑-rule internalized several disjunctions", () => {
+  const kb = buildTableauKb(e4Rows());
+  const result = proveSubsumption(kb, "stone", "terrestrial");
+  assert.equal(result.status, "proved");
+  assert.deepEqual(result.cases, []);
+  assert.equal(result.casesTotal, 0);
+});
+
+test("two input orders of a union-driven proof give the same cases list", () => {
+  const rows = e3Rows();
+  const shuffled = [rows[3], rows[1], rows[4], rows[0], rows[2]];
+  const resultA = proveEntailment(buildTableauKb(rows), "rex", atom("dog"));
+  const resultB = proveEntailment(buildTableauKb(shuffled), "rex", atom("dog"));
+  assert.deepEqual(resultA.cases, resultB.cases);
+});
+
+test("MAX_PROVEN_CASES caps the rendered cases list deterministically, reporting the real total apart from the capped list", () => {
+  // A union wide enough to outrun the cap — every member but one is
+  // disjoint with rex, so only the survivor lets the proof close, but every
+  // member still counts toward the case analysis the proof reasoned over.
+  const memberCount = MAX_PROVEN_CASES + 3;
+  const members = Array.from({ length: memberCount }, (_, i) => `member-${String(i).padStart(2, "0")}`);
+  const rows = [
+    ...members.map((m, i) => ({ id: `u${i}`, subject: "wide-union", predicate: "owl:unionOf", object: m })),
+    { id: "s1", subject: "source", predicate: "rdfs:subClassOf", object: "wide-union" },
+    { id: "t1", subject: "rex", predicate: "rdf:type", object: "source" },
+    ...members.slice(1).map((m, i) => ({ id: `d${i}`, subject: "rex", predicate: "owl:disjointWith", object: m })),
+  ];
+  const kb = buildTableauKb(rows);
+  const result = proveEntailment(kb, "rex", atom(members[0]));
+  assert.equal(result.status, "proved");
+  assert.equal(result.cases.length, MAX_PROVEN_CASES);
+  assert.equal(result.casesTotal, memberCount);
+  const rowsRev = [...rows].reverse();
+  const resultRev = proveEntailment(buildTableauKb(rowsRev), "rex", atom(members[0]));
+  assert.deepEqual(result.cases, resultRev.cases, "the capped list is deterministic regardless of input order");
 });

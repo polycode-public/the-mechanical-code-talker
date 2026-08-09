@@ -29,7 +29,7 @@ test("E3's premises taught, asked as a plain question, answer yes citing both pr
     assert.match(answer, /rex is a pet/);
     assert.match(answer, /rex is not a cat/);
     assert.match(answer, /pet is a kind of cat-or-dog/);
-    assert.match(answer, /in every case, rex is a dog\./);
+    assert.match(answer, /in every case — a cat or a dog — rex is a dog\./);
     assert.equal(record.miss, false);
     assert.equal(record.via, "fact");
   } finally {
@@ -63,7 +63,7 @@ test("an entailed negation renders no, grounded in the store — not a counter-m
     const { answer, record } = await runTurn("is rex a fish", { memoryDir: dir, sessionId: "s1" });
     assert.match(answer, /^no —/);
     assert.match(answer, /dog is not a fish/);
-    assert.match(answer, /so rex is not a fish\./);
+    assert.match(answer, /in every case — a cat or a dog — rex is not a fish\./);
     assert.equal(record.miss, false);
   } finally {
     await rm(dir, { recursive: true, force: true });
