@@ -353,6 +353,10 @@ e2e-web-index:
 e2e-web-local-origin:
   extends: .e2e-web-base
   script:
+    # pages-news / pages-news-feed lstat public/chat-seed.json before copying it
+    # into their snapshot; only deploy:website's demo:build produces it, so this
+    # job builds it for itself.
+    - npm run build:chat-seed
     - >-
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
