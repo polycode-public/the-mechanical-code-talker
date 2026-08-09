@@ -41,8 +41,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   work. Playtest 007 (turn 14) widens the scope: taught capability
   (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
   "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
-  Playtest 008 (turn 26) adds the plain-property shape: "animal is alive" (corpus) plus
-  "pig is a kind of animal" leaves "are pigs alive" a miss. In flight in the playtest-008
+  Playtest 027 (turn 26) adds the plain-property shape: "animal is alive" (corpus) plus
+  "pig is a kind of animal" leaves "are pigs alive" a miss. In flight in the playtest-027
   fixes worktree.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
@@ -88,8 +88,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   fallback in favour of a designed empty state, and decides the borderline cases ("apple"
   without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
   dispatched; N2 sequences after the news-controls worktree merges (same files).
-- [ ] **Playtest 008 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_008.md`
-  in flight) — queued, in flight in a chat.mjs worktree: (1) taught have-facts must
+- [ ] **Playtest 027 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_027.md`
+  holds the transcript and analysis) — queued, in flight in a chat.mjs worktree: (1) taught have-facts must
   round-trip through "how many X does Y have" (taught "dog has 4 legs", the count ask still
   missed — digits and number words both); (2) "X is what" inversion routes to the what-is
   lane ("a dog is what" missed while "what is a dog" answered), with an adjective-qualified
