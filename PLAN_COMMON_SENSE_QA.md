@@ -708,7 +708,30 @@ choice lane still lands on `refMiss` before `probeChoiceOptions` ever runs. Reac
 two different rungs: `extractStemSourceTerm` gaining postponed-wh templates of its own is the next
 one, in `choice-question.mjs`.
 
-**Model tier: Sonnet.** The seeding path and the detail columns need care; the scoring is trivial.
+**`extractStemSourceTerm` gained four postponed-wh templates of its own**, one per shape
+`leadsInterrogative` now gates on: a wh-word fronted behind a single preposition, a wh-word inverted
+mid-sentence around an auxiliary with no comma, a trailing clause after a comma or period that itself
+opens with a question-lead word, and a bare trailing wh-word with nothing marking where its term
+starts. Across the fixture (through the same enumerated shape the rig feeds it), stems with a
+non-empty extracted source term rose from 37 to 69; the remaining 24 fixture stems that pass the
+interrogative gate but still extract "" are shapes structured enough to gate as a question but not
+structured enough for a closed template to read a term out of (a self-referential "what are you?", a
+clause with the term buried behind a chain of subordinate clauses), plus the fixture's own duplicate-
+option and comma-boundary edge cases.
+
+Re-measured: `answered`, `refused`, `abstained`, and `sourceEdgePresent` all came back byte-identical
+to the prior round (1/2/97/2, still 0 correct) — the same single item answers, the same two refuse.
+Traced directly (`runTurn` against a freshly seeded store, outside the rig): the newly-reached stems
+do now reach `probeChoiceOptions` rather than `refMiss`-ing before it — "During a shark filled tornado
+where should you not be?" answers "I don't know how 'shark filled tornado' relates to any of ..."
+instead of the old templates' generic no-source-term miss, and feeding the same item's gold concept
+("shark") through the probe directly grounds two options and refuses. The gap is the captured phrase,
+not the reach: the mid-sentence and trailing-clause templates cap at three words with nothing to stop
+them short of a boundary word, so a modifier-heavy noun phrase ("shark filled tornado") comes out
+whole instead of at its head noun, and a three-word phrase never matches a single-concept child-pack
+key. `answered`/`refused`/`abstained` can't see this distinction either way: a miss the probe never
+reached and a miss the probe reached and found nothing both set `record.miss = true` and land in
+`abstained` alike, so the schema has no column that would show the reach gain this round did land.
 
 New file: **`scripts/claims/claim-commonsenseqa.mjs`**. Registered in `package.json` as
 `"claim:commonsenseqa": "node scripts/claims/claim-commonsenseqa.mjs"`, which is what enrols it with
