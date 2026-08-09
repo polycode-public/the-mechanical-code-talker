@@ -24,6 +24,25 @@ test("A rdfs:subClassOf R, R a someValuesFrom restriction, reads as A ⊑ ∃r.C
   assert.ok(hasAxiom(kb, atom("heart"), { t: "some", r: "has", c: atom("valve") }));
 });
 
+test("A rdfs:subClassOf R, R an allValuesFrom restriction, reads as A ⊑ ∀r.C, citing all three fact ids", () => {
+  const kb = buildTableauKb([
+    { id: "f1", subject: "heart", predicate: "rdfs:subClassOf", object: "all-contains-valve" },
+    { id: "f2", subject: "all-contains-valve", predicate: "owl:onProperty", object: "contains" },
+    { id: "f3", subject: "all-contains-valve", predicate: "owl:allValuesFrom", object: "valve" },
+  ]);
+  assert.ok(hasAxiom(kb, atom("heart"), { t: "all", r: "contains", c: atom("valve") }));
+  const ax = kb.axioms.find((a) => canonicalKey(a.sub) === canonicalKey(atom("heart")));
+  assert.deepEqual(ax.from, ["f1", "f2", "f3"]);
+});
+
+test("a restriction with neither someValuesFrom nor allValuesFrom nor a qualified cardinality is skipped rather than guessed at", () => {
+  const kb = buildTableauKb([
+    { id: "f1", subject: "heart", predicate: "rdfs:subClassOf", object: "mystery-restriction" },
+    { id: "f2", subject: "mystery-restriction", predicate: "owl:onProperty", object: "contains" },
+  ]);
+  assert.ok(!kb.axioms.some((a) => a.sub.name === "heart"), "an unrepresentable restriction must not mint an axiom");
+});
+
 test("A rdfs:subClassOf R, R a min-cardinality restriction with onClass, reads as A ⊑ ≥n r.C", () => {
   const kb = buildTableauKb([
     { id: "f1", subject: "bicycle", predicate: "rdfs:subClassOf", object: "min-2-wheel" },

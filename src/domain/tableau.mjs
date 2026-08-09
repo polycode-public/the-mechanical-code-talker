@@ -47,6 +47,7 @@ const notE = (c) => ({ t: "not", c });
 const andE = (cs) => ({ t: "and", cs });
 const orE = (cs) => ({ t: "or", cs });
 const someE = (r, c) => ({ t: "some", r, c });
+const allE = (r, c) => ({ t: "all", r, c });
 
 /** A stable string key for a concept expression. Sorting, dedup and clash
  *  detection all go through this, so two structurally equal expressions are
@@ -914,6 +915,7 @@ export function buildTableauKb(rows) {
 
   const onPropertyOf = new Map();   // restriction -> { object, id }
   const someValuesFromOf = new Map();
+  const allValuesFromOf = new Map();
   const onClassOf = new Map();
   const cardinalityOf = new Map();  // restriction -> { kind, n, id }
   const unionMembersOf = new Map(); // union node -> [row, …]
@@ -937,6 +939,7 @@ export function buildTableauKb(rows) {
     const p = String(r.predicate).trim().toLowerCase();
     if (p === "owl:onproperty") onPropertyOf.set(r.subject, { object: r.object, id: r.id });
     else if (p === "owl:somevaluesfrom") someValuesFromOf.set(r.subject, { object: r.object, id: r.id });
+    else if (p === "owl:allvaluesfrom") allValuesFromOf.set(r.subject, { object: r.object, id: r.id });
     else if (p === "owl:onclass") onClassOf.set(r.subject, { object: r.object, id: r.id });
     else if (p === "owl:mincardinality") cardinalityOf.set(r.subject, { kind: "min", n: Number(r.object), id: r.id });
     else if (p === "owl:maxcardinality") cardinalityOf.set(r.subject, { kind: "max", n: Number(r.object), id: r.id });
@@ -978,6 +981,11 @@ export function buildTableauKb(rows) {
     const svfRow = someValuesFromOf.get(restriction);
     if (svfRow) {
       axioms.push(mkAxiom(atom(r.subject), someE(propRow.object, atom(svfRow.object)), [r.id, propRow.id, svfRow.id]));
+      continue;
+    }
+    const avfRow = allValuesFromOf.get(restriction);
+    if (avfRow) {
+      axioms.push(mkAxiom(atom(r.subject), allE(propRow.object, atom(avfRow.object)), [r.id, propRow.id, avfRow.id]));
       continue;
     }
     const cardRow = cardinalityOf.get(restriction);
@@ -1123,15 +1131,15 @@ function addToSetMap(map, key, value) {
 /** Restrict fact rows to the signature-connected module around a set of
  *  seed terms. `rdfs:subClassOf` closes unbounded in both directions (it is
  *  always followed, at no hop cost); a restriction's filler (owl:onProperty
- *  / owl:someValuesFrom / owl:onClass) and owl:unionOf / owl:complementOf /
- *  owl:oneOf membership are hop-bounded structural edges. Reaching a term
- *  through a restriction's filler edge re-seeds that term's own walk at the
- *  full hop budget, so a chain of restrictions extends the module without
- *  an unbounded hop count; a union/complement/oneOf membership edge simply
- *  spends one hop. The returned rows are every row whose subject or object
- *  lands in the resulting signature, plus any role axiom naming a role a
- *  included restriction uses. Pure, no I/O. Returns the restricted row
- *  array, in the input's own row order. */
+ *  / owl:someValuesFrom / owl:allValuesFrom / owl:onClass) and owl:unionOf /
+ *  owl:complementOf / owl:oneOf membership are hop-bounded structural edges.
+ *  Reaching a term through a restriction's filler edge re-seeds that term's
+ *  own walk at the full hop budget, so a chain of restrictions extends the
+ *  module without an unbounded hop count; a union/complement/oneOf
+ *  membership edge simply spends one hop. The returned rows are every row
+ *  whose subject or object lands in the resulting signature, plus any role
+ *  axiom naming a role an included restriction uses. Pure, no I/O. Returns
+ *  the restricted row array, in the input's own row order. */
 export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HOPS } = {}) {
   const list = Array.isArray(rows) ? rows.filter((r) => r && r.subject && r.predicate) : [];
   const hopBudget = clampNonNegativeInt(hops, DEFAULT_MODULE_HOPS);
@@ -1152,7 +1160,7 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     const p = String(r.predicate).trim().toLowerCase();
     if (p === "rdfs:subclassof") { addToSetMap(subUp, r.subject, r.object); addToSetMap(subDown, r.object, r.subject); }
     else if (p === "owl:onproperty") onPropertyOf.set(r.subject, r.object);
-    else if (p === "owl:somevaluesfrom" || p === "owl:onclass") { fillerOf.set(r.subject, r.object); addToSetMap(fillerBack, r.object, r.subject); }
+    else if (p === "owl:somevaluesfrom" || p === "owl:allvaluesfrom" || p === "owl:onclass") { fillerOf.set(r.subject, r.object); addToSetMap(fillerBack, r.object, r.subject); }
     else if (p === "owl:unionof") { addToSetMap(unionMembers, r.subject, r.object); addToSetMap(memberUnions, r.object, r.subject); }
     else if (p === "owl:complementof") { complementPair.set(r.subject, r.object); addToSetMap(memberComplements, r.object, r.subject); }
     else if (p === "owl:oneof") { addToSetMap(oneOfMembers, r.subject, r.object); addToSetMap(memberOneOf, r.object, r.subject); }

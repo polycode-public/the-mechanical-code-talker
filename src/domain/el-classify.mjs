@@ -59,6 +59,7 @@ const isType = (p) => lower(p) === "rdf:type";
 const isDisjoint = (p) => lower(p) === "owl:disjointwith";
 const isOnProperty = (p) => lower(p) === "owl:onproperty";
 const isSomeValuesFrom = (p) => lower(p) === "owl:somevaluesfrom";
+const isAllValuesFrom = (p) => lower(p) === "owl:allvaluesfrom";
 const isOnClass = (p) => lower(p) === "owl:onclass";
 const isIntersectionOf = (p) => lower(p) === "owl:intersectionof";
 const isSubPropertyOf = (p) => lower(p) === "rdfs:subpropertyof";
@@ -89,6 +90,7 @@ export function normalizeElTBox(rows, { budget = 500 } = {}) {
   // value) so an axiom's `from` can cite the real stored fact id it rode. ----
   const onPropertyRow = new Map();      // restriction node -> its owl:onProperty row
   const someValuesFromRow = new Map();  // restriction node -> its owl:someValuesFrom row
+  const allValuesFromRow = new Map();   // restriction node -> its owl:allValuesFrom row
   const onClassRow = new Map();         // restriction node -> its owl:onClass row
   const cardinalityRow = new Map();     // restriction node -> its owl:{min,max,}cardinality row
   const intersectionRows = new Map();   // intersection node -> ordered [owl:intersectionOf row, …]
@@ -102,6 +104,10 @@ export function normalizeElTBox(rows, { budget = 500 } = {}) {
     const p = r.predicate;
     if (isOnProperty(p)) { onPropertyRow.set(r.subject, r); addConcept(r.subject); }
     else if (isSomeValuesFrom(p)) { someValuesFromRow.set(r.subject, r); addConcept(r.subject); addConcept(r.object); }
+    // owl:allValuesFrom is left OUT of addConcept on purpose — EL has no
+    // universal restriction, and the restriction node it labels is stripped
+    // back out of `concepts` below rather than read as an atomic class.
+    else if (isAllValuesFrom(p)) { allValuesFromRow.set(r.subject, r); }
     else if (isOnClass(p)) { onClassRow.set(r.subject, r); addConcept(r.subject); addConcept(r.object); }
     else if (isCardinalityPredicate(p)) { cardinalityRow.set(r.subject, r); addConcept(r.subject); }
     else if (isIntersectionOf(p)) {
@@ -122,6 +128,15 @@ export function normalizeElTBox(rows, { budget = 500 } = {}) {
   const someValuesFromRestrictions = new Set(
     [...onPropertyRow.keys()].filter((r) => someValuesFromRow.has(r)),
   );
+  // EL has no universal restriction: an owl:allValuesFrom restriction node is
+  // recognised only so the loop below can skip it rather than fold it in as
+  // an atomic concept — and it never earned a concepts entry through this
+  // set in the first place (onProperty's own addConcept still ran, so the
+  // restriction id is scrubbed back out here).
+  const allValuesFromRestrictions = new Set(
+    [...onPropertyRow.keys()].filter((r) => allValuesFromRow.has(r)),
+  );
+  for (const r of allValuesFromRestrictions) concepts.delete(r);
   const restrictionOf = new Map(); // restriction node -> { role, filler }
   for (const r of someValuesFromRestrictions) {
     restrictionOf.set(r, { role: onPropertyRow.get(r).object, filler: someValuesFromRow.get(r).object });
@@ -164,6 +179,7 @@ export function normalizeElTBox(rows, { budget = 500 } = {}) {
       axioms.push({ form: "someLeft", role: "has", filler, sup: B, from: [opRow.id, ocRow.id, cardRow.id] });
       continue;
     }
+    if (allValuesFromRestrictions.has(B)) continue; // no EL universal restriction — skip, never guess an atomic concept
     axioms.push({ form: "sub", sub: A, sup: B, from: [r.id] });
   }
 
