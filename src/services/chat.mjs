@@ -4251,11 +4251,23 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // "every p is a glyph" teach while "every p is venomous" refuses, an
   // unpredictable asymmetry between two universally-quantified sentences
   // over the same corpus-anchored subject.
-  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
+  // A bare GENERIC PLURAL subject with no determiner at all ("animals are
+  // alive") carries the same implicit-universal reading matchBareHabitualTeach
+  // already gives a bare plural verb subject ("dogs bark" mints the same
+  // capability "every dog can bark" reaches for) — an English plural with no
+  // article generalizes over the whole class. Gated on the LEXICON's own
+  // plural fold, never the naive suffix strip alone, so only a genuinely
+  // plural noun qualifies: "redis" ends in "s" but has no lexicon singular,
+  // so it stays outside this reading and falls through to the ordinary bare
+  // (single-entity) property gate below, unaffected.
+  const lexiconSingular = /^are$/i.test(verb) ? lookupNoun(lex, subjectRaw)?.lemma : null;
+  const bareGenericPlural = !String(det || "").trim() && !!lexiconSingular
+    && lexiconSingular.toLowerCase() !== String(subjectRaw).toLowerCase();
+  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim()) || bareGenericPlural;
   if (universalQuantifier && (await isAnchorableTerm(subjectRaw, lex, memoryDir, cache, graph))
     && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
     const classSubject = /^are$/i.test(verb)
-      ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
+      ? (lexiconSingular || singularizeSurface(subjectRaw))
       : subjectRaw;
     return teachFact(memoryDir, sessionId, {
       subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every", observedAt, dateText,
@@ -15312,6 +15324,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // sides singularizing to KNOWN lexicon nouns, so real chatter ("these are
   // yours") stays with the orientation card.
   let isPluralMembershipTeach = false;
+  // The property-teach sibling: "animals are alive" — the SAME 3-word
+  // deferral, but the OBJECT is an ADJECTIVE, not a noun class, so it needs
+  // its own noun-vs-adjective read below rather than isPluralMembershipTeach's
+  // noun-noun gate. Matches unknownAdjectiveFallback's own bare-generic-plural
+  // mint gate (chat.mjs's teach-side write) exactly, so the two lanes can
+  // never disagree about which "X are Y" sentences are teachable — without
+  // this, the sentence never reaches teachLane at all, and the mint gate's
+  // own widening below has nothing to widen.
+  let isPluralPropertyTeach = false;
   // A bare habitual naming a subject grounded NOWHERE ("penguins swim", no
   // prior grounding) gets an honest grounding hint instead of the
   // orientation card — computed here, rendered inside the conversational
@@ -15331,12 +15352,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       ? null : (matchBareHabitualTeach(bareLine) || matchBareCanTeach(bareLine));
     if (pm || habitual) {
       try {
-        const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
+        const { loadLexicon, lookupNoun, lookupAdjective } = await import("../domain/grammar/lexicon.mjs");
         const lex = loadLexicon();
         if (pm) {
           const s = singularizeSurface(pm[1].toLowerCase());
           const o = singularizeSurface(pm[2].toLowerCase());
           isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
+          if (!isPluralMembershipTeach) {
+            const subjSingular = lookupNoun(lex, pm[1])?.lemma;
+            if (subjSingular && subjSingular.toLowerCase() !== pm[1].toLowerCase()
+              && (lookupAdjective(lex, pm[2]) || (await objectReadsAsNonNoun(pm[2])))) {
+              isPluralPropertyTeach = true;
+            }
+          }
         } else {
           // The bare habitual/capability siblings ("dogs bark", "a dog
           // barks", "wrens can sing") — same deferral, same known-subject
@@ -15394,7 +15422,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isPluralPropertyTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips
