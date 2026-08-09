@@ -46,24 +46,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   proof. Track B makes a missed yes/no question fall through to a bounded tableau proof, names a
   by-cases answer's cases, and regenerates the infbench ceiling markers. Next rounds: A1-g/A1-k/A1-d
   concurrently, then A2, A3, A4, then the serialized `chat.mjs` rounds B1 and B2, then B3.
-- [ ] **PLAN_NEWS_FEED.md — remaining phases** — paused before phase 4. Landed: phases 0-3 and
-  5 (domain, fixtures, adapters, store, service, CLI verb). Next rounds: phase 4 chat wiring (a
-  `chat.mjs` round; also carries the strict-tier provenance nuance recorded in the plan's phase
-  3 section), 6 page, 7a/7b site, 8 e2e + CI enrolment, 9 rig + claims.
-- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — landed: F0-F3 plus the broadened
-  `extractStemSourceTerm` (six closed stem templates; re-measured claim now 1 answered, 2
-  refused, 97 abstained, `sourceEdgePresent` 2). The measured next gate, recorded in the
-  plan's F3 section: `coreParse`'s `leadsInterrogative` (`QUESTION_LEAD_RE` in
-  `src/domain/interpret/normalize.mjs`) declines 50 of the 100 fixture stems before the
-  choice lane runs at all, and that gate is shared with other lanes, so widening it is its
-  own careful round with the full chat blast radius. Next rounds: that gate, F4 claims-block
-  swap, F5 removal + corpus rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
-- [ ] **Three seonix playtest findings (their PLAYTEST_LOG_004/005, relayed 2026-08-08)** —
-  (1) "what does X mean" misses LexiconTerm individuals `/describe` finds (worked on 3.0.8);
-  (2) the denotes ask lane reports no edges on a term whose `/describe` lists twenty, and the
-  reverse phrasing filters candidates to Modules though denotes objects are Functions/Classes;
-  (3) `/impact`'s closure drops `mgx:serves` edges seonix's native closure crosses. Diagnosis
-  track dispatched; fixes land through the `chat.mjs`/ask queue.
+- [ ] **PLAN_NEWS_FEED.md — remaining phases** — landed: phases 0-6 (domain through the page,
+  `/news` in chat and the CLI). Phases 7a/7b are built and green in worktree
+  `agent-a7915144b53c56f2c` (branch of the same name), merge gated on one artifact: the
+  news.png home-plate screenshot — the capture harness times out waiting for `#feed .item`
+  visibility even though the page provably reaches 30 items in 10s under a plain probe
+  (route interception, wait style, viewport and the seed serving are all ruled out
+  individually; the remaining suspect is interaction between them — pick up from
+  `/tmp/tmct-7b-*.log`). Then: 8 e2e + CI enrolment, 9 rig + claims.
+- [ ] **PLAN_COMMON_SENSE_QA.md — remaining phases** — landed: F0-F3, the broadened
+  `extractStemSourceTerm`, and the widened `leadsInterrogative` gate (fixture reach 50 → 95
+  of 100 stems; aggregate unchanged at 1 answered / 2 refused / 97 abstained because the
+  stem extractor's six templates all expect a fronted wh-word — the postponed-wh extraction
+  is the measured next rung, recorded in the plan). Next rounds: that extraction, F4
+  claims-block swap, F5 removal + corpus rows, rungs R1-R5 (R2-R4 serialized on `chat.mjs`).
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
