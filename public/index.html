@@ -400,6 +400,33 @@ yes — you told me: cat-or-dog is either cat (source: ace:chat:&lt;session-id&g
     </figure>
   </section>
 
+  <div class="copy" id="news-example">
+    <h2>The feed runs through the same /news command</h2>
+    <p>
+      news.html is a dashboard, but the feed underneath it is one chat command.
+      Type <code>/news poll</code> in any chat session and it runs the same
+      poll-ground-rank loop, then reports it as text. This is a real exchange
+      with the engine, run before this page was built, not a mockup.
+    </p>
+    <pre class="transcript"><span class="you">/news</span>
+no news items yet — poll a source or teach something first.
+
+Goal (inferred): Surface or work the news feed built over this graph.
+
+<span class="you">/news poll</span>
+polled 1 source: 2 new items, 1 fact stored, 0 derived, 0 failures, 0 evicted.
+
+Goal (inferred): Surface or work the news feed built over this graph.
+
+<span class="you">/news rank</span>
+1. wombat (2) — unknown word
+2. marsupial (1) — unknown word
+3. nocturnal (1) — unknown word
+
+Goal (inferred): Surface or work the news feed built over this graph.</pre>
+    <p class="source-note">More on how polling, grounding and ranking work on <a href="./news-about.html">news-about.html</a>.</p>
+  </div>
+
   <section class="feature" id="feature-sprites">
     <div class="feature-copy">
       <h2>The sprite library</h2>
