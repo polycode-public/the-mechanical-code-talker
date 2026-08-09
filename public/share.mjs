@@ -58,7 +58,7 @@ const POSTS = {
       { angle: "the reading behind it", to: "news-about.html#papers",
         text: "The refusal follows Chow's 1970 reject option and Reiter's 1978 open world assumption, the same literature chat.html's own honest miss rests on. The feed formats follow RSS 2.0, Atom and JSON Feed." },
       { angle: "the number", to: "news-about.html#build",
-        text: "The measurement rig behind this page prints a strict and an optimistic grounding rate on every run, from the same fixtures the demo buttons replay. Its first published number lands in reports/NEWS_RIG.md." },
+        text: "The measurement rig behind this page replays the shipped fixtures through the real poll-to-feed loop: 42.86% of sentences ground strict, 52.38% once the optimistic tier counts too. The full breakdown, source by source, is in reports/NEWS_RIG.md." },
     ],
   },
   plan: {
