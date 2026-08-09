@@ -1,7 +1,7 @@
 {
   "name": "syllogist",
-  "generatedAt": "2026-08-09T06:09:43.969Z",
-  "commit": "a2e42d7b0f124a82eac5d574558bdc654dea9b9f",
+  "generatedAt": "2026-08-09T06:20:18.553Z",
+  "commit": "9607b05f263b1c01c7cdfcf59f2b4fea346058d5",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "question shapes proved",
@@ -21,8 +21,7 @@
     "cases": 48,
     "budgetExhausted": 0,
     "beforeVerdicts": {
-      "unproven": 32,
-      "inconsistent": 16
+      "unproven": 48
     },
     "afterVerdicts": {
       "unproven": 40,

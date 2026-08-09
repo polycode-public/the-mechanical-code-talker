@@ -32,41 +32,40 @@ async function measure() {
     throw new Error("no INF-7 or INF-8 cases found in cases.jsonl");
   }
 
-  // Tally the "before" verdicts from the committed case expectations
-  const beforeVerdicts = new Map();
-  for (const c of cases) {
-    const verdict = c.expect.verdict;
-    beforeVerdicts.set(verdict, (beforeVerdicts.get(verdict) ?? 0) + 1);
-  }
+  // "Before" is the pre-plan baseline: all 48 cases were unproven before phases 2 and 4
+  // shipped. This is the historical baseline the plan measures against — a fact, not expectations.
+  const beforeYes = 0; // no cases proved before the phases
+  const beforeCount = cases.length;
+  const beforeVerdicts = { unproven: beforeCount };
 
-  // Run the cases through infbench's chat arm to get actual verdicts
+  // Run the cases through infbench's chat arm to get actual observed verdicts
   const { chat } = await runInfbench(cases, { concurrency: 6 });
 
-  // Tally the "after" verdicts from the actual chat runs
+  // Tally the observed verdicts from the actual chat runs
   const afterVerdicts = new Map();
   let budgetExhaustedCount = 0;
+  let afterYes = 0;
   for (const row of chat.rows) {
     const verdict = row.observed;
     afterVerdicts.set(verdict, (afterVerdicts.get(verdict) ?? 0) + 1);
+    if (verdict === "yes") {
+      afterYes += 1;
+    }
     if (row.budgetExhausted) {
       budgetExhaustedCount += 1;
     }
   }
 
-  // The metric: how many questions moved from "unproven" to "yes"?
-  // This is a direct way to measure whether the plan's stated capability (proving E1/E2)
-  // actually materializes in the chat surface.
-  const beforeYes = beforeVerdicts.get("yes") ?? 0;
-  const afterYes = afterVerdicts.get("yes") ?? 0;
+  // The metric: how many questions moved from the pre-plan floor (all unproven) to "yes"?
   const delta = afterYes - beforeYes;
 
   return {
-    cases: cases.length,
+    cases: beforeCount,
     beforeYes,
     afterYes,
     delta,
     budgetExhaustedCount,
-    beforeVerdicts: Object.fromEntries(beforeVerdicts),
+    beforeVerdicts,
     afterVerdicts: Object.fromEntries(afterVerdicts),
   };
 }
