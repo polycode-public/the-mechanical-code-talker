@@ -74,6 +74,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   fallback in favour of a designed empty state, and decides the borderline cases ("apple"
   without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
   dispatched; N2 sequences after the news-controls worktree merges (same files).
+- [ ] **index.html gains a wiki-backed worked example** — between "The sprite library" and
+  the Facts as "RDF/OWL triples" sections, in the existing worked-example style: a real
+  research exchange (e.g. "what is an aardvark") showing the engine search Wikipedia,
+  synthesize the answer as prose (aardvarks are animals), and cite the wiki passage text and
+  its URL. A genuine transcript, generated locally, never a mockup. In flight in a worktree.
 - [ ] **Playtest 027 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_027.md`
   holds the transcript and analysis) — code-complete and merged, pending deployed
   verification: count asks read the quantity off taught have-facts (digits and number
