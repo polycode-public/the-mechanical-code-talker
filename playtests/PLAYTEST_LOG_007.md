@@ -94,7 +94,8 @@ Findings and the fixes queued
    statements** (turns 12, 19: "animals are alive", "leaves are green"). An
    internal failure string is not an answer. The statement should either
    teach a property fact or decline in the house voice naming what shape
-   would land. QUEUED.
+   would land. DELIVERED — a bare generic plural now mints under the
+   singular the same way the explicit-quantifier form already did.
 
 2. **Capability and property facts never inherit through a taught subclass
    edge** (turn 14: "animals can be alive" + "a pig is an animal" stored,
@@ -105,15 +106,20 @@ Findings and the fixes queued
 
 3. **Singular capability teach declines where the plural teaches** (turn 15
    "a pig can be alive" vs turn 13 "animals can be alive"). One surface
-   family, two outcomes. QUEUED.
+   family, two outcomes. DELIVERED — a determiner-led capability lead now
+   reaches the same mint, positive and negated alike.
 
 4. **"what type/kind of X is <individual>" never reads the taught type**
    (turn 4: john's type was taught two turns earlier). The qualifier noun
-   swallows the parse. QUEUED.
+   swallows the parse. DELIVERED — the qualifier is no longer restricted to
+   a closed five-word set, and a taught or corpus subclass bridge to it
+   rides along with the answer when one exists.
 
 5. **A plural teach subject stores unfolded** (turn 20 stores and reads
    back "leaves is green" instead of folding to "leaf"), which also blocks
-   turn 21's composition against "tree has leaf". QUEUED.
+   turn 21's composition against "tree has leaf". DELIVERED — the same fold
+   as item 1; turn 21's "do trees have green leaves" now grounds its parts
+   honestly instead of declining over a phantom unknown word.
 
 6. **No definitional teach frame** (turns 5-6: "a creature is any living
    thing that can move on its own"). A genus-plus-gloss frame (creature ⊑

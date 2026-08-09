@@ -4251,11 +4251,23 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // "every p is a glyph" teach while "every p is venomous" refuses, an
   // unpredictable asymmetry between two universally-quantified sentences
   // over the same corpus-anchored subject.
-  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
+  // A bare GENERIC PLURAL subject with no determiner at all ("animals are
+  // alive") carries the same implicit-universal reading matchBareHabitualTeach
+  // already gives a bare plural verb subject ("dogs bark" mints the same
+  // capability "every dog can bark" reaches for) — an English plural with no
+  // article generalizes over the whole class. Gated on the LEXICON's own
+  // plural fold, never the naive suffix strip alone, so only a genuinely
+  // plural noun qualifies: "redis" ends in "s" but has no lexicon singular,
+  // so it stays outside this reading and falls through to the ordinary bare
+  // (single-entity) property gate below, unaffected.
+  const lexiconSingular = /^are$/i.test(verb) ? lookupNoun(lex, subjectRaw)?.lemma : null;
+  const bareGenericPlural = !String(det || "").trim() && !!lexiconSingular
+    && lexiconSingular.toLowerCase() !== String(subjectRaw).toLowerCase();
+  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim()) || bareGenericPlural;
   if (universalQuantifier && (await isAnchorableTerm(subjectRaw, lex, memoryDir, cache, graph))
     && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
     const classSubject = /^are$/i.test(verb)
-      ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
+      ? (lexiconSingular || singularizeSurface(subjectRaw))
       : subjectRaw;
     return teachFact(memoryDir, sessionId, {
       subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every", observedAt, dateText,
@@ -4499,6 +4511,17 @@ const quantifiedHasObject = (m) => (/^all$/i.test(m[1])
  *  the single noun between the determiner and the verb; a two-token subject stays
  *  declined, like the preposition-pinned frame, because nothing names its head. */
 const DETERMINER_HAS_TEACH_RE = /^(?:the|an?|my|your|our|their|his|her|its)\s+([\w'-]+)\s+(?:has|have|had)\s+(.+?)[.!?]*$/i;
+/** The determiner-led CAPABILITY teach ("a pig can be alive", "the wolf can
+ *  swim") — DETERMINER_HAS_TEACH_RE's own sibling for the "can" verb family.
+ *  The closed modal pins the split the same way "has"/"have" pins
+ *  DETERMINER_HAS_TEACH_RE's, so a leading article needs no verb-position
+ *  guessing. Its own object slot is unbounded ("can VERB", "can be
+ *  ADJECTIVE" — matchBareCanTeach/parseCapability already own the
+ *  single-word-verb case; this is the multi-word remainder both decline on),
+ *  so a plural bare subject ("animals can be alive") and its singular
+ *  articled twin ("a pig can be alive") land through the same generalVerbTeach
+ *  mint instead of one of the two silently declining. */
+const DETERMINER_CAN_TEACH_RE = /^(?:the|an?|every|each|all|my|your|our|their|his|her|its)\s+([\w'-]+)\s+can\s+(.+?)[.!?]*$/i;
 /** The quantified LOCATIVE teach ("every disk rests on peg-a", "each disk
  *  rests on peg-a", "all disks rest on peg-a") — QUANTIFIED_HAS_TEACH_RE's own
  *  sibling for the board-fact verb family. The has/have frame can pin the
@@ -4721,6 +4744,7 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw) || quantLoc || countLoc) {
     const quantHas = (!quantLoc && !countLoc) ? p.match(QUANTIFIED_HAS_TEACH_RE) : null;
     const detHas = (!quantHas && !quantLoc && !countLoc) ? p.match(DETERMINER_HAS_TEACH_RE) : null;
+    const detCan = (!quantHas && !detHas && !quantLoc && !countLoc) ? p.match(DETERMINER_CAN_TEACH_RE) : null;
     if (quantHas) {
       subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
@@ -4729,6 +4753,10 @@ async function generalVerbTeach(payload) {
       subjectRaw = detHas[1];
       verbRaw = "has";
       objectRaw = detHas[2];
+    } else if (detCan) {
+      subjectRaw = detCan[1];
+      verbRaw = "can";
+      objectRaw = detCan[2];
     } else if (quantLoc) {
       // Universal locative ("every disk rests on peg-a") — the same
       // "every"-only quantifier-field convention unknownSubjectFallback's
@@ -6630,20 +6658,35 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // every other sentence reading its first word exactly as before.
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
     const detHasLed = detLed ? null : raw.match(DETERMINER_HAS_TEACH_RE);
-    const quantHasLed = (detLed || detHasLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
+    // A determiner-led CAPABILITY lead ("a pig can be alive") needs the same
+    // override as detHasLed: its own first word ("a") never POS-tags as a
+    // NOUN/PROPN, and matchBareCanTeach/parseCapability both decline on a
+    // multi-word verb ("be alive"), so without this the sentence never even
+    // reaches generalVerbTeach — exactly the gap that let the bare-plural
+    // twin ("animals can be alive") teach while its singular-articled form
+    // silently declined. Read through splitTeachNegation first (its own
+    // idempotent rebuild — generalVerbTeach re-derives the identical
+    // positive form later) so a negated lead ("a rock cannot be alive")
+    // is recognized here too: the bare-plural twin ("rocks cannot be
+    // alive") never needed this, since its own no-article subject already
+    // passes the POS gate below without going through any det-led shape at
+    // all, which is exactly the asymmetry this lead exists to close.
+    const detCanLed = (detLed || detHasLed) ? null : splitTeachNegation(raw).payload.match(DETERMINER_CAN_TEACH_RE);
+    const quantHasLed = (detLed || detHasLed || detCanLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
     // The two locative quantifier leads ("every disk rests…", "one more disk
     // rests…") need the same override as quantHasLed/detHasLed just below:
     // their own first word ("every"/"one"/"another") never POS-tags as a
     // NOUN/PROPN, so without this the bare-sentence POS gate silently drops
     // them exactly the way it used to drop "every overbid has a gouger".
-    const quantLocLed = (detLed || detHasLed || quantHasLed) ? null : raw.match(QUANTIFIED_LOCATIVE_TEACH_RE);
-    const countLocLed = (detLed || detHasLed || quantHasLed || quantLocLed)
+    const quantLocLed = (detLed || detHasLed || detCanLed || quantHasLed) ? null : raw.match(QUANTIFIED_LOCATIVE_TEACH_RE);
+    const countLocLed = (detLed || detHasLed || detCanLed || quantHasLed || quantLocLed)
       ? null : raw.match(LOCATIVE_COUNTING_TEACH_RE);
     const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
       : (detHasLed ? detHasLed[1]
-        : (quantHasLed ? quantifiedHasSubject(quantHasLed)
-          : (quantLocLed ? quantifiedLocativeSubject(quantLocLed)
-            : (countLocLed ? countLocLed[1] : raw.match(/^([\w'-]+)/)?.[1]))));
+        : (detCanLed ? detCanLed[1]
+          : (quantHasLed ? quantifiedHasSubject(quantHasLed)
+            : (quantLocLed ? quantifiedLocativeSubject(quantLocLed)
+              : (countLocLed ? countLocLed[1] : raw.match(/^([\w'-]+)/)?.[1])))));
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
@@ -6652,7 +6695,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // NON_DECLARATIVE_OPENER_RE runs even for these leads — "every umm has a
     // thing" isn't a real quantified sentence, just filler that fits the shape.
     if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
-      && (quantHasLed || detHasLed || quantLocLed || countLocLed || (await subjectIsNounOrPropn(subjectWord)))) {
+      && (quantHasLed || detHasLed || detCanLed || quantLocLed || countLocLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
@@ -10538,9 +10581,17 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
  *  factAnswer's "what do you know about X" KNOW_ABOUT form): everything remembered
  *  that mentions X on either side. */
 const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|say)\s+(?:you|me|us)?\s*about\s+(.+?)[?.!\s]*$/i;
-/** "what kind of thing is an X" — the subject-side membership phrasing the grammar
- *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
-const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** "what kind of thing is an X" / "what type of creature is X" — the
+ *  subject-side membership phrasing the grammar doesn't parse: reports X's
+ *  OWN remembered type (falling back to X's members). "kind" and "type" both
+ *  lead (English uses them interchangeably here); the qualifier noun between
+ *  "kind/type of" and "is/are" is OPTIONAL and, when present, captured
+ *  separately (group 1) rather than restricted to a closed generic set — "a
+ *  creature"/"an animal" reads exactly like the bare "thing"/"class" the
+ *  original five-word set already covered, since the qualifier only narrows
+ *  how the question reads (see this function's own qualifier-confirmation
+ *  block below), never which shapes the regex accepts. */
+const KIND_OF_RE = /^what\s+(?:kind|type)\s+of\s+(?:an?\s+)?([\w-]+(?:\s+[\w-]+)?)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 /** "does every <N1> have at least <m> <N2>" — cardinality monotonicity: a
  *  class's OWN declared exactly/min cardinality restriction proves "at least
  *  m" for any queried m <= n (src/domain/syllogise.mjs's proveCardinalityAtLeast). */
@@ -12237,8 +12288,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
   // article) does, for every term alike.
   let term = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
   let kindOf = false;
+  let qualifier = null;
   const mk = q.match(KIND_OF_RE);
-  if (mk) { term = mk[1]; kindOf = true; }
+  if (mk) { qualifier = mk[1] ? mk[1].trim() : null; term = mk[2]; kindOf = true; }
   else if (!term && !envelope?.parsed) {
     const m = q.match(/^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
     if (m) term = m[1];
@@ -12251,6 +12303,23 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     ? (subjectHits.length ? subjectHits : objectHits)
     : (objectHits.length ? objectHits : subjectHits);
   if (!hits.length) return null;
+  // The qualifier noun ("creature" in "what type of creature is john") never
+  // gates the answer — it narrows how the question reads, the same way
+  // grammar.resolve.type-word-describes-subject's "the Store class" narrows
+  // presentation without excluding an answer. When the answered type is
+  // ALSO directly taught as a kind of the qualifier ("pig rdfs:subClassOf
+  // creature"), that confirming fact rides along with the answer; when no
+  // such fact is known, the plain type answer stands on its own — never a
+  // fabricated confirmation, and never a refusal over a qualifier word the
+  // store simply hasn't linked yet.
+  if (qualifier && hits === subjectHits) {
+    const qualifierVariants = factTermVariants(normFactTerm, qualifier);
+    const bridgeFor = (hit) => isa.find((g) => g.subject === hit.object && qualifierVariants.has(g.object));
+    const confirmed = hits.map((hit) => ({ hit, bridge: bridgeFor(hit) })).find(({ bridge }) => bridge);
+    if (confirmed) {
+      return { text: `${renderFactLine(confirmed.hit)} — ${renderFactLine(confirmed.bridge)}`, replace: true };
+    }
+  }
   return renderMany(hits);
 }
 
@@ -15312,6 +15381,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // sides singularizing to KNOWN lexicon nouns, so real chatter ("these are
   // yours") stays with the orientation card.
   let isPluralMembershipTeach = false;
+  // The property-teach sibling: "animals are alive" — the SAME 3-word
+  // deferral, but the OBJECT is an ADJECTIVE, not a noun class, so it needs
+  // its own noun-vs-adjective read below rather than isPluralMembershipTeach's
+  // noun-noun gate. Matches unknownAdjectiveFallback's own bare-generic-plural
+  // mint gate (chat.mjs's teach-side write) exactly, so the two lanes can
+  // never disagree about which "X are Y" sentences are teachable — without
+  // this, the sentence never reaches teachLane at all, and the mint gate's
+  // own widening below has nothing to widen.
+  let isPluralPropertyTeach = false;
   // A bare habitual naming a subject grounded NOWHERE ("penguins swim", no
   // prior grounding) gets an honest grounding hint instead of the
   // orientation card — computed here, rendered inside the conversational
@@ -15331,12 +15409,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       ? null : (matchBareHabitualTeach(bareLine) || matchBareCanTeach(bareLine));
     if (pm || habitual) {
       try {
-        const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
+        const { loadLexicon, lookupNoun, lookupAdjective } = await import("../domain/grammar/lexicon.mjs");
         const lex = loadLexicon();
         if (pm) {
           const s = singularizeSurface(pm[1].toLowerCase());
           const o = singularizeSurface(pm[2].toLowerCase());
           isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
+          if (!isPluralMembershipTeach) {
+            const subjSingular = lookupNoun(lex, pm[1])?.lemma;
+            if (subjSingular && subjSingular.toLowerCase() !== pm[1].toLowerCase()
+              && (lookupAdjective(lex, pm[2]) || (await objectReadsAsNonNoun(pm[2])))) {
+              isPluralPropertyTeach = true;
+            }
+          }
         } else {
           // The bare habitual/capability siblings ("dogs bark", "a dog
           // barks", "wrens can sing") — same deferral, same known-subject
@@ -15394,7 +15479,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isPluralPropertyTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips

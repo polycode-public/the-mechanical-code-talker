@@ -54,11 +54,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   under-covered C2 relative-embedded census cell.
 - [ ] **Lift the L2 CommonsenseQA number above zero** — `PLAN_CSQA_SELECTION.md` holds the design:
   phases S1 (topic reader) through S5 (corpus rows), each its own measured round.
-- [ ] **Playtest 007 fixes** (`playtests/PLAYTEST_LOG_007.md` holds the transcript and analysis)
-  — queued: the "response templates unavailable" leak on bare plural property statements; the
-  singular/plural capability-teach parity gap; the "what type of X is <individual>" ask shape;
-  plural teach subjects storing unfolded ("leaves is green"). Candidates recorded in the log,
-  not queued: a definitional teach frame, and adjective-qualified have-ask composition.
 - [ ] **News page field report (2026-08-09, deployed site)** — five parts, from live use:
   (1) polls succeed (request log: USGS ok, Hacker News ok, Wikipedia featured ok at ~400KB) yet
   FACTS.FROM-NEWS and GRAPH.SIZE stay 0 — the polled text barely reaches the graph; (2) "poll
