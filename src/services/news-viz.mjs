@@ -331,6 +331,8 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     if (!feed.items.length) { emptyEl.hidden = false; setTile("tileFeedItems", 0, "nothing yet"); return; }
     emptyEl.hidden = true;
     for (const item of feed.items) {
+      // One yield per card keeps the page clickable while a long feed renders.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const card = document.createElement("div");
       card.className = "item";
       const seedTag = feed.seedFallback ? '<span class="seedtag">from the seed graph — start to poll live sources</span>' : "";

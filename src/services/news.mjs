@@ -39,7 +39,7 @@
 
 import { normFactTerm, normFactPredicate, factIdFor, sha256Bytes } from "../domain/hash.mjs";
 import {
-  newsWindowRows, scoreHubs, subgraphAround, renderNewsParagraph, buildNewsItems, evictNewsFacts,
+  newsWindowRows, scoreHubs, subgraphAround, buildTermAdjacency, renderNewsParagraph, buildNewsItems, evictNewsFacts,
 } from "../domain/news-feed.mjs";
 import {
   createTermLedger, bumpTerms, rankedTerms, markTerm, groundedSweep, ledgerPayload, ledgerFromPayload,
@@ -293,8 +293,9 @@ function collectItemSources(subgraphRows, sourcesByFactId) {
  *  buildNewsItems's own, already-pinned window contract. */
 function assembleNewsItems(rows, windowRows, { now, limit, sourcesByFactId }) {
   const hubs = scoreHubs(rows, windowRows, { limit });
+  const adjacency = buildTermAdjacency(rows);
   const items = hubs.map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term);
+    const subgraphRows = subgraphAround(rows, term, { adjacency });
     const factIds = subgraphRows.map((r) => r.id).sort();
     return {
       id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,

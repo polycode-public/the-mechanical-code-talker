@@ -136,7 +136,26 @@ export function createNewsSession({
   const memoryDir = createInMemoryStore();
   applySeedPayload(memoryDir, seedPayload);
 
-  const store = { loadMemory, readFactRows, appendFacts, removeFacts };
+  // Folding the seeded store is seconds of main-thread work in a browser,
+  // and every session verb reads rows — uncached, a 30-item feed render
+  // folds the whole store once per item and freezes the page for minutes.
+  // One fold per write epoch keeps every read on the same rows.
+  let foldedRows = null;
+  const store = {
+    loadMemory,
+    readFactRows(memory) {
+      if (!foldedRows) foldedRows = readFactRows(memory);
+      return foldedRows;
+    },
+    async appendFacts(...args) {
+      foldedRows = null;
+      return appendFacts(...args);
+    },
+    async removeFacts(...args) {
+      foldedRows = null;
+      return removeFacts(...args);
+    },
+  };
   const cache = { rows: null };
   let lexicon = loadLexicon();
   let config = resolveNewsConfig();

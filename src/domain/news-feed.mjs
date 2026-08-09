@@ -60,11 +60,35 @@ export function scoreHubs(rows, windowRows, { limit = 6 } = {}) {
     .slice(0, limit);
 }
 
+/** One normalization pass over `rows`: each term to the row indices touching
+ *  it, plus every row's own normalized pair. Built once per feed assembly and
+ *  shared across every hub's walk — re-normalizing the whole store per
+ *  frontier term is minutes of main-thread work on a browser-sized graph. */
+export function buildTermAdjacency(rows) {
+  const byTerm = new Map();
+  const terms = new Array(rows.length);
+  for (let i = 0; i < rows.length; i += 1) {
+    const s = normFactTerm(rows[i].subject);
+    const o = normFactTerm(rows[i].object);
+    terms[i] = [s, o];
+    let forSubject = byTerm.get(s);
+    if (!forSubject) byTerm.set(s, (forSubject = []));
+    forSubject.push(i);
+    if (o !== s) {
+      let forObject = byTerm.get(o);
+      if (!forObject) byTerm.set(o, (forObject = []));
+      forObject.push(i);
+    }
+  }
+  return { byTerm, terms };
+}
+
 /** Breadth-first over subject/object adjacency from `hub`, exactly `hops`
  *  levels deep, then capped by content-addressed id — so the cap never
  *  depends on `rows`' own order, only on which rows the hop-bounded walk
  *  actually reaches. */
-export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60 } = {}) {
+export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adjacency = null } = {}) {
+  const adj = adjacency ?? buildTermAdjacency(rows);
   const hubTerm = normFactTerm(hub);
   const visited = new Set([hubTerm]);
   let frontier = [hubTerm];
@@ -72,11 +96,10 @@ export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60 } = {
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
-      const matches = rows.filter((r) => normFactTerm(r.subject) === term || normFactTerm(r.object) === term);
-      for (const row of matches) {
+      for (const idx of adj.byTerm.get(term) ?? []) {
+        const row = rows[idx];
         collected.set(row.id, row);
-        const s = normFactTerm(row.subject);
-        const o = normFactTerm(row.object);
+        const [s, o] = adj.terms[idx];
         if (!visited.has(s)) nextFrontier.add(s);
         if (!visited.has(o)) nextFrontier.add(o);
       }
@@ -174,8 +197,9 @@ export function renderNewsParagraph(hub, subgraphRows) {
 export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map() } = {}) {
   const windowRows = newsWindowRows(rows, { now, windowMs });
   const hubs = scoreHubs(rows, windowRows, { limit });
+  const adjacency = buildTermAdjacency(rows);
   const items = hubs.map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term);
+    const subgraphRows = subgraphAround(rows, term, { adjacency });
     const factIds = subgraphRows.map((r) => r.id).sort();
     return {
       id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,
