@@ -60,19 +60,43 @@ export function scoreHubs(rows, windowRows, { limit = 6 } = {}) {
     .slice(0, limit);
 }
 
+/** Every row keyed by each term it names (subject and object, normalized) —
+ *  built once so a hop-bounded walk looks a frontier term up instead of
+ *  re-scanning the whole fact set for it. On a seed-scale graph (tens of
+ *  thousands of rows), the walk this replaces re-filtered `rows` once per
+ *  frontier term per hop — quadratic in the graph size, and slow enough to
+ *  read as a hang. */
+function indexRowsByTerm(rows) {
+  const byTerm = new Map();
+  const add = (term, row) => {
+    if (!term) return;
+    let bucket = byTerm.get(term);
+    if (!bucket) { bucket = []; byTerm.set(term, bucket); }
+    bucket.push(row);
+  };
+  for (const row of rows) {
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    add(s, row);
+    if (o !== s) add(o, row);
+  }
+  return byTerm;
+}
+
 /** Breadth-first over subject/object adjacency from `hub`, exactly `hops`
  *  levels deep, then capped by content-addressed id — so the cap never
  *  depends on `rows`' own order, only on which rows the hop-bounded walk
  *  actually reaches. */
 export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60 } = {}) {
   const hubTerm = normFactTerm(hub);
+  const byTerm = indexRowsByTerm(rows);
   const visited = new Set([hubTerm]);
   let frontier = [hubTerm];
   const collected = new Map();
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
-      const matches = rows.filter((r) => normFactTerm(r.subject) === term || normFactTerm(r.object) === term);
+      const matches = byTerm.get(term) || [];
       for (const row of matches) {
         collected.set(row.id, row);
         const s = normFactTerm(row.subject);
