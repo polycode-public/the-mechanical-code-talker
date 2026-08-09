@@ -1,7 +1,7 @@
-// grammar/ace.mjs tests — patterns 10 through 16, the class-expression and
-// role vocabulary phase 0 adds beside the original 9 (grammar-ace.test.mjs
-// keeps those). Pattern numbers refer to
-// docs/references/schemas/ace-owl-fragment.md's table.
+// grammar/ace.mjs tests — patterns 10 through 18, the class-expression and
+// role vocabulary phase 0 (and the universal-restriction frame after it) add
+// beside the original 9 (grammar-ace.test.mjs keeps those). Pattern numbers
+// refer to docs/references/schemas/ace-owl-fragment.md's table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseAce } from "../../src/domain/grammar/ace.mjs";
@@ -244,4 +244,67 @@ test("pattern 16: an undeclared verb falls through to the ordinary copula declin
   const r = parseAce("zorbnaxing is transitive");
   assert.notEqual(r?.pattern, "transitiveRole");
   assert.deepEqual(r?.triples ?? [], []);
+});
+
+test("pattern 18: 'every N1 VERB only N2' → owl:allValuesFrom universal restriction", () => {
+  const r = parseAce("every heart contains only valves");
+  assert.equal(r.pattern, "universal");
+  assert.deepEqual(r.residue, []);
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:all-contains-valve", predicate: "rdf:type", object: "owl:Restriction", kind: "owl:allValuesFrom" },
+    { subject: "tmct:all-contains-valve", predicate: "owl:onProperty", object: "tmct:contains", kind: "owl:allValuesFrom" },
+    { subject: "tmct:all-contains-valve", predicate: "owl:allValuesFrom", object: "tmct:valve", kind: "owl:allValuesFrom" },
+    { subject: "tmct:heart", predicate: "rdfs:subClassOf", object: "tmct:all-contains-valve", kind: "owl:allValuesFrom" },
+  ]);
+});
+
+test("pattern 18: the 'has' case ('every N1 has only N2') mints a restriction on tmct:has", () => {
+  const r = parseAce("every heart has only valves");
+  assert.equal(r.pattern, "universal");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:all-has-valve", predicate: "rdf:type", object: "owl:Restriction", kind: "owl:allValuesFrom" },
+    { subject: "tmct:all-has-valve", predicate: "owl:onProperty", object: "tmct:has", kind: "owl:allValuesFrom" },
+    { subject: "tmct:all-has-valve", predicate: "owl:allValuesFrom", object: "tmct:valve", kind: "owl:allValuesFrom" },
+    { subject: "tmct:heart", predicate: "rdfs:subClassOf", object: "tmct:all-has-valve", kind: "owl:allValuesFrom" },
+  ]);
+});
+
+test("pattern 18: node-name determinism — re-teaching the same sentence mints the identical restriction node", () => {
+  const a = parseAce("every heart contains only valves");
+  const b = parseAce("every heart contains only valves");
+  assert.deepEqual(a.triples, b.triples);
+});
+
+test("pattern 18: the singular filler form ('only a N2') folds to the same node as the plural", () => {
+  const r = parseAce("every heart contains only a valve");
+  assert.equal(r.pattern, "universal");
+  assert.deepEqual(r.triples, parseAce("every heart contains only valves").triples);
+});
+
+test("pattern 18: an undeclared verb declines — the sentence never reads as a universal restriction", () => {
+  const r = parseAce("every heart zorbnaxes only valves");
+  assert.notEqual(r?.pattern, "universal");
+});
+
+test("pattern 18: an undeclared filler noun declines with residue naming it", () => {
+  const r = parseAce("every heart contains only zorbnaxes");
+  assert.equal(r.pattern, "universal");
+  assert.deepEqual(r.triples, []);
+  assert.deepEqual(r.residue, ["zorbnaxes"]);
+});
+
+test("pattern 18: 'only' with nothing resolvable after it declines, nothing stored", () => {
+  const r = parseAce("every heart contains only");
+  assert.deepEqual(r?.triples ?? [], []);
+});
+
+test("pattern 18: 'every N1 VERB a N2' (no 'only') still routes to pattern 15 unchanged", () => {
+  const r = parseAce("every heart contains a valve");
+  assert.equal(r.pattern, "bareExistential");
+  assert.deepEqual(triplesOf(r), [
+    ["tmct:some-contains-valve", "rdf:type", "owl:Restriction"],
+    ["tmct:some-contains-valve", "owl:onProperty", "tmct:contains"],
+    ["tmct:some-contains-valve", "owl:someValuesFrom", "tmct:valve"],
+    ["tmct:heart", "rdfs:subClassOf", "tmct:some-contains-valve"],
+  ]);
 });

@@ -1,5 +1,5 @@
 // grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser.
-// Implements the 17 controlled-English sentence patterns of
+// Implements the 18 controlled-English sentence patterns of
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
@@ -55,6 +55,7 @@ const PATTERN_DIFFERENT_FROM = "differentFrom";
 const PATTERN_BARE_EXISTENTIAL = "bareExistential";
 const PATTERN_TRANSITIVE_ROLE = "transitiveRole";
 const PATTERN_INVERSE_ROLE = "inverseRole";
+const PATTERN_UNIVERSAL = "universal";
 
 /** The pattern field's full domain, in the README's table order. */
 const PATTERNS = Object.freeze([
@@ -62,7 +63,7 @@ const PATTERNS = Object.freeze([
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
   PATTERN_CAPABILITY, PATTERN_UNION, PATTERN_COMPLEMENT, PATTERN_NEGATIVE_TYPE,
   PATTERN_ENUMERATION, PATTERN_DIFFERENT_FROM, PATTERN_BARE_EXISTENTIAL, PATTERN_TRANSITIVE_ROLE,
-  PATTERN_INVERSE_ROLE,
+  PATTERN_INVERSE_ROLE, PATTERN_UNIVERSAL,
 ]);
 
 const DET = new Set(["a", "an", "the"]);
@@ -438,6 +439,47 @@ function parseUnion(lexicon, toks, isIdx) {
   ]);
 }
 
+/** Pattern 18 — "every N1 VERB only N2" → allValuesFrom universal
+ *  restriction: N1 ⊑ ∀VERB.N2, mirroring pattern 15's bare-existential
+ *  node-naming convention (`all-<pred>-<filler>` beside
+ *  `some-<pred>-<filler>`). Tried before the bare-existential arm so "only"
+ *  claims the sentence first — "every heart contains only valves" never
+ *  reaches pattern 15, and "every heart contains a valve" (no "only") always
+ *  falls through to it unchanged. */
+function parseUniversal(lexicon, toks, lower) {
+  const ns = lexicon.ns;
+  for (let i = 2; i < toks.length - 1; i += 1) {
+    const verb = lookupVerb(lexicon, lower[i]);
+    if (!verb) continue;
+    let objStart = i + 1;
+    if (verb.prep) {
+      if (lower[objStart] !== verb.prep) continue;
+      objStart += 1;
+      if (objStart >= toks.length) continue;
+    }
+    if (lower[objStart] !== "only") continue;
+    const fillerStart = objStart + 1;
+    if (fillerStart >= toks.length) continue;
+    const np1 = resolveNP(lexicon, toks.slice(1, i));
+    // Same homonym-tolerance as parseBareExistential: a subject that fails to
+    // resolve at THIS verb position tries the next candidate rather than
+    // committing to a miss that would shadow another pattern.
+    if (np1.term == null) continue;
+    const np2 = resolveNP(lexicon, toks.slice(fillerStart));
+    if (np2.term == null) return missOrNull(PATTERN_UNIVERSAL, [np1, np2]);
+    if (np1.individual || np2.individual) return null;
+    const pred = predicateOf(verb, ns);
+    const r = `${ns}all-${local(lexicon, pred)}-${local(lexicon, np2.term)}`;
+    return hit(PATTERN_UNIVERSAL, [np1, np2], [
+      { subject: r, predicate: "rdf:type", object: "owl:Restriction", kind: "owl:allValuesFrom" },
+      { subject: r, predicate: "owl:onProperty", object: pred, kind: "owl:allValuesFrom" },
+      { subject: r, predicate: "owl:allValuesFrom", object: np2.term, kind: "owl:allValuesFrom" },
+      { subject: np1.term, predicate: "rdfs:subClassOf", object: r, kind: "owl:allValuesFrom" },
+    ]);
+  }
+  return null;
+}
+
 /** Pattern 15 — "every N1 VERB [det] N2" → someValuesFrom bare existential
  *  restriction: "every heart has a valve" (the `has` verb), and the general
  *  verb form "every heart contains a valve". Tried after the `that` and
@@ -487,6 +529,8 @@ function parseEvery(lexicon, toks, lower) {
   if (hasIdx > 1 && (lower[hasIdx + 1] === "at" || lower[hasIdx + 1] === "exactly")) {
     return parseCardinality(lexicon, toks, lower, hasIdx);
   }
+  const universal = parseUniversal(lexicon, toks, lower);
+  if (universal) return universal;
   const bareExistential = parseBareExistential(lexicon, toks, lower);
   if (bareExistential) return bareExistential;
   const isIdx = lower.indexOf("is");
@@ -721,7 +765,7 @@ function parseCopula(lexicon, toks, lower, isIdx) {
   ]);
 }
 
-/** Parse one sentence against the 17-pattern ACE-OWL sub-fragment. See the
+/** Parse one sentence against the 18-pattern ACE-OWL sub-fragment. See the
  *  file header for the result contract; `lexicon` defaults to the committed
  *  core under the library's own neutral DEFAULT_NS ("ex:") when the caller
  *  doesn't supply one. */
