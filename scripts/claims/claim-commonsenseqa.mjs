@@ -16,6 +16,7 @@ import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { resolveExtensions, seedActiveCorpusEntries } from "../../src/services/extensions.mjs";
 import { initXlBands, SEED_BAND_CAPS } from "../build-chat-seed.mjs";
+import { splitChoiceQuestion, routeChoiceRelation } from "../../src/domain/choice-question.mjs";
 import { writeClaim, defaultHardware, ROOT } from "./lib.mjs";
 
 export const FIXTURE_PATH = join(ROOT, "test-benchmarks", "claims", "commonsenseqa-sample.jsonl");
@@ -26,6 +27,7 @@ export const SOURCES = [
   "scripts/claims/claim-commonsenseqa.mjs",
   "corpus/child/manifest.json",
   "corpus/conceptnet/slice.jsonl",
+  "corpus/wordnet/wordnet-full.jsonl",
 ];
 
 /**
@@ -102,6 +104,12 @@ export async function runSample(items, memoryDir, graph) {
   let abstained = 0;
   let sourceEdgePresent = 0;
   let correctWhenSourceEdgePresent = 0;
+  let routedByRelation = 0;
+  let correctWhenRouted = 0;
+  const byHop = { 1: { answered: 0, correct: 0 }, 2: { answered: 0, correct: 0 }, unreachable: { abstained: 0 } };
+  const matchedBy = { exact: 0, lemma: 0, "head-noun": 0, wordnet: 0 };
+  let abstainedUncued = 0;
+  const abstainedUncuedStems = [];
   const missedIds = [];
   const missedStems = [];
   for (const item of items) {
@@ -109,11 +117,37 @@ export async function runSample(items, memoryDir, graph) {
       memoryDir, sessionId: `commonsenseqa-${item.id}`, graph,
     });
     const selectedLabel = result?.detail?.selectedLabel;
-    if (result?.record?.miss === true) abstained += 1;
-    else if (typeof selectedLabel === "string") answered += 1;
-    else refused += 1;
-
+    const isMiss = result?.record?.miss === true;
     const ok = scoresCorrect(selectedLabel, item.answerKey);
+    // routeChoiceRelation reads only the STEM the splitter itself would see —
+    // the same shape probeChoiceOptions routes on, so this is what the lane
+    // actually routed, not a re-derivation from the fixture's own text.
+    const parsedStem = splitChoiceQuestion(questionFor(item))?.stem ?? item.question.stem;
+    const routed = routeChoiceRelation(parsedStem) !== null;
+
+    if (isMiss) {
+      abstained += 1;
+      byHop.unreachable.abstained += 1;
+      if (!routed) {
+        abstainedUncued += 1;
+        abstainedUncuedStems.push(item.question.stem);
+      }
+    } else if (typeof selectedLabel === "string") {
+      answered += 1;
+      // hop is 1 for a direct edge, 2 for a chain (probeChoiceOptions,
+      // rung 3); a hop the schema does not name (there is none today) is
+      // dropped rather than guessed at. matchedBy is set only on the
+      // direct-edge path (probeChoiceOptions, rung 4) — a chain answer has
+      // no wording lever to attribute, so it is left out of this tally.
+      const hop = result?.detail?.hop;
+      if (hop === 1 || hop === 2) {
+        byHop[hop].answered += 1;
+        if (ok) byHop[hop].correct += 1;
+      }
+      const matchedByTag = result?.detail?.matchedBy;
+      if (matchedByTag && matchedByTag in matchedBy) matchedBy[matchedByTag] += 1;
+    } else refused += 1;
+
     if (ok) correct += 1;
     else {
       missedIds.push(item.id);
@@ -124,10 +158,17 @@ export async function runSample(items, memoryDir, graph) {
       sourceEdgePresent += 1;
       if (ok) correctWhenSourceEdgePresent += 1;
     }
+
+    if (routed) {
+      routedByRelation += 1;
+      if (ok) correctWhenRouted += 1;
+    }
   }
   return {
     correct, answered, refused, abstained,
     sourceEdgePresent, correctWhenSourceEdgePresent,
+    routedByRelation, correctWhenRouted,
+    byHop, matchedBy, abstainedUncued, abstainedUncuedStems,
     missedIds, missedStems,
   };
 }
@@ -147,9 +188,15 @@ export function buildClaimDetail(items, bands, result) {
     abstained: result.abstained,
     sourceEdgePresent: result.sourceEdgePresent,
     correctWhenSourceEdgePresent: result.correctWhenSourceEdgePresent,
+    routedByRelation: result.routedByRelation,
+    correctWhenRouted: result.correctWhenRouted,
+    byHop: result.byHop,
+    matchedBy: result.matchedBy,
+    abstainedUncued: result.abstainedUncued,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),
+    abstainedUncuedExampleStems: result.abstainedUncuedStems.slice(0, 3),
   };
 }
 

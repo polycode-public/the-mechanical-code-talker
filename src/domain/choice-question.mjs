@@ -18,6 +18,7 @@
 // that declines whenever a candidate option itself reads as a second,
 // embedded question ("is it a bird or is it a plane").
 import { leadsInterrogative, QUESTION_LEAD_RE } from "./interpret/normalize.mjs";
+import { gerundOf, pastOf } from "./inflect.mjs";
 
 /** The recognized shapes. Frozen so a caller can switch on the value
  *  without inventing its own string. */
@@ -525,4 +526,131 @@ export function isChoiceQuestion(text) {
  *  "duplicate-options", "option-empty". Returns "" when it did not decline. */
 export function choiceDeclineReason(text) {
   return coreParse(text).reason;
+}
+
+// ---- relation routing ----
+//
+// The direct-edge probe in chat.mjs's probeChoiceOptions accepts an edge
+// under any predicate, which is close to no evidence when CommonsenseQA's
+// distractors sit on the same relation as the gold answer (section 2.3 of
+// the design survey). Routing narrows the accepted edge set to the relation
+// family the stem itself names, before the graph is even touched — a closed
+// cue table, not a general parser, matching the house style of every other
+// table in this module.
+//
+// Ordered by measured cue yield on the committed fixture (section 10.2):
+// AtLocation cues the most stems by a wide margin, so it is tried first.
+// First cue that matches wins; a stem matching none routes to null, which
+// the caller reads as "no relation named" and falls back to any-predicate
+// matching for that question.
+export const CHOICE_RELATION_ROUTES = Object.freeze([
+  {
+    family: "AtLocation",
+    predicates: Object.freeze(["mgx:atLocation", "mgx:locatedNear"]),
+    cue: /\b(where|located|location)\b/i,
+  },
+  {
+    family: "IsA/Synonym/HasProperty",
+    predicates: Object.freeze(["rdfs:subClassOf", "mgx:synonym", "mgx:hasProperty"]),
+    // Narrower than a bare "what is a ...?" lead on purpose — that shape
+    // matches almost any noun question ("what is a dog capable of?",
+    // "what is a hammer used for?"), which would shadow every other family.
+    cue: /\b(kind of|type of|another word for|same as|synonym)\b/i,
+  },
+  {
+    family: "HasPrerequisite/HasSubevent",
+    predicates: Object.freeze(["mgx:hasPrerequisite", "mgx:hasSubevent", "mgx:hasFirstSubevent", "mgx:hasLastSubevent"]),
+    cue: /\b(before|after|first|next|then|once you|in order to)\b/i,
+  },
+  {
+    family: "Desires/MotivatedByGoal",
+    predicates: Object.freeze(["mgx:desires", "mgx:motivatedByGoal", "mgx:causesDesire"]),
+    cue: /\b(want\w*|desire\w*|motivat\w*)\b/i,
+  },
+  {
+    family: "Causes",
+    predicates: Object.freeze(["mgx:causes", "mgx:causesDesire"]),
+    cue: /\b(cause\w*|result(?:s|ed)? in|leads? to|led to)\b/i,
+  },
+  {
+    family: "PartOf/HasA/MadeOf",
+    predicates: Object.freeze(["mgx:partOf", "mgx:hasA", "mgx:madeOf"]),
+    cue: /\b(part of|made of|has a|have a)\b/i,
+  },
+  {
+    family: "CapableOf",
+    predicates: Object.freeze(["mgx:capableOf", "mgxneg:capableOf"]),
+    cue: /\b(capable of|able to)\b/i,
+  },
+  {
+    family: "UsedFor",
+    predicates: Object.freeze(["mgx:usedFor"]),
+    cue: /\b(used for|used to|use for)\b/i,
+  },
+]);
+
+// ---- lemma normalization (rung 4, lever 1) ----
+//
+// An option's surface form and a stored edge's surface form differ in
+// regular inflection ("getting full" against an edge to "get full"). Reverse
+// inflection is ambiguous by nature ("having" could come from "hav" or
+// "have"), so every candidate base is SELF-VERIFIED against inflect.mjs's
+// own forward rules before it counts — a candidate survives only when
+// running it back through gerundOf/pastOf reproduces the exact word it came
+// from. No new inflection rule is invented here; this only reverses the
+// existing regular -ing/-ed ones. Plural -s/-es stays out of scope: chat.mjs's
+// own factTermVariants already folds that at the noun level.
+
+function gerundBaseCandidates(word) {
+  if (!word.endsWith("ing") || word.length <= 4) return [];
+  const stem = word.slice(0, -3);
+  const candidates = new Set([stem, stem.slice(0, -1), `${stem}e`]);
+  return [...candidates].filter((c) => c.length > 1 && gerundOf(c) === word);
+}
+
+function pastBaseCandidates(word) {
+  if (!word.endsWith("ed") || word.length <= 3) return [];
+  const candidates = new Set([word.slice(0, -1), word.slice(0, -2), word.slice(0, -2).slice(0, -1)]);
+  if (word.endsWith("ied")) candidates.add(`${word.slice(0, -3)}y`);
+  return [...candidates].filter((c) => c.length > 1 && pastOf(c) === word);
+}
+
+/** Every phrase reachable from `text` by lemmatizing exactly one word's
+ *  regular -ing/-ed inflection back to its base form — "getting full" ->
+ *  "get full", "she reduced it" untouched (no word survives self-
+ *  verification as a genuine -ing/-ed inflection). */
+export function lemmaFoldVariants(text) {
+  const words = String(text ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const variants = new Set();
+  words.forEach((word, i) => {
+    for (const base of [...gerundBaseCandidates(word), ...pastBaseCandidates(word)]) {
+      variants.add([...words.slice(0, i), base, ...words.slice(i + 1)].join(" "));
+    }
+  });
+  return variants;
+}
+
+// ---- head-noun backoff (rung 4, lever 2) ----
+
+/** The head noun of a multi-word phrase — its LAST word, the house style's
+ *  own head-final assumption ("fast food restaurant" -> "restaurant", "train
+ *  station" -> "station"). Returns "" for a single-word phrase: there is
+ *  nothing to back off to when the phrase already IS its own head. Bounded
+ *  and closed on purpose — the head only, never every sub-phrase — so the
+ *  caller stays a single, cheap fallback pass rather than a fuzzy search. */
+export function headNounOf(text) {
+  const words = String(text ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 ? words[words.length - 1] : "";
+}
+
+/** Reads the relation family a stem's own wording names, first cue wins.
+ *  Returns null when no route's cue matches, which the caller reads as "no
+ *  relation named" — the probe then falls back to any-predicate matching.
+ *  @returns {null | { family: string, predicates: string[] }} */
+export function routeChoiceRelation(stem) {
+  const text = String(stem ?? "");
+  for (const route of CHOICE_RELATION_ROUTES) {
+    if (route.cue.test(text)) return { family: route.family, predicates: [...route.predicates] };
+  }
+  return null;
 }

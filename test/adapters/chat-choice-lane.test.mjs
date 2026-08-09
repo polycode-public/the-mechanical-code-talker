@@ -152,6 +152,197 @@ test("the lane's miss is not rewritten by the generic grammar wall", async () =>
   }
 });
 
+// ---- relation routing (rung 2) ----
+
+test("an option connected only by the wrong relation family does not ground once the stem routes", async () => {
+  const dir = await freshRepo();
+  try {
+    // MAGAZINE_Q's "where" routes to AtLocation — a usedFor edge is a
+    // stated relation, but the WRONG one, so it must not count as grounding.
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:usedFor", object: "bookstore", provenance: "corpus:test" },
+    ]);
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /I don't know how "magazines" relates to any of/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option connected by the routed relation family still grounds", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:atLocation", object: "bookstore", provenance: "corpus:test" },
+    ]);
+    const r = await turn(MAGAZINE_Q, { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "B");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a stem naming no relation still probes every predicate", async () => {
+  const dir = await freshRepo();
+  try {
+    // "What do beavers use to build dams?" names no relation family at all
+    // (routeChoiceRelation returns null), so an edge under any predicate
+    // still grounds, unchanged from before routing.
+    await appendFacts(dir, [
+      { subject: "beavers", predicate: "mgx:capableOf", object: "teeth", provenance: "corpus:test" },
+    ]);
+    const r = await turn("What do beavers use to build dams?\nA) teeth B) claws", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- inference depth (rung 3) ----
+
+test("a 2-hop option grounds through a chain and the answer cites every step", async () => {
+  const dir = await freshRepo();
+  try {
+    // No direct shark-to-animal edge — only a chain through "fish".
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark an animal or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.lane, "ask-choice");
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.hop, 2);
+    assert.match(r.answer, /shark is a kind of fish/);
+    assert.match(r.answer, /fish is a kind of animal/);
+    assert.match(r.answer, /source: corpus:test/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a 3-hop option does not ground at maxHops: 2", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "vertebrate", provenance: "corpus:test" },
+      { subject: "vertebrate", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark an animal or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option reachable only through a non-isa hop is never cited as a chain", async () => {
+  const dir = await freshRepo();
+  try {
+    // fish->reef is atLocation, not isa — findIsaChain never walks it, so
+    // "reef" must stay ungrounded rather than being cited through a hop
+    // nothing isa-family backs.
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "mgx:atLocation", object: "reef", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark a reef or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the same chain facts taught in either insertion order produce the same answer", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    await appendFacts(dirA, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    await appendFacts(dirB, [
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+    ]);
+    const rA = await turn("is a shark an animal or a plant", { memoryDir: dirA });
+    const rB = await turn("is a shark an animal or a plant", { memoryDir: dirB });
+    assert.equal(rA.answer, rB.answer);
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+    assert.equal(rA.detail.hop, rB.detail.hop);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
+  }
+});
+
+// ---- wording levers (rung 4) ----
+
+test("a plural option matches a singular edge, tagged as an exact-fold match", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "farm", predicate: "mgx:hasA", object: "cow", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a farm cows or a horse", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.matchedBy, "exact");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a gerund option matches a base-form edge, tagged as a lemma match", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "dog", predicate: "mgx:hasSubevent", object: "get full", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a dog getting full or chewing", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.matchedBy, "lemma");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a multi-word option matches its head noun only after the full phrase misses", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "magazine", predicate: "mgx:atLocation", object: "restaurant", provenance: "corpus:test" },
+    ]);
+    const r = await turn("Where would you find a magazine?\nA) fast food restaurant B) doctor", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.matchedBy, "head-noun");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a WordNet-expanded match is labelled as such in the turn detail", async () => {
+  const dir = await freshRepo();
+  try {
+    // "car" <-> "automobile" is a real committed wordnet-full.jsonl synonym
+    // pair — neither exact nor lemma nor head-noun backoff reaches it.
+    await appendFacts(dir, [
+      { subject: "garage", predicate: "mgx:atLocation", object: "automobile", provenance: "corpus:test" },
+    ]);
+    const r = await turn("Where would you find a garage?\nA) car B) house", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.detail.selectedLabel, "A");
+    assert.equal(r.detail.matchedBy, "wordnet");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("two grounded options tie and the lane picks neither, whatever their edge weights", async () => {
   const dir = await freshRepo();
   try {

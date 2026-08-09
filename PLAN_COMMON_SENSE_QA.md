@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage) is built and measured. R2–R5 remain.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. All five rungs — R1 (seed coverage), R2 (relation routing), R3 (inference depth), R4 (the wording levers) and R5 (the abstained band) — are built and measured.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1150,6 +1150,26 @@ the number rather than describing it.
 
 ### 10.2 Rung 2 — relation routing
 
+**Built and measured.** `CHOICE_RELATION_ROUTES` and `routeChoiceRelation(stem)` landed in
+`choice-question.mjs`, an eight-family cue table ordered AtLocation first (the highest measured cue
+yield), then IsA/Synonym/HasProperty, HasPrerequisite/HasSubevent, Desires/MotivatedByGoal, Causes,
+PartOf/HasA/MadeOf, CapableOf, UsedFor. `probeChoiceOptions` reads the route off the parsed stem and,
+when one fires, keeps only facts whose predicate is in that family before deciding whether an option
+grounds; an unrouted stem still probes every predicate, unchanged. `detail.routedByRelation` and
+`detail.correctWhenRouted` landed in the rig payload, computed straight off `routeChoiceRelation`
+applied to each item's own parsed stem.
+
+Re-measured (chunked foreground slices, one persisted seeded repo, merged): before 14/11/75
+(answered/refused/abstained), `sourceEdgePresent` 30, `correctOfAnswered` 0; after 14/11/75,
+`sourceEdgePresent` 30, `correctOfAnswered` still 0, `routedByRelation` 56, `correctWhenRouted` 0.
+Every outcome column came back byte-identical to rung 1. The route fired on 56 of the 100 questions
+and changed no verdict: on this seed, whenever a stem's own cue names a relation family, the edges the
+probe already found for that pair already sit under a predicate in that family — the rung 1 seed cut
+was built off the same relation vocabulary the cue table routes to, so narrowing rarely has anything
+to exclude. Routing is real (56 questions now carry a named family, and the two new columns are
+populated from the run) but it moved nothing measurable this round. Threshold stays `{ min, 0 }`,
+unchanged, since `value` did not rise.
+
 **Model tier: Sonnet.** Serialized on `chat.mjs`.
 
 **What it does.** The phase F2 probe accepts an edge under any predicate. Rung 2 routes: read the
@@ -1203,6 +1223,30 @@ ground; an option connected by the right relation does; an unrouted stem still p
 
 ### 10.3 Rung 3 — inference depth
 
+**Built and measured.** `probeChoiceOptions` now falls back to `findIsaChain` (`syllogise.mjs`,
+`maxHops: 2`) for an option with no direct edge, chasing from every spelling of the source term over
+the store's own `rdf:type`/`rdfs:subClassOf` rows. A chain only grounds when every one of its steps
+resolves to a real stored Fact row (`premises.every(Boolean)`, the same guard the isa lanes already
+use before citing a chain) — a hop the store cannot back is never cited, and never fabricated as a
+grounding. The routing filter from rung 2 does not gate the chain: a relation family cues a direct
+edge's predicate, and `findIsaChain` only ever walks the isa family, a different axis. The winning
+answer renders through `renderIsaChain` when it came from a chain rather than a direct edge, and
+`turn.detail.hop` (1 for a direct edge, the chain length otherwise) lets the rig bucket
+`detail.byHop` straight off the run.
+
+Re-measured (chunked foreground slices, one persisted seeded repo, merged): before 14/11/75
+(answered/refused/abstained), `sourceEdgePresent` 30, `correctOfAnswered` 0; after 14/11/75,
+`sourceEdgePresent` 30, `correctOfAnswered` still 0, `byHop` `{1: {answered 14, correct 0}, 2:
+{answered 0, correct 0}, unreachable: {abstained 75}}`. Every answered question in this run grounded
+on a direct edge; the chain fallback never fired a new grounding. The rung 1 seed's relational
+predicates (atLocation, causes, desires, motivatedByGoal, hasSubevent) are what carries most of the
+fixture's coverage, and the isa layer (`rdfs:subClassOf`) that `findIsaChain` walks is a separate,
+smaller part of the same seed with little reason to bridge an arbitrary CommonsenseQA source-option
+pair two hops apart — most of the fixture's questions are not taxonomic to begin with (section 2.2's
+own stem-cue table puts IsA/Synonym/HasProperty at 11 of 100). The determinism and non-isa-hop tests
+pass, confirming the chain machinery itself is sound; it simply had nothing to reach on this seed.
+Threshold stays `{ min, 0 }`, unchanged, since `value` did not rise.
+
 **Model tier: Sonnet.** Serialized on `chat.mjs`.
 
 **What already exists.** `syllogise()` materializes five OWL 2 RL rules under budget, focus, screen
@@ -1251,6 +1295,18 @@ That last one is the read-time determinism check `CLAUDE.md` requires of any res
 store, and `sortFactIndividualsById` is the precedent it names.
 
 ### 10.4 Rung 4 — the wording gap
+
+**Built and measured, three levers, one measured round each.**
+
+| lever | mechanism | before -> after (answered/refused/abstained) | `correctOfAnswered` | what moved |
+|---|---|---|---|---|
+| lemma normalization | `lemmaFoldVariants` (choice-question.mjs): a self-verifying reverse of `inflect.mjs`'s regular -ing/-ed rules, tried on the option text before the exact match | 14/11/75 -> 14/11/75 | 0 -> 0 | nothing; no answered item's gap this round was a gerund/past-tense mismatch |
+| head-noun backoff | `headNounOf` (choice-question.mjs): a multi-word option that finds nothing under the full phrase retries under its last word alone | 14/11/75 -> 13/13/74 | 0 -> 0 | the partition, not correctness: one item's previously-sole grounded option gained a second grounded option once its head noun was tried, so a single answer became a tie, and one previously-abstained item gained its first grounded option the same way |
+| WordNet expansion | `choiceWordnetTags` (chat.mjs): a one-hop lookup into `corpus/wordnet/wordnet-full.jsonl`'s own `/r/Synonym` edges, tried only when the first two levers find nothing, loaded and cached once per process | 13/13/74 -> 14/13/73 | 0 -> 0 | one previously-abstained item now answers (wrong option, so `correctOfAnswered` stays 0); `detail.matchedBy.wordnet` reads 1 |
+
+Each round ran the full chunked-foreground re-measurement before the next lever landed, so every row above is the actual delta that lever alone produced against the round immediately before it. `detail.matchedBy` closes at `{ exact: 13, lemma: 0, "head-noun": 0, wordnet: 1 }` — one honest wrinkle worth recording: the head-noun lever visibly moved the partition (13->13/74->13 shift) without ever appearing in `matchedBy`, because `matchedBy` only tags the WINNING match in an answered item, and the head-noun round's effect landed entirely inside ties and a still-abstained-then-not item, never as a sole winner. The column is accurate to what it defines; it just does not show every lever's full reach.
+
+None of the three levers raised `value` (still 0) or improved `correctOfAnswered`. Threshold stays `{ min, 0 }`, unchanged.
 
 **Model tier: Sonnet.** Owns `src/domain/choice-question.mjs` and one function in `chat.mjs`.
 
@@ -1322,6 +1378,27 @@ behaviour and is what the abstained column reports.
 **What rung 5 delivers.** A `detail.abstainedUncued` count (abstained questions whose stem matched no
 relation route), the three real stems quoted above read from the run rather than authored, and the
 claims block copy that names the band. Nothing else.
+
+**Built and measured.** `runSample` (`scripts/claims/claim-commonsenseqa.mjs`) now computes
+`routeChoiceRelation` once per item and reuses it for both `routedByRelation` (rung 2) and this
+rung's count, so the two never drift against each other. `detail.abstainedUncued` and
+`detail.abstainedUncuedExampleStems` (the first three, in fixture order, read from the run) land in
+the rig payload. `scripts/build-demo-site.mjs`'s L2 block gains a fourth paragraph naming the band,
+its count, and its three real stems, each figure carrying its own `data-source` citation.
+
+Measured against the rung 4 seed (chunked foreground slices, one persisted seeded repo, merged):
+`abstained` stayed 73 (unchanged — this rung measures and narrates, it does not touch the engine),
+`abstainedUncued` reads 35 of those 73 — the stem named no relation cue at all, so
+`routeChoiceRelation` never had anything to route. The three real examples this run surfaced:
+
+- "How might a automobile get off a freeway?"
+- "You stop and have food all around you, what are you?"
+- "A story about World War II would be set when?"
+
+These differ from the plan's own illustrative examples above (drawn during the design survey, before
+rung 1's re-cut seed existed) — the contract is "read from the run", not "match the design doc", and
+the design doc's examples stay as a record of what motivated this rung, not a pin on today's output.
+Threshold stays `{ min, 0 }`, unchanged, since `value` did not move.
 
 ---
 

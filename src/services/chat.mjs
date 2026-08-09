@@ -70,7 +70,7 @@ import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./n
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { splitChoiceQuestion } from "../domain/choice-question.mjs";
+import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3703,9 +3703,96 @@ export { isAnchorableTerm };
  *  graph from the question's own distractors would ground every option for
  *  free, which is a slow way to guess rather than an honest probe.
  *
- *  `chain` stays null on every entry here — a direct-edge probe only. A
- *  bounded findIsaChain chase for an option with no direct edge is later work
- *  (rung 3), which is why `graph` already rides this signature unused. */
+ *  ROUTING (rung 2): `routeChoiceRelation` (choice-question.mjs) reads the
+ *  relation family the STEM itself names — "where" cues AtLocation, "part of"
+ *  cues PartOf/HasA/MadeOf, and so on, a closed cue table ordered by measured
+ *  yield on the committed fixture. When a route fires, an edge only grounds
+ *  an option if its predicate is IN that family — an edge under some other
+ *  predicate is no longer "a stated relation", it is the WRONG stated
+ *  relation, and the whole point of routing is to stop counting that as
+ *  evidence. A stem naming no relation at all (routeChoiceRelation returns
+ *  null) falls back to the unrouted any-predicate probe, unchanged.
+ *
+ *  CHAIN FALLBACK (rung 3): an option with no direct edge gets one more
+ *  chance — findIsaChain (syllogise.mjs), the SAME bounded rooted proof
+ *  search the isa lanes already cite, chases from every spelling of
+ *  sourceTerm toward the option over the store's own rdf:type/rdfs:subClassOf
+ *  edges, maxHops:2 (its usual live-chase bound). `chain`, when non-null, is
+ *  the ORDERED ARRAY OF FACT ROWS the chase proved, every one of them a real
+ *  stored row so the citation never names a step nothing backs — the same
+ *  `premises.every(Boolean)` discipline the isa lanes use before returning a
+ *  chain answer. The routing filter above does not apply to the chain: a
+ *  relation family cues a DIRECT edge's predicate, and findIsaChain only ever
+ *  walks the isa family, a different axis entirely.
+ *
+ *  WORDING (rung 4): an option's variant set is TAGGED, not just widened —
+ *  `choiceTermTags` maps every spelling the option could be read as back to
+ *  the mechanism that produced it ("exact" for factTermVariants' own plural
+ *  fold, "lemma" for lemmaFoldVariants' regular -ing/-ed reversal), so a
+ *  grounded fact's `matchedBy` says HOW it matched, not just THAT it did.
+ *  HEAD-NOUN BACKOFF is a second, separate pass: only when the full phrase
+ *  (exact + lemma) finds NOTHING does a multi-word option retry under its
+ *  head noun alone (`headNounOf`, choice-question.mjs) — "fast food
+ *  restaurant" retries as "restaurant". Bounded to the head only, never
+ *  every sub-phrase, and never tried when the full phrase already grounded.
+ *  WORDNET EXPANSION is the third and widest pass, tried only when the first
+ *  two find nothing: a fixed-depth (one hop) lookup into
+ *  corpus/wordnet/wordnet-full.jsonl's own `/r/Synonym` edges, the same
+ *  ConceptNet-shape corpus the `wordnet-xl` band already ships from, loaded
+ *  and indexed once per process and cached (loadWordnetSynonymIndex, below)
+ *  — a 28 MB file is not re-parsed per turn. */
+function choiceTermTags(text) {
+  const tags = new Map();
+  const addAll = (values, tag) => { for (const v of values) if (!tags.has(v)) tags.set(v, tag); };
+  addAll(factTermVariants(normFactTermStatic, text), "exact");
+  for (const folded of lemmaFoldVariants(text)) addAll(factTermVariants(normFactTermStatic, folded), "lemma");
+  return tags;
+}
+function choiceHeadNounTags(text) {
+  const head = headNounOf(text);
+  if (!head) return new Map();
+  const tags = new Map();
+  for (const v of factTermVariants(normFactTermStatic, head)) tags.set(v, "head-noun");
+  return tags;
+}
+
+/** subject|object -> Set(synonym) built once from wordnet-full.jsonl's own
+ *  `/r/Synonym` rows, both directions (a chained synonym pair is stored one
+ *  way in the source file, and a lookup needs to reach it from either
+ *  member). Cached at module scope: the file is 28 MB / ~206,000 rows, and a
+ *  choice question that never needs this pass never pays to load it — the
+ *  cache only fills on the first ungrounded option that reaches it. */
+let choiceWordnetSynonymIndex = null;
+async function loadChoiceWordnetSynonymIndex() {
+  if (choiceWordnetSynonymIndex) return choiceWordnetSynonymIndex;
+  const index = new Map();
+  try {
+    const { loadSlice, termText, WORDNET_DIR } = await import("../adapters/corpus/conceptnet.mjs");
+    const assertions = await loadSlice(join(WORDNET_DIR, "wordnet-full.jsonl"));
+    const add = (a, b) => {
+      if (!a || !b || a === b) return;
+      if (!index.has(a)) index.set(a, new Set());
+      index.get(a).add(b);
+    };
+    for (const row of assertions) {
+      if (row.rel !== "/r/Synonym") continue;
+      const a = termText(row.start);
+      const b = termText(row.end);
+      add(a, b);
+      add(b, a);
+    }
+  } catch { /* the corpus is optional; an empty index just skips this pass */ }
+  choiceWordnetSynonymIndex = index;
+  return choiceWordnetSynonymIndex;
+}
+async function choiceWordnetTags(text) {
+  const index = await loadChoiceWordnetSynonymIndex();
+  const synonyms = index.get(String(text ?? "").toLowerCase().trim());
+  if (!synonyms) return new Map();
+  const tags = new Map();
+  for (const syn of synonyms) for (const v of factTermVariants(normFactTermStatic, syn)) tags.set(v, "wordnet");
+  return tags;
+}
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
   let rows = await factRows(memoryDir, cache);
@@ -3714,12 +3801,58 @@ async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthe
     const learned = await childPackFactsForKey(parsed.sourceTerm, { memoryDir, env, cache, synthesisBudget });
     if (learned) rows = await factRows(memoryDir, cache);
   }
-  return parsed.options.map((option) => {
-    const optionVariants = factTermVariants(normFactTermStatic, option.text);
-    const facts = rows.filter((f) => (sourceVariants.has(f.subject) && optionVariants.has(f.object))
-      || (sourceVariants.has(f.object) && optionVariants.has(f.subject)));
-    return { label: option.label, text: option.text, grounds: facts.length > 0, facts, chain: null };
-  });
+  const route = routeChoiceRelation(parsed.stem);
+  const {
+    findIsaChain: chaseChoiceIsa, buildSubClassSuccessors: buildChoiceSubClassSucc,
+    TYPE_PREDICATE: CHOICE_TYPE_PREDICATE, SUBCLASS_PREDICATE: CHOICE_SUBCLASS_PREDICATE,
+  } = await import("../domain/syllogise.mjs");
+  const choiceTypeRows = rows.filter((f) => f.predicate === CHOICE_TYPE_PREDICATE);
+  const choiceSubClassRows = rows.filter((f) => f.predicate === CHOICE_SUBCLASS_PREDICATE);
+  const choiceTypeEdges = choiceTypeRows.map((f) => [f.subject, f.object]);
+  const choiceSubClassSucc = buildChoiceSubClassSucc(choiceSubClassRows.map((f) => [f.subject, f.object]));
+  const factForChoiceChainStep = (step) => (step.predicate === CHOICE_SUBCLASS_PREDICATE ? choiceSubClassRows : choiceTypeRows)
+    .find((f) => f.subject === step.subject && f.object === step.object);
+  const matchFacts = (variantsSet) => {
+    let matched = rows.filter((f) => (sourceVariants.has(f.subject) && variantsSet.has(f.object))
+      || (sourceVariants.has(f.object) && variantsSet.has(f.subject)));
+    if (route) matched = matched.filter((f) => route.predicates.includes(f.predicate));
+    return matched;
+  };
+
+  return Promise.all(parsed.options.map(async (option) => {
+    const primaryTags = choiceTermTags(option.text);
+    const primaryVariants = new Set(primaryTags.keys());
+    let facts = matchFacts(primaryVariants);
+    let activeTags = primaryTags;
+    if (facts.length === 0) {
+      const headTags = choiceHeadNounTags(option.text);
+      if (headTags.size) {
+        const headFacts = matchFacts(new Set(headTags.keys()));
+        if (headFacts.length) { facts = headFacts; activeTags = headTags; }
+      }
+    }
+    if (facts.length === 0) {
+      const wordnetTags = await choiceWordnetTags(option.text);
+      if (wordnetTags.size) {
+        const wordnetFacts = matchFacts(new Set(wordnetTags.keys()));
+        if (wordnetFacts.length) { facts = wordnetFacts; activeTags = wordnetTags; }
+      }
+    }
+    facts = facts.map((f) => {
+      const optionSideTerm = sourceVariants.has(f.subject) ? f.object : f.subject;
+      return { ...f, matchedBy: activeTags.get(optionSideTerm) ?? "exact" };
+    });
+    let chain = null;
+    if (facts.length === 0) {
+      for (const subj of sourceVariants) {
+        const path = chaseChoiceIsa(subj, primaryVariants, choiceTypeEdges, choiceSubClassSucc, { maxHops: 2 });
+        if (!path) continue;
+        const premises = path.map(factForChoiceChainStep);
+        if (premises.every(Boolean)) { chain = premises; break; }
+      }
+    }
+    return { label: option.label, text: option.text, grounds: facts.length > 0 || chain !== null, facts, chain };
+  }));
 }
 
 /** The "both sides ungrounded" grounding NUDGE: reuses teachSuggestion's own
@@ -18330,20 +18463,36 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         turn.lane = "ask-choice";
         turn.detail = {
           traversal: `${grounded.length} of ${probed.length} options grounded against "${parsed.sourceTerm}"`,
-          matches: grounded.flatMap((o) => o.facts),
+          matches: grounded.flatMap((o) => (o.facts.length ? o.facts : o.chain || [])),
         };
         return withLast(turn, choiceGoal);
       }
       const winner = grounded[0];
-      const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
-      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding fact`);
-      const text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
+      // Direct edge first; a chain (rung 3) only ever fires when NO direct
+      // edge exists for the winning option — probeChoiceOptions' own guard.
+      let text; let matches; let hop; let traversalNote; let matchedBy;
+      if (winner.facts.length > 0) {
+        const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
+        text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
+        matches = winner.facts;
+        hop = 1;
+        matchedBy = fact.matchedBy;
+        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`;
+      } else {
+        text = `${winner.text} — ${renderIsaChain(winner.chain)}.`;
+        matches = winner.chain;
+        hop = winner.chain.length;
+        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via a ${winner.chain.length}-hop isa chain`;
+      }
+      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
       const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
       turn.lane = "ask-choice";
       turn.detail = {
-        traversal: `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`,
-        matches: winner.facts,
+        traversal: traversalNote,
+        matches,
         selectedLabel: winner.label,
+        hop,
+        ...(matchedBy ? { matchedBy } : {}),
       };
       return withLast(turn, choiceGoal);
     }
