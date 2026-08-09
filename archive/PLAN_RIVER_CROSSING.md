@@ -17,7 +17,7 @@ every world or actor edit, no turn spent), R6 the river-crossing scenario as `mu
 fourth dropdown entry plus the site wiring (`mudiii-about.html`'s mechanism section,
 `index.html`'s feature-plate clause, `share.mjs`'s posts), R7 the e2e coverage
 (`test-e2e/pages-mudiii-river.test.mjs`, five tests, enrolled beside its sibling in
-`e2e:deployed:pages`) plus three of its seven named corpus rows (`test/corpus/planning.jsonl`,
+`e2e:deployed:pages`) plus its corpus rows (`test/corpus/planning.jsonl`,
 riding a small `loadPlanContext` fix so the plan lane derives river-style constraints from
 `mgx:consumes`/`mgx:guards` facts the same way `mudiii-turn.mjs`'s puzzle plan already does),
 and R8's measurement half (`riverRuleSentences`/`riverInstanceSentences` and
@@ -26,14 +26,11 @@ chunked sweep entry point, and the measured `results/claims/planner.json`: river
 classic 3-passenger optimum under 1s and reports an honest miss at every larger size, crossing
 10s at 182 passengers). R7 closes this plan's phase ladder.
 
-Still open: the four `games/mudiii.jsonl` corpus rows R7's own table named — MUDIII's chat
-game lane recognizes a closed opener vocabulary naming its three grid layouts and nothing for
-a layout-less puzzle world, and its only drive-trait sentence table
-(`src/services/agent-editor.mjs`) is spliced into the browser page only, never reached by
-`chat.mjs`'s own turn dispatcher, so neither a chat-reachable river opener nor a chat-reachable
-per-instance drive read/write exists yet to write those four rows against (section 11 records
-the finding); R8's claims-page block; and (sequenced later still) the
-population-counting/boat-capacity puzzle variants.
+R7's own `games/mudiii.jsonl` rows landed later, once the chat lane gained a river opener and
+the drive-trait table gained its ask half (section 11 records what that took).
+
+Still open: R8's claims-page block, and (sequenced later still) the population-counting/
+boat-capacity puzzle variants.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every phase
 names its module paths, data structures, function signatures, test files, corpus rows and acceptance
@@ -1239,14 +1236,14 @@ node scripts/gen-screenshots.mjs && node --test test/estate/screenshots.test.mjs
 
 ## 11. Phase R7 — e2e and corpus rows
 
-**Shipped, in part.** `test-e2e/pages-mudiii-river.test.mjs` (five tests) covers the puzzle
+**Shipped.** `test-e2e/pages-mudiii-river.test.mjs` (five tests) covers the puzzle
 opening paused with its four passengers named, the classic seven-move crossing (goat first and
 last) on the outlook panel, the belief panel stating its own honest gap rather than fabricating
 a table for a world with no vision model, the full retract/widen/miss/restore edit sequence over
 the fox's class-level appetite for the goat, and no horizontal overflow at 375/320px — enrolled
 beside its sibling in `e2e:deployed:pages`.
 
-Three of the section's seven named corpus rows shipped, all in `test/corpus/planning.jsonl`:
+The plan-lane half of the section's corpus rows shipped first, all in `test/corpus/planning.jsonl`:
 `planning-the-packed-river-world-solves-at-seven-crossings`,
 `planning-retracting-a-consumes-fact-shortens-the-crossing-plan` and
 `planning-an-unsolvable-crossing-reports-the-miss-not-a-partial-plan`. Each preloads the packed
@@ -1261,18 +1258,21 @@ no matching `guards` row yields no constraint, and no other shipped world states
 same pair — and verified against the whole `planning`/`games/mudiii` corpus lanes plus
 `test:fast` and the estate tier, all green.
 
-The other four named rows (`games/mudiii.jsonl`'s two `games.mudiii.river.*` rows and two
-`games.mudiii.drives.*` rows) stay open. `mudiiiTurn`'s opener is a closed regex vocabulary
-naming exactly the three grid layouts (`src/services/mudiii-turn.mjs`'s `matchMudiiiOpening`);
-a puzzle world with no layout matches none of them and mudiiiTurn does not claim the line at
-all, so there is no chat line that opens the river scenario as a game to write these against.
-The drive-trait sentence table (`src/services/agent-editor.mjs`, "X evades Y", "X eats Y") is
-reached only through `window.tmct.page` in the browser, never through `chat.mjs`'s own turn
-dispatcher, and the ordinary ask lane has no interrogative grammar for `mgx:pursues`/`evades`/
-`consumes`/`guards` either — so there is neither a chat-reachable way to write a per-instance
-drive override nor to read one back. Closing this needs a chat-lane opener for a layout-less
-puzzle world and a chat-reachable drive-trait query/write surface, which is new engine work
-rather than a corpus row.
+The `games.mudiii.river.*` and `games.mudiii.drives.*` rows needed two pieces of engine work
+first, and landed with them. `matchMudiiiOpening` (`src/services/mudiii-turn.mjs`) gained a
+river opener beside its three layout openers, and a world in its `PUZZLE_WORLDS` set now
+survives a live turn instead of ending the game on a null layout — which also fixed the river
+PAGE, where every chat line had been killing the session. `agent-editor.mjs` gained the ask
+half of its own sentence table (forward and inverse over `mgx:consumes`/`evades`/`guards`/
+`pursues`, forward over the numbers and the model name), wired into `chat.mjs` as the
+`ask-agent-trait` lane and claimed only when the store states a trait about the named term.
+The landed rows read against real behavior rather than the drafts above: two under
+`games.mudiii.river.opening`, two under `games.mudiii.river.legal`, two under
+`games.mudiii.drives.read`, one under `games.mudiii.drives.instance-override`, two under
+`games.mudiii.drives.honest-gap`, and a board-verb decline under `games.mudiii.miss`, with
+`test/adapters/chat-mudiii-river-and-drives.test.mjs` carrying the lane tests. A chat-reachable
+WRITE path for a per-instance drive override is not among them — the corpus row preloads the
+override through `setup.facts` and pins the read.
 
 New spec, following `test-e2e/pages-mudiii.test.mjs`'s own `openMudiiiPage` helper (`:73-108`: a real
 Chromium context with `--enable-unsafe-swiftshader`, third-party requests blocked, console errors

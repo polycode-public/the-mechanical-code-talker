@@ -29,12 +29,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
-  the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
-  a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
-  world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
-  into the browser page only, with no ask-lane grammar for those predicates. Operator said go
-  (2026-08-09); four planned corpus rows wait on it. In flight in a chat.mjs worktree.
+- [ ] **MUDIII's chat surface reaches the river scenario and the drive-trait sentences** —
+  code-complete and merged, pending deployed verification: "open the river crossing" (and
+  siblings) opens the puzzle world from chat with the roster, legal crossings and
+  drive-derived goal all read from the store; twelve ask patterns cover the drive predicates
+  in both directions with citations and honest gaps; eleven corpus rows pin it. Folded-in
+  find: every chat line typed on the river PAGE had been killing the session (the turn
+  engine ended any game whose world had no grid layout) — fixed on the same path.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
   next tuning cycle, each its own measured round:

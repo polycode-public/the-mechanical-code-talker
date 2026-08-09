@@ -77,6 +77,7 @@ import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 import { mudiiiTurn } from "./mudiii-turn.mjs";
+import { parseAgentTraitAsk, answerAgentTraitAsk } from "./agent-editor.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
@@ -18633,6 +18634,37 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const rec = withLast(result, mTurn.goal ?? "watch the town square");
       rec.planState = planHolder.state;
       return rec;
+    }
+  }
+
+  // AGENT DRIVE TRAITS — "who does the cabbage evade", "what does the fox
+  // eat", "who guards the goat": the ask side of the actor card's own closed
+  // sentence table (agent-editor.mjs), reading the SAME `mgx:` trait rows
+  // that card renders and writes. It sits after the game lanes so a live
+  // game's own grammar always wins the line, and it claims a question only
+  // when the store states a trait about the named term at all — with none,
+  // agent-editor answers null and the question falls through to whatever
+  // lane owned it before.
+  {
+    const traitAsk = parseAgentTraitAsk(workingLine);
+    if (traitAsk) {
+      const rows = await factRows(memoryDir, factRowsCache);
+      const answered = answerAgentTraitAsk(rows, traitAsk, {
+        cite: (r) => (r.provenance ? ` (source: ${citationProvenance(r.provenance)})` : ""),
+      });
+      if (answered) {
+        const goal = "look up a stated agent trait";
+        note(trace, `lane: agent-trait ask — ${traitAsk.direction} ${traitAsk.predicate} on "${traitAsk.term}", ${answered.matches.length} stated row(s)`);
+        const turn = plainTurn(workingLine, answered.text, { via: "composed", miss: answered.miss, focus, goal });
+        turn.lane = "ask-agent-trait";
+        turn.detail = {
+          traversal: `${traitAsk.direction} read of ${traitAsk.predicate} over "${traitAsk.term}"`,
+          matches: answered.matches,
+        };
+        const rec = withLast(turn, goal);
+        rec.planState = planHolder.state;
+        return rec;
+      }
     }
   }
 

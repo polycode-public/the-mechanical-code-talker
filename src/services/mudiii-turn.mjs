@@ -55,8 +55,20 @@ const MUDIII_MARKET_OPEN_RE =
   /^(?:let'?s\s+)?(?:visit|watch|enter|start|begin)\s+(?:the\s+)?market\s+(?:square|day)(?:\s+game)?[.!?\s]*$/i;
 const MUDIII_CHAPEL_OPEN_RE =
   /^(?:let'?s\s+)?(?:visit|watch|enter|start|begin)\s+(?:the\s+)?chapel\s+corner(?:\s+game)?[.!?\s]*$/i;
+// The one puzzle world this lane opens. Same closed style as the three
+// layouts above, with "open" and "solve" alongside the shared verb set —
+// a crossing is something you open and solve, not somewhere you visit.
+const MUDIII_RIVER_OPEN_RE =
+  /^(?:let'?s\s+)?(?:visit|watch|enter|start|begin|open|solve)\s+(?:the\s+)?river(?:\s+crossing)?(?:\s+(?:puzzle|game))?[.!?\s]*$/i;
 
-/** The layout name an opening line names, or null when the line opens
+// A world the pack ships with no grid layout: a fixed cast on named places,
+// with no roster to mint and nothing that moves on its own. Closed, like
+// every other vocabulary here — a world name absent from both this set and
+// TOWN_SQUARE_LAYOUTS is one this lane does not know.
+const PUZZLE_WORLDS = Object.freeze(new Set(["river-crossing"]));
+const isPuzzleWorld = (world) => PUZZLE_WORLDS.has(world);
+
+/** The world name an opening line names, or null when the line opens
  *  nothing this lane recognizes. Shape-only, closed vocabulary — never a
  *  generic "play X" grammar, so a name this pack does not ship (e.g. "play
  *  mudiii") stays unclaimed and falls to chat's own last-resort honest
@@ -66,6 +78,7 @@ function matchMudiiiOpening(line) {
   if (MUDIII_HEADLINE_OPEN_RE.test(l) || MUDIII_FOX_GOBLIN_OPEN_RE.test(l)) return "town-square";
   if (MUDIII_MARKET_OPEN_RE.test(l)) return "town-square-market";
   if (MUDIII_CHAPEL_OPEN_RE.test(l)) return "town-square-chapel";
+  if (MUDIII_RIVER_OPEN_RE.test(l)) return "river-crossing";
   return null;
 }
 
@@ -161,6 +174,17 @@ async function openMudiiiGame(world, { planHolder, memoryDir, env, cache, gameCo
   if (cache) cache.rows = null; // the fact-rows cache predates these writes
 
   const layout = layoutNamed(world) ?? TOWN_SQUARE_LAYOUTS[world];
+  if (!layout) {
+    planHolder.state = { mudiii: { world, turn: 0 } };
+    const rows = readFactRows(await loadMemory(memoryDir));
+    const opening = payload.meta?.opening ?? WORLD_OPENING_FALLBACK;
+    return {
+      text: [opening, ...standingLines(rows)].join("\n"),
+      goal: "ferry every passenger across the river",
+      lane: "game-inform",
+      note: `MUDIII — loaded the "${world}" puzzle from the worlds pack into this session's memory (facts + rule rows, provenance ${tag}); no layout, so no cast was minted`,
+    };
+  }
   const { started } = await startTownSquareGame(memoryDir, { layout, config: gameConfig?.mudiii, roles: MUDIII_ROLES });
   planHolder.state = { mudiii: { world, turn: 0 } };
   const opener = started
@@ -1061,6 +1085,157 @@ async function mudiiiContextAnswer(line, { memoryDir }) {
   return { text: GENERIC_GOAL_TEXT, lane: "game-inform", note: "MUDIII — goal aside: the game's predator/prey/forage objective", goal: "understand the game" };
 }
 
+// ---- the layout-less puzzle world -------------------------------------------
+//
+// A puzzle world ships a fixed party standing on named places, with no grid,
+// no roster to mint and nothing that moves on its own. The square's own verbs
+// (tick, the addressed teach-frame, the food channel) have nothing to act on
+// here, so they decline by name; the orientation asides answer from the
+// world's own rows and the crossing plan riverPuzzleOutlook already computes.
+
+const PLACE_PREDICATE = "mgx:currently-in";
+const PUZZLE_WHERE_RE = /^where(?:'s|\s+is)\s+(?:the\s+)?([a-z][a-z0-9-]*)(?:\s+now)?[?.!\s]*$/i;
+
+/** "on bank-east: cabbage-1, farmer-1, fox-1, goat-1." — one line per place
+ *  anything stands in, read off the world's own `mgx:currently-in` rows and
+ *  sorted by place then by individual, so the same fact set reads back the
+ *  same way whatever order it arrived in. Empty when nothing is placed. Pure. */
+function standingLines(rows) {
+  const byPlace = new Map();
+  for (const row of rows || []) {
+    if (row.predicate !== PLACE_PREDICATE) continue;
+    if (!byPlace.has(row.object)) byPlace.set(row.object, new Set());
+    byPlace.get(row.object).add(row.subject);
+  }
+  return [...byPlace.keys()].sort()
+    .map((place) => `on ${place}: ${[...byPlace.get(place)].sort().join(", ")}.`);
+}
+
+/** The puzzle's objective in one sentence: where the goal wants everyone,
+ *  plus the pairs the world's own drive facts say may not be left alone —
+ *  `constraintsFromDrives`, the same derivation the crossing search itself
+ *  runs, never a hand-written rule sentence. Pure. */
+function puzzleGoalText(rows, puzzle) {
+  const target = puzzle?.goalPlace
+    ? `ferry every passenger onto ${puzzle.goalPlace}`
+    : "ferry every passenger across";
+  const constraints = constraintsFromDrives(rows)
+    .map((c) => `never leave ${c.left} alone with ${c.right} unless ${c.guard} is there`);
+  return constraints.length ? `${target} — ${constraints.join("; ")}.` : `${target}.`;
+}
+
+/** What may cross right now, counted and named from `puzzle.moves`. Null when
+ *  the store carries no crossing action for this world at all. Pure. */
+function legalCrossingsText(puzzle) {
+  if (!puzzle) return null;
+  if (!puzzle.moves.length) return "no crossing is legal from here.";
+  if (puzzle.moves.length === 1) return `one crossing is legal from here: ${puzzle.moves[0]}.`;
+  return `${puzzle.moves.length} crossings are legal from here: ${puzzle.moves.join("; ")}.`;
+}
+
+/** "where is the goat" on a puzzle world: the named individual's own place,
+ *  or every placed member of the named class. Null when the term names
+ *  nothing placed, so an unrelated "where is X" still reaches the ordinary
+ *  lanes. Pure. */
+function puzzleWhereAnswer(rows, term) {
+  const placed = (rows || []).filter((r) => r.predicate === PLACE_PREDICATE);
+  const named = placed.filter((r) => r.subject === term);
+  const hits = named.length
+    ? named
+    : placed.filter((r) => rows.some((t) => t.subject === r.subject && t.predicate === "rdf:type" && t.object === term));
+  if (!hits.length) return null;
+  const lines = hits.map((r) => `${r.subject} is on ${r.object}`).sort();
+  return {
+    text: `${lines.join("; ")}.`,
+    lane: "game-answer",
+    note: `MUDIII — where-aside: ${term}'s place read off the world's own ${PLACE_PREDICATE} rows`,
+    goal: `find the ${term}`,
+  };
+}
+
+/** One turn of an open puzzle world. Returns the same
+ *  `{ text, lane, note, goal?, miss? }` shape the square's own turns do, or
+ *  null when the line is not this lane's to answer (the drive asks and every
+ *  ordinary question fall through untouched). */
+async function puzzleWorldTurn(line, { planHolder, memoryDir, world, openingWorld }) {
+  const trimmed = String(line).trim();
+
+  if (openingWorld) {
+    return {
+      text: `the ${world} puzzle is already open — say "stop watching" to close it first.`,
+      lane: "game-inform",
+      note: "MUDIII — an opening arrived mid-puzzle; declined, the open puzzle stands",
+    };
+  }
+  if (MUDIII_STOP_RE.test(trimmed)) {
+    planHolder.state = null;
+    return {
+      text: `OK — the ${world} puzzle closes here. Everything the world wrote stays remembered; say "open the river crossing" to pick it back up.`,
+      lane: "game-inform",
+      note: "MUDIII — the puzzle closed on request; the world's facts stay in the store",
+    };
+  }
+  if (MUDIII_TICK_RE.test(trimmed)) {
+    return {
+      text: 'nothing here moves on its own — this world changes only when someone is ferried. Say "what can I do" for the crossings that are legal right now.',
+      lane: "game-inform",
+      note: "MUDIII — tick declined: a puzzle world has no roster to advance",
+    };
+  }
+  if (MUDIII_ADDRESS_LEAD_RE.test(trimmed) || MUDIII_PUT_FOOD_RE.test(trimmed) || MUDIII_DROP_FOOD_RE.test(trimmed)) {
+    return {
+      text: `the ${world} puzzle has no grid and nobody to address — it holds a fixed party on named places. Say "what can I do" for the crossings that are legal right now.`,
+      lane: "game-inform",
+      note: "MUDIII — a town-square board verb arrived on a puzzle world; declined rather than answered against nothing",
+      miss: true,
+    };
+  }
+
+  const asksOptions = MUDIII_OPTIONS_RE.test(trimmed);
+  const asksGoal = MUDIII_GOAL_GENERIC_RE.test(trimmed);
+  const asksWhereMe = MUDIII_WHERE_AM_I_RE.test(trimmed);
+  const whereMatch = trimmed.match(PUZZLE_WHERE_RE);
+  if (!asksOptions && !asksGoal && !asksWhereMe && !whereMatch) return null;
+
+  if (asksWhereMe) {
+    return {
+      text: 'you have no piece here — the party is the world\'s own. Say "what can I do" for the crossings that are legal right now.',
+      lane: "game-inform",
+      note: "MUDIII — where-am-I aside: the watcher stance on a puzzle world",
+      goal: "understand your role",
+    };
+  }
+
+  const memory = await loadMemory(memoryDir);
+  const rows = readFactRows(memory);
+  if (whereMatch) return puzzleWhereAnswer(rows, whereMatch[1].toLowerCase());
+
+  const puzzle = riverPuzzleOutlook(rows, readRuleRows(memory));
+  if (asksGoal) {
+    return {
+      text: puzzleGoalText(rows, puzzle),
+      lane: "game-inform",
+      note: "MUDIII — goal aside: the puzzle's own goal place, with the constraints its drive facts imply",
+      goal: "understand the puzzle",
+    };
+  }
+  const legal = legalCrossingsText(puzzle);
+  if (!legal) {
+    return {
+      text: `this store holds no crossing action for the ${world} puzzle, so there is nothing legal to list.`,
+      lane: "game-inform",
+      note: "MUDIII — options declined: the world's own action rules are not in the store",
+      miss: true,
+    };
+  }
+  return {
+    text: `${legal} Say "stop watching" to close it.`,
+    lane: "game-answer",
+    note: "MUDIII — options aside: the crossings legal from the current arrangement",
+    goal: "see what you can do",
+  };
+}
+
 // ---- the lane ------------------------------------------------------------
 
 /**
@@ -1113,6 +1288,9 @@ export async function mudiiiTurn(line, { planHolder, memoryDir, env, cache = nul
 
   // A game is live.
   const layout = layoutNamed(mudiii.world);
+  if (!layout && isPuzzleWorld(mudiii.world)) {
+    return puzzleWorldTurn(line, { planHolder, memoryDir, world: mudiii.world, openingWorld });
+  }
   if (!layout) {
     planHolder.state = null;
     return {

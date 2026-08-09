@@ -179,6 +179,131 @@ export function parseAgentEditorText(text) {
   return { triples, unrecognized };
 }
 
+// ---- asking ----------------------------------------------------------------
+//
+// The read side of the same table. `AGENT_LINE_PATTERNS` states each trait as
+// a sentence; the entries below ask for one back, in the two shapes a
+// relation has: FORWARD names the subject and asks for its objects ("what
+// does the fox eat"), INVERSE names the object and asks which subjects state
+// it ("who eats the goat"). Only the four relational predicates take an
+// inverse — "who weighs 8" is not a question the actor card has a sentence
+// for in either direction.
+//
+// `mgx:display-name` and `mgx:is-predator` carry no ask entry: their plain
+// English phrasings ("what is the fox's name", "is the fox a predator") are
+// the relation lane's and the type-check lane's own, and both already answer
+// them from the store.
+
+const AGENT_TRAIT_ASK_PATTERNS = [
+  { predicate: "mgx:consumes", direction: "forward",
+    re: /^(?:what|who)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(?:want\s+to\s+)?eat[?.!\s]*$/i,
+    gap: (t) => `what ${t} eats` },
+  { predicate: "mgx:consumes", direction: "inverse",
+    re: /^(?:what|who)\s+eats\s+(?:the\s+|a\s+|an\s+)?(.+?)[?.!\s]*$/i,
+    gap: (t) => `who eats ${t}` },
+  { predicate: "mgx:evades", direction: "forward",
+    re: /^(?:what|who)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+evade[?.!\s]*$/i,
+    gap: (t) => `what ${t} evades` },
+  { predicate: "mgx:evades", direction: "inverse",
+    re: /^(?:what|who)\s+evades\s+(?:the\s+|a\s+|an\s+)?(.+?)[?.!\s]*$/i,
+    gap: (t) => `who evades ${t}` },
+  { predicate: "mgx:guards", direction: "forward",
+    re: /^(?:what|who)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+guard[?.!\s]*$/i,
+    gap: (t) => `what ${t} guards` },
+  { predicate: "mgx:guards", direction: "inverse",
+    re: /^(?:what|who)\s+guards\s+(?:the\s+|a\s+|an\s+)?(.+?)[?.!\s]*$/i,
+    gap: (t) => `who guards ${t}` },
+  { predicate: "mgx:pursues", direction: "forward",
+    re: /^(?:what|who)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(?:pursue|chase)[?.!\s]*$/i,
+    gap: (t) => `what ${t} pursues` },
+  { predicate: "mgx:pursues", direction: "inverse",
+    re: /^(?:what|who)\s+(?:pursues|chases)\s+(?:the\s+|a\s+|an\s+)?(.+?)[?.!\s]*$/i,
+    gap: (t) => `who pursues ${t}` },
+  { predicate: "mgx:hasMass", direction: "forward",
+    re: /^(?:how\s+much|what)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+weigh[?.!\s]*$/i,
+    gap: (t) => `what ${t} weighs` },
+  { predicate: "mgx:mass-drain-per-turn", direction: "forward",
+    re: /^(?:how\s+much|what)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+lose\s+each\s+turn[?.!\s]*$/i,
+    gap: (t) => `what ${t} loses each turn` },
+  { predicate: "mgx:vision-radius", direction: "forward",
+    re: /^how\s+(?:far|many\s+cells)\s+can\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+see[?.!\s]*$/i,
+    gap: (t) => `how far ${t} sees` },
+  { predicate: "mgx:model", direction: "forward",
+    re: /^(?:what|who)\s+does\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+look\s+like[?.!\s]*$/i,
+    gap: (t) => `what ${t} looks like` },
+];
+
+/** One question -> `{ predicate, direction, term, gapPhrase }`, or null when
+ *  nothing in the ask table recognizes it. `gapPhrase` is the entry's own
+ *  wording for what went unanswered, so a miss says which question missed
+ *  rather than restating the raw predicate. Pure. */
+export function parseAgentTraitAsk(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return null;
+  for (const pattern of AGENT_TRAIT_ASK_PATTERNS) {
+    const m = trimmed.match(pattern.re);
+    if (!m) continue;
+    const term = LOW(m[1]);
+    if (!term) continue;
+    return { predicate: pattern.predicate, direction: pattern.direction, term, gapPhrase: pattern.gap(term) };
+  }
+  return null;
+}
+
+/** Whether `rows` state anything trait-shaped about `term` at all — as the
+ *  subject of a trait row anywhere on its own class chain, or as the object
+ *  of one. This is the gate on the whole ask family: a store that holds no
+ *  agent traits for the term is not this table's to answer, so the question
+ *  falls back to whatever lane owned it before. Pure. */
+export function namesAgentTrait(rows, term) {
+  const chain = new Set(classChainOf(rows, term));
+  return (rows || []).some((r) => AGENT_TRAIT_PREDICATES.includes(r.predicate)
+    && (chain.has(r.subject) || r.object === term));
+}
+
+/** The rows answering a forward ask: `subject`'s own if it declares any,
+ *  otherwise the nearest class link that does — the same nearest-first walk
+ *  `traitValuesOf` resolves a value through, kept as ROWS so the answer can
+ *  cite each one. Empty when no chain link declares the predicate. Pure. */
+function traitRowsOnChain(rows, subject, predicate) {
+  for (const node of classChainOf(rows, subject)) {
+    const hits = (rows || []).filter((r) => r.subject === node && r.predicate === predicate);
+    if (hits.length) return hits.slice().sort(compareTraitHits);
+  }
+  return [];
+}
+
+const compareTraitHits = (a, b) => {
+  if (a.subject !== b.subject) return a.subject < b.subject ? -1 : 1;
+  return a.object < b.object ? -1 : a.object > b.object ? 1 : 0;
+};
+
+const defaultCite = (row) => (row.provenance ? ` (source: ${row.provenance})` : "");
+
+/** Answer a parsed ask against `rows`: `{ text, miss, matches }`, or null
+ *  when the store states no trait about the term at all (the caller keeps
+ *  the line). A hit names the answer first and then every row it stands on,
+ *  each cited; a subject with nothing stated under that predicate gets the
+ *  gap said out loud, never a default filled in for it. An answer resolved
+ *  off a class rather than the named instance says which class carried it.
+ *  `cite` renders one row's citation, so a caller can normalize provenance
+ *  its own way. Pure. */
+export function answerAgentTraitAsk(rows, ask, { cite = defaultCite } = {}) {
+  if (!ask || !namesAgentTrait(rows, ask.term)) return null;
+  const hits = ask.direction === "forward"
+    ? traitRowsOnChain(rows, ask.term, ask.predicate)
+    : (rows || []).filter((r) => r.predicate === ask.predicate && r.object === ask.term).sort(compareTraitHits);
+  if (!hits.length) return { text: `nothing on record says ${ask.gapPhrase}.`, miss: true, matches: [] };
+
+  const named = [...new Set(hits.map((r) => (ask.direction === "forward" ? r.object : r.subject)))].sort();
+  const answeredBy = hits[0].subject;
+  const lead = ask.direction === "forward" && answeredBy !== ask.term
+    ? `from ${ask.term}'s ${answeredBy} class: `
+    : "";
+  const lines = hits.map((r) => `${agentTraitSentence(r.subject, r.predicate, r.object).replace(/\.$/, "")}${cite(r)}`);
+  return { text: `${named.join(", ")} — ${lead}${lines.join("; ")}.`, miss: false, matches: hits };
+}
+
 // ---- sync planning ---------------------------------------------------------
 
 const tripleKey = (t) => `${t.subject} ${t.predicate} ${t.object}`;
