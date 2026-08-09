@@ -29,13 +29,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **MUDIII's chat surface reaches the river scenario and the drive-trait sentences** —
-  code-complete and merged, pending deployed verification: "open the river crossing" (and
-  siblings) opens the puzzle world from chat with the roster, legal crossings and
-  drive-derived goal all read from the store; twelve ask patterns cover the drive predicates
-  in both directions with citations and honest gaps; eleven corpus rows pin it. Folded-in
-  find: every chat line typed on the river PAGE had been killing the session (the turn
-  engine ended any game whose world had no grid layout) — fixed on the same path.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
   next tuning cycle, each its own measured round:
@@ -44,56 +37,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - [ ] a negation-scope filter
   - [ ] the temporal-window boundary in commit counting
   - [ ] growing the under-covered C2 relative-embedded census cell
-- [ ] **River puzzle renders in three.js on mudiii.html** — code-complete and merged, pending
-  deployed verification: `bootRiver`/`applyRiver` draw banks, water, a boat and one labelled
-  figure per passenger on the same stage the chase squares use (the fox rides its real GLB;
-  farmer/goat/cabbage get coloured silhouettes since the manifest carries no models for
-  them), each crossing tweening as playback walks the plan; the 2D chip board stays as the
-  no-WebGL fallback. The about page now covers the focus panel, playback and the direct
-  link, and the demo list carries the river entry with its own share posts.
-- [ ] **News page controls follow-up (2026-08-09 second field report)** — code-complete and
-  merged, pending deployed verification: (1) "stop & forget" now retracts every news/research
-  row, resets the session and card cache, and holds an emptied feed on screen; (2) the poll
-  roster defaults to all five contemporary feeds with the reference works grouped separately
-  as lookup-only; (3) `poll once` (always present, no consent preference written) and
-  `stop polling` (cancels the timer, aborts an in-flight cycle at its next yield point — an
-  interrupted lookup returns to pending, never the negative cache); (4) enrichment prose now
-  goes through `ingestText` and renders through the same paraphrase templates as articles
-  ("rottnest has a lighthouse", not one bald isa edge).
-- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — code-complete
-  and merged, pending deployed verification: `newsworthyHubs` now passes only entity-anchored
-  novelty (test E new entity / test A fresh anchored assertion), the concept-card fallback is
-  gone (a seed-only graph or an empty poll shows the designed honest empty state — measured:
-  seed graph 0 hubs, the Wikimedia fixture 0 of 0 candidates, the NYT fixture 5 hubs of 6
-  candidates), and concepts keep the ranked-terms panel and background lines. Two flags:
-  the NYT fixture's own test-scaffolding sentence yields two spurious hubs (fixture-content
-  matter, recorded as measured); and the marketing screenshot for news.html will now capture
-  the empty state, since the seed alone never heads a card — an operator content call on
-  whether that is the right plate.
-- [ ] **index.html gains a wiki-backed worked example** — code-complete and merged, pending
-  deployed verification: a real three-turn research transcript (honest miss on "what is an
-  aardvark", `research aardvark` fetching and citing the live Simple English Wikipedia
-  passage and URL, then the re-ask answering "aardvark is a kind of mammal" from the
-  grounded research fact) sits between the sprites and ledger plates, pinned in the index
-  spec.
-- [ ] **Playtest 027 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_027.md`
-  holds the transcript and analysis) — code-complete and merged, pending deployed
-  verification: count asks read the quantity off taught have-facts (digits and number
-  words); "X is what" rewrites into the what-is lane, with an adjective-qualified subject
-  answering the head noun honestly; "can/could X be Y" reads the property and capability
-  facts the plain ask reads; the ground-nothing hint names the asked subject; and the
-  one-hop `⊑` inheritance gap is closed across property, capability and does-have lanes
-  (all 20 infbench b2PropertyInheritance rows now pass, from 5). Candidates recorded in the
-  log, not queued: possessive "a dogs name", compound-noun "human name", and the backwards
-  instance teach "a human name is john".
-- [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
-  chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
-  existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
-  carries a real three-turn `/news` transcript between the news and sprites plates, pinned in
-  the index spec. Remainder: the standalone `tmct news` CLI verb defaults to `poll` while the
-  in-chat `/news` defaults to showing the feed — a real divergence no test pins; resolve by
-  PINNING both defaults as intended behavior (no CLI change), per the coordinator's stated
-  default unless the operator asks to reconcile instead.
+- [ ] **Pin the `tmct news` vs `/news` default divergence** — the standalone CLI verb defaults
+  to `poll` while the in-chat `/news` defaults to showing the feed; both are intended, neither
+  is test-pinned on the CLI side. Pin both defaults as they stand (no behavior change). In
+  flight in a worktree.
+- [ ] **news.html's marketing screenshot now captures the empty state** — since the
+  newsworthiness gate landed, the seed alone never heads a card, so the capture pipeline
+  photographs the designed empty feed. Operator content call: keep the honest empty plate, or
+  bake a fixture poll into the capture run so the shot shows a populated feed.
 
 ## Discipline
 
