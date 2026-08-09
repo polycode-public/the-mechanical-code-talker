@@ -1,4 +1,6 @@
-// mudiii-scene.mjs — the town square's own three.js scene, reached from
+// mudiii-scene.mjs — the three.js scene behind mudiii.html, drawing whichever
+// world the page has open: a town square, or the river the crossing puzzle is
+// played on. Reached from
 // mudiii-viz.mjs (the page shell) through exactly one frozen function:
 // `mudiiiSceneScript(opts) -> string`, a standalone inline <script> the page
 // embeds next to its own (see mudiii-viz.mjs's own header on the split: two
@@ -31,6 +33,17 @@
 //         test/fixtures/mudiii-ticks.json's own _readme.tickPayload
 //         documents (agents/items keyed by id, ecology a tagged-union
 //         array).
+//       .bootRiver({ passengers, assetManifest, agentPresentation }) in
+//         boot()'s place for a scenario with no grid: the ground and the grid
+//         helper give way to two banks, water, a boat and one labelled figure
+//         per passenger. Returns false when three.js could not be vendored,
+//         which is the page shell's cue to show its own flat crossing board.
+//       .applyRiver({ banks, position, aboard, boatPlace, crossingMs }) per
+//         crossing, in applyTick's place — every field read off the plan the
+//         page is playing, so nothing about a move is decided here either.
+//       .riverSnapshot() — read-only, where every passenger and the boat now
+//         stand in world units, for an e2e assertion on a canvas whose pixels
+//         cannot be read.
 //       .setCamera({ mode, selectedId }) whenever the page's own camera
 //         state changes — a mode button, the agent-select dropdown, or a
 //         nextCameraSelection fallback the page shell already computes and
@@ -605,6 +618,9 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // orbited keeps the view they made: pulling it back to the board's centre
   // would undo their own gesture.
   function refitOverheadCamera() {
+    // The crossing's own rig frames a river, not a board, so a resize leaves
+    // it where it is rather than pulling it back to a grid that is not there.
+    if (riverMode) return;
     if (!cameraRigged || cameraState.mode !== "overhead" || overheadOrbited) return;
     var rig = cameraRigFor("overhead", null, GRID_SIZE, cameraView());
     if (rig) tweenCameraToRig(rig, performance.now());
@@ -1024,6 +1040,301 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     }
   }
 
+  // ---- the crossing, on this same stage -------------------------------------
+  // A puzzle world has no grid to walk, so the ground plane and the grid helper
+  // give way to two banks with water between them, a boat, and one labelled
+  // figure per passenger. Nothing here decides a move: applyRiver draws the
+  // position the page hands it, and the page reads that off the plan the
+  // planner already found.
+  var RIVER_BANK_X = 4.6;
+  var RIVER_BANK_WIDTH = 4.4;
+  var RIVER_BANK_DEPTH = 9;
+  var RIVER_WATER_WIDTH = 5;
+  var RIVER_BOAT_X = 2.05;
+  var RIVER_BANK_SPACING = 1.15;
+  var RIVER_SEAT_SPACING = 0.62;
+  var RIVER_DECK_Y = 0.24;
+  // Each kind's own silhouette and colour, used for a passenger the asset
+  // manifest carries no model for. A kind the manifest DOES carry (the fox)
+  // loads its real GLB through the same loader the chase agents use, so the
+  // crossing reuses those meshes rather than drawing a second fox of its own.
+  var RIVER_FIGURES = {
+    farmer: { color: 0xC9A227, height: 0.95, shape: "person" },
+    goat: { color: 0xE3DCCB, height: 0.62, shape: "beast" },
+    fox: { color: 0xC8622B, height: 0.55, shape: "beast" },
+    cabbage: { color: 0x6F9E3F, height: 0.42, shape: "orb" },
+  };
+  var riverMode = false;
+  var riverStageParts = [];
+  var riverBoatGroup = null;
+  var riverBoatTween = null;
+  var riverBoatSide = "near";
+  var riverPassengers = {};
+  var riverBankNames = ["", ""];
+
+  // Where the nth of "count" figures stands along the bank, or sits in the
+  // boat: centred on zero, so a bank of one and a bank of four both read as
+  // arranged rather than pushed to an edge.
+  function riverSlotOffset(index, count, spacing) {
+    if (index < 0 || count <= 1) return 0;
+    return (index - (count - 1) / 2) * spacing;
+  }
+
+  function clearRiverStage() {
+    for (var i = 0; i < riverStageParts.length; i += 1) {
+      if (riverStageParts[i].parent) riverStageParts[i].parent.remove(riverStageParts[i]);
+    }
+    riverStageParts = [];
+    for (var id in riverPassengers) {
+      if (riverPassengers[id].group.parent) riverPassengers[id].group.parent.remove(riverPassengers[id].group);
+    }
+    riverPassengers = {};
+    if (riverBoatGroup && riverBoatGroup.parent) riverBoatGroup.parent.remove(riverBoatGroup);
+    riverBoatGroup = null;
+    riverBoatTween = null;
+    riverBankNames = ["", ""];
+    riverMode = false;
+  }
+
+  function buildRiverStage() {
+    if (groundMesh) {
+      scene.remove(groundMesh);
+      groundMesh.geometry.dispose();
+      groundMesh.material.dispose();
+      groundMesh = null;
+    }
+    var grid = scene.getObjectByName("townSquareGrid");
+    if (grid) scene.remove(grid);
+    var turf = new THREE.MeshStandardMaterial({ color: 0x7c9a5b });
+    var sides = [["river-bank-near", -RIVER_BANK_X], ["river-bank-far", RIVER_BANK_X]];
+    for (var i = 0; i < sides.length; i += 1) {
+      var slab = new THREE.Mesh(new THREE.BoxGeometry(RIVER_BANK_WIDTH, 0.3, RIVER_BANK_DEPTH), turf);
+      slab.name = sides[i][0];
+      slab.position.set(sides[i][1], -0.15, 0);
+      scene.add(slab);
+      riverStageParts.push(slab);
+    }
+    var water = new THREE.Mesh(
+      new THREE.PlaneGeometry(RIVER_WATER_WIDTH, RIVER_BANK_DEPTH),
+      new THREE.MeshStandardMaterial({ color: 0x2F6F96, transparent: true, opacity: 0.92 }),
+    );
+    water.name = "river-water";
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(0, -0.12, 0);
+    scene.add(water);
+    riverStageParts.push(water);
+  }
+
+  function buildRiverBoat() {
+    var group = new THREE.Group();
+    group.name = "river-boat";
+    var timber = new THREE.MeshStandardMaterial({ color: 0x8A5A2B });
+    var hull = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.22, 2.5), timber);
+    hull.position.y = 0.11;
+    group.add(hull);
+    var gunwale = new THREE.BoxGeometry(0.12, 0.32, 2.5);
+    var offsets = [-0.69, 0.69];
+    for (var i = 0; i < offsets.length; i += 1) {
+      var side = new THREE.Mesh(gunwale, timber);
+      side.position.set(offsets[i], 0.3, 0);
+      group.add(side);
+    }
+    var label = makeAgentLabel("boat", 0.55);
+    label.name = "label-boat";
+    group.add(label);
+    group.position.set(-RIVER_BOAT_X, -0.02, 0);
+    scene.add(group);
+    return group;
+  }
+
+  function buildRiverFigure(kind) {
+    var spec = RIVER_FIGURES[kind] || { color: 0xB0A48A, height: 0.7, shape: "person" };
+    var material = new THREE.MeshStandardMaterial({ color: spec.color });
+    var group = new THREE.Group();
+    group.name = "figure-" + kind;
+    if (spec.shape === "orb") {
+      var orb = new THREE.Mesh(new THREE.SphereGeometry(spec.height / 2, 18, 14), material);
+      orb.position.y = spec.height / 2;
+      group.add(orb);
+      return group;
+    }
+    if (spec.shape === "beast") {
+      var body = new THREE.Mesh(new THREE.BoxGeometry(0.34, spec.height * 0.45, 0.8), material);
+      body.position.y = spec.height * 0.62;
+      group.add(body);
+      var head = new THREE.Mesh(new THREE.BoxGeometry(0.26, spec.height * 0.3, 0.3), material);
+      head.position.set(0, spec.height * 0.82, 0.5);
+      group.add(head);
+      var legGeometry = new THREE.BoxGeometry(0.1, spec.height * 0.42, 0.1);
+      var feet = [[-0.12, 0.3], [0.12, 0.3], [-0.12, -0.3], [0.12, -0.3]];
+      for (var f = 0; f < feet.length; f += 1) {
+        var leg = new THREE.Mesh(legGeometry, material);
+        leg.position.set(feet[f][0], spec.height * 0.21, feet[f][1]);
+        group.add(leg);
+      }
+      return group;
+    }
+    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.21, spec.height * 0.62, 14), material);
+    torso.position.y = spec.height * 0.42;
+    group.add(torso);
+    var crown = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), material);
+    crown.position.y = spec.height * 0.85;
+    group.add(crown);
+    return group;
+  }
+
+  function ensureRiverPassenger(id) {
+    if (riverPassengers[id]) return riverPassengers[id];
+    var kind = roleOfAgentId(id);
+    var pres = presentationFor(id, kind);
+    var group = new THREE.Group();
+    group.name = "passenger-" + id;
+    // Held back until applyRiver says which bank it stands on, so nobody is
+    // drawn standing in the middle of the water while the plan is still
+    // being read.
+    group.visible = false;
+    scene.add(group);
+    var entry = {
+      group: group, tween: null, aboard: false, seat: 0, kind: kind, placed: false,
+      label: (pres && pres.label) ? pres.label : id,
+    };
+    riverPassengers[id] = entry;
+    var asset = manifestByKind[(pres && pres.model) || kind];
+    var figureHeight = RIVER_FIGURES[kind] ? RIVER_FIGURES[kind].height : 0.7;
+    group.add(makeAgentLabel(entry.label, asset ? asset.targetHeight : figureHeight));
+    if (!asset) {
+      group.add(buildRiverFigure(kind));
+      return entry;
+    }
+    loadGlbRaw(modelUrlFor(asset.destPath)).then(function (gltf) {
+      if (riverPassengers[id] !== entry) return;
+      normalizeToHeight(gltf.scene, asset.targetHeight);
+      group.add(gltf.scene);
+    }).catch(function (err) {
+      // eslint-disable-next-line no-console
+      console.warn("tmct: a passenger model failed to load", id, err);
+      if (riverPassengers[id] === entry) group.add(buildRiverFigure(kind));
+    });
+    return entry;
+  }
+
+  function nameRiverBank(slot, name) {
+    if (riverBankNames[slot] === name) return;
+    riverBankNames[slot] = name;
+    var existing = scene.getObjectByName("river-bank-label-" + slot);
+    if (existing && existing.parent) existing.parent.remove(existing);
+    if (!name) return;
+    var sprite = makeAgentLabel(name, 1.5);
+    sprite.name = "river-bank-label-" + slot;
+    sprite.position.set(slot === 1 ? RIVER_BANK_X : -RIVER_BANK_X, 1.8, -RIVER_BANK_DEPTH / 2 + 0.7);
+    scene.add(sprite);
+    riverStageParts.push(sprite);
+  }
+
+  // Draw one position of the crossing. "state" is { banks: [near, far],
+  // position: { id: place }, aboard: [ids], boatPlace, crossingMs } — every
+  // field read straight off the plan the page is playing.
+  function applyRiver(state) {
+    if (!riverMode || !scene) return;
+    var banks = (state && state.banks) || [];
+    nameRiverBank(0, banks[0] || "");
+    nameRiverBank(1, banks[1] || "");
+    var position = (state && state.position) || {};
+    var aboardList = (state && state.aboard) || [];
+    var aboard = {};
+    for (var a = 0; a < aboardList.length; a += 1) aboard[aboardList[a]] = true;
+    var ids = Object.keys(position).sort();
+    var standing = {};
+    for (var s = 0; s < ids.length; s += 1) {
+      if (aboard[ids[s]]) continue;
+      var place = position[ids[s]];
+      if (!standing[place]) standing[place] = [];
+      standing[place].push(ids[s]);
+    }
+    var now = performance.now();
+    for (var i = 0; i < ids.length; i += 1) {
+      var id = ids[i];
+      var entry = ensureRiverPassenger(id);
+      entry.aboard = Boolean(aboard[id]);
+      entry.group.visible = true;
+      if (entry.aboard) {
+        entry.seat = riverSlotOffset(aboardList.indexOf(id), aboardList.length, RIVER_SEAT_SPACING);
+        entry.tween = null;
+        entry.placed = true;
+        continue;
+      }
+      var onFarBank = banks.indexOf(position[id]) === 1;
+      var neighbours = standing[position[id]] || [];
+      var target = {
+        x: onFarBank ? RIVER_BANK_X : -RIVER_BANK_X,
+        z: riverSlotOffset(neighbours.indexOf(id), neighbours.length, RIVER_BANK_SPACING),
+      };
+      if (entry.placed) {
+        entry.tween = startTween(
+          { x: entry.group.position.x, z: entry.group.position.z }, target, now, tweenDurationMs,
+        );
+      } else {
+        entry.group.position.set(target.x, 0, target.z);
+        entry.tween = null;
+        entry.placed = true;
+      }
+      entry.group.rotation.y = onFarBank ? Math.PI : 0;
+    }
+    var boatIsFar = (state && state.boatPlace) === banks[1];
+    riverBoatSide = aboardList.length ? "crossing" : (boatIsFar ? "far" : "near");
+    if (!riverBoatGroup) return;
+    var boatX = boatIsFar ? RIVER_BOAT_X : -RIVER_BOAT_X;
+    if (Math.abs(riverBoatGroup.position.x - boatX) < 0.001) {
+      riverBoatTween = null;
+      return;
+    }
+    var crossingMs = Number(state && state.crossingMs) || tweenDurationMs;
+    riverBoatTween = startTween(
+      { x: riverBoatGroup.position.x }, { x: boatX }, now,
+      reduced ? 0 : (aboardList.length ? crossingMs : tweenDurationMs),
+    );
+  }
+
+  function stepRiverFrame(ts) {
+    if (riverBoatTween && riverBoatGroup) {
+      var boatPoint = tweenStep(riverBoatTween, ts);
+      riverBoatGroup.position.x = boatPoint.x;
+      if (boatPoint.done) riverBoatTween = null;
+    }
+    for (var id in riverPassengers) {
+      var entry = riverPassengers[id];
+      if (entry.aboard) {
+        if (riverBoatGroup) entry.group.position.set(riverBoatGroup.position.x, RIVER_DECK_Y, entry.seat);
+        continue;
+      }
+      if (!entry.tween) continue;
+      var point = tweenStep(entry.tween, ts);
+      entry.group.position.set(point.x, 0, point.z);
+      if (point.done) entry.tween = null;
+    }
+  }
+
+  // A crossing is watched from one fixed three-quarter view of the whole
+  // river; there is no agent to ride and no board to fit, so this rigs the
+  // camera directly rather than asking cameraRigFor for a grid rig.
+  function rigRiverCamera() {
+    cameraState = { mode: "overhead", selectedId: null };
+    cameraRigged = true;
+    overheadOrbited = false;
+    lookOffset.yaw = 0;
+    lookOffset.pitch = 0;
+    cameraTween = null;
+    lookAtTween = null;
+    lookTarget = { x: 0, y: 0, z: 0 };
+    if (!camera3) return;
+    camera3.position.set(0, 7.2, 11);
+    camera3.lookAt(0, 0, 0);
+    if (!orbitControls) return;
+    orbitControls.target.set(0, 0, 0);
+    orbitControls.enabled = true;
+    orbitControls.update();
+  }
+
   // ---- the clicked cell, and the route to it --------------------------------
   // The line follows the cells the world's own exit search returned, never a
   // straight segment from agent to target: a straight one cuts through
@@ -1103,6 +1414,10 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
   // made. Tracking the agent as it moves is refreshCameraTween's job below,
   // which leaves the visitor's own look alone.
   function setCamera(state) {
+    // A crossing has no agent to follow and no board to fit. The page still
+    // pushes its own camera state after a chat turn, so this holds the river
+    // rig rather than cutting to a grid overhead of an empty floor.
+    if (riverMode) return;
     var next = { mode: (state && state.mode) || "overhead", selectedId: (state && state.selectedId) || null };
     var changed = !cameraRigged || next.mode !== cameraState.mode || next.selectedId !== cameraState.selectedId;
     cameraState = next;
@@ -1142,12 +1457,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     return byKind;
   }
 
-  async function boot(input) {
-    var ok = await ensureThree();
-    if (!ok) return;
-    if (input && input.gridSize) { GRID_SIZE = Number(input.gridSize) || GRID_SIZE; }
-    if (input && input.cellSize) { CELL_SIZE = Number(input.cellSize) || CELL_SIZE; }
-    rebuildGround();
+  function clearLiveMeshes() {
     for (var id in agentGroups) if (agentGroups[id].group.parent) agentGroups[id].group.parent.remove(agentGroups[id].group);
     agentGroups = {};
     for (var itemId in itemMeshes) if (itemMeshes[itemId].mesh.parent) itemMeshes[itemId].mesh.parent.remove(itemMeshes[itemId].mesh);
@@ -1158,6 +1468,16 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     clearRoute();
     clearFlash();
     removalLog = [];
+  }
+
+  async function boot(input) {
+    var ok = await ensureThree();
+    if (!ok) return;
+    clearRiverStage();
+    if (input && input.gridSize) { GRID_SIZE = Number(input.gridSize) || GRID_SIZE; }
+    if (input && input.cellSize) { CELL_SIZE = Number(input.cellSize) || CELL_SIZE; }
+    rebuildGround();
+    clearLiveMeshes();
     manifestByKind = buildManifestByKind(input && input.assetManifest);
     agentPresentation = (input && input.agentPresentation) || null;
     await placeProps((input && input.propPlacements) || []);
@@ -1168,8 +1488,30 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
     booted = true;
   }
 
+  /** The crossing's own boot, in place of a town square's. Returns true when
+   *  the stage is standing, false when three.js could not be vendored at all —
+   *  the page keeps its own flat crossing board for that second case. */
+  async function bootRiver(input) {
+    var ok = await ensureThree();
+    if (!ok) return false;
+    clearRiverStage();
+    clearLiveMeshes();
+    await placeProps([]);
+    manifestByKind = buildManifestByKind(input && input.assetManifest);
+    agentPresentation = (input && input.agentPresentation) || null;
+    buildRiverStage();
+    riverBoatGroup = buildRiverBoat();
+    riverMode = true;
+    var passengers = (input && input.passengers) || [];
+    for (var i = 0; i < passengers.length; i += 1) ensureRiverPassenger(passengers[i]);
+    drag = null;
+    rigRiverCamera();
+    booted = true;
+    return true;
+  }
+
   function applyTick(tick) {
-    if (!scene) return;
+    if (!scene || riverMode) return;
     var now = performance.now();
     var agents = (tick && tick.agents) || {};
     var items = (tick && tick.items) || {};
@@ -1204,6 +1546,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       }
       if (entry.mixer) entry.mixer.update(deltaSec);
     }
+    if (riverMode) stepRiverFrame(ts);
     if (flashMesh) {
       var flashLeft = flashUntil - performance.now();
       if (flashLeft <= 0) clearFlash();
@@ -1238,6 +1581,25 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
 
   window.mudiiiScene = {
     boot: boot,
+    bootRiver: bootRiver,
+    applyRiver: applyRiver,
+    // Where the crossing currently stands, in world units — an e2e
+    // assertion's read, because a software renderer's canvas pixels say
+    // nothing about which bank a passenger is on. Null off a puzzle scenario.
+    riverSnapshot: function () {
+      if (!riverMode) return null;
+      var out = { banks: riverBankNames.slice(), boat: null, passengers: {} };
+      if (riverBoatGroup) out.boat = { x: riverBoatGroup.position.x, side: riverBoatSide };
+      for (var id in riverPassengers) {
+        var entry = riverPassengers[id];
+        out.passengers[id] = {
+          x: entry.group.position.x, z: entry.group.position.z, aboard: entry.aboard,
+          label: entry.label, kind: entry.kind, parts: entry.group.children.length,
+          visible: entry.group.visible,
+        };
+      }
+      return out;
+    },
     applyTick: applyTick,
     setCamera: setCamera,
     flashCell: flashCell,
