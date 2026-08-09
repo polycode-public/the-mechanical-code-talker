@@ -9482,6 +9482,18 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, m[2]);
     const hit = facts.find((f) => f.predicate === predicate && subj.has(f.subject) && obj.has(f.object));
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    // A curated phrase can share its English verb with the general-verb
+    // teach mint ("eats" renders mgx:consumes, but teaching "X eats Y"
+    // stores mgx:eat): when the subject holds a fact under the verb's own
+    // general predicate, that reader owns the answer either way, so this
+    // one stands down instead of committing a miss over the wrong
+    // predicate namespace.
+    const [phraseHead] = phrase.split(" ");
+    const generalPredicate = await generalVerbPredicate(baseVerbSurface(phraseHead));
+    if (generalPredicate !== predicate) {
+      const negTwin = generalPredicate.replace(/^mgx:/, "mgxneg:");
+      if (facts.some((f) => (f.predicate === generalPredicate || f.predicate === negTwin) && subj.has(f.subject))) continue;
+    }
     const teachHint = FORWARD_YESNO_TEACHABLE.has(predicate) ? ` If it's true, teach me: "${m[1]} ${phrase} ${m[2]}".` : "";
     const sameRelation = facts.filter((f) => f.predicate === predicate && subj.has(f.subject));
     if (sameRelation.length) {
