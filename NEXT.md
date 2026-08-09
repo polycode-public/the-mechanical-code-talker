@@ -55,10 +55,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
-- [ ] **Claims page: retire the C8 reasoning block; index.html gains a worked example** — drop
-  the C8 block ("A query the ask lane can't prove alone, /classify and /prove can sometimes
-  close...") from claims.html, and instead put a worked reasoning example on index.html in the
-  chat-example style, placed between two feature plates to break the screenshot run up.
 - [ ] **A plan to lift the L2 CommonsenseQA number above zero** — the block reads 0 of 100
   correct with 30 answers present in the graph and 0 of those 30 picked: selection, not
   coverage, is now the whole gap (rungs R2-R5 measured routing, chains and wording levers all

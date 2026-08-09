@@ -360,6 +360,25 @@
     </figure>
   </section>
 
+  <div class="copy" id="reasoning-example">
+    <h2>One question, more than one fact</h2>
+    <p>
+      Some questions do not answer from a single fact. Teach a rule with two
+      branches, rule one branch out, and <code>/prove</code> works the other
+      by cases. This is a real exchange with the engine, run before this page
+      was built, not a mockup.
+    </p>
+    <pre class="transcript"><span class="you">tmct&gt; every pet is a cat or a dog</span>
+noted — remembered 4 facts: cat-or-dog rdf:type class; cat-or-dog owl:unionOf cat; cat-or-dog owl:unionOf dog; pet rdfs:subClassOf cat-or-dog
+<span class="you">tmct&gt; rex is a pet</span>
+noted — remembered: rex is a pet
+<span class="you">tmct&gt; rex is not a cat</span>
+noted — remembered: no rex is a cat
+<span class="you">/prove is rex a dog</span>
+yes — you told me: cat-or-dog is either cat (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;); you told me: rex is a pet (source: teach:chat:&lt;session-id&gt;@&lt;timestamp&gt;); you told me: rex is not a cat (source: teach:chat:&lt;session-id&gt;@&lt;timestamp&gt;); you told me: pet is a kind of cat-or-dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;); you told me: cat-or-dog is either dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;); in every case — a cat or a dog — rex is a dog.</pre>
+    <p class="source-note">More on how <code>/classify</code> and <code>/prove</code> work on <a href="./chat-about.html#reasoning">chat-about.html</a>.</p>
+  </div>
+
   <section class="feature flip" id="feature-news">
     <div class="feature-copy">
       <h2>A feed built only from what grounds</h2>
