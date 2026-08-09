@@ -9,6 +9,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { runTurn } from "../../src/services/chat.mjs";
+import { appendFacts } from "../../src/adapters/memory/core.mjs";
 import { driveSessionTurns, stripGoalLine } from "../helpers/session.mjs";
 
 async function freshRepo() {
@@ -82,4 +84,80 @@ test("closing the puzzle frees the slot and the same opener works again", async 
   ]);
   assert.match(closed.answer, /puzzle closes here/);
   assert.match(reopened.answer, /^on bank-east: cabbage-1, farmer-1, fox-1, goat-1\.$/m);
+});
+
+test("a drive ask answers from the stored row and cites it, in both directions", async () => {
+  const [, forward, inverse] = await say([
+    "open the river crossing", "who does the cabbage evade", "who evades the goat",
+  ]);
+  assert.equal(forward.record.miss, false);
+  assert.equal(forward.answer, "goat — cabbage evades goat (source: world:river-crossing).");
+  assert.equal(inverse.answer, "cabbage — cabbage evades goat (source: world:river-crossing).");
+});
+
+test("an appetite ask reads the same consumes row the crossing constraint is derived from", async () => {
+  const [, eats] = await say(["open the river crossing", "what does the fox want to eat"]);
+  assert.equal(eats.answer, "goat — fox eats goat (source: world:river-crossing).");
+});
+
+test("a drive with several stated objects names every one of them, each cited", async () => {
+  const [, guards] = await say(["open the river crossing", "who does the farmer guard"]);
+  assert.equal(
+    guards.answer,
+    "fox, goat — farmer guards fox (source: world:river-crossing); farmer guards goat (source: world:river-crossing).",
+  );
+});
+
+test("an undeclared drive reads as absent, never as a default inferred from a stated one", async () => {
+  const [, pursue] = await say(["open the river crossing", "what does the fox pursue"]);
+  assert.equal(pursue.record.miss, true);
+  assert.equal(pursue.answer, "nothing on record says what fox pursues.");
+});
+
+test("an inverse ask about a term no row states the predicate of stays a miss", async () => {
+  const [, guarded] = await say(["open the river crossing", "who guards the cabbage"]);
+  assert.equal(guarded.record.miss, true);
+  assert.equal(guarded.answer, "nothing on record says who guards cabbage.");
+});
+
+test("an ask about an instance says which class answered when the instance states nothing itself", async () => {
+  const [, inherited] = await say(["open the river crossing", "what does fox-1 eat"]);
+  assert.equal(inherited.answer, "goat — from fox-1's fox class: fox eats goat (source: world:river-crossing).");
+});
+
+test("the town square's own numbers read back through the same table", async () => {
+  const [, mass, vision, drain, pursues] = await say([
+    "visit the town square",
+    "how much does the goblin weigh",
+    "how far can the fox see",
+    "how much does the goblin lose each turn",
+    "what does the fox pursue",
+  ]);
+  assert.equal(mass.answer, "8 — goblin weighs 8 (source: world:town-square).");
+  assert.equal(vision.answer, "4 — fox sees 4 cells (source: world:town-square).");
+  assert.equal(drain.answer, "0.06 — goblin loses 0.06 each turn (source: world:town-square).");
+  assert.equal(pursues.answer, "goblin — fox pursues goblin (source: world:town-square).");
+});
+
+test("the drive ask is its own lane, and needs no game open to read the rows", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "wolf", predicate: "mgx:consumes", object: "goat", provenance: "test:pen" },
+    ]);
+    const r = await runTurn("what does the wolf eat", { config: null, memoryDir: dir });
+    assert.equal(r.lane, "ask-agent-trait");
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /^goat — wolf eats goat \(source: test:pen\)\./);
+    assert.equal(r.detail.matches.length, 1);
+    assert.equal(r.detail.matches[0].predicate, "mgx:consumes");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a store holding no agent traits at all leaves the question to the lanes that owned it", async () => {
+  const [cold] = await say(["what does the fox eat"]);
+  assert.equal(cold.lane, undefined);
+  assert.doesNotMatch(cold.answer, /nothing on record says/);
 });

@@ -41,12 +41,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   work. Playtest 007 (turn 14) widens the scope: taught capability
   (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
   "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
-- [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
-  the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
-  a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
-  world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
-  into the browser page only, with no ask-lane grammar for those predicates. Both are new
-  engine work if wanted; four planned corpus rows wait on them.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
