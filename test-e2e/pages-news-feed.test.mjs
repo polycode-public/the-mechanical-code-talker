@@ -199,7 +199,9 @@ function waitForFeedRendered(page, label = "the feed finishing its render") {
  *  the page's own change handler commit config.sources/config.kbSources
  *  exactly the way a visitor's click would. */
 async function keepOnlySource(page, kind, keepId) {
-  const ids = kind === "kb" ? ["simple-wikipedia", "wikidata", "wiktionary"] : ["wikimedia-featured", "hacker-news", "usgs-quakes"];
+  const ids = kind === "kb"
+    ? ["simple-wikipedia", "wikidata", "wiktionary"]
+    : ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"];
   for (const id of ids) {
     const box = page.locator(`[data-source-toggle][value="${id}"]`);
     if (id === keepId) await box.check();
@@ -432,6 +434,65 @@ test("poll now reads back as pressed at once, keeps answering while it ingests a
   }
 });
 
+test("poll once is live from the first paint and schedules nothing; stop polling wakes while a cycle runs and disarms the next poll", async () => {
+  const { context, page, pageErrors } = await openNewsPage();
+  try {
+    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
+
+    await keepOnlySource(page, "contemporary", "wikimedia-featured");
+    await keepOnlySource(page, "kb", null);
+    await routeWikimediaFeatured(page);
+
+    // Before anything has been pressed: poll once is offered, stop polling
+    // has nothing to stop.
+    const atRest = await page.evaluate(() => ({
+      pollOnceDisabled: document.getElementById("pollOnce").disabled,
+      stopDisabled: document.getElementById("stopPolling").disabled,
+    }));
+    assert.equal(atRest.pollOnceDisabled, false, "poll once is enabled before any start");
+    assert.equal(atRest.stopDisabled, true, "stop polling is out of action while nothing polls");
+
+    await page.locator("#pollOnce").click();
+    const pressed = await page.evaluate(() => ({
+      disabled: document.getElementById("pollOnce").disabled,
+      busy: document.getElementById("pollOnce").getAttribute("aria-busy"),
+      stopDisabled: document.getElementById("stopPolling").disabled,
+    }));
+    assert.equal(pressed.disabled, true, "poll once reads back as pressed at once");
+    assert.equal(pressed.busy, "true", "and marks itself busy");
+    assert.equal(pressed.stopDisabled, false, "stop polling wakes for the running cycle");
+
+    await waitFor(page, () => document.getElementById("pollOnce").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "poll once settling" });
+    assert.deepEqual(pageErrors, [], "a poll-once cycle against fulfilled routes never throws");
+    assert.equal(await page.locator("#pollOnce").innerText(), "poll once", "the button goes back to its own label");
+
+    const afterOnce = await page.evaluate(() => ({
+      consented: window.tmct.session.consented,
+      pref: window.localStorage.getItem("tmct.news.started"),
+      nextPollAt: window.tmct.session.nextPollAt,
+      requests: window.tmct.session.requestLog.length,
+    }));
+    assert.ok(afterOnce.requests > 0, "the press really did poll");
+    assert.equal(afterOnce.consented, false, "one poll is not a standing consent");
+    assert.equal(afterOnce.pref, null, "poll once records nothing for the next visit");
+    assert.equal(afterOnce.nextPollAt, "", "poll once schedules no next poll");
+    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), true, "with nothing running or armed, stop polling goes quiet again");
+
+    // start does arm the next poll, and stop polling takes it back out.
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() settling" });
+    assert.ok(await page.evaluate(() => window.tmct.session.nextPollAt), "start armed the next poll");
+    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), false, "stop polling is live while a poll is scheduled");
+
+    await page.locator("#stopPolling").click();
+    assert.equal(await page.evaluate(() => window.tmct.session.nextPollAt), "", "stop polling cancels the scheduled poll");
+    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), true, "with nothing left to stop it goes quiet");
+    assert.match(await page.locator("#controlsStatus").innerText(), /stopped/, "the status line says polling stopped");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the feed scrolls inside its own box, re-orders on the sort control, and narrows to a picked keyword pill", async () => {
   const { context, page } = await openNewsPage();
   try {
@@ -506,10 +567,12 @@ test("the feed scrolls inside its own box, re-orders on the sort control, and na
   }
 });
 
-test("stop & forget clears the start preference; a reload of the same page reads back as first-visit", async () => {
+test("stop & forget clears the start preference and purges the articles; a reload of the same page reads back as first-visit", async () => {
   const { context, page, pageErrors } = await openNewsPage();
   try {
     await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
+    const cardsBefore = await waitForFeedRendered(page, "the seed-derived feed's first render");
+    assert.ok(cardsBefore > 0, `the page has articles on screen before the purge: ${cardsBefore}`);
 
     await page.locator("#newsStart").click();
     await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() settling" });
@@ -517,8 +580,18 @@ test("stop & forget clears the start preference; a reload of the same page reads
     assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.started")), "on", "consent persists as the page's own preference");
 
     await page.locator("#stopForget").click();
+    await waitFor(page, () => document.getElementById("stopForget").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the purge settling" });
     assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "stop & forget revokes consent immediately, in this same session");
     assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.started")), null, "stop & forget clears the persisted preference");
+
+    // The articles themselves go, not just the preference: no card on
+    // screen, an empty feed from the session, and the count line saying so.
+    assert.equal(await page.locator("#feed .item").count(), 0, "no article card survives stop & forget");
+    const purgedFeed = await page.evaluate(() => window.tmct.session.buildFeed());
+    assert.deepEqual(purgedFeed.items, [], "the session rebuilds an empty feed, never seed-graph cards in the articles' place");
+    assert.equal(await page.locator("#feedCount").innerText(), "0 articles", "the count line reads back as empty");
+    assert.match(await page.locator("#feedEmpty").innerText(), /articles are gone/, "the empty feed says why it is empty");
+    assert.equal(await page.locator("#requestLogBody tr").count(), 0, "the request log is cleared with the articles");
 
     // The reload pays the seed's own boot cost again — there is no
     // persistence layer under news.html (unlike chat.html's IndexedDB

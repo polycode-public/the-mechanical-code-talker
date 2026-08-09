@@ -42,6 +42,16 @@ test("renderNewsHtml: the start button, the request log, and the controls row al
   assert.match(html, /id="addSourceBtn"/);
 });
 
+test("renderNewsHtml: poll once ships alongside start, and stop polling ships disabled until there is something to stop", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /id="pollOnce"[^>]*>poll once</, "the poll-once button is in the markup, not conditional on any state");
+  assert.match(html, /id="stopPolling"[^>]*>stop polling</, "the stop control is in the markup too");
+  assert.match(html, /id="stopPolling" disabled/, "it starts disabled — nothing is polling on a first paint");
+  assert.match(html, /session\.pollOnce\(\)/, "poll once runs one cycle and schedules nothing");
+  assert.match(html, /session\.stopPolling\(\)/, "stop polling calls the session's own stop");
+  assert.match(html, /session\.busy \|\| session\.nextPollAt/, "the stop control is live while a cycle runs or a timer is armed");
+});
+
 test("renderNewsHtml: the two named fixture-replay demo buttons render", () => {
   const html = renderNewsHtml();
   assert.match(html, /id="replayNyt"[^>]*>replay recorded NYT sample</);
@@ -85,6 +95,26 @@ test("renderNewsHtml: the sources block lists every registered source once, togg
   const html = renderNewsHtml();
   for (const id of ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"]) {
     assert.match(html, new RegExp(`data-source-id="${id}"`), `source "${id}" has a toggle row`);
+  }
+});
+
+test("renderNewsHtml: the sources block separates the polled news feeds from the reference works, every news feed ticked", () => {
+  const html = renderNewsHtml();
+  const pollRoster = html.slice(html.indexOf('id="pollRoster"'), html.indexOf('id="lookupRoster"'));
+  const lookupRoster = html.slice(html.indexOf('id="lookupRoster"'));
+  assert.match(html, /news feeds — polled when you press start or poll once/);
+  assert.match(html, /reference works — looked up to explain a term, never polled/);
+  for (const id of ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"]) {
+    assert.match(pollRoster, new RegExp(`data-source-id="${id}"`), `"${id}" sits in the poll roster`);
+    assert.match(
+      pollRoster,
+      new RegExp(`value="${id}" checked`),
+      `"${id}" is ticked to poll on a first visit`,
+    );
+  }
+  for (const id of ["simple-wikipedia", "wikidata", "wiktionary", "dbpedia-lookup", "english-wikipedia"]) {
+    assert.match(lookupRoster, new RegExp(`data-source-id="${id}"`), `"${id}" sits in the lookup roster`);
+    assert.ok(!pollRoster.includes(`data-source-id="${id}"`), `"${id}" is never offered as a poll target`);
   }
 });
 

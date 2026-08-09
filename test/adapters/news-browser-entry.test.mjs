@@ -1,7 +1,7 @@
 // news-browser-entry: createNewsSession over the real news capability —
-// the consent gate (no fetch before start()), the phase transitions, fixture
-// replay under corpus-tier provenance, upload downgrade, and a returning
-// visit reading back correctly after stop & forget.
+// the consent gate (nothing fetches until a button is pressed), the phase
+// transitions, fixture replay under corpus-tier provenance, upload downgrade,
+// and a returning visit reading back correctly after stop & forget.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createNewsSession, NEWS_START_PREF_KEY } from "../../src/surfaces/web/news-browser-entry.mjs";
@@ -74,6 +74,57 @@ test("phase transitions fire in order against stubbed fetchers: seeded -> pollin
   assert.equal(session.phase, "idle", "a completed start() cycle settles on idle");
   assert.ok(seen.length > 0, "the stubbed fetcher actually ran during that cycle");
   session.destroy();
+});
+
+test("pollOnce() fetches on its own press, records no start preference and schedules no next poll", async () => {
+  const { prefs, map } = memoryPrefs();
+  let fetchCalls = 0;
+  const fetchImpl = async (...args) => { fetchCalls += 1; return emptyOkFetch()(...args); };
+  const session = createNewsSession({ prefs, fetchImpl, now: FIXED_NOW });
+  assert.equal(session.consented, false);
+  await session.pollOnce();
+  assert.ok(fetchCalls > 0, "the press itself authorised that one round of requests");
+  assert.equal(session.consented, false, "one poll is not a standing consent");
+  assert.equal(map.get(NEWS_START_PREF_KEY), undefined, "nothing was persisted for the next visit");
+  assert.equal(session.nextPollAt, "", "poll once really is once — no next poll is armed");
+  session.destroy();
+});
+
+test("stopPolling() cancels the armed timer and abandons an in-flight cycle at its next article, never mid-fold", async () => {
+  const { prefs } = memoryPrefs();
+  const session = createNewsSession({ prefs, fetchImpl: emptyOkFetch(), now: FIXED_NOW });
+  await session.start();
+  assert.ok(session.nextPollAt, "start() armed the next poll");
+  const stopped = session.stopPolling();
+  assert.equal(stopped.wasRunning, false, "nothing was mid-flight");
+  assert.equal(session.nextPollAt, "", "the armed timer is cancelled");
+  assert.equal(session.busy, false);
+
+  // A cycle stopped from inside its own ingest reports what it managed, and
+  // says it stopped rather than reporting a clean finish.
+  let ingestedBeforeStop = 0;
+  const twoArticles = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      mostread: {
+        articles: [
+          { normalizedtitle: "A wombat is a marsupial.", extract: "", content_urls: { desktop: { page: "https://x/1" } } },
+          { normalizedtitle: "A quokka is a marsupial.", extract: "", content_urls: { desktop: { page: "https://x/2" } } },
+        ],
+      },
+    }),
+    text: async () => "",
+    headers: { get: () => null },
+  });
+  const stopping = createNewsSession({
+    prefs, fetchImpl: twoArticles, now: FIXED_NOW,
+    yieldToHost: () => { ingestedBeforeStop += 1; if (ingestedBeforeStop === 1) stopping.stopPolling(); return Promise.resolve(); },
+  });
+  const result = await stopping.poll();
+  assert.equal(result.aborted, true, "the cycle reports that it stopped rather than finishing");
+  assert.ok(result.newItems >= 1, "the articles it had already merged are kept");
+  stopping.destroy();
 });
 
 test("addSource() performs its own one-off preflight regardless of start() consent", async () => {
@@ -153,15 +204,28 @@ test("ingestFile downgrades an uploaded jsonl row above the teach tier, and leav
   session.destroy();
 });
 
-test("revokeConsent clears the start preference; a fresh session against the same prefs reads back as first-visit", async () => {
+test("revokeConsent purges the articles as well as the start preference: an empty feed, no news-tagged fact left, and a fresh session reads back as first-visit", async () => {
   const { prefs, map } = memoryPrefs();
   const s1 = createNewsSession({ prefs, fetchImpl: emptyOkFetch(), now: FIXED_NOW });
   await s1.start();
-  assert.equal(s1.consented, true);
+  const body = `<rss><channel><item><title>Talks Resume Over Ceasefire Terms</title><link>https://example.com/a</link><description>Officials met today in the capital.</description></item></channel></rss>`;
+  await s1.replayFixture("nyt-world", { format: "rss", body });
+  assert.ok(s1.consented, "start() recorded consent");
   assert.equal(map.get(NEWS_START_PREF_KEY), "on");
-  s1.revokeConsent();
+  const gathered = readFactRows(await loadMemory(s1.memoryDir)).filter((r) => /news/.test(r.provenance || ""));
+  assert.ok(gathered.length > 0, "the replay left news-tagged facts behind to purge");
+
+  const result = await s1.revokeConsent();
   assert.equal(s1.consented, false);
   assert.equal(map.get(NEWS_START_PREF_KEY), undefined);
+  assert.equal(result.factsRemoved, gathered.length, "every news-tagged fact was retracted");
+  const left = readFactRows(await loadMemory(s1.memoryDir)).filter((r) => /news/.test(r.provenance || ""));
+  assert.deepEqual(left, [], "no news-tagged fact survives the purge");
+  const feed = await s1.buildFeed();
+  assert.deepEqual(feed.items, [], "the feed reads back empty rather than falling back to seed-graph cards");
+  assert.equal(feed.seedFallback, false, "an emptied feed is not a seed fallback");
+  assert.deepEqual(s1.requestLog, [], "the request log is cleared with the articles");
+  assert.deepEqual(await s1.rank(), [], "the term ledger is cleared with the articles");
   s1.destroy();
 
   const s2 = createNewsSession({ prefs, fetchImpl: neverFetch(), now: FIXED_NOW });
