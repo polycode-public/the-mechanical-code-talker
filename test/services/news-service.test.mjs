@@ -2,14 +2,16 @@
 // per-source health/backoff, grounding a snapshot under the news: tag,
 // ledger admission independent of lexicon membership, KB enrichment walking
 // sources in config order with a negative cache, re-processing after a term
-// grounds, eviction against news_fact_cap, the seed-only feed fallback, and
-// determinism. Every fetch is an injected stub — no network anywhere here.
+// grounds, eviction against news_fact_cap, the newsworthiness gate's empty
+// state, and determinism. Every fetch is an injected stub — no network
+// anywhere here.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   clampNewsConfig, pollNewsSources, ingestNewsSnapshot, enrichTopTerms, reprocessAfterGrounding,
   isVocabGroundedTerm, isFactGroundedTerm, ingestUploadedFactRows, buildFeed, cycleMetrics, createNewsState,
+  filterRankedTermEntries,
 } from "../../src/services/news.mjs";
 import { openMemoryBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
@@ -433,16 +435,15 @@ test("ingestUploadedFactRows downgrades an above-teach row and leaves an at-or-b
 
 // ---- the feed ---------------------------------------------------------------
 
-test("buildFeed falls back to whole-graph hub scoring on a seed-only graph, and every item carries the fallback flag", async () => {
+test("buildFeed on a seed-only graph reads back empty rather than falling back to whole-graph concept cards", async () => {
   const { ctx } = await makeCtx();
   await appendFacts(ctx.memoryDir, [
     { subject: "volcano", predicate: "rdfs:subClassOf", object: "mountain", provenance: "corpus:test" },
     { subject: "volcano", predicate: "mgx:hasA", object: "lava", provenance: "corpus:test" },
   ]);
   const feed = await buildFeed(ctx);
-  assert.ok(feed.seedFallback, "no news-tagged rows exist yet, so scoring fell back to the whole graph");
-  assert.ok(feed.items.length > 0, "the first paint is never empty");
-  assert.ok(feed.items.some((it) => it.hub === "volcano"));
+  assert.deepEqual(feed.items, [], "nothing has been reported yet, so the gate has nothing to pass");
+  assert.equal(feed.seedFallback, false, "the seed fallback has retired from the feed path");
 });
 
 test("buildFeed is deterministic: the same state and the same now render byte-identical feeds", async () => {
@@ -453,6 +454,29 @@ test("buildFeed is deterministic: the same state and the same now render byte-id
   const first = await buildFeed(ctx);
   const second = await buildFeed(ctx);
   assert.deepEqual(first, second);
+});
+
+test("buildFeed badges a card newName when the lexicon has no everyday-noun reading for its hub", async () => {
+  const { ctx } = await makeCtx();
+  await appendFacts(ctx.memoryDir, [
+    { subject: "xyzzyplugh", predicate: "mgx:hasA", object: "new role", provenance: "news:src@1", observedAt: FIXED_NOW },
+    { subject: "tariff", predicate: "mgx:hasA", object: "new schedule", provenance: "news:src@1", observedAt: FIXED_NOW },
+  ]);
+  const feed = await buildFeed(ctx);
+  const unknown = feed.items.find((it) => it.hub === "xyzzyplugh");
+  const known = feed.items.find((it) => it.hub === "tariff");
+  assert.equal(unknown.newName, true, "the lexicon has never met this term");
+  assert.equal(known.newName, false, "a lexicon noun is not badged as a new name");
+});
+
+test("filterRankedTermEntries drops a class object and a bare quantity, keeping every other entry", () => {
+  const rows = [{ id: "seed:1", subject: "spider", predicate: "rdf:type", object: "animal" }];
+  const entries = [
+    { term: "animal", count: 3 },
+    { term: "42000000", count: 2 },
+    { term: "widget", count: 1 },
+  ];
+  assert.deepEqual(filterRankedTermEntries(rows, entries), [{ term: "widget", count: 1 }]);
 });
 
 // ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ---------------

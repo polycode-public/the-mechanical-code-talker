@@ -129,9 +129,9 @@ ${THEME_TOKENS_CSS}
   @media (max-width: 480px) { .sourcename { min-width: 0; } .sourcestatus { flex-basis: 100%; } }
   .sourcehome { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--corpus); }
   .sourcestatus { margin-left: auto; font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); }
-  .reqlog { margin-bottom: 1rem; }
-  .reqlog table { width: 100%; border-collapse: collapse; font-family: ${MONO_STACK}; font-size: .7rem; }
-  .reqlog th, .reqlog td { text-align: left; padding: .2rem .4rem; border-bottom: 1px solid var(--line); }
+  .reqlog { margin-bottom: 1rem; max-width: 100%; overflow-x: auto; }
+  .reqlog table { width: 100%; table-layout: fixed; border-collapse: collapse; font-family: ${MONO_STACK}; font-size: .7rem; }
+  .reqlog th, .reqlog td { text-align: left; padding: .2rem .4rem; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
   .reqlog tbody:empty::after { content: "no requests yet — nothing has fetched before you press start"; }
   .feedwrap { margin-bottom: 1.2rem; }
   .feedbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .45rem; }
@@ -247,7 +247,7 @@ ${NEWS_STYLE}
     </div>
     <div class="pills" id="feedPills" aria-label="Filter the feed by key term"></div>
     <div class="feed" id="feed" tabindex="0">
-      <div class="empty" id="feedEmpty">no news items yet — the seed graph builds the first ones once it finishes loading.</div>
+      <div class="empty" id="feedEmpty">no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.</div>
     </div>
   </section>
 
@@ -371,9 +371,13 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   let feedItems = [];
   const cardsByItemId = new Map();
   const activePillTerms = new Set();
-  // What an empty feed says. It starts as the pre-poll line and becomes the
-  // purge line once "stop & forget" has emptied the graph of articles.
-  let emptyFeedText = "no news items yet — the seed graph builds the first ones once it finishes loading.";
+  // What an empty feed says: this line before a poll, or after one that
+  // reported nothing newsworthy; the purge line once "stop & forget" has
+  // emptied the graph of articles, until the next poll (start or poll once)
+  // puts content back and reverts it — the same "next action that puts
+  // content back" rule the session's own forgotten flag follows.
+  const DEFAULT_EMPTY_FEED_TEXT = "no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.";
+  let emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
 
   const MAX_PILLS = 12;
 
@@ -595,10 +599,12 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     }
 
     startBtn.addEventListener("click", function () {
+      emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
       return runFetchingPress(startBtn, "polling…", "poll now", function () { return window.tmct.session.start(); });
     });
 
     el("pollOnce").addEventListener("click", function () {
+      emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
       const pollOnceBtn = el("pollOnce");
       return runFetchingPress(pollOnceBtn, "polling…", "poll once", function () { return window.tmct.session.pollOnce(); });
     });

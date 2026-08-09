@@ -61,21 +61,32 @@ const READY_CHECKS = {
   news: async (page) => {
     // The page starves both requestAnimationFrame and the injected pollers
     // while it streams and indexes the seed, so every waitFor variant times
-    // out even though the items are provably rendered — a plain
-    // sleep-then-evaluate loop is the one sampling path that answers.
+    // out even though the render is provably finished — a plain
+    // sleep-then-evaluate loop is the one sampling path that answers. The
+    // seed graph alone never heads a card (the feed only shows entity-
+    // anchored reports a poll brought in), so "rendered" here means either a
+    // card exists or the feed's own empty state has painted in its place —
+    // read off #feedCount's own text landing, not #feedEmpty's visibility:
+    // that element starts un-hidden in the static markup before any JS has
+    // run at all, so checking it alone reads "ready" before the seed has
+    // even started fetching. #feedCount starts empty and only paintFeed()
+    // ever writes to it, so a non-empty count is unambiguous proof the
+    // first render actually finished.
     const deadline = Date.now() + NEWS_READY_TIMEOUT_MS;
     let ready = false;
     while (Date.now() < deadline) {
       await page.waitForTimeout(2000);
       ready = await page.evaluate(() => {
-        const el = document.querySelector("#feed .item");
-        if (!el) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
+        const item = document.querySelector("#feed .item");
+        if (item) {
+          const r = item.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) return true;
+        }
+        return (document.getElementById("feedCount").textContent || "").trim().length > 0;
       });
       if (ready) break;
     }
-    if (!ready) throw new Error("news feed item never rendered within NEWS_READY_TIMEOUT_MS");
+    if (!ready) throw new Error("news feed never finished rendering within NEWS_READY_TIMEOUT_MS");
   },
   // mudiii.html runs a live three.js animation loop and keeps fetching models
   // from the moment it boots, so "networkidle" (used by every ready check

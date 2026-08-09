@@ -15,6 +15,8 @@ import {
   hasQuantityMarker,
   newsworthyHubs,
   splitCardRows,
+  priorTerms,
+  isNovelTerm,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -396,4 +398,143 @@ test("buildNewsItems' background/backgroundParagraph carry the relation the gate
   assert.deepEqual(item.background, ["fact:2"]);
   assert.equal(item.paragraph, "ceasefire causes relief.");
   assert.equal(item.backgroundParagraph, "ceasefire is found in geneva.");
+});
+
+test("newsworthyHubs and buildNewsItems take an injected readsAsEntityTerm, so a caller with a stronger (wink-backed) check can reject a candidate the domain-local default would allow", () => {
+  const rows = [row("fact:1", "bang", "mgx:bua", "thong shooting")];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+
+  const withDefault = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(withDefault.some((h) => h.term === "bang"), "the domain-local lexical check alone admits it");
+
+  const rejectBang = (term) => term !== "bang";
+  const withInjected = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR, readsAsEntityTerm: rejectBang });
+  assert.ok(!withInjected.some((h) => h.term === "bang"), "the injected check overrides the domain-local default");
+
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6, readsAsEntityTerm: rejectBang });
+  assert.ok(!items.some((it) => it.hub === "bang"), "buildNewsItems threads the same injected check down to the gate");
+});
+
+// ---- priorTerms / isNovelTerm (PLAN_NEWSWORTHINESS.md N0) ------------------
+
+test("priorTerms collects subject and object terms from corpus, corpusWeak, reference and teach rows only", () => {
+  const rows = [
+    row("fact:1", "mont blanc", "rdf:type", "mountain", { provenance: "corpus:test" }),
+    row("fact:2", "avalanche", "mgx:relatedTo", "snow", { provenance: "corpus-weak:conceptnet /r/RelatedTo" }),
+    row("fact:3", "polar bear", "rdf:type", "bear", { provenance: "reference:simplewiki:Polar bear@912" }),
+    row("fact:4", "sourdough", "rdf:type", "bread", { provenance: "teach:chat:s1@2026-08-08T00:00:00Z" }),
+  ];
+  const prior = priorTerms(rows);
+  for (const term of ["mont blanc", "mountain", "avalanche", "snow", "polar bear", "bear", "sourdough", "bread"]) {
+    assert.ok(prior.has(term), `"${term}" is prior knowledge: ${JSON.stringify([...prior])}`);
+  }
+});
+
+test("priorTerms never admits a news:, news-fixture: or research: row — an enrichment lookup is not prior knowledge", () => {
+  const rows = [
+    row("fact:1", "kumamoto prefecture", "mgx:hasProperty", "1738000", { provenance: "news:wikimedia-featured@1" }),
+    row("fact:2", "ridgecrest quake", "rdf:type", "earthquake", { provenance: "news-fixture:usgs@1" }),
+    row("fact:3", "kilometre", "rdfs:subClassOf", "unit", { provenance: "research:simple-wikipedia:kilometre" }),
+  ];
+  assert.deepEqual(priorTerms(rows), new Set());
+});
+
+test("priorTerms is read term-whole: a two-word phrase is one entry, not two", () => {
+  const rows = [row("fact:1", "kumamoto prefecture", "rdf:type", "prefecture", { provenance: "corpus:test" })];
+  const prior = priorTerms(rows);
+  assert.ok(prior.has("kumamoto prefecture"));
+  assert.ok(!prior.has("kumamoto"), "the phrase is one entry, never split into its words");
+});
+
+test("priorTerms on an empty graph is the empty set", () => {
+  assert.deepEqual(priorTerms([]), new Set());
+});
+
+test("isNovelTerm answers priorTerms' own absence check, term-whole", () => {
+  const prior = new Set(["kumamoto prefecture", "mountain"]);
+  assert.equal(isNovelTerm("kumamoto prefecture", prior), false);
+  assert.equal(isNovelTerm("kumamoto", prior), true, "the phrase being prior does not make its own word prior");
+  assert.equal(isNovelTerm("nonthaburi", prior), true);
+});
+
+// ---- the two tests, section 4's borderline cases (PLAN_NEWSWORTHINESS.md) --
+
+test("a new entity mentioned once by one source still heads a card — the feed reports, it does not corroborate", () => {
+  const rows = [row("fact:1", "sydney green", "mgx:hasA", "new role", { provenance: "news:src@1" })];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "sydney green"), "one reported row is enough to head a card");
+});
+
+test("\"sydney green\" the person heads a card even though both words are lexicon-known — the bigram is absent from prior terms", () => {
+  const rows = [
+    row("seed:1", "sydney", "rdf:type", "city", { provenance: "corpus:seed" }),
+    row("seed:2", "green", "rdf:type", "colour", { provenance: "corpus:seed" }),
+    row("fact:1", "sydney green", "mgx:hasA", "new role", { provenance: "news:src@1" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "sydney green"), "the two-word term is its own prior-term entry, absent from the set");
+});
+
+test("a named storm heads a card, and the class term it is an instance of never does", () => {
+  const rows = [
+    row("seed:1", "storm", "rdf:type", "weather event", { provenance: "corpus:seed" }),
+    row("fact:1", "hurricane erin", "rdf:type", "storm", { provenance: "news:src@1" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(!terms.includes("hurricane erin"), "an identity-only report never heads a card on its own");
+  assert.ok(!terms.includes("storm"), "a class term never hubs");
+});
+
+test("a named storm mentioned in a non-identity reported row heads a card via multi-word prior-term absence", () => {
+  const rows = [
+    row("seed:1", "storm", "rdf:type", "weather event", { provenance: "corpus:seed" }),
+    row("fact:1", "hurricane erin", "mgx:atLocation", "atlantic ocean", { provenance: "news:src@1" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "hurricane erin"), "the storm's own name is absent from prior terms");
+});
+
+test("a class object mentioned in a burglary story never heads a card, even as a plain reported row", () => {
+  const rows = [
+    row("seed:1", "drawer", "rdf:type", "furniture", { provenance: "corpus:seed" }),
+    row("fact:1", "burglar", "mgx:capableOf", "drawer", { provenance: "news:src@1" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(!terms.includes("drawer"), `a class object never hubs, even reported: ${JSON.stringify(terms)}`);
+});
+
+test("\"apple\" the business never heads a card while it stays prior knowledge with no anchor, and does once a report anchors it with a digit", () => {
+  const seedRows = [
+    row("seed:1", "apple", "rdf:type", "fruit", { provenance: "corpus:seed" }),
+    row("seed:2", "orchard", "rdf:type", "place", { provenance: "corpus:seed" }),
+  ];
+  // Both sides of this report are already prior knowledge — "orchard" is not
+  // a fresh co-term either, so nothing anchors the fresh-assertion test.
+  const noAnchor = [...seedRows, row("fact:1", "apple", "mgx:hasA", "orchard", { provenance: "news:src@1" })];
+  const noAnchorReported = reportedRows(noAnchor, { now: NOW, windowMs: 6 * HOUR });
+  const noAnchorHubs = newsworthyHubs(noAnchor, noAnchorReported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(!noAnchorHubs.some((h) => h.term === "apple"), "prior knowledge with no anchor never heads a card");
+
+  const anchored = [...seedRows, row("fact:1", "apple", "mgx:hasProperty", "42000000 units sold", { provenance: "news:src@1" })];
+  const anchoredReported = reportedRows(anchored, { now: NOW, windowMs: 6 * HOUR });
+  const anchoredHubs = newsworthyHubs(anchored, anchoredReported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(anchoredHubs.some((h) => h.term === "apple"), "a digit-anchored report grounds the fresh-assertion test");
+});
+
+test("a stubbed Wikidata Q-id row anchors a fresh assertion about a known entity even with no digit run", () => {
+  const rows = [
+    row("seed:1", "acme corp", "rdf:type", "company", { provenance: "corpus:seed" }),
+    row("qid:1", "acme corp", "mgx:hasProperty", "q4242424", { provenance: "research:wikidata:acme corp" }),
+    row("fact:1", "acme corp", "mgx:hasA", "new subsidiary", { provenance: "news:src@1" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "acme corp"), "a stubbed enrichment Q-id row anchors the fresh assertion");
 });
