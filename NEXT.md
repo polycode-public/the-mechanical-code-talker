@@ -56,8 +56,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   phases S1 (topic reader) through S5 (corpus rows), each its own measured round. S5 also
   drops the duplicated `grammar.choice.several-ground` row in `grammar.jsonl` (same id twice,
   found during plan verification).
-- [ ] **News page field report (2026-08-09, deployed site)** — code-complete and merged,
-  awaiting deployed-site verification on the next release. The tiles now render from a real
+- [ ] **News page field report (2026-08-09, deployed site)** — fixed and live at 5.0.34
+  (pipeline green at the deployed sha; the button-clicking specs are structurally local-only,
+  so live confirmation is an operator re-test). The tiles now render from a real
   `stats()` read (they had no renderer at all); a poll no longer freezes the tab (ingest went
   from ~16 folds per article to 2, with yields — longest main-thread block 12.4s down to
   3.4s, held by an 8s e2e budget); clause fragments can no longer become stored terms or card
@@ -67,15 +68,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   passes and `syllogise` rounds reached from `chat.mjs`/`news.mjs`, unchunkable from the
   news slice; and each article still pays one initial fold because `ingestSnapshotFacts`
   calls `ingestText` per article.
-- [ ] **River-crossing field report (2026-08-09)** — code-complete and merged, awaiting
-  deployed-site verification on the next release: play/pause/step now walk the planner's own
-  crossing positions (the page derives no move itself), a crossing board renders labelled
-  passenger chips moving bank to bank with the boat, and a focus panel below the chat shows
-  the followed agent's beliefs, numbered plan (played moves ticked) and per-instance
-  imperatives. A `[hidden]`-vs-author-CSS bug that kept grid panels on the river screen was
-  folded in. The chat box on that page still only speaks town-square vocabulary — that gap is
-  the already-open MUDIII chat-surface item, now more visible since the panel shows drives the
-  chat below it cannot answer about.
 - [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
