@@ -31,6 +31,10 @@
 //              or ms), or a fixed reading directly. Never read from here —
 //              the wall clock enters only through this parameter.
 //   notify     an optional, failure-tolerated status hook.
+//   shouldAbort an optional predicate the long loops read at every awaited
+//              yield point. Once it answers true the cycle stops between
+//              whole units of work — never inside one — and reports
+//              `aborted: true` alongside whatever it had already finished.
 //
 // Determinism: given the same fetched payloads and the same `now`, the same
 // facts land and the same feed renders, byte for byte (PLAN_NEWS_FEED.md
@@ -55,8 +59,7 @@ import {
 } from "../adapters/corpus/news-sources.mjs";
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
-import { ingestText, optimisticTriples } from "./extract-facts.mjs";
-import { splitSentences } from "./sentences.mjs";
+import { ingestText } from "./extract-facts.mjs";
 
 export { NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS };
 
@@ -234,6 +237,12 @@ function termFocusOf(facts) {
 
 function invalidateCache(cache) {
   if (cache) cache.rows = null;
+}
+
+/** The ctx's own stop signal, or a predicate that never stops. Read once per
+ *  call site so a ctx without one costs nothing. */
+function abortSignalOf(ctx) {
+  return typeof ctx?.shouldAbort === "function" ? ctx.shouldAbort : () => false;
 }
 
 // A feed title rarely carries its own terminal punctuation ("Scientists
@@ -427,6 +436,7 @@ function snapshotMentionsAny(snapshot, terms) {
  *  fact-grounding alone. */
 export async function reprocessAfterGrounding(ctx, groundedTerms) {
   const { memoryDir, store, state, config } = ctx;
+  const shouldAbort = abortSignalOf(ctx);
   const terms = [...new Set((groundedTerms || []).map((t) => normFactTerm(t)).filter(Boolean))];
   if (!terms.length) return { facts: 0, derived: 0, flipped: [] };
 
@@ -434,6 +444,7 @@ export async function reprocessAfterGrounding(ctx, groundedTerms) {
   let factsTotal = 0;
   const allNewFacts = [];
   for (const snap of touched) {
+    if (shouldAbort()) break;
     const { facts } = await ingestSnapshotFacts(ctx, snap);
     factsTotal += facts.length;
     allNewFacts.push(...facts);
@@ -540,14 +551,18 @@ function emptyCycleAccumulator(at) {
 /** Polls every enabled contemporary source (config order), skipping any
  *  whose health says wait; ingests every genuinely new snapshot; evicts
  *  news-tagged facts past the configured cap. Never touches a source with no
- *  enabled ids — that reads as "nothing to poll", not a failure. */
+ *  enabled ids — that reads as "nothing to poll", not a failure. A ctx
+ *  carrying `shouldAbort` can stop the cycle between sources or between
+ *  articles; what already landed stays, and the result says `aborted`. */
 export async function pollNewsSources(ctx) {
   const { memoryDir, store, config, state, providers, now } = ctx;
+  const shouldAbort = abortSignalOf(ctx);
   const nowVal = resolveNow(now);
   const enabledIds = normalizeNewsSourceIds(config.sources);
   if (!enabledIds.length) {
-    return { fetched: 0, newItems: 0, failures: 0, evicted: 0, facts: 0, derived: 0, sources: [] };
+    return { fetched: 0, newItems: 0, failures: 0, evicted: 0, facts: 0, derived: 0, aborted: false, sources: [] };
   }
+  let aborted = false;
 
   const recordsById = new Map(newsSourceRecords().map((r) => [r.id, r]));
   const perSource = [];
@@ -558,6 +573,7 @@ export async function pollNewsSources(ctx) {
   let derivedTotal = 0;
 
   for (const sourceId of enabledIds) {
+    if (shouldAbort()) { aborted = true; break; }
     const record = recordsById.get(sourceId);
     const health = findOrCreateHealth(state, sourceId);
     if (!record) { perSource.push({ sourceId, status: "unknown-source" }); continue; }
@@ -595,6 +611,7 @@ export async function pollNewsSources(ctx) {
     const before = emptyCycleAccumulator(nowVal);
     const after = emptyCycleAccumulator(nowVal);
     for (const snapshot of added) {
+      if (shouldAbort()) { aborted = true; break; }
       const r = await ingestNewsSnapshot(ctx, snapshot);
       after.sentences += r.sentences;
       after.recognized += r.recognized;
@@ -608,6 +625,7 @@ export async function pollNewsSources(ctx) {
       state.metrics = [...(state.metrics || []), cycleMetrics(before, after, { source: sourceId })];
     }
     perSource.push({ sourceId, status: "ok", newItems: added.length });
+    if (aborted) break;
   }
 
   const memory = await store.loadMemory(memoryDir);
@@ -619,7 +637,10 @@ export async function pollNewsSources(ctx) {
   }
 
   state.lastPollAt = nowVal;
-  return { fetched, newItems: newItemsTotal, failures, evicted: evictIds.length, facts: factsTotal, derived: derivedTotal, sources: perSource };
+  return {
+    fetched, newItems: newItemsTotal, failures, evicted: evictIds.length,
+    facts: factsTotal, derived: derivedTotal, aborted, sources: perSource,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -633,35 +654,45 @@ const KB_SOURCE_TO_RESEARCH_CHOICE = Object.freeze({
   "dbpedia-lookup": "dbpedia",
 });
 
-/** Grounds `article` under `provider`'s own provenance tag: the structured
- *  or isa facts the research-source seam licenses (researchFacts), plus the
- *  optimistic tier's read of the summary — the same two-tier posture
- *  chat.mjs's own reference-article ingest takes, reached here through the
- *  shared seam instead of a duplicated private function. */
+/** Grounds `article` under `provider`'s own provenance tag, through the SAME
+ *  ingest seam a polled article takes: the structured or isa facts the
+ *  research-source seam licenses (researchFacts), then the article's own
+ *  prose through ingestText's strict recognizer plus optimistic tier. A
+ *  looked-up article therefore reaches the graph with the density of
+ *  relations a polled one does, and the feed's paraphrase templates have the
+ *  same kind of material to write a card from — a bare isa edge left the
+ *  reader with one bald sentence where a polled item got a paragraph. */
 async function ingestResearchArticle(ctx, term, provider, article) {
-  const { memoryDir, store, config, lexicon } = ctx;
+  const { memoryDir, store, config, lexicon, now } = ctx;
   const provenance = provider.provenanceTag(term);
-  const facts = researchFacts(provider, term, article);
-  const seen = new Set(facts.map((f) => `${f.subject}\0${f.predicate}\0${f.object}`));
-  for (const sentence of splitSentences(article.summary || article.text || "")) {
-    for (const t of optimisticTriples(sentence, { lexicon: lexicon ?? undefined })) {
-      if (!t.subject || !t.object || t.subject === t.object) continue;
-      const key = `${t.subject}\0${t.predicate}\0${t.object}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      facts.push({ subject: t.subject, predicate: t.predicate, object: t.object, provenance });
-    }
+  const structured = researchFacts(provider, term, article);
+  if (structured.length) {
+    await store.appendFacts(memoryDir, structured);
+    invalidateCache(ctx.cache);
   }
+
+  const prose = String(article.summary || article.text || "").trim();
+  let ingested = { extracted: [], optimistic: [] };
+  if (prose) {
+    ingested = await ingestText(prose, {
+      memoryDir, sourceTag: provenance, optimistic: true,
+      lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now),
+    });
+    invalidateCache(ctx.cache);
+  }
+
+  const facts = [...structured, ...ingested.extracted, ...ingested.optimistic];
   if (!facts.length) return { facts: 0, derived: 0 };
-  await store.appendFacts(memoryDir, facts);
-  invalidateCache(ctx.cache);
+  const distinct = new Set(facts.map(
+    (f) => `${normFactTerm(f.subject)}\0${normFactPredicate(f.predicate)}\0${normFactTerm(f.object)}`,
+  ));
   let derived = 0;
   if (config.syllogismsPerIngest > 0) {
     const focus = [...termFocusOf(facts)];
     const res = await syllogise(memoryDir, { focus, expandFocus: true, budget: config.syllogismsPerIngest, store });
     derived = res?.count || 0;
   }
-  return { facts: facts.length, derived };
+  return { facts: distinct.size, derived };
 }
 
 /** Takes the top `limit` pending (negative-cache-expired) terms and walks
@@ -671,6 +702,7 @@ async function ingestResearchArticle(ctx, term, provider, article) {
  *  all-null term enters the negative cache. */
 export async function enrichTopTerms(ctx, { limit } = {}) {
   const { memoryDir, store, state, providers, config, now } = ctx;
+  const shouldAbort = abortSignalOf(ctx);
   const nowVal = resolveNow(now);
   const cap = Number.isFinite(limit) ? limit : config.enrichTermsPerCycle;
 
@@ -683,11 +715,14 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
   const missed = [];
   let factsTotal = 0;
   let derivedTotal = 0;
+  let aborted = false;
 
   for (const entry of candidates) {
+    if (shouldAbort()) { aborted = true; break; }
     markTerm(ledger, entry.term, "enriching", nowVal);
     let hit = null;
     for (const sourceId of config.kbSources) {
+      if (shouldAbort()) { aborted = true; break; }
       const choice = KB_SOURCE_TO_RESEARCH_CHOICE[sourceId];
       if (!choice || typeof providers?.getResearchProvider !== "function") continue;
       const provider = providers.getResearchProvider({ source: choice });
@@ -696,6 +731,9 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
       try { article = await provider.lookup(entry.term); } catch { article = null; }
       if (article) { hit = { provider, article }; break; }
     }
+    // A stop mid-lookup is not a verdict on the term: it goes back to
+    // pending so the next cycle picks it up, never into the negative cache.
+    if (aborted) { markTerm(ledger, entry.term, "pending", nowVal); break; }
     if (!hit) {
       markTerm(ledger, entry.term, "missed", nowVal);
       missed.push(entry.term);
@@ -724,7 +762,7 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
   state.lastEnrichAt = nowVal;
 
   return {
-    enriched, missed,
+    enriched, missed, aborted,
     facts: factsTotal + reprocessResult.facts,
     derived: derivedTotal + reprocessResult.derived,
   };
@@ -829,11 +867,14 @@ function renderSourcesText(ctx) {
     .join("\n");
 }
 
+const STOPPED_SUFFIX = " stopped before the rest.";
+
 function renderPollResult(result) {
-  if (!result.sources.length) return { text: "no sources enabled — nothing to poll.", miss: true };
+  if (!result.sources.length && !result.aborted) return { text: "no sources enabled — nothing to poll.", miss: true };
   const text = `polled ${pluralize(result.fetched, "source")}: ${pluralize(result.newItems, "new item")}, `
     + `${pluralize(result.facts, "fact")} stored, ${result.derived} derived, `
-    + `${pluralize(result.failures, "failure")}, ${result.evicted} evicted.`;
+    + `${pluralize(result.failures, "failure")}, ${result.evicted} evicted.`
+    + (result.aborted ? STOPPED_SUFFIX : "");
   return { text, miss: false };
 }
 
@@ -842,8 +883,9 @@ function renderEnrichResult(result) {
   const missedText = result.missed.length ? ` (${result.missed.join(", ")})` : "";
   const text = `enriched ${pluralize(result.enriched.length, "term")}${enrichedText}; `
     + `${pluralize(result.missed.length, "miss")}${missedText}; `
-    + `${pluralize(result.facts, "fact")} stored, ${result.derived} derived.`;
-  return { text, miss: !result.enriched.length && !result.missed.length };
+    + `${pluralize(result.facts, "fact")} stored, ${result.derived} derived.`
+    + (result.aborted ? STOPPED_SUFFIX : "");
+  return { text, miss: !result.enriched.length && !result.missed.length && !result.aborted };
 }
 
 async function handleAddSource(ctx, url) {

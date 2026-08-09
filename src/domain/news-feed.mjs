@@ -8,6 +8,7 @@
 import { sha256Bytes, normFactTerm } from "./hash.mjs";
 import { FACT_PREDICATE_PHRASES, predicatePhrase, factSentence } from "./fact-phrase.mjs";
 import { STOP_SET } from "./hub-terms.mjs";
+import { articleFor } from "./digest/words.mjs";
 
 export const NEWS_HUB_HOPS = 2; // fixed by design, not a knob
 
@@ -378,7 +379,10 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
     .filter((r) => IDENTITY_PREDICATES.has(r.predicate))
     .map((r) => r.object)
     .sort();
-  if (identityObjects.length) sentences.push(`${hub} is a ${joinWithAnd(identityObjects)}`);
+  if (identityObjects.length) {
+    const withArticles = identityObjects.map((object) => `${articleFor(object)} ${object}`);
+    sentences.push(`${hub} is ${joinWithAnd(withArticles)}`);
+  }
 
   for (const predicate of Object.keys(FACT_PREDICATE_PHRASES)) {
     if (IDENTITY_PREDICATES.has(predicate) || sentences.length >= SENTENCE_CAP) continue;

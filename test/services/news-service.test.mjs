@@ -13,6 +13,7 @@ import {
 } from "../../src/services/news.mjs";
 import { openMemoryBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
+import { renderNewsParagraph } from "../../src/domain/news-feed.mjs";
 import { createTermLedger, bumpTerms, ledgerPayload, ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
 
@@ -41,7 +42,89 @@ function snapshotFor(sourceId, guid, title, summary, now = FIXED_NOW) {
   return normalizeFeedItems(sourceId, [{ guid, title, url: `https://example.com/${sourceId}/${guid}`, summary }], { now })[0];
 }
 
+/** A fetcher that answers one snapshot per call from a fixed list. */
+function fetcherFor(sourceId, titles) {
+  return {
+    id: sourceId,
+    async fetchItems() {
+      const raw = titles.map((title, i) => ({ guid: String(i + 1), title, url: `https://x/${sourceId}/${i + 1}`, summary: "" }));
+      return { items: normalizeFeedItems(sourceId, raw, { now: FIXED_NOW }), bytes: 100 };
+    },
+  };
+}
+
 // ---- polling ----------------------------------------------------------------
+
+test("a ctx that says stop stops the poll between sources: the first source's articles land, the second is never fetched", async () => {
+  const config = clampNewsConfig({ sources: ["hacker-news", "usgs-quakes"] });
+  const { ctx } = await makeCtx({ config });
+  let usgsFetches = 0;
+  ctx.providers.newsFetchers = new Map([
+    ["hacker-news", fetcherFor("hacker-news", ["A module is a component."])],
+    ["usgs-quakes", { id: "usgs-quakes", async fetchItems() { usgsFetches += 1; return { items: [], bytes: 0 }; } }],
+  ]);
+  let polledSources = 0;
+  ctx.shouldAbort = () => polledSources >= 1;
+  const originalFetch = ctx.providers.newsFetchers.get("hacker-news").fetchItems;
+  ctx.providers.newsFetchers.get("hacker-news").fetchItems = async () => {
+    polledSources += 1;
+    return originalFetch();
+  };
+
+  const result = await pollNewsSources(ctx);
+  assert.equal(result.aborted, true, "the cycle reports that it stopped part-way");
+  assert.equal(usgsFetches, 0, "the source after the stop was never fetched");
+  assert.equal(ctx.state.items.length, 1, "what the first source returned still landed");
+  assert.equal(result.sources.length, 1, "only the source it got to is reported on");
+});
+
+test("a stop between articles keeps what already ingested and never half-folds the one it was on", async () => {
+  const config = clampNewsConfig({ sources: ["hacker-news"] });
+  const { ctx } = await makeCtx({ config });
+  ctx.providers.newsFetchers = new Map([[
+    "hacker-news",
+    fetcherFor("hacker-news", ["A module is a component.", "A widget is a gadget.", "A quokka is a marsupial."]),
+  ]]);
+  let ingested = 0;
+  ctx.shouldAbort = () => ingested >= 1;
+  const rowsBefore = readFactRows(await loadMemory(ctx.memoryDir)).length;
+  const originalReadRows = ctx.store.readFactRows;
+  ctx.store.readFactRows = (memory) => {
+    const rows = originalReadRows(memory);
+    if (rows.length > rowsBefore) ingested = 1;
+    return rows;
+  };
+
+  const result = await pollNewsSources(ctx);
+  ctx.store.readFactRows = originalReadRows;
+  const stored = readFactRows(await loadMemory(ctx.memoryDir));
+  assert.ok(result.aborted, "the poll reports that it stopped");
+  assert.ok(stored.length > rowsBefore, "the article it had already folded is stored whole");
+});
+
+test("an enrich cycle stopped mid-lookup returns its term to pending, never to the negative cache", async () => {
+  const config = clampNewsConfig({ kbSources: ["simple-wikipedia"], enrichTermsPerCycle: 2 });
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["gizmo", 3], ["widget", 2]]), "item-1", FIXED_NOW, new Map());
+  const state = { ...createNewsState(), ledger: ledgerPayload(ledger) };
+  const { ctx } = await makeCtx({ config, state });
+  let lookups = 0;
+  ctx.providers.getResearchProvider = () => ({
+    name: "simple-wikipedia",
+    provenanceTag: (term) => `research:simple-wikipedia:${term}`,
+    lookup: async () => { lookups += 1; return null; },
+  });
+  ctx.shouldAbort = () => true;
+
+  const result = await enrichTopTerms(ctx);
+  assert.equal(result.aborted, true, "the cycle reports that it stopped");
+  assert.equal(lookups, 0, "no lookup fired after the stop");
+  assert.deepEqual(result.missed, [], "a stop is never read as a miss");
+  const after = ledgerFromPayload(ctx.state.ledger);
+  for (const term of ["gizmo", "widget"]) {
+    assert.equal(after.terms.get(term).status, "pending", `${term} waits for the next cycle`);
+  }
+});
 
 test("pollNewsSources merges snapshots by id, ingests only the genuinely new ones, and enforces item_cap", async () => {
   const config = clampNewsConfig({ sources: ["hacker-news"], itemCap: 2 });
@@ -77,7 +160,7 @@ test("pollNewsSources merges snapshots by id, ingests only the genuinely new one
 test("pollNewsSources with no enabled sources reads as nothing to poll, never a failure", async () => {
   const { ctx } = await makeCtx({ config: clampNewsConfig({ sources: [] }) });
   const result = await pollNewsSources(ctx);
-  assert.deepEqual(result, { fetched: 0, newItems: 0, failures: 0, evicted: 0, facts: 0, derived: 0, sources: [] });
+  assert.deepEqual(result, { fetched: 0, newItems: 0, failures: 0, evicted: 0, facts: 0, derived: 0, aborted: false, sources: [] });
 });
 
 test("pollNewsSources tracks per-source health: failures back off with doubling, three failures auto-disable, and a backed-off source is skipped rather than retried", async () => {
@@ -245,10 +328,43 @@ test("enrichTopTerms caps at enrich_terms_per_cycle, walks kb sources in config 
   assert.deepEqual(calls["simple-wikipedia"], ["alpha", "beta", "gamma"], "beta was not retried inside the TTL");
 });
 
+test("an enriched term arrives with the relations its article states, and reads back through the same paraphrase a polled item gets", async () => {
+  const config = clampNewsConfig({ enrichTermsPerCycle: 1, kbSources: ["simple-wikipedia"] });
+  const { ctx } = await makeCtx({ config });
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["rottnest", 2]]), "item1", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  const summary = "A rottnest is an island. Rottnest has a lighthouse.";
+  ctx.providers.getResearchProvider = ({ source }) => ({
+    name: source,
+    origin: "https://example.org",
+    provenanceTag: (term) => `research:${source}:${term}`,
+    async lookup(term) {
+      return term === "rottnest"
+        ? { term, title: "Rottnest", text: summary, summary, url: "https://x/rottnest", revid: 1, isa: "island" }
+        : null;
+    },
+  });
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, ["rottnest"]);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).filter((r) => r.subject === "rottnest");
+  assert.ok(rows.some((r) => r.object === "island"), "the isa edge the source licensed is stored");
+  assert.ok(
+    rows.some((r) => r.predicate === "mgx:hasA" && r.object.includes("lighthouse")),
+    `the article's own relation sentence is read too, not just its first line: ${JSON.stringify(rows.map((r) => `${r.predicate} ${r.object}`))}`,
+  );
+
+  const paragraph = renderNewsParagraph("rottnest", rows);
+  assert.match(paragraph, /rottnest is an island/, "the paraphrase agrees its article with the word after it");
+  assert.match(paragraph, /lighthouse/, "and it carries the relation the lookup found");
+});
+
 test("enrichTopTerms with nothing pending is a clean no-op", async () => {
   const { ctx } = await makeCtx();
   const result = await enrichTopTerms(ctx);
-  assert.deepEqual(result, { enriched: [], missed: [], facts: 0, derived: 0 });
+  assert.deepEqual(result, { enriched: [], missed: [], aborted: false, facts: 0, derived: 0 });
 });
 
 // ---- reprocessing -----------------------------------------------------------
