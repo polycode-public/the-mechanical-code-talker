@@ -29,18 +29,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`does X have Y` misses property inheritance through a taught `⊑` hop** — found live while
-  regenerating infbench for `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B3 (`reports/BENCHMARK_INFERENCE_5.0.28.md`),
-  pre-existing and unrelated to that plan's own changes. Example: teach "every argyle has a
-  receptacle", "e150.mjs is a argyle"; ask "does e150.mjs have a receptacle" — an honest miss
-  instead of the "yes" the stored someValuesFrom restriction plus the type assertion entail. 10 of
-  15 `b2PropertyInheritance` infbench rows (the `member` and `grandparent` variants) show this; the
-  `class-direct` variant (no individual involved) already passes. The gap sits in the `does X have
-  Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
-  ladder — a different code path from `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
-  work. Playtest 007 (turn 14) widens the scope: taught capability
-  (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
-  "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
