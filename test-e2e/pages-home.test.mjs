@@ -434,7 +434,9 @@ test("every about page loads clean, styled by the shared sheet, with its nav and
       const styled = await page.locator(".about-shell").evaluate((el) => getComputedStyle(el).display);
       assert.equal(styled, "grid", `${name}'s about page picked up site.css`);
       const crumbs = page.locator(".about-crumbs a");
-      assert.equal(await crumbs.count(), 7, `${name}'s nav lists all seven sections`);
+      // chat-about carries one extra crumb: its reasoning walkthrough section.
+      const expectedCrumbs = name === "chat" ? 8 : 7;
+      assert.equal(await crumbs.count(), expectedCrumbs, `${name}'s nav lists every section it carries`);
       // Each Next lands on a section that exists on the page it points into.
       const withinPage = await page.locator('.next-link[href^="#"]').evaluateAll((els) => els.map((el) => el.getAttribute("href")));
       for (const target of withinPage) {

@@ -57,9 +57,7 @@ const POSTS = {
         text: "Two buttons replay a real recorded NYT and Wikipedia response through the live pipeline with the network switched off, so you can watch it ground a real article with nothing fetched." },
       { angle: "the reading behind it", to: "news-about.html#papers",
         text: "The refusal follows Chow's 1970 reject option and Reiter's 1978 open world assumption, the same literature chat.html's own honest miss rests on. The feed formats follow RSS 2.0, Atom and JSON Feed." },
-      // Filled in once reports/NEWS_RIG.md exists: this sentence gets the
-      // measured strict grounding rate from the fixture rig run.
-      { angle: "the number", to: "news.html",
+      { angle: "the number", to: "news-about.html#build",
         text: "The measurement rig behind this page prints a strict and an optimistic grounding rate on every run, from the same fixtures the demo buttons replay. Its first published number lands in reports/NEWS_RIG.md." },
     ],
   },

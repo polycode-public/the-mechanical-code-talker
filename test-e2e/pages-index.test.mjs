@@ -56,13 +56,13 @@ test("each demo page gets a feature section whose plate shows that page's screen
   }
 });
 
-test("the feature sections repeat the claims in claim-grid order, plates numbered I to VI", async () => {
+test("the feature sections repeat the claims in claim-grid order, plates numbered I to VII", async () => {
   const html = await readFile(INDEX, "utf8");
   const positions = PAGE_ORDER.map((page) => html.indexOf(`id="feature-${page}"`));
   assert.ok(positions.every((i) => i !== -1));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches claim order");
   const numerals = [...html.matchAll(/<span class="plate-no">Plate ([IVX]+)<\/span>/g)].map((m) => m[1]);
-  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI"]);
+  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII"]);
 });
 
 test("the page carries one live demo box and no live page embeds", async () => {
@@ -194,7 +194,7 @@ test("the eyebrow strip links out to the repository and into the sections it nam
   const html = await readFile(INDEX, "utf8");
   const hero = html.slice(html.indexOf('<header class="hero">'), html.indexOf("</header>"));
   assert.match(hero, /href="https:\/\/gitlab\.com\/polycode-projects\/the-mechanical-code-talker"[^>]*>Polycode projects</);
-  for (const [phrase, target] of [["pure JS", "library"], ["no LLM", "capabilities"], ["offline", "live-demo"]]) {
+  for (const [phrase, target] of [["pure JS", "library"], ["no LLM", "capabilities"], ["offline by default", "live-demo"]]) {
     assert.match(hero, new RegExp(`href="#${target}"[^>]*>${phrase}<`), `"${phrase}" jumps to #${target}`);
     assert.match(html, new RegExp(`id="${target}"`), `#${target} is a real anchor on the page`);
   }
@@ -205,12 +205,17 @@ test("the eyebrow strip links out to the repository and into the sections it nam
 // walks as a presentation. Structure only; the prose is a human's to change.
 
 const ABOUT_SECTIONS = ["what", "play", "shots", "inference", "build", "papers", "credits"];
+// chat-about carries one page-specific extra: the reasoning walkthrough behind
+// /classify and /prove sits between inference and build.
+const aboutSectionsOf = (page) => (page === "chat"
+  ? ["what", "play", "shots", "inference", "reasoning", "build", "papers", "credits"]
+  : ABOUT_SECTIONS);
 
-test("every demo has an about page carrying the same seven sections, in the same order", async () => {
+test("every demo's about page carries the shared section set in order, chat adding its reasoning walkthrough", async () => {
   for (const page of PAGE_ORDER) {
     const html = await readFile(publicFile(aboutPageOf(page)), "utf8");
     const ids = [...html.matchAll(/<section class="about-section" id="([a-z]+)">/g)].map((m) => m[1]);
-    assert.deepEqual(ids, ABOUT_SECTIONS, `${page}'s about page carries the shared section set`);
+    assert.deepEqual(ids, aboutSectionsOf(page), `${page}'s about page carries the shared section set`);
   }
 });
 
@@ -219,7 +224,7 @@ test("each about page's left nav names every section it has, and nothing it does
     const html = await readFile(publicFile(aboutPageOf(page)), "utf8");
     const nav = html.slice(html.indexOf('<ol class="about-crumbs">'), html.indexOf("</ol>"));
     const targets = [...nav.matchAll(/href="#([a-z]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(targets, ABOUT_SECTIONS, `${page}'s nav is a breadcrumb into every section`);
+    assert.deepEqual(targets, aboutSectionsOf(page), `${page}'s nav is a breadcrumb into every section`);
   }
 });
 
@@ -227,7 +232,7 @@ test("every Next button lands on the following section, and the last one leads t
   for (const [i, page] of PAGE_ORDER.entries()) {
     const html = await readFile(publicFile(aboutPageOf(page)), "utf8");
     const nexts = [...html.matchAll(/<a class="next-link" href="([^"]+)"/g)].map((m) => m[1]);
-    const withinPage = ABOUT_SECTIONS.slice(1).map((id) => `#${id}`);
+    const withinPage = aboutSectionsOf(page).slice(1).map((id) => `#${id}`);
     const last = i + 1 < PAGE_ORDER.length ? `./${aboutPageOf(PAGE_ORDER[i + 1])}` : "./index.html";
     assert.deepEqual(nexts, [...withinPage, last], `${page}'s Next chain walks its sections then moves on`);
   }
