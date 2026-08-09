@@ -98,11 +98,13 @@ export function parseArgs(argv) {
  */
 async function runSentence(sentence, { config, memoryDir, env, beforeRows }) {
   const before = beforeRows || readFactRows(await loadMemory(memoryDir));
+  if (ingestYield) await ingestYield();
   const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), env });
   // Only an assert turn can have written a Fact, so only an assert turn earns
   // the post-turn fold; every other turn hands the caller's own view straight
   // back untouched.
   if (record?.via !== "assert") return { recognized: false, rows: [], afterRows: before, decline: String(answer || "") };
+  if (ingestYield) await ingestYield();
   const after = readFactRows(await loadMemory(memoryDir));
   if (record?.miss) return { recognized: false, rows: [], afterRows: after, decline: String(answer || "") };
   return { recognized: true, rows: touchedFactRows(before, after), afterRows: after };
@@ -733,10 +735,15 @@ export async function ingestText(text, {
   // landed.
   const cleanedSentences = [];
 
-  // One fold, threaded through every candidate below. A fresh fold per
-  // candidate is three quarters of a second each on a browser-sized graph,
-  // and a poll cycle runs hundreds of them.
+  // One fold, threaded through every candidate below. A fold costs about a
+  // second on a browser-sized graph and the old shape paid two per candidate,
+  // which is what made a poll block the page for minutes.
   let currentRows = readFactRows(await loadMemory(dir));
+  // Facts this call has already written its own tag onto. Their provenance in
+  // `currentRows` is a tag behind, so a later sentence would otherwise read
+  // them back as freshly touched; skipping them is what a re-fold would have
+  // said, without the re-fold.
+  const taggedIds = new Set();
 
   // One recognized read of some text form: null when the strict recognizer
   // grounds nothing, else the Fact rows it touched. A row whose subject or
@@ -752,9 +759,10 @@ export async function ingestText(text, {
     });
     currentRows = afterRows;
     if (!recognized) { lastDecline = decline || lastDecline; return null; }
-    const kept = rows.filter((row) => readsAsEntityFact(row, termNlp));
-    if (kept.length !== rows.length) {
-      const retractIds = rows.filter((row) => !kept.includes(row) && !knownIds.has(row.id)).map((row) => row.id);
+    const fresh = rows.filter((row) => !taggedIds.has(row.id));
+    const kept = fresh.filter((row) => readsAsEntityFact(row, termNlp));
+    if (kept.length !== fresh.length) {
+      const retractIds = fresh.filter((row) => !kept.includes(row) && !knownIds.has(row.id)).map((row) => row.id);
       if (retractIds.length) {
         await removeFacts(dir, retractIds);
         const retracted = new Set(retractIds);
@@ -806,11 +814,8 @@ export async function ingestText(text, {
               subject: row.subject, predicate: row.predicate, object: row.object,
               provenance: tag, quantifier: row.quantifier || "", sentence,
             });
+            taggedIds.add(row.id);
           }
-          // The audit tag above changed the provenance of every row it
-          // touched, and the threaded fold reads provenance to tell one
-          // sentence's writes from the next one's.
-          currentRows = readFactRows(await loadMemory(dir));
           continue;
         }
         const ungrounded = ungroundedTermsIn(lastDecline);
@@ -821,16 +826,23 @@ export async function ingestText(text, {
         optimisticSentences += 1;
         const tag = `optimistic-extract:${sourceTag}`;
         for (const t of candidates) {
-          await appendFact(dir, {
+          const written = await appendFact(dir, {
             subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
           });
           optimisticFacts.push({ ...t, provenance: tag, sentence });
+          taggedIds.add(written.id);
         }
-        currentRows = readFactRows(await loadMemory(dir));
       }
     }
 
-    const finalRows = readFactRows(await loadMemory(dir));
+    // The fact-degree scan below only reads each row's subject and object, so
+    // the threaded fold plus this call's own writes answers it exactly.
+    // `canonical` prices every endpoint's degree instead, which needs the
+    // store's real row set.
+    if (ingestYield) await ingestYield();
+    const finalRows = canonical
+      ? readFactRows(await loadMemory(dir))
+      : currentRows.concat(extracted, optimisticFacts);
     // ungroundedCounts widens the legacy ungroundedTerms rule (a lexicon-miss
     // named in a decline) to the fact-degree rule: every term with zero fact
     // rows, lexicon-known or not. ungroundedTerms stays a subset by

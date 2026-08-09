@@ -50,11 +50,20 @@ function rowObservedMs(row) {
   return toMs(row.createdAt || "");
 }
 
+/** Does this provenance carry a news/research tag anywhere in it? True for a
+ *  bare `news:…` and for both ingest wrappers (`extracted:news:…`,
+ *  `optimistic-extract:news:…`), which is what the live poll path writes. The
+ *  window filter below and any surface counting "facts from news" read the
+ *  same rule from here, so a tile can never drift from the feed. */
+export function isNewsProvenance(provenance) {
+  return NEWS_WINDOW_PROVENANCE_RE.test(String(provenance || ""));
+}
+
 export function newsWindowRows(rows, { now, windowMs }) {
   const nowMs = toMs(now);
   const startMs = nowMs - windowMs;
   return rows.filter((row) => {
-    if (!NEWS_WINDOW_PROVENANCE_RE.test(String(row.provenance || ""))) return false;
+    if (!isNewsProvenance(row.provenance)) return false;
     const t = rowObservedMs(row);
     return Number.isFinite(t) && t >= startMs && t <= nowMs;
   });

@@ -30,6 +30,11 @@ const INTERACTION_TIMEOUT_MS = 45_000;
 // The responsiveness contract: an in-page evaluate round trip must answer
 // within this bound even while the seed streams and indexes.
 const ROUND_TRIP_BUDGET_MS = 1500;
+// The same contract while a poll is mid-ingest. The floor here is one
+// sentence's own recognizer pass, which the ingest cannot split — the ingest
+// yields the thread between passes, so this bound is a few of those, not the
+// whole article and nothing like the whole poll.
+const POLL_ROUND_TRIP_BUDGET_MS = 8000;
 
 let siteDir;
 let server;
@@ -120,6 +125,61 @@ async function routeSimpleWikipediaOneHit(page) {
     return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body });
   });
   return { openSearchCallCount: () => openSearchCalls };
+}
+
+/** Serves the mostread shape a live Wikipedia featured poll returns: several
+ *  articles whose extracts run past one clause each. Two of them ground a
+ *  clean class fact; the other two carry the shapes that used to lose their
+ *  subject on the way in — a trailing "It has a geographic area of …" and a
+ *  bare "The gunman had earlier killed …" — whose predicate remainders once
+ *  reached the graph as terms and titled a card of their own. */
+async function routeWikimediaArticleSet(page) {
+  const article = (title, extract) => ({
+    normalizedtitle: title,
+    displaytitle: title,
+    extract,
+    wikibase_item: title.replace(/\s+/g, "_"),
+    content_urls: { desktop: { page: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}` } },
+  });
+  await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    headers: { "access-control-allow-origin": "*" },
+    body: JSON.stringify({
+      mostread: {
+        articles: [
+          article("Tariff", "A tariff is a tax imposed on imported goods and services."),
+          article("Quokka", "A quokka is a marsupial. Rottnest sightings, wetlands, dry-season counts."),
+          article("Nonthaburi Province", "Nonthaburi Province is a province of Thailand. It has a geographic area of 7,409 square kilometres (2,861 sq mi) and a population of 1,683,115."),
+          article("Bang Bua Thong shooting", "The gunman had earlier killed his two grandparents in Bang Bua Thong prior to the shooting."),
+        ],
+      },
+    }),
+  }));
+}
+
+// A card's title names a thing. These words open a predicate remainder or a
+// new clause, so a title starting with one is a sentence the ingest lost the
+// subject of rather than an article's own subject.
+const FRAGMENT_LEAD_WORDS = new Set([
+  "and", "or", "but", "because", "since", "although", "though", "while", "so", "that", "which",
+  "is", "are", "was", "were", "be", "been", "being", "has", "have", "had",
+  "of", "in", "on", "at", "for", "to", "with", "from", "by", "as", "into", "over", "under",
+]);
+
+function firstWordOf(title) {
+  return String(title).trim().toLowerCase().split(/\s+/)[0].replace(/^[^a-z0-9]+/, "");
+}
+
+/** Resolves once the feed's own render has finished: the count line names a
+ *  total and that many cards are on screen. A card renders per yielded tick,
+ *  so reading the list mid-render sees an arbitrary prefix of it. */
+function waitForFeedRendered(page, label = "the feed finishing its render") {
+  return waitFor(page, () => {
+    const match = /^(\d+) articles?$/.exec(document.getElementById("feedCount").textContent || "");
+    if (!match) return 0;
+    return document.querySelectorAll("#feed .item").length === Number(match[1]) ? Number(match[1]) : 0;
+  }, { label });
 }
 
 /** Unchecks every default source but the one named, so the request surface
@@ -275,6 +335,149 @@ test("both fixture demo buttons replay their own recorded sample as corpus-tier 
     // fixture replays reached the graph without it.
     assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "neither fixture demo grants poll consent");
     assert.equal((await page.evaluate(() => window.tmct.session.requestLog)).length, 0, "neither fixture replay makes a network request of its own");
+  } finally {
+    await context.close();
+  }
+});
+
+test("poll now reads back as pressed at once, keeps answering while it ingests a multi-article payload, moves the graph tiles off zero, and titles every card with a subject", async () => {
+  const { context, page, pageErrors } = await openNewsPage();
+  try {
+    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
+
+    await keepOnlySource(page, "contemporary", "wikimedia-featured");
+    await keepOnlySource(page, "kb", null);
+    await routeWikimediaArticleSet(page);
+
+    const tileValue = (id) => page.evaluate((tileId) => Number(document.querySelector(`#${tileId} [data-value]`).textContent), id);
+    assert.equal(await tileValue("tileFactsFromNews"), 0, "nothing has been polled yet, so no fact came from news");
+
+    await page.locator("#newsStart").click();
+
+    // The click's own affordance, read back before anything is awaited on the
+    // poll itself: the button is out of action and says so.
+    const pressed = await page.evaluate(() => {
+      const btn = document.getElementById("newsStart");
+      return { disabled: btn.disabled, busy: btn.getAttribute("aria-busy"), label: btn.textContent, status: document.getElementById("controlsStatus").textContent };
+    });
+    assert.equal(pressed.disabled, true, "the button disables on the click itself");
+    assert.equal(pressed.busy, "true", "the button marks itself busy on the click itself");
+    assert.equal(pressed.label, "polling…", "the button says what it is doing");
+    assert.equal(pressed.status, "polling…", "the status line says what it is doing");
+
+    // The page keeps answering while the ingest runs. Each sample is asserted
+    // where it lands: one long stretch of blocked main thread reads as a
+    // single large sample, and asserting inline turns it into the exact
+    // over-budget failure rather than a confusing sample count.
+    const pollSamples = [];
+    let settled = false;
+    const deadline = Date.now() + READY_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const startedAt = Date.now();
+      settled = await page.evaluate(() => document.getElementById("newsStart").disabled === false);
+      const ms = Date.now() - startedAt;
+      pollSamples.push(ms);
+      assert.ok(ms < POLL_ROUND_TRIP_BUDGET_MS, `round trip ${pollSamples.length - 1} answered in ${ms}ms during the poll, over the ${POLL_ROUND_TRIP_BUDGET_MS}ms budget: ${JSON.stringify(pollSamples)}`);
+      if (settled) break;
+      await page.waitForTimeout(250);
+    }
+    assert.ok(settled, `the poll settled inside ${READY_TIMEOUT_MS}ms: ${JSON.stringify(pollSamples)}`);
+    assert.ok(pollSamples.length >= 2, `the page answered more than once while the poll ran: ${JSON.stringify(pollSamples)}`);
+    assert.deepEqual(pageErrors, [], "a real poll over the fulfilled route never throws");
+
+    // The two graph tiles read the store the poll just wrote into. The
+    // news tile was 0 before the click, so its own rise is both the
+    // assertion and the signal that the post-poll render has landed.
+    const factsFromNews = await waitFor(page, () => Number(document.querySelector("#tileFactsFromNews [data-value]").textContent) || 0, {
+      timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the poll's own facts reaching the graph tile",
+    });
+    const graphSize = await tileValue("tileGraphSize");
+    assert.ok(graphSize > 0, `the graph tile counts the seeded store: ${graphSize}`);
+    assert.ok(factsFromNews <= graphSize, `news facts are a subset of the graph: ${factsFromNews} of ${graphSize}`);
+
+    // Every rendered card is titled by a thing, never by the tail of a
+    // sentence whose subject the ingest lost.
+    await waitForFeedRendered(page, "the post-poll feed render");
+    const titles = await page.locator("#feed .item .hub").allInnerTexts();
+    assert.ok(titles.length > 0, "the poll leaves a rendered feed behind");
+    for (const title of titles) {
+      assert.ok(!FRAGMENT_LEAD_WORDS.has(firstWordOf(title)), `a card title never opens with a bare verb phrase or conjunction: ${JSON.stringify(title)}`);
+      assert.ok(title.trim().split(/\s+/).length <= 6, `a card title names a thing rather than a clause: ${JSON.stringify(title)}`);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("the feed scrolls inside its own box, re-orders on the sort control, and narrows to a picked keyword pill", async () => {
+  const { context, page } = await openNewsPage();
+  try {
+    const total = await waitForFeedRendered(page, "the seed-derived feed's first render");
+    assert.ok(total > 1, `the seed graph renders more than one card: ${total}`);
+
+    // Its own scroll: the box is shorter than the page and taller content
+    // moves inside it rather than running the page off the bottom.
+    const box = await page.evaluate(() => {
+      const feed = document.getElementById("feed");
+      feed.scrollTop = 400;
+      return {
+        overflowY: getComputedStyle(feed).overflowY,
+        clientHeight: feed.clientHeight,
+        scrollHeight: feed.scrollHeight,
+        scrollTop: feed.scrollTop,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    assert.equal(box.overflowY, "auto", "the feed owns its own scrollbar");
+    assert.ok(box.clientHeight < box.viewportHeight, `the feed box is shorter than the viewport: ${JSON.stringify(box)}`);
+    assert.ok(box.scrollHeight > box.clientHeight, `the cards overflow the box rather than the page: ${JSON.stringify(box)}`);
+    assert.ok(box.scrollTop > 0, `the box actually scrolls: ${JSON.stringify(box)}`);
+
+    // The sort control re-orders what is already rendered, on the item's own
+    // key rather than on anything the card happens to print.
+    const feed = await page.evaluate(() => window.tmct.session.buildFeed());
+    const itemByHub = new Map(feed.items.map((it) => [it.hub, it]));
+    const renderedHubs = async () => (await page.locator("#feed .item .hub").allInnerTexts()).map((t) => t.trim());
+    const beforeSort = await renderedHubs();
+
+    for (const [mode, keyOf] of [["facts", (it) => it.factIds.length], ["changed", (it) => it.changedCount]]) {
+      await page.selectOption("#feedSort", mode);
+      const hubs = await renderedHubs();
+      assert.equal(hubs.length, beforeSort.length, `sorting by ${mode} never drops a card`);
+      const keys = hubs.map((hub) => keyOf(itemByHub.get(hub)));
+      for (let i = 1; i < keys.length; i += 1) {
+        assert.ok(keys[i - 1] >= keys[i], `sorting by ${mode} really is descending: ${JSON.stringify(keys)}`);
+      }
+    }
+    await page.selectOption("#feedSort", "newest");
+
+    // The pills are built from the articles' own key terms, and picking one
+    // narrows the list to the articles that name it.
+    const pillTerms = await page.locator("#feedPills .pill").allInnerTexts();
+    assert.ok(pillTerms.length > 0, "the feed offers filter pills built from its own articles");
+    const allTitles = await page.locator("#feed .item .hub").allInnerTexts();
+    const picked = pillTerms[0];
+    await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).click();
+    const narrowedTitles = await page.locator("#feed .item .hub").allInnerTexts();
+    assert.ok(narrowedTitles.length > 0, `picking "${picked}" leaves at least the article it came from`);
+    assert.ok(narrowedTitles.length < allTitles.length, `picking "${picked}" narrows the list: ${narrowedTitles.length} of ${allTitles.length}`);
+    assert.equal(await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).getAttribute("aria-pressed"), "true", "the picked pill reads as pressed");
+    assert.match(await page.locator("#feedCount").innerText(), /of \d+ articles$/, "the count says how much of the feed is showing");
+
+    await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).click();
+    assert.equal((await page.locator("#feed .item .hub").allInnerTexts()).length, allTitles.length, "unpicking the pill restores the whole list");
+
+    // The whole feed section still fits a 320px-wide screen.
+    await page.setViewportSize({ width: 320, height: 640 });
+    const narrow = await page.evaluate(() => ({
+      pageScrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      pillsVisible: document.querySelectorAll("#feedPills .pill").length,
+      sortVisible: document.getElementById("feedSort").getBoundingClientRect().width > 0,
+    }));
+    assert.ok(narrow.pageScrollWidth <= narrow.clientWidth + 1, `nothing pushes the page sideways at 320px: ${JSON.stringify(narrow)}`);
+    assert.ok(narrow.pillsVisible > 0, "the pills survive the narrow layout");
+    assert.ok(narrow.sortVisible, "the sort control survives the narrow layout");
   } finally {
     await context.close();
   }
