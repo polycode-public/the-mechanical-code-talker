@@ -33,6 +33,7 @@
         <li><a href="#play">Chat you can replay</a></li>
         <li><a href="#shots">What it looks like</a></li>
         <li><a href="#inference">What it works out</a></li>
+        <li><a href="#reasoning">Reasoning through class expressions</a></li>
         <li><a href="#build">How it is built</a></li>
         <li><a href="#papers">Related work</a></li>
         <li><a href="#credits">Credits and further reading</a></li>
@@ -120,6 +121,33 @@ I don't know — I was never told a quantifier for that.</pre>
         <li>dog    mgx:capableOf    bark         (source: corpus:human /r/CapableOf)</li>
       </ul>
       <p><strong>How it carries a thread.</strong> The session keeps the last resolved subject as a focus. Ask about something, then ask &ldquo;what calls it?&rdquo;, and the pronoun binds to that focus. A pronoun with no focus behind it resolves to nothing and is reported as unresolved, not guessed.</p>
+      <a class="next-link" href="#reasoning"><span class="next-label">Next</span> Reasoning through class expressions <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </section>
+
+    <section class="about-section" id="reasoning">
+      <h2>Reasoning through class expressions</h2>
+      <p>Beyond fact retrieval and class inheritance chains, two explicit reasoning commands close questions that need description logic (class unions, negations) or EL saturation through existential restrictions. The engine reasons over taught class axioms without materialising new facts into the store.</p>
+      <p><strong>/classify.</strong> EL saturation: what follows from class membership facts? Use it when one class is described as an existential restriction and you want to ask about a composed restriction two hops away.</p>
+      <pre class="transcript"><span class="you">tmct&gt; every heart has a valve</span>
+noted — remembered 1 fact: heart rdfs:subClassOf [restriction: every heart has some valve]
+<span class="you">tmct&gt; every valve is a flap</span>
+noted — remembered 1 fact: valve rdfs:subClassOf flap
+<span class="you">/classify heart</span>
+derived 1 entailed fact(s) classifying "heart":
+  heart rdfs:subClassOf [restriction: every heart has some flap]
+<span class="you">tmct&gt; does a heart have a flap</span>
+yes — every heart has a valve (source: ace:chat:...@...) and a valve is a flap (source: ace:chat:...@...) — via: class expression ∃has.flap (source: entailed:elSubsumption)</pre>
+      <p class="source-note">EL entailment example from INF-7 in PLAN_SYLLOGIST_EL_DL.md, integrated into the chat ask lane through the auto-synthesis hook that runs /classify silently after a learn-on-miss load.</p>
+      <p><strong>/prove.</strong> DL tableau refutation: what entails a specific fact in description logic? Use it for a question shape the ask lane cannot resolve alone — a disjunction (union), a negated class, or a class expression too composed to teach directly.</p>
+      <pre class="transcript"><span class="you">tmct&gt; every pet is a cat or a dog</span>
+noted — remembered: pet ⊔ [cat, dog]
+<span class="you">tmct&gt; rex is a pet</span>
+noted — remembered 1 fact: rex rdf:type pet
+<span class="you">tmct&gt; rex is not a cat</span>
+noted — remembered 1 fact: rex owl:disjointWith cat
+<span class="you">/prove is rex a dog</span>
+yes — every pet is a cat or a dog (source: ace:chat:...@...) and rex is a pet (source: ace:chat:...@...) and rex is not a cat (source: ace:chat:...@...) — in every case, rex is a dog.</pre>
+      <p class="source-note">Disjunction elimination example from INF-3 (case analysis), integrated into /prove as an explicit command that branches on each disjunct and reports the case-analysis marker when a union premise is used.</p>
       <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 

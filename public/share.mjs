@@ -42,6 +42,8 @@ const POSTS = {
         text: "No server, no API key, no model. One bundle, one seed file of about 63,000 facts, and wink-nlp for lemmas. Here is the whole stack." },
       { angle: "try a question", to: "index.html?q=what%20calls%20Task",
         text: "The box on this page runs the real engine on a real code graph, live in your browser, primed with a question. Type your own over the top of it." },
+      { angle: "it proves things", to: "chat-about.html#reasoning",
+        text: "Beyond retrieval and inheritance chains, /classify saturates class restrictions through EL completion rules, and /prove checks yes/no entailments by DL tableau refutation. Today, 0 of 48 nested-existential and cardinality-clash benchmark questions yield a proved yes — the path is open for future phases." },
     ],
   },
   news: {

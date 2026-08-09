@@ -69,6 +69,12 @@ noted — remembered 1 fact: cat rdfs:subClassOf pet (every cat is a pet)
 <span class="you">what is a cat</span>
 you told me: cat is a kind of pet (source: ace:chat:...@...)</pre>
       <p>Taught facts are kept on this device, best effort, and are never sent anywhere unless you share them yourself (see <a href="#sharing">Sharing a world</a>).</p>
+      <p><strong>Commands for questions the ask lane can't reach.</strong> Two commands close questions that need description logic or class saturation. Type <code>/classify <em>term</em></code> to saturate a term through its class restrictions and derived subsumptions. Type <code>/prove is <em>subject</em> a <em>class</em></code> to check a yes/no entailment by DL tableau refutation, even for shapes the ask lane cannot resolve alone (unions, negations, composed restrictions). Examples:</p>
+      <pre class="transcript"><span class="you">/classify heart</span>
+derived 1 entailed fact(s) classifying "heart":
+  heart rdfs:subClassOf [restriction: every heart has some flap]
+<span class="you">/prove is rex a dog</span>
+yes — every pet is a cat or a dog (source: ace:chat:...@...) and rex is a pet (source: ace:chat:...@...) and rex is not a cat (source: ace:chat:...@...) — in every case, rex is a dog.</pre>
     </section>
 
     <section class="about-section" id="news">
