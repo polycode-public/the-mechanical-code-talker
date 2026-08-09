@@ -97,10 +97,19 @@ const READY_CHECKS = {
       { timeout: MUDIII_READY_TIMEOUT_MS },
     );
 
-    // A real page.click() scrolls the control into view, which can leave the
-    // 3D canvas out of the eventual screenshot — dispatching the click
-    // straight to the DOM fires the same listener without moving the page.
-    await page.evaluate(() => document.querySelector("#autoToggle")?.click());
+    // The board opens playing on its own whenever the browser reports no
+    // reduced-motion preference, which is Chromium's own default under
+    // Playwright — so by the time the scene and the HUD are both ready, play
+    // has usually already started. A blind click would toggle it back OFF
+    // and freeze the turn counter this function waits on next, so this only
+    // clicks when the deck still reads paused. A real page.click() scrolls
+    // the control into view, which can leave the 3D canvas out of the
+    // eventual screenshot — dispatching the click straight to the DOM fires
+    // the same listener without moving the page.
+    await page.evaluate(() => {
+      const btn = document.querySelector("#autoToggle");
+      if (btn && btn.getAttribute("aria-pressed") !== "true") btn.click();
+    });
 
     await page.waitForFunction(
       (threshold) => {
@@ -174,7 +183,12 @@ async function main() {
   // the chat seed is neither, and the news plate needs a seeded feed.
   cpSync(join(repoRoot, "public", "chat-seed.json"), join(siteDir, "chat-seed.json"));
   const server = await serveDirectory(siteDir);
-  const browser = await chromium.launch();
+  // mudiii.html is the one plate that needs real WebGL (three.js), so the
+  // shared browser needs the same software-render fallback
+  // test-e2e/pages-mudiii.test.mjs's own openMudiiiPage launches with —
+  // without it, a sandbox with no GPU passthrough can leave the scene's
+  // own ready() signal never firing.
+  const browser = await chromium.launch({ args: ["--enable-unsafe-swiftshader", "--use-gl=swiftshader"] });
   const pages = [];
   try {
     for (const name of PAGE_ORDER) {

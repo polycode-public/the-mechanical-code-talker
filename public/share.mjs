@@ -140,6 +140,10 @@ const POSTS = {
         text: "The same tick engine as the flat board demo, with a three.js scene on top. The 3D bundle is only built for a site that actually ships this page." },
       { angle: "look at it", to: "mudiii-about.html#shots",
         text: "A fox and three goblins on the town square, each acting on its own view of it, with the HUD showing what each one currently wants." },
+      { angle: "the classic puzzle, wired to the same drive facts", to: "mudiii-about.html#inference",
+        text: "The fourth scenario ferries a fox, a goat and a cabbage across a river. What makes the fox eat the goat is one fact, mgx:consumes, the same predicate that makes the fox chase a goblin on the town square. Edit it and the puzzle's own rule about leaving them alone changes with it." },
+      { angle: "it never guesses a shortened plan", to: "mudiii-about.html#build",
+        text: "Give the fox a second appetite no single farmer can cover and the river crossing reports no plan found. Never a shortcut standing in for a real crossing." },
     ],
   },
 };
