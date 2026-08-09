@@ -4511,6 +4511,17 @@ const quantifiedHasObject = (m) => (/^all$/i.test(m[1])
  *  the single noun between the determiner and the verb; a two-token subject stays
  *  declined, like the preposition-pinned frame, because nothing names its head. */
 const DETERMINER_HAS_TEACH_RE = /^(?:the|an?|my|your|our|their|his|her|its)\s+([\w'-]+)\s+(?:has|have|had)\s+(.+?)[.!?]*$/i;
+/** The determiner-led CAPABILITY teach ("a pig can be alive", "the wolf can
+ *  swim") — DETERMINER_HAS_TEACH_RE's own sibling for the "can" verb family.
+ *  The closed modal pins the split the same way "has"/"have" pins
+ *  DETERMINER_HAS_TEACH_RE's, so a leading article needs no verb-position
+ *  guessing. Its own object slot is unbounded ("can VERB", "can be
+ *  ADJECTIVE" — matchBareCanTeach/parseCapability already own the
+ *  single-word-verb case; this is the multi-word remainder both decline on),
+ *  so a plural bare subject ("animals can be alive") and its singular
+ *  articled twin ("a pig can be alive") land through the same generalVerbTeach
+ *  mint instead of one of the two silently declining. */
+const DETERMINER_CAN_TEACH_RE = /^(?:the|an?|every|each|all|my|your|our|their|his|her|its)\s+([\w'-]+)\s+can\s+(.+?)[.!?]*$/i;
 /** The quantified LOCATIVE teach ("every disk rests on peg-a", "each disk
  *  rests on peg-a", "all disks rest on peg-a") — QUANTIFIED_HAS_TEACH_RE's own
  *  sibling for the board-fact verb family. The has/have frame can pin the
@@ -4733,6 +4744,7 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw) || quantLoc || countLoc) {
     const quantHas = (!quantLoc && !countLoc) ? p.match(QUANTIFIED_HAS_TEACH_RE) : null;
     const detHas = (!quantHas && !quantLoc && !countLoc) ? p.match(DETERMINER_HAS_TEACH_RE) : null;
+    const detCan = (!quantHas && !detHas && !quantLoc && !countLoc) ? p.match(DETERMINER_CAN_TEACH_RE) : null;
     if (quantHas) {
       subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
@@ -4741,6 +4753,10 @@ async function generalVerbTeach(payload) {
       subjectRaw = detHas[1];
       verbRaw = "has";
       objectRaw = detHas[2];
+    } else if (detCan) {
+      subjectRaw = detCan[1];
+      verbRaw = "can";
+      objectRaw = detCan[2];
     } else if (quantLoc) {
       // Universal locative ("every disk rests on peg-a") — the same
       // "every"-only quantifier-field convention unknownSubjectFallback's
@@ -6642,20 +6658,35 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // every other sentence reading its first word exactly as before.
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
     const detHasLed = detLed ? null : raw.match(DETERMINER_HAS_TEACH_RE);
-    const quantHasLed = (detLed || detHasLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
+    // A determiner-led CAPABILITY lead ("a pig can be alive") needs the same
+    // override as detHasLed: its own first word ("a") never POS-tags as a
+    // NOUN/PROPN, and matchBareCanTeach/parseCapability both decline on a
+    // multi-word verb ("be alive"), so without this the sentence never even
+    // reaches generalVerbTeach — exactly the gap that let the bare-plural
+    // twin ("animals can be alive") teach while its singular-articled form
+    // silently declined. Read through splitTeachNegation first (its own
+    // idempotent rebuild — generalVerbTeach re-derives the identical
+    // positive form later) so a negated lead ("a rock cannot be alive")
+    // is recognized here too: the bare-plural twin ("rocks cannot be
+    // alive") never needed this, since its own no-article subject already
+    // passes the POS gate below without going through any det-led shape at
+    // all, which is exactly the asymmetry this lead exists to close.
+    const detCanLed = (detLed || detHasLed) ? null : splitTeachNegation(raw).payload.match(DETERMINER_CAN_TEACH_RE);
+    const quantHasLed = (detLed || detHasLed || detCanLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
     // The two locative quantifier leads ("every disk rests…", "one more disk
     // rests…") need the same override as quantHasLed/detHasLed just below:
     // their own first word ("every"/"one"/"another") never POS-tags as a
     // NOUN/PROPN, so without this the bare-sentence POS gate silently drops
     // them exactly the way it used to drop "every overbid has a gouger".
-    const quantLocLed = (detLed || detHasLed || quantHasLed) ? null : raw.match(QUANTIFIED_LOCATIVE_TEACH_RE);
-    const countLocLed = (detLed || detHasLed || quantHasLed || quantLocLed)
+    const quantLocLed = (detLed || detHasLed || detCanLed || quantHasLed) ? null : raw.match(QUANTIFIED_LOCATIVE_TEACH_RE);
+    const countLocLed = (detLed || detHasLed || detCanLed || quantHasLed || quantLocLed)
       ? null : raw.match(LOCATIVE_COUNTING_TEACH_RE);
     const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
       : (detHasLed ? detHasLed[1]
-        : (quantHasLed ? quantifiedHasSubject(quantHasLed)
-          : (quantLocLed ? quantifiedLocativeSubject(quantLocLed)
-            : (countLocLed ? countLocLed[1] : raw.match(/^([\w'-]+)/)?.[1]))));
+        : (detCanLed ? detCanLed[1]
+          : (quantHasLed ? quantifiedHasSubject(quantHasLed)
+            : (quantLocLed ? quantifiedLocativeSubject(quantLocLed)
+              : (countLocLed ? countLocLed[1] : raw.match(/^([\w'-]+)/)?.[1])))));
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
@@ -6664,7 +6695,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // NON_DECLARATIVE_OPENER_RE runs even for these leads — "every umm has a
     // thing" isn't a real quantified sentence, just filler that fits the shape.
     if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
-      && (quantHasLed || detHasLed || quantLocLed || countLocLed || (await subjectIsNounOrPropn(subjectWord)))) {
+      && (quantHasLed || detHasLed || detCanLed || quantLocLed || countLocLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
