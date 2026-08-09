@@ -76,8 +76,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   playing screen below the focused agent's chat window, not only inside the editor. In flight
   in a fix worktree.
 - [ ] **News through the chat surface** — assess the consumer surface: how a chat user reaches
-  the news feed (`/news` lane), pin it in a test, and show it on index.html. Waits on the
-  chat.mjs slot (playtest-fixes agent) and the index.html slot (claims/index rework) freeing.
+  the news feed (`/news` lane), pin it in a test, and show it on index.html. In flight in a
+  worktree.
 - [ ] **bedrock-meter pins tmct 5.0.25 exactly** — a consumer taking both bedrock-meter and a
   newer tmct gets two tmct copies; a caret range or peerDependency shape on bedrock-meter's side
   needs a shared decision.
