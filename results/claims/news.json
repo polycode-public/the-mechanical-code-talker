@@ -1,0 +1,163 @@
+{
+  "name": "news",
+  "generatedAt": "2026-08-09T11:41:28.014Z",
+  "commit": "3b35329d209aa0ff00ffc2c017aa79874724ddac",
+  "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
+  "pack": "shipped",
+  "unit": "percent",
+  "threshold": {
+    "direction": "min",
+    "value": 40.86
+  },
+  "sources": [
+    "scripts/news-rig.mjs",
+    "test/fixtures/news",
+    "src/services/news.mjs",
+    "src/domain/news-feed.mjs",
+    "src/domain/term-ledger.mjs",
+    "src/domain/feed-normalize.mjs",
+    "src/adapters/corpus/news-sources.mjs",
+    "src/services/extract-facts.mjs"
+  ],
+  "value": 42.86,
+  "detail": {
+    "sentenceCount": 21,
+    "recognizedCount": 9,
+    "optimisticCount": 2,
+    "groundedRateOptimisticPercent": 52.38,
+    "sourcesPolled": [
+      "wikimedia-featured",
+      "hacker-news",
+      "usgs-quakes",
+      "nyt-world",
+      "wikinews-published"
+    ],
+    "kbSourcesEnabled": [
+      "simple-wikipedia",
+      "wikidata",
+      "wiktionary",
+      "dbpedia-lookup"
+    ],
+    "perSource": [
+      {
+        "sourceId": "wikimedia-featured",
+        "sentences": 4,
+        "recognized": 0,
+        "optimisticCount": 1,
+        "groundedRateStrict": 0,
+        "groundedRateOptimistic": 0.25,
+        "factsAdded": 1,
+        "derived": 0
+      },
+      {
+        "sourceId": "hacker-news",
+        "sentences": 3,
+        "recognized": 1,
+        "optimisticCount": 0,
+        "groundedRateStrict": 0.3333333333333333,
+        "groundedRateOptimistic": 0.3333333333333333,
+        "factsAdded": 1,
+        "derived": 0
+      },
+      {
+        "sourceId": "usgs-quakes",
+        "sentences": 4,
+        "recognized": 0,
+        "optimisticCount": 0,
+        "groundedRateStrict": 0,
+        "groundedRateOptimistic": 0,
+        "factsAdded": 0,
+        "derived": 0
+      },
+      {
+        "sourceId": "nyt-world",
+        "sentences": 8,
+        "recognized": 6,
+        "optimisticCount": 1,
+        "groundedRateStrict": 0.75,
+        "groundedRateOptimistic": 0.875,
+        "factsAdded": 7,
+        "derived": 2
+      },
+      {
+        "sourceId": "wikinews-published",
+        "sentences": 2,
+        "recognized": 2,
+        "optimisticCount": 0,
+        "groundedRateStrict": 1,
+        "groundedRateOptimistic": 1,
+        "factsAdded": 2,
+        "derived": 0
+      }
+    ],
+    "factsFromPoll": 11,
+    "derivedFromPoll": 2,
+    "enrichCandidatesTried": 8,
+    "enrichEnriched": [],
+    "enrichMissed": [
+      "km",
+      "ceasefire",
+      "earthquake",
+      "alaska",
+      "announcement",
+      "guid",
+      "hn",
+      "item"
+    ],
+    "factsFromEnrich": 0,
+    "derivedFromEnrich": 0,
+    "feedItemCount": 4,
+    "pendingLedgerTop": [
+      {
+        "term": "kodiak",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "m",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "magnitude",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "ne",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "negotiations",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "ridgecrest",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "ssw",
+        "count": 2,
+        "vocabGrounded": false
+      },
+      {
+        "term": "tag",
+        "count": 2,
+        "vocabGrounded": true
+      },
+      {
+        "term": "casualty",
+        "count": 1,
+        "vocabGrounded": true
+      },
+      {
+        "term": "conflict",
+        "count": 1,
+        "vocabGrounded": true
+      }
+    ]
+  }
+}
