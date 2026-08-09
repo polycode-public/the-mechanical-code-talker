@@ -146,23 +146,23 @@ test("'what is a X <predicate>' for a known subject with NO facts under that rel
 test("a ConceptNet /r/Synonym pair resolves a vocabulary term that had NO direct facts, source cited", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-syn-"));
   try {
-    // the committed slice carries a real bidirectional "argument"~"parameter"
-    // /r/Synonym row — no fact is ever taught about "argument" itself.
+    // the committed slice carries a real bidirectional "bucket"~"pail"
+    // /r/Synonym row — no fact is ever taught about "pail" itself.
     await appendFact(dir, {
-      subject: "parameter", predicate: "rdfs:subClassOf", object: "value",
+      subject: "bucket", predicate: "rdfs:subClassOf", object: "container",
       provenance: "ace:chat:t-syn@2026-07-07T00:00:00.000Z",
     });
     // control: a direct hit on the taught term needs no synonym detour
-    const direct = await runTurn("what is a parameter", { config: CONFIG, memoryDir: dir });
-    assert.match(direct.answer, /^you told me: parameter is a kind of value/);
+    const direct = await runTurn("what is a bucket", { config: CONFIG, memoryDir: dir });
+    assert.match(direct.answer, /^you told me: bucket is a kind of container/);
     assert.doesNotMatch(direct.answer, /known synonym/);
 
-    const viaSyn = await runTurn("what is an argument", { config: CONFIG, memoryDir: dir });
+    const viaSyn = await runTurn("what is a pail", { config: CONFIG, memoryDir: dir });
     assert.equal(viaSyn.record.via, "fact");
     assert.equal(viaSyn.record.miss, false);
     assert.match(viaSyn.answer,
-      /^no direct facts about "argument" — showing its known synonym "parameter" \(source: corpus:conceptnet \/r\/Synonym\):/);
-    assert.match(viaSyn.answer, /you told me: parameter is a kind of value/);
+      /^no direct facts about "pail" — showing its known synonym "bucket" \(source: corpus:conceptnet \/r\/Synonym\):/);
+    assert.match(viaSyn.answer, /you told me: bucket is a kind of container/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
