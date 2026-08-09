@@ -55,15 +55,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - [ ] a negation-scope filter
   - [ ] the temporal-window boundary in commit counting
   - [ ] growing the under-covered C2 relative-embedded census cell
-- [ ] **River puzzle renders in three.js on mudiii.html** — the crossing board shipped as a
-  2D chip-and-CSS panel while the grid scenarios have the real 3D stage; the river scene
-  should render on the same three.js stage: banks, water, boat and passengers as meshes,
-  animating each ferry move as playback walks the plan. In flight in a fix worktree.
-- [ ] **mudiii scenario by query parameter, river as a top-level demo** — the rendered
-  scenario should be selectable by query parameter (e.g. `mudiii.html?scenario=river`), and
-  that link exposed as its own top-level demo entry so the river-crossing puzzle is reachable
-  directly, not only through the dropdown. In flight in the same worktree as the three.js
-  item.
+- [ ] **River puzzle renders in three.js on mudiii.html** — code-complete and merged, pending
+  deployed verification: `bootRiver`/`applyRiver` draw banks, water, a boat and one labelled
+  figure per passenger on the same stage the chase squares use (the fox rides its real GLB;
+  farmer/goat/cabbage get coloured silhouettes since the manifest carries no models for
+  them), each crossing tweening as playback walks the plan; the 2D chip board stays as the
+  no-WebGL fallback. Remainder: `mudiii-about.html`'s copy still describes the town square
+  only — it should mention the crossing and the direct link.
+- [ ] **mudiii scenario by query parameter, river as a top-level demo** — code-complete and
+  merged, pending deployed verification: `mudiii.html?scenario=river` boots the scenario
+  directly (slug-matched, silent fallback on unknown), and index.html carries a river
+  showcase band linking to it. Flagged for an operator call: the link is a showcase band, not
+  an eighth claim-grid cell, because the grid is pinned one cell per demo PAGE (own about
+  page, screenshot, og image) and the river is a scenario inside mudiii.html — promote it to
+  a full demo page if wanted.
 - [ ] **News page controls follow-up (2026-08-09 second field report)** — four parts, in
   flight in a fix worktree: (1) "stop & forget" must purge the articles, not just the start
   preference; (2) the default-enabled source roster should be actual news feeds (Wikimedia
