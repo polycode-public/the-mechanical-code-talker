@@ -64,11 +64,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   coverage, is now the whole gap (rungs R2-R5 measured routing, chains and wording levers all
   flat). A design wave is drafting the plan; its survey starts from the rungs' own measured
   dead ends in `PLAN_COMMON_SENSE_QA.md`.
-- [ ] **Playtest 007 fixes** (`playtests/PLAYTEST_LOG_007.md` holds the transcript and analysis)
-  — queued: the "response templates unavailable" leak on bare plural property statements; the
-  singular/plural capability-teach parity gap; the "what type of X is <individual>" ask shape;
-  plural teach subjects storing unfolded ("leaves is green"). Candidates recorded in the log,
-  not queued: a definitional teach frame, and adjective-qualified have-ask composition.
 - [ ] **Archive the delivered plan docs and refresh STATUS.md** — after each plan's work is verified by code inspection AND on the deployed site:
   `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md`,
   `PLAN_RIVER_CROSSING.md` and `PLAN_NEWS_FEED.md` are delivered end to end and move to
