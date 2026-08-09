@@ -162,7 +162,6 @@
     "bench:receipts": "node scripts/bench-receipts.mjs",
     "claims": "node scripts/claims/run-all.mjs",
     "claim:prose-band": "node scripts/claims/claim-prose-band.mjs",
-    "claim:openbookqa": "node scripts/claims/claim-openbookqa.mjs",
     "claim:commonsenseqa": "node scripts/claims/claim-commonsenseqa.mjs",
     "claim:planner": "node scripts/claims/claim-planner.mjs",
     "roll": "node scripts/roll.mjs",

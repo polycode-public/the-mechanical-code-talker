@@ -1,10 +1,9 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), and F4
-(the claims block) are built and tested. Every other module path marked "new" below is still a file
-that does not exist yet. The plan delivers the whole arc: the closed multiple-choice lane, the
-CommonsenseQA fixture and rig, the claims block, the removal of the OpenBookQA stack, and the five
-measured rungs that follow.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. The five rungs R1–R5 remain.
+The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
+the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
+the three outcomes plus negative cases.
 
 This plan is written to be built by a Sonnet-tier implementer with no further design work. Every
 phase names its module paths, its data structures, its function signatures, its test files, its
@@ -919,6 +918,11 @@ All commands passed; 3 claims.test cases + 104 estate cases + 222 fast tests gre
 ---
 
 ## 9. Phase F5 — the removal, and the corpus rows
+
+**Built.** Five OpenBookQA files deleted and the `claim:openbookqa` script dropped from package.json;
+seven grammar.choice rows landed in test/corpus/grammar.jsonl covering one-grounds, several-ground,
+honest-miss, enumerated-shape, teach-not-a-choice, set-question-not-a-choice, and miss-tie-never-broken.
+All acceptance commands pass: test:fast, grammar.test, corpus-matrix, claims.test, estate tier, check:links.
 
 **Model tier: Haiku.** Mechanical, but grep-first.
 
