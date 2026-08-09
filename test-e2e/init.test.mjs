@@ -685,7 +685,7 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
 // everything in-process (no disk churn between bundles); seeded CONTENT is
 // backend-independent, so the resulting fact count matches a real disk-backed
 // `npm run init:xl`/`init:xxl` run exactly. Real total, measured via this
-// same in-process seed: init:xl = 73,008 facts (`human` + persona-size
+// same in-process seed: init:xl = 63,971 facts (`human` + persona-size
 // large's human-medium/human-large + seon + conceptnet + aws/python/java +
 // wordnet-xl); init:xxl = same base with wordnet-full swapping in for
 // wordnet-xl, plus namenet. ±10% tolerance below — corpora drift slightly as
@@ -732,9 +732,9 @@ async function seedBundleSet(extensions) {
   }
 }
 
-test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (73,008 facts)", async () => {
+test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (63,971 facts)", async () => {
   const count = await seedBundleSet(INIT_XL_BUNDLES);
-  const EXPECTED = 73008;
+  const EXPECTED = 63971;
   assert.ok(
     count >= EXPECTED * 0.9 && count <= EXPECTED * 1.1,
     `init:xl's bundle set seeded ${count} facts, expected ~${EXPECTED} (±10%)`,

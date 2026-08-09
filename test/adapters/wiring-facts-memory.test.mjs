@@ -146,23 +146,24 @@ test("'what is a X <predicate>' for a known subject with NO facts under that rel
 test("a ConceptNet /r/Synonym pair resolves a vocabulary term that had NO direct facts, source cited", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-syn-"));
   try {
-    // the committed slice carries a real bidirectional "bucket"~"pail"
-    // /r/Synonym row — no fact is ever taught about "pail" itself.
+    // the committed slice carries a real bidirectional
+    // "stockholder"~"shareholder" /r/Synonym row — no fact is ever taught
+    // about "stockholder" itself.
     await appendFact(dir, {
-      subject: "bucket", predicate: "rdfs:subClassOf", object: "container",
+      subject: "shareholder", predicate: "rdfs:subClassOf", object: "investor",
       provenance: "ace:chat:t-syn@2026-07-07T00:00:00.000Z",
     });
     // control: a direct hit on the taught term needs no synonym detour
-    const direct = await runTurn("what is a bucket", { config: CONFIG, memoryDir: dir });
-    assert.match(direct.answer, /^you told me: bucket is a kind of container/);
+    const direct = await runTurn("what is a shareholder", { config: CONFIG, memoryDir: dir });
+    assert.match(direct.answer, /^you told me: shareholder is a kind of investor/);
     assert.doesNotMatch(direct.answer, /known synonym/);
 
-    const viaSyn = await runTurn("what is a pail", { config: CONFIG, memoryDir: dir });
+    const viaSyn = await runTurn("what is a stockholder", { config: CONFIG, memoryDir: dir });
     assert.equal(viaSyn.record.via, "fact");
     assert.equal(viaSyn.record.miss, false);
     assert.match(viaSyn.answer,
-      /^no direct facts about "pail" — showing its known synonym "bucket" \(source: corpus:conceptnet \/r\/Synonym\):/);
-    assert.match(viaSyn.answer, /you told me: bucket is a kind of container/);
+      /^no direct facts about "stockholder" — showing its known synonym "shareholder" \(source: corpus:conceptnet \/r\/Synonym\):/);
+    assert.match(viaSyn.answer, /you told me: shareholder is a kind of investor/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
