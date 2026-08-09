@@ -49,8 +49,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   figure per passenger on the same stage the chase squares use (the fox rides its real GLB;
   farmer/goat/cabbage get coloured silhouettes since the manifest carries no models for
   them), each crossing tweening as playback walks the plan; the 2D chip board stays as the
-  no-WebGL fallback. Remainder: `mudiii-about.html`'s copy still describes the town square
-  only — it should mention the crossing and the direct link.
+  no-WebGL fallback. The about page now covers the focus panel, playback and the direct
+  link, and the demo list carries the river entry with its own share posts.
 - [ ] **News page controls follow-up (2026-08-09 second field report)** — code-complete and
   merged, pending deployed verification: (1) "stop & forget" now retracts every news/research
   row, resets the session and card cache, and holds an emptied feed on screen; (2) the poll
