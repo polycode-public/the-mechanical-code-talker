@@ -53,7 +53,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   negation-scope filter, the temporal-window boundary in commit counting, and growing the
   under-covered C2 relative-embedded census cell.
 - [ ] **Lift the L2 CommonsenseQA number above zero** — `PLAN_CSQA_SELECTION.md` holds the design:
-  phases S1 (topic reader) through S5 (corpus rows), each its own measured round.
+  phases S1 (topic reader) through S5 (corpus rows), each its own measured round. S5 also
+  drops the duplicated `grammar.choice.several-ground` row in `grammar.jsonl` (same id twice,
+  found during plan verification).
 - [ ] **News page field report (2026-08-09, deployed site)** — five parts, from live use:
   (1) polls succeed (request log: USGS ok, Hacker News ok, Wikipedia featured ok at ~400KB) yet
   FACTS.FROM-NEWS and GRAPH.SIZE stay 0 — the polled text barely reaches the graph; (2) "poll
