@@ -68,13 +68,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Runtime-readable AGENTBENCH envelope stamp in the npm tarball** — bedrock-meter asks
   for a shipped `envelope.json` (or equivalent) in `files` so consumers replace hardcoded
   tripwire literals with a measured read.
-- [ ] **PLAN_RIVER_CROSSING.md — execute** — R0-R3 shipped (the trait vocabulary, the class
-  chain and spawn copy, the drive engine reading facts, and the river-crossing world with its
-  constraint derived from the same rows). R4 onward (the per-instance editor, the belief/plan
-  panels, the site phase) not started. One stated default the operator can override: a class
-  edit changes the next spawn, not standing instances (R4). The other Wikipedia variants
-  (missionaries-and-cannibals, bridge-and-torch) sequence as a later increment because they
-  need precondition shapes the domain engine lacks.
+- [ ] **PLAN_RIVER_CROSSING.md — R5-R8, paused on the operator's hold** — R0-R4 are shipped
+  (see the plan's Status header for the delivered detail). R5 belief/plan panels, R6 the
+  river scenario on the mudiii page + site wiring, R7 e2e/corpus, R8 the planner-rig river
+  domain resume only when the operator says so (weekly usage cycle). The Wikipedia variants
+  needing population counting and boat capacity sequence later still.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
   cycle should try next: relative-embedded chain resolution, a conditional-question lane, a

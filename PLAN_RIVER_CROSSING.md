@@ -1,7 +1,19 @@
 # PLAN_RIVER_CROSSING.md — river-crossing puzzles on the MUDIII square, with every imperative externalised as a fact
 
-Status: design. Nothing below is built. Every module path that is not marked "ships today" is a file
-that does not exist yet.
+Status: R0-R4 shipped; R5-R8 paused on the operator's hold (waiting out the weekly usage
+cycle) and resume only on their word. Delivered and merged to `main`, each phase's own section
+carrying its "shipped" note: R0 the trait vocabulary (five `mgx:` predicates, ontology rows,
+phrase-table sentences), R1 `src/domain/agent-traits.mjs` (class-chain resolver, idempotent
+spawn copy), R2 the engine reading drives/vision/mass/drain from fact rows with the config
+fallback (ten-tick fixture tape byte-identical; spawn copies under `spawn:` provenance), R3
+`corpus/worlds/src/river-crossing.jsonl` plus `constraintsFromDrives` (the puzzle constraint
+derived from the same `mgx:consumes`/`mgx:guards` rows that drive the chase; 7-move optimum,
+one-legal-opening and honest-miss all pinned in `test/services/river-crossing.test.mjs`), and
+R4 the per-instance editor (`src/services/agent-editor.mjs`, the actor card's instance/class
+tabs on the existing `#agentSelect`; a class edit changes the next spawn, not standing
+instances). Still open: R5 belief/plan panels, R6 the river scenario on the mudiii page plus
+site wiring, R7 e2e/corpus, R8 the planner-rig `river` domain, and (sequenced later still)
+the population-counting/boat-capacity puzzle variants.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every phase
 names its module paths, data structures, function signatures, test files, corpus rows and acceptance
