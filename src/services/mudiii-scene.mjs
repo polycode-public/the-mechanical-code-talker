@@ -886,7 +886,7 @@ export function mudiiiSceneScript({ canvasId, statusId, gridSize, cellSize } = {
       var statedAsset = manifestByKind[pres.model];
       if (statedAsset) asset = statedAsset;
       // eslint-disable-next-line no-console
-      else console.warn("tmct: no model named \"" + pres.model + "\" in the asset manifest — " + id + " keeps its " + kind + " mesh");
+      else console.warn("tmct: no model named '" + pres.model + "' in the asset manifest — " + id + " keeps its " + kind + " mesh");
     }
     var labelSprite = makeAgentLabel(pres && pres.label ? pres.label : id, asset ? asset.targetHeight : 1);
     labelSprite.name = "label-" + id;
