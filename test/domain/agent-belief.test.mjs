@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_VISION_RADIUS, believedCellOf, nearestBelievedTarget, beliefSnapshotFor,
+  DEFAULT_VISION_RADIUS, believedCellOf, beliefOriginOf, nearestBelievedTarget, beliefSnapshotFor,
 } from "../../src/domain/agent-belief.mjs";
 
 /** A folded world state carrying just what belief reads: where everything is,
@@ -188,6 +188,66 @@ test("beliefSnapshotFor reports a removed candidate as unknown rather than dropp
     { "goblin-1": null },
     "the belief panel keeps a row for it, saying the observer knows nothing",
   );
+});
+
+test("beliefOriginOf reports \"seen\" wherever believedCellOf reads ground truth", () => {
+  const state = stateOf({ "goblin-1": "cell-5-2" });
+  assert.equal(
+    beliefOriginOf("goblin-1", "fox-1", { x: 2, y: 2 }, state, { visionRadius: 4 }),
+    "seen",
+    "three Chebyshev steps away sits inside a radius-4 vision",
+  );
+  assert.equal(
+    believedCellOf("goblin-1", "fox-1", { x: 2, y: 2 }, state, { visionRadius: 4 }) !== null,
+    true,
+  );
+});
+
+test("beliefOriginOf reports the told turn wherever believedCellOf falls back to a told fact", () => {
+  const state = stateOf({ "goblin-1": "cell-9-9" });
+  const toldFacts = [
+    { subject: "goblin-1", toAgent: "fox-1", cell: "cell-6-2", turn: 4 },
+    { subject: "goblin-1", toAgent: "fox-1", cell: "cell-3-7", turn: 9 },
+  ];
+  assert.deepEqual(
+    beliefOriginOf("goblin-1", "fox-1", { x: 2, y: 2 }, state, { visionRadius: 2, toldFacts }),
+    { told: 9 },
+    "the later turn's told fact is the one that answered",
+  );
+});
+
+test("beliefOriginOf is null wherever believedCellOf finds nothing to report", () => {
+  const state = stateOf({ "goblin-1": "cell-9-9" });
+  assert.equal(
+    beliefOriginOf("goblin-1", "fox-1", { x: 2, y: 2 }, state, { visionRadius: 2 }),
+    null,
+    "outside vision and nothing told",
+  );
+});
+
+test("beliefOriginOf reports a removed target as null, the same as believedCellOf", () => {
+  const state = stateOf({ "goblin-1": "cell-3-3" }, ["goblin-1"]);
+  assert.equal(
+    beliefOriginOf("goblin-1", "fox-1", { x: 3, y: 3 }, state, { visionRadius: 4 }),
+    null,
+    "an eaten goblin has no origin to report even standing on the observer's own cell",
+  );
+});
+
+test("beliefOriginOf agrees with believedCellOf across the whole existing suite's fixtures", () => {
+  // Every case above and below this test pairs a null cell with a null
+  // origin and a non-null cell with a non-null origin — spot-checked here
+  // against a handful of the same states rather than repeating the whole file.
+  const cases = [
+    { state: stateOf({ "goblin-1": "cell-6-3", "well-1": "cell-4-3" }), target: "goblin-1", observer: "fox-1", cell: { x: 2, y: 3 }, opts: { visionRadius: 4 } },
+    { state: stateOf({}), target: "goblin-7", observer: "fox-1", cell: { x: 2, y: 2 }, opts: { visionRadius: 4, toldFacts: [{ subject: "goblin-7", toAgent: "fox-1", cell: "cell-8-8", turn: 1 }] } },
+    { state: stateOf({ "goblin-1": "somewhere" }), target: "goblin-1", observer: "fox-1", cell: { x: 2, y: 2 }, opts: { visionRadius: 40 } },
+  ];
+  for (const c of cases) {
+    const believedCell = believedCellOf(c.target, c.observer, c.cell, c.state, c.opts);
+    const origin = beliefOriginOf(c.target, c.observer, c.cell, c.state, c.opts);
+    assert.equal(believedCell === null, origin === null, `cell and origin agree on whether anything is believed about ${c.target}`);
+  }
 });
 
 test("an unparseable cell id is unknown, never a coordinate invented from it", () => {

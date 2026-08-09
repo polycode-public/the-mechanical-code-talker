@@ -1157,42 +1157,34 @@ function itemsPayload(liveItemIds, { state, itemCellOf, roles, taken = null }) {
 // ---- one tick --------------------------------------------------------------------
 
 /**
- * One full tick over `layout`: fold, believe, decide, move, run the ecology
- * pass, and append everything as this turn's stamped facts in a single write.
+ * The movement DECISION half of one tick, over `rows`/`state` as they stand
+ * right now: fold nothing further, believe, and decide — for every live
+ * predator and prey, exactly the rung, plan, goal, mood and belief a real
+ * tick would assign it, with none of a tick's EFFECTS (no eating, no spawn,
+ * no mass debit, no write). `runTownSquareTick` runs this and then applies
+ * the effects; `agentOutlook` (mudiii-turn.mjs) runs the SAME derivation and
+ * reads only the answers, so the two can never disagree about what an agent
+ * currently believes or plans.
  *
- * Predators move before prey, and that ordering is load-bearing for replay: a
- * prey's belief is computed against the PRE-move predator positions (it reacts
- * to where the predator was when it looked), while eating resolves on the
- * post-move ones (it is caught where the predator actually ends up).
- *
- * `manualMoves` is the one place a visitor's own hand reaches the world:
- * `{ agentId: cellId }`, or `{ agentId: { cell, facing } }`, checked before
- * that agent's belief chain runs. A legal request moves the agent under the
- * `driven` rung; an illegal one is refused and that agent decides for itself
- * this turn, so a rejected press never freezes it. A driven turn spends a
- * turn like any other: the ecology pass runs, and every other agent decides
- * and moves in this same call.
- *
- * Returns `{ turn, epoch, agents, items, ecology, rungs, activeWebs, writes }`.
- * `agents` and `items` and `ecology` are the frozen render payload — see
- * townSquareTickPayload, which projects exactly those three plus the turn.
- * `rungs` is the decision each live agent reached this turn ("driven" for a
- * hand-driven move, then "chase", "evade", "forage", "wander", and —
- * on a cast that carries or spins webs —
- * "carry", "deliver", "carried", "trapped", "hold-web", "build-web"); an agent
- * that decided and then died still has a rung and no longer has an `agents`
- * entry, which is the difference between a decision and a survivor.
- * `activeWebs` is every unexpired predator-built web, empty on a board with
- * none.
+ * Returns everything either caller needs to keep going: `{ lay, k, epoch,
+ * stamp, agents, rungs, movementWrites, postMovePlacements, tickWebs,
+ * traitRows, traitsOf, predators, prey, liveItemIds, foodIds, itemCellOf,
+ * itemMassOf, beliefContext }`. `agents[id]` carries exactly the shape a tick
+ * payload's own entry does before the ecology pass and mass debit finalise
+ * it — `{ role, cell, facing, goal, mood, plan, mass: 0, belief }` — so
+ * appending fields here would drift the tick's own frozen payload shape.
+ * `beliefContext[id]` is `{ cell, candidates, opts, foodCandidates, foodOpts
+ * }`, the exact inputs this agent's own belief snapshot was taken with —
+ * `agentOutlook`'s own "how it knows" column reads it through
+ * `beliefOriginOf`, off the same walk, so a panel's cell and its origin can
+ * never drift apart either.
  */
-export async function runTownSquareTick(memoryDir, {
-  layout, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
-  manualMoves = {},
+export function planTownSquareTurn(rows, state, {
+  layout, config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+  toldFacts = [], manualMoves = {},
 } = {}) {
   const lay = typeof layout === "string" ? TOWN_SQUARE_LAYOUTS[layout] : layout;
-  if (!lay) throw new Error(`runTownSquareTick: no such layout "${layout}"`);
-  const rows = readFactRows(await loadMemory(memoryDir));
-  const state = foldTownSquareState(rows);
+  if (!lay) throw new Error(`planTownSquareTurn: no such layout "${layout}"`);
   const k = state.tickCount + 1;
   const epoch = state.epoch;
   const stamp = (base) => snapshotSubject(base, k, epoch);
@@ -1204,6 +1196,7 @@ export async function runTownSquareTick(memoryDir, {
   const postMovePlacements = new Map();
   const agents = {};
   const rungs = {};
+  const beliefContext = {};
 
   const carriesPrey = config.carryPreyToWeb === true;
   const buildsWebs = config.buildWebs === true;
@@ -1442,6 +1435,7 @@ export async function runTownSquareTick(memoryDir, {
     }
 
     const belief = beliefSnapshotFor(agentId, beliefCell, beliefCandidates, state, beliefOpts);
+    const foodCandidates = foodVisionGated ? [] : beliefCandidates.filter((id) => foodIds.has(id));
     // beliefSnapshotFor's one call covers every candidate, food included, so
     // an ungated food call needs the food entries re-taken at the widened
     // radius too — otherwise the panel would show a crumb null while the
@@ -1449,9 +1443,12 @@ export async function runTownSquareTick(memoryDir, {
     // only: every key already exists from the call above, so this can never
     // reorder the panel.
     if (!foodVisionGated) {
-      const foodCandidates = beliefCandidates.filter((id) => foodIds.has(id));
       Object.assign(belief, beliefSnapshotFor(agentId, beliefCell, foodCandidates, state, foodBeliefOpts));
     }
+    // What a belief panel's own "how it knows" column re-derives per entry —
+    // the exact cell and opts this agent's belief was just taken with, so
+    // `beliefOriginOf` walks the identical rung `belief` did.
+    beliefContext[agentId] = { cell: beliefCell, candidates: beliefCandidates, opts: beliefOpts, foodCandidates, foodOpts: foodBeliefOpts };
     // A hand-picked facing beats the step it came with, which is what lets the
     // page walk an agent backwards without spinning it round.
     const facing = drivenFacing ?? plan[0] ?? restingFacing;
@@ -1463,6 +1460,53 @@ export async function runTownSquareTick(memoryDir, {
 
   for (const id of predators) decide(id, "predator");
   for (const id of prey) decide(id, "prey");
+
+  return {
+    lay, k, epoch, stamp, agents, rungs, movementWrites, postMovePlacements, tickWebs, traitRows, traitsOf,
+    predators, prey, liveItemIds, foodIds, itemCellOf, itemMassOf, beliefContext,
+  };
+}
+
+/**
+ * One full tick over `layout`: fold, believe, decide, move, run the ecology
+ * pass, and append everything as this turn's stamped facts in a single write.
+ *
+ * Predators move before prey, and that ordering is load-bearing for replay: a
+ * prey's belief is computed against the PRE-move predator positions (it reacts
+ * to where the predator was when it looked), while eating resolves on the
+ * post-move ones (it is caught where the predator actually ends up).
+ *
+ * `manualMoves` is the one place a visitor's own hand reaches the world:
+ * `{ agentId: cellId }`, or `{ agentId: { cell, facing } }`, checked before
+ * that agent's belief chain runs. A legal request moves the agent under the
+ * `driven` rung; an illegal one is refused and that agent decides for itself
+ * this turn, so a rejected press never freezes it. A driven turn spends a
+ * turn like any other: the ecology pass runs, and every other agent decides
+ * and moves in this same call.
+ *
+ * Returns `{ turn, epoch, agents, items, ecology, rungs, activeWebs, writes }`.
+ * `agents` and `items` and `ecology` are the frozen render payload — see
+ * townSquareTickPayload, which projects exactly those three plus the turn.
+ * `rungs` is the decision each live agent reached this turn ("driven" for a
+ * hand-driven move, then "chase", "evade", "forage", "wander", and —
+ * on a cast that carries or spins webs —
+ * "carry", "deliver", "carried", "trapped", "hold-web", "build-web"); an agent
+ * that decided and then died still has a rung and no longer has an `agents`
+ * entry, which is the difference between a decision and a survivor.
+ * `activeWebs` is every unexpired predator-built web, empty on a board with
+ * none.
+ */
+export async function runTownSquareTick(memoryDir, {
+  layout, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+  manualMoves = {},
+} = {}) {
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldTownSquareState(rows);
+  const {
+    lay, k, epoch, stamp, agents, rungs, movementWrites, postMovePlacements, tickWebs, traitRows, traitsOf,
+    predators, prey, liveItemIds, foodIds, itemCellOf, itemMassOf,
+  } = planTownSquareTurn(rows, state, { layout, config, roles, toldFacts, manualMoves });
+  const carriesPrey = config.carryPreyToWeb === true;
 
   const postMoveMass = new Map();
   for (const id of [...predators, ...prey]) {

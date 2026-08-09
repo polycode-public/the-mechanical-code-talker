@@ -13,11 +13,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   mudiiiTurn, pillsForMudiii, oneStepDirectionBetween, believedFactSentence,
-  beliefLineFor, taughtPlacementSubjects,
+  beliefLineFor, taughtPlacementSubjects, agentOutlook,
   parseTownSquareTeachLine, planTaughtTownSquareTriple, townSquareTeachConfirmation,
 } from "../../src/services/mudiii-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
-import { loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
+import {
+  loadMemory, readFactRows, appendFacts, appendRule, createInMemoryStore,
+} from "../../src/adapters/memory/core.mjs";
+import { loadWorld, worldsPackDir } from "../../src/adapters/corpus/worlds-pack.mjs";
+import { startTownSquareGame } from "../../src/services/predator-prey.mjs";
+import { layoutNamed } from "../../src/domain/town-square-world.mjs";
 
 async function withMemoryDir(prefix, fn) {
   const memoryDir = await mkdtemp(join(tmpdir(), prefix));
@@ -746,4 +751,90 @@ test("pillsForMudiii: the false-claim reflection uses the caller's own gridSize,
   const { claimPills } = pillsForMudiii(agents, {}, null, { gridSize: 14 }); // the chapel layout's own size
   const falseClaim = claimPills.find((p) => p.truth === false);
   assert.equal(falseClaim.text, "the goblin is at cell-10-10", "the point reflection of (5,5) through a 14-wide board's center is (10,10)");
+});
+
+// ---- agentOutlook: beliefs and plans recomputed live, no turn spent ---------
+
+test("agentOutlook writes no fact and does not advance the turn", () => withMemoryDir("tmct-mudiii-outlook-write-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const before = readFactRows(await loadMemory(memoryDir));
+  const outlook = await agentOutlook(memoryDir, { layout: "town-square" });
+  const after = readFactRows(await loadMemory(memoryDir));
+  assert.equal(after.length, before.length, "no fact was appended or retracted");
+  assert.equal(outlook.turn, 0, "the board is still at rest — nobody has ticked");
+}));
+
+test("agentOutlook's per-agent outlook carries a rung, a goal, a belief map, a beliefOrigin map and a plan, off the same walk the tick's own decision uses", () => withMemoryDir("tmct-mudiii-outlook-shape-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const outlook = await agentOutlook(memoryDir, { layout: "town-square" });
+  const ids = Object.keys(outlook.agents);
+  assert.deepEqual(ids, [...ids].sort(), "agent ids are sorted");
+  for (const id of ids) {
+    const entry = outlook.agents[id];
+    assert.ok(entry.rung, `${id} carries a rung`);
+    assert.equal(typeof entry.goal, "string");
+    assert.ok(Array.isArray(entry.plan), `${id}'s plan is an array, never null, on an open board`);
+    assert.ok(entry.traits && entry.traits.subject === id, `${id}'s traits are its own`);
+    assert.deepEqual(
+      Object.keys(entry.beliefOrigin).sort(), Object.keys(entry.belief).sort(),
+      "beliefOrigin names exactly the same subjects belief does",
+    );
+    for (const [subject, cell] of Object.entries(entry.belief)) {
+      assert.equal(cell === null, entry.beliefOrigin[subject] === null, `${id}'s belief and beliefOrigin agree about ${subject}`);
+    }
+  }
+  assert.equal(outlook.puzzle, null, "the town square carries no ferry action, so there is no puzzle plan to show");
+}));
+
+test("agentOutlook: two calls with no edit between them return deep-equal results", () => withMemoryDir("tmct-mudiii-outlook-repeat-", async (memoryDir) => {
+  const planHolder = { state: null };
+  await mudiiiTurn("visit the town square", { planHolder, memoryDir, env: {} });
+  const first = await agentOutlook(memoryDir, { layout: "town-square" });
+  const second = await agentOutlook(memoryDir, { layout: "town-square" });
+  assert.deepEqual(second, first);
+}));
+
+test("agentOutlook: the same rows in two different insertion orders return deep-equal results", async () => {
+  const world = loadWorld(worldsPackDir(), "town-square");
+  const tag = "world:town-square";
+  async function seeded(order) {
+    const memoryDir = createInMemoryStore();
+    const facts = order === "forward" ? world.facts : [...world.facts].reverse();
+    await appendFacts(memoryDir, facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag })));
+    const rules = order === "forward" ? world.rules : [...world.rules].reverse();
+    for (const rule of rules) await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
+    await startTownSquareGame(memoryDir, { layout: layoutNamed("town-square"), epoch: 0, predatorCount: 1, preyCount: 3 });
+    return memoryDir;
+  }
+  const forward = await agentOutlook(await seeded("forward"), { layout: "town-square" });
+  const reverse = await agentOutlook(await seeded("reverse"), { layout: "town-square" });
+  assert.deepEqual(reverse, forward, "reversing every fact and rule's insertion order changes nothing about the outlook");
+});
+
+test("agentOutlook's puzzle plan reads the shipped river-crossing world the same way the chat lane solves data/games/river.txt", async () => {
+  const world = loadWorld(worldsPackDir(), "river-crossing");
+  const memoryDir = createInMemoryStore();
+  await appendFacts(memoryDir, world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:river-crossing" })));
+  for (const rule of world.rules) {
+    await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:river-crossing" });
+  }
+  const outlook = await agentOutlook(memoryDir, {});
+  assert.deepEqual(outlook.agents, {}, "no town-square roster to decide over with no layout given");
+  assert.equal(outlook.puzzle.plan.length, 7, "the classic optimum");
+  assert.equal(outlook.puzzle.miss, null);
+});
+
+test("agentOutlook's puzzle plan reports the honest miss, never a shortened plan, once no farmer can cover every appetite", async () => {
+  const world = loadWorld(worldsPackDir(), "river-crossing");
+  const memoryDir = createInMemoryStore();
+  const widened = [...world.facts, { subject: "fox", predicate: "mgx:consumes", object: "cabbage" }];
+  await appendFacts(memoryDir, widened.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:river-crossing" })));
+  for (const rule of world.rules) {
+    await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:river-crossing" });
+  }
+  const outlook = await agentOutlook(memoryDir, {});
+  assert.equal(outlook.puzzle.plan, null, "no crossing sequence survives three mutually exclusive pairs guarded by one farmer");
+  assert.match(outlook.puzzle.miss, /no plan found within \d+ moves/);
 });

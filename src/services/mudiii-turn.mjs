@@ -18,16 +18,21 @@ import {
   agentKindOf, liveIdsOfKind, layoutNamed, isFoodId,
 } from "../domain/town-square-world.mjs";
 import {
-  MUDIII_ROLES, foldTownSquareState, startTownSquareGame, runTownSquareTick,
+  MUDIII_ROLES, foldTownSquareState, startTownSquareGame, runTownSquareTick, planTownSquareTurn,
   placeFood, roleOfId, beliefSnapshotFor,
 } from "./predator-prey.mjs";
 import { snapshotSubject, parseSnapshotSubject } from "./adventure.mjs";
 import { correctMisspellings, QUESTION_LEAD_RE } from "../domain/interpret/normalize.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
-import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
+import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
-import { agentTraitsOf } from "../domain/agent-traits.mjs";
+import { agentTraitsOf, constraintsFromDrives } from "../domain/agent-traits.mjs";
+import { beliefOriginOf } from "../domain/agent-belief.mjs";
+import {
+  compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
+} from "../domain/domain.mjs";
+import { findActionPath } from "../domain/planning.mjs";
 
 const PREDATOR_KIND = MUDIII_ROLES.predator.kind; // "fox"
 const PREY_KIND = MUDIII_ROLES.prey.kind;         // "goblin"
@@ -520,6 +525,112 @@ async function mudiiiBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_
     lane: "game-inform",
     note: `MUDIII — belief snapshot rendered for ${observerId} via beliefSnapshotFor (read-only, no tick run)`,
   };
+}
+
+// ---- beliefs and plans, recomputed live, no turn spent ----------------------
+
+// The one puzzle this plan ships (PLAN_RIVER_CROSSING.md's R3): a world that
+// carries no "ferry onto" action-signature has no puzzle plan to compute, so
+// riverPuzzleOutlook stays null on the town square and any other board with
+// no ferry action rule.
+const RIVER_CROSSING_ACTION = "ferry onto";
+const RIVER_CROSSING_GOAL = [{ universal: true, term: "passenger", predicate: "currently-in", object: "bank-west" }];
+
+/** The river-crossing puzzle's own plan, recomputed from `rows`/`ruleRows` as
+ *  they stand right now: the world's own action rules plus whatever
+ *  action-constraint rows the drive facts themselves imply
+ *  (constraintsFromDrives), searched the same way the chat lane solves
+ *  data/games/river.txt. Null on a world whose rule rows carry no "ferry
+ *  onto" action-signature, or whose action domain does not carry a
+ *  "passenger" class the goal can quantify over. Returns `{ moves, plan,
+ *  miss }`: `moves` is every legal move from the CURRENT position (the empty
+ *  list when nothing may move), `plan` is the found action sequence or null,
+ *  `miss` is null when a plan was found and the stated reason otherwise — a
+ *  budget decline as well as an exhausted search, never a shortened plan
+ *  either way. Pure. */
+function riverPuzzleOutlook(rows, ruleRows) {
+  const hasFerryAction = (ruleRows || []).some((r) => r.kind === "action-signature" && r.name === RIVER_CROSSING_ACTION);
+  if (!hasFerryAction) return null;
+  const derived = constraintsFromDrives(rows).map((slots) => ({ name: RIVER_CROSSING_ACTION, kind: "action-constraint", slots }));
+  const domain = compileDomain(rows, [...(ruleRows || []), ...derived]);
+  let isGoal;
+  try {
+    isGoal = compileGoal(RIVER_CROSSING_GOAL, domain);
+  } catch {
+    return null; // this board's action domain is not the river puzzle's own shape
+  }
+  const start = stateFromFacts(rows, domain);
+  const moves = movesFromRules(start, domain).map((m) => m.action.label);
+  const maxDepth = DEFAULT_GAME_CONFIG.planning.maxDepth;
+  try {
+    const found = findActionPath(start, isGoal, (s) => movesFromRules(s, domain), { maxDepth, stateKey: stateKeyFor });
+    return { moves, plan: found ? found.actions : null, miss: found ? null : `no plan found within ${maxDepth} moves` };
+  } catch (err) {
+    if (!(err instanceof PlanBudgetError)) throw err;
+    return { moves, plan: null, miss: `action grounding count ${err.groundings} exceeds the budget of ${err.budget}` };
+  }
+}
+
+/** Every live agent's belief map and plan, computed from the store as it
+ *  stands right now, without writing a fact or advancing a turn. Runs the
+ *  SAME derivation runTownSquareTick's own decision phase performs
+ *  (predator-prey.mjs's planTownSquareTurn) and reads only the answers — the
+ *  rung, the goal line, the belief snapshot and the plan each live agent
+ *  would carry into its NEXT tick — never a tick's effects (no eating, no
+ *  spawn, no mass debit, no write).
+ *
+ *  `layout` is optional here (unlike runTownSquareTick, which requires one):
+ *  a board with no town-square roster to decide over — the puzzle world
+ *  before R6 wires it to a layout, or a caller asking only about `puzzle` —
+ *  still gets its `puzzle` field computed, with `agents` empty rather than a
+ *  thrown "no such layout".
+ *
+ *  Returns `{ turn, agents: { id: { rung, goal, belief, beliefOrigin, plan,
+ *  traits } }, puzzle: { moves, plan, miss } | null }`. `beliefOrigin` mirrors
+ *  `belief`'s own key set, each value `"seen"`, `{ told: turn }` or null —
+ *  `beliefOriginOf` walking the exact cell/candidates/opts the tick's own
+ *  belief snapshot was taken with (planTownSquareTurn's `beliefContext`), so
+ *  a panel's cell and its "how it knows" label can never disagree.
+ *
+ *  Deterministic: a pure function of the store's current rows (and
+ *  `toldFacts`), whatever order either arrived in. Two calls with no edit
+ *  between them, or the same rows fed in twice in a different order, return
+ *  deep-equal results. */
+export async function agentOutlook(memoryDir, {
+  layout = null, toldFacts = [], config = DEFAULT_GAME_CONFIG.mudiii, roles = MUDIII_ROLES,
+} = {}) {
+  const memory = await loadMemory(memoryDir);
+  const rows = readFactRows(memory);
+  const ruleRows = readRuleRows(memory);
+  const state = foldTownSquareState(rows);
+
+  const outlookAgents = {};
+  if (layout) {
+    const { agents, rungs, beliefContext, traitRows } =
+      planTownSquareTurn(rows, state, { layout, config, roles, toldFacts, manualMoves: {} });
+    for (const id of Object.keys(agents).sort()) {
+      const ctx = beliefContext[id];
+      const beliefOrigin = {};
+      for (const candidateId of ctx.candidates) {
+        if (candidateId === id) continue;
+        beliefOrigin[candidateId] = beliefOriginOf(candidateId, id, ctx.cell, state, ctx.opts);
+      }
+      for (const candidateId of ctx.foodCandidates) {
+        if (candidateId === id) continue;
+        beliefOrigin[candidateId] = beliefOriginOf(candidateId, id, ctx.cell, state, ctx.foodOpts);
+      }
+      outlookAgents[id] = {
+        rung: rungs[id],
+        goal: agents[id].goal,
+        belief: agents[id].belief,
+        beliefOrigin,
+        plan: agents[id].plan,
+        traits: agentTraitsOf(traitRows, id),
+      };
+    }
+  }
+
+  return { turn: state.tickCount, agents: outlookAgents, puzzle: riverPuzzleOutlook(rows, ruleRows) };
 }
 
 function noLivePlacedSubjectAnswer(kind) {

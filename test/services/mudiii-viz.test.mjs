@@ -663,7 +663,7 @@ test("renderMudiiiHtml: the actor card is wired to render on entering edit mode 
   assert.match(html, /renderEditPlacements\(\);\s*renderActorEditor\(\);/, "the card draws once on entering edit mode");
   const onChange = /el\("agentSelect"\)\.addEventListener\("change", function \(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(onChange);
-  assert.match(onChange[1], /if \(editing\) renderActorEditor\(\);/, "picking a new agent refreshes the card while editing");
+  assert.match(onChange[1], /if \(editing\) \{ renderActorEditor\(\); renderOutlookPanel\(\); \}/, "picking a new agent refreshes the card and the outlook panel while editing");
 });
 
 test("renderMudiiiHtml: the two tabs write to the instance or to its class, never a second subject scheme", () => {
@@ -688,6 +688,66 @@ test("renderMudiiiHtml: the actor card reuses the world editor's own suggestion 
   assert.match(html, /window\.tmct\.page\.relatedForTerm/);
   assert.match(html, /el\("actorEditorPills"\)\.addEventListener\("click"/);
   assert.match(html, /el\("actorEditorText"\)\.addEventListener\("input", onActorEditorChanged\);/);
+});
+
+// ---- the belief and plan panels (R5: recomputed live, no turn spent) ----
+
+test("renderMudiiiHtml: the outlook panel carries a belief table, a plan line and a puzzle-plan line", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /id="mudiiiOutlookPanel"/);
+  assert.match(html, /id="outlookBeliefTable"/);
+  assert.match(html, /id="outlookBeliefBody"/);
+  assert.match(html, /id="outlookPlanText"/);
+  assert.match(html, /id="outlookPuzzlePlanText"/);
+});
+
+test("renderMudiiiHtml: the outlook panel is refreshed on boot, after every world edit and after every actor edit", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /async function refreshOutlook\(\)/);
+  assert.match(html, /session\.outlook\(\)/, "refreshOutlook reads the session's own outlook() read path, not a fabricated one");
+  const boot = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(boot);
+  assert.match(boot[1], /renderAll\(\);\s*await refreshOutlook\(\);/, "boot refreshes the panel once the opening board is drawn");
+  const applyEditor = /async function applyEditorText\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(applyEditor);
+  assert.match(applyEditor[1], /await refreshOutlook\(\);/, "a world edit refreshes the panel");
+  const applyActorEditor = /async function applyActorEditorText\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(applyActorEditor);
+  assert.match(applyActorEditor[1], /await refreshOutlook\(\);/, "an actor edit refreshes the panel");
+});
+
+test("renderMudiiiHtml: a null belief renders as the stated gap, never as a blank cell", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  assert.match(html, /nothing seen, nothing told/);
+  const fn = /function beliefOriginText\(cell, origin\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(fn, "the null-cell wording lives in its own named function, not inlined at each call site");
+  assert.match(fn[1], /if \(!cell\) return "nothing seen, nothing told";/);
+});
+
+test("renderMudiiiHtml: the belief table's own render function names the cell and how the actor knows it", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const fn = /function renderOutlookPanel\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(fn);
+  assert.match(fn[1], /entry\.belief\[subject\]/);
+  assert.match(fn[1], /entry\.beliefOrigin\[subject\]/);
+  assert.match(fn[1], /entry\.plan/);
+  assert.match(fn[1], /entry\.rung/);
+  assert.match(fn[1], /entry\.goal/);
+});
+
+test("renderMudiiiHtml: the puzzle plan panel names both the found plan and the honest miss, never a shortened plan", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const fn = /function renderOutlookPanel\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(fn);
+  assert.match(fn[1], /found " \+ n \+ " move/, "a found puzzle plan states how many moves it takes");
+  assert.match(fn[1], /puzzle\.miss/, "an unsolved puzzle states the reason rather than a partial plan");
+});
+
+test("renderMudiiiHtml: entering edit mode refreshes the outlook panel alongside the actor editor", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const fn = /async function enterEditMode\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(fn);
+  assert.match(fn[1], /renderActorEditor\(\);\s*await refreshOutlook\(\);/);
 });
 
 // ---- roleOfAgentId ------------------------------------------------------

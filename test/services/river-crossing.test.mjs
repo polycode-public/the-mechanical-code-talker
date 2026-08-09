@@ -84,3 +84,27 @@ test("giving the fox a second appetite the farmer cannot cover reports the hones
   const { result } = solve(facts, world.rules);
   assert.equal(result, null, "no crossing sequence survives three mutually exclusive pairs guarded by one farmer");
 });
+
+test("editing the fox's own appetite and putting it back walks the plan through retract, shortened, honest miss, restore — each recomputed fresh from the rows alone, with the original seven moves returning byte-identically", () => {
+  const world = riverWorld();
+  const original = solve(world.facts, world.rules).result;
+  assert.equal(original.actions.length, 7, "the classic optimum, taken as the baseline to restore to");
+
+  const withoutGoatAppetite = world.facts.filter(
+    (r) => !(r.subject === "fox" && r.predicate === "mgx:consumes" && r.object === "goat"),
+  );
+  const shortened = solve(withoutGoatAppetite, world.rules).result;
+  assert.ok(shortened, "a crossing plan still exists with one fewer constraint");
+  assert.ok(shortened.actions.length < 7, "retracting a consumes row can only widen the search, never lengthen the plan");
+
+  const withCabbageAppetiteToo = [...world.facts, { subject: "fox", predicate: "mgx:consumes", object: "cabbage" }];
+  const miss = solve(withCabbageAppetiteToo, world.rules).result;
+  assert.equal(miss, null, "three mutually exclusive pairs guarded by one farmer leaves nothing standing");
+
+  const restored = solve(world.facts, world.rules).result;
+  assert.deepEqual(
+    restored.actions.map((a) => a.label),
+    original.actions.map((a) => a.label),
+    "recomputing from the world's own unedited rows returns the original seven-move plan byte-identically",
+  );
+});
