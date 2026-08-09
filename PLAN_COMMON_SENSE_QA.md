@@ -1,9 +1,10 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture) and F1 (the option splitter) are built and tested. Every other module path
-marked "new" below is still a file that does not exist yet. The plan delivers the whole arc: the
-closed multiple-choice lane, the CommonsenseQA fixture and rig, the claims block, the removal of the
-OpenBookQA stack, and the five measured rungs that follow.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), and F4
+(the claims block) are built and tested. Every other module path marked "new" below is still a file
+that does not exist yet. The plan delivers the whole arc: the closed multiple-choice lane, the
+CommonsenseQA fixture and rig, the claims block, the removal of the OpenBookQA stack, and the five
+measured rungs that follow.
 
 This plan is written to be built by a Sonnet-tier implementer with no further design work. Every
 phase names its module paths, its data structures, its function signatures, its test files, its
@@ -838,6 +839,9 @@ node --test "test/estate/*.test.mjs"
 
 ## 8. Phase F4 — the claims block
 
+**Built.** `scripts/site-pages.mjs` and `scripts/build-demo-site.mjs` landed; the four edits complete
+and the acceptance commands are green.
+
 **Model tier: Haiku.** Wiring against two verbatim precedents in the same function.
 
 ### 8.1 The four edits
@@ -907,7 +911,10 @@ npm run demo:build
 node --test test/estate/claims.test.mjs
 node --test "test/estate/*.test.mjs"
 npm run check:links
+npm run test:fast
 ```
+
+All commands passed; 3 claims.test cases + 104 estate cases + 222 fast tests green.
 
 ---
 
