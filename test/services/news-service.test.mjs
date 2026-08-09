@@ -339,6 +339,59 @@ test("buildFeed is deterministic: the same state and the same now render byte-id
   assert.deepEqual(first, second);
 });
 
+// ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ---------------
+//
+// The recorded Wikimedia fixture's own text ("A tariff is a tax imposed on
+// imported goods and services.") only ever grounds an identity fact — real
+// prose the strict recognizer can turn into a relation is what proves the
+// gate lets a genuine report through, so this exercises the real
+// ingestNewsSnapshot/appendFacts paths rather than the fixture's exact
+// wording. `now` runs off the real clock: the strict recognizer's own
+// assert-turn write (ingestText -> runTurn -> teachFact) stamps its OWN
+// assertion with the wall clock regardless of the caller's `observedAt`, and
+// a fixed simulated `now` would then read that stamp as outside the window.
+test("buildFeed's gate: a research-tagged definition and an identity-only report never head a card, while a genuinely reported, anchored fact does", async () => {
+  const { ctx } = await makeCtx({ now: () => new Date().toISOString() });
+
+  // The enrichment loop's own provenance (PLAN_NEWS_FEED.md section 17.1): a
+  // definition the graph looked up, stamped fresh, that used to enter the
+  // window as though a source had reported it.
+  await appendFacts(ctx.memoryDir, [
+    { subject: "kilometre", predicate: "rdfs:subClassOf", object: "unit", provenance: "research:simple-wikipedia:kilometre" },
+  ]);
+
+  // One contemporary item: an identity-only sentence (the recorded fixture's
+  // own shape) plus two relation sentences — one of them digit-anchored.
+  const snapshot = snapshotFor(
+    "wikimedia-featured", "1",
+    "A tariff is a tax imposed on imported goods and services.",
+    "Kumamoto is a city. Kumamoto has a population of 1738000.",
+  );
+  ctx.state.items = [snapshot];
+  await ingestNewsSnapshot(ctx, snapshot);
+
+  const feed = await buildFeed(ctx);
+  assert.equal(feed.seedFallback, false, "a genuinely anchored reported fact takes the feed out of the seed fallback");
+
+  const hubs = feed.items.map((it) => it.hub);
+  assert.ok(!hubs.includes("kilometre"), `a research-tagged definition never heads a card: ${JSON.stringify(hubs)}`);
+  assert.ok(!hubs.includes("tariff"), `an identity-only report never heads a card: ${JSON.stringify(hubs)}`);
+  assert.ok(!hubs.includes("unit"), `a class term never heads a card: ${JSON.stringify(hubs)}`);
+  assert.ok(!hubs.includes("city"), `a class term never heads a card: ${JSON.stringify(hubs)}`);
+  assert.ok(hubs.includes("kumamoto"), `a genuinely reported, digit-anchored fact heads its own card: ${JSON.stringify(hubs)}`);
+
+  for (const item of feed.items) {
+    const reportedCount = item.factIds.length - item.background.length;
+    assert.ok(reportedCount > 0, `card "${item.hub}" carries at least one reported fact id: ${JSON.stringify(item)}`);
+  }
+
+  const kumamotoItem = feed.items.find((it) => it.hub === "kumamoto");
+  assert.ok(kumamotoItem.sources.some((s) => s.url), "the Kumamoto item carries its source link");
+  assert.ok(kumamotoItem.background.length > 0, "the identity fact rides along as background, not as its own card");
+  assert.match(kumamotoItem.backgroundParagraph, /city/, "the collapsed line carries what the paragraph dropped");
+  assert.ok(!kumamotoItem.paragraph.includes("tariff"), "an unrelated identity-only report never leaks into another card's background");
+});
+
 // ---- metrics ----------------------------------------------------------------
 
 test("cycleMetrics computes strict and optimistic grounding rate as two separate columns, plus the plain count deltas", () => {

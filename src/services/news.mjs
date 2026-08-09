@@ -40,6 +40,7 @@
 import { normFactTerm, normFactPredicate, factIdFor, sha256Bytes } from "../domain/hash.mjs";
 import {
   newsWindowRows, scoreHubs, subgraphAround, buildTermAdjacency, renderNewsParagraph, buildNewsItems, evictNewsFacts,
+  conceptTerms, isQuantityTerm,
 } from "../domain/news-feed.mjs";
 import {
   createTermLedger, bumpTerms, rankedTerms, markTerm, groundedSweep, ledgerPayload, ledgerFromPayload,
@@ -291,9 +292,19 @@ function collectItemSources(subgraphRows, sourcesByFactId) {
 /** The item-assembly buildNewsItems runs internally, exposed here so
  *  buildFeed's seed-only fallback (S1: score hubs over the WHOLE graph, not
  *  just news/research-tagged rows) can reuse the same shape without widening
- *  buildNewsItems's own, already-pinned window contract. */
+ *  buildNewsItems's own, already-pinned window contract.
+ *
+ *  The newsworthiness gate's test 2 only (PLAN_NEWS_FEED.md section 17.6): a
+ *  seed-only graph carries no news rows at all, so tests 1 (reported) and 3
+ *  (anchored) have nothing to read — every candidate would fail them
+ *  trivially and empty the page, which is exactly the fallback exists to
+ *  prevent. Dropping class and bare-quantity terms still holds: neither ever
+ *  makes a good card title, seed graph or not. */
 function assembleNewsItems(rows, windowRows, { now, limit, sourcesByFactId }) {
-  const hubs = scoreHubs(rows, windowRows, { limit });
+  const concepts = conceptTerms(rows);
+  const candidates = scoreHubs(rows, windowRows, { limit: Infinity })
+    .filter(({ term }) => !concepts.has(term) && !isQuantityTerm(term));
+  const hubs = candidates.slice(0, limit);
   const adjacency = buildTermAdjacency(rows);
   const items = hubs.map(({ term, changed }) => {
     const subgraphRows = subgraphAround(rows, term, { adjacency });
@@ -307,6 +318,8 @@ function assembleNewsItems(rows, windowRows, { now, limit, sourcesByFactId }) {
       paragraph: renderNewsParagraph(term, subgraphRows),
       tier: tierOfRows(subgraphRows),
       sources: collectItemSources(subgraphRows, sourcesByFactId),
+      background: [],
+      backgroundParagraph: "",
     };
   });
   return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));
@@ -784,7 +797,8 @@ function renderFeedText(feed, focus) {
       const seedTag = feed.seedFallback ? " (from the seed graph — start to poll live sources)" : "";
       const sourceNames = it.sources.map((s) => s.title || s.url).filter(Boolean);
       const sourcesText = sourceNames.length ? ` sources: ${sourceNames.join(", ")}` : "";
-      return `${i + 1}. ${it.paragraph} (${it.tier || "unranked"})${sourcesText}${seedTag}`;
+      const backgroundText = it.backgroundParagraph ? ` what the graph already knew: ${it.backgroundParagraph}` : "";
+      return `${i + 1}. ${it.paragraph} (${it.tier || "unranked"})${sourcesText}${seedTag}${backgroundText}`;
     })
     .join("\n");
 }

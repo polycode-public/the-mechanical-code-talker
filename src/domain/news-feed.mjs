@@ -69,6 +69,181 @@ export function newsWindowRows(rows, { now, windowMs }) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The newsworthiness gate (PLAN_NEWS_FEED.md section 17). A card reports what
+// a contemporary source said inside the window; everything the graph looked
+// up, inferred or already held is background. classifyNewsRow bands a single
+// row; reportedRows and newsworthyHubs narrow buildNewsItems downstream of
+// newsWindowRows/scoreHubs, which keep their own behaviour unchanged.
+// ---------------------------------------------------------------------------
+
+// Identity predicates and their negative twins — what a thing IS, never what
+// happened to it, so a row under any of these bands background whoever wrote
+// it. Distinct from renderNewsParagraph's own narrower IDENTITY_PREDICATES
+// (below), which only needs the two positive forms for its identity sentence.
+const GATE_IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf", "mgxneg:subClassOf", "owl:disjointWith"]);
+
+// Every determiner a universal quantifier is ever stored under — today only
+// "every" is written (chat.mjs's own teach lane), "all"/"each" kept here so a
+// future writer of either still bands background rather than heading a card.
+const UNIVERSAL_QUANTIFIERS = new Set(["every", "all", "each"]);
+
+// A REPORT is `news:` or `news-fixture:` only — `research:` counts for the
+// window (isNewsProvenance, above) but never for the gate: an enrichment
+// lookup is something the graph asked for, not something a source reported.
+const REPORT_PROVENANCE_RE = /(?:^|:)(?:news|news-fixture):/;
+
+// A term the anchoring test (newsworthyHubs, below) must treat as prior
+// knowledge — matched at any segment boundary, including after a " | "
+// union, so a row folded from two assertions counts if either one does.
+const CORPUS_OR_TEACH_SEGMENT_RE = /(?:^|:|\|\s*)(?:corpus|teach):/;
+
+const hasNonEmptyArray = (value) => Array.isArray(value) && value.length > 0;
+
+// The provenance HEAD is the first whitespace-delimited token — the same cut
+// point trust.mjs's own provenanceTagToSource uses, so "entailed:" is read
+// off the row's OWN assertion even when a union has appended a second tag
+// after it.
+const provenanceHead = (provenance) => String(provenance || "").trim().split(/\s+/)[0] || "";
+
+/** "derived" | "background" | "reported" for one row, pure over the row plus
+ *  `now` (PLAN_NEWS_FEED.md section 17.3, step one). Rules apply in order,
+ *  first hit wins: a syllogised row is derived; an identity, universal or
+ *  non-news-provenance row is background; a news/news-fixture row with no
+ *  readable or in-window stamp is background; everything else is reported. */
+export function classifyNewsRow(row, { now, windowMs }) {
+  if (provenanceHead(row.provenance).startsWith("entailed:")
+    || hasNonEmptyArray(row.environments) || hasNonEmptyArray(row.justification)) {
+    return "derived";
+  }
+  if (GATE_IDENTITY_PREDICATES.has(row.predicate)) return "background";
+  if (UNIVERSAL_QUANTIFIERS.has(String(row.quantifier || "").toLowerCase())) return "background";
+  if (!REPORT_PROVENANCE_RE.test(String(row.provenance || ""))) return "background";
+  const t = rowObservedMs(row);
+  const nowMs = toMs(now);
+  if (!Number.isFinite(t) || t < nowMs - windowMs || t > nowMs) return "background";
+  return "reported";
+}
+
+/** The "reported" subset of `rows` — counting occurrences over this set,
+ *  rather than the wider news window, is what makes a hub's `changedCount`
+ *  count reports rather than lookups (newsworthyHubs, below). */
+export function reportedRows(rows, { now, windowMs }) {
+  return rows.filter((row) => classifyNewsRow(row, { now, windowMs }) === "reported");
+}
+
+/** The class objects of every identity row anywhere in `rows` — what the
+ *  graph's own `rdf:type`/`rdfs:subClassOf` (and negative twins) rows name as
+ *  a CLASS, regardless of who reported the identity fact. A hub test, not a
+ *  row band: a term absent from this set is not a class by the graph's own
+ *  account. */
+export function conceptTerms(rows) {
+  const terms = new Set();
+  for (const row of rows) {
+    if (!GATE_IDENTITY_PREDICATES.has(row.predicate)) continue;
+    const t = normFactTerm(row.object);
+    if (t) terms.add(t);
+  }
+  return terms;
+}
+
+const BARE_NUMBER_RE = /^-?[£$€]?\d[\d,]*(?:\.\d+)?%?$/;
+const ISO_DATE_RE = /^\d{4}-\d{2}(-\d{2})?$/;
+const QUARTER_RE = /^q[1-4]\s+\d{4}$/i;
+const LEADING_DIGIT_PHRASE_RE = /^\d[\d,.]*\s+\S/;
+const TRAILING_NUMBER_PHRASE_RE = /\s\d[\d,.]*$/;
+
+/** True when the WHOLE term is a number, a date or a quantity phrase ("q3
+ *  2026", "7,409 square kilometres", "1,683,115") — never a term a hub may
+ *  head: a date is when a card happened, and an amount is what it says. */
+export function isQuantityTerm(term) {
+  const t = String(term ?? "").trim().toLowerCase();
+  if (!t) return false;
+  if (BARE_NUMBER_RE.test(t)) return true;
+  if (ISO_DATE_RE.test(t)) return true;
+  if (QUARTER_RE.test(t)) return true;
+  if (LEADING_DIGIT_PHRASE_RE.test(t)) return true;
+  if (TRAILING_NUMBER_PHRASE_RE.test(t)) return true;
+  return false;
+}
+
+/** True when `term` contains a digit run anywhere — the anchor a specific
+ *  measurement gives a seeded hub, weaker than isQuantityTerm's "the whole
+ *  term IS a number" test. */
+export function hasQuantityMarker(term) {
+  return /\d/.test(String(term ?? ""));
+}
+
+/** scoreHubs's gated twin: from `reported` rows only, counts terms (subject
+ *  and object, STOP_SET removed) as `changed`, then keeps a term only when it
+ *  passes all three hub tests (PLAN_NEWS_FEED.md section 17.3, step two):
+ *  reported (it is why the term is a candidate at all), not a class or a bare
+ *  quantity, and anchored — either the window introduced the term outright,
+ *  or one of its own reported rows joins it to something window-new or
+ *  carrying a digit run. `rows` is the WHOLE fact set (conceptTerms and the
+ *  anchoring test both read prior knowledge from it, not just the window). */
+export function newsworthyHubs(rows, reported, { now, windowMs, limit = 6, adjacency = null } = {}) {
+  const adj = adjacency ?? buildTermAdjacency(rows);
+  const concepts = conceptTerms(rows);
+  const nowMs = toMs(now);
+  const startMs = nowMs - windowMs;
+
+  function isWindowNewTerm(term) {
+    const idxs = adj.byTerm.get(term);
+    if (!idxs || !idxs.length) return false;
+    for (const idx of idxs) {
+      const row = rows[idx];
+      const t = rowObservedMs(row);
+      if (!(Number.isFinite(t) && t >= startMs && t <= nowMs)) return false;
+      if (CORPUS_OR_TEACH_SEGMENT_RE.test(String(row.provenance || ""))) return false;
+    }
+    return true;
+  }
+
+  const counts = new Map();
+  const anchors = new Map();
+  for (const row of reported) {
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    for (const [term, other] of [[s, o], [o, s]]) {
+      if (!term || STOP_SET.has(term)) continue;
+      counts.set(term, (counts.get(term) || 0) + 1);
+      let others = anchors.get(term);
+      if (!others) anchors.set(term, (others = new Set()));
+      if (other) others.add(other);
+    }
+  }
+
+  const hubs = [];
+  for (const [term, changed] of counts) {
+    if (concepts.has(term) || isQuantityTerm(term)) continue;
+    let anchored = isWindowNewTerm(term);
+    if (!anchored) {
+      for (const other of anchors.get(term) ?? []) {
+        if (hasQuantityMarker(other) || isWindowNewTerm(other)) { anchored = true; break; }
+      }
+    }
+    if (!anchored) continue;
+    hubs.push({ term, changed });
+  }
+
+  return hubs
+    .sort((a, b) => b.changed - a.changed || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0))
+    .slice(0, limit);
+}
+
+/** A card's two-hop sub-graph, divided by the row-band gate: `reported` rows
+ *  (what heads the card) and everything else (the collapsed background
+ *  line). `reportedIds` is the reported-row id set the caller already
+ *  computed over the whole fact set (reportedRows' output, by id). */
+export function splitCardRows(subgraphRows, reportedIds) {
+  const ids = reportedIds instanceof Set ? reportedIds : new Set(reportedIds || []);
+  const reported = [];
+  const background = [];
+  for (const row of subgraphRows) (ids.has(row.id) ? reported : background).push(row);
+  return { reported, background };
+}
+
 /** Counts window facts per term (subject and object, normalized, STOP_SET
  *  removed) -> [{ term, changed }] sorted changed desc then term asc, capped
  *  at `limit`. */
@@ -178,12 +353,23 @@ const SENTENCE_CAP = 5;
  *  8.3): identity first, then the hub's own relations grouped by predicate in
  *  FACT_PREDICATE_PHRASES table order, then one closing sentence naming up to
  *  three second-hop facts. Every sentence shown is a grounded fact, never a
- *  paraphrase of prose the grammar could not read. */
-export function renderNewsParagraph(hub, subgraphRows) {
+ *  paraphrase of prose the grammar could not read.
+ *
+ *  `reportedIds` (PLAN_NEWS_FEED.md section 17.4), when given, restricts the
+ *  relation sentences and the closing "Around it" sentence to rows in that
+ *  set — the identity sentence keeps drawing from every row it's handed,
+ *  since "what is this thing" is the first question a reader has regardless
+ *  of who reported it. Defaults to null, meaning every row renders, so every
+ *  existing caller and pin is unaffected. */
+export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = {}) {
   const hubTerm = normFactTerm(hub);
+  const isReported = reportedIds === null
+    ? () => true
+    : (id) => (reportedIds instanceof Set ? reportedIds.has(id) : reportedIds.includes(id));
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
+  const reportedHubRows = hubRows.filter((r) => isReported(r.id));
   const secondHopRows = subgraphRows.filter(
-    (r) => normFactTerm(r.subject) !== hubTerm && normFactTerm(r.object) !== hubTerm,
+    (r) => normFactTerm(r.subject) !== hubTerm && normFactTerm(r.object) !== hubTerm && isReported(r.id),
   );
 
   const sentences = [];
@@ -196,7 +382,7 @@ export function renderNewsParagraph(hub, subgraphRows) {
 
   for (const predicate of Object.keys(FACT_PREDICATE_PHRASES)) {
     if (IDENTITY_PREDICATES.has(predicate) || sentences.length >= SENTENCE_CAP) continue;
-    const objects = hubRows
+    const objects = reportedHubRows
       .filter((r) => r.predicate === predicate)
       .map((r) => r.object)
       .sort();
@@ -218,25 +404,35 @@ export function renderNewsParagraph(hub, subgraphRows) {
   return capped.length ? `${capped.join(". ")}.` : "";
 }
 
-/** scoreHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6), paragraph
- *  included, sorted builtAt desc then id asc. `sourcesByFactId` maps fact ids
- *  to snapshot source links ({ title, url, name }). */
+/** newsworthyHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6),
+ *  paragraph included, sorted builtAt desc then id asc. `sourcesByFactId`
+ *  maps fact ids to snapshot source links ({ title, url, name }). The gate
+ *  (PLAN_NEWS_FEED.md section 17): `reportedRows` replaces `newsWindowRows`
+ *  and `newsworthyHubs` replaces `scoreHubs` as this function's own inputs —
+ *  both keep their prior behaviour for every other caller. Each item's
+ *  two-hop sub-graph then splits into its own `reported`/`background` rows,
+ *  so a card's paragraph draws from what was reported and its collapsed
+ *  `backgroundParagraph` draws from what the graph already knew. */
 export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map() } = {}) {
-  const windowRows = newsWindowRows(rows, { now, windowMs });
-  const hubs = scoreHubs(rows, windowRows, { limit });
+  const reported = reportedRows(rows, { now, windowMs });
+  const reportedIds = new Set(reported.map((r) => r.id));
   const adjacency = buildTermAdjacency(rows);
+  const hubs = newsworthyHubs(rows, reported, { now, windowMs, limit, adjacency });
   const items = hubs.map(({ term, changed }) => {
     const subgraphRows = subgraphAround(rows, term, { adjacency });
     const factIds = subgraphRows.map((r) => r.id).sort();
+    const { background } = splitCardRows(subgraphRows, reportedIds);
     return {
       id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,
       hub: term,
       factIds,
       changedCount: changed,
       builtAt: now,
-      paragraph: renderNewsParagraph(term, subgraphRows),
+      paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds }),
       tier: tierOf(subgraphRows),
       sources: collectSources(subgraphRows, sourcesByFactId),
+      background: background.map((r) => r.id).sort(),
+      backgroundParagraph: renderNewsParagraph(term, background),
     };
   });
   return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));

@@ -108,6 +108,21 @@ test("replayFixture lands facts under news-fixture: provenance, at the corpus tr
   session.destroy();
 });
 
+test("buildFeed's items carry background/backgroundParagraph once the newsworthiness gate splits a card's own rows", async () => {
+  const { prefs } = memoryPrefs();
+  const session = createNewsSession({ prefs, fetchImpl: neverFetch(), now: FIXED_NOW });
+  await appendFacts(session.memoryDir, [
+    { subject: "ceasefire", predicate: "mgx:causes", object: "relief", provenance: "news:src@i1", observedAt: FIXED_NOW() },
+    { subject: "ceasefire", predicate: "rdf:type", object: "event", provenance: "news:src@i1", observedAt: FIXED_NOW() },
+  ]);
+  const feed = await session.buildFeed();
+  const item = feed.items.find((it) => it.hub === "ceasefire");
+  assert.ok(item, `ceasefire heads a card from its own reported relation: ${JSON.stringify(feed.items.map((i) => i.hub))}`);
+  assert.ok(item.background.length > 0, "the identity fact rides along as background, not its own sentence in the main paragraph");
+  assert.match(item.backgroundParagraph, /event/, "the collapsed line carries what the gate dropped from the paragraph");
+  session.destroy();
+});
+
 test("the seed-only feed carries the seed label until the first poll completes", async () => {
   const { prefs } = memoryPrefs();
   const session = createNewsSession({ prefs, fetchImpl: neverFetch(), now: FIXED_NOW });
