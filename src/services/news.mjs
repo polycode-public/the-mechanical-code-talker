@@ -46,6 +46,7 @@ import {
 } from "../domain/term-ledger.mjs";
 import { syllogise } from "../domain/syllogise.mjs";
 import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
+import { pluralOf } from "../domain/inflect.mjs";
 import { provenanceTagToSource, SOURCE_PRIOR } from "../domain/memory/trust.mjs";
 import {
   NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS,
@@ -767,7 +768,7 @@ export function ingestUploadedFactRows(rows, { fileLabel, now } = {}) {
 const NEWS_USAGE = "usage: /news [poll|rank|enrich|sources|add <url>|interval <minutes>]";
 
 function pluralize(n, word) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+  return `${n} ${n === 1 ? word : pluralOf(word)}`;
 }
 
 function renderFeedText(feed, focus) {
