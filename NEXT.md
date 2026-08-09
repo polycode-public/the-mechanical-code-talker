@@ -30,19 +30,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 - [ ] **`does X have Y` misses property inheritance through a taught `⊑` hop** — found live while
-  regenerating infbench for `PLAN_DL_ENGLISH_SURFACE.md`'s B3 (`reports/BENCHMARK_INFERENCE_5.0.28.md`),
+  regenerating infbench for `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B3 (`reports/BENCHMARK_INFERENCE_5.0.28.md`),
   pre-existing and unrelated to that plan's own changes. Example: teach "every argyle has a
   receptacle", "e150.mjs is a argyle"; ask "does e150.mjs have a receptacle" — an honest miss
   instead of the "yes" the stored someValuesFrom restriction plus the type assertion entail. 10 of
   15 `b2PropertyInheritance` infbench rows (the `member` and `grandparent` variants) show this; the
   `class-direct` variant (no individual involved) already passes. The gap sits in the `does X have
   Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
-  ladder — a different code path from `PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
+  ladder — a different code path from `archive/PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
   work. Playtest 007 (turn 14) widens the scope: taught capability
   (`mgx:capableOf`) and property facts miss through the same one-hop subclass edge —
   "animals can be alive" plus "a pig is an animal" leaves "can a pig be alive" unconfirmed.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
-  the plan-ladder remainder `PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
+  the plan-ladder remainder `archive/PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle
   world), and the per-instance drive sentences (`agent-editor.mjs`'s closed table) are spliced
   into the browser page only, with no ask-lane grammar for those predicates. Both are new
@@ -93,12 +93,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   consumer-style import test. Related cross-repo note: bedrock-meter pins tmct 5.0.25 exactly,
   so a consumer taking both gets two tmct copies; a caret range or peerDependency shape on
   their side needs a shared decision.
-- [ ] **Archive the delivered plan docs and refresh STATUS.md** — after each plan's work is verified by code inspection AND on the deployed site:
-  `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md` and
-  `PLAN_RIVER_CROSSING.md` are delivered end to end and move to `archive/` with their live
-  references repointed; STATUS.md's plan table resynthesizes via the `refresh-status` skill
-  (its syllogist row still reads DESIGN). `PLAN_NEWS_FEED.md` left this list — the field
-  report above reopens it.
 
 ## Discipline
 
