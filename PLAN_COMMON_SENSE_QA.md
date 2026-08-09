@@ -1,6 +1,6 @@
 # PLAN_COMMON_SENSE_QA.md — swap the claims stack to CommonsenseQA, and climb five rungs off zero
 
-Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage) and R2 (relation routing) are built and measured. R3–R5 remain.
+Status: F0 (the fixture), F1 (the option splitter), F2 (the chat lane), F3 (the rig), F4 (the claims block), and F5 (removal + corpus rows) are built and tested. R1 (seed coverage), R2 (relation routing) and R3 (inference depth) are built and measured. R4–R5 remain.
 The plan delivers the whole arc: the closed multiple-choice lane, the CommonsenseQA fixture and rig,
 the claims block, the removal of the OpenBookQA stack, and seven grammar.choice corpus rows covering
 the three outcomes plus negative cases.
@@ -1222,6 +1222,30 @@ representative stem routes to, plus a test that an unrouted stem returns null.
 ground; an option connected by the right relation does; an unrouted stem still probes every predicate.
 
 ### 10.3 Rung 3 — inference depth
+
+**Built and measured.** `probeChoiceOptions` now falls back to `findIsaChain` (`syllogise.mjs`,
+`maxHops: 2`) for an option with no direct edge, chasing from every spelling of the source term over
+the store's own `rdf:type`/`rdfs:subClassOf` rows. A chain only grounds when every one of its steps
+resolves to a real stored Fact row (`premises.every(Boolean)`, the same guard the isa lanes already
+use before citing a chain) — a hop the store cannot back is never cited, and never fabricated as a
+grounding. The routing filter from rung 2 does not gate the chain: a relation family cues a direct
+edge's predicate, and `findIsaChain` only ever walks the isa family, a different axis. The winning
+answer renders through `renderIsaChain` when it came from a chain rather than a direct edge, and
+`turn.detail.hop` (1 for a direct edge, the chain length otherwise) lets the rig bucket
+`detail.byHop` straight off the run.
+
+Re-measured (chunked foreground slices, one persisted seeded repo, merged): before 14/11/75
+(answered/refused/abstained), `sourceEdgePresent` 30, `correctOfAnswered` 0; after 14/11/75,
+`sourceEdgePresent` 30, `correctOfAnswered` still 0, `byHop` `{1: {answered 14, correct 0}, 2:
+{answered 0, correct 0}, unreachable: {abstained 75}}`. Every answered question in this run grounded
+on a direct edge; the chain fallback never fired a new grounding. The rung 1 seed's relational
+predicates (atLocation, causes, desires, motivatedByGoal, hasSubevent) are what carries most of the
+fixture's coverage, and the isa layer (`rdfs:subClassOf`) that `findIsaChain` walks is a separate,
+smaller part of the same seed with little reason to bridge an arbitrary CommonsenseQA source-option
+pair two hops apart — most of the fixture's questions are not taxonomic to begin with (section 2.2's
+own stem-cue table puts IsA/Synonym/HasProperty at 11 of 100). The determinism and non-isa-hop tests
+pass, confirming the chain machinery itself is sound; it simply had nothing to reach on this seed.
+Threshold stays `{ min, 0 }`, unchanged, since `value` did not rise.
 
 **Model tier: Sonnet.** Serialized on `chat.mjs`.
 

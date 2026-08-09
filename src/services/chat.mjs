@@ -3703,10 +3703,6 @@ export { isAnchorableTerm };
  *  graph from the question's own distractors would ground every option for
  *  free, which is a slow way to guess rather than an honest probe.
  *
- *  `chain` stays null on every entry here — a direct-edge probe only. A
- *  bounded findIsaChain chase for an option with no direct edge is later work
- *  (rung 3), which is why `graph` already rides this signature unused.
- *
  *  ROUTING (rung 2): `routeChoiceRelation` (choice-question.mjs) reads the
  *  relation family the STEM itself names — "where" cues AtLocation, "part of"
  *  cues PartOf/HasA/MadeOf, and so on, a closed cue table ordered by measured
@@ -3715,7 +3711,19 @@ export { isAnchorableTerm };
  *  predicate is no longer "a stated relation", it is the WRONG stated
  *  relation, and the whole point of routing is to stop counting that as
  *  evidence. A stem naming no relation at all (routeChoiceRelation returns
- *  null) falls back to the unrouted any-predicate probe, unchanged. */
+ *  null) falls back to the unrouted any-predicate probe, unchanged.
+ *
+ *  CHAIN FALLBACK (rung 3): an option with no direct edge gets one more
+ *  chance — findIsaChain (syllogise.mjs), the SAME bounded rooted proof
+ *  search the isa lanes already cite, chases from every spelling of
+ *  sourceTerm toward the option over the store's own rdf:type/rdfs:subClassOf
+ *  edges, maxHops:2 (its usual live-chase bound). `chain`, when non-null, is
+ *  the ORDERED ARRAY OF FACT ROWS the chase proved, every one of them a real
+ *  stored row so the citation never names a step nothing backs — the same
+ *  `premises.every(Boolean)` discipline the isa lanes use before returning a
+ *  chain answer. The routing filter above does not apply to the chain: a
+ *  relation family cues a DIRECT edge's predicate, and findIsaChain only ever
+ *  walks the isa family, a different axis entirely. */
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const sourceVariants = factTermVariants(normFactTermStatic, parsed.sourceTerm);
   let rows = await factRows(memoryDir, cache);
@@ -3725,12 +3733,32 @@ async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthe
     if (learned) rows = await factRows(memoryDir, cache);
   }
   const route = routeChoiceRelation(parsed.stem);
+  const {
+    findIsaChain: chaseChoiceIsa, buildSubClassSuccessors: buildChoiceSubClassSucc,
+    TYPE_PREDICATE: CHOICE_TYPE_PREDICATE, SUBCLASS_PREDICATE: CHOICE_SUBCLASS_PREDICATE,
+  } = await import("../domain/syllogise.mjs");
+  const choiceTypeRows = rows.filter((f) => f.predicate === CHOICE_TYPE_PREDICATE);
+  const choiceSubClassRows = rows.filter((f) => f.predicate === CHOICE_SUBCLASS_PREDICATE);
+  const choiceTypeEdges = choiceTypeRows.map((f) => [f.subject, f.object]);
+  const choiceSubClassSucc = buildChoiceSubClassSucc(choiceSubClassRows.map((f) => [f.subject, f.object]));
+  const factForChoiceChainStep = (step) => (step.predicate === CHOICE_SUBCLASS_PREDICATE ? choiceSubClassRows : choiceTypeRows)
+    .find((f) => f.subject === step.subject && f.object === step.object);
+
   return parsed.options.map((option) => {
     const optionVariants = factTermVariants(normFactTermStatic, option.text);
     let facts = rows.filter((f) => (sourceVariants.has(f.subject) && optionVariants.has(f.object))
       || (sourceVariants.has(f.object) && optionVariants.has(f.subject)));
     if (route) facts = facts.filter((f) => route.predicates.includes(f.predicate));
-    return { label: option.label, text: option.text, grounds: facts.length > 0, facts, chain: null };
+    let chain = null;
+    if (facts.length === 0) {
+      for (const subj of sourceVariants) {
+        const path = chaseChoiceIsa(subj, optionVariants, choiceTypeEdges, choiceSubClassSucc, { maxHops: 2 });
+        if (!path) continue;
+        const premises = path.map(factForChoiceChainStep);
+        if (premises.every(Boolean)) { chain = premises; break; }
+      }
+    }
+    return { label: option.label, text: option.text, grounds: facts.length > 0 || chain !== null, facts, chain };
   });
 }
 
@@ -18323,20 +18351,34 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         turn.lane = "ask-choice";
         turn.detail = {
           traversal: `${grounded.length} of ${probed.length} options grounded against "${parsed.sourceTerm}"`,
-          matches: grounded.flatMap((o) => o.facts),
+          matches: grounded.flatMap((o) => (o.facts.length ? o.facts : o.chain || [])),
         };
         return withLast(turn, choiceGoal);
       }
       const winner = grounded[0];
-      const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
-      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding fact`);
-      const text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
+      // Direct edge first; a chain (rung 3) only ever fires when NO direct
+      // edge exists for the winning option — probeChoiceOptions' own guard.
+      let text; let matches; let hop; let traversalNote;
+      if (winner.facts.length > 0) {
+        const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
+        text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
+        matches = winner.facts;
+        hop = 1;
+        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`;
+      } else {
+        text = `${winner.text} — ${renderIsaChain(winner.chain)}.`;
+        matches = winner.chain;
+        hop = winner.chain.length;
+        traversalNote = `option "${winner.label}" grounded against "${parsed.sourceTerm}" via a ${winner.chain.length}-hop isa chain`;
+      }
+      note(trace, `lane: splitChoiceQuestion — exactly one option ("${winner.label}") grounds against "${parsed.sourceTerm}"; cited the deciding ${winner.facts.length > 0 ? "fact" : "chain"}`);
       const turn = plainTurn(workingLine, text, { via: "composed", miss: false, focus, goal: choiceGoal });
       turn.lane = "ask-choice";
       turn.detail = {
-        traversal: `option "${winner.label}" grounded against "${parsed.sourceTerm}" via ${fact.predicate}`,
-        matches: winner.facts,
+        traversal: traversalNote,
+        matches,
         selectedLabel: winner.label,
+        hop,
       };
       return withLast(turn, choiceGoal);
     }

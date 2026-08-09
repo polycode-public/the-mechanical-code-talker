@@ -105,6 +105,7 @@ export async function runSample(items, memoryDir, graph) {
   let correctWhenSourceEdgePresent = 0;
   let routedByRelation = 0;
   let correctWhenRouted = 0;
+  const byHop = { 1: { answered: 0, correct: 0 }, 2: { answered: 0, correct: 0 }, unreachable: { abstained: 0 } };
   const missedIds = [];
   const missedStems = [];
   for (const item of items) {
@@ -112,11 +113,24 @@ export async function runSample(items, memoryDir, graph) {
       memoryDir, sessionId: `commonsenseqa-${item.id}`, graph,
     });
     const selectedLabel = result?.detail?.selectedLabel;
-    if (result?.record?.miss === true) abstained += 1;
-    else if (typeof selectedLabel === "string") answered += 1;
-    else refused += 1;
-
+    const isMiss = result?.record?.miss === true;
     const ok = scoresCorrect(selectedLabel, item.answerKey);
+
+    if (isMiss) {
+      abstained += 1;
+      byHop.unreachable.abstained += 1;
+    } else if (typeof selectedLabel === "string") {
+      answered += 1;
+      // hop is 1 for a direct edge, 2 for a chain (probeChoiceOptions,
+      // rung 3); a hop the schema does not name (there is none today) is
+      // dropped rather than guessed at.
+      const hop = result?.detail?.hop;
+      if (hop === 1 || hop === 2) {
+        byHop[hop].answered += 1;
+        if (ok) byHop[hop].correct += 1;
+      }
+    } else refused += 1;
+
     if (ok) correct += 1;
     else {
       missedIds.push(item.id);
@@ -141,7 +155,7 @@ export async function runSample(items, memoryDir, graph) {
     correct, answered, refused, abstained,
     sourceEdgePresent, correctWhenSourceEdgePresent,
     routedByRelation, correctWhenRouted,
-    missedIds, missedStems,
+    byHop, missedIds, missedStems,
   };
 }
 
@@ -162,6 +176,7 @@ export function buildClaimDetail(items, bands, result) {
     correctWhenSourceEdgePresent: result.correctWhenSourceEdgePresent,
     routedByRelation: result.routedByRelation,
     correctWhenRouted: result.correctWhenRouted,
+    byHop: result.byHop,
     scorer: "gold-key: the lane's selected option label equals answerKey; a refusal or a miss scores zero; no judge, no text match",
     missedIds: result.missedIds,
     exampleStems: result.missedStems.slice(0, 3),

@@ -201,6 +201,84 @@ test("a stem naming no relation still probes every predicate", async () => {
   }
 });
 
+// ---- inference depth (rung 3) ----
+
+test("a 2-hop option grounds through a chain and the answer cites every step", async () => {
+  const dir = await freshRepo();
+  try {
+    // No direct shark-to-animal edge — only a chain through "fish".
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark an animal or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.equal(r.lane, "ask-choice");
+    assert.equal(r.detail.selectedLabel, "1");
+    assert.equal(r.detail.hop, 2);
+    assert.match(r.answer, /shark is a kind of fish/);
+    assert.match(r.answer, /fish is a kind of animal/);
+    assert.match(r.answer, /source: corpus:test/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a 3-hop option does not ground at maxHops: 2", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "vertebrate", provenance: "corpus:test" },
+      { subject: "vertebrate", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark an animal or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option reachable only through a non-isa hop is never cited as a chain", async () => {
+  const dir = await freshRepo();
+  try {
+    // fish->reef is atLocation, not isa — findIsaChain never walks it, so
+    // "reef" must stay ungrounded rather than being cited through a hop
+    // nothing isa-family backs.
+    await appendFacts(dir, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "mgx:atLocation", object: "reef", provenance: "corpus:test" },
+    ]);
+    const r = await turn("is a shark a reef or a plant", { memoryDir: dir });
+    assert.equal(r.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the same chain facts taught in either insertion order produce the same answer", async () => {
+  const dirA = await freshRepo();
+  const dirB = await freshRepo();
+  try {
+    await appendFacts(dirA, [
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+    ]);
+    await appendFacts(dirB, [
+      { subject: "fish", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:test" },
+      { subject: "shark", predicate: "rdfs:subClassOf", object: "fish", provenance: "corpus:test" },
+    ]);
+    const rA = await turn("is a shark an animal or a plant", { memoryDir: dirA });
+    const rB = await turn("is a shark an animal or a plant", { memoryDir: dirB });
+    assert.equal(rA.answer, rB.answer);
+    assert.equal(rA.detail.selectedLabel, rB.detail.selectedLabel);
+    assert.equal(rA.detail.hop, rB.detail.hop);
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
+  }
+});
+
 test("two grounded options tie and the lane picks neither, whatever their edge weights", async () => {
   const dir = await freshRepo();
   try {
