@@ -75,9 +75,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   imperatives (the "this cabbage" drive sentences from the editor) must show on the main
   playing screen below the focused agent's chat window, not only inside the editor. In flight
   in a fix worktree.
-- [ ] **News through the chat surface** — assess the consumer surface: how a chat user reaches
-  the news feed (`/news` lane), pin it in a test, and show it on index.html. In flight in a
-  worktree.
+- [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
+  chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
+  existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
+  carries a real three-turn `/news` transcript between the news and sprites plates, pinned in
+  the index spec. Remainder: the standalone `tmct news` CLI verb defaults to `poll` while the
+  in-chat `/news` defaults to showing the feed — a real divergence no test pins; pin it or
+  reconcile it.
 - [ ] **bedrock-meter pins tmct 5.0.25 exactly** — a consumer taking both bedrock-meter and a
   newer tmct gets two tmct copies; a caret range or peerDependency shape on bedrock-meter's side
   needs a shared decision.
