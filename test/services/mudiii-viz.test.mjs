@@ -17,7 +17,7 @@ import { TWEEN_DURATION_MS, startTween, reseedTween } from "../../src/services/m
 import {
   renderMudiiiHtml, agentCardMarkup, roleOfAgentId, cellToWorld, cellFromGroundPoint,
   propPlacementsFrom, occupiedCells, currentPlacementsFrom, blockedCellReason, cameraRigFor, nextCameraSelection, cameraSelectionForMode,
-  mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction,
+  mapDotsFor, mapBlocksFor, hudCardFieldsFor, clipForAction, scenarioIndexFromQuery,
 } from "../../src/services/mudiii-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 import FIXTURE from "../fixtures/mudiii-ticks.json" with { type: "json" };
@@ -717,10 +717,10 @@ test("renderMudiiiHtml: the outlook panel is refreshed on boot, after every worl
   assert.match(applyActorEditor[1], /await refreshOutlook\(\);/, "an actor edit refreshes the panel");
 });
 
-test("renderMudiiiHtml: the crossing board takes the 3D stage's place on a puzzle scenario, and each is hidden by attribute where the other belongs", () => {
+test("renderMudiiiHtml: the 3D stage stands on every scenario, and the crossing's own strip appears beside it only on a puzzle", () => {
   const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.match(html, /id="sceneStage"[^>]*data-hide-when-puzzle/, "the chase's 3D stage steps aside for a world with no grid");
-  assert.match(html, /id="riverStage"[^>]*data-show-when-puzzle/, "and the crossing board is what stands there instead");
+  assert.doesNotMatch(html, /id="sceneStage"[^>]*data-hide-when-puzzle/, "the 3D stage draws the river too, so a puzzle never sends it away");
+  assert.match(html, /id="riverStage"[^>]*data-show-when-puzzle/, "the crossing's title, progress and last move ride under the stage");
   assert.match(html, /id="riverChipsLeft"/);
   assert.match(html, /id="riverChipsBoat"/, "the boat holds chips of its own, so a passenger reads as aboard mid-crossing");
   assert.match(html, /id="riverChipsRight"/);
@@ -729,8 +729,28 @@ test("renderMudiiiHtml: the crossing board takes the 3D stage's place on a puzzl
   // An author display rule beats the browser's own [hidden] rule, so the
   // sheet has to restate it or a hidden panel keeps its box.
   assert.match(html, /\.scene-stage\[hidden\] \{ display: none; \}/);
+  assert.match(html, /\.river-board\[hidden\] \{ display: none; \}/);
   assert.match(html, /\.map-panel\[hidden\]/);
   assert.match(html, /\.hud-row\[hidden\]/);
+});
+
+test("renderMudiiiHtml: a puzzle boots the river onto the 3D stage and keeps the flat board as the fallback", () => {
+  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
+  const bootPuzzle = /async function bootPuzzle\(seq, s\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(bootPuzzle, "a puzzle scenario boots through its own named function");
+  assert.match(bootPuzzle[1], /callScene\("bootRiver", \{/, "the stage is asked for a river, not a town square");
+  assert.match(bootPuzzle[1], /passengers: puzzleActorIds/, "and the passengers are the world's own numbered individuals");
+  assert.match(bootPuzzle[1], /riverStage3d = stage === true;/, "a stage that could not start is the one case the flat board is for");
+  assert.match(bootPuzzle[1], /el\("riverBoard"\)\.hidden = riverStage3d;/);
+
+  const push = /function pushRiverToScene\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(push, "one named function hands the stage what to draw");
+  assert.match(push[1], /callScene\("applyRiver"/);
+  assert.match(push[1], /position: riverPositionNow\(\)/, "the stage is handed the plan's own position, never one derived here");
+  assert.match(push[1], /aboard: riverAfloat \? riverAfloat\.travellers : \[\]/);
+  const board = /function renderRiverBoard\(\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(board);
+  assert.match(board[1], /pushRiverToScene\(\);/, "every redraw of the flat board redraws the 3D one from the same position");
 });
 
 test("renderMudiiiHtml: playback only walks the positions the planner handed back, and never derives a move of its own", () => {
@@ -788,6 +808,49 @@ test("renderMudiiiHtml: the puzzle plan panel names both the found plan and the 
   assert.ok(fn);
   assert.match(fn[1], /found " \+ n \+ " move/, "a found puzzle plan states how many moves it takes");
   assert.match(fn[1], /puzzle\.miss/, "an unsolved puzzle states the reason rather than a partial plan");
+});
+
+// ---- opening on a named scenario from the URL ---------------------------
+
+const QUERY_SCENARIOS = [
+  { label: "town square (12x12)", worldPayload: { name: "town-square" } },
+  { label: "market row (10x10, stall lanes to corner a goblin in)", worldPayload: { name: "town-square-market" } },
+  { label: "chapel yard (14x14, open ground)", worldPayload: { name: "town-square-chapel" } },
+  { label: "river crossing (fox, goat, cabbage and a farmer)", worldPayload: { name: "river-crossing" } },
+];
+
+test("scenarioIndexFromQuery: a word of a scenario's own name or label picks it, whatever the case", () => {
+  for (const search of ["?scenario=river", "?scenario=River", "?scenario=RIVER", "?scenario=river-crossing", "?scenario=River%20Crossing"]) {
+    assert.equal(scenarioIndexFromQuery(search, QUERY_SCENARIOS), 3, search);
+  }
+  assert.equal(scenarioIndexFromQuery("?scenario=chapel", QUERY_SCENARIOS), 2);
+  assert.equal(scenarioIndexFromQuery("?scenario=town-square-market", QUERY_SCENARIOS), 1);
+});
+
+test("scenarioIndexFromQuery: an exact name beats another scenario's word", () => {
+  const scenarios = [
+    { label: "the market crossing", worldPayload: { name: "market" } },
+    { label: "river crossing", worldPayload: { name: "crossing" } },
+  ];
+  assert.equal(scenarioIndexFromQuery("?scenario=crossing", scenarios), 1);
+});
+
+test("scenarioIndexFromQuery: an unknown, empty or absent value opens the page's first scenario", () => {
+  for (const search of ["", "?", "?scenario=", "?scenario=lagoon", "?other=river", undefined, null]) {
+    assert.equal(scenarioIndexFromQuery(search, QUERY_SCENARIOS), 0, String(search));
+  }
+  assert.equal(scenarioIndexFromQuery("?scenario=river", []), 0, "a page carrying no scenarios still answers with an index");
+});
+
+test("renderMudiiiHtml: the page reads its opening scenario off the URL, and the dropdown agrees with it", () => {
+  const html = renderMudiiiHtml({
+    worldPayload: WORLD_PAYLOAD,
+    agents: AGENTS,
+    scenarios: QUERY_SCENARIOS.map((s) => ({ ...s, worldPayload: { ...s.worldPayload, facts: [] }, agents: AGENTS })),
+  });
+  assert.match(html, /let scenarioIndex = scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\);/);
+  assert.match(html, /scenarioSelect\.value = String\(scenarioIndex\);/, "the dropdown shows whichever scenario the URL opened");
+  assert.match(html, /function scenarioIndexFromQuery\(search, scenarios\)/, "the matcher itself is spliced in, not re-implemented in the page");
 });
 
 test("renderMudiiiHtml: entering edit mode refreshes the outlook panel alongside the actor editor", () => {

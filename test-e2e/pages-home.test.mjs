@@ -210,7 +210,7 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
 test("the showcase links to the Polycode family projects", async () => {
   const { context, page } = await openHomePage();
   try {
-    const cards = page.locator("section.showcase:not(#claims-teaser) .showcase-card");
+    const cards = page.locator("section.showcase:not(#claims-teaser):not(#river-puzzle) .showcase-card");
     await cards.first().waitFor({ state: "visible" });
     assert.equal(await cards.count(), 3, "three family showcase cards");
     const teaser = page.locator('#claims-teaser .showcase-card[href="./claims.html"]');
@@ -221,10 +221,24 @@ test("the showcase links to the Polycode family projects", async () => {
       "https://gitlab.com/polycode-projects/bedrock-meter",
       "https://gitlab.com/polycode-projects/the-quiet-feed",
     ]);
-    const text = await page.locator("section.showcase:not(#claims-teaser)").innerText();
+    const text = await page.locator("section.showcase:not(#claims-teaser):not(#river-puzzle)").innerText();
     assert.match(text, /Seonix/);
     assert.match(text, /Bedrock Meter/);
     assert.match(text, /The Quiet Feed/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the river-crossing card opens mudiii on that scenario in a new tab", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const card = page.locator('#river-puzzle .showcase-card[href="./mudiii.html?scenario=river"]');
+    await card.waitFor({ state: "visible" });
+    assert.equal(await card.getAttribute("target"), "_blank", "it leaves the home page standing behind it");
+    assert.equal(await card.getAttribute("rel"), "noopener noreferrer");
+    const text = await page.locator("#river-puzzle").innerText();
+    assert.match(text, /fox, the goat and the cabbage/i, "the card names the puzzle rather than the page");
   } finally {
     await context.close();
   }

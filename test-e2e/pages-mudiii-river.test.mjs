@@ -7,12 +7,14 @@
 // search, restoring it and adding a second appetite exhausts every legal
 // opening, and undoing both returns the original crossing byte-identically.
 //
-// The playing screen itself is the other half: play walks the crossing the
-// planner found one move at a time with the passengers drawn on their banks
-// and aboard the boat, pause holds where it stopped, step takes a single
+// The playing screen itself is the other half: the same 3D stage the chase
+// squares use draws two banks, the water between them, a boat and one
+// labelled figure per passenger, and play walks the crossing the planner
+// found one move at a time. Pause holds where it stopped, step takes a single
 // crossing, reset puts everyone back, and the panel under the chat shows
 // whichever passenger is followed — its beliefs, the plan, and the drive
-// sentences it inherits from its class.
+// sentences it inherits from its class. A link can open the page straight on
+// the scenario (mudiii.html?scenario=river) with no dropdown touched.
 // Mirrors pages-mudiii.test.mjs's own fixture setup and assertion style.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
@@ -52,7 +54,7 @@ after(async () => {
  *  waits on. Third-party hosts are blocked and same-origin console
  *  errors/failed requests are tracked for the whole session, river switch
  *  included. */
-async function openMudiiiPage() {
+async function watchedPage() {
   const context = await browser.newContext();
   const page = await context.newPage();
   const consoleErrors = [];
@@ -72,6 +74,28 @@ async function openMudiiiPage() {
     if (req.url().startsWith(server.origin)) failedRequests.push(req.url());
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
+  return { context, page, consoleErrors, failedRequests };
+}
+
+/** Open mudiii.html on a URL of its own and wait for whichever scenario that
+ *  URL asks for to finish booting. A puzzle scenario opens paused by design,
+ *  so the ready signal is bootPuzzle's own last act: naming itself in the
+ *  scene status. */
+async function openRiverPageDirectly(query) {
+  const opened = await watchedPage();
+  await opened.page.goto(`${server.origin}/mudiii.html${query}`, { waitUntil: "networkidle" });
+  await readUntil(
+    opened.page,
+    (p) => p.evaluate(() => /puzzle/i.test(document.querySelector("#sceneStatus")?.textContent || "")),
+    (ready) => ready === true,
+    { timeout: READY_TIMEOUT_MS },
+  );
+  return opened;
+}
+
+async function openMudiiiPage() {
+  const opened = await watchedPage();
+  const { page } = opened;
 
   await page.goto(`${server.origin}/mudiii.html`, { waitUntil: "networkidle" });
   // Sleep-then-read rather than waitForFunction: boot indexing can starve
@@ -92,7 +116,7 @@ async function openMudiiiPage() {
     (ready) => ready === true,
     { timeout: READY_TIMEOUT_MS },
   );
-  return { context, page, consoleErrors, failedRequests };
+  return opened;
 }
 
 /** Stop the board and wait until it is actually still — pauseBoard's own
@@ -176,6 +200,16 @@ async function readUntil(page, read, accepts, { timeout = SYNC_TIMEOUT_MS, inter
 }
 
 const movesPlayed = (board) => Number((/move (\d+) of/.exec(board.progress) ?? [0, -1])[1]);
+
+/** What the 3D stage is actually drawing: the two bank names, where the boat
+ *  is, and each passenger's own world position, label and mesh count. A
+ *  software renderer's pixels say nothing about which bank anyone is on, so
+ *  the scene's own state hook is what an assertion reads. */
+const readStage = (page) => page.evaluate(() => (window.mudiiiScene?.riverSnapshot?.() ?? null));
+
+const PASSENGERS = ["cabbage-1", "farmer-1", "fox-1", "goat-1"];
+// Both banks sit this far either side of the water in the scene's own units.
+const BANK_X = 4.6;
 
 test("the river scenario opens paused with zero console or page errors, naming its four passengers on the follow control", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
@@ -288,14 +322,15 @@ test("editing the fox's own appetite for the goat live-redraws the crossing plan
   }
 });
 
-test("the crossing board opens with all four passengers on the near bank, and the 3D chase stage gives way to it", async () => {
+test("the crossing opens with all four passengers on the near bank, drawn on the same 3D stage the chase squares use", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
   try {
     await openRiverScenario(page);
 
-    assert.equal(await page.locator("#riverStage").isVisible(), true, "the crossing board is the playing screen here");
-    assert.equal(await page.locator("#sceneStage").isVisible(), false, "the chase's 3D stage steps aside for a world with no grid");
-    assert.equal(await page.locator("#mapPanel").isVisible(), false, "and so does the overhead map of a square that does not exist");
+    assert.equal(await page.locator("#sceneStage").isVisible(), true, "the 3D stage stays put and draws the river instead of a square");
+    assert.equal(await page.locator("#riverStage").isVisible(), true, "the crossing's title, progress and last move sit under it");
+    assert.equal(await page.locator("#riverBoard").isVisible(), false, "the flat board is the fallback for a stage that could not start, not the default view");
+    assert.equal(await page.locator("#mapPanel").isVisible(), false, "the overhead map of a square that does not exist stays away");
 
     assert.deepEqual(await readBanks(page), OPENING_BANKS, "everyone starts on the east bank");
     const board = await readBoard(page);
@@ -307,6 +342,139 @@ test("the crossing board opens with all four passengers on the near bank, and th
     assert.deepEqual(consoleErrors, [], "no console error drawing the crossing board");
   } finally {
     await context.close();
+  }
+});
+
+test("the 3D stage draws the two named banks, a boat and one labelled figure per passenger", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+
+    // Every figure is a label sprite plus its own mesh; the fox's is the same
+    // GLB the chase squares load for it, so the wait is for that fetch.
+    const stage = await readUntil(
+      page, readStage,
+      (s) => Boolean(s) && PASSENGERS.every((id) => s.passengers[id] && s.passengers[id].parts >= 2),
+      { timeout: READY_TIMEOUT_MS },
+    );
+
+    assert.deepEqual(stage.banks, ["bank-east", "bank-west"], "the two shores the plan's own positions name, near one first");
+    assert.deepEqual(Object.keys(stage.passengers).sort(), PASSENGERS, "one figure per passenger, and nothing else on the water");
+    for (const id of PASSENGERS) {
+      const passenger = stage.passengers[id];
+      // The name over a figure's head is whatever the world's own rows call
+      // it (its mgx:display-name), falling back to the id when they say
+      // nothing — never a label this stage invents.
+      assert.ok(passenger.label && id.startsWith(passenger.label), `${id} carries its own name over its head, not "${passenger.label}"`);
+      assert.equal(passenger.visible, true, `${id} is actually drawn, not held back off the board`);
+      assert.equal(passenger.aboard, false, "nobody has boarded yet");
+      assert.equal(passenger.x, -BANK_X, `${id} stands on the near bank`);
+    }
+    const labels = PASSENGERS.map((id) => stage.passengers[id].label);
+    assert.equal(new Set(labels).size, PASSENGERS.length, `each figure is named apart from the others: ${JSON.stringify(labels)}`);
+    // Four figures on one bank stand apart rather than inside each other.
+    const lanes = PASSENGERS.map((id) => stage.passengers[id].z);
+    assert.equal(new Set(lanes).size, PASSENGERS.length, `each figure has its own lane along the bank: ${JSON.stringify(lanes)}`);
+    assert.equal(stage.boat.side, "near", "the boat is moored on the near bank");
+    assert.ok(stage.boat.x < 0 && stage.boat.x > -BANK_X, `the boat sits on the water, not on a bank: ${stage.boat.x}`);
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error drawing the crossing in three dimensions");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a step ferries its passengers across the 3D stage: they board the boat, ride it over and step off on the far bank", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudiiiPage();
+  try {
+    await openRiverScenario(page);
+    const opening = await readUntil(page, readStage, (s) => Boolean(s) && Boolean(s.boat));
+
+    // The stage's own drawing contract, driven straight: passengers handed as
+    // aboard ride the boat rather than standing on a bank.
+    await page.evaluate((banks) => window.mudiiiScene.applyRiver({
+      banks,
+      position: {
+        "cabbage-1": banks[0], "farmer-1": banks[0], "fox-1": banks[0], "goat-1": banks[0],
+      },
+      aboard: ["farmer-1", "goat-1"],
+      boatPlace: banks[1],
+      crossingMs: 400,
+    }), opening.banks);
+    const afloat = await readStage(page);
+    assert.equal(afloat.boat.side, "crossing", "a boat with passengers aboard reads as crossing, not moored");
+    assert.equal(afloat.passengers["farmer-1"].aboard, true, "the one rowing is aboard");
+    assert.equal(afloat.passengers["goat-1"].aboard, true, "and so is the passenger being carried");
+    assert.equal(afloat.passengers["fox-1"].aboard, false, "the fox was never on this crossing");
+    const carried = await readUntil(
+      page, readStage,
+      (s) => s.boat.x > 0 && Math.abs(s.passengers["goat-1"].x - s.boat.x) < 0.01,
+    );
+    assert.ok(
+      Math.abs(carried.passengers["farmer-1"].x - carried.boat.x) < 0.01,
+      "everyone aboard travels with the hull rather than drifting off it",
+    );
+    assert.equal(carried.passengers["fox-1"].x, -BANK_X, "and whoever stayed behind has not moved");
+
+    // Then the real thing: one step of the planner's own crossing lands the
+    // two travellers on the far bank.
+    await page.locator("#stepBtn").click();
+    const landed = await readUntil(
+      page, readStage,
+      (s) => s.passengers["goat-1"].x === BANK_X && s.passengers["farmer-1"].x === BANK_X,
+      { timeout: 30_000 },
+    );
+    assert.equal(landed.passengers["goat-1"].aboard, false, "the goat is off the boat once the move lands");
+    assert.equal(landed.passengers["fox-1"].x, -BANK_X, "the fox is still on the near bank");
+    assert.equal(landed.passengers["cabbage-1"].x, -BANK_X, "and so is the cabbage");
+    assert.equal(landed.boat.side, "far", "the boat is moored on the far side it rowed to");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error ferrying a passenger across the 3D stage");
+  } finally {
+    await context.close();
+  }
+});
+
+test("mudiii.html?scenario=river opens on the crossing with no dropdown touched, and an address it does not carry opens the first square", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openRiverPageDirectly("?scenario=river");
+  try {
+    const picked = await page.locator("#scenarioSelect").inputValue();
+    const label = await page.$eval("#scenarioSelect", (select) => select.selectedOptions[0].textContent);
+    assert.match(label, /river crossing/i, "the dropdown agrees with the scenario the URL opened");
+    assert.notEqual(picked, "0", "and it is not the square the page would otherwise have opened on");
+
+    assert.match(await page.locator("#sceneStatus").textContent(), /puzzle/i, "the scene names the puzzle it booted");
+    assert.equal(await page.locator("#puzzleNote").isHidden(), false, "the puzzle note explains why nothing moves on its own");
+    assert.equal(await page.locator("#autoToggle").getAttribute("aria-pressed"), "false", "a solved-by-search puzzle opens paused");
+    const ids = await page.$$eval("#agentSelect option", (opts) => opts.map((o) => o.value));
+    assert.deepEqual(ids, PASSENGERS, "the follow control lists the river's own four passengers");
+    assert.deepEqual(await readBanks(page), OPENING_BANKS, "everyone starts on the east bank");
+    const stage = await readUntil(page, readStage, (s) => Boolean(s) && Boolean(s.boat));
+    assert.deepEqual(stage.banks, ["bank-east", "bank-west"], "and the 3D stage is the river, not a town square");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error opening the crossing straight from a link");
+  } finally {
+    await context.close();
+  }
+
+  // An address the page carries no scenario for opens the one it always did,
+  // rather than an error or an empty stage.
+  const unknown = await watchedPage();
+  try {
+    await unknown.page.goto(`${server.origin}/mudiii.html?scenario=lagoon`, { waitUntil: "networkidle" });
+    await unknown.page.waitForFunction(
+      () => document.querySelector("#autoToggle")?.getAttribute("aria-pressed") === "true",
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    assert.equal(await unknown.page.locator("#scenarioSelect").inputValue(), "0", "an unknown scenario falls back silently to the first");
+    assert.equal(await unknown.page.locator("#sceneStage").isVisible(), true, "and the town square plays as it always does");
+    assert.deepEqual(unknown.consoleErrors, [], "no console error on a scenario name the page does not carry");
+  } finally {
+    await unknown.context.close();
   }
 });
 
@@ -330,9 +498,13 @@ test("play executes the planner's moves, the passengers cross bank by bank, and 
     );
     const heldBanks = await readBanks(page);
     assert.ok(movesPlayed(held) >= 3 && movesPlayed(held) < 7, `paused part-way through, at ${held.progress}`);
+    // Which passengers are across depends on the move it stopped on — the
+    // farmer rows some of them back — so the claim here is only that the
+    // crossing really has moved people, not a count the timing decides.
+    assert.notDeepEqual(heldBanks, OPENING_BANKS, "the opening arrangement is behind it");
     assert.ok(
-      Object.values(heldBanks).filter((place) => place === "bank-west").length >= 2,
-      `at least two passengers are across when it stops: ${JSON.stringify(heldBanks)}`,
+      Object.values(heldBanks).some((place) => place === "bank-west"),
+      `somebody is across when it stops: ${JSON.stringify(heldBanks)}`,
     );
 
     // A paused crossing is a still one: nothing lands after the click.

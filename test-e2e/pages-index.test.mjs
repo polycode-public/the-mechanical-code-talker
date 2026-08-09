@@ -103,6 +103,23 @@ test("the news example sits between the news and sprites feature plates and show
   assert.match(section, /1\. wombat \(2\) — unknown word/, "the example shows the engine's real ranked ungrounded-term list");
 });
 
+test("the river-crossing puzzle has its own link, straight onto the scenario mudiii.html reads from the URL", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const start = html.indexOf('<section class="showcase" id="river-puzzle">');
+  assert.ok(start !== -1, "the river crossing is its own band on the home page");
+  const band = html.slice(start, html.indexOf("</section>", start));
+  assert.match(
+    band,
+    /<a class="showcase-card" href="\.\/mudiii\.html\?scenario=river" target="_blank" rel="noopener noreferrer">/,
+    "the card opens mudiii on the river scenario, in a new tab",
+  );
+  assert.match(band, /mudiii\.html\?scenario=river<\/span>/, "and names the address it opens");
+  assert.match(band, /fox, the goat and the cabbage/i, "the band names the puzzle rather than the page");
+  // The scenario parameter is only worth linking if the page reads it.
+  const viz = await readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8");
+  assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
+});
+
 test("the showcase names the Polycode family projects and links to them", async () => {
   const html = await readFile(INDEX, "utf8");
   const showcase = html.slice(html.indexOf('<section class="showcase">'), html.indexOf("<footer>"));

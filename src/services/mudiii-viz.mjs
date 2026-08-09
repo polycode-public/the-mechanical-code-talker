@@ -20,7 +20,9 @@
 // `.setCamera(...)` on every camera-mode change, agent-select change and
 // `nextCameraSelection` fallback (see `callScene`, below) — every call
 // guarded, because a failed three.js vendor load (~800 KB) must never take
-// the map panel, the HUD, the deck or the chat down with it.
+// the map panel, the HUD, the deck or the chat down with it. A puzzle
+// scenario swaps those first two calls for `.bootRiver(...)` once and
+// `.applyRiver(...)` per crossing; the same stage draws the river.
 //
 // Deliberately absent, all P2P (mud.html's #statePill, share/join buttons,
 // the share overlay, the wave button): this is the 1-player page. A later
@@ -112,6 +114,35 @@ const MUDIII_NOTE_LINES = [
  *  re-derived from its id here. Pure, self-contained. */
 export function roleOfAgentId(id) {
   return String(id).replace(/-\d+$/, "");
+}
+
+/** Which scenario a page URL asks for. `?scenario=river` on a page whose
+ *  fourth entry is the river crossing returns 3. The asked-for value and each
+ *  scenario's own world name and label are all reduced to the same hyphenated
+ *  slug before they are compared, so "River", "river" and "river-crossing" all
+ *  reach the same scenario; a whole hyphen-separated word of a name or a label
+ *  counts, which is what lets a short "river" reach "river crossing (fox,
+ *  goat, cabbage and a farmer)". An exact name or label wins over a word of
+ *  one. A value the page carries no scenario for falls back to 0 — the
+ *  scenario the page would have opened on anyway, with no error and no empty
+ *  stage. Pure, self-contained. */
+export function scenarioIndexFromQuery(search, scenarios) {
+  const slugOf = (text) => String(text == null ? "" : text)
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const wanted = slugOf(new URLSearchParams(String(search || "")).get("scenario"));
+  if (!wanted) return 0;
+  const list = scenarios || [];
+  const namesOf = (s) => [slugOf(s && s.label), slugOf(s && s.worldPayload && s.worldPayload.name)];
+  for (let i = 0; i < list.length; i += 1) {
+    if (namesOf(list[i]).indexOf(wanted) !== -1) return i;
+  }
+  for (let i = 0; i < list.length; i += 1) {
+    const names = namesOf(list[i]);
+    for (let n = 0; n < names.length; n += 1) {
+      if (names[n] && names[n].split("-").indexOf(wanted) !== -1) return i;
+    }
+  }
+  return 0;
 }
 
 /** A manifest row's `destPath` as a URL the page can actually fetch.
@@ -553,7 +584,7 @@ export function agentCardMarkup(slot) {
  *  dropdown, the same rule mud-viz.mjs's own renderMudHtml follows. `puzzle`
  *  is true for a scenario with no town-square layout of its own (the
  *  river-crossing puzzle): no roster is minted and no tick ever runs, so the
- *  crossing board takes the 3D stage's place and the deck's play/step/reset
+ *  3D stage draws the river instead of a square and the deck's play/step/reset
  *  controls walk the plan the search found rather than driving a simulation
  *  (see this file's own pageScript, `data-hide-when-puzzle` and
  *  `data-show-when-puzzle`). `assetManifest` is
@@ -702,7 +733,7 @@ ${openingAgents.map((a) => `                <option value="${escapeHtml(a.id)}">
       </div>
     </section>
   </div>
-  <section class="scene-stage" id="sceneStage" aria-label="the town square, in three dimensions" data-hide-when-puzzle>
+  <section class="scene-stage" id="sceneStage" aria-label="the world, in three dimensions">
     <canvas id="sceneCanvas"></canvas>
     <div class="dir-ring" id="driveRing" role="group" aria-label="walk the agent the camera follows" hidden>
 ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button type="button" class="dir-pill" data-drive="${point}" title="walk ${point}" aria-label="walk ${point}" aria-pressed="false">${escapeHtml(DIR_GLYPH[point])}</button></span>`).join("\n")}
@@ -714,7 +745,7 @@ ${RING_POINTS.map((point) => `      <span class="dir-slot dir-${point}"><button 
       <span class="river-title">the crossing</span>
       <span class="mono river-progress" id="riverProgress"></span>
     </div>
-    <div class="river-board" id="riverBoard">
+    <div class="river-board" id="riverBoard" aria-label="the crossing, as a flat board">
       <section class="river-bank" id="riverBankLeft" aria-label="the near bank">
         <h3 class="river-bank-name" id="riverBankLeftName"></h3>
         <div class="river-chips" id="riverChipsLeft"></div>
@@ -1060,10 +1091,12 @@ const MUDIII_STYLE = `
   .outlook-belief-table td { padding: .12rem .4rem .12rem 0; vertical-align: top; }
   .outlook-plan { margin: 0; font-family: ${MONO_STACK}; font-size: .68rem; white-space: pre-wrap; color: var(--square-ink); }
 
-  /* The crossing board: two banks with the water between them, standing in
-     for the 3D square on a scenario that has no grid to draw. The boat is
-     absolutely placed inside the water so one CSS transition carries it —
-     and everyone aboard it — from bank to bank. */
+  /* The crossing's own strip under the 3D stage: its title, how far through
+     the plan it is, and the move it just played. The flat board below them is
+     the same crossing in CSS, shown only when the 3D stage could not start —
+     two banks with the water between them, the boat absolutely placed inside
+     the water so one CSS transition carries it, and everyone aboard it, from
+     bank to bank. */
   .river-stage {
     display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem;
     background: var(--parchment); border: 1px solid var(--square-stone-dark); border-radius: 4px;
@@ -1075,6 +1108,7 @@ const MUDIII_STYLE = `
   .river-title { font-family: ${DISPLAY_STACK}; font-size: 1rem; }
   .river-progress { font-size: .68rem; color: var(--square-stone-dark); }
   .river-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 1.1fr) minmax(0, 1fr); gap: .5rem; align-items: stretch; }
+  .river-board[hidden] { display: none; }
   .river-bank {
     background: rgba(124,154,91,.32); border: 1px solid var(--square-stone-dark); border-radius: 3px;
     padding: .4rem .45rem; display: flex; flex-direction: column; gap: .35rem; min-width: 0; min-height: 7rem;
@@ -1252,6 +1286,7 @@ function pageScript() {
   const matchPills = ${matchPills.toString()};
   const createPillComplete = ${createPillComplete.toString()};
   const roleOfAgentId = ${roleOfAgentId.toString()};
+  const scenarioIndexFromQuery = ${scenarioIndexFromQuery.toString()};
   const cellToWorld = ${cellToWorld.toString()};
   const cellFromGroundPoint = ${cellFromGroundPoint.toString()};
   const propPlacementsFrom = ${propPlacementsFrom.toString()};
@@ -1270,7 +1305,9 @@ function pageScript() {
 
   const el = (id) => document.getElementById(id);
   const SEED_COMMANDS = ["tick", "what does the fox see", "where is the goblin", "what can I do"];
-  let scenarioIndex = 0;
+  // A link can open the page straight on one scenario (mudiii.html?scenario=river),
+  // so the dropdown is a second way in rather than the only one.
+  let scenarioIndex = scenarioIndexFromQuery(window.location.search, DATA.scenarios);
   const scenario = function () { return DATA.scenarios[scenarioIndex]; };
   const gridSizeOf = function () { return scenario().gridSize || DATA.gridSize; };
   // A puzzle scenario (the river crossing) carries no town-square layout —
@@ -1322,6 +1359,11 @@ function pageScript() {
   // moored. Only ever set between two positions the plan already contains.
   let riverAfloat = null;
   let riverPlanKey = "";
+  // Whether the 3D stage is drawing the crossing. False when three.js could
+  // not be vendored at all, and then the flat board below the stage is shown
+  // instead. Both are drawn from the same riverPlaces position either way, so
+  // the two can never disagree about where anyone is.
+  let riverStage3d = false;
 
   /** Take on whatever crossing the planner currently finds. Returns true when
    *  that is a DIFFERENT crossing from the one being played — an edit to a
@@ -1399,8 +1441,22 @@ function pageScript() {
       + '<span class="river-chip-name mono">' + esc(id) + "</span></span>";
   }
 
+  /** Hand the 3D stage the same position the flat board below it is drawing:
+   *  who stands on which bank, who is aboard, and where the boat is going. */
+  function pushRiverToScene() {
+    if (!riverStage3d) return;
+    callScene("applyRiver", {
+      banks: riverBanks,
+      position: riverPositionNow(),
+      aboard: riverAfloat ? riverAfloat.travellers : [],
+      boatPlace: riverAfloat ? riverAfloat.to : riverBoatPlace(),
+      crossingMs: RIVER_CROSSING_MS,
+    });
+  }
+
   function renderRiverBoard() {
     if (!isPuzzle()) return;
+    pushRiverToScene();
     const position = riverPositionNow();
     const aboard = {};
     (riverAfloat ? riverAfloat.travellers : []).forEach(function (id) { aboard[id] = true; });
@@ -2022,6 +2078,7 @@ function pageScript() {
     el("resetBtn").addEventListener("click", function () { resetBoard(); });
     const scenarioSelect = el("scenarioSelect");
     if (scenarioSelect) {
+      scenarioSelect.value = String(scenarioIndex);
       scenarioSelect.addEventListener("change", function () {
         const picked = Number(scenarioSelect.value);
         if (!DATA.scenarios[picked] || picked === scenarioIndex) return;
@@ -2551,7 +2608,9 @@ function pageScript() {
   // straight off its own facts (puzzleActorIdsFrom), the actor card and the
   // outlook panel work exactly as they do for a chase board's followed
   // agent, and the plan panel is the whole point — refreshOutlook() below
-  // computes it the same way it always does.
+  // computes it the same way it always does. The 3D stage stays where it is
+  // and draws the river instead of a town square; the flat crossing board
+  // under it is shown only when the stage could not start at all.
   async function bootPuzzle(seq, s) {
     cast = [];
     props = [];
@@ -2566,11 +2625,13 @@ function pageScript() {
     agentsById = {};
     itemsById = {};
     el("chatInput").disabled = false;
-    await callScene("boot", {
-      propPlacements: [], assetManifest: DATA.assetManifest, gridSize: gridSizeOf(), cellSize: 1,
-      agentPresentation: {},
+    const stage = await callScene("bootRiver", {
+      passengers: puzzleActorIds, assetManifest: DATA.assetManifest,
+      agentPresentation: agentPresentationFrom((s.worldPayload && s.worldPayload.facts) || []),
     });
     if (seq !== bootSeq) return;
+    riverStage3d = stage === true;
+    el("riverBoard").hidden = riverStage3d;
     camera.selectedId = puzzleActorIds[0] || null;
     renderAll();
     await refreshStoreRows();
@@ -2595,6 +2656,7 @@ function pageScript() {
     expandedAgents.clear();
     const s = scenario();
     applyPuzzleVisibility();
+    riverStage3d = false;
     if (s.puzzle) return bootPuzzle(seq, s);
     const foxes = mintRoster(rosterPrefixFor(s, "predator"), chosenFoxCount());
     const goblins = mintRoster(rosterPrefixFor(s, "prey"), chosenGoblinCount());
