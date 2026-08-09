@@ -70,9 +70,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   buttons. In flight in a fix worktree.
 - [ ] **A newsworthiness gate: news vs synthesized concepts** — a specific time period or
   monetary amount can be news; the *concept* of a time period, monetary unit or building never
-  is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. A design
-  wave is drafting the gate into `PLAN_NEWS_FEED.md`: a testable definition of what the feed
-  may show as news, and where concept-level synthesis belongs instead.
+  is, yet corpus concept cards ("kilometre", "city", "boy") sit in the feed today. The design
+  is landed as `PLAN_NEWS_FEED.md` phase 10 (traced cause: `research:` enrichment lookups
+  enter the news window as if reported); execution is not yet dispatched.
+- [ ] **River-crossing field report (2026-08-09)** — the playing screen is not useful as
+  shipped: it needs play and pause driven by the planning engine's own plan (the 7-move ferry
+  sequence should animate the characters, steppable), the characters must be visibly rendered
+  and helpful on the main screen, and the focused agent's beliefs, plan and per-instance
+  imperatives (the "this cabbage" drive sentences from the editor) must show on the main
+  playing screen below the focused agent's chat window, not only inside the editor. In flight
+  in a fix worktree.
 - [ ] **News through the chat surface** — assess the consumer surface: how a chat user reaches
   the news feed (`/news` lane), pin it in a test, and show it on index.html. Waits on the
   chat.mjs slot (playtest-fixes agent) and the index.html slot (claims/index rework) freeing.
