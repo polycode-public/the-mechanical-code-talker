@@ -78,16 +78,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **News through the chat surface** — assess the consumer surface: how a chat user reaches
   the news feed (`/news` lane), pin it in a test, and show it on index.html. Waits on the
   chat.mjs slot (playtest-fixes agent) and the index.html slot (claims/index rework) freeing.
-- [ ] **News contract drift: documented names unreachable from the published package** —
-  reported by the quiet-feed session while adopting tmct as its news engine, verified here:
-  `createNewsState` and `cycleMetrics` are exported by `src/services/news.mjs` and named in
-  the contract docs, but `src/services/index.mjs` never re-exports them and the `exports` map
-  has no `./news` subpath and no wildcard, so consumers cannot reach them (nor tmct's own news
-  fetchers and courtesy gate — deep imports die on ERR_PACKAGE_PATH_NOT_EXPORTED). Decide the
-  consumer surface (a `./news` subpath is the likely shape), export it, and pin it with a
-  consumer-style import test. Related cross-repo note: bedrock-meter pins tmct 5.0.25 exactly,
-  so a consumer taking both gets two tmct copies; a caret range or peerDependency shape on
-  their side needs a shared decision.
+- [ ] **bedrock-meter pins tmct 5.0.25 exactly** — a consumer taking both bedrock-meter and a
+  newer tmct gets two tmct copies; a caret range or peerDependency shape on bedrock-meter's side
+  needs a shared decision.
 - [ ] **Archive the delivered plan docs and refresh STATUS.md** — after each plan's work is verified by code inspection AND on the deployed site:
   `PLAN_SYLLOGIST_EL_DL.md`, `PLAN_DL_ENGLISH_SURFACE.md`, `PLAN_COMMON_SENSE_QA.md` and
   `PLAN_RIVER_CROSSING.md` are delivered end to end and move to `archive/` with their live

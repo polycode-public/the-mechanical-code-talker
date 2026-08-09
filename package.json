@@ -51,6 +51,7 @@
     "./repository-interface": "./src/adapters/repository-interface.mjs",
     "./conformance": "./src/tools/conformance.mjs",
     "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs",
+    "./news": "./src/services/news-exports.mjs",
     "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs"
   },
   "files": [

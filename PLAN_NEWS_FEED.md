@@ -581,13 +581,22 @@ in place) when enrichment grows its sub-graph, and is stable when nothing change
 `/news`, the TUI (via chat), the CLI verb, and the JS import — consumes the same exported
 functions: `resolveNewsConfig`, `parseNewsRequest`, `pollNewsSources`, `ingestNewsSnapshot`,
 `enrichTopTerms`, `reprocessAfterGrounding`, `isVocabGroundedTerm`, `isFactGroundedTerm`,
-`ingestUploadedFactRows`, `buildFeed`, `newsTurn`, plus
+`ingestUploadedFactRows`, `buildFeed`, `newsTurn`, `cycleMetrics`, `createNewsState`, plus
 the domain builders (`buildNewsItems`, `rankedTerms`) re-exported through the package entry
 beside the existing public exports. No surface re-implements any step; a JS consumer gets
 exactly what the page runs:
 
 ```js
 import { resolveNewsConfig, pollNewsSources, buildFeed } from "@polycode-projects/the-mechanical-code-talker";
+```
+
+A consumer that only wants the news engine, without the chat/grammar engine the package's `.`
+entry also pulls in, imports the same contract plus the built-in fetchers and courtesy gate
+through the `./news` subpath instead:
+
+```js
+import { resolveNewsConfig, pollNewsSources, buildFeed, createNewsState, cycleMetrics }
+  from "@polycode-projects/the-mechanical-code-talker/news";
 ```
 
 ---
@@ -943,7 +952,12 @@ This module is the library contract (section 6.7).
 `ingestUploadedFactRows`, `buildFeed`, `newsTurn`, `cycleMetrics` — plus `createNewsState`, a
 small companion that hands a fresh, empty, news-store-shaped state to a surface or a test
 starting cold. The package entry (`src/services/index.mjs`) re-exports the section 10.2 contract
-plus `buildNewsItems`/`rankedTerms`, per section 6.7. `extract-facts.mjs` gained the additive
+plus `buildNewsItems`/`rankedTerms`, per section 6.7; the `./news` subpath
+(`src/services/news-exports.mjs`) carries the same contract plus the built-in fetchers
+(`createNewsFetcher`, `preflightNewsUrl`, `registerNewsSource`, `newsSourceRecords`,
+`normalizeNewsSourceIds`) and courtesy gate (`createCourtesyGate`) for a consumer that wants
+tmct's own source adapters as an optional convenience, without the chat/grammar engine the `.`
+entry also pulls in. `extract-facts.mjs` gained the additive
 `ungroundedCounts` widening (a `Map<term, occurrences>` over every fact-ungrounded term a text
 names, lexicon-known or not — a strict superset of the legacy `ungroundedTerms` set, which stays
 untouched). `toml-config.mjs` carries the `[news]` sparse pass-through line.
