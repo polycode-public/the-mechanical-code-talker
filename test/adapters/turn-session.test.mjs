@@ -94,7 +94,7 @@ test("buildExtraOptions can override a base option (vocabHint has no effect here
   await session.turn("hello", { some: "arg" });
   assert.equal(seen.length, 1);
   assert.deepEqual(seen[0].callArgs, { some: "arg" });
-  assert.deepEqual(seen[0].state, { focus: null, last: null, planState: null, researchState: null });
+  assert.deepEqual(seen[0].state, { focus: null, last: null, planState: null, researchState: null, newsState: null });
 });
 
 test("captureExtraState runs once after a successful turn with the folded-forward state, and never runs on a throw", async () => {
