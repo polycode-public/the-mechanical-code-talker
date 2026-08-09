@@ -36,7 +36,10 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     assert.equal(conceptnet.corpusPath, CONCEPTNET_SLICE_FILE);
     assert.equal(conceptnet.provenancePrefix, "corpus:conceptnet");
     assert.equal(conceptnet.limit, undefined);
-    assert.deepEqual(conceptnet.prefer, ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"]);
+    assert.deepEqual(conceptnet.prefer, [
+      "rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf",
+      "mgx:atLocation", "mgx:causes", "mgx:desires", "mgx:motivatedByGoal", "mgx:hasSubevent",
+    ]);
     const human = entries.get("human");
     assert.equal(human.kind, "corpus");
     assert.equal(human.active, true, "human is the new default active bundle");

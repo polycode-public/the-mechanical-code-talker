@@ -63,8 +63,11 @@ function provKey(tier) {
  * (no chip: a miss, or an answer that grounds in nothing citable, e.g. /help
  * output or a focus-set confirmation).
  *
- * Reads the SAME "(source: ...)" citation(s) the visible answer text already
- * carries, via `bucketFor` (the page's own spliced copy of ledger-viz.mjs's
+ * Reads the SAME "(source: ...)" / "(sources: ...; ...)" citation(s) the
+ * visible answer text already carries — the singular form a flat fact
+ * citation or a proof-chain step uses, the plural, semicolon-joined form a
+ * digest read-back's source line uses (termDigestReadBack, chat.mjs) — via
+ * `bucketFor` (the page's own spliced copy of ledger-viz.mjs's
  * `provBucketFor`, injected rather than imported so this function stays
  * `.toString()`-splice safe — the same discipline spider-fly-viz.mjs's own
  * `threadCellsForSpiderPlan` holds its own injected `geometry` to).
@@ -94,7 +97,7 @@ function provKey(tier) {
  */
 export function provenanceChipFor(answer, record, bucketFor) {
   if (!record || record.miss) return null;
-  const cites = [...String(answer || "").matchAll(/\(source: ([^)]+)\)/g)].map((m) => m[1]);
+  const cites = [...String(answer || "").matchAll(/\(sources?: ([^)]+)\)/g)].flatMap((m) => m[1].split("; "));
   if (!cites.length) return record.via === "assert" ? "taught" : null;
   const buckets = cites.map((c) => bucketFor([], c));
   const allTaught = buckets.every((b) => b === "taught");

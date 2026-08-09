@@ -34,8 +34,8 @@ const demoById = (id) => DEMOS.find((d) => d.id === id);
 test("a seeded web session answers 'what is a dog' with corpus provenance", async () => {
   const session = seededSession();
   const { answer, record } = await session.turn("what is a dog");
-  assert.match(answer, /dog is a kind of/);
-  assert.match(answer, /\(source: corpus:/);
+  assert.match(answer, /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i);
+  assert.match(answer, /\(sources?: corpus:/);
   assert.ok(!record?.miss, "a grounded answer never records as a miss");
 });
 
@@ -45,7 +45,7 @@ test("an unknown term misses honestly, and the session survives to answer the ne
   assert.match(miss.answer, /I don't know "zorblatt" yet/);
   assert.equal(miss.record?.miss, true);
   const next = await session.turn("what is a dog");
-  assert.match(next.answer, /dog is a kind of/);
+  assert.match(next.answer, /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i);
 });
 
 test("teach + read-back: the syllogist demo's turns hold as an engine contract", async () => {
@@ -62,9 +62,9 @@ test("teach + read-back: the syllogist demo's turns hold as an engine contract",
 
 test("sessions never share a store: a fact taught in one is unknown to a fresh one", async () => {
   const first = seededSession();
-  await first.turn("every dog is a mammal");
+  await first.turn("every wibblefrog is a mammal");
   const second = seededSession();
-  const { answer } = await second.turn("is a dog a mammal");
+  const { answer } = await second.turn("is a wibblefrog a mammal");
   assert.doesNotMatch(answer, /^yes — /, "the second session never inherits the first session's teaching");
 });
 

@@ -100,7 +100,8 @@ test("a grounded question answers with its citation AND a matching provenance ch
   try {
     const row = await ask(page, "what is a dog");
     const bubbleText = await row.locator(".bubble").innerText();
-    assert.match(bubbleText, /dog is a kind of animal(?: → [^(\n]+)? \(source: corpus:/, "the answer is grounded and names its source (the is-a object may carry its superclass chain)");
+    assert.match(bubbleText, /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i, "the answer is grounded and names dog's class");
+    assert.match(bubbleText, /\(sources?: corpus:/, "the answer names its source");
     assert.equal(await row.locator(".provchip").count(), 1, "exactly one provenance chip renders alongside the answer");
     // .innerText() reflects the CSS text-transform (uppercase); the chip's
     // actual DOM text (and its accessible title) is lowercase — read

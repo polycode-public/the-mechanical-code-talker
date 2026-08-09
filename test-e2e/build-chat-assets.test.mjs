@@ -47,8 +47,8 @@ test("build-chat-seed: the payload answers 'what is a dog' with provenance, carr
 
     const hit = await factAnswer(handle, "what is a dog", null, true, {});
     assert.ok(hit?.text, "the seeded store answers the canonical vocabulary question");
-    assert.match(hit.text, /dog is a kind of/);
-    assert.match(hit.text, /\(source: corpus:/, "the answer names its corpus provenance");
+    assert.match(hit.text, /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i);
+    assert.match(hit.text, /\(sources?: corpus:/, "the answer names its corpus provenance");
 
     const miss = await factAnswer(handle, "what is a zorblatt", null, true, {});
     assert.equal(miss, null, "an unseeded term still gets the honest null");

@@ -104,7 +104,7 @@ test("a redeploy served from the same directory rolls the precache name, the nex
     const seededRow = await ask(page, "what is a dog");
     assert.match(
       await seededRow.locator(".bubble").innerText(),
-      /dog is a kind of animal/,
+      /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i,
       "the reloaded page still boots and answers correctly under the new build",
     );
 

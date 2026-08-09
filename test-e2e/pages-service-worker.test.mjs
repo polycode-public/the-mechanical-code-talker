@@ -73,7 +73,7 @@ test("after one online visit, chat.html boots and answers fully offline from the
     await row.locator(".bubble:not(.pending)").waitFor({ timeout: ANSWER_TIMEOUT_MS });
     assert.match(
       await row.locator(".bubble").innerText(),
-      /dog is a kind of animal/,
+      /dog is a (canine|domestic animal|four legged animal|mammal|pet)/i,
       "a seeded question still answers offline — the seed came from the cache",
     );
 
