@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { runTurn, WALL_MISS_RE } from "../../src/services/chat.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { registerChildPackProvider } from "../../src/adapters/corpus/child-pack.mjs";
 
 const NO_CHILD_PACK_ENV = { TMCT_CHILD_PACK_DIR: fileURLToPath(new URL("../fixtures/no-such-child-pack", import.meta.url)) };
 
@@ -440,5 +441,103 @@ test("feeding the same facts in two insertion orders picks the same topic", asyn
   } finally {
     await rm(dirA, { recursive: true, force: true });
     await rm(dirB, { recursive: true, force: true });
+  }
+});
+
+// ---- constraint-term child-pack pull (S2) ----
+
+// One word, letters only: the store folds a fact's object through
+// normFactTerm (lowercase, non-word runs become spaces), so a marker with an
+// underscore or a mixed case would never compare equal to what lands on disk.
+const markerObjectOf = (term) => `zzzmarker${term}`;
+
+/** A canned child-pack provider: lookup(term) hands back one fact under the
+ *  term's own name, subject === term, so a caller can tell a pull actually
+ *  reached the pack (the marker object shows up in the store afterward)
+ *  apart from a pull that never happened (it does not). Terms with no entry
+ *  read as a pack miss, the ordinary null. */
+function cannedChildPack(terms) {
+  const byTerm = new Map(terms.map((t) => [t, markerObjectOf(t)]));
+  return {
+    lookup: async (term) => {
+      const marker = byTerm.get(term);
+      return marker ? { term, facts: [{ subject: term, predicate: "mgx:hasProperty", object: marker }] } : null;
+    },
+  };
+}
+
+test("a constraint term already in memory is not pulled again", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+      { subject: "tall", predicate: "mgx:hasProperty", object: "height", provenance: "corpus:test" },
+    ]);
+    registerChildPackProvider(cannedChildPack(["tall", "grass"]));
+    try {
+      const r = await turn("Where can you find a snake in tall grass?\nA) forest B) field", { memoryDir: dir, env: {} });
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      assert.ok(rows.some((f) => f.object === markerObjectOf("grass")), "grass had no fact yet, so it was pulled");
+      assert.ok(!rows.some((f) => f.object === markerObjectOf("tall")), "tall already had a fact, so it was not pulled again");
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an option term is never pulled, even when it names a pack term", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    registerChildPackProvider(cannedChildPack(["forest"]));
+    try {
+      // "forest" names both the stem's own trailing clause and option A —
+      // stemConstraintTerms drops every option word, so it never reaches
+      // pullChoiceConstraintFacts at all, pack entry or not.
+      const r = await turn("Where can you find a snake near a forest?\nA) forest B) field", { memoryDir: dir, env: {} });
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      assert.ok(!rows.some((f) => f.object === markerObjectOf("forest")), "an option term is never pulled from the child pack");
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a stem with more constraint terms than the budget pulls the first five in stem order", async () => {
+  const dir = await freshRepo();
+  try {
+    await appendFacts(dir, [
+      { subject: "snake", predicate: "mgx:atLocation", object: "forest", provenance: "corpus:test" },
+      { subject: "snake", predicate: "mgx:atLocation", object: "field", provenance: "corpus:test" },
+    ]);
+    const terms = ["tall", "green", "wet", "cold", "old", "dry", "soggy", "grass"];
+    registerChildPackProvider(cannedChildPack(terms));
+    try {
+      const r = await turn(
+        "Where can you find a tall green wet cold old dry snake near soggy grass?\nA) forest B) field",
+        { memoryDir: dir, env: {} },
+      );
+      assert.equal(r.record.miss, false);
+      assert.match(r.answer, /More than one of those grounds/);
+      const rows = readFactRows(await loadMemory(dir));
+      const pulled = terms.filter((t) => rows.some((f) => f.object === markerObjectOf(t)));
+      assert.deepEqual(pulled, ["tall", "green", "wet", "cold", "old"]);
+    } finally {
+      registerChildPackProvider(null);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

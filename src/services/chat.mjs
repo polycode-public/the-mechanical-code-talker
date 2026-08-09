@@ -70,7 +70,7 @@ import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./n
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
-import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf, stemTopicCandidates } from "../domain/choice-question.mjs";
+import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf, stemTopicCandidates, stemConstraintTerms } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
@@ -3830,6 +3830,31 @@ async function chooseChoiceTopic(candidates, { memoryDir, cache, templateCapture
   if (best.salience === 0) return { topic: "", salience: 0, runnerUp: "" };
   const runnerUp = scored.find((c) => c.text !== best.text)?.text ?? "";
   return { topic: best.text, salience: best.salience, runnerUp };
+}
+
+/**
+ * Pulls the child pack once per constraint term, so the constraint check in
+ * the tie branch has rows to read. Bounded three ways: at most
+ * CHOICE_CONSTRAINT_PULL_BUDGET terms per turn, in stemConstraintTerms order;
+ * nothing pulled for a term memory already holds a fact for; nothing pulled
+ * for any option term, ever — terms reaching here already went through
+ * stemConstraintTerms' own option-word filter, the same discipline
+ * probeChoiceOptions' own docblock states for the topic pull.
+ *
+ * @returns {Promise<string[]>} the terms actually pulled, for the trace note
+ */
+async function pullChoiceConstraintFacts(terms, { memoryDir, env, cache, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+  const pulled = [];
+  if (!memoryDir) return pulled;
+  for (const term of terms.slice(0, CHOICE_CONSTRAINT_PULL_BUDGET)) {
+    const rows = await factRows(memoryDir, cache);
+    const variants = factTermVariants(normFactTermStatic, term);
+    const hasFact = rows.some((f) => variants.has(f.subject) || variants.has(f.object));
+    if (hasFact) continue;
+    const learned = await childPackFactsForKey(term, { memoryDir, env, cache, synthesisBudget });
+    if (learned) pulled.push(term);
+  }
+  return pulled;
 }
 
 async function probeChoiceOptions(parsed, { memoryDir, env, cache, graph, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
@@ -12952,6 +12977,14 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
 // materialisation, not the whole-store maintenance job /syllogise runs.
 const AUTO_SYNTHESIS_BUDGET = 12;
 
+// Caps how many child-pack pulls one tied choice-question turn may spend on
+// the stem's own constraint terms (pullChoiceConstraintFacts, above). Five
+// covers every constraint term a CommonsenseQA stem carries after stopword
+// filtering; the cap is what stops a long stem from turning one turn into a
+// bulk import. A constant rather than config: it bounds work per turn, which
+// is a design decision, not a preference.
+const CHOICE_CONSTRAINT_PULL_BUDGET = 5;
+
 /** The `[reasoning]` knobs for a classification pass rooted at `memoryDir` —
  *  the repo's own `tmct.toml` when it sets one, the shipped defaults
  *  otherwise. `resolveReasoningConfig` wants the NORMALIZED sparse pass-
@@ -18506,6 +18539,13 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         return refMiss(`I don't know how "${topic}" relates to any of ${joinOr(probed.map((o) => o.text))}. Nothing I hold connects it to one of them.`);
       }
       if (grounded.length > 1) {
+        // The stem's OTHER content terms are constraints the question stated
+        // beyond naming its topic — pulled here, not at the topic probe
+        // above, because they only matter once a tie needs something to
+        // separate on. Never pulled for an option term (stemConstraintTerms'
+        // own filter already excludes those).
+        const constraintTerms = stemConstraintTerms(parsed.stem, topic, parsed.options);
+        await pullChoiceConstraintFacts(constraintTerms, { memoryDir, env, cache: factRowsCache, synthesisBudget });
         // A tie is reported, never broken — whatever the grounded options'
         // own edge weights, this branch fires on COUNT alone.
         note(trace, `lane: splitChoiceQuestion — ${grounded.length} of ${probed.length} options ground against "${topic}"; reported as a tie`);

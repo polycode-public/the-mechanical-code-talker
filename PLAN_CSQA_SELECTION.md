@@ -418,6 +418,10 @@ node --test test/adapters/chat-child-lane.test.mjs
 node --test "test/estate/*.test.mjs"
 ```
 
+**Measured (S2):** `answered` 20, `correctOfAnswered` 4, `refused` 23, `abstained` 57 — identical to
+S1. Expected: the pull only enriches the store on a tie, and nothing yet reads what it pulled; S3 is
+what turns the pulled facts into a decision.
+
 ---
 
 ## 6. Phase S3 — separate on constraints, or refuse
