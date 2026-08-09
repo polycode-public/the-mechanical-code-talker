@@ -1,16 +1,21 @@
 # PLAN_DL_ENGLISH_SURFACE.md — let plain English reach the tableau: the role-axiom teach frames, and `/prove` on a miss
 
-Status: Phases A1, A2 and A3 have landed. A1's grammar, tableau reader and ontology/docs (section
+Status: Phases A1 through A4 have landed. A1's grammar, tableau reader and ontology/docs (section
 4, sub-tracks A1-g/A1-k/A1-d) — pattern 18, `allE`, the `owl:allValuesFrom` KB reader and
 module-extraction follow, and the EL normalizer skip. A2's grammar and ontology/docs (section 5) —
 pattern 19, `rdfs:subPropertyOf`, one row, one direction; both engines' own reader confirmed by
 test rather than re-implemented. A3's ABox role route into the tableau (section 6) — the
 role-assertion KB reader, the widened `individuals`/`roles`, edge seeding in `buildInitialBranch`,
 and module-extraction's own reseeding through an asserted edge. A1's `renderUniversalRestrictionLine`
-and A2's `isRoleScaffoldingDeclaration` read-backs (4.3, 5.3) both ride the shared `chat.mjs`
-read-back round (section 12), not yet built. Phase A4 through B3 remain DESIGN, nothing built;
-every module path in those sections marked "new" is a file or function that does not exist yet;
-every existing anchor below was read at HEAD.
+and A2's `isRoleScaffoldingDeclaration` read-backs (4.3, 5.3) have landed too, plus a restriction
+node's onProperty/someValuesFrom/allValuesFrom scaffolding gained the same describe-lane suppression.
+Landing A4's three corpus rows against the live chat surface surfaced a real bug in A3's own role
+route — role-hierarchy/transitivity matching compared an asserted edge's literal predicate spelling
+against a role axiom's namespace-stripped term spelling, so a role reaching the tableau only through
+a real taught relation never matched its own declaration; section 6's own text below still describes
+the reader as originally landed; the fix and the corpus rows are section 12's read-back round and A4.
+Phase B1 through B3 remain DESIGN, nothing built; every module path in those sections marked "new"
+is a file or function that does not exist yet; every existing anchor below was read at HEAD.
 
 `PLAN_SYLLOGIST_EL_DL.md` shipped a SHOIQ tableau. It proves transitive-role propagation, role
 hierarchies, nominals, qualified cardinality and inverse roles, with a test file per increment. Two
