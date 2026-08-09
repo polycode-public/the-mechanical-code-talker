@@ -73,14 +73,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   polling" control that halts the running "start polling live sources" state; (4) "enrich
   now" output must read like the articles do — through the paraphrasing sentence templates,
   not raw rows.
-- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — the shipped gate
-  still lets the seed fallback show corpus concept cards ("purse", "drawer", "cars" — a
-  reader knows what a drawer is; that is not news). A Fable-tier design wave is drafting
-  `PLAN_NEWSWORTHINESS.md`: codify what makes a mention newsworthy in terms of the graph
-  itself — a NEW mention of a named person, business, place or event (an individual the graph
-  didn't hold, or a fresh assertion about one it did), never a class the seed already
-  defines; and decide what the feed shows when nothing qualifies (an empty-but-honest feed
-  beats concept cards).
+- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — design landed:
+  `PLAN_NEWSWORTHINESS.md` defines news as an entity-anchored novelty event (test E: a
+  reported row names a non-class term absent from the graph's prior corpus/reference/teach
+  terms; test A: a fresh anchored assertion about a known entity), kills the concept-card
+  fallback in favour of a designed empty state, and decides the borderline cases ("apple"
+  without an anchor is a recorded known miss, never a guess). Execution N0-N4 not yet
+  dispatched; N2 sequences after the news-controls worktree merges (same files).
 - [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
