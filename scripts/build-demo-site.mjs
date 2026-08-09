@@ -791,6 +791,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
   const proseBand = blocks["prose-band"];
   const commonsenseqa = blocks.commonsenseqa;
   const syllogist = blocks.syllogist;
+  const news = blocks.news;
 
   const plannerRows = Object.entries(planner.detail.domains).map(([domainName, d]) => `
           <tr>
@@ -853,6 +854,17 @@ function renderClaimsHtml({ blocks, plannerButton }) {
     jsonName: "syllogist", demoHref: "chat.html",
   });
 
+  const l3 = claimFigureBlock({
+    id: "l3-news", kicker: "L3",
+    sentence: "Replaying the shipped news and knowledge-base fixtures through the whole poll-to-feed loop, this much of the fetched text landed as a stored fact.",
+    figureHtml: `<p class="claim-block-figure" data-source="results/claims/news.json#value">${news.value}<span class="unit">% strict, of ${fmtInt(news.detail.sentenceCount)} sentences</span></p>
+        <p class="claim-block-figure-split"><span data-source="results/claims/news.json#detail.recognizedCount">${fmtInt(news.detail.recognizedCount)}</span> recognized strict, <span data-source="results/claims/news.json#detail.groundedRateOptimisticPercent">${news.detail.groundedRateOptimisticPercent}%</span> once the optimistic tier is counted too.</p>
+        <p>The enrichment round tried <span data-source="results/claims/news.json#detail.enrichCandidatesTried">${fmtInt(news.detail.enrichCandidatesTried)}</span> fact-ungrounded terms against the knowledge-base fixtures and grounded <span data-source="results/claims/news.json#detail.enrichEnriched">${fmtInt(news.detail.enrichEnriched.length)}</span> of them; the rest went into the negative cache, the same shape a real source finding nothing reads as.</p>`,
+    notMean: `This run's strict rate reads higher than L1's prose-band claim, not lower — the shipped contemporary fixtures are authored samples matching each format's real field shapes rather than trims of recorded live bytes, and an author's sample sentences lean toward the clean copula shape ("a tariff is a tax on imports") the strict recognizer reads well. It is not a claim about raw contemporary news prose in general. The knowledge-base fixtures are each keyed to one demonstration term ("heart") never mentioned by the contemporary fixtures, so this run's own enrichment attempts miss honestly rather than fabricate a match — see <code>reports/NEWS_RIG.md</code> for the per-source breakdown and the full reasoning.`,
+    standard: "fixture-true: every fetch this run made was answered from a file committed to the repository, through the exact adapters and service code the live page runs, with the network switched off.",
+    jsonName: "news", demoHref: "news.html",
+  });
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -876,6 +888,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <li><a href="#l1-prose-band">Prose grounding</a></li>
       <li><a href="#l2-commonsenseqa">CommonsenseQA</a></li>
       <li><a href="#c8-syllogist">Syllogist reasoning</a></li>
+      <li><a href="#l3-news">News feed grounding</a></li>
     </ol>
   </nav>
 
@@ -885,7 +898,7 @@ function renderClaimsHtml({ blocks, plannerButton }) {
       <h1>Claims and limits</h1>
     </header>
 
-    <div class="claim-block-grid">${c7}${l1}${l2}${c8}
+    <div class="claim-block-grid">${c7}${l1}${l2}${c8}${l3}
     </div>
     ${bench}
 

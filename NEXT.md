@@ -39,10 +39,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   Y` lane (`DOES_HAVE_ASK_RE`/`restrictionExistentialHit`, `src/services/chat.mjs`), not the isa
   ladder — a different code path from `PLAN_DL_ENGLISH_SURFACE.md`'s B1/B2 fallback and case-naming
   work.
-- [ ] **PLAN_NEWS_FEED.md — phase 9, in flight** — phases 0-8 are landed and the page's UX
-  contract is pinned green end to end (`test-e2e/pages-news.test.mjs`,
-  `pages-news-feed.test.mjs`). Phase 9 (the fixture rig, `reports/NEWS_RIG.md`, the claims
-  block, the share-post number) is running in a worktree sub-agent and closes the plan.
 - [ ] **MUDIII's chat surface can't reach the river scenario or the drive-trait sentences** —
   the plan-ladder remainder `PLAN_RIVER_CROSSING.md`'s R7 section records: the chat opener is
   a closed regex naming only the three grid layouts (no chat line opens a layout-less puzzle

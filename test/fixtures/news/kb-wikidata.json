@@ -2,6 +2,7 @@
   "entities": {
     "Q1071": {
       "id": "Q1071",
+      "lastrevid": 2130456789,
       "labels": { "en": { "language": "en", "value": "heart" } },
       "descriptions": { "en": { "language": "en", "value": "organ that pumps blood through the blood vessels" } },
       "claims": {

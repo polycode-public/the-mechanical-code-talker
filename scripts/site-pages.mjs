@@ -110,4 +110,4 @@ export const HELP_META = {
  *  exist in the repo — the same three checks that test already runs over
  *  every JSON file present, now also pinned to what the page promises to
  *  show. Every rig under results/claims/ publishes a block here. */
-export const CLAIMS_PAGE_BLOCKS = ["planner", "prose-band", "commonsenseqa", "syllogist"];
+export const CLAIMS_PAGE_BLOCKS = ["planner", "prose-band", "commonsenseqa", "syllogist", "news"];

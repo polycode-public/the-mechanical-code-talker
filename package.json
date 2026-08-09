@@ -165,6 +165,7 @@
     "claim:commonsenseqa": "node scripts/claims/claim-commonsenseqa.mjs",
     "claim:planner": "node scripts/claims/claim-planner.mjs",
     "claim:syllogist": "node scripts/claims/claim-syllogist.mjs",
+    "claim:news": "node scripts/news-rig.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
     "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
