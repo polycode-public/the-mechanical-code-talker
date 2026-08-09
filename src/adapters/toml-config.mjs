@@ -165,7 +165,8 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // PASS-THROUGH, same discipline as [games.*]/[research]/[recognition] —
   // the raw `[reasoning]` table (syllogise_budget/syllogise_depth/
   // classify_budget/classify_rounds/max_environments/prove_steps/
-  // prove_branches/prove_nodes, snake_case) rides through unmodified;
+  // prove_branches/prove_nodes/ask_prove_fallback/ask_prove_steps/
+  // ask_prove_branches/ask_prove_nodes, snake_case) rides through unmodified;
   // mapping onto the internal camelCase shape and default-filling is
   // resolveReasoningConfig's job.
   if (src.reasoning !== undefined) cfg.reasoning = src.reasoning;

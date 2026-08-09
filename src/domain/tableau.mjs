@@ -972,6 +972,19 @@ export function proveSubsumption(kb, subClass, superClass, opts = {}) {
   return proveByRefutation(kb, [{ ind: "fresh-0", expr: query, from: [] }], opts);
 }
 
+/** Class subsumption of a NEGATED superclass by refutation: does the KB
+ *  entail `subClass ⊑ ¬superClass`? Same fresh-individual technique as
+ *  proveSubsumption, asserting `subClass ⊓ superClass` (unsatisfiable ⟺ the
+ *  negation is entailed) rather than `subClass ⊓ ¬superClass`. The
+ *  class-level counterpart of calling proveEntailment with `notE(concept)`
+ *  directly — proveSubsumption's own signature takes a class name rather
+ *  than an arbitrary concept, so there is no concept argument to negate at
+ *  that call site. */
+export function proveSubsumptionOfNegation(kb, subClass, superClass, opts = {}) {
+  const query = toNNF(andE([atom(subClass), atom(superClass)]));
+  return proveByRefutation(kb, [{ ind: "fresh-0", expr: query, from: [] }], opts);
+}
+
 // ---- reading the store into a KB -------------------------------------------
 
 function describeClashKind(clash) {
@@ -1374,5 +1387,34 @@ export function extractTableauModule(rows, seedTerms, { hops = DEFAULT_MODULE_HO
     if (p === "rdfs:subpropertyof" || p === "owl:inverseof") return rolesUsed.has(localRoleName(r.subject));
     if (p === "rdf:type" && String(r.object).toLowerCase() === "transitiveproperty") return rolesUsed.has(localRoleName(r.subject));
     return false;
+  });
+}
+
+// The row shapes a plain subclass chase (the isa ladder, /classify,
+// /syllogise) never reads — moduleHasDlShape's own vocabulary, kept apart
+// from RECOGNISED_KB_PREDICATES above since that set also names shapes the
+// chases DO read (owl:onProperty, owl:someValuesFrom, owl:onClass,
+// rdfs:subClassOf, owl:disjointWith, rdf:type, mgxneg:subClassOf).
+const DL_SHAPE_PREDICATES = new Set([
+  "owl:unionof", "owl:complementof", "owl:oneof", "owl:allvaluesfrom",
+  "owl:mincardinality", "owl:maxcardinality", "owl:cardinality",
+  "rdfs:subpropertyof", "owl:inverseof",
+]);
+
+/** Does this module hold any axiom shape the plain subclass chases cannot
+ *  read? True when some row's predicate is owl:unionOf, owl:complementOf,
+ *  owl:oneOf, owl:allValuesFrom, a cardinality predicate, or a role axiom
+ *  (rdfs:subPropertyOf, owl:inverseOf, or a `rdf:type
+ *  owl:TransitiveProperty` declaration). Without one of these the tableau
+ *  can only redo the subclass walk the chases just finished, so running it
+ *  would spend a budget to reach the same miss they already reached —
+ *  this is the gate that keeps chat's automatic /prove fallback off the
+ *  ordinary hot path. Pure, no I/O. */
+export function moduleHasDlShape(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.some((r) => {
+    const p = String(r?.predicate || "").trim().toLowerCase();
+    if (DL_SHAPE_PREDICATES.has(p)) return true;
+    return p === "rdf:type" && String(r?.object || "").toLowerCase() === "transitiveproperty";
   });
 }

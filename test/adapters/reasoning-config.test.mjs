@@ -25,6 +25,10 @@ test("resolveReasoningConfig: a set key wins, every unset sibling keeps its defa
   assert.equal(cfg.proveSteps, DEFAULT_REASONING_CONFIG.proveSteps);
   assert.equal(cfg.proveBranches, DEFAULT_REASONING_CONFIG.proveBranches);
   assert.equal(cfg.proveNodes, DEFAULT_REASONING_CONFIG.proveNodes);
+  assert.equal(cfg.askProveFallback, DEFAULT_REASONING_CONFIG.askProveFallback);
+  assert.equal(cfg.askProveSteps, DEFAULT_REASONING_CONFIG.askProveSteps);
+  assert.equal(cfg.askProveBranches, DEFAULT_REASONING_CONFIG.askProveBranches);
+  assert.equal(cfg.askProveNodes, DEFAULT_REASONING_CONFIG.askProveNodes);
 });
 
 test("resolveReasoningConfig: every documented key maps from its snake_case tmct.toml spelling", () => {
@@ -32,11 +36,13 @@ test("resolveReasoningConfig: every documented key maps from its snake_case tmct
     reasoning: {
       syllogise_budget: 10, syllogise_depth: 5, classify_budget: 20, classify_rounds: 6,
       max_environments: 2, prove_steps: 30, prove_branches: 7, prove_nodes: 8,
+      ask_prove_fallback: false, ask_prove_steps: 40, ask_prove_branches: 9, ask_prove_nodes: 11,
     },
   });
   assert.deepEqual(cfg, {
     syllogiseBudget: 10, syllogiseDepth: 5, classifyBudget: 20, classifyRounds: 6,
     maxEnvironments: 2, proveSteps: 30, proveBranches: 7, proveNodes: 8,
+    askProveFallback: false, askProveSteps: 40, askProveBranches: 9, askProveNodes: 11,
   });
 });
 
@@ -46,6 +52,17 @@ test("resolveReasoningConfig: a non-positive or non-integer value falls back to 
   assert.equal(cfg.classifyRounds, DEFAULT_REASONING_CONFIG.classifyRounds);
   assert.equal(cfg.proveSteps, DEFAULT_REASONING_CONFIG.proveSteps);
   assert.equal(cfg.proveBranches, DEFAULT_REASONING_CONFIG.proveBranches);
+});
+
+test("resolveReasoningConfig: ask_prove_steps = 0 clamps to its default rather than disabling the fallback's budget", () => {
+  const cfg = resolveReasoningConfig({ reasoning: { ask_prove_steps: 0 } });
+  assert.equal(cfg.askProveSteps, DEFAULT_REASONING_CONFIG.askProveSteps);
+});
+
+test("resolveReasoningConfig: ask_prove_fallback = false turns the fallback off, and a corrupt value degrades to its default", () => {
+  assert.equal(resolveReasoningConfig({ reasoning: { ask_prove_fallback: false } }).askProveFallback, false);
+  assert.equal(resolveReasoningConfig({ reasoning: { ask_prove_fallback: "nope" } }).askProveFallback, DEFAULT_REASONING_CONFIG.askProveFallback);
+  assert.equal(resolveReasoningConfig({ reasoning: { ask_prove_fallback: 0 } }).askProveFallback, DEFAULT_REASONING_CONFIG.askProveFallback);
 });
 
 test("resolveReasoningConfig: returns a fresh object each call — callers cannot mutate the shipped defaults", () => {

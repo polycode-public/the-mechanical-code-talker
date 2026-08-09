@@ -9055,6 +9055,138 @@ async function findWiderConsistencyClash(rows, variants, reasoning) {
 }
 export { findWiderConsistencyClash };
 
+/** TRACK B1: a plain isa-shaped miss falls through to a bounded, automatic
+ *  tableau proof before the isa reader's own recovery text renders. Called
+ *  from the isa branch immediately after `deeperChainExists` is computed and
+ *  immediately before `knownSubjectIsa.length` is checked — the one point
+ *  that dominates every exit the branch takes, whichever of the three
+ *  reasons (a subject with an `rdf:type` row, a subject with only an
+ *  `owl:disjointWith` row, or a subject the store has never seen) sent it
+ *  there.
+ *
+ *  Three things gate the prover, and none of them runs it: the question
+ *  already parsed through ISA_ASK_RE (true by construction — every caller
+ *  matched it to reach here); every live chase above already missed (true
+ *  by construction — this runs immediately before the isa branch's own
+ *  recovery text); and the extracted module holds a DL-only axiom shape
+ *  (`moduleHasDlShape`) — without one the tableau can only redo the
+ *  subclass walk the chases just finished, so running it would spend a
+ *  budget to reach the identical miss they already reached.
+ *
+ *  Two-sided, PROVED ONLY. Proves `subject : class`; `proved` renders yes.
+ *  A `disproved` first pass tries the NEGATION (`subject : ¬class`);
+ *  `proved` there renders no — a store-entailed negation, never the
+ *  counter-model `/prove` itself renders as "no", since a counter-model
+ *  under the open-world rule means "not entailed", not "entailed false",
+ *  and converting that into a denial on a plain question would turn
+ *  abstention into a guess. Anything else (both passes disproved, either
+ *  exhausted, or the ex-falso guard below firing) returns null, so the
+ *  isa branch's own miss text renders byte-identical.
+ *
+ *  The ex-falso guard runs before either proof pass: an individual whose
+ *  own premises already clash proves anything asked of it (the shipped
+ *  `inference.dl.cardinality-clash` corpus row shows the shape doing this
+ *  under an explicit `/prove`), and an automatic fallback must never turn
+ *  that into a confident yes — it renders the clash instead, through the
+ *  same premise-quoting text `findWiderConsistencyClash` above already
+ *  uses.
+ *
+ *  Returns `{ text, replace: true }` on a proved verdict or a clash,
+ *  `{ budgetExhausted: true }` when a pass exhausted its budget (the caller
+ *  reads this flag to stamp the turn record the same way `/prove`'s own
+ *  budget wall does, and renders nothing else — the existing miss stands),
+ *  or `null` when nothing here changes the answer. */
+// A cheap, LITERAL duplicate of tableau.mjs's own moduleHasDlShape
+// vocabulary (DL_SHAPE_PREDICATES there) — checked here, inline, before
+// this file's own dynamic `import("../domain/tableau.mjs")`, so the
+// overwhelming majority of ordinary isa misses (nothing DL-shaped in the
+// store at all) never pay that module's first-load parse cost on the hot
+// path. Keep in sync with tableau.mjs's DL_SHAPE_PREDICATES by hand; a
+// drift here only ever makes this pre-check MISS a real DL shape (falling
+// through to the authoritative, imported moduleHasDlShape below, which
+// still runs whenever this pre-check can't rule the store out), never
+// falsely certify one.
+const CHAT_DL_SHAPE_PREDICATES = new Set([
+  "owl:unionof", "owl:complementof", "owl:oneof", "owl:allvaluesfrom",
+  "owl:mincardinality", "owl:maxcardinality", "owl:cardinality",
+  "rdfs:subpropertyof", "owl:inverseof",
+]);
+function storeMightHaveDlShape(rows) {
+  return rows.some((r) => {
+    const p = String(r?.predicate || "").trim().toLowerCase();
+    if (CHAT_DL_SHAPE_PREDICATES.has(p)) return true;
+    return p === "rdf:type" && String(r?.object || "").toLowerCase() === "transitiveproperty";
+  });
+}
+async function autoProveFallback(memoryDir, cache, allRows, subjectWord, subjCandidates, objVariants, classWord) {
+  // storeMightHaveDlShape already ruled out "nothing DL-shaped anywhere in
+  // the store" without paying tableau.mjs's own first-load parse cost — see
+  // its own docblock. Only a store that passes it ever reaches the import.
+  if (!storeMightHaveDlShape(allRows)) return null;
+  const {
+    extractTableauModule, buildTableauKb, proveEntailment, proveSubsumption, proveSubsumptionOfNegation,
+    findTableauViolations, moduleHasDlShape,
+  } = await import("../domain/tableau.mjs");
+  const { normFactTerm } = await import("../adapters/memory/core.mjs");
+  const subjectTerm = resolveProveTerm(subjCandidates, allRows, normFactTerm(subjectWord));
+  const classTerm = resolveProveTerm(objVariants, allRows, normFactTerm(classWord));
+  // The subject's own stored TYPES seed the module too, not just its name —
+  // extractTableauModule's structural walk starts from class/role
+  // vocabulary, so an individual reached only through its own `rdf:type`
+  // edge never pulls in that class's own restrictions or union membership
+  // unless the class is seeded directly. Same discipline
+  // findWiderConsistencyClash already applies above.
+  const typeSeeds = allRows.filter((r) => r.predicate === "rdf:type" && subjCandidates.has(r.subject)).map((r) => r.object);
+  const moduleRows = extractTableauModule(allRows, [subjectTerm, classTerm, ...typeSeeds]);
+  // Both cheap, in-memory, no I/O — the gate that keeps the ordinary miss
+  // off the hot-path cost of reading tmct.toml at all. Only a DL-shaped
+  // module ever reaches resolveReasoningConfigForRepo below.
+  if (!moduleHasDlShape(moduleRows)) return null;
+  const reasoning = await resolveReasoningConfigForRepo(memoryDir);
+  if (!reasoning.askProveFallback) return null;
+  const kb = buildTableauKb(moduleRows);
+  const proveOpts = { maxSteps: reasoning.askProveSteps, maxBranches: reasoning.askProveBranches, maxNodes: reasoning.askProveNodes };
+  const isIndividual = kb.namedIndividuals.has(subjectTerm);
+  const byId = new Map(moduleRows.map((r) => [r.id, r]));
+
+  if (isIndividual) {
+    const violation = findTableauViolations(kb, [subjectTerm], proveOpts)[0];
+    if (violation) {
+      const cited = violation.premises.map((id) => byId.get(id)).filter(Boolean).map(renderFactLine).join("; ");
+      return {
+        text: `I can't answer that — what I've been told about ${violation.subject} is inconsistent: `
+          + `${cited || "the facts I hold about it clash"}. I'd need one of those retracted before I can answer honestly.`,
+        replace: true,
+      };
+    }
+  }
+
+  const renderProvedCite = (result) => {
+    const premiseRows = result.premises.map((id) => byId.get(id)).filter(Boolean);
+    return { cited: premiseRows.map(renderFactLine).join("; "), caseSplit: premiseRows.some((r) => r.predicate === "owl:unionOf" || r.predicate === "owl:oneOf") };
+  };
+
+  const positive = isIndividual
+    ? proveEntailment(kb, subjectTerm, { t: "atom", name: classTerm }, proveOpts)
+    : proveSubsumption(kb, subjectTerm, classTerm, proveOpts);
+  if (positive.status === "proved") {
+    const { cited, caseSplit } = renderProvedCite(positive);
+    const conclusion = caseSplit ? `in every case, ${subjectWord} is a ${classWord}.` : `so ${subjectWord} is a ${classWord}.`;
+    return { text: `yes — ${cited}; ${conclusion}`, replace: true };
+  }
+  if (positive.status === "exhausted") return { budgetExhausted: true };
+
+  // Step 1 disproved: a counter-model, never rendered on this path. Step 2
+  // asks the negation — a store-entailed negation is a grounded no.
+  const negative = isIndividual
+    ? proveEntailment(kb, subjectTerm, { t: "not", c: { t: "atom", name: classTerm } }, proveOpts)
+    : proveSubsumptionOfNegation(kb, subjectTerm, classTerm, proveOpts);
+  if (negative.status === "exhausted") return { budgetExhausted: true };
+  if (negative.status !== "proved") return null;
+  const { cited } = renderProvedCite(negative);
+  return { text: `no — ${cited}; so ${subjectWord} is not a ${classWord}.`, replace: true };
+}
+
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
   let normFactTerm; let normFactPredicate;
   try { ({ normFactTerm, normFactPredicate } = await import("../adapters/memory/core.mjs")); } catch { return null; }
@@ -11390,6 +11522,16 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const deeperChainExists = [...subjCandidates].some(
       (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
     );
+    // TRACK B1 — the automatic /prove fallback: every live chase above has
+    // already missed, so this is the one point upstream of every exit the
+    // isa branch takes (see autoProveFallback's own docblock). A proved
+    // verdict or an ex-falso clash replaces the miss outright; an exhausted
+    // budget merges onto whichever of the three recovery texts below still
+    // renders, so the miss itself stays byte-identical and only gains the
+    // marker chatbench/infbench read apart from a parse miss.
+    const autoProve = await autoProveFallback(memoryDir, cache, rows, subjectWord, subjCandidates, objVariants, kindWord);
+    if (autoProve?.text) return autoProve;
+    const askProveBudgetExhausted = !!autoProve?.budgetExhausted;
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
       // A someValuesFrom restriction node among the subject's own remembered
@@ -11419,6 +11561,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
         replace: true,
         miss: true, // still a MISS in the turn record — honest wording, not an answer
+        ...(askProveBudgetExhausted ? { budgetExhausted: true } : {}),
       };
     }
     // A stored CONVERSE ("every dog is a mammal" asked as "is a mammal a
@@ -11433,6 +11576,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         text: `I can't confirm that — what I know runs the other way: ${renderFactLine(converseHit)}. A kind doesn't reverse. If it's true, teach me: "every ${subjectWord} is a ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`,
         replace: true,
         miss: true,
+        ...(askProveBudgetExhausted ? { budgetExhausted: true } : {}),
       };
     }
     // Subject with NO isa facts: only divert when it's mentioned NOWHERE at
@@ -11445,6 +11589,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         text: `I can't confirm that — I don't know "${subjectWord}" at all yet. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}". If it isn't, teach me: "no ${subjectWord} is a ${kindWord}".`,
         replace: true,
         miss: true,
+        ...(askProveBudgetExhausted ? { budgetExhausted: true } : {}),
       };
     }
     return null; // the honest miss stands (never a guessed "no")
@@ -15221,6 +15366,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (liveGameOwnWord) bareMetaHit = null;
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
   let selfContainedMiss = false;
+  // TRACK B1: the automatic /prove fallback's own budget-exhaustion marker,
+  // read off a fact-lane hit the same way selfContainedMiss is — merged onto
+  // the turn record below, the same field /prove's own budget wall stamps.
+  let budgetExhausted = false;
   if (bareMetaHit?.reference) {
     // The bare-form reference hit mirrors (4h): the cited answer replaces the
     // miss, the turn is no longer recorded as one, and the article's grounded
@@ -15376,6 +15525,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // the empty-graph orientation pointer below stays off it — a pronoun
       // decline with an index pointer under it is two answers to one turn.
       if (fact.selfContainedMiss) selfContainedMiss = true;
+      if (fact.budgetExhausted) budgetExhausted = true;
       // A `weakOnly` hit (the "what do you know about X" reader's
       // corpus-weak-only hedge) is shown as `answer` above like any other
       // fact-lane hit, but doesn't count as REAL grounding — via/recordMiss
@@ -15961,6 +16111,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // Premise-derived trust for a LIVE-CHASE-ONLY entailment answer; omitted
     // entirely when this turn didn't answer via one of those.
     ...(entailedTrust !== null ? { entailedTrust } : {}),
+    // The automatic /prove fallback's own budget wall — the same marker
+    // /prove's own explicit budget wall stamps, so chatbench/infbench can
+    // count a budget miss apart from a parse miss.
+    ...(budgetExhausted ? { budgetExhausted: true } : {}),
   };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
