@@ -77,11 +77,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   matter, recorded as measured); and the marketing screenshot for news.html will now capture
   the empty state, since the seed alone never heads a card — an operator content call on
   whether that is the right plate.
-- [ ] **index.html gains a wiki-backed worked example** — between "The sprite library" and
-  the Facts as "RDF/OWL triples" sections, in the existing worked-example style: a real
-  research exchange (e.g. "what is an aardvark") showing the engine search Wikipedia,
-  synthesize the answer as prose (aardvarks are animals), and cite the wiki passage text and
-  its URL. A genuine transcript, generated locally, never a mockup. In flight in a worktree.
+- [ ] **index.html gains a wiki-backed worked example** — code-complete and merged, pending
+  deployed verification: a real three-turn research transcript (honest miss on "what is an
+  aardvark", `research aardvark` fetching and citing the live Simple English Wikipedia
+  passage and URL, then the re-ask answering "aardvark is a kind of mammal" from the
+  grounded research fact) sits between the sprites and ledger plates, pinned in the index
+  spec.
 - [ ] **Playtest 027 fixes** (session f8137211, 2026-08-09; `playtests/PLAYTEST_LOG_027.md`
   holds the transcript and analysis) — code-complete and merged, pending deployed
   verification: count asks read the quantity off taught have-facts (digits and number
