@@ -13493,16 +13493,35 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
   return null;
 }
 
+// The one taught action this lane derives a constraint for without being
+// asked: the river-crossing world pack and data/games/river.txt's own
+// taught lesson both name their crossing action "ferry onto", so a
+// mgx:consumes/mgx:guards pair only ever widens or narrows THAT action's
+// legal moves, never a different taught world's. A world that never teaches
+// "ferry onto" gets no constraint rows at all — constraintsFromDrives runs
+// over every fact row, but compileDomain groups action-constraint rows by
+// name, so the derived rows simply have nowhere to attach.
+const DRIVE_DERIVED_CONSTRAINT_ACTION = "ferry onto";
+
 /** Load the taught domain for the plan lane: fact rows + rule rows compiled
- *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
- *  the caller may have just written snapshot rows this same turn. */
+ *  through src/domain.mjs, with the fox may not be with the goat family of
+ *  constraints added wherever the rows state a consumes/guards pair
+ *  (agent-traits.mjs's constraintsFromDrives) — the same bridge
+ *  mudiii-turn.mjs's own puzzle plan runs, so a world taught here and a
+ *  world played on the square solve the same puzzle the same way. A world
+ *  with no such pair compiles exactly as it did before this ran. Fresh-loads
+ *  memory (never the turn cache) because the caller may have just written
+ *  snapshot rows this same turn. */
 async function loadPlanContext(memoryDir) {
   const { loadMemory, readFactRows, readRuleRows } = await import("../adapters/memory/core.mjs");
   const { compileDomain, stateFromFacts } = await import("../domain/domain.mjs");
+  const { constraintsFromDrives } = await import("../domain/agent-traits.mjs");
   const payload = await loadMemory(memoryDir);
   const factRows = readFactRows(payload);
   const ruleRows = readRuleRows(payload);
-  const domain = compileDomain(factRows, ruleRows);
+  const derivedConstraints = constraintsFromDrives(factRows)
+    .map((slots) => ({ name: DRIVE_DERIVED_CONSTRAINT_ACTION, kind: "action-constraint", slots }));
+  const domain = compileDomain(factRows, [...ruleRows, ...derivedConstraints]);
   const state = stateFromFacts(factRows, domain);
   return { factRows, ruleRows, domain, state };
 }
