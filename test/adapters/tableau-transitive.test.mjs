@@ -1,6 +1,7 @@
 // tableau-transitive.test.mjs — owl:TransitiveProperty: the universal rule
-// propagating a filler through a role's own transitive successors, and
-// equality blocking terminating a transitive cyclic existential.
+// propagating a filler through a role's own transitive successors (both
+// ∃-rule-generated and directly asserted), and equality blocking terminating
+// a transitive cyclic existential.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildTableauKb, canonicalKey, isSatisfiable, proveEntailment } from "../../src/domain/tableau.mjs";
@@ -93,6 +94,24 @@ test("order-independence: a transitive role's propagation is byte-identical acro
   const resultA = isSatisfiable(buildTableauKb(rowsA), []);
   const resultB = isSatisfiable(buildTableauKb(rowsB), []);
   assert.deepEqual(resultA, resultB);
+});
+
+// ---- ABox role assertions over a transitive role ---------------------------
+
+test("a chain of two asserted edges over a declared-transitive role composes for the ∀-rule, and equality blocking still terminates", () => {
+  const kb = buildTableauKb([
+    { id: "t0", subject: "contains", predicate: "rdf:type", object: "transitiveproperty" },
+    { id: "ta", subject: "a", predicate: "rdf:type", object: "module" },
+    { id: "tb", subject: "b", predicate: "rdf:type", object: "module" },
+    { id: "tc", subject: "c", predicate: "rdf:type", object: "module" },
+    { id: "e1", subject: "a", predicate: "contains", object: "b" },
+    { id: "e2", subject: "b", predicate: "contains", object: "c" },
+  ]);
+  const result = isSatisfiable(kb, [{ ind: "a", expr: allE("contains", atom("safe")), from: ["p1"] }]);
+  assert.equal(result.satisfiable, true);
+  assert.ok(hasLabel(findNode(result.model, "b"), atom("safe")), "the immediate asserted successor must carry the universal's filler");
+  assert.ok(hasLabel(findNode(result.model, "c"), atom("safe")), "a transitive role's universal must reach an asserted successor's own asserted successor too");
+  assert.ok(result.steps < 200, `propagating across two asserted edges must terminate quickly, took ${result.steps} steps`);
 });
 
 test("kb.transitiveRoles carries every declared transitive role, and only those", () => {
