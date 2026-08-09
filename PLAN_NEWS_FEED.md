@@ -1417,7 +1417,7 @@ enrolled in `.gitlab-ci.yml`'s `e2e-web-local-origin` job list.
 | `test-e2e/pages-news.test.mjs` | structural: page loads with zero console/page errors; **zero third-party requests before the start action**; after a real click on the start button with every route blocked, the page degrades to failure chips and stays error-free; the seven tiles/panels render; no horizontal overflow at 375 and 320 px; the about anchor resolves |
 | `test-e2e/pages-news-feed.test.mjs` | real button clicks, asserted by their own observable effect: the start button (fixture-fulfilled poll — a status chip flips, the request log gains a row), both fixture-replay demo buttons (each its own distinct effect on the ranked terms / feed), and stop & forget (consent clears; a reload of the same page reads back as first-visit); the S1–S5 contract (seed items before any route releases, a KB hit grounds a term and reprocesses the item it came from, a KB miss enters the negative cache and is not retried, the interval control re-arms `nextPollAt`); the responsiveness contract (an in-page evaluate round trip answers within 1500 ms at several points across the page's one-time boot cost; a replay click's own effect lands in a small fraction of that boot budget, never re-paying it) |
 
-Two real bugs surfaced and fixed while writing these specs, both outside `news-browser-entry.mjs`/
+Five real bugs surfaced and fixed while writing these specs, all outside `news-browser-entry.mjs`/
 `news-viz.mjs`/`chat.mjs` (the concurrently-owned files this phase does not touch):
 
 - `subgraphAround` (`src/domain/news-feed.mjs`) re-filtered the whole fact set once per frontier
@@ -1429,23 +1429,39 @@ Two real bugs surfaced and fixed while writing these specs, both outside `news-b
   `ReferenceError: process is not defined` and silently failing every browser call (poll, enrich,
   replay, the teach panel). Fixed by skipping `loadConfig` for a non-string `memoryDir`, matching
   what the function's own prior comment already said should happen.
+- `runSentence` (same file) called `runTurn` without an `env`, so `dispatchTurn`'s own
+  `env = process.env` default parameter threw the same `ReferenceError` the moment the strict
+  recognizer actually ran a candidate — masked by the next bug below until that one's fixed too.
+  Fixed by passing `env` through explicitly (real `process.env` in Node, `{}` in a browser).
+- `uuidv7` (`src/adapters/uuid.mjs`) imported `randomBytes` from `node:crypto`, which the browser
+  bundle stubs as a throw-on-call — and `chat.mjs`'s `runTurn` stamps a session id here on every
+  turn, so every strict-tier ingest attempt would hit it. Fixed by switching to
+  `globalThis.crypto.getRandomValues` (Web Crypto), identical in Node ≥19 and every real browser,
+  needing no environment branch at all.
+- `effectiveStatus` (`src/domain/term-ledger.mjs`) treated `ttlMs: 0` the same as "no TTL given",
+  so a zero-hour negative cache left a missed term stuck "missed" forever instead of immediately
+  eligible again. Fixed by checking `ttlMs == null` instead of `!ttlMs`.
 - `pluralize` (`src/services/news.mjs`) built its own plural by appending "s", reading "0 misss"
   for a miss count other than one. Fixed by routing through the shared `pluralOf` (`src/domain/
   inflect.mjs`), the same helper `viz-theme.mjs` already uses.
 
-Two more are real and reproducible against current main, both inside the two concurrently-owned
-files, so left unfixed here per this phase's brief — the specs above assert the intended contract
-and will start passing once these land:
+With every one of those fixed, the ingest path itself no longer crashes anywhere — verified end to
+end by deleting `globalThis.process` and confirming `ingestText` grounds a real fact against a
+non-string `memoryDir` rather than throwing. What's left is one real, reproducible gap, inside the
+concurrently-owned `news-viz.mjs`, left unfixed here per this phase's brief — the specs above assert
+the intended contract and will start passing once it lands:
 
 - `news-viz.mjs`'s boot never calls `registerWinkModel`/`loadWinkVendor` (section 1's own precedent
-  for shared page machinery). Without it, `winkInstance()` has nothing registered and Node's own
-  fallback path (`process.getBuiltinModule`) has no `process` to call, so it degrades to `null` —
-  every optimistic-tier extraction and the ungrounded-term scan silently produce nothing on the
-  real page, even though the same text grounds correctly in Node.
-- `news-viz.mjs`'s source-toggle handler sets `window.tmct.session.config.sources = ids`, but
-  `session.config` (`news-browser-entry.mjs`) is a getter returning a fresh copy on every read — the
-  assignment lands on a copy that is discarded immediately, so checking or unchecking a source
-  never actually narrows what gets polled or enriched.
+  for shared page machinery). Without it, `winkInstance()` has nothing registered and returns
+  `null` on the real page — every optimistic-tier extraction, the strict tier's own turn-answering
+  (which reads on wink too), and the ungrounded-term scan all silently produce nothing, even though
+  the same text grounds correctly in Node (where the fallback `require("wink-nlp")` path works).
+
+A second, separate gap also lives in the two concurrently-owned files: `news-viz.mjs`'s
+source-toggle handler sets `window.tmct.session.config.sources = ids`, but `session.config`
+(`news-browser-entry.mjs`) is a getter returning a fresh copy on every read — the assignment lands
+on a copy that is discarded immediately, so checking or unchecking a source never actually narrows
+what gets polled or enriched.
 
 Remaining corpus rows (same lane, same runner) — four of the planned seven. The other three
 (`news.ingest.free-text`, `news.ingest.lexicon-upload`, `news.ingest.upload-downgrade`) test the
@@ -1477,8 +1493,15 @@ node --test test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
 ```
 
 The last command's current result against main: `pages-news.test.mjs` 3/4 (one real, unrelated
-CSS overflow at 320px in `news-viz.mjs`); `pages-news-feed.test.mjs` 1/4 (stop & forget passes; the
-other three hit the two unfixed bugs above).
+CSS overflow at 320px in `news-viz.mjs`); `pages-news-feed.test.mjs` 1/4 (stop & forget passes).
+The other three each fail on a precise, distinct symptom of the gaps above: the S1–S5 contract's
+request log gains 3 rows instead of 1 (the config getter-copy bug — every default source polls,
+not just the one left checked); the replay test's own fact never grounds (`seedFallback` stays
+`true` — the missing `registerWinkModel` call); the responsiveness contract's own round trip
+measures a single continuous ~13-second busy stretch, not the 1500ms budget — the page's main
+thread is occupied in one unbroken block across boot (session build through the first render),
+same shape as the `subgraphAround` hang above but not the same call: that one is already fixed
+and measured at ~4 seconds alone, so most of this stretch is something else in the boot path.
 
 ---
 

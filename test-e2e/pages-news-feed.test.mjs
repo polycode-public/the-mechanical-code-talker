@@ -312,9 +312,17 @@ test("the page answers an in-page round trip within 1500ms at several points whi
     // (a rendered `#feed .item`) rather than the phase flag alone, because
     // the phase flips to "seeded" before that first render starts — a loop
     // gated on the phase flag samples only the smaller fetch/parse window.
-    // Each sample must answer inside the budget even though the page's own
-    // main thread is busy with that work, proving the boot cost never blocks
-    // the browser's own event loop past the responsiveness contract.
+    //
+    // Each sample's own round trip is asserted the moment it lands, not
+    // batched at the end: a CDP evaluate() call cannot return early or
+    // report partial progress, so ONE stretch of a busy main thread reads
+    // as one large sample rather than several small ones swallowed inside
+    // it — asserting inline is what turns that stretch into the exact
+    // "over budget" failure it is, instead of a confusing sample-count
+    // shortfall. At least 2 samples (one before the boot work starts, one
+    // spanning it) is what a first-and-last measurement structurally
+    // guarantees; the loop takes more whenever the main thread actually
+    // yields in between.
     const roundTripSamples = [];
     const deadline = Date.now() + READY_TIMEOUT_MS;
     while (Date.now() < deadline) {
@@ -325,14 +333,13 @@ test("the page answers an in-page round trip within 1500ms at several points whi
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
       });
-      roundTripSamples.push(Date.now() - startedAt);
+      const ms = Date.now() - startedAt;
+      roundTripSamples.push(ms);
+      assert.ok(ms < ROUND_TRIP_BUDGET_MS, `round-trip sample ${roundTripSamples.length - 1} answered in ${ms}ms, over the ${ROUND_TRIP_BUDGET_MS}ms budget: ${JSON.stringify(roundTripSamples)}`);
       if (firstItemReady) break;
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(1000);
     }
-    assert.ok(roundTripSamples.length >= 3, `at least 3 round trips were sampled across boot: got ${roundTripSamples.length}`);
-    for (const [i, ms] of roundTripSamples.entries()) {
-      assert.ok(ms < ROUND_TRIP_BUDGET_MS, `round-trip sample ${i} answered in ${ms}ms, over the ${ROUND_TRIP_BUDGET_MS}ms budget: ${JSON.stringify(roundTripSamples)}`);
-    }
+    assert.ok(roundTripSamples.length >= 2, `at least 2 round trips were sampled across boot: got ${roundTripSamples.length}`);
 
     // Once boot has paid its one-time cost (the loop above only exits once
     // phase has left "seeding"), a replay-button click's own effect must
