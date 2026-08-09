@@ -628,10 +628,13 @@ export async function ingestText(text, {
   const paragraphs = String(text ?? "").split(/\n[ \t]*\n/);
   const ephemeral = !memoryDir;
   const dir = memoryDir || await mkdtemp(join(tmpdir(), "tmct-ingest-"));
-  // `dir` may be a backend handle (a sqlite store), not a path — only a real
-  // directory string can seed loadConfig's cwd; a handle-holding caller passes
-  // its own config.
-  const cfg = config || loadConfig(process.env, typeof dir === "string" ? dir : process.cwd());
+  // `dir` may be a backend handle (a sqlite store, or a browser's in-memory
+  // store), not a path — only a real directory string can seed loadConfig's
+  // cwd, and `process` itself doesn't exist in a browser. A handle-holding
+  // caller passes its own config; absent that, `graphFile` is moot for a
+  // handle anyway (there is no on-disk repo to resolve it against), so a
+  // bare default stands in rather than reaching for `loadConfig`/`process`.
+  const cfg = config || (typeof dir === "string" ? loadConfig(process.env, dir) : { graphFile: "" });
   const lex = lexicon || loadLexicon();
   const nlp = optimistic ? winkInstance() : null;
   // The fact-degree scan below runs whether or not --optimistic is on, so it
