@@ -619,6 +619,8 @@ dact:apology a dact:CommunicativeFunction ;
 #    pattern 16  VERB is transitive           owl:TransitiveProperty
 #    pattern 17  VERB1 is the inverse         owl:inverseOf, both directions
 #                of VERB2
+#    pattern 18  every N1 VERB only N2         owl:Restriction + owl:onProperty +
+#                                              owl:allValuesFrom (universal restriction)
 #
 #    Flat-store stand-in: the JSON fact store has no RDF lists, so a pattern-4
 #    intersection is flattened to REPEATED owl:intersectionOf triples (one per
@@ -682,6 +684,14 @@ tmct:contains a owl:TransitiveProperty .
 # directions are stored, unlike owl:differentFrom's one-direction storage.
 tmct:contains owl:inverseOf tmct:owns .
 tmct:owns owl:inverseOf tmct:contains .
+
+# Pattern 18's term, the universal-restriction sibling of pattern 4/15's
+# someValuesFrom convention: owl: is standard OWL 2 vocabulary, so it needs
+# no declaration of its own, only this documentation example.
+tmct:heart rdfs:subClassOf tmct:all-contains-valve .
+tmct:all-contains-valve a owl:Restriction ;
+  owl:onProperty tmct:contains ;
+  owl:allValuesFrom tmct:valve .
 
 # ---------------------------------------------------------------------------
 # 3. Software-entity classes — the lexicon's top-level nouns (lowercase lemma
