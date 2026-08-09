@@ -690,6 +690,24 @@ the 100 fixture stems open with a word `QUESTION_LEAD_RE` recognizes at all, so 
 declined before `extractStemSourceTerm` ever runs — untouched here, since it is a shared gate several
 other lanes also read). Section 7.6's acceptance commands are green.
 
+**`leadsInterrogative` widened.** CommonsenseQA stems mostly postpone their wh-word instead of
+fronting it ("... you will be doing what?", "The trucker plopped on the bench ..., where did he
+arrive?"), which `QUESTION_LEAD_RE`'s first-word-only check couldn't see. `leadsInterrogative`
+(`src/domain/interpret/normalize.mjs`) now also recognizes four closed, deterministic shapes, each
+gated on the line actually ending in "?": a bare wh-word as the last word before the question mark,
+a wh-word fronted behind a single preposition ("In what country ...?"), a wh-word inverted around an
+auxiliary mid-sentence with no comma to split on, and a trailing comma/period clause that itself
+opens with a `QUESTION_LEAD_RE` word. That takes the fixture from 50 of 100 stems passing the gate to
+95 of 100 (5 stay declined — genuinely irregular stems with no wh-word at all, or a wh-word in a
+position none of the four shapes cover). Re-measured: `answered`, `refused`, `abstained`, and
+`sourceEdgePresent` all came back unchanged (1/2/97/2, still 0 correct) — a wider gate, not a wider
+selection. `splitChoiceQuestion` now parses stem-and-options for the newly-reached stems
+(`sourceTerm: ""` where before it returned `null` outright), but `extractStemSourceTerm`'s six
+templates all read for a FRONTED wh-word, so they still return `""` for a postponed one and the
+choice lane still lands on `refMiss` before `probeChoiceOptions` ever runs. Reach and selection stay
+two different rungs: `extractStemSourceTerm` gaining postponed-wh templates of its own is the next
+one, in `choice-question.mjs`.
+
 **Model tier: Sonnet.** The seeding path and the detail columns need care; the scoring is trivial.
 
 New file: **`scripts/claims/claim-commonsenseqa.mjs`**. Registered in `package.json` as
