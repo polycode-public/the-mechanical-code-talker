@@ -552,10 +552,11 @@ export function agentCardMarkup(slot) {
  *  puzzle }]` — a page given none is the one-square case and ships no
  *  dropdown, the same rule mud-viz.mjs's own renderMudHtml follows. `puzzle`
  *  is true for a scenario with no town-square layout of its own (the
- *  river-crossing puzzle): no roster is minted, no tick ever runs, and the
- *  page shows the actor card and the outlook panel's puzzle plan in place of
- *  the chase HUD (see this file's own pageScript, `data-hide-when-puzzle`).
- *  `assetManifest` is
+ *  river-crossing puzzle): no roster is minted and no tick ever runs, so the
+ *  crossing board takes the 3D stage's place and the deck's play/step/reset
+ *  controls walk the plan the search found rather than driving a simulation
+ *  (see this file's own pageScript, `data-hide-when-puzzle` and
+ *  `data-show-when-puzzle`). `assetManifest` is
  *  data/mudiii-assets.json's own `assets` rows, embedded as page data and
  *  resolved client-side by `propPlacementsFrom` — this is the one parameter
  *  mud-viz.mjs's renderMudHtml has no equivalent of, because mud.html has no
