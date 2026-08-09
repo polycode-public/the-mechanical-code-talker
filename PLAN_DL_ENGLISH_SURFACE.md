@@ -21,9 +21,15 @@ guard and its own `[reasoning]` knobs (`ask_prove_fallback`/`ask_prove_steps`/`a
 role-matching gap A4 did, this time in `extractTableauModule`'s own structural walk: an individual
 reached only through its own `rdf:type` edge (rather than through the asked class itself) never
 pulled in that class's union/restriction rows, now fixed by seeding the module with the subject's
-own types too, the same discipline `findWiderConsistencyClash` already used. B2 and B3 remain
-DESIGN, nothing built; every module path in section 9 marked "new" is a file or function that does
-not exist yet; every existing anchor below was read at HEAD.
+own types too, the same discipline `findWiderConsistencyClash` already used. B2 has landed too:
+`applyOrRule` (`src/domain/tableau.mjs`) records each genuine case-analysis choice it makes,
+told apart from the ⊑-rule's own routine TBox-internalization disjunction by two structural
+conditions together (tracing to a real union/oneOf fact id, and every disjunct a bare atom or
+nominal — neither alone is reliable), and `proveByRefutation` surfaces the distinct disjuncts as
+a new `cases` field (capped at `MAX_PROVEN_CASES`, with the real count on `casesTotal`). Both
+`/prove` and the automatic fallback render it through one shared `renderProvedConclusion`. B3
+remains DESIGN, nothing built; every module path in section 10 marked "new" is a file or function
+that does not exist yet; every existing anchor below was read at HEAD.
 
 `PLAN_SYLLOGIST_EL_DL.md` shipped a SHOIQ tableau. It proves transitive-role propagation, role
 hierarchies, nominals, qualified cardinality and inverse roles, with a test file per increment. Two
