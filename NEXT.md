@@ -48,22 +48,39 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   into the browser page only, with no ask-lane grammar for those predicates. Both are new
   engine work if wanted; four planned corpus rows wait on them.
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks the levers a tuning
-  cycle should try next: relative-embedded chain resolution, a conditional-question lane, a
-  negation-scope filter, the temporal-window boundary in commit counting, and growing the
-  under-covered C2 relative-embedded census cell.
-- [ ] **News page field report (2026-08-09, deployed site)** — fixed and live at 5.0.34
-  (pipeline green at the deployed sha; the button-clicking specs are structurally local-only,
-  so live confirmation is an operator re-test). The tiles now render from a real
-  `stats()` read (they had no renderer at all); a poll no longer freezes the tab (ingest went
-  from ~16 folds per article to 2, with yields — longest main-thread block 12.4s down to
-  3.4s, held by an 8s e2e budget); clause fragments can no longer become stored terms or card
-  titles (`readsAsEntityTerm` guard); the feed scrolls in its own pane with sort and hub
-  filter pills; and two new e2e tests click poll-now for real, assert the page answers
-  mid-ingest and the tiles move. Remainder: the residual ~3s blocks are single `runTurn`
-  passes and `syllogise` rounds reached from `chat.mjs`/`news.mjs`, unchunkable from the
-  news slice; and each article still pays one initial fold because `ingestSnapshotFacts`
-  calls `ingestText` per article.
+  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
+  next tuning cycle, each its own measured round:
+  - [ ] relative-embedded chain resolution
+  - [ ] a conditional-question lane
+  - [ ] a negation-scope filter
+  - [ ] the temporal-window boundary in commit counting
+  - [ ] growing the under-covered C2 relative-embedded census cell
+- [ ] **River puzzle renders in three.js on mudiii.html** — the crossing board shipped as a
+  2D chip-and-CSS panel while the grid scenarios have the real 3D stage; the river scene
+  should render on the same three.js stage: banks, water, boat and passengers as meshes,
+  animating each ferry move as playback walks the plan. In flight in a fix worktree.
+- [ ] **mudiii scenario by query parameter, river as a top-level demo** — the rendered
+  scenario should be selectable by query parameter (e.g. `mudiii.html?scenario=river`), and
+  that link exposed as its own top-level demo entry so the river-crossing puzzle is reachable
+  directly, not only through the dropdown. In flight in the same worktree as the three.js
+  item.
+- [ ] **News page controls follow-up (2026-08-09 second field report)** — four parts, in
+  flight in a fix worktree: (1) "stop & forget" must purge the articles, not just the start
+  preference; (2) the default-enabled source roster should be actual news feeds (Wikimedia
+  featured, Hacker News, USGS, NYT World, Wikinews) with the reference/KB sources (Simple
+  English Wikipedia, Wikidata, Wiktionary, DBpedia, English Wikipedia) reserved for
+  enrichment rather than polling; (3) an always-present "poll once" button, plus a "stop
+  polling" control that halts the running "start polling live sources" state; (4) "enrich
+  now" output must read like the articles do — through the paraphrasing sentence templates,
+  not raw rows.
+- [ ] **Newsworthiness v2: entity-anchored news, defined in graph terms** — the shipped gate
+  still lets the seed fallback show corpus concept cards ("purse", "drawer", "cars" — a
+  reader knows what a drawer is; that is not news). A Fable-tier design wave is drafting
+  `PLAN_NEWSWORTHINESS.md`: codify what makes a mention newsworthy in terms of the graph
+  itself — a NEW mention of a named person, business, place or event (an individual the graph
+  didn't hold, or a fresh assertion about one it did), never a class the seed already
+  defines; and decide what the feed shows when nothing qualifies (an empty-but-honest feed
+  beats concept cards).
 - [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
   chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
   existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
