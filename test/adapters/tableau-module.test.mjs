@@ -47,6 +47,36 @@ test("a chain of restrictions longer than the hop budget still extracts — each
   for (const r of rows) assert.ok(extractedIds.has(r.id), `expected ${r.id} (deep in the restriction chain) in the extracted module`);
 });
 
+test("a universal restriction's filler is inside the extracted module", () => {
+  const rows = [
+    { id: "r1", subject: "heart", predicate: "rdfs:subClassOf", object: "all-contains-valve" },
+    { id: "r2", subject: "all-contains-valve", predicate: "owl:onProperty", object: "contains" },
+    { id: "r3", subject: "all-contains-valve", predicate: "owl:allValuesFrom", object: "valve" },
+    { id: "n1", subject: "noise", predicate: "rdfs:subClassOf", object: "noise-parent" },
+  ];
+  const extracted = extractTableauModule(rows, ["heart"], { hops: 4 });
+  const extractedIds = new Set(extracted.map(rowKey));
+  assert.ok(extractedIds.has("r1") && extractedIds.has("r2") && extractedIds.has("r3"));
+  assert.ok(!extractedIds.has("n1"));
+});
+
+test("a chain of universal restrictions longer than the hop budget still extracts — each re-seeds its own walk", () => {
+  const chain = ["valve", "hinge", "pin", "washer", "nut"];
+  const rows = [];
+  let prev = "heart";
+  chain.forEach((filler, i) => {
+    const restriction = `all-contains-${filler}`;
+    rows.push({ id: `u${i}a`, subject: prev, predicate: "rdfs:subClassOf", object: restriction });
+    rows.push({ id: `u${i}b`, subject: restriction, predicate: "owl:onProperty", object: "contains" });
+    rows.push({ id: `u${i}c`, subject: restriction, predicate: "owl:allValuesFrom", object: filler });
+    prev = filler;
+  });
+
+  const extracted = extractTableauModule(rows, ["heart"], { hops: 2 });
+  const extractedIds = new Set(extracted.map(rowKey));
+  for (const r of rows) assert.ok(extractedIds.has(r.id), `expected ${r.id} (deep in the universal-restriction chain) in the extracted module`);
+});
+
 test("a seed term with nothing in the store extracts to an empty module, never a crash", () => {
   const rows = [{ id: "a1", subject: "cat", predicate: "rdfs:subClassOf", object: "animal" }];
   assert.doesNotThrow(() => extractTableauModule(rows, ["nonexistent-term"], { hops: 4 }));

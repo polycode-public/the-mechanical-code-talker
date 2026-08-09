@@ -389,6 +389,8 @@ test("the ontology grounds the grammar: every emitted kind appears, and lexicon 
     "owl:unionOf", "owl:complementOf", "owl:oneOf", "owl:differentFrom", "owl:TransitiveProperty",
     // pattern 17 (PLAN_SYLLOGIST_EL_DL.md section 9, increment 4e)
     "owl:inverseOf",
+    // pattern 18 — the universal-restriction teach frame
+    "owl:allValuesFrom",
   ]) {
     assert.ok(text.includes(kind), `grammar kind ${kind} covered`);
   }

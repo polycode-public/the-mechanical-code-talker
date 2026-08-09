@@ -29,6 +29,17 @@ test("shape 2 — a someValuesFrom restriction normalizes to NF3 (someRight) and
   assert.deepEqual(restrictionOf.get("some-has-valve"), { role: "has", filler: "valve" });
 });
 
+test("an owl:allValuesFrom restriction yields no EL axiom and does not become an atomic concept — EL has no universal restriction", () => {
+  const rows = [
+    row("1", "heart", "rdfs:subClassOf", "all-contains-valve"),
+    row("2", "all-contains-valve", "owl:onProperty", "contains"),
+    row("3", "all-contains-valve", "owl:allValuesFrom", "valve"),
+  ];
+  const { axioms, concepts } = normalizeElTBox(rows);
+  assert.deepEqual(axioms, []);
+  assert.ok(!concepts.has("all-contains-valve"), "the universal restriction node must not read as an atomic concept");
+});
+
 test("shape 3 — the cardinality-as-existential bridge: min cardinality >= 1 normalizes the same as a someValuesFrom restriction", () => {
   const rows = [
     row("1", "bicycle", "rdfs:subClassOf", "min-1-wheel"),

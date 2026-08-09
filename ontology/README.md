@@ -53,6 +53,7 @@ section 2:
 | every N1 VERB [a] N2 | `owl:someValuesFrom` (bare existential, no `that`-clause) |
 | VERB is transitive | `owl:TransitiveProperty` |
 | VERB1 is the inverse of VERB2 | `owl:inverseOf` (both directions) |
+| every N1 VERB only N2 | `owl:allValuesFrom` (universal restriction) |
 
 Two flat-store conventions to know: an intersection (pattern 4) is stored as
 **repeated `owl:intersectionOf` triples** (the JSON fact store has no RDF
