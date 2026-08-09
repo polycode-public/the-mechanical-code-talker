@@ -1,7 +1,6 @@
 # PLAN_RIVER_CROSSING.md — river-crossing puzzles on the MUDIII square, with every imperative externalised as a fact
 
-Status: R0-R5 and R8's measurement half shipped; R6 and R7 in flight; R8's claims-page
-block waits on R6. Delivered and merged to `main`, each phase's own section carrying its
+Status: R0-R7 and R8's measurement half shipped, each phase's own section carrying its
 "shipped" note: R0 the trait vocabulary (five `mgx:` predicates, ontology rows, phrase-table
 sentences), R1 `src/domain/agent-traits.mjs` (class-chain resolver, idempotent spawn copy),
 R2 the engine reading drives/vision/mass/drain from fact rows with the config fallback
@@ -14,13 +13,26 @@ tabs on the existing `#agentSelect`; a class edit changes the next spawn, not st
 instances), R5 the belief and plan panels (`agentOutlook` in `src/services/mudiii-turn.mjs`
 over `predator-prey.mjs`'s `planTownSquareTurn`; `beliefOriginOf` in
 `src/domain/agent-belief.mjs`; the page's `.outlook-panel`, recomputed on boot and after
-every world or actor edit, no turn spent), and R8's measurement half
-(`riverRuleSentences`/`riverInstanceSentences` and `PLANNER_DOMAINS.river` in
-`src/surfaces/web/planner-instances.mjs`, `claim-planner.mjs`'s chunked sweep entry point,
-and the measured `results/claims/planner.json`: river solves the classic 3-passenger optimum
-under 1s and reports an honest miss at every larger size, crossing 10s at 182 passengers).
-Still open: R6 the river scenario on the mudiii page plus site wiring, R7 e2e/corpus, R8's
-claims-page block (waits on R6), and (sequenced later still) the
+every world or actor edit, no turn spent), R6 the river-crossing scenario as `mudiii.html`'s
+fourth dropdown entry plus the site wiring (`mudiii-about.html`'s mechanism section,
+`index.html`'s feature-plate clause, `share.mjs`'s posts), R7 the e2e coverage
+(`test-e2e/pages-mudiii-river.test.mjs`, five tests, enrolled beside its sibling in
+`e2e:deployed:pages`) plus three of its seven named corpus rows (`test/corpus/planning.jsonl`,
+riding a small `loadPlanContext` fix so the plan lane derives river-style constraints from
+`mgx:consumes`/`mgx:guards` facts the same way `mudiii-turn.mjs`'s puzzle plan already does),
+and R8's measurement half (`riverRuleSentences`/`riverInstanceSentences` and
+`PLANNER_DOMAINS.river` in `src/surfaces/web/planner-instances.mjs`, `claim-planner.mjs`'s
+chunked sweep entry point, and the measured `results/claims/planner.json`: river solves the
+classic 3-passenger optimum under 1s and reports an honest miss at every larger size, crossing
+10s at 182 passengers). R7 closes this plan's phase ladder.
+
+Still open: the four `games/mudiii.jsonl` corpus rows R7's own table named — MUDIII's chat
+game lane recognizes a closed opener vocabulary naming its three grid layouts and nothing for
+a layout-less puzzle world, and its only drive-trait sentence table
+(`src/services/agent-editor.mjs`) is spliced into the browser page only, never reached by
+`chat.mjs`'s own turn dispatcher, so neither a chat-reachable river opener nor a chat-reachable
+per-instance drive read/write exists yet to write those four rows against (section 11 records
+the finding); R8's claims-page block; and (sequenced later still) the
 population-counting/boat-capacity puzzle variants.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work. Every phase
@@ -1226,6 +1238,41 @@ node scripts/gen-screenshots.mjs && node --test test/estate/screenshots.test.mjs
 ---
 
 ## 11. Phase R7 — e2e and corpus rows
+
+**Shipped, in part.** `test-e2e/pages-mudiii-river.test.mjs` (five tests) covers the puzzle
+opening paused with its four passengers named, the classic seven-move crossing (goat first and
+last) on the outlook panel, the belief panel stating its own honest gap rather than fabricating
+a table for a world with no vision model, the full retract/widen/miss/restore edit sequence over
+the fox's class-level appetite for the goat, and no horizontal overflow at 375/320px — enrolled
+beside its sibling in `e2e:deployed:pages`.
+
+Three of the section's seven named corpus rows shipped, all in `test/corpus/planning.jsonl`:
+`planning-the-packed-river-world-solves-at-seven-crossings`,
+`planning-retracting-a-consumes-fact-shortens-the-crossing-plan` and
+`planning-an-unsolvable-crossing-reports-the-miss-not-a-partial-plan`. Each preloads the packed
+river world's own `mgx:consumes`/`mgx:guards` facts through `setup.facts` (the documented path
+for a predicate the chat surface has no teach phrasing for) alongside the same taught "ferry
+onto" action `data/games/river.txt` already uses, with none of the two hand-authored constraint
+sentences — the constraint has to come from the drive facts alone for the row to prove anything.
+That needed one small fix: `loadPlanContext` (`src/services/chat.mjs`) now merges
+`constraintsFromDrives`'s derived rows into every domain the plan lane compiles, the same bridge
+`mudiii-turn.mjs`'s own puzzle plan already runs. Safe by construction — a `consumes` pair with
+no matching `guards` row yields no constraint, and no other shipped world states both on the
+same pair — and verified against the whole `planning`/`games/mudiii` corpus lanes plus
+`test:fast` and the estate tier, all green.
+
+The other four named rows (`games/mudiii.jsonl`'s two `games.mudiii.river.*` rows and two
+`games.mudiii.drives.*` rows) stay open. `mudiiiTurn`'s opener is a closed regex vocabulary
+naming exactly the three grid layouts (`src/services/mudiii-turn.mjs`'s `matchMudiiiOpening`);
+a puzzle world with no layout matches none of them and mudiiiTurn does not claim the line at
+all, so there is no chat line that opens the river scenario as a game to write these against.
+The drive-trait sentence table (`src/services/agent-editor.mjs`, "X evades Y", "X eats Y") is
+reached only through `window.tmct.page` in the browser, never through `chat.mjs`'s own turn
+dispatcher, and the ordinary ask lane has no interrogative grammar for `mgx:pursues`/`evades`/
+`consumes`/`guards` either — so there is neither a chat-reachable way to write a per-instance
+drive override nor to read one back. Closing this needs a chat-lane opener for a layout-less
+puzzle world and a chat-reachable drive-trait query/write surface, which is new engine work
+rather than a corpus row.
 
 New spec, following `test-e2e/pages-mudiii.test.mjs`'s own `openMudiiiPage` helper (`:73-108`: a real
 Chromium context with `--enable-unsafe-swiftshader`, third-party requests blocked, console errors
