@@ -350,7 +350,9 @@ export class WebsiteStack extends Stack {
       code: lambda.Code.fromAsset(ROW_SERVICE_DIST_DIR),
       memorySize: 256,
       timeout: Duration.seconds(10),
-      reservedConcurrentExecutions: 10,
+      // No reserved concurrency: this account's total concurrency sits at the
+      // Lambda service floor, so any reservation is rejected at deploy time.
+      // The account-wide cap is itself the blunt compute bound here.
       environment: {
         TABLE_NAME: rowTable.tableName,
         TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
