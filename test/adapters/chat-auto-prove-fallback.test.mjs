@@ -93,8 +93,8 @@ test("the ex-falso guard: an individual whose class carries a min/max cardinalit
 
     const { answer } = await runTurn("is beryl a wheel", { memoryDir: dir, sessionId: "s1" });
     assert.match(answer, /^I can't answer that — what I've been told about beryl is inconsistent:/);
-    assert.match(answer, /min-2-wheel owl:minCardinality 2/);
-    assert.match(answer, /max-0-wheel owl:maxCardinality 0/);
+    assert.match(answer, /min-2-wheel minCardinality 2/);
+    assert.match(answer, /max-0-wheel maxCardinality 0/);
     assert.ok(!/^yes —/.test(answer), "an inconsistent subject must never render a confident yes");
   } finally {
     await rm(dir, { recursive: true, force: true });
