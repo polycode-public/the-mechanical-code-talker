@@ -54,7 +54,8 @@
     "./news": "./src/services/news-exports.mjs",
     "./phrase": "./src/domain/phrase-exports.mjs",
     "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs",
-    "./memory-backend-conformance": "./src/tools/memory-backend-conformance.mjs"
+    "./memory-backend-conformance": "./src/tools/memory-backend-conformance.mjs",
+    "./memory-backends": "./src/adapters/memory/backends-exports.mjs"
   },
   "files": [
     "bin/",
@@ -89,6 +90,14 @@
     "typescript": "~5.6.2",
     "wink-eng-lite-web-model": "^1.8.1",
     "wink-nlp": "^2.4.0"
+  },
+  "peerDependencies": {
+    "@aws-sdk/lib-dynamodb": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/lib-dynamodb": {
+      "optional": true
+    }
   },
   "scripts": {
     "help": "node --disable-warning=ExperimentalWarning bin/tmct.mjs --help",
@@ -207,6 +216,7 @@
     "extract:facts": "node --disable-warning=ExperimentalWarning bin/tmct.mjs extract"
   },
   "devDependencies": {
+    "@aws-sdk/lib-dynamodb": "3.1106.0",
     "esbuild": "0.28.1",
     "ink-testing-library": "4.0.0",
     "playwright": "1.61.1",
