@@ -86,14 +86,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (all 20 infbench b2PropertyInheritance rows now pass, from 5). Candidates recorded in the
   log, not queued: possessive "a dogs name", compound-noun "human name", and the backwards
   instance teach "a human name is john".
-- [ ] **News through the chat surface** — delivered: the `/news` lane assessment found the
-  chat, CLI-chat and browser-chat paths all wired through one `newsTurn` seam with thorough
-  existing pins (7 lane tests + 10 corpus rows, cited not duplicated), and index.html now
-  carries a real three-turn `/news` transcript between the news and sprites plates, pinned in
-  the index spec. Remainder: the standalone `tmct news` CLI verb defaults to `poll` while the
-  in-chat `/news` defaults to showing the feed — a real divergence no test pins; resolve by
-  PINNING both defaults as intended behavior (no CLI change), per the coordinator's stated
-  default unless the operator asks to reconcile instead.
 
 ## Discipline
 
