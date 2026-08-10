@@ -5,7 +5,7 @@
 // unknown invocation ever suggested it).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -109,4 +109,23 @@ test("a verb's continuation prose lines all hang at the prose column", () => {
   const continuations = lines.filter((l) => /^ {31}\S/.test(l));
   assert.ok(continuations.length > 5, "the help wraps prose across lines");
   for (const l of continuations) assert.equal(l.slice(0, 31).trim(), "");
+});
+
+test("a bare `tmct news` still defaults to a poll, and tmct.toml's [news] sources list is honored", () => {
+  const base = mkdtempSync(path.join(tmpdir(), "tmct-news-toml-"));
+  try {
+    writeFileSync(path.join(base, "tmct.toml"), "[news]\nsources = []\n");
+    const r = spawnSync(process.execPath, [BIN, "news"], {
+      cwd: base, encoding: "utf8", timeout: 30_000,
+    });
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}: ${r.stderr}`);
+    // Zero enabled sources reaches this exact text with no fetcher ever
+    // touched — a bare invocation with an emptied [news] table stays
+    // deterministic and network-free, and only reads this way because the
+    // toml's own sources list was actually honored (an unread [news] table
+    // would still poll the shipped defaults instead).
+    assert.equal(r.stdout, "no sources enabled — nothing to poll.\n");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });

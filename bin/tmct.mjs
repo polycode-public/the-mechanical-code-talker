@@ -1426,7 +1426,6 @@ async function main() {
     const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
     const { newsTurn, resolveNewsConfig, createNewsState } = await import("../src/services/news.mjs");
     const { loadMemory, readFactRows, appendFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
-    const { loadTomlConfig } = await import("../src/adapters/toml-config.mjs");
     const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
     // Same env > tmct.toml > default backend resolution as `tmct memory` — the
     // news facts must land in the store chat reads back.
@@ -1435,7 +1434,10 @@ async function main() {
     const store = { loadMemory, readFactRows, appendFacts };
     const memory = await loadMemory(memoryDir);
     const rows = readFactRows(memory);
-    const config = resolveNewsConfig(toml?.news);
+    // resolveNewsConfig unwraps `toml?.news` itself (the tmct.toml [news]
+    // table) — pass the whole toml, not its news sub-table, or a `[news]`
+    // table in tmct.toml is silently never read.
+    const config = resolveNewsConfig(toml);
     const state = createNewsState();
     let res;
     try {
