@@ -415,6 +415,71 @@ test("newsworthyHubs and buildNewsItems take an injected readsAsEntityTerm, so a
   assert.ok(!items.some((it) => it.hub === "bang"), "buildNewsItems threads the same injected check down to the gate");
 });
 
+// ---- the gate declines identifier-token and clause-fallback rows ----------
+
+test("a row marked identifier-token never heads a card on its own", () => {
+  const rows = [row("fact:1", "normalizefeeditems", "mgx:fallsBackTo", "the link", { extraction: ["identifier-token"] })];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(!hubs.some((h) => h.term === "normalizefeeditems"), "an identifier-token row is declined from heading, not merely from being kept");
+});
+
+test("a row marked clause-fallback never anchors a fresh assertion for its subject", () => {
+  const rows = [
+    row("seed:1", "london", "rdf:type", "city", { provenance: "corpus:seed", observedAt: "2020-01-01T00:00:00Z" }),
+    row("fact:1", "london", "mgx:hasProperty", "9 million residents", { extraction: ["clause-fallback"] }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(!hubs.some((h) => h.term === "london"), "a clause-fallback row cannot anchor the fresh-assertion test, unlike the same shape with no finding");
+});
+
+test("a pronoun-carry row still heads a card — the subject came from the paragraph's own prose, not a mis-read", () => {
+  const rows = [row("fact:1", "sydney green", "mgx:hasA", "new role", { provenance: "news:src@1", extraction: ["pronoun-carry"] })];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "sydney green"), "pronoun-carry is not a declining finding, so it heads exactly as an unmarked row would");
+});
+
+test("a term with one clean occurrence still heads even when another row for the same term is declined", () => {
+  const rows = [
+    row("fact:1", "normalizefeeditems", "mgx:fallsBackTo", "the link", { extraction: ["identifier-token"] }),
+    row("fact:2", "normalizefeeditems", "mgx:hasA", "clean definition", { provenance: "news:src@2" }),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(hubs.some((h) => h.term === "normalizefeeditems"), "a genuinely clean occurrence still heads, even alongside a declined one for the same term");
+});
+
+test("classifyNewsRow bands an mgx:nameFor row background — a definition is never a card head", () => {
+  const nameFor = row("fact:1", "latency", "mgx:nameFor", "time period");
+  assert.equal(classifyNewsRow(nameFor, { now: NOW, windowMs: 6 * HOUR }), "background");
+});
+
+test("newsworthyHubs never hubs a definitional mgx:nameFor row's object, even via a second, unrelated report", () => {
+  const rows = [
+    row("fact:1", "latency", "mgx:nameFor", "time period", { provenance: "corpus:test" }),
+    row("fact:2", "queue", "mgx:causes", "time period"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(terms.includes("queue"), `queue is a plain reported term: ${JSON.stringify(terms)}`);
+  assert.ok(!terms.includes("time period"), `time period is named by a definitional row and never hubs: ${JSON.stringify(terms)}`);
+});
+
+test("the domain-local entity check rejects a multi-word term led by a phrasal-verb particle, but a one-word particle term is exempt", () => {
+  const rows = [
+    row("fact:1", "site", "mgx:fallsBackTo", "back to the link"),
+    row("fact:2", "site", "mgx:hasA", "back"),
+  ];
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
+  const terms = hubs.map((h) => h.term);
+  assert.ok(!terms.includes("back to the link"), `a particle-led multi-word term never heads: ${JSON.stringify(terms)}`);
+  assert.ok(terms.includes("back"), `a one-word particle term is exempt from the widening: ${JSON.stringify(terms)}`);
+});
+
 // ---- priorTerms / isNovelTerm (PLAN_NEWSWORTHINESS.md N0) ------------------
 
 test("priorTerms collects subject and object terms from corpus, corpusWeak, reference and teach rows only", () => {
