@@ -266,13 +266,13 @@ const WIKIDATA_RESEARCH_PROVENANCE_RE = /(?:^|:)research:wikidata:/;
 const WIKIDATA_QID_TERM_RE = /^q[1-9]\d*$/;
 
 // The two attached findings a row's own extraction may carry that disqualify
-// it from heading a card or anchoring novelty (PLAN_EXTRACTION_CONFIDENCE.md
-// section 2.5): an identifier-shaped token or a clause-fallback read is a
-// structural tell the row was mis-read, not a report a card should lead
-// with. `pronoun-carry` is deliberately absent — a subject carried from the
-// paragraph's own prose is not a mis-read, and barring it would suppress
-// real hubs. A row with no `extraction` at all (nothing recorded, or an old
-// row from before this plan) never matches.
+// it from heading a card or anchoring novelty: an identifier-shaped token or
+// a clause-fallback read is a structural tell the row was mis-read, not a
+// report a card should lead with. `pronoun-carry` is deliberately absent — a
+// subject carried from the paragraph's own prose is not a mis-read, and
+// barring it would suppress real hubs. A row with no `extraction` at all
+// (nothing recorded, or a row written before findings existed) never
+// matches.
 const GATE_DECLINING_FINDINGS = new Set(["identifier-token", "clause-fallback"]);
 
 function rowCarriesGateDecliningFinding(row) {
