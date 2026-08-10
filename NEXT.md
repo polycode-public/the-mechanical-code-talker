@@ -40,7 +40,9 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   the news-about.html rewrite (Sonnet, the M8-flagged content fold). Landed since the
   last tracker move: E3, E4, the p2p carry, T3, T12, T7, T5, M8 (news.html thin at
   7.2 KB, −1,031 lines). Pipeline fixes for batch 3's red (#760) ride the next push.
-- Queued: T14 after T13 → T8 after T6 → T9 after T8 → T10/M10/T11 tail.
+- Queued: T14 after T13 → T8 after T6 → T9 after T8 → T10/M10/T11 tail. After T14: a
+  fresh `npm run gen:screenshots` news capture (the committed news.png still shows the
+  pre-flip UI; the about-page rewrite landed and flagged it).
   Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
   206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
   CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
