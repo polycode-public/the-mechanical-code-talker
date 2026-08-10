@@ -29,39 +29,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The latest round closed the tail three cases and
-  took the pool to 1075/1075 on tier-1 (`reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`); its decision
-  log re-ranks what is left:
-  - [x] relative-embedded chain resolution
-  - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
-    by design, since a taught locative fact stores the located thing as its subject
-  - [x] the temporal-window boundary in commit counting — measured in
-    `reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`; the pool's tier-1 failures drop from nine to two
-  - [x] a conditional-question lane — measured in `reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`; the
-    cell goes 15/25 to 25/25 green and a hypothetical the fact set cannot decide refuses
-  - [x] a `named <X>` qualifier inside a boolean branch — measured in
-    `reports/BENCHMARK_CEFR_ENGLISH_5.0.40.md`; both frontier rows compile and C2
-    relative-embedded is 25/25 green
-  - [x] a negation-scope filter — measured in `reports/BENCHMARK_CEFR_ENGLISH_5.0.41.md`; A2
-    negation goes 1.667 to 1.988 with its four hard fails cleared, and the cell reaches 25/25 green
-  - [x] `g-c1-neg-rel-19` — landed in the same round; a trailing qualifier now restricts the head
-    the sentence gives it, so the tested importer is excluded
-  - [ ] C2 pronoun-binding, 13/25 green with 12 frontier — the largest unexamined block; needs a
-    diagnosis pass before it can be ranked against the rest
-  - [ ] B2 assert-recall, 16/25 green with 9 frontier and a 0.64 performance-vs-production band
-    gap, the widest in the pool — the capability answers, something in the production path
-    doesn't reach it
-  - [x] A2 negation's four standing hard fails (`g-a2-neg-3`, `-4`, `-14`, `-24`) — all four clear
-    in the negation-scope round, three of them 0.000 to 2.000
-  - [x] `g-b1-neg-11`, "which functions are not exported" — measured in
-    `reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`; the recovery line now offers the exported-functions
-    branch, rephrase-hint goes 0.5 to 1.0 and the hard fail clears
-  - [x] `g-b2-coord-4` and `g-c1-presup-4` — measured in the same round; one defect in the
-    enumerated-choice label marker, not two levers, and the pool reaches 1075/1075 on tier-1
-  - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
-    all 25 of it, so the cell is measured rather than excluded
 - [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
   matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
   which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
