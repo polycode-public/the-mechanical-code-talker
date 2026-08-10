@@ -71,14 +71,15 @@ verdict cache can re-judge cheaply.
 Root `PLAN_*.md` docs, enumerated fresh. Delivered plans retire to `archive/` (six did on
 2026-08-09: PLAN_SYLLOGIST_EL_DL, PLAN_DL_ENGLISH_SURFACE, PLAN_COMMON_SENSE_QA,
 PLAN_RIVER_CROSSING, then PLAN_NEWS_FEED and PLAN_CSQA_SELECTION — each verified by code
-inspection and against the deployed site, 5.0.32 and 5.0.35 respectively, before the move). A `backlog/` directory holds 14 parked plans — a third lifecycle state beside
+inspection and against the deployed site, 5.0.32 and 5.0.35 respectively, before the move;
+PLAN_NEWSWORTHINESS followed on 2026-08-10, its N0-N4 live since 5.0.36 with its two recorded
+remainders promoted to NEXT items before the move). A `backlog/` directory holds 14 parked plans — a third lifecycle state beside
 root (live) and `archive/` (delivered/retired) — not tabulated here.
 
 | plan | goal | delivered | design horizon (known engineering) | research horizon (open problem) |
 |---|---|---|---|---|
 | `PLAN_NLU_BENCHMARKS.md` | score tmct against CLINC150 and HWU64 with a deterministic harness-only matcher, and feed confirmed gaps back as levers and corpus rows | nothing committed — a 2026-07-15 spike measured tier-1 arms but its scripts are not in-repo | steps 0–5 (ground truth, baseline, matcher, both runs, failure taxonomy); levers L1–L6; L7/L8 (RL property completion, Horn generalization — L8's stratified negation-as-failure needs its own design pass but the technique is precedented); W1/W2 | the far end of the "why" spectrum: contested historiography, defaults, counterfactuals, competing narratives — the plan names defeasible logic and argumentation frameworks as candidate literatures with no settled deterministic engineering today |
 | `PLAN_PUBLISH.md` | publication readiness for the site and repo, then the launch | every engineering task (T1–T7, T10, T11a/b, T15) and all four manual items shipped; the receipts page delivered under `archive/PLAN_RECEIPTS.md` | launch sequencing only — announcement timing (the ELIZA 60th-anniversary cycle), Show HN, direct submissions, conference talks (NodeConf EU CFP closes 2026-09-01) | — |
-| `PLAN_NEWSWORTHINESS.md` | replace the news feed's seed-graph concept-card fallback with an entity-anchored newsworthiness gate (a new named individual, or a fresh anchored assertion about a known one) | N0–N4 landed and measured: the prior-term read, the two-test gate, the fallback's removal, e2e pins on the operator's own examples, and the fixture measurements — see the plan's own build markers | — | recognising a named entity in lower-cased, normalised text with no gazetteer; the plan's own section 8 names NER, wikification/entity linking and first-story detection as the candidate literatures |
 
 ## README audit: claims vs. reality
 

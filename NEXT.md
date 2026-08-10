@@ -92,10 +92,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `C1:negation+relative-embedded` is one of those, so the cell's floor is this receipt. Carrying the
   intermediate through `evalBoolean` instead of re-evaluating the seed covers all of them; it
   reaches every composite lane and every miss text pinned against them.
-- [ ] **news.html's marketing screenshot now captures the empty state** — since the
-  newsworthiness gate landed, the seed alone never heads a card, so the capture pipeline
-  photographs the designed empty feed. Operator content call: keep the honest empty plate, or
-  bake a fixture poll into the capture run so the shot shows a populated feed.
+- [ ] **The newsworthiness gate's one measured false positive: scaffolding prose reads as
+  news** — `archive/PLAN_NEWSWORTHINESS.md`'s N4 marker records "back to the link" and
+  "normalizefeeditems" heading cards on the NYT fixture: the fixture's own test-scaffolding
+  sentence ("An item with no guid tag, so normalizeFeedItems falls back to the link.") is
+  well-formed prose, and the gate cannot tell meta-commentary about the parser from a report.
+  The real fix is extraction quality in `extract-facts.mjs` — the same family as the recorded
+  confidence-marker candidate and the relative-clause verb picks — not fixture editing, which
+  would risk the guid-fallback test the fixture exists to serve.
+- [ ] **Capture both news screenshot candidates with Playwright and present them** — the
+  capture pipeline now photographs the honest empty feed, and the open content call is empty
+  plate vs a baked fixture poll. Produce both shots myself (the empty state as captured today,
+  and a variant with the recorded fixture replayed before capture) and put them in front of
+  the operator so the decision is made looking at the actual plates.
 
 ## Discipline
 
