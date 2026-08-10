@@ -18,8 +18,7 @@
 
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   loadSlice, loadMap, toFacts, SLICE_FILE, WORDNET_DIR, SEON_CONCEPTS_FILE, TIER2_DIR,
 } from "../../src/adapters/corpus/conceptnet.mjs";
@@ -27,8 +26,6 @@ import { normFactTerm, factIdForTriple } from "../../src/domain/hash.mjs";
 import { queryTerms, fuzzyVariantsFor } from "../../src/domain/retrieval-plan.mjs";
 import { rowsToPayload } from "../../src/adapters/memory/rows.mjs";
 import { retrieveSubgraph, termQueryOverDocumentClient, RETRIEVAL_BUDGETS } from "../../src/services/subgraph-retrieval.mjs";
-
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export const WORDNET_BAND = "wordnet-complete";
 export const CONCEPTNET_BAND = "conceptnet-full";
@@ -397,7 +394,7 @@ async function main() {
   for (const check of movedBandChecks) {
     const absence = check.absentFromMidBundle
       ? "is absent from the mid bundle, so retrieval is the only path to it"
-      : "IS in the mid bundle, so this case proves nothing — pick another term";
+      : "IS in the mid bundle, so this case proves nothing. Pick another term";
     const round = check.rowsBack > 0
       ? `retrieval brought ${check.rowsBack} rows back under the shipped budgets`
       : "retrieval brought NOTHING back, so the round trip is broken";

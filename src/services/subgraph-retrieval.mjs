@@ -68,7 +68,8 @@ export const RETRIEVAL_BUDGETS = Object.freeze({
  *  seed and the session. */
 export const SUPPLEMENTED_MODE = "supplemented";
 
-/** No corpus read happened — no bands configured, or the breaker is open. The
+/** No corpus read happened, because no bands are configured or the breaker is
+ *  open. The
  *  answer stands on the bundled seed and the session alone. */
 export const SEED_SESSION_MODE = "seed-session";
 
@@ -249,8 +250,8 @@ async function chaseAncestry(rows, run) {
 /** Retrieve the corpus subgraph one turn can reach.
  *
  *  `queryTerm({band, term, exclusiveStartKey, limit})` resolves to
- *  `{rows, lastEvaluatedKey}` — the injected read seam, so the caller decides
- *  whether that is a document client, an HTTP route or a fixture.
+ *  `{rows, lastEvaluatedKey}`. The read is injected, so the caller decides
+ *  whether it comes from a document client, an HTTP route or a fixture.
  *
  *  Returns `{rows, metrics, plan}`. `metrics.mode` and `metrics.bounded` are
  *  what an answer's honesty marker reads: `bounded` is true when a budget

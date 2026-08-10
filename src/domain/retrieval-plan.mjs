@@ -9,7 +9,7 @@
 // those bounds holds everything the engine could have reached anyway.
 //
 // Nothing here is scored or ranked. Terms come out sorted, variants come out
-// sorted and capped, and a cap always cuts the same tail — which is what lets a
+// sorted and capped, and a cap always cuts the same tail. That is what lets a
 // smaller budget return a prefix of a larger one's answer instead of a
 // different answer.
 
@@ -124,7 +124,7 @@ export function queryTerms(text, { lexicon = loadLexicon() } = {}) {
 
 /** Deterministic fuzzy variants for one term: the words of a closed vocabulary
  *  within a fixed edit distance, capped, and ordered by that same distance with
- *  alphabetical order breaking every tie. Nothing is scored — the order is the
+ *  alphabetical order breaking every tie. Nothing is scored. The order is the
  *  bound the tier already measures, so a cap keeps the nearest forms instead of
  *  whatever the alphabet happened to put first.
  *
