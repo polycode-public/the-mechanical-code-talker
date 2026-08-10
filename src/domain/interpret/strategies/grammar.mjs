@@ -7,7 +7,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   META_MEANING_VERBS, WHERE_MARKERS, MENTION_MARKERS,
-  INHERITS_REVERSE_VERBS, stripTrailingScopeFiller, stripTrailingDiscourseTag,
+  readConverse, stripTrailingScopeFiller, stripTrailingDiscourseTag,
   ARTICLE_RELATION_CONTINUATIONS, HAS_FAMILY_VERBS,
 } from "../../ask-vocab.mjs";
 import { escapeRegex } from "../normalize.mjs";
@@ -23,9 +23,9 @@ const META_ALT = META_MEANING_VERBS.slice().sort((a, b) => b.length - a.length).
 const isHasFamilyDefines = (kind, verb) => kind === "defines" && HAS_FAMILY_VERBS.has(verb);
 
 const TEMPLATES = [
-  // T1 ASK: "does X import Y" -> Yes/No. REVERSE VERB SWAP: a semantically-reverse
-  // verb ("superclass of") means the opposite of its forward counterpart, so
-  // INHERITS_REVERSE_VERBS (ask-vocab.mjs) swaps subject/object here at parse time.
+  // T1 ASK: "does X import Y" -> Yes/No. A converse verb ("superclass of",
+  // "belongs to") states the relation from its object's side, so readConverse
+  // (ask-vocab.mjs) swaps subject/object here at parse time.
   {
     name: "ask",
     re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -33,13 +33,15 @@ const TEMPLATES = [
       const verb = m[2].toLowerCase();
       const kind = VERB_TO_KIND[verb];
       if (isHasFamilyDefines(kind, verb)) return null;
-      let subject = m[1].trim();
-      let object = m[3].trim();
-      if (INHERITS_REVERSE_VERBS.includes(verb)) [subject, object] = [object, subject];
-      return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
+      return readConverse({
+        shape: "ask", entityType: null, modifier: "direct", kind,
+        subject: m[1].trim(), object: m[3].trim(),
+      }, verb);
     },
   },
-  // T2 reverse: "which <entity> [<modifier>] <verb> <object>".
+  // T2 reverse: "which <entity> [<modifier>] <verb> <object>". A converse verb
+  // turns the same sentence into a forward read off the named object, keeping
+  // the asked entity filter.
   {
     name: "reverse",
     re: new RegExp(`^which\\s+(${ENTITY_ALT})\\s+(?:(${MODIFIER_ALT})\\s+)?(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -47,13 +49,13 @@ const TEMPLATES = [
       const verb = m[3].toLowerCase();
       const kind = VERB_TO_KIND[verb];
       if (isHasFamilyDefines(kind, verb)) return null;
-      return {
+      return readConverse({
         shape: "reverse",
         entityType: ENTITY_TO_TYPE[m[1].toLowerCase()],
         modifier: m[2] ? MODIFIER_TO_KIND[m[2].toLowerCase()] : "direct",
         kind,
         object: m[4].trim(),
-      };
+      }, verb);
     },
   },
   // T3 forward: "what does <object> <verb>" — X is given, list its R-related things.
@@ -65,7 +67,7 @@ const TEMPLATES = [
       const verb = m[2].toLowerCase();
       const kind = VERB_TO_KIND[verb];
       if (isHasFamilyDefines(kind, verb)) return null;
-      return { shape: "forward", entityType: null, modifier: "direct", kind, object: m[1].trim() };
+      return readConverse({ shape: "forward", entityType: null, modifier: "direct", kind, object: m[1].trim() }, verb);
     },
   },
   // T4 meta: "what does <term> mean" — a question about the graph's own vocabulary,

@@ -281,8 +281,61 @@ test("relative chain: a clause nothing satisfies refuses instead of citing the n
   assert.doesNotMatch(r.content, /is defined in/);
 });
 
-test("relative chain: a chain whose inner relation has no reading refuses, and names nothing on the way past", () => {
-  const r = runAsk("which tests cover the module that defines the class that Widget.render belongs to");
+// ============================================================================
+// CONVERSE VERB READINGS — a phrase that states a relation from its object's
+// side ("belongs to", "is part of", "is a superclass of") flips at parse time,
+// so the traversal runs the way the sentence means rather than its mirror.
+// ============================================================================
+
+test("converse verb: a chain hop through 'belongs to' reads the containing class, not the mirror", () => {
+  assert.deepEqual(labels(runAsk("which tests cover the module that defines the class that Widget.render belongs to")),
+    ["app/unit-tests/b.test.mjs"]);
+  assert.deepEqual(labels(runAsk("which class does Widget.render belong to")), ["Widget"]);
+  assert.deepEqual(labels(runAsk("what does Widget.render belong to")), ["Widget"]);
+});
+
+test("converse verb: the yes/no form swaps the two named roles", () => {
+  assert.match(runAsk("does Widget.render belong to Widget").content, /^Yes — contains edge from Widget to Widget\.render\./);
+  assert.match(runAsk("does Widget belong to Widget.render").content, /^No —/);
+});
+
+test("converse verb: a set question changes direction and keeps its asked kind filter", () => {
+  assert.deepEqual(labels(runAsk("which methods are part of Widget")), ["Widget.render"]);
+  assert.deepEqual(labels(runAsk("what is defined in Widget")), ["Widget.name", "Widget.render"]);
+  // the forward phrasing of the same relation is untouched
+  assert.deepEqual(labels(runAsk("what does Widget contain")), ["Widget.name", "Widget.render"]);
+  assert.deepEqual(labels(runAsk("which classes contain Widget.render")), ["Widget"]);
+});
+
+test("converse verb: the reverse-inherits phrasings answer the base class, not the subclasses", () => {
+  assert.deepEqual(labels(runAsk("which classes are a superclass of Button")), ["Widget"]);
+  assert.deepEqual(labels(runAsk("which classes inherit from Widget")), ["Button"]);
+});
+
+test("converse verb: a module-grain membership question falls back to the member's recorded site", () => {
+  // Button carries no contains edge from a module — only its recorded site.
+  assert.deepEqual(labels(runAsk("which module does Button belong to")), ["app/lib/c.mjs"]);
+  assert.deepEqual(labels(runAsk("which module does fnAlpha belong to")), ["app/lib/a.mjs"]);
+});
+
+test("passive with a prepositional agent: 'is X defined in Y' asks whether Y defines X", () => {
+  assert.match(runAsk("is Widget defined in app/lib/b.mjs").content, /^Yes — defines edge from app\/lib\/b\.mjs to Widget\./);
+  assert.match(runAsk("is Widget defined in app/lib/c.mjs").content, /^No —/);
+  assert.match(runAsk("is Widget.render contained in Widget").content, /^Yes — contains edge from Widget to Widget\.render\./);
+});
+
+test("a placement verb keeps its forward reading, so a taught locative fact stays the way it was stated", () => {
+  const p = parseQuery("does ann live in paris", { nlp });
+  assert.equal(p.shape, "ask");
+  assert.equal(p.subject, "ann");
+  assert.equal(p.object, "paris");
+});
+
+test("a relation with no converse defined stays an honest miss rather than a guessed flip", () => {
+  const r = runAsk("which tests cover the module that defines the class that Widget.render is owned by");
   assert.equal(r.tmct_ask.miss, true);
   assert.doesNotMatch(r.content, /app\/lib\/b\.mjs|app\/unit-tests\/b\.test\.mjs/);
+  const flat = runAsk("which class does Widget.render report to");
+  assert.equal(flat.tmct_ask.miss, true);
+  assert.doesNotMatch(flat.content, /Widget/);
 });

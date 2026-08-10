@@ -1480,7 +1480,14 @@ function siteDefiningModules(graph, objectIds) {
   return uniqueById(out);
 }
 
-const definesHop = (kind, entityType) => entityType === "Module" && kindsFor(kind).includes("defines");
+// Both stored membership relations answer "which module is this in": `defines`
+// runs Module -> symbol, `contains` runs Class -> member, and a member's own
+// recorded source site stands in for either edge when the index never wrote one.
+// So a converse-verb question at module grain ("which module does Button live
+// in") reaches the same site fallback the defines hop already uses.
+const MODULE_MEMBERSHIP_KINDS = new Set(["defines", "contains"]);
+const moduleMembershipHop = (kind, entityType) => entityType === "Module"
+  && kindsFor(kind).some((k) => MODULE_MEMBERSHIP_KINDS.has(k));
 
 const askSiteMembersCache = new WeakMap();
 
@@ -1531,7 +1538,7 @@ function reverseOverSet(graph, kind, entityType, objectIds) {
   const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
   if (!entityType || entityType === "Change") return subjects;
   const direct = subjects.filter((s) => s.class === entityType);
-  if (definesHop(kind, entityType)) {
+  if (moduleMembershipHop(kind, entityType)) {
     // Per-object, not per-set: "the module that defines {Widget, Button}" is the
     // union of each symbol's defining module, so a set where one member carries
     // the edge and another only a site must answer with both.
@@ -3749,7 +3756,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     matches = subjects;
   } else {
     const direct = subjects.filter((s) => s.class === entityType);
-    const sited = direct.length || !definesHop(kind, entityType) ? [] : siteDefiningModules(graph, new Set([gObjMatch.id]));
+    const sited = direct.length || !moduleMembershipHop(kind, entityType) ? [] : siteDefiningModules(graph, new Set([gObjMatch.id]));
     if (direct.length) {
       matches = direct;
     } else if (sited.length) {

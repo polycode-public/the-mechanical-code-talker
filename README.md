@@ -1496,7 +1496,7 @@ The `<where-marker>` slot takes any of *defined*, *declared*, *located*, *implem
 - **uses** — *uses*, *use*, *makes use of*, *make use of*, and more
 - **calls** — *invokes*, *invoke*, *calls*, *call*, and more
 - **defines** — *defines*, *define*, *declares*, *declare*, and more
-- **contains** — *contains*, *contain*, *lives in*, *live in*, and more
+- **contains** — *contains*, *contain*, *containing*, *belongs to*, and more
 - **tests** — *tests*, *test*, *covers*, *cover*, and more
 - **inherits** — *inherits from*, *inherit from*, *inherits*, *inherit*, and more
 - **touches** — *touched*, *touches*, *changed*, *change*, and more

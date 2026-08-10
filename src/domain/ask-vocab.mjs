@@ -28,6 +28,29 @@ const INHERITS_REVERSE_VERB_LIST = [
   "superclass", "superclasses",
 ];
 
+// The `contains` phrasings a MEMBER uses about its own container: "Widget.render
+// belongs to Widget" states the same stored edge as "Widget contains
+// Widget.render", read from the other end. They sit in RELATIONS.contains.verbs
+// (below) so VERB_TO_KIND resolves them to the right relation, and in
+// CONVERSE_VERBS (below that) so the strategies that build a parse flip the
+// direction instead of traversing the mirror of the question asked.
+const CONTAINS_CONVERSE_VERB_LIST = [
+  "belongs to", "belong to",
+  "is part of", "are part of",
+  "is defined in", "are defined in",
+];
+
+// The PLACEMENT phrasings of the same relation ("live in", "sit inside") state
+// where their subject is, and a taught locative fact stores exactly that
+// subject ("ann lives in paris" -> ann mgx:life-in paris, ask-world-relation's
+// own lane). So these read forward, and a converse entry would invert every
+// taught placement answer. "define" is no placement verb, which is why
+// "is defined in" sits in the converse list above instead.
+const CONTAINS_PLACEMENT_VERB_LIST = [
+  "lives in", "live in",
+  "sits in", "sit in", "sits inside", "sit inside",
+];
+
 export const RELATIONS = {
   imports: {
     bare: "import",
@@ -87,10 +110,12 @@ export const RELATIONS = {
     bare: "contain",
     comment: "Class -> Method/Attribute: subject's membership includes object.",
     verbs: [
-      "contains", "contain", "lives in", "live in", "is defined in", "are defined in",
-      "is part of", "are part of", "sits in", "sit in", "sits inside", "sit inside",
+      "contains", "contain",
       // gerund (g-drop normalization)
       "containing",
+      // the member's-side phrasings, flipped at parse time (CONVERSE_VERBS)
+      ...CONTAINS_CONVERSE_VERB_LIST,
+      ...CONTAINS_PLACEMENT_VERB_LIST,
     ],
   },
   tests: {
@@ -291,6 +316,31 @@ export const INHERITS_REVERSE_VERBS = Object.freeze([
   ...INHERITS_REVERSE_VERB_LIST,
   "is the superclass of", "are the superclass of", "is the parent class of",
 ]);
+
+/** Every verb phrase that names its relation from the OBJECT's side. The stored
+ *  edge runs one way; these phrases state it backwards, so a parse built from
+ *  the phrase alone answers the mirror of the question asked. A strategy that
+ *  has just built a parse hands it to `readConverse` below. Closed table: a
+ *  phrase is here only because it is already in RELATIONS' own verb lists. */
+export const CONVERSE_VERBS = Object.freeze(new Set([
+  ...INHERITS_REVERSE_VERBS,
+  ...CONTAINS_CONVERSE_VERB_LIST,
+]));
+
+/** Turn a parse built from a converse verb phrase into the reading the phrase
+ *  actually has. The two named roles swap ("does X belong to Y" asks whether Y
+ *  contains X); a set question changes direction and keeps its asked kind
+ *  filter ("which methods are part of Widget" lists what Widget contains, not
+ *  the methods containing Widget). Any other shape, and any forward-reading
+ *  verb, comes back untouched — a verb with no converse entry keeps whatever
+ *  reading it already had, including an honest miss. */
+export function readConverse(parsed, verbPhrase) {
+  if (!parsed || !CONVERSE_VERBS.has(verbPhrase)) return parsed;
+  if (parsed.shape === "ask") return { ...parsed, subject: parsed.object, object: parsed.subject };
+  if (parsed.shape === "reverse") return { ...parsed, shape: "forward" };
+  if (parsed.shape === "forward") return { ...parsed, shape: "reverse" };
+  return parsed;
+}
 
 // ---- where/when/mentions markers: these questions carry no relation verb,
 // so ask.mjs routes them by marker word instead of VERB_TO_KIND. ----

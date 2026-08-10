@@ -8,7 +8,8 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   WHERE_MARKERS, MENTION_MARKERS, PLACEHOLDER_NOUNS, PASSIVE_PARTICIPLE_TO_KIND,
-  INHERITS_REVERSE_VERBS, HAS_FAMILY_VERBS, CALLS_VERB_REPORT_NOUNS,
+  REDUCED_RELATIVE_CLAUSES,
+  readConverse, HAS_FAMILY_VERBS, CALLS_VERB_REPORT_NOUNS,
 } from "../../ask-vocab.mjs";
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
@@ -243,6 +244,7 @@ export function parseKeywordSpot(text, nlp = null) {
   // against the canonicalized array, whose word IS the table key.
   const entityType = entityHit ? ENTITY_TO_TYPE[canonWords.slice(entityHit.start, entityHit.end).join(" ")] : null;
   const modifier = modifierHit ? MODIFIER_TO_KIND[canonWords.slice(modifierHit.start, modifierHit.end).join(" ")] : "direct";
+  const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
 
   // "when" turns a touches decomposition temporal; other verbs fall through.
   if (kind === "touches" && lcWords.includes("when")) {
@@ -310,19 +312,30 @@ export function parseKeywordSpot(text, nlp = null) {
   if (verbFromParticiple && byIdx < 0 && afterText && lcWords[verbHit.start] === "called") return null;
 
   if (beforeText && afterText) {
-    const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
     // The bare have-family "ask" shape ("does X have Y") declines here, same
     // reasoning as grammar.mjs's T1 (see HAS_FAMILY_VERBS above) — never for
     // the entityType-driven forward/reverse branches below, which keep their
     // own tested grain-check decline.
     if (kind === "defines" && HAS_FAMILY_VERBS.has(verbPhrase)) return null;
     if (kind === "calls" && (leadsWithCallsReportNoun(afterText) || isBareCallsVerbWord(beforeText))) return null;
-    // A semantically-reverse verb ("superclass of") swaps subject/object, same as
-    // grammar.mjs's T1.
-    let subject = beforeText;
-    let object = afterText;
-    if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
-    return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
+    // A passive participle whose complement is introduced by a preposition
+    // rather than "by" ("is Widget DEFINED IN app/lib/b.mjs") names its AGENT
+    // after that preposition, so the leading term is the relation's object.
+    // REDUCED_RELATIVE_CLAUSES already curates which participle+preposition
+    // bigrams read that way; the "by" bigrams never reach here, since the
+    // passive branch above claims every sentence carrying one.
+    const bigram = verbFromParticiple && byIdx < 0
+      ? REDUCED_RELATIVE_CLAUSES[`${lcWords[verbHit.start]} ${lcWords[verbHit.end]}`]
+      : null;
+    if (bigram && bigram.role === "agent" && bigram.kind === kind) {
+      return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: afterText, object: beforeText });
+    }
+    // A converse verb ("superclass of", "belongs to") swaps subject/object, same
+    // as grammar.mjs's T1.
+    return stamp(readConverse({
+      shape: "ask", entityType: null, modifier: "direct", kind,
+      subject: beforeText, object: afterText,
+    }, verbPhrase));
   }
   if (afterText) {
     if (kind === "calls" && leadsWithCallsReportNoun(afterText)) return null;
@@ -333,7 +346,7 @@ export function parseKeywordSpot(text, nlp = null) {
     // answered "no classes" over a module-level graph. Only a type word on
     // the wh-side of the verb ("which CLASSES use Store") filters the result.
     const resultType = entityHit && entityHit.start >= verbHit.end ? null : entityType;
-    return stamp({ shape: "reverse", entityType: resultType, modifier, kind, object: afterText });
+    return stamp(readConverse({ shape: "reverse", entityType: resultType, modifier, kind, object: afterText }, verbPhrase));
   }
   // "what is a kind of class": when the object is itself an entity-type noun, the
   // entity match swallows the whole post-verb span as a grain qualifier, leaving
@@ -365,7 +378,7 @@ export function parseKeywordSpot(text, nlp = null) {
   }
   // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
   // selection); modifier stays hardcoded since no forward closure traversal exists.
-  if (beforeText) return stamp({ shape: "forward", entityType, modifier: "direct", kind, object: beforeText });
+  if (beforeText) return stamp(readConverse({ shape: "forward", entityType, modifier: "direct", kind, object: beforeText }, verbPhrase));
   return null;
 }
 
