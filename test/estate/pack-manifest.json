@@ -456,6 +456,7 @@
   "src/domain/seeded-random.mjs",
   "src/domain/sense-split.mjs",
   "src/domain/skos-view.mjs",
+  "src/domain/source-breaker.mjs",
   "src/domain/spider-fly-world.mjs",
   "src/domain/sprite-animation.mjs",
   "src/domain/sprite-expressions.mjs",

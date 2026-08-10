@@ -1882,6 +1882,15 @@ the CI lint job; the smoke script dry-run against the double.
 
 ## 23. Phase T7 — the external sources join the pattern
 
+**BUILT** (2026-08-10, merged): `src/domain/source-breaker.mjs` (per-source closed/open/
+half-open over in-memory state — page-lifetime in the browser, process-lifetime in the
+CLI), `throughSourceBreaker` as the one seam on every live adapter, the per-turn fetch
+budget (6) beside the untouched 2 s courtesy throttle, and the reader-facing skip notes
+("Answered without Wikipedia. That source kept failing, so this session stopped asking
+it.") in chat trailers and the enrich status; a term whose every KB source was skipped
+returns to pending rather than the negative cache. 300-test radius green. The coordinator
+added the module's missing pack-manifest line post-merge.
+
 **Owns** the external call sites and their manners (§3.16): the live research adapters
 (`src/adapters/corpus/wikipedia-live.mjs` and siblings — per-source timeout and per-turn
 fetch caps as declared constants beside the existing 2 s courtesy throttle), the research
