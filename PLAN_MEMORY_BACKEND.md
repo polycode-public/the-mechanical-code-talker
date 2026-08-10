@@ -1,6 +1,6 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend, the AWS row service behind the deployed demos, and a consumer-hosted turn surface over a Dynamo corpus
 
-Status: DESIGN, revised seven times. The first draft made news.html an IndexedDB consumer; the
+Status: DESIGN, revised nine times. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every
 backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and
@@ -34,7 +34,12 @@ poll and enrichment cycles move server-side behind async triggers with the page 
 `graphVersion` meta value to refresh (§3.21, phases T12–T13), the good-citizen/breaker
 machinery goes shared-state on the worker, and bedrock-meter's adoption items land
 (`basePayload` and per-session bounds on the constructor, the M0–M4+M9 npm cut named inside
-the campaign, the attributeNames fixed-fields rule). The consumer
+the campaign, the attributeNames fixed-fields rule). The ninth replays the seed decision with
+the corpus-migration framing the seventh missed: the turn Lambda bundles the mid band set
+(persona, SEON, the code corpuses — a one-second-class parse), WordNet and ConceptNet return
+per-query from their corpus bands as supersets of what the bundle gave up, and all three bands
+become the demo's loaded set with tmct's own deployment owning their attribution (§3.13,
+§3.18). The consumer
 requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
@@ -62,9 +67,10 @@ CloudFront distribution) → the library's own DynamoDB backend → table. bedro
 and configures the shipped DynamoDB backend over their own table; nothing on the storage path is
 theirs to build. On top of the same table, `POST /api/sessions/:uuid/turn` runs a full tmct
 turn in a Lambda with no network but DynamoDB — the whole engine as a consumer-hosted API tmct
-demos on its own deployment — fed by shared `corpus:<band>` partitions holding corpora too
-large to bundle, retrieved per turn as a bounded, deterministic subgraph the unchanged
-synchronous engine resolves over. And the demo pages meet the same architecture from the
+demos on its own deployment — fed by shared `corpus:<band>` partitions holding the corpora the
+Lambda does not bundle (both the too-large-to-bundle and the deliberately migrated, §3.18),
+retrieved per turn as a bounded, deterministic subgraph the unchanged synchronous engine
+resolves over. And the demo pages meet the same architecture from the
 browser side: chat.html and ledger.html gain an opt-in AWS-backed mode behind a slider and a
 `?backend=aws` deep link, and the home grid — renamed the demo grid — carries nine deep-linked
 buttons.
@@ -813,18 +819,30 @@ it) and retrieval read amplification (the §3.15.1 budgets and per-session meter
 
 ### 3.13 The corpus supplement: shared read-only partitions
 
-Corpora too large to bundle live in the same table under band partitions. Three bands are
-first-class deliverables of this plan — their build pipelines ship in-tree (T0) and any
-credentialed operator loads or clears them with the CLI verb (§3.14):
+The corpora the Lambda does not bundle live in the same table under band partitions — both
+the ones too large ever to bundle and the two §3.18 deliberately migrates out of the seed.
+Three bands are first-class deliverables of this plan — their build pipelines ship in-tree
+(T0) and any credentialed operator loads or clears them with the CLI verb (§3.14):
 
-- **`corpus:wikidata-slice`** — CC0, no attribution burden. **The demo's loaded set**: the CI
-  post-deploy job loads this band and only this band.
-- **`corpus:wordnet-complete`** — the WordNet licence (permissive, attribution in the band's
-  NOTICE); load-ready, not loaded by the demo.
-- **`corpus:conceptnet-full`** — CC BY-SA. Load-ready, not loaded by the demo; its pipeline
-  emits a NOTICE alongside the jsonl (the `commonsenseqa-sample.NOTICE` precedent), the
-  loader writes the licence into the band manifest, and citations of its facts carry the
-  attribution — whoever loads it owns serving that NOTICE wherever the band's answers appear.
+- **`corpus:wikidata-slice`** — CC0, no attribution burden.
+- **`corpus:wordnet-complete`** — Open English WordNet, CC-BY-4.0, attribution in the band's
+  NOTICE. A superset of the bundled WordNet-xl band, which §3.18 moves out of the turn
+  Lambda's seed — this band is how its content comes back.
+- **`corpus:conceptnet-full`** — CC BY-SA 4.0, share-alike. A superset of the capped
+  ConceptNet band §3.18 likewise moves out. Its pipeline emits a NOTICE alongside the jsonl
+  (the `commonsenseqa-sample.NOTICE` precedent), the loader writes the licence into the band
+  manifest, and citations of its facts carry the attribution.
+
+**The demo's loaded set is all three.** The seed decision (§3.18) makes the two moved bands
+required for the demo's base competence, not optional extras: the CI post-deploy job loads
+wikidata-slice, wordnet-complete, and conceptnet-full. That puts the attribution duty on
+tmct's own deployment: the repo's existing machinery is `corpus/LICENSES.json` (the
+machine-readable rollup, one entry per corpus family, each naming its human-readable
+`LICENSE-NOTICE` file, guarded by `test/estate/corpus-licences.test.mjs`) — the band
+pipelines' emitted NOTICEs join that rollup as new entries, and the deployed site serves the
+attribution the same way it serves the shipped corpora's (WordNet CC-BY attribution;
+ConceptNet CC BY-SA with share-alike stated). An operator loading bands into their own
+deployment inherits the same duty, which the manifest's licence field makes visible.
 
 A fourth, the wikipedia-derived band (`corpus:simplewiki-derived` — extracted article facts
 at a scale the reference pack doesn't attempt), is future work with its own design doc:
@@ -1007,10 +1025,12 @@ closed     turn reads the item (piggybacked beside the cap pre-check read);
            new state.
 
 open       inside cooldown (fixed, 60 s from openedAt): the turn SKIPS corpus
-           retrieval entirely and runs seed ⊕ session — today's shipped
-           product, fully working — and the answer carries the
-           supplement-absent marker (§3.17). After cooldown: conditional
-           write {state: half-open}; exactly the winner proceeds to probe.
+           retrieval entirely and runs seed ⊕ session — the mid-bundle
+           baseline of §3.18: persona, ontology and common vocabulary,
+           without the moved bands' depth — and the answer carries the
+           supplement-absent marker (§3.17), which under this floor is the
+           reader's only signal of the thinner mode. After cooldown:
+           conditional write {state: half-open}; exactly the winner probes.
 
 half-open  the winning turn retrieves with a single bounded probe Query
            before committing to the full plan. Success → conditional
@@ -1069,18 +1089,31 @@ point-answers, and a lane-inventory test asserting every enumeration-class lane 
 
 ### 3.18 Cold start and the seed band
 
-The turn tier bundles the **full xl band set** — 63,470 facts, ~93.5 MB raw JSON, well inside
-the Lambda layer limit — the operator's call: a cold start pays the multi-second parse, and in
-exchange the Lambda answers exactly like the browser demo even with every corpus band
-unreachable, because the breaker's skip mode (§3.16) then runs over the same seed the deployed
-pages ship. The near-empty-boot alternative (bundle almost nothing, lean on corpus retrieval
-for the base) is rejected: it would make the surface's baseline competence depend on DynamoDB
-being up, and a breaker-open turn would be a much poorer product than the one the browser
-already demonstrates. Corpus bands exist for the corpora *larger* than xl (§3.13), not to slim
-the seed. Warm invocations pay nothing — the parsed payload lives for the container's
-lifetime. T3's acceptance measures the cold boot with the xl bundle and publishes the number
-in the plan's build marker; provisioned concurrency is the named fallback lever if that
-measurement disappoints, priced when needed, and not the plan.
+The turn tier bundles the **mid band set** — the human persona bands (small, medium, large:
+13,632 facts by the deployed page's own band counts), SEON (399), and the three small code
+corpuses (88) — roughly 14,100 facts, an estimated fifth of the xl set's ~93.5 MB, a parse in
+the one-second class rather than multi-second. The two heavy bands leave the bundle and return
+per-query: **WordNet-xl's content is a subset of `corpus:wordnet-complete`, and the capped
+ConceptNet band is a subset of `corpus:conceptnet-full`** (§3.13), so retrieval serves a
+superset of everything the bundle gave up. Point answers are near-lossless — term-anchored
+retrieval mirrors the bounded reads the engine does anyway (§3.15) — and the recorded trade
+is two-sided: enumeration answers over the moved bands are retrieval-bounded and say so
+(§3.17), and breaker-open mode (§3.16) answers from the mid bundle alone — common vocabulary,
+the persona, the ontology, but not the moved bands' depth.
+
+Two alternatives are recorded as considered:
+
+- **Full xl bundled** — an earlier revision's decision, replaced on replay: it bought
+  breaker-open parity with the browser demo at a multi-second cold start, and the replay
+  recognised that corpus migration loses almost nothing per-query, so the parity was priced
+  too high.
+- **Near-empty boot** — still rejected: baseline competence must not depend on DynamoDB
+  being up; a breaker-open turn over a near-empty bundle would be no product at all.
+
+Warm invocations pay nothing — the parsed payload lives for the container's lifetime. T3's
+acceptance measures the cold boot with the mid bundle and publishes the number in the plan's
+build marker; provisioned concurrency is the named fallback lever if that measurement
+disappoints, priced when needed, and not the plan.
 
 ### 3.19 Page backend modes: the slider and the query parameter
 
@@ -1539,10 +1572,14 @@ recovery, clear) — plus the three first-class band build pipelines under
 `build-conceptnet-full.mjs`), each reading its upstream dump from an operator-supplied path
 and emitting the §3.14 jsonl beside a manifest-ready digest; the ConceptNet pipeline also
 emits its CC BY-SA NOTICE and the WordNet pipeline its licence attribution, which the loader
-carries into the band manifest (§3.13). The Wikidata slice's selection rule (which entities
-and relations make the slice) is committed inside its pipeline and recorded in this phase's
-build marker when it lands. Pipelines are tested over committed miniature dump fixtures — no
-network and no real dump in CI; running a real dump is an operator act. **Sonnet**, after M4.
+carries into the band manifest and `corpus/LICENSES.json`'s rollup gains as entries (§3.13).
+The Wikidata slice's selection rule (which entities and relations make the slice) is committed
+inside its pipeline and recorded in this phase's build marker when it lands. Pipelines are
+tested over committed miniature dump fixtures — no network and no real dump in CI; running a
+real dump is an operator act. The WordNet and ConceptNet pipelines are **demo-blocking**
+under §3.18's seed decision: the deployed turn surface needs their bands loaded to exceed the
+mid-bundle floor, so they are not optional extras behind the Wikidata slice. **Sonnet**,
+after M4.
 
 Acceptance: `node --test test/adapters/corpus-bands.test.mjs test/services/corpus-loader.test.mjs`;
 the pipeline test files over the miniature fixtures;
@@ -1562,7 +1599,10 @@ fold, the collision table, and the hop plan, and its determinism claims carry th
 The order inside the phase is fixed: the harness runs first — the full calibration set twice,
 fuzzy on and fuzzy off — its tables land in this phase's build marker, and `RETRIEVAL_BUDGETS`
 is set from those measurements (§3.15.1). T3 consumes calibrated constants, never the starting
-hypotheses.
+hypotheses. The calibration set's named cases include the moved-band round trips §3.18
+creates: a what-is over a WordNet-only word (absent from the mid bundle) and a
+ConceptNet-only relation must come back through retrieval, so the harness proves the
+migration's near-losslessness rather than assuming it.
 
 Acceptance: the two test files; the harness run recorded in the build marker;
 `npm run test:fast`.
@@ -1583,8 +1623,10 @@ Acceptance: the test file; `npm run test:fast`.
 double pattern as M5 — the real handler on `node:http`, the in-memory backend, a fixture band
 loaded through the real loader), `npm run build:turn-service`,
 `test/services/turn-handler.test.mjs` (new; the §3.12 sequence, the turn-rate counter, the
-breaker-skip path, 413/429/507 semantics, fresh-backend-per-invocation, the cold-boot
-measurement published in the build marker). **Sonnet**, after T0–T2 and M5.
+breaker-skip path answering from the mid bundle with the supplement-absent marker,
+413/429/507 semantics, fresh-backend-per-invocation, the cold-boot measurement published in
+the build marker — the target is the one-second class §3.18's mid bundle buys, not the
+multi-second xl parse). **Sonnet**, after T0–T2 and M5.
 
 Acceptance: the test file; `npm run test:fast`; the measured boot number recorded.
 
@@ -1624,10 +1666,12 @@ the `/api/sessions/*/turn` behavior wiring), the corpus read route
 handler, band name validated against the configured list, `fuzzy=1` expanding through the T1
 variant machinery, eventually consistent reads; its handler tests join
 `test/server/row-service.test.mjs`), the `corpus:load` post-deploy CI job
-(`.gitlab-ci.yml`: runs `tmct corpus load wikidata-slice` over OIDC — the demo's one loaded
-band (§3.13); the digest no-op makes it cheap every pipeline), and the post-deploy smoke's
-turn probe (one live turn under a fresh UUID) plus a corpus-route probe (one term read against
-the loaded band). **Sonnet**, after T3.
+(`.gitlab-ci.yml`: runs `tmct corpus load` for all three demo bands — wikidata-slice,
+wordnet-complete, conceptnet-full (§3.13); the digest no-op makes the unchanged bands cheap
+every pipeline, and the two moved bands are demo-blocking — a turn surface without them has
+only the mid-bundle floor of §3.18), and the post-deploy smoke's turn probe (one live turn
+under a fresh UUID) plus a corpus-route probe (one term read against a loaded band, including
+one WordNet-only term that the bundle no longer carries). **Sonnet**, after T3.
 
 Acceptance: `npx tsc --noEmit` in `infra/`; `node --test test/server/row-service.test.mjs`;
 the CI lint job; the smoke script dry-run against the double.
@@ -1785,8 +1829,10 @@ pause there; the cut is a version number their side can depend on, not a review 
 `core.mjs` serializes M0-knowledge → M1 → M3. `chat.mjs` serializes T4 → T7 and either
 against anything else touching it. `news-browser-entry.mjs`/`news-viz.mjs` serialize
 M8 → T13 (and T8's corpus toggle lands between them or with T13 — same files, one owner at a
-time). `package.json` is touched in M2 and M4 only. The full suite runs at the coordinator's
-push moments; each phase's acceptance list is its blast radius.
+time). `package.json` is touched in M2 and M4 only. T6's CI load job is demo-blocking on all
+three T0 pipelines (§3.18 moved WordNet and ConceptNet out of the bundle, so their bands are
+base competence, not extras). The full suite runs at the coordinator's push moments; each
+phase's acceptance list is its blast radius.
 
 ---
 
@@ -1870,11 +1916,14 @@ ships with it and says so, not that it hides.
     budget, never a wrong answer — grounding still has to succeed on the engine's own terms.
     T1's harness measures both modes before the budgets freeze, and the per-request knob
     (§3.15.2) means a bad experience is one toggle from an exact-only comparison.
-16. **The xl cold start.** Bundling the full xl seed (§3.18) puts a multi-second parse on
-    every cold Lambda start, by the operator's explicit trade: baseline competence must not
-    depend on DynamoDB. Accepted with the number to be measured and published in T3's build
-    marker; warm containers pay nothing, and provisioned concurrency is the priced lever if
-    the cold tail ever matters at real traffic.
+16. **The mid-bundle breaker floor.** With the heavy bands moved to corpus partitions
+    (§3.18), breaker-open mode answers from ~14k facts instead of ~63k: common vocabulary,
+    persona and ontology hold, WordNet/ConceptNet depth does not. The trade bought a
+    one-second-class cold start (measured and published in T3's build marker; provisioned
+    concurrency stays the priced lever if even that disappoints). The supplement-absent
+    marker (§3.17) carries more weight under this floor — it is the reader's only signal
+    that a thin answer came from the degraded mode and not from the engine — and T4's pins
+    cover the marker in breaker-open mode explicitly.
 
 And the two build risks carried from the first draft: **the M3 sqlite refactor** rewrites
 Backend C's persistence internals under a byte-identical-storage pin — the before/after dump
