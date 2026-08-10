@@ -61,21 +61,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   enumeration answers state their retrieval bounds rather than claiming completeness. tmct
   stays offline; this surface is what a consumer hosts and tmct's deployment demos it.
   DOC ONLY: nothing builds until the operator says build.
-- [ ] **bedrock-meter's embedded-path findings (inbox, 2026-08-09/10)** — in flight in two
-  worktrees: (1) chat.mjs's `predicatePhrase` renders raw CURIEs for the `tmct:` predicates
-  the lexicon itself mints ("latency tmct:needs result" reached their public page) while
-  `src/domain/fact-phrase.mjs`'s copy already falls through to the local name — unify on one
-  implementation and publish it (their standing export ask: public `factSentence`/
-  `predicatePhrase` plus a `reference:<pack>:<title>@<revid>` → {title, url} helper);
-  (2) the lane-3 narration prints `memoryDir=[object Object]`; (3) a lane-2b turn narrates
-  "no parse stood" and "goal: unclear" while its own decision line says a fact resolved —
-  the goal line must match `via=fact`; (4) an offline, pack-backed research source
-  (`researchSource: "simple-wikipedia-pack"` reading the shipped reference pack) plus a
-  public seam for consumer-supplied research providers, so a network-free deployment still
-  shows the research fan-out. Recorded, not built (their request): a confidence marker on
-  extraction-tier triples so a consumer can decline unsure rows — extraction quality itself
-  explicitly not asked for; and bookkeeping rows leaving read-back structurally is
-  `PLAN_MEMORY_BACKEND.md`'s §3.7 scope.
 - [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
   matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
   which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
