@@ -1,16 +1,21 @@
 // scripts/post-deploy-smoke.mjs — after a publish, check that what the world
 // sees matches what we built. Reads package.json's version, then asks npm's
 // registry and the Pages home page what they are serving. Both must agree.
+// It also round-trips one row through the deployed row service, the same
+// same-origin `/api/*` surface the page itself calls.
 //
 // Registry and Pages both lag a publish by a minute or two, so an early
 // disagreement means nothing. This polls, and reports one only once the
-// attempts run out. It reads public endpoints, so it needs no token.
+// attempts run out. It reads public endpoints, so it needs no token; the row
+// round trip mints its own session key, so it needs no session either.
 //
 // Run it after publish:npm and pages. With nothing published, it reports the
-// disagreement it exists to catch.
+// disagreement it exists to catch. `rowServiceRoundTrip` is exported so a
+// test can point it at a local double instead of the live origin.
 
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 import { parseVersionFile } from "../src/domain/version-stamp.mjs";
@@ -20,6 +25,10 @@ const { name, version, homepage } = JSON.parse(readFileSync(join(ROOT, "package.
 
 const REGISTRY_URL = `https://registry.npmjs.org/${name.replace("/", "%2f")}/latest`;
 const PAGES_URL = homepage;
+// The row service lives at the same origin as the page; SMOKE_API_BASE_URL
+// exists so a dry run can point this at a local double (server/row-service's
+// own reference backend) instead of the deployed origin.
+const API_BASE_URL = process.env.SMOKE_API_BASE_URL ?? PAGES_URL;
 const VERSION_URL = new URL("version.txt", PAGES_URL.endsWith("/") ? PAGES_URL : `${PAGES_URL}/`).href;
 const ATTEMPTS = Number(process.env.SMOKE_ATTEMPTS ?? 10);
 const DELAY_MS = Number(process.env.SMOKE_DELAY_MS ?? 30_000);
@@ -103,6 +112,42 @@ async function modelBytes() {
   return served;
 }
 
+/** PUT one row under a fresh session, GET it back, then DELETE the whole
+ *  session — the round trip a real page's first write and its "stop and
+ *  forget" both take. Throws on any step that doesn't behave; on success
+ *  returns the minted session key (nothing to compare it against — a fresh
+ *  UUID every run is the point). `baseUrl` defaults to the deployed origin;
+ *  a test passes a local double's URL instead. */
+export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
+  const origin = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const sessionKey = randomUUID();
+  const rowKey = `fact:post-deploy-smoke@${sessionKey}`;
+  const fetchJson = (path, init) => fetch(`${origin}${path}`, {
+    ...init,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "content-type": "application/json", "user-agent": `${name} post-deploy-smoke`, ...init?.headers },
+  });
+
+  const putRes = await fetchJson(`/api/sessions/${sessionKey}/rows`, {
+    method: "PUT",
+    body: JSON.stringify({ puts: [{ rowKey, rowClass: "fact", term: "", json: JSON.stringify({ smoke: true }) }] }),
+  });
+  if (putRes.status !== 204) throw new Error(`PUT /api/sessions/:uuid/rows returned ${putRes.status}, not 204`);
+
+  const getRes = await fetchJson("/api/rows", { method: "GET", headers: { "x-tmct-session": sessionKey } });
+  if (!getRes.ok) throw new Error(`GET /api/rows returned ${getRes.status}, not 200`);
+  const { rows } = await getRes.json();
+  if (!rows.some((row) => row.rowKey === rowKey)) throw new Error("the row just PUT is missing from GET /api/rows");
+
+  const deleteRes = await fetchJson(`/api/sessions/${sessionKey}/rows`, {
+    method: "DELETE",
+    body: JSON.stringify({ all: true }),
+  });
+  if (deleteRes.status !== 204) throw new Error(`DELETE /api/sessions/:uuid/rows returned ${deleteRes.status}, not 204`);
+
+  return sessionKey;
+}
+
 /** One pass over every endpoint. Never throws; the caller decides when to give up. */
 async function checkOnce() {
   const results = {};
@@ -112,6 +157,7 @@ async function checkOnce() {
     ["vendor", vendorEncoding],
     ["mudiii", mudiiiPage],
     ["models", modelBytes],
+    ["api", rowServiceRoundTrip],
   ]) {
     try {
       results[label] = { value: await read() };
@@ -120,37 +166,47 @@ async function checkOnce() {
     }
   }
   const ok = results.npm.value === version && results.pages.value === version
-    && Boolean(results.vendor.value) && Boolean(results.mudiii.value) && Boolean(results.models.value);
+    && Boolean(results.vendor.value) && Boolean(results.mudiii.value) && Boolean(results.models.value)
+    && Boolean(results.api.value);
   return { results, ok };
 }
 
 const describe = (r) => r.error ?? r.value;
 
 async function main() {
-  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}, and that precompressed assets serve`);
+  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}, and that precompressed assets and the row service serve`);
   let last;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     last = await checkOnce();
-    const { npm, pages, vendor } = last.results;
-    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)} vendor-encoding=${describe(vendor)}`);
+    const { npm, pages, vendor, api } = last.results;
+    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)} vendor-encoding=${describe(vendor)} api=${describe(api)}`);
     if (last.ok) {
-      console.log(`both serve ${version}, and vendor/wink.js serves content-encoding: ${vendor.value}`);
+      console.log(`both serve ${version}, vendor/wink.js serves content-encoding: ${vendor.value}, and the row service round-tripped session ${api.value}`);
       return 0;
     }
     if (attempt < ATTEMPTS) await sleep(DELAY_MS);
   }
-  const { npm, pages, vendor } = last.results;
+  const { npm, pages, vendor, api } = last.results;
   console.error(`after ${ATTEMPTS} attempts, the deploy did not verify.`);
   console.error(`  npm:    ${describe(npm)}`);
   console.error(`  pages:  ${describe(pages)}`);
   console.error(`  vendor: ${describe(vendor)}`);
+  console.error(`  api:    ${describe(api)}`);
   if (vendor.error) {
     console.error(
       "  the vendor probe failing means precompressed serving on this deployment is still documented-but-unverified"
       + " — the .gz/.br siblings built, but the host did not serve one.",
     );
   }
+  if (api.error) {
+    console.error("  the api probe failing means the row service did not accept, return, or delete its own smoke row.");
+  }
   return 1;
 }
 
-process.exitCode = await main();
+// Only run the live check when this file is the process entry point — a test
+// imports `rowServiceRoundTrip` alone and must not trigger a run against the
+// real deployed origin just by loading the module.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  process.exitCode = await main();
+}

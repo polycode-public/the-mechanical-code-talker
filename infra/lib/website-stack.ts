@@ -21,8 +21,17 @@ import {
   aws_certificatemanager as acm,
   aws_route53 as route53,
   aws_route53_targets as targets,
+  aws_dynamodb as dynamodb,
+  aws_lambda as lambda,
+  aws_events as events,
+  aws_events_targets as events_targets,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
+
+// The row service's bundle (`npm run build:row-service`, esbuild, AWS SDK
+// left external because the Lambda Node runtime ships it) — a sibling of the
+// built site, not part of it.
+const ROW_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "row-service", "dist");
 
 export interface WebsiteStackProps extends StackProps {
   readonly envName: string;
@@ -33,6 +42,16 @@ export interface WebsiteStackProps extends StackProps {
   /** Optional: supply both to have CDK write the Route53 A-record alias. */
   readonly hostedZoneId?: string;
   readonly zoneName?: string;
+  /** The row service's session/row TTL, in days (§3.8's `TTL_DAYS`). */
+  readonly rowServiceTtlDays?: number;
+  /** The row service's hard global row cap (§3.8's `TABLE_ROW_CAP`). */
+  readonly rowServiceTableRowCap?: number;
+  /** The `/api/*` WAF web ACL's ARN, read cross-region from `EdgeGuardStack`
+   *  (its CLOUDFRONT-scope ACL lives in us-east-1, same constraint as the
+   *  ACM cert). Omitted, the distribution deploys without a web ACL — the
+   *  posture a synth with no edge-guard stack in context still needs to
+   *  produce a valid template. */
+  readonly webAclArn?: string;
 }
 
 // CloudFront only compresses on the fly up to this size; anything larger has
@@ -313,6 +332,63 @@ export class WebsiteStack extends Stack {
         previousOversizedDeployment = siblingDeployment;
       }
     }
+
+    // ---------- the row service: table, Lambda, function URL, /api/* ----------
+    const rowTable = new dynamodb.Table(this, "RowServiceTable", {
+      tableName: `tmct-${envName}-${slug}-rows`,
+      partitionKey: { name: "sessionKey", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: "expiresAt",
+      removalPolicy: envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+    });
+
+    const rowServiceFn = new lambda.Function(this, "RowServiceFn", {
+      functionName: `tmct-${envName}-${slug}-row-service`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler.handler",
+      code: lambda.Code.fromAsset(ROW_SERVICE_DIST_DIR),
+      memorySize: 256,
+      timeout: Duration.seconds(10),
+      reservedConcurrentExecutions: 10,
+      environment: {
+        TABLE_NAME: rowTable.tableName,
+        TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
+        TABLE_ROW_CAP: String(props.rowServiceTableRowCap ?? 2_000_000),
+      },
+    });
+    rowTable.grantReadWriteData(rowServiceFn);
+
+    const rowServiceUrl = rowServiceFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+    });
+
+    // No caching (every route is a session-scoped read or a mutation) and
+    // every header/method/body forwarded, since the handler reads the
+    // session key from `x-tmct-session` and the mutating verbs need their
+    // JSON bodies intact.
+    distribution.addBehavior("/api/*", origins.FunctionUrlOrigin.withOriginAccessControl(rowServiceUrl), {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+    });
+
+    if (props.webAclArn) {
+      distribution.attachWebAclId(props.webAclArn);
+    }
+
+    // The daily reconcile: a physical recount that corrects the TTL-driven
+    // upward drift in the row service's own global-cap counter (§3.8).
+    new events.Rule(this, "RowServiceReconcileRule", {
+      ruleName: `tmct-${envName}-${slug}-row-reconcile`,
+      schedule: events.Schedule.rate(Duration.days(1)),
+      targets: [
+        new events_targets.LambdaFunction(rowServiceFn, {
+          event: events.RuleTargetInput.fromObject({ mode: "reconcile" }),
+        }),
+      ],
+    });
 
     // ---------- Route 53 A-record alias to CloudFront ----------
     if (hostedZoneId && zoneName) {

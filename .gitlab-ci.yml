@@ -576,10 +576,15 @@ deploy:website:
     - npm run build:ask-bundle
     - npm run gen:worlds-pack
     - npm run demo:build
+    - npm run build:row-service
     - command -v aws >/dev/null || pip install --quiet awscli
     - source scripts/assume-aws.sh prod
     - cd infra
     - npm ci
+    # Deploying tmct-prod-prod-website also deploys tmct-prod-prod-edge-guard
+    # (the WAF web ACL and billing alarm, us-east-1) and its cross-region
+    # export-reader stack: the CDK CLI walks a named stack's dependencies
+    # even when they're not listed on the command line.
     - npx cdk deploy tmct-prod-prod-website --require-approval never
         -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
         -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
