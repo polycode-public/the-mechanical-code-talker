@@ -1,11 +1,17 @@
-// corpus-loader.mjs — load and clear the shared, read-only corpus bands
-// (corpus-bands.mjs) over an injected DynamoDB-shaped document client: the
-// AWS SDK's `DynamoDBDocument` convenience wrapper (`.put`/`.get`/`.delete`/
-// `.query`, no Command objects), the same client shape
+// corpus-loader.mjs — load, clear and read the shared, read-only corpus
+// bands (corpus-bands.mjs) over an injected DynamoDB-shaped document client:
+// the AWS SDK's `DynamoDBDocument` convenience wrapper (`.put`/`.get`/
+// `.delete`/`.query`, no Command objects), the same client shape
 // `termQueryOverDocumentClient` (subgraph-retrieval.mjs) already reads. This
 // module holds no credentials and imports no AWS package itself — the
 // consumer constructs the client (a profile locally, OIDC in CI) and injects
 // it, matching the shipped DynamoDB row backend's own discipline (§3.10).
+//
+// `queryBandTerm` lives here rather than in corpus-bands.mjs because it
+// wraps subgraph-retrieval.mjs's `termQueryOverDocumentClient` — the one
+// term-Query implementation this whole surface shares — and that module is
+// services-layer; corpus-bands.mjs is adapters-layer and may not import
+// upward into it (test/estate/import-layers.test.mjs).
 //
 // Load streams the source jsonl (wire-row-shaped facts, one per line),
 // writes each with bounded concurrency, and writes the manifest row last —
@@ -27,6 +33,7 @@ import {
   bandPartitionKey, bandSortKeyForRow, buildBandManifest, MANIFEST_SORT_KEY,
 } from "../adapters/memory/corpus-bands.mjs";
 import { BackendRejected, BackendUnavailable, assertValidRow } from "../adapters/memory/row-backend.mjs";
+import { termQueryOverDocumentClient } from "./subgraph-retrieval.mjs";
 
 const DEFAULT_WRITE_CONCURRENCY = 25;
 
@@ -188,4 +195,29 @@ export async function clearBand({ client, tableName, band, writeConcurrency = DE
     await call(() => client.delete({ TableName: tableName, Key: { pk: manifestItem.pk, sk: manifestItem.sk } }), "delete");
   }
   return { band, deleted: items.length };
+}
+
+const DEFAULT_BAND_QUERY_PAGE_SIZE = 200;
+
+/** One term's rows from one band, fully paginated, wrapping
+ *  subgraph-retrieval.mjs's `termQueryOverDocumentClient` — the one term
+ *  Query this whole surface shares. `client` is the same convenience
+ *  document client (`.query({...})` resolving to `{Items,
+ *  LastEvaluatedKey}`) `loadBand`/`clearBand` already take. Returns plain
+ *  wire rows (`{rowKey, rowClass, term, json}`), with the storage-only
+ *  `pk`/`sk` stripped — the loader's own read-back checks and the read-only
+ *  corpus route both call this rather than issuing their own Query. */
+export async function queryBandTerm(client, tableName, band, term, { pageSize = DEFAULT_BAND_QUERY_PAGE_SIZE } = {}) {
+  const queryTerm = termQueryOverDocumentClient({ client, tableName, pageSize });
+  const rows = [];
+  let exclusiveStartKey;
+  for (;;) {
+    const response = await queryTerm({ band, term, exclusiveStartKey });
+    for (const item of response.rows) {
+      rows.push({ rowKey: item.rowKey, rowClass: item.rowClass, term: item.term, json: item.json });
+    }
+    exclusiveStartKey = response.lastEvaluatedKey;
+    if (!exclusiveStartKey) break;
+  }
+  return rows;
 }

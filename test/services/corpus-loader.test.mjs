@@ -8,8 +8,8 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { loadBand, clearBand, bandStatus, digestFile } from "../../src/services/corpus-loader.mjs";
-import { bandFactRow, bandPartitionKey, MANIFEST_SORT_KEY } from "../../src/adapters/memory/corpus-bands.mjs";
+import { loadBand, clearBand, bandStatus, digestFile, queryBandTerm } from "../../src/services/corpus-loader.mjs";
+import { bandFactRow, bandPartitionKey, bandSortKeyForRow, MANIFEST_SORT_KEY } from "../../src/adapters/memory/corpus-bands.mjs";
 import { BackendRejected } from "../../src/adapters/memory/row-backend.mjs";
 import { createFakeCorpusDocumentClient, poisonPutCall } from "../helpers/fake-corpus-document-client.mjs";
 
@@ -166,4 +166,33 @@ test("bandStatus reads back exactly the manifest fields the loader wrote", async
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("queryBandTerm reads one term's rows out of the band partition, paginating past a small page size", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const band = "wordnet-complete";
+  const pk = bandPartitionKey(band);
+  const rows = Array.from({ length: 5 }, (_, i) => bandFactRow({
+    subject: "dolphin", predicate: "rdfs:subClassOf", object: `sense-${i}`, band, ord: i,
+  }));
+  for (const row of rows) {
+    await client.put({ TableName: "t", Item: { pk, sk: bandSortKeyForRow(row.rowClass, row.term, row.rowKey), ...row } });
+  }
+  // an unrelated term in the same band, which a term read must not return
+  const other = bandFactRow({ subject: "cat", predicate: "rdfs:subClassOf", object: "mammal", band });
+  await client.put({ TableName: "t", Item: { pk, sk: bandSortKeyForRow(other.rowClass, other.term, other.rowKey), ...other } });
+
+  const found = await queryBandTerm(client, "t", band, "dolphin", { pageSize: 2 });
+  assert.equal(found.length, 5);
+  assert.deepEqual(found.map((r) => r.rowKey).sort(), rows.map((r) => r.rowKey).sort());
+  for (const row of found) {
+    assert.equal(row.pk, undefined);
+    assert.equal(row.sk, undefined);
+  }
+});
+
+test("queryBandTerm returns nothing for a term the band never held", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const found = await queryBandTerm(client, "t", "conceptnet-full", "zzzqx-nonsense");
+  assert.deepEqual(found, []);
 });

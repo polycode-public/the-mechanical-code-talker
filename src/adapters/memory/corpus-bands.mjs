@@ -1,19 +1,26 @@
 // corpus-bands.mjs — shared read-only reference partitions that live beside
-// session rows in the same table: band naming, the manifest shape, the wire
-// row a band fact projects onto, and the term Query helper reads use.
+// session rows in the same table: band naming, the manifest shape, and the
+// wire row a band fact projects onto.
 //
 // A band lives at partition key `corpus:<band>`, sort key
 // `<rowClass>#<term>#<rowKey>` for a fact row, `manifest` for the band's own
 // bookkeeping row. `corpus:<band>` is not a UUIDv4, so it can never collide
 // with a session key and no session route can address it — the only reads
-// this module's helper serves are the deliberate, term-scoped corpus read a
-// turn issues, never a session's own row traffic.
+// a band partition gets are the deliberate, term-scoped corpus read a turn
+// issues (corpus-loader.mjs's `queryBandTerm`), never a session's own row
+// traffic.
 //
 // Bands are written once, by the credentialed loader (corpus-loader.mjs),
 // and never mutated afterward except by a full reload or clear: nothing on
 // the public API path ever calls putRows against a `corpus:` partition.
+//
+// The term Query itself lives in corpus-loader.mjs, not here: this module is
+// an adapters-layer module (pure naming/shape, no store calls), and the one
+// Query implementation this whole surface shares
+// (subgraph-retrieval.mjs's termQueryOverDocumentClient) is a services-layer
+// module — an adapter may not import upward into services (see
+// test/estate/import-layers.test.mjs).
 
-import { termQueryOverDocumentClient } from "../../services/subgraph-retrieval.mjs";
 import { normFactTerm, factIdForTriple } from "../../domain/hash.mjs";
 import { assertValidRow } from "./row-backend.mjs";
 
@@ -128,30 +135,4 @@ export function bandFactRow({ subject, predicate, object, provenance = "", band,
     json: JSON.stringify({ ord, individual }),
   };
   return assertValidRow(row, { provenance });
-}
-
-const DEFAULT_BAND_QUERY_PAGE_SIZE = 200;
-
-/** One term's rows from one band, fully paginated: `client` is the same
- *  convenience document client `termQueryOverDocumentClient` already reads
- *  (`.query({...})` resolving to `{Items, LastEvaluatedKey}`), so this is the
- *  one place a band's term Query is implemented — the retrieval module reuses
- *  it through `termQueryOverDocumentClient` directly, and this wraps the same
- *  function for a caller that just wants a term's full row set (the loader's
- *  own read-back checks, and the read-only corpus route). Returns plain wire
- *  rows (`{rowKey, rowClass, term, json}`), with the storage-only `pk`/`sk`
- *  stripped. */
-export async function queryBandTerm(client, tableName, band, term, { pageSize = DEFAULT_BAND_QUERY_PAGE_SIZE } = {}) {
-  const queryTerm = termQueryOverDocumentClient({ client, tableName, pageSize });
-  const rows = [];
-  let exclusiveStartKey;
-  for (;;) {
-    const response = await queryTerm({ band, term, exclusiveStartKey });
-    for (const item of response.rows) {
-      rows.push({ rowKey: item.rowKey, rowClass: item.rowClass, term: item.term, json: item.json });
-    }
-    exclusiveStartKey = response.lastEvaluatedKey;
-    if (!exclusiveStartKey) break;
-  }
-  return rows;
 }
