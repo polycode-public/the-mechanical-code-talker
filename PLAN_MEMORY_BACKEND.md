@@ -1679,6 +1679,11 @@ Acceptance: `node --test test/adapters/news-browser-entry.test.mjs`;
 
 ## 14. Phase M9 — the contract page and README
 
+**BUILT** (2026-08-10, merged): the memory-backend seam joins `docs/adapter-contract.md`
+(interface, wire row, index key, service mapping, failure semantics, kit usage, the three
+shipped backends including M3's sqlite posture) and README gains its custom-backends
+section; links and estate gates green.
+
 **Owns** `docs/adapter-contract.md` (a memory-backend section beside the existing provider
 seam: the §3.1 method table, the row shape, the key recommendation, the endpoint table, the
 adapter-documented items from §4), `README.md` (a short consumer paragraph: inject an object,

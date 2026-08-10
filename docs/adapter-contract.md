@@ -285,7 +285,7 @@ Export the essentials:
 
 ```js
 import { createRowMemoryBackend, createDynamoRowBackend, isRowBackend } from "@polycode-projects/the-mechanical-code-talker/memory-backends";
-import { createSqliteRowBackend } from "@polycode-projects/the-mechanical-code-talker/adapters/memory";
+import { createSqliteRowBackend } from "@polycode-projects/the-mechanical-code-talker/memory";
 ```
 
 ## 8. Shipped implementations
