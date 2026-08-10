@@ -64,6 +64,9 @@ import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpu
 // Imported for its research-source registration side effect only, so
 // getResearchProvider({ source: "wikidata" }) can find an entry to build.
 import "../adapters/corpus/wikidata-live.mjs";
+// Same side-effect-only import, for getResearchProvider({ source:
+// "simple-wikipedia-pack" }) — the offline pack-backed research source.
+import "../adapters/corpus/simple-wikipedia-pack.mjs";
 import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest, researchSourceLabel } from "./research.mjs";
 import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue-store.mjs";
 import { newsTurn, resolveNewsConfig, NEWS_DEFAULTS, createNewsState } from "./news.mjs";

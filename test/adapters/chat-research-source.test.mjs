@@ -40,6 +40,31 @@ test("createSession({ repoPath }): tmct.toml's [research] source alone (no optio
   }
 });
 
+test("createSession({ repoPath }): tmct.toml's [research] source selects the offline pack-backed source", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[research]\nsource = "simple-wikipedia-pack"\n');
+    const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
+    assert.equal(s.researchSource, "simple-wikipedia-pack");
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("createSession: the researchSource option (bin/tmct.mjs's --research-source flag tier) selects the offline pack-backed source", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" }, researchSource: "simple-wikipedia-pack" });
+    assert.equal(s.researchSource, "simple-wikipedia-pack");
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createSession precedence: the explicit researchSource option (bin/tmct.mjs's --research-source) beats tmct.toml", async () => {
   clearCache();
   const dir = await tmpRepo();

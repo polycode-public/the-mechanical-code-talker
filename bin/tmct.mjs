@@ -709,11 +709,11 @@ async function main() {
     let researchSource;
     try {
       memoryBackend = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
-      // `--research-source <wikipedia|wikidata>`: the CLI's flag tier of the
-      // research lane's source precedence (below /wikipedia|/wikidata in chat,
-      // above tmct.toml's [research] source). Omitted when absent so the
-      // lower tiers still apply unchanged.
-      researchSource = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata"]);
+      // `--research-source <wikipedia|wikidata|simple-wikipedia-pack>`: the
+      // CLI's flag tier of the research lane's source precedence (below
+      // /wikipedia|/wikidata in chat, above tmct.toml's [research] source).
+      // Omitted when absent so the lower tiers still apply unchanged.
+      researchSource = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata", "simple-wikipedia-pack"]);
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);
       process.exit(2);
@@ -888,13 +888,14 @@ async function main() {
       process.exit(2);
     }
 
-    // `--research-source <wikipedia|wikidata>`: written into tmct.toml's
-    // `[research] source` (src/services/init.mjs's renderTomlConfig), the same
-    // flag name `tmct chat` reads at its own precedence tier — a repo set up
-    // once here needs no flag on a later `tmct chat` in it.
+    // `--research-source <wikipedia|wikidata|simple-wikipedia-pack>`: written
+    // into tmct.toml's `[research] source` (src/services/init.mjs's
+    // renderTomlConfig), the same flag name `tmct chat` reads at its own
+    // precedence tier — a repo set up once here needs no flag on a later
+    // `tmct chat` in it.
     let researchSourceVal;
     try {
-      researchSourceVal = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata"]);
+      researchSourceVal = enumFlag(rest, ["--research-source"], ["wikipedia", "wikidata", "simple-wikipedia-pack"]);
     } catch (e) {
       process.stderr.write(`tmct init: ${e?.message || e}\n`);
       process.exit(2);

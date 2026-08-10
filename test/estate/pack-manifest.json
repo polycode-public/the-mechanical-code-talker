@@ -311,6 +311,7 @@
   "src/adapters/corpus/news-sources.mjs",
   "src/adapters/corpus/reference-pack.mjs",
   "src/adapters/corpus/research-source.mjs",
+  "src/adapters/corpus/simple-wikipedia-pack.mjs",
   "src/adapters/corpus/sprite-large-template-files.mjs",
   "src/adapters/corpus/sprite-template-files.mjs",
   "src/adapters/corpus/templates.mjs",
