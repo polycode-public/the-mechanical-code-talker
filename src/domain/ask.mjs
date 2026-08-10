@@ -1482,6 +1482,27 @@ function siteDefiningModules(graph, objectIds) {
 
 const definesHop = (kind, entityType) => entityType === "Module" && kindsFor(kind).includes("defines");
 
+const askSiteMembersCache = new WeakMap();
+
+/** Symbols grouped by the module their recorded SITE places them in — the same
+ *  edge/site asymmetry siteDefiningModules covers, read from the module's side. */
+function siteMembersByModule(graph) {
+  let byModule = askSiteMembersCache.get(graph);
+  if (byModule) return byModule;
+  byModule = new Map();
+  const byPath = modulesByPath(graph);
+  for (const ind of graph.individuals || []) {
+    if (ind.class === "Module") continue;
+    const label = moduleLabelOf(ind);
+    const mod = label ? byPath.get(normPath(label)) : null;
+    if (!mod) continue;
+    if (!byModule.has(mod.id)) byModule.set(mod.id, []);
+    byModule.get(mod.id).push(ind);
+  }
+  askSiteMembersCache.set(graph, byModule);
+  return byModule;
+}
+
 /** Reverse traversal over a SET of object ids (the nested "callers of {X…}" step) —
  *  mirrors traverse()'s reverse general case (symbol-grain sibling + defines-refine),
  *  but membership-tests e.object against a set instead of a single id. */
@@ -1647,7 +1668,14 @@ export function metaFallbackEntityAnswer(graph, term) {
  *  filtered to `entityType` when given. */
 function membershipOwnSet(graph, id, entityType) {
   const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, new Set([id]))));
-  return entityType ? objs.filter((o) => o.class === entityType) : objs;
+  const direct = entityType ? objs.filter((o) => o.class === entityType) : objs;
+  if (direct.length) return direct;
+  // Fallback only: symbols this module SITES without a membership edge of their
+  // own. A module can define a class through the edge while its methods are
+  // recorded by site alone, so "methods in <module>" reads empty off the edges
+  // and the where-lane still places every one of those methods in that module.
+  const sited = siteMembersByModule(graph).get(id) || [];
+  return entityType ? sited.filter((o) => o.class === entityType) : sited;
 }
 
 /** Resolve a "<kind> of/in <term>" owner term to either a directory scope (a
@@ -1949,9 +1977,7 @@ function evalSet(graph, ast, opts) {
     case "membershipSet": {
       const owners = evalSet(graph, ast.inner, opts);
       if (!owners.length) return [];
-      const ids = new Set(owners.map((o) => o.id));
-      const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
-      return ast.entityType ? objs.filter((o) => o.class === ast.entityType) : objs;
+      return uniqueById(owners.flatMap((o) => membershipOwnSet(graph, o.id, ast.entityType)));
     }
     case "qualifier": {
       // a qualifier wrapping a MEMBERSHIP inner needs the filter applied INSIDE
