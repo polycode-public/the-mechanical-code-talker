@@ -204,6 +204,75 @@ test("a dated taught fact's mgx:observedAt is record content — it rides the wi
   assert.equal(merged.assertions[0].observedAt, "2019-03-01T00:00:00.000Z");
 });
 
+test("a finding-bearing taught fact's mgx:extractionFinding is record content — it rides the wire fact and the peer reads back the same caveat", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob = makeRoom(network, { peerId: "peer-b", displayName: "mossy-acorn" });
+  await connect(alice.room, bob.room);
+
+  await appendFacts(alice.memoryDir, [{
+    ...teachFact("normalizefeeditems", "tmct:has", "guid", "sess-a", "2026-05-01T10:00:00.000Z"),
+    extraction: ["identifier-token"],
+  }]);
+  await alice.room.afterLocalChange();
+  await settle();
+
+  const merged = findRow(await rowsOf(bob.memoryDir), "normalizefeeditems", "tmct:has");
+  assert.ok(merged, "the taught fact reached the peer");
+  assert.deepEqual(merged.extraction, ["identifier-token"]);
+  assert.deepEqual(merged.assertions[0].extraction, ["identifier-token"]);
+
+  const aliceRows = await rowsOf(alice.memoryDir);
+  assert.deepEqual(findRow(aliceRows, "normalizefeeditems", "tmct:has").extraction, ["identifier-token"],
+    "the origin's own copy still carries the finding it recorded");
+});
+
+test("two peers that merge the same finding-bearing assertions in opposite orders read back the same row, findings included", async () => {
+  const network = createFakeNetwork();
+  const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
+  const bob1Transports = [];
+  const bob2Transports = [];
+  const bob1 = makeRoom(network, { peerId: "peer-b1", displayName: "mossy-acorn", capture: bob1Transports });
+  const bob2 = makeRoom(network, { peerId: "peer-b2", displayName: "quiet-bracken", capture: bob2Transports });
+  await connect(alice.room, bob1.room);
+  await connect(alice.room, bob2.room);
+
+  // Two independent sources' own readings of the same triple, each recording
+  // a different finding — exactly the shape a row.extraction union folds
+  // over. Delivered as two separate "op" batches, in opposite orders, to two
+  // otherwise-identical peers.
+  const clauseFallback = {
+    subject: "cell", predicate: "rdfs:subClassOf", object: "unit",
+    provenance: "teach:peer:amber-fox#node:0123456789abcdef@2026-05-01T10:00:00.000Z",
+    extraction: ["clause-fallback"],
+  };
+  const pronounCarry = {
+    subject: "cell", predicate: "rdfs:subClassOf", object: "unit",
+    provenance: "teach:peer:quiet-bracken#node:fedcba9876543210@2026-05-01T10:00:01.000Z",
+    extraction: ["pronoun-carry"],
+  };
+
+  network.injectTo(bob1Transports[0], { type: "op", from: "peer-a", facts: [clauseFallback] });
+  await settle();
+  network.injectTo(bob1Transports[0], { type: "op", from: "peer-a", facts: [pronounCarry] });
+  await settle();
+
+  network.injectTo(bob2Transports[0], { type: "op", from: "peer-a", facts: [pronounCarry] });
+  await settle();
+  network.injectTo(bob2Transports[0], { type: "op", from: "peer-a", facts: [clauseFallback] });
+  await settle();
+
+  const row1 = findRow(await rowsOf(bob1.memoryDir), "cell", "rdfs:subClassOf");
+  const row2 = findRow(await rowsOf(bob2.memoryDir), "cell", "rdfs:subClassOf");
+  assert.deepEqual(row1.extraction, ["clause-fallback", "pronoun-carry"]);
+  assert.deepEqual(row1.extraction, row2.extraction, "the row union does not depend on arrival order");
+  assert.deepEqual(
+    row1.assertions.map((a) => ({ id: a.id, extraction: a.extraction })),
+    row2.assertions.map((a) => ({ id: a.id, extraction: a.extraction })),
+    "each source's own finding lands on the same assertion record whichever order the two arrived in",
+  );
+});
+
 test("presence-wins: on an id collision at an equal assertion timestamp, a record carrying mgx:observedAt supersedes the same record without one", async () => {
   const network = createFakeNetwork();
   const alice = makeRoom(network, { peerId: "peer-a", displayName: "amber-fox" });
