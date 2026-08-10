@@ -131,6 +131,16 @@ export function createWikipediaLiveProvider({
     name: sourceName,
     origin,
 
+    /** Opens this source's per-turn fetch budget (courtesy.mjs). A caller with
+     *  a turn boundary calls it once at the top of the turn; one that has none
+     *  never calls it and spends no budget. */
+    beginTurn() { gate.beginTurn(); },
+
+    /** The source's own running totals, including how many of its failures
+     *  said the source itself is struggling — what a circuit breaker reads to
+     *  tell a timing-out source from one that simply has no article. */
+    stats() { return gate.stats(); },
+
     /** The tag a fact gained through the research source contract carries. The
      *  research lane stamps its own `research:<topic>@<depth>` tag instead when
      *  it ingests, because only the lane knows how far its fan-out reached. */

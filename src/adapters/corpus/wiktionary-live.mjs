@@ -132,6 +132,13 @@ export function createWiktionaryLiveProvider({
     name: sourceName,
     origin,
 
+    /** Opens this source's per-turn fetch budget (courtesy.mjs). */
+    beginTurn() { gate.beginTurn(); },
+
+    /** The source's own running totals, including the failures that said the
+     *  source itself is struggling — what a circuit breaker reads. */
+    stats() { return gate.stats(); },
+
     provenanceTag(term) {
       return researchSourceTag(sourceName, term);
     },
