@@ -149,15 +149,28 @@ async function loadRowQueue(impl) {
   return queueStateFrom(await readBookkeeping(impl, BOOKKEEPING_RESEARCH_QUEUE));
 }
 
+/** A title only ever moves forward: queued, then finished or passed over. A
+ *  writer holding an older snapshot must not push a finished title back into
+ *  the queue, which is what lets two turns step the same run at once and keep
+ *  both results. */
+const isSettled = (status) => status === STATUS_DONE || status === STATUS_SKIPPED;
+
 /** Write the run's rows and drop only what this state actually retired: the
  *  rows of an earlier run, and any title of THIS run the state no longer
- *  mentions. A row another writer added for a title this state never saw is
- *  left alone. */
+ *  mentions. A title another writer has already finished keeps that result, and
+ *  a row another writer added for a title this state never saw is left alone. */
 async function saveRowQueue(impl, state) {
-  const rows = queueRows(state);
+  const stored = await readBookkeeping(impl, BOOKKEEPING_RESEARCH_QUEUE);
+  const settled = new Set(stored
+    .filter((e) => e.value?.runKey === state.key && isSettled(e.value?.status))
+    .map((e) => e.rowKey));
+  const rows = queueRows(state).filter((row) => {
+    const entry = JSON.parse(row.json).value;
+    return !entry.status || isSettled(entry.status) || !settled.has(row.rowKey);
+  });
   const keep = new Set(rows.map((r) => r.rowKey));
-  const stale = (await readBookkeeping(impl, BOOKKEEPING_RESEARCH_QUEUE))
-    .filter((e) => !keep.has(e.rowKey))
+  const stale = stored
+    .filter((e) => !keep.has(e.rowKey) && !settled.has(e.rowKey))
     .filter((e) => e.value?.runKey !== state.key || e.key.startsWith(`${state.key}#entry#`))
     .map((e) => e.rowKey);
   await impl.putRows(rows);
