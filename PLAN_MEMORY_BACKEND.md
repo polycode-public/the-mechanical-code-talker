@@ -1806,6 +1806,13 @@ Acceptance: the test file; `npm run test:fast`.
 
 ## 19. Phase T3 — the turn handler
 
+**BUILT** (2026-08-10, merged): `server/turn-service/` (handler + local double +
+`build-seed.mjs` reusing the chat-seed pipeline for the mid band list), 10 tests. Measured
+mid-bundle cold start: 14,122 facts, ~20.1 MB JSON, 120–150 ms cold parse + vocabulary
+extraction — one-second-class as designed. Each POST runs as a fresh single-shot turn
+(no conversational pointers restored; a future continuity design would be its own
+revision). Turn writes joining the global table cap counter landed as T6's fold.
+
 **Owns** `server/turn-service/handler.mjs`, `server/turn-service/local.mjs` (new; the same
 double pattern as M5 — the real handler on `node:http`, the in-memory backend, a fixture band
 loaded through the real loader), `npm run build:turn-service`,
@@ -1940,6 +1947,14 @@ retrieval budgets, the breaker, what their embedded path can adopt (the retrieva
 bands work identically over their table), and what stays theirs. **Haiku**, last.
 
 ## 27a. Phase T12 — the news worker and the cycle triggers
+
+**BUILT** (2026-08-10, merged): `server/news-worker/` (modes poll/enrich/ingest/
+materialize over the unmodified news.mjs cycles and a `wrapRowBackend` handle, xl seed,
+seed-stamp guard purging mismatched sessions), the trigger/feed routes in the row service,
+and an atomic conditional-write cycle lock (the marker-read draft raced under concurrent
+HTTP triggers — the in-process worker finishes faster than a network round trip). 14 new
+tests; every prior row-service test unchanged. The worker's own CDK construct had no
+named home in the plan; it lands with T6.
 
 **Owns** `server/news-worker/handler.mjs` and `server/news-worker/local.mjs` (new; §3.21's
 worker — the real `pollNewsSources`/`enrichTopTerms` over a fresh dynamo backend, the cycle
