@@ -58,14 +58,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   intermediate through `evalBoolean` instead of re-evaluating the seed. One judged round over
   the affected cells, answer-identity-controlled view leading (the deleted instrument items'
   recorded noise makes the raw view unreadable at this signal size).
-- [ ] **The newsworthiness gate's one measured false positive: scaffolding prose reads as
-  news** — `archive/PLAN_NEWSWORTHINESS.md`'s N4 marker records "back to the link" and
-  "normalizefeeditems" heading cards on the NYT fixture: the fixture's own test-scaffolding
-  sentence ("An item with no guid tag, so normalizeFeedItems falls back to the link.") is
-  well-formed prose, and the gate cannot tell meta-commentary about the parser from a report.
-  The real fix is extraction quality in `extract-facts.mjs` — the same family as the recorded
-  confidence-marker candidate and the relative-clause verb picks — not fixture editing, which
-  would risk the guid-fallback test the fixture exists to serve.
+- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — designed, doc
+  only, build gated on the operator. A closed vocabulary of named structural findings per
+  assertion (never a score): three decline reasons (`definitional-frame`,
+  `relative-clause-verb`, `fragment-term`) and three attached findings (`identifier-token`,
+  `clause-fallback`, `pronoun-carry`); the newsworthiness gate rejects finding-bearing rows
+  from heading cards; acceptance is the NYT fixture at 3 hubs / 0 junk with the fixture
+  byte-identical, and the latency sentence declining both its bad edges. Serializes against
+  `PLAN_MEMORY_BACKEND.md`'s M1/M3 on core.mjs; the fluent-meta-commentary residual is
+  recorded with the NER horizon. Closes the scaffolding-prose false positive and
+  bedrock-meter's confidence-marker ask.
 - [ ] **Capture both news screenshot candidates with Playwright and present them** — the
   capture pipeline now photographs the honest empty feed, and the open content call is empty
   plate vs a baked fixture poll. Produce both shots myself (the empty state as captured today,
