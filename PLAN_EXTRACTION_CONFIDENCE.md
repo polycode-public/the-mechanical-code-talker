@@ -1,6 +1,7 @@
 # PLAN_EXTRACTION_CONFIDENCE.md — extraction says how it read each sentence: named findings, never scores
 
-Status: DESIGN. Nothing in this plan is built. It answers three recorded extraction defects and
+Status: BUILDING — the operator gave the build go on 2026-08-10; the E-phases run inside the
+memory-backend campaign's slots. It answers three recorded extraction defects and
 one consumer ask with a single mechanism: the extractor records named, testable findings about
 how a triple was read, and each consumer decides which findings it declines. The trigger is
 `archive/PLAN_NEWSWORTHINESS.md`'s N4 marker: "back to the link" and "normalizefeeditems" headed

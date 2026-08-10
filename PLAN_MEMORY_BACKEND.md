@@ -1,6 +1,7 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend, the AWS row service behind the deployed demos, and a consumer-hosted turn surface over a Dynamo corpus
 
-Status: DESIGN, revised ten times. The first draft made news.html an IndexedDB consumer; the
+Status: BUILDING — the operator gave the build go on 2026-08-10; the campaign (§28) is running.
+Revised ten times before the go. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every
 backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and

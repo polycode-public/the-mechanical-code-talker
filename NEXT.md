@@ -29,6 +29,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+**Build campaign in flight (go given 2026-08-10).** All four items below are being built as one
+continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted per
+`PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
+worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
+
+- Wave 1 (in flight): M0 projection (Opus), E0 detectors (Opus), the combined miss-lead round
+  on chat.mjs (Opus), the news screenshot capture (Sonnet).
+- Queued behind it: M1/M2/T1 → M3/M4 → M5/T0/T2/E1/T4 → M6/M7/T3/T12/E2/E3 →
+  M8/T5/T6/T7/E4 → T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut
+  bedrock-meter pins.
+
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
   former turn-service plan: three in-tree backends (in-memory, sqlite, DynamoDB) behind one
@@ -46,8 +57,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   and mode-honest copy; the home grid renamed the demo grid with nine deep-linked buttons;
   and (tenth revision) news.html as a FULLY THIN client — no in-page graph, no seed fetch,
   a server-materialized feed document polled by version, and a chat area below the teach
-  panel that is the turn endpoint's first page consumer. DOC ONLY: nothing builds until the
-  operator says build.
+  panel that is the turn endpoint's first page consumer. BUILDING — campaign in flight, see
+  the wave tracker above.
 - [ ] **One combined round: the composite miss lead + the empty-composition receipt**
   (operator: combined, 2026-08-10) — the two share one miss-text surface, so one Opus round
   redesigns it once and measures once. (a) "nothing in the index matches that (functions)"
@@ -61,8 +72,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   intermediate through `evalBoolean` instead of re-evaluating the seed. One judged round over
   the affected cells, answer-identity-controlled view leading (the deleted instrument items'
   recorded noise makes the raw view unreadable at this signal size).
-- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — designed, doc
-  only, build gated on the operator. A closed vocabulary of named structural findings per
+- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — BUILDING inside
+  the campaign (E0 in wave 1). A closed vocabulary of named structural findings per
   assertion (never a score): three decline reasons (`definitional-frame`,
   `relative-clause-verb`, `fragment-term`) and three attached findings (`identifier-token`,
   `clause-fallback`, `pronoun-carry`); the newsworthiness gate rejects finding-bearing rows
