@@ -10,9 +10,11 @@ export async function loadGraph(config, source) {
   const graph = parseEntities(payload);
   if (!graph.individuals.length) {
     // Honest miss, never a stack: a fresh repo simply has no graph yet (the chat
-    // session itself creates one as the conversation folds in).
+    // session itself creates one as the conversation folds in). A caller with
+    // no graphFile at all (no code domain configured, ever) reads the same:
+    // `config?.graphFile` in the message below just names nothing.
     const e = new ToolError(
-      `the graph at ${config.graphFile} is empty — no entities to answer from yet ` +
+      `the graph at ${config?.graphFile} is empty — no entities to answer from yet ` +
         "(this repo starts with no graph; the chat session folds the conversation into one).",
     );
     // An empty CODE graph is not an empty world: a caller that can still answer
