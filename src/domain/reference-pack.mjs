@@ -87,6 +87,16 @@ export function referenceProvenanceTag(article) {
   return `reference:${REFERENCE_PACK_NAME}:${article.title}@${article.revid}`;
 }
 
+/** Wikimedia titles are underscored and percent-encoded in a wiki URL. The
+ *  build script (scripts/fetch-reference-pack.mjs) stamps every shipped row's
+ *  `url` with this, and referenceTagToUrl below rebuilds the same link from a
+ *  stored fact's provenance tag. */
+export const REFERENCE_PACK_ORIGIN = "https://simple.wikipedia.org";
+
+export function articleUrlFor(origin, title) {
+  return `${origin}/wiki/${encodeURIComponent(String(title).replace(/ /g, "_"))}`;
+}
+
 /** The pure half of the clean-miss gate: is this term even a pack-lookup
  *  candidate, and under which key? Returns the pack key (the lexicon entry's
  *  lemma, normFactTerm-folded) or null when the term is empty, not plain
@@ -113,6 +123,42 @@ export const LIVE_PACK_NAME = "wikipedia-live";
  *  "wikipedia-live". */
 export function liveProvenanceTag(article) {
   return `reference:${LIVE_PACK_NAME}:${article.title}@${article.revid}`;
+}
+
+export const LIVE_PACK_ORIGIN = "https://en.wikipedia.org";
+const ORIGIN_BY_PACK = new Map([
+  [REFERENCE_PACK_NAME, REFERENCE_PACK_ORIGIN],
+  [LIVE_PACK_NAME, LIVE_PACK_ORIGIN],
+]);
+
+/**
+ * The revision-pinned article a `reference:<pack>:<Title>@<revid>` provenance
+ * tag names: `{ pack, title, revid, url }`, or null. Null covers every tag
+ * this cannot place — a tag from another source kind, a pack with no known
+ * origin, a missing or non-numeric revision — because a consumer showing
+ * provenance needs a link it can follow or nothing at all, never one assembled
+ * out of a guess about where the article might live.
+ *
+ * The `?oldid=` query pins the revision the fact was read from, exactly as
+ * renderReferenceAnswer cites it in chat.
+ */
+export function referenceTagToUrl(tag) {
+  const t = String(tag ?? "").trim();
+  if (!t.startsWith("reference:")) return null;
+  const rest = t.slice("reference:".length);
+  const colon = rest.indexOf(":");
+  if (colon < 0) return null;
+  const origin = ORIGIN_BY_PACK.get(rest.slice(0, colon));
+  if (!origin) return null;
+  // The article segment keeps its spaces and may contain "@" itself, so the
+  // revision splits off the LAST one and only counts when it is all digits.
+  const article = rest.slice(colon + 1);
+  const at = article.lastIndexOf("@");
+  if (at < 1) return null;
+  const revid = article.slice(at + 1);
+  if (!/^\d+$/.test(revid)) return null;
+  const title = article.slice(0, at);
+  return { pack: rest.slice(0, colon), title, revid, url: `${articleUrlFor(origin, title)}?oldid=${revid}` };
 }
 
 /** The cited answer for a clean miss the live lookup could ground: the

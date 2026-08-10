@@ -52,6 +52,7 @@
     "./conformance": "./src/tools/conformance.mjs",
     "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs",
     "./news": "./src/services/news-exports.mjs",
+    "./phrase": "./src/domain/phrase-exports.mjs",
     "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs"
   },
   "files": [
