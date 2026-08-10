@@ -2982,7 +2982,7 @@ function heldPhrases(held) {
     return { one: `${held.owner} has 1 ${singular}`, many: `${held.owner} has ${held.count} ${plural}` };
   }
   if (held.wholeKind) {
-    return { one: `the index has 1 ${singular}`, many: `the index has ${held.count} ${plural}` };
+    return { one: `The index has 1 ${singular}`, many: `The index has ${held.count} ${plural}` };
   }
   if (held.clause?.passive) {
     const phrase = passiveClausePhrase(held.clause);
@@ -3001,21 +3001,36 @@ function heldPhrases(held) {
   };
 }
 
-/** The receipt for an empty composition: what held, what emptied it, and a
- *  branch to ask on its own. A clause-shaped held set quotes its own clause;
- *  anything else takes the caller's note, where the shape has one. Null where
- *  the step may claim nothing, which leaves the caller its own honest empty. */
-function emptiedBranchLine(emptied, fallbackBranchNote = null) {
+/** The question a held clause answers on its own, phrased the way the clause
+ *  was asked. Both readings parse, so the nudge can never name a shape that
+ *  misses. */
+function heldBranchQuestion(held) {
+  if (!held.clause || !held.entityType) return null;
+  const plural = nounFor(held.entityType, 2);
+  const ask = held.clause.passive
+    ? `which ${plural} are ${passiveClausePhrase(held.clause)}`
+    : `which ${plural} ${bareVerbFor(held.clause.kind)} ${held.clause.object}`;
+  return `Try "${ask}" for that branch on its own.`;
+}
+
+/** The receipt for an empty composition: the empty answer first, then what
+ *  held, what emptied it, and a branch to ask on its own.
+ *
+ *  The verdict leads because the receipt alone reads as a description. An
+ *  answer that opens by naming an entity the question rejected is one a reader
+ *  can mistake for the answer, however carefully the rest of the sentence
+ *  excludes it. Null where the step may claim nothing, which leaves the caller
+ *  its own honest empty. */
+function emptiedBranchLine(emptied, entityType, fallbackBranchNote = null) {
   if (!emptied?.held) return null;
   const step = stepPhrases(emptied.step);
   if (!step) return null;
   const held = emptied.held;
   const phrases = heldPhrases(held);
   const one = held.count === 1;
-  const branch = held.clause && !held.clause.passive && held.entityType
-    ? `Try "which ${nounFor(held.entityType, 2)} ${bareVerbFor(held.clause.kind)} ${held.clause.object}" for that branch on its own.`
-    : fallbackBranchNote;
-  return `${one ? phrases.one : phrases.many}, but ${one ? step.one : step.many}.${branch ? ` ${branch}` : ""}`;
+  const branch = heldBranchQuestion(held) || fallbackBranchNote;
+  const verdict = entityType ? `no ${nounFor(entityType, 2)} match that` : "nothing matches that";
+  return `${verdict}. ${one ? phrases.one : phrases.many}, but ${one ? step.one : step.many}.${branch ? ` ${branch}` : ""}`;
 }
 
 /** The empty line for a composition whose first clause held nothing: the
@@ -3146,7 +3161,7 @@ function renderComposite(parsed, result, graph) {
   // — inherited from <ancestor>: …"), never silently presented as the owner's own.
   if (result.compositeKind === "membership") {
     if (!result.matches.length) {
-      const receipt = emptiedBranchLine(result.emptied);
+      const receipt = emptiedBranchLine(result.emptied, result.entityType);
       if (receipt) return { content: receipt, miss: true, ambiguous: false, matches: [] };
       const lead = result.ownerLabel && result.entityType
         ? `${result.ownerLabel} has no ${nounFor(result.entityType, 2)} in this index.`
@@ -3293,7 +3308,7 @@ function renderComposite(parsed, result, graph) {
     // to them, instead of a blanket "nothing matches" beside an unrelated
     // recovery.
     const branchNote = coverageGrainNote(parsed, result.entityType) || qualifierBranchNote(parsed);
-    const receipt = emptiedBranchLine(result.emptied, branchNote);
+    const receipt = emptiedBranchLine(result.emptied, result.entityType, branchNote);
     if (receipt) return { content: receipt, miss: true, ambiguous: false, matches: [] };
     const hint = branchNote || touchesRephraseHint(graph);
     const lead = result.emptied?.leaf

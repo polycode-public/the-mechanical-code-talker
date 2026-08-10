@@ -504,13 +504,13 @@ test("an empty composition says which branch emptied it and points at the branch
   // an entity and the qualifier took it away.
   const r = runAsk("if a module imports app/lib/f.mjs, has it got tests");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^1 module imports app\/lib\/f\.mjs, but it is not tested\./);
+  assert.match(r.content, /^no modules match that\. 1 module imports app\/lib\/f\.mjs, but it is not tested\./);
   assert.match(r.content, /Try "which modules import app\/lib\/f\.mjs"/);
   // The same receipt on the plain composition the conditional compiles to.
   assert.match(runAsk("which modules import app/lib/f.mjs and are tested").content,
-    /^1 module imports app\/lib\/f\.mjs, but it is not tested\./);
+    /^no modules match that\. 1 module imports app\/lib\/f\.mjs, but it is not tested\./);
   const many = runAsk("which modules import app/lib/a.mjs and are exported");
-  assert.match(many.content, /^3 modules import app\/lib\/a\.mjs, but none of them is exported\./);
+  assert.match(many.content, /^no modules match that\. 3 modules import app\/lib\/a\.mjs, but none of them is exported\./);
 });
 
 test("a clause nothing satisfied states the clause itself, since there is no held branch to name", () => {
@@ -603,7 +603,7 @@ test("negation over a relative chain refuses when the exclusion empties it, and 
   assert.equal(r.tmct_ask.miss, true);
   // The module is named inside the receipt for what removed it, never offered
   // as the answer.
-  assert.match(r.content, /^1 module matched that far \(app\/functions\/d\/handler\.mjs\), but it is tested\.$/);
+  assert.match(r.content, /^no modules match that\. 1 module matched that far \(app\/functions\/d\/handler\.mjs\), but it is tested\.$/);
 });
 
 test("negation scope: a coverage complement is taken over the modules the index can place, not over every individual", () => {
@@ -634,7 +634,7 @@ test("negation scope: a symbol still reads the coverage its own defining module 
 
 test("an empty coverage-filtered symbol set explains the module grain instead of the generic rephrase nudge", () => {
   const r = runAsk("untested methods");
-  assert.match(r.content, /^the index has 1 method, but it is tested\./);
+  assert.match(r.content, /^no methods match that\. The index has 1 method, but it is tested\./);
   assert.match(r.content, /records tests edges module to module/);
   assert.match(r.content, /counts as covered exactly when the module it lives in is tested/);
   assert.doesNotMatch(r.content, /who touched/);
@@ -644,7 +644,7 @@ test("a negation that empties a clause names the branch that held and what was t
   // Widget is the one class inheriting Base, and b.mjs — where it lives — is tested.
   const r = runAsk("classes inheriting from Base but not tested");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^1 class inherits from Base, but it is tested\./);
+  assert.match(r.content, /^no classes match that\. 1 class inherits from Base, but it is tested\./);
   assert.match(r.content, /Try "which classes inherit from Base" for that branch on its own\./);
 });
 
@@ -656,7 +656,7 @@ test("a qualifier that empties a whole kind offers that qualifier's own branch, 
   assert.equal(r.tmct_ask.miss, true);
   // The index holds a function, so the lead states the population and the
   // qualifier that emptied it instead of claiming the kind is missing.
-  assert.match(r.content, /^the index has 1 function, but it is exported\./);
+  assert.match(r.content, /^no functions match that\. The index has 1 function, but it is exported\./);
   assert.match(r.content, /Try "which functions are exported" for that branch on its own\./);
   assert.doesNotMatch(r.content, /who touched|nothing in the index matches/);
 });
@@ -714,13 +714,13 @@ test("an empty kind and an emptied filter are different sentences", () => {
   // emptied the set, so the line counts them instead.
   const noStatic = runAsk("which classes are static");
   assert.equal(noStatic.tmct_ask.miss, true);
-  assert.match(noStatic.content, /^the index has 3 classes, but none of them is static\./);
+  assert.match(noStatic.content, /^no classes match that\. The index has 3 classes, but none of them is static\./);
 });
 
 test("an intersection of two clauses names the clause none of the held set satisfied", () => {
   const r = runAsk("which modules import app/lib/a.mjs and import app/lib/c.mjs");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^3 modules import app\/lib\/a\.mjs, but none of them imports app\/lib\/c\.mjs\./);
+  assert.match(r.content, /^no modules match that\. 3 modules import app\/lib\/a\.mjs, but none of them imports app\/lib\/c\.mjs\./);
   assert.match(r.content, /Try "which modules import app\/lib\/a\.mjs" for that branch on its own\./);
 });
 
@@ -729,7 +729,7 @@ test("a difference names what every held member also does", () => {
   // the exclusion is what emptied the answer.
   const r = runAsk("modules that import app/lib/b.mjs but do not import app/lib/c.mjs");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^1 module imports app\/lib\/b\.mjs, but it imports app\/lib\/c\.mjs too\./);
+  assert.match(r.content, /^no modules match that\. 1 module imports app\/lib\/b\.mjs, but it imports app\/lib\/c\.mjs too\./);
 });
 
 test("a multi-step fold names the step that emptied it, over the set that reached that step", () => {
@@ -737,17 +737,17 @@ test("a multi-step fold names the step that emptied it, over the set that reache
   // it away, and the count is that intermediate, never the seed's.
   const r = runAsk("which classes inherit from Base and are tested and are exported");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^1 class matched that far \(Widget\), but it is not exported\.$/);
+  assert.match(r.content, /^no classes match that\. 1 class matched that far \(Widget\), but it is not exported\.$/);
 });
 
 test("a relation hop over a held inner set says the hop found nothing, rather than that the kind is missing", () => {
   const commits = runAsk("which commit touched the module that defines Widget");
   assert.equal(commits.tmct_ask.miss, true);
-  assert.match(commits.content, /^1 module defines Widget, but no commit in this index touches it\./);
+  assert.match(commits.content, /^no commits match that\. 1 module defines Widget, but no commit in this index touches it\./);
   assert.match(commits.content, /Try "which modules define Widget" for that branch on its own\./);
   // A forward hop reads from the held set's own side.
   const imported = runAsk("what is imported by the module that defines fnAlpha");
-  assert.match(imported.content, /^1 module defines fnAlpha, but it imports nothing in this index\./);
+  assert.match(imported.content, /^nothing matches that\. 1 module defines fnAlpha, but it imports nothing in this index\./);
 });
 
 test("the branch an emptied composition offers is one the parser accepts and answers", () => {
@@ -768,5 +768,5 @@ test("a membership owner with no members of the asked kind names the owner", () 
 test("a passive clause reads its own direction when it is the step that emptied the set", () => {
   const r = runAsk("classes inherited from Widget defined in app/lib/c.mjs");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /^1 class inherits from Widget, but it is not defined in app\/lib\/c\.mjs\./);
+  assert.match(r.content, /^no classes match that\. 1 class inherits from Widget, but it is not defined in app\/lib\/c\.mjs\./);
 });
