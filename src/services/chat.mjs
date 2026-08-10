@@ -30,7 +30,7 @@ import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
 // about what a predicate says.
 import {
   FACT_PREDICATE_PHRASES, TEACH_PARTICIPLE_SRC, predicatePhrase,
-  thirdPersonSingularSurface, baseVerbSurface, gerundVerbSurface,
+  thirdPersonSingularSurface, baseVerbSurface, gerundVerbSurface, findingCaveat,
 } from "../domain/fact-phrase.mjs";
 import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
@@ -8105,6 +8105,36 @@ function citationProvenance(provenance) {
   return provenance.replace(/#node:[0-9a-f]+/g, "");
 }
 
+/** What every rendered fact line ends with: the extractor's caveat, when the
+ *  row carries a finding worth declaring, then the source citation. The order
+ *  is fixed — a reader sees how the sentence was read, then who said it — and
+ *  both halves are optional, so a clean untraced row ends with nothing at all.
+ *
+ *  A row whose extractor recorded a finding stays answerable (no lane declines
+ *  a stored fact); the caveat is how the answer says which reading it leans
+ *  on, the same reader-visible signal renderFactLine's "possibly:" hedge gives
+ *  a weak-corpus row. */
+function factLineTail(f) {
+  const caveat = findingCaveat(f);
+  const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
+  return `${caveat ? ` ${caveat}` : ""}${cite}`;
+}
+
+/** Every extraction finding the rows behind ONE composed sentence carry. A
+ *  union or an enumeration reads several stored rows out as a single line, so
+ *  the line declares what any of them was read from. */
+function composedExtraction(rows) {
+  return rows.filter(Boolean).flatMap((r) => (Array.isArray(r.extraction) ? r.extraction : []));
+}
+
+/** One fact as an uncited-framing citation step: the phrase, its caveat and
+ *  its source. Chains, both-sides refusals and "via:" receipts all read a
+ *  premise this way — the same convention renderFactLine uses, without the
+ *  "you told me"/"i learned" first-person framing a standalone line carries. */
+function citedFactPhrase(f) {
+  return `${factPhrase(f)}${factLineTail(f)}`;
+}
+
 /** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
  *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
  *  source cited, not "i learned: …" — that phrase over-claims and anthropomorphises
@@ -8116,28 +8146,28 @@ function citationProvenance(provenance) {
  *  that it's lower-confidence, so a distinct, honest hedge ("possibly: …")
  *  applies here instead. Provenance stays VERBATIM in every case. */
 function renderFactLine(f) {
-  const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
+  const tail = factLineTail(f);
   // A rdfs:subPropertyOf row relates two PREDICATES, not two things — factPhrase
   // would compose the raw CURIE ("contains rdfs:subPropertyOf touches"), so this
   // shape gets its own dedicated line ahead of the provenance-keyed framing below,
   // the same way renderUnionLine/renderEnumerationLine read as a definition
   // rather than a first-person claim regardless of who taught it.
   if (f.predicate === SUB_PROPERTY_OF_PREDICATE) {
-    return `${gerundVerbSurface(f.subject)} implies ${gerundVerbSurface(f.object)}${cite}`;
+    return `${gerundVerbSurface(f.subject)} implies ${gerundVerbSurface(f.object)}${tail}`;
   }
   // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
   // natural frames — both are things the operator SAID, so both read first-person.
-  if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
+  if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${tail}`;
   // WEAK corpus facts (lower trust, e.g. RelatedTo) — real, cited, but hedged as
   // uncertain rather than either flatly stated or falsely claimed as "learned".
-  if (f.provenance.includes("corpus-weak:")) return `possibly: ${factPhrase(f)}${cite}`;
+  if (f.provenance.includes("corpus-weak:")) return `possibly: ${factPhrase(f)}${tail}`;
   // SOLID corpus facts are background DATA — present the relation plainly, cited
   // to its source, never "i learned: …" (a first-person claim over corpus data).
-  if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
+  if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${tail}`;
   // Reference-pack facts are the same class of cited data — the "i learned:"
   // frame read as a definition-less non-answer on the re-ask.
-  if (f.provenance.includes("reference:")) return `${factPhrase(f)}${cite}`;
-  return `i learned: ${factPhrase(f)}${cite}`;
+  if (f.provenance.includes("reference:")) return `${factPhrase(f)}${tail}`;
+  return `i learned: ${factPhrase(f)}${tail}`;
 }
 
 /** A union node's stored triples read back as ONE sentence rather than a
@@ -8149,9 +8179,11 @@ function renderFactLine(f) {
  *  Pure — takes the fact rows, returns one line. */
 function renderUnionLine(node, members) {
   const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
-  const cite = node.provenance ? ` (source: ${citationProvenance(node.provenance)})` : "";
+  // One sentence states every arm, so its caveat covers every row it was
+  // composed from, not just the one the citation came off.
+  const tail = factLineTail({ ...node, extraction: composedExtraction([node, ...sorted]) });
   const arms = sorted.map((m) => `${indefiniteArticleFor(m.object)} ${m.object}`).join(" or ");
-  return `every ${node.subject} is ${arms}${cite}`;
+  return `every ${node.subject} is ${arms}${tail}`;
 }
 
 /** An enumerated class's stored `owl:oneOf` triples read back as ONE sentence:
@@ -8169,9 +8201,9 @@ function renderEnumerationLine(cls, members) {
     ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
     : names.join("");
   const citeSource = sorted.find((m) => m.provenance)?.provenance;
-  const cite = citeSource ? ` (source: ${citationProvenance(citeSource)})` : "";
+  const tail = factLineTail({ provenance: citeSource || "", extraction: composedExtraction(sorted) });
   const plural = thirdPersonSingularSurface(String(cls || "").replace(/-/g, " "));
-  return `the ${plural} are exactly ${list}${cite}`;
+  return `the ${plural} are exactly ${list}${tail}`;
 }
 
 /** A universal restriction's stored triples read back as ONE sentence rather
@@ -8185,18 +8217,16 @@ function renderEnumerationLine(cls, members) {
 function renderUniversalRestrictionLine(node, rows) {
   const onProperty = rows.find((r) => r.predicate === "owl:onProperty");
   const allValuesFrom = rows.find((r) => r.predicate === "owl:allValuesFrom");
-  const cite = node.provenance ? ` (source: ${citationProvenance(node.provenance)})` : "";
+  const tail = factLineTail({ ...node, extraction: composedExtraction([node, onProperty, allValuesFrom]) });
   const filler = thirdPersonSingularSurface(String(allValuesFrom?.object || "").replace(/-/g, " "));
-  return `every ${node.subject} ${onProperty?.object || ""} only ${filler}${cite}`;
+  return `every ${node.subject} ${onProperty?.object || ""} only ${filler}${tail}`;
 }
 export { renderUnionLine, renderEnumerationLine, renderUniversalRestrictionLine };
 
-const SENSE_CITE_RE = / \(source: [^)]*\)$/;
-
 /** Append an is-a object's superclass chain to its rendered fact line, before
- *  the citation: "rover is a kind of dog" becomes "rover is a kind of dog →
- *  canine → mammal → animal". Only the subject-side is-a lines of the queried
- *  term get a chain; every other line renders unchanged.
+ *  the caveat and the citation: "rover is a kind of dog" becomes "rover is a
+ *  kind of dog → canine → mammal → animal". Only the subject-side is-a lines
+ *  of the queried term get a chain; every other line renders unchanged.
  *
  *  `toward` steers the chain toward a specific ancestor (the class a "list …"
  *  question actually asked about) when the is-a object has more than one
@@ -8207,8 +8237,9 @@ function renderFactLineWithChain(f, parents, subjectVariants, { toward = null } 
   const chain = ancestryChain(f.object, parents, { cap: 6, stopAt: ANSWER_STOP_SET, toward });
   if (chain.length <= 1) return base;
   const suffix = ` → ${chain.slice(1).join(" → ")}`;
-  const cite = base.match(SENSE_CITE_RE);
-  return cite ? base.slice(0, cite.index) + suffix + cite[0] : base + suffix;
+  const tail = factLineTail(f);
+  if (!tail || !base.endsWith(tail)) return base + suffix;
+  return base.slice(0, base.length - tail.length) + suffix + tail;
 }
 
 /** Render a subject-scan fact list with each is-a object's superclass chain
@@ -8335,9 +8366,8 @@ function isaPolarityReply(hit, negHit) {
  *  inconsistency as a derivation — so neither side wins, same discipline as
  *  isaPolarityReply's both-sides verdict. */
 function isaInconsistencyRefusal(posFact, disjointFact) {
-  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   return {
-    text: `you've told me both ${cite(posFact)} and ${cite(disjointFact)} — together those contradict, and I won't derive an answer from an inconsistency. `
+    text: `you've told me both ${citedFactPhrase(posFact)} and ${citedFactPhrase(disjointFact)} — together those contradict, and I won't derive an answer from an inconsistency. `
       + `To settle it, say "forget that ${posFact.subject} is ${indefiniteArticleFor(posFact.object)} ${posFact.object}".`,
     replace: true,
   };
@@ -8347,21 +8377,22 @@ function isaInconsistencyRefusal(posFact, disjointFact) {
  *  an ordered list of
  *  premise Fact rows as one continuous argument — "cache is a kind of store;
  *  store is a kind of component; so redis.mjs is a component" — each premise
- *  cited via the SAME factPhrase + "(source: …)" convention renderFactLine
- *  uses, just without its "you told me"/"i learned" framing (a chain reads as
- *  one derivation, not a list of standalone recollections). The conclusion
- *  clause is spelled directly from the first premise's subject and the last
- *  premise's object — sound for any chain length, though today's only caller
- *  (the live cax-sco/scm-sco chase below) ever passes exactly two. */
+ *  cited through citedFactPhrase, the SAME caveat + "(source: …)" convention
+ *  renderFactLine uses, just without its "you told me"/"i learned" framing (a
+ *  chain reads as one derivation, not a list of standalone recollections). The
+ *  conclusion clause is spelled directly from the first premise's subject and
+ *  the last premise's object — sound for any chain length, though today's only
+ *  caller (the live cax-sco/scm-sco chase below) ever passes exactly two. */
 function renderIsaChain(premises) {
-  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : ""}`;
   const first = premises[0];
   const last = premises[premises.length - 1];
-  return `${premises.map(step).join("; ")}; so ${first.subject} is a ${last.object}`;
+  return `${premises.map((f) => citedFactPhrase(f)).join("; ")}; so ${first.subject} is a ${last.object}`;
 }
 
 /** Read every reified Fact out of the memory graph as plain {subject, predicate,
- *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
+ *  object, provenance} rows, each carrying `extraction` when its own record
+ *  recorded a finding, so a line rendered off this reader declares the same
+ *  caveat a readFactRows row would. Lazy + failure-tolerated: no memory → []. */
 async function memoryFacts(memoryDir) {
   try {
     const { loadMemory } = await import("../adapters/memory/core.mjs");
@@ -8370,7 +8401,11 @@ async function memoryFacts(memoryDir) {
     for (const ind of m.individuals || []) {
       if (ind?.class !== "Fact") continue;
       const get = (k) => (ind.attributes || []).find((a) => a.key === k)?.value || "";
-      out.push({ subject: get("subject"), predicate: get("predicate"), object: get("object"), provenance: get("provenance") });
+      const extraction = get("extraction").split(" ").filter(Boolean);
+      out.push({
+        subject: get("subject"), predicate: get("predicate"), object: get("object"), provenance: get("provenance"),
+        ...(extraction.length ? { extraction } : {}),
+      });
     }
     return out;
   } catch {
@@ -9021,7 +9056,7 @@ function renderIsaCite(chain, facts) {
     (f) => f.predicate === step.predicate && f.subject === step.subject && f.object === step.object,
   ));
   if (!steps.length || !steps.every(Boolean)) return null;
-  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
+  return steps.map((g) => citedFactPhrase(g)).join("; ");
 }
 
 /** THE capability answer — every reader that asks "can X do Y" renders through
@@ -9700,7 +9735,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       if (declined) return declined;
       const steps = order.slice(0, -1).map((n, i) => pairs.find((f) => f.subject === n && f.object === order[i + 1]));
       if (steps.every(Boolean)) {
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
+        const cite = steps.map((g) => citedFactPhrase(g)).join("; ");
         return { text: `${order[0]} — ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
       }
     }
@@ -10425,7 +10460,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         if (!chain || chain.length < 2) return renderFactLine(f);
         const steps = chain.map(rowForStep);
         if (!steps.every(Boolean)) return renderFactLine(f);
-        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${citationProvenance(g.provenance)})` : ""}`).join("; ");
+        const cite = steps.map((g) => citedFactPhrase(g)).join("; ");
         return `${renderFactLine(f)} — via: ${cite}`;
       });
       const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -11505,7 +11540,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
                   const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
                   if (seenAlias.has(key)) continue;
                   seenAlias.add(key);
-                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${citationProvenance(af.provenance)})` : ""}`);
+                  parts.push(citedFactPhrase(af));
                 }
               }
               return `${node.entity} — ${parts.join("; ")}`;
@@ -11688,7 +11723,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
           const chain = [posFact, ...(objFact ? [objFact] : [])].map(renderFactLine).join("; ");
           return {
-            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${citationProvenance(disjointFact.provenance)})` : ""} `
+            text: `no — ${chain}; and ${citedFactPhrase(disjointFact)} `
               + `— so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
             replace: true,
           };
