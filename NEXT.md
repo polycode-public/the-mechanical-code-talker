@@ -48,19 +48,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   a server-materialized feed document polled by version, and a chat area below the teach
   panel that is the turn endpoint's first page consumer. DOC ONLY: nothing builds until the
   operator says build.
-- [ ] **One combined round: the composite miss lead + the empty-composition receipt**
-  (operator: combined, 2026-08-10) — the two share one miss-text surface, so one Opus round
-  redesigns it once and measures once. (a) "nothing in the index matches that (functions)"
-  claims the kind is empty when the filter emptied it — both judge samples on both arms of
-  `g-b1-neg-11` scored honesty 0 for it on a correct verdict; the lead heads 121 of 1,075
-  answers across 15 cells (B2 relative-embedded 23, C2 garden-path 19, C1 relative-embedded
-  16). Separate "this kind is empty" from "nothing satisfied the filter". (b) An empty
-  composition names its emptied branch only for a seed clause plus one qualifier; an
-  intersection of two clauses, a difference, and a multi-step fold still answer the generic
-  line, and every miss left in `C1:negation+relative-embedded` is one of those. Carry the
-  intermediate through `evalBoolean` instead of re-evaluating the seed. One judged round over
-  the affected cells, answer-identity-controlled view leading (the deleted instrument items'
-  recorded noise makes the raw view unreadable at this signal size).
+- [ ] **The two empty leads the composition receipt did not reach** — `whereSet` still answers
+  "nothing in the index matches that clause (classes), so there is no location to cite" and
+  `temporal` still answers "nothing in the index matches the inner set", the last two empties
+  that name neither the branch that emptied them nor the population the index holds. The walk
+  that names them exists (`emptiedBranch`); these two renderers do not call it, and each has a
+  tail sentence of its own to compose with.
 - [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — designed, doc
   only, build gated on the operator. A closed vocabulary of named structural findings per
   assertion (never a score): three decline reasons (`definitional-frame`,
