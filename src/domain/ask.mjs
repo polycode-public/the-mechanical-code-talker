@@ -289,13 +289,16 @@ function parseComposite(text, nlp) {
     || parseNegatedAsk(w, lc, nlp)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
+    || parseWhereSet(w, lc, nlp, 0)
     || parseCommitFilter(w, lc)
     || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
     || parseFind(w, lc, nlp, 0)
     || parseList(w, lc, nlp, 0)
+    || parseDefinitionSiteMembership(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
+    || parseRelativeSubjectForward(w, lc, nlp, 0)
     || parsePluralAnaphoraObject(w, lc, nlp)
     || parseStackedReducedRelative(w, lc)
     || parseRelationalOrQualified(w, lc, nlp, 0);
@@ -513,8 +516,12 @@ function parseSetPhrase(text, nlp, depth) {
   if (negated) return negated;
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
+  const definitionSite = parseDefinitionSiteMembership(w, lc, nlp, depth);
+  if (definitionSite) return definitionSite;
   const nested = parseNested(w, lc, nlp, depth);
   if (nested) return nested;
+  const relSubject = parseRelativeSubjectForward(w, lc, nlp, depth);
+  if (relSubject) return relSubject;
   const rel = parseRelationalOrQualified(w, lc, nlp, depth);
   if (rel) return rel;
   const clause = parseSimpleClause(text, nlp);
@@ -565,6 +572,65 @@ function parseNested(w, lc, nlp, depth) {
     return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
   }
   return null;
+}
+
+// A LONE reduced relative naming the definition site: "<kind> [are] defined in
+// <owner>". parseStackedReducedRelative needs two such bigrams on one head noun,
+// so a single one had no route at all and the flat parser read the participle as
+// part of the owner's name. The phrase means exactly "<kind> in <owner>", which
+// the membership atom already resolves — including an owner that is itself a
+// relative clause.
+const DEFINITION_SITE_PARTICIPLES = new Set(["defined", "declared"]);
+function parseDefinitionSiteMembership(w, lc, nlp, depth) {
+  let i = 0;
+  if (FRAME_WORDS.has(lc[i]) || MEMBERSHIP_OWNER_DET.has(lc[i])) i += 1;
+  const noun = entityNoun(lc[i]);
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  i += 1;
+  if (COPULA_WORDS.has(lc[i])) i += 1;
+  if (!DEFINITION_SITE_PARTICIPLES.has(lc[i]) || lc[i + 1] !== "in") return null;
+  const owner = w.slice(i + 2);
+  if (!owner.length) return null;
+  return membershipAtom(noun.entityType, owner, nlp, depth);
+}
+
+// SUBJECT-POSITION relative clause: "which <kind> <the <kind> that <inner>>
+// <verb>" — the relative clause is the outer verb's SUBJECT, and the verb
+// dangles with no object of its own ("which class the class that inherits from
+// Widget inherits from"). parseNested only reads OBJECT-position relatives, so
+// this shape otherwise falls through to the flat clause parser, which reads the
+// embedded clause's own words as one term. Gated hard: the text must END with a
+// relation verb phrase and carry a relative pronoun before it, a combination no
+// other production claims.
+function parseRelativeSubjectForward(w, lc, nlp, depth) {
+  let i = 0;
+  if (!FRAME_WORDS.has(lc[0])) return null;
+  i += 1;
+  const noun = entityNoun(lc[i]);
+  if (!noun) return null;
+  i += 1;
+  const rest = w.slice(i);
+  const restLc = lc.slice(i);
+  if (rest.length < 2) return null;
+  // the dangling verb: the SHORTEST trailing phrase that is a whole relation verb.
+  let verb = null;
+  for (let k = rest.length - 1; k > 0; k -= 1) {
+    const tail = restLc.slice(k);
+    const vh = findPhrase(tail, VERB_TO_KIND);
+    if (vh && vh.start === 0 && vh.end === tail.length) { verb = { kind: vh.kind, at: k }; break; }
+  }
+  if (!verb) return null;
+  const subjWords = rest.slice(0, verb.at);
+  const subjLc = restLc.slice(0, verb.at);
+  if (!subjLc.some((x) => RELATIVE_PRONOUNS.includes(x))) return null;
+  let head = subjWords;
+  let headLc = subjLc;
+  while (headLc.length && MEMBERSHIP_OWNER_DET.has(headLc[0])) { head = head.slice(1); headLc = headLc.slice(1); }
+  if (!headLc.length || !entityNoun(headLc[0])) return null;
+  const framed = FRAME_WORDS.has(headLc[0]) ? head.join(" ") : `which ${head.join(" ")}`;
+  const inner = parseSetPhrase(framed, nlp, depth + 1);
+  if (!inner || inner.node === "miss") return { node: "miss", reason: (inner && inner.reason) || "the embedded subject clause didn't parse" };
+  return { node: "forwardSet", kind: verb.kind, entityType: noun.entityType, inner };
 }
 
 // Plural anaphora object: "those"/"them" standing alone as a reverse-clause
@@ -639,6 +705,58 @@ function parseCommitFilter(w, lc) {
   const pivotRaw = w.slice(i + 1).join(" ").trim();
   if (!pivotRaw) return { node: "miss", reason: `"what changed ${op}" needs a date or commit afterward` };
   return { node: "commitFilter", op, pivotRaw };
+}
+
+// "<kind> in|of <owner>" where the OWNER is itself a relative clause ("functions
+// in the module that imports X"). The owner has to be resolved as a set first:
+// handed to the term resolver as one free-text string it fuzzy-matches the name
+// sitting inside the relative clause, and the answer then describes the wrong
+// entity with full confidence — the exact shape the miss-over-guess contract
+// forbids. Falls back to the plain free-text membership node whenever the owner
+// carries no relative marker, so every other membership query is untouched.
+const MEMBERSHIP_OWNER_DET = new Set(["the", "a", "an", "all", "those", "these", "any"]);
+function membershipAtom(entityType, termWords, nlp, depth) {
+  const termLc = termWords.map((x) => x.toLowerCase());
+  if (termLc.some((t) => RELATIVE_PRONOUNS.includes(t))) {
+    let head = termWords;
+    let headLc = termLc;
+    while (headLc.length && MEMBERSHIP_OWNER_DET.has(headLc[0])) { head = head.slice(1); headLc = headLc.slice(1); }
+    if (headLc.length && entityNoun(headLc[0])) {
+      const framed = FRAME_WORDS.has(headLc[0]) ? head.join(" ") : `which ${head.join(" ")}`;
+      const owners = parseSetPhrase(framed, nlp, depth + 1);
+      if (!owners || owners.node === "miss") {
+        return { node: "miss", reason: (owners && owners.reason) || "the owner clause of this membership query didn't parse" };
+      }
+      return { node: "membershipSet", entityType, inner: owners };
+    }
+  }
+  return { node: "membership", entityType, term: termWords.join(" ") };
+}
+
+// Where-over-relative: "where is <relative set> defined" resolves the relative
+// clause to real entities FIRST, then cites each one's own source site — the
+// same compose-then-answer order parseTemporal uses for "when did <relative
+// set> change". Without it the whole clause is handed to the flat where-shape
+// as one free-text term, which fuzzy-matches its wordiest name and answers a
+// confident location for the wrong entity. Fires only for a relative subject;
+// "where is Widget defined" stays on the flat path.
+const WHERE_SET_AUX = new Set(["is", "are", "was", "were", "does", "do", "did"]);
+const WHERE_SET_DET = new Set(["the", "a", "an", "all", "those", "these", "any"]);
+function parseWhereSet(w, lc, nlp, depth = 0) {
+  if (lc[0] !== "where") return null;
+  if (!WHERE_SET_AUX.has(lc[1])) return null;
+  if (!WHERE_MARKER_WORDS.has(lc[lc.length - 1])) return null;   // needs the definition-site tail
+  let subjWords = w.slice(2, lc.length - 1);
+  let subjLc = lc.slice(2, lc.length - 1);
+  while (subjLc.length && WHERE_SET_DET.has(subjLc[0])) { subjWords = subjWords.slice(1); subjLc = subjLc.slice(1); }
+  if (!subjWords.length) return null;
+  if (!subjLc.some((x) => RELATIVE_PRONOUNS.includes(x))) return null;
+  const noun = entityNoun(subjLc[0]);
+  if (!noun) return null;                                        // needs a kind noun to frame the inner query
+  const framed = FRAME_WORDS.has(subjLc[0]) ? subjWords.join(" ") : `which ${subjWords.join(" ")}`;
+  const inner = parseSetPhrase(framed, nlp, depth + 1);
+  if (!inner || inner.node === "miss") return { node: "miss", reason: (inner && inner.reason) || "the inner set of the location query didn't parse" };
+  return { node: "whereSet", inner, entityType: noun.entityType || null };
 }
 
 // Minimal code-identifier token shape: dotted paths, Capitalized symbols, or
@@ -1116,7 +1234,9 @@ function buildPredicateAtoms(entityType, subjPrefix, predLc, predWords, nlp, dep
     const qc = dropLeadCopula(bw, blc);
     if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
-      atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
+      const owned = membershipAtom(entityType, bw.slice(1), nlp, depth);
+      if (owned.node === "miss") return { miss: owned.reason };
+      atoms.push({ op, kind: "set", ast: owned });
       continue;
     }
     let phrase = bw;
@@ -1255,7 +1375,9 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     const qc = dropLeadCopula(bw, blc);
     if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
-      atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
+      const owned = membershipAtom(entityType, bw.slice(1), nlp, depth + 1);
+      if (owned.node === "miss") return owned;
+      atoms.push({ op, kind: "set", ast: owned });
       continue;
     }
     let phrase = bw;
@@ -1323,6 +1445,64 @@ function splitBoolean(predLc, predWords) {
 // same primitives (edgesOfKind, resolveObject, refineToEntities, traverse) the
 // simple path uses. Pure given (graph, ast, opts). ----
 
+const askModuleByPathCache = new WeakMap();
+
+/** Module individuals keyed by normalized repo path, so a recorded source site
+ *  ("app/lib/c.mjs:1-10") can be turned back into the Module node it names. */
+function modulesByPath(graph) {
+  let byPath = askModuleByPathCache.get(graph);
+  if (byPath) return byPath;
+  byPath = new Map();
+  for (const ind of graph.individuals || []) {
+    if (ind.class === "Module") byPath.set(normPath(ind.label), ind);
+  }
+  askModuleByPathCache.set(graph, byPath);
+  return byPath;
+}
+
+/** The modules a set of symbols is defined in, read off each symbol's recorded
+ *  SITE rather than a stored `defines` edge. An extractor can site a symbol
+ *  without writing the edge (the fixture does exactly that for Button and
+ *  Widget.render), and the `where` lane already answers "Button is defined in
+ *  app/lib/c.mjs" from that same attribute — so a `defines` hop that reads only
+ *  the edge contradicts the `where` answer and turns a chain into a false empty.
+ *  Fallback only: a symbol the edge already covers never reaches here. */
+function siteDefiningModules(graph, objectIds) {
+  const byPath = modulesByPath(graph);
+  const out = [];
+  for (const id of objectIds) {
+    const ind = graph.byId.get(id);
+    if (!ind || ind.class === "Module") continue;
+    const label = moduleLabelOf(ind);
+    const mod = label ? byPath.get(normPath(label)) : null;
+    if (mod) out.push(mod);
+  }
+  return uniqueById(out);
+}
+
+const definesHop = (kind, entityType) => entityType === "Module" && kindsFor(kind).includes("defines");
+
+const askSiteMembersCache = new WeakMap();
+
+/** Symbols grouped by the module their recorded SITE places them in — the same
+ *  edge/site asymmetry siteDefiningModules covers, read from the module's side. */
+function siteMembersByModule(graph) {
+  let byModule = askSiteMembersCache.get(graph);
+  if (byModule) return byModule;
+  byModule = new Map();
+  const byPath = modulesByPath(graph);
+  for (const ind of graph.individuals || []) {
+    if (ind.class === "Module") continue;
+    const label = moduleLabelOf(ind);
+    const mod = label ? byPath.get(normPath(label)) : null;
+    if (!mod) continue;
+    if (!byModule.has(mod.id)) byModule.set(mod.id, []);
+    byModule.get(mod.id).push(ind);
+  }
+  askSiteMembersCache.set(graph, byModule);
+  return byModule;
+}
+
 /** Reverse traversal over a SET of object ids (the nested "callers of {X…}" step) —
  *  mirrors traverse()'s reverse general case (symbol-grain sibling + defines-refine),
  *  but membership-tests e.object against a set instead of a single id. */
@@ -1340,10 +1520,25 @@ function reverseOverSet(graph, kind, entityType, objectIds) {
   // branch for the flat path; the module-coarse case is byte-unchanged (no fine ids).
   const objHasFine = !!symbolKind && [...objectIds].some((id) => FINE_ENTITY_TYPES.has(graph.byId.get(id)?.class));
   const scanKinds = objHasFine ? [...kindsFor(kind), symbolKind] : kindsFor(kind);
-  const edges = scanKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => objectIds.has(e.object));
+  const scanned = scanKinds.flatMap((k) => edgesOfKind(graph, k));
+  let edges = scanned.filter((e) => objectIds.has(e.object));
+  // cochange is symmetric but stored as one directed edge per pair, so a set
+  // member recorded as the stored SUBJECT is just as much a cochange partner —
+  // the same flip traverse() makes on the flat path.
+  if (kind === "cochange") {
+    edges = edges.concat(scanned.filter((e) => objectIds.has(e.subject)).map((e) => ({ ...e, subject: e.object, object: e.subject })));
+  }
   const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
   if (!entityType || entityType === "Change") return subjects;
   const direct = subjects.filter((s) => s.class === entityType);
+  if (definesHop(kind, entityType)) {
+    // Per-object, not per-set: "the module that defines {Widget, Button}" is the
+    // union of each symbol's defining module, so a set where one member carries
+    // the edge and another only a site must answer with both.
+    const covered = new Set(edges.map((e) => e.object));
+    const uncovered = new Set([...objectIds].filter((id) => !covered.has(id)));
+    return uniqueById([...direct, ...siteDefiningModules(graph, uncovered)]);
+  }
   if (direct.length) return direct;
   if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
     return refineToEntities(graph, new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id)), entityType);
@@ -1473,7 +1668,14 @@ export function metaFallbackEntityAnswer(graph, term) {
  *  filtered to `entityType` when given. */
 function membershipOwnSet(graph, id, entityType) {
   const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, new Set([id]))));
-  return entityType ? objs.filter((o) => o.class === entityType) : objs;
+  const direct = entityType ? objs.filter((o) => o.class === entityType) : objs;
+  if (direct.length) return direct;
+  // Fallback only: symbols this module SITES without a membership edge of their
+  // own. A module can define a class through the edge while its methods are
+  // recorded by site alone, so "methods in <module>" reads empty off the edges
+  // and the where-lane still places every one of those methods in that module.
+  const sited = siteMembersByModule(graph).get(id) || [];
+  return entityType ? sited.filter((o) => o.class === entityType) : sited;
 }
 
 /** Resolve a "<kind> of/in <term>" owner term to either a directory scope (a
@@ -1768,6 +1970,15 @@ function evalSet(graph, ast, opts) {
       const { own, inherited } = computeMembership(graph, owner.id, owner.entityClass, ast.entityType);
       return own.length ? own : inherited;
     }
+    // Membership whose owner was itself a relative clause: the owners resolve as
+    // a set, then every owner's members are collected and filtered to the asked
+    // kind. An empty owner set stays empty rather than falling back to a
+    // free-text resolve, which is what would guess.
+    case "membershipSet": {
+      const owners = evalSet(graph, ast.inner, opts);
+      if (!owners.length) return [];
+      return uniqueById(owners.flatMap((o) => membershipOwnSet(graph, o.id, ast.entityType)));
+    }
     case "qualifier": {
       // a qualifier wrapping a MEMBERSHIP inner needs the filter applied INSIDE
       // the inheritance walk, at each level, not once after a flat resolve —
@@ -1989,6 +2200,16 @@ function evalTemporal(graph, ast, opts) {
   return { compositeKind: "temporal", matches: commits, entityType: ast.entityType, innerCount: inner.length };
 }
 
+/** Where over a nested set: the inner set's members, each carrying its own
+ *  recorded site for the renderer to cite. */
+function evalWhereSet(graph, ast, opts) {
+  const matches = evalSet(graph, ast.inner, opts);
+  return {
+    compositeKind: "whereSet", matches, entityType: ast.entityType,
+    sites: matches.map((ind) => (ind.attributes || []).find((a) => a.key === "site")?.value || null),
+  };
+}
+
 function evalSuperlative(graph, ast) {
   let pool = graph.individuals.filter((i) => i.class === ast.entityType);
   // A tests-metric ranking over Modules surveys COVERAGE, and a test module
@@ -2180,6 +2401,7 @@ function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "worldRelation") return evalWorldRelation(graph, ast);
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
+  if (ast.node === "whereSet") return evalWhereSet(graph, ast, opts);
   if (ast.node === "recentCommits") return evalRecentCommits(graph);
   if (ast.node === "commitFilter") return evalCommitFilter(graph, ast);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
@@ -2460,6 +2682,22 @@ function renderComposite(parsed, result, graph) {
     return {
       content: `the ${setNoun} in that set ${wasWere} last touched by commit ${newest.label} on ${day}${msg ? ` ("${msg}")` : ""}${more ? `; ${more} earlier commit${more === 1 ? "" : "s"} recorded` : ""}.`,
       miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // where over a composed set: cite each resolved member's own location. An
+  // empty inner set is an honest miss, and a member the index places nowhere is
+  // said out loud rather than dropped, so the count of answers always matches
+  // the count of entities the clause resolved to.
+  if (result.compositeKind === "whereSet") {
+    const setNoun = result.entityType ? nounFor(result.entityType, 2) : "entities";
+    if (!result.matches.length) {
+      return { content: `nothing in the index matches that clause (${setNoun}), so there is no location to cite. ${compositionalHint()}.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const lines = result.matches.map((ind, i) => definedAtLine(ind, result.sites[i])
+      || `${ind.label} has no recorded code location in this index.`);
+    const placed = result.matches.filter((ind, i) => definedAtLine(ind, result.sites[i]));
+    return {
+      content: lines.join(" "), miss: placed.length === 0, ambiguous: false, matches: result.matches,
     };
   }
   // set-producing
@@ -3511,8 +3749,12 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     matches = subjects;
   } else {
     const direct = subjects.filter((s) => s.class === entityType);
+    const sited = direct.length || !definesHop(kind, entityType) ? [] : siteDefiningModules(graph, new Set([gObjMatch.id]));
     if (direct.length) {
       matches = direct;
+    } else if (sited.length) {
+      matches = sited;
+      grainNote = `, falling back to ${gObjMatch.label}'s recorded source site (no defines edge)`;
     } else if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
       const moduleIds = new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id));
       matches = refineToEntities(graph, moduleIds, entityType);
@@ -3540,6 +3782,21 @@ function moduleLabelOf(ind) {
   if (site) return String(site).split(":")[0];
   const m = String(ind.id || "").match(/^fn:(.+)#/);
   return m ? m[1] : null;
+}
+
+/** One entity's location sentence, cited off its recorded site, or null when
+ *  the index places it nowhere. "is defined in" stays unvaried on purpose —
+ *  pinned ground truth for "where is X defined", shared by the flat where-shape
+ *  and the composed where-over-a-relative-set so the two can never word the
+ *  same fact differently. */
+function definedAtLine(ind, site) {
+  const m = String(site || "").match(/^(.*):(\d+)(?:-(\d+))?$/);
+  if (m) {
+    const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
+    return `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`;
+  }
+  const mod = moduleLabelOf(ind);
+  return mod ? `${symbolLabelOf(ind)} is defined in ${mod} (no line span recorded in this index).` : null;
 }
 
 function symbolLabelOf(ind) {
@@ -3915,25 +4172,14 @@ function renderCore(parsed, result, graph) {
     if (ind.class === "Commit") {
       return { content: `${ind.label} is a commit, not a code location — try "what did commit ${ind.label} touch".`, miss: true, ambiguous: false };
     }
-    const m = String(result.site || "").match(/^(.*):(\d+)(?:-(\d+))?$/);
-    if (m) {
-      // "is defined in" stays unvaried here on purpose — pinned ground truth
-      // for "where is X defined". The other two "defined in" call sites
-      // answer a different query shape and carry the phrasing variety instead.
-      const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
-      return { content: `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`, miss: false, ambiguous: false, matches: result.matches };
-    }
-    const mod = moduleLabelOf(ind);
-    if (!mod) {
+    const line = definedAtLine(ind, result.site);
+    if (!line) {
       return {
         content: `${ind.label} has no recorded code location in this index — it carries no source site, and nothing places it in a module.`,
         miss: true, ambiguous: false,
       };
     }
-    return {
-      content: `${symbolLabelOf(ind)} is defined in ${mod} (no line span recorded in this index).`,
-      miss: false, ambiguous: false, matches: result.matches,
-    };
+    return { content: line, miss: false, ambiguous: false, matches: result.matches };
   }
   // when: newest touching commit + its date; undated commits are said out loud
   // (honest miss with the precise re-index hint), never silently skipped.

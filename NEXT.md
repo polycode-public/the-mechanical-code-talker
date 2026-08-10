@@ -31,12 +31,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round:
-  - [ ] relative-embedded chain resolution
+  next tuning cycle, each its own measured round. The relative-embedded round is landed and
+  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.36.md`), and its own decision log re-ranks what
+  is left:
+  - [x] relative-embedded chain resolution
+  - [ ] converse verb readings — "belongs to" has no reading, and "is part of"/"lives in"
+    compile to a forward traversal when they mean the reverse
   - [ ] a conditional-question lane
+  - [ ] the temporal-window boundary in commit counting — seven of the pool's nine tier-1
+    failures sit in this one cell
   - [ ] a negation-scope filter
-  - [ ] the temporal-window boundary in commit counting
-  - [ ] growing the under-covered C2 relative-embedded census cell
+  - [ ] a `named <X>` qualifier inside a boolean branch
+  - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
+    all 25 of it, so the cell is measured rather than excluded
 - [ ] **news.html's marketing screenshot now captures the empty state** — since the
   newsworthiness gate landed, the seed alone never heads a card, so the capture pipeline
   photographs the designed empty feed. Operator content call: keep the honest empty plate, or
