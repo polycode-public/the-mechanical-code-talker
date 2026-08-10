@@ -26,7 +26,7 @@ import {
   PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
-  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition,
+  WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition, phraseForRelation,
   stripTrailingScopeFiller, stripTrailingTemporalAdverb, CALLS_VERB_REPORT_NOUNS,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, applyConditionalFrames, counterfactualSubjectOf, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
@@ -2223,28 +2223,41 @@ function oppositeQualifierWord(word) {
   return Object.keys(QUALIFIERS).find((k) => QUALIFIERS[k].via === opposite.via && QUALIFIERS[k].value === opposite.value) || null;
 }
 
-function evalBoolean(graph, ast, opts) {
+/** The fold itself, keeping the set that reached every atom. An empty answer
+ *  reads those intermediates to say which branch emptied it, so the receipt is
+ *  the fold's own record rather than a second evaluation of the seed. Each step
+ *  gets a fresh array, so a later atom can never rewrite an earlier `before`. */
+function foldBoolean(graph, ast, opts) {
+  const steps = [];
   let acc = [];
   for (const atom of ast.atoms) {
-    if (atom.op === "seed") { acc = evalSet(graph, atom.ast, opts); continue; }
-    if (atom.kind === "qual") {
+    const before = acc;
+    if (atom.op === "seed") acc = evalSet(graph, atom.ast, opts);
+    else if (atom.kind === "qual") {
       const holds = (ind) => atom.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]));
       const complementHolds = (ind) => atom.filters.every((f) => {
         const opposite = oppositeQualifierSpec(QUALIFIERS[f]);
         return opposite ? qualHolds(graph, ind, opposite) : !qualHolds(graph, ind, QUALIFIERS[f]);
       });
-      acc = atom.op === "difference" ? acc.filter(complementHolds) : acc.filter(holds);
-      continue;
+      acc = atom.op === "difference" ? before.filter(complementHolds) : before.filter(holds);
+    } else {
+      const other = evalSet(graph, atom.ast, opts);
+      const oids = new Set(other.map((i) => i.id));
+      if (atom.op === "intersection") acc = before.filter((i) => oids.has(i.id));
+      else if (atom.op === "difference") acc = before.filter((i) => !oids.has(i.id));
+      else if (atom.op === "union") {
+        const seen = new Set(before.map((i) => i.id));
+        acc = before.slice();
+        for (const o of other) if (!seen.has(o.id)) { seen.add(o.id); acc.push(o); }
+      }
     }
-    const oids = new Set(evalSet(graph, atom.ast, opts).map((i) => i.id));
-    if (atom.op === "intersection") acc = acc.filter((i) => oids.has(i.id));
-    else if (atom.op === "difference") acc = acc.filter((i) => !oids.has(i.id));
-    else if (atom.op === "union") {
-      const seen = new Set(acc.map((i) => i.id));
-      for (const other of evalSet(graph, atom.ast, opts)) if (!seen.has(other.id)) { seen.add(other.id); acc.push(other); }
-    }
+    steps.push({ atom, before, after: acc });
   }
-  return acc;
+  return { matches: acc, steps };
+}
+
+function evalBoolean(graph, ast, opts) {
+  return foldBoolean(graph, ast, opts).matches;
 }
 
 /** Resolve parseAnaphora's in-sentence candidateTerms to real graph entities,
@@ -2305,7 +2318,25 @@ function evalAnaphora(graph, ast, opts) {
   // session layer's register() does not evict the set on the class change a
   // narrowing produces.
   const referents = setReferentsFor(common, items, "anaphora", { bound: true });
-  return { compositeKind: "set", matches: items, entityType: common, referents };
+  // The prior answer is the set this filter emptied, so the empty case names
+  // those entities rather than reading as a claim about the whole index.
+  const emptied = items.length ? null : priorSetEmptiedBy(graph, baseItems, f);
+  return { compositeKind: "set", matches: items, entityType: common, referents, ...(emptied ? { emptied } : {}) };
+}
+
+/** What a follow-up filter did to the set the previous answer established. */
+function priorSetEmptiedBy(graph, baseItems, filter) {
+  if (!baseItems.length || !filter) return null;
+  const held = { ...heldSet(baseItems, null, null) };
+  if (filter.type === "qual") {
+    const step = qualifierStep(graph, filter.filters, false, baseItems);
+    return step ? { held, step } : null;
+  }
+  if (filter.type === "entity") return { held, step: { type: "entityKind", entityType: filter.entityType } };
+  if (filter.type === "clause" && filter.clause?.kind && filter.clause.object) {
+    return { held, step: { type: "clause", clause: { kind: filter.clause.kind, object: filter.clause.object }, excluded: false } };
+  }
+  return null;
 }
 
 // Structural kinds counted for "most-connected" (total degree). Symbol-grain and
@@ -2488,11 +2519,24 @@ function evalMembershipComposite(graph, ast, opts) {
   const { own, inherited, viaLabel } = computeMembership(graph, owner.id, owner.entityClass, entityType, filterFn);
   const inheritedNotOwn = !own.length && inherited.length > 0;
   const finalMatches = inheritedNotOwn ? inherited : own;
+  // An owner that holds members the qualifier rejected is a different answer
+  // from an owner that holds none at all, so the empty case says which.
+  const emptied = finalMatches.length ? null : membershipEmptiedBy(graph, owner, entityType, qualNode);
   return {
     compositeKind: "membership", entityType, matches: finalMatches,
     inheritedNotOwn, viaLabel, ownerLabel: owner.label,
     referents: membershipReferents(finalMatches),
+    ...(emptied ? { emptied } : {}),
   };
+}
+
+function membershipEmptiedBy(graph, owner, entityType, qualNode) {
+  if (!qualNode) return null;
+  const { own, inherited } = computeMembership(graph, owner.id, owner.entityClass, entityType, null);
+  const held = own.length ? own : inherited;
+  if (!held.length) return null;
+  const step = qualifierStep(graph, qualNode.filters, false, held);
+  return step ? { held: { ...heldSet(held, null, { entityType }), owner: owner.label }, step } : null;
 }
 
 /** Existence eval — a direct membership/name check against the graph, never
@@ -2661,45 +2705,128 @@ function evalComposite(graph, ast, opts = {}) {
   // qualifier listing ("which modules are tested") registers the same way, just
   // under its own lane name.
   const referents = setReferentsFor(entityType, matches, ast.node === "qualifier" ? "qualifierListing" : "compositeSet");
-  const narrowedFrom = matches.length ? null : qualifierEmptiedSet(graph, ast, opts);
-  return { compositeKind: "set", matches, entityType, referents, ...(narrowedFrom ? { narrowedFrom } : {}) };
+  const emptied = matches.length ? null : emptiedBranch(graph, ast, opts);
+  return { compositeKind: "set", matches, entityType, referents, ...(emptied ? { emptied } : {}) };
+}
+
+/** The clause a set node states in words, or null where it states none the
+ *  receipt may quote. The reverse reading ("which modules IMPORT x.mjs") reads
+ *  as an active sentence about the set itself; the forward one ("the classes
+ *  x.mjs DEFINES") reads as a passive about the same set, and only where the
+ *  relation's own verb is a single word — "inherit from" has no passive that
+ *  keeps the direction the question asked in. */
+function quotableClause(node) {
+  const clause = node?.node === "clause" ? node.clause : null;
+  if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
+  const passive = clause.shape === "forward";
+  if (clause.shape !== "reverse" && !passive) return null;
+  if (passive && bareVerbFor(clause.kind).includes(" ")) return null;
+  return {
+    kind: clause.kind, object: clause.object, passive,
+    entityType: clause.entityType || node.entityType || null,
+  };
+}
+
+// The agent a passive reading names its subject with. A module DEFINES its
+// symbols, and they read as defined IN it, not by it.
+const PASSIVE_AGENT_PREPOSITION = { defines: "in", contains: "in" };
+
+/** "is imported by app/lib/f.mjs", "is defined in app/lib/c.mjs" — the passive
+ *  half of a forward clause, built from the relation's own bare verb. */
+function passiveClausePhrase(clause) {
+  const bare = bareVerbFor(clause.kind);
+  const participle = bare.endsWith("e") ? `${bare}d` : `${bare}ed`;
+  return `${participle} ${PASSIVE_AGENT_PREPOSITION[clause.kind] || "by"} ${clause.object}`;
+}
+
+const sameClassOf = (list) => (list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null);
+
+/** What a qualifier step may claim about the set it emptied, or null where it
+ *  may claim nothing.
+ *
+ *  A difference reports what the exclusion took away, so it may only name the
+ *  qualifier where the members really do satisfy it. A member the qualifier
+ *  does not apply to at either polarity leaves by the same door, and saying it
+ *  was tested would be a guess about a coverage fact nothing records.
+ *
+ *  An intersection's members failed the filter, which is all that is proven, so
+ *  the receipt negates it. A filter that is already a negative adjective would
+ *  stack into "but it is not untested", so where the vocabulary carries the
+ *  positive word AND every member satisfies it, the receipt says that instead. */
+function qualifierStep(graph, filters, excluded, held) {
+  const allHold = (words) => held.every((ind) => words.every((f) => qualHolds(graph, ind, QUALIFIERS[f])));
+  if (excluded && !allHold(filters)) return null;
+  const opposites = excluded || !filters.every((f) => QUALIFIERS[f]?.value === false)
+    ? [] : filters.map(oppositeQualifierWord);
+  const statable = opposites.length > 0 && opposites.every(Boolean) && allHold(opposites);
+  return { type: "qual", filters: statable ? opposites : filters, negated: !excluded && !statable };
+}
+
+/** What one boolean atom did to the set that reached it. */
+function atomStep(graph, atom, held) {
+  if (atom.kind === "qual") {
+    if (atom.op !== "difference" && atom.op !== "intersection") return null;
+    return qualifierStep(graph, atom.filters, atom.op === "difference", held);
+  }
+  if (atom.op !== "difference" && atom.op !== "intersection") return null;
+  const excluded = atom.op === "difference";
+  if (atom.ast?.node === "named") return { type: "named", term: atom.ast.term, excluded };
+  const clause = quotableClause(atom.ast);
+  return clause ? { type: "clause", clause, excluded } : null;
 }
 
 /** An empty composite tells the reader nothing about WHICH branch emptied it.
  *  Two very different answers read the same: a clause nothing satisfied, and a
- *  clause that held real entities until the qualifier took them away. The
- *  second is the one worth saying out loud, and it is exactly what a
- *  conditional compiles to. The seed is re-evaluated once, on the empty path
- *  only, so a question that answered pays nothing for it. */
-function qualifierEmptiedSet(graph, ast, opts) {
-  if (ast.node !== "boolean" || ast.atoms?.length !== 2) return null;
-  const [seed, filter] = ast.atoms;
-  if (seed.op !== "seed" || filter.kind !== "qual") return null;
-  const excluded = filter.op === "difference";
-  if (!excluded && filter.op !== "intersection") return null;
-  const clause = seed.ast?.node === "clause" ? seed.ast.clause : null;
-  if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
-  const held = evalSet(graph, seed.ast, opts);
-  if (!held.length) return null;
-  const allHold = (words) => held.every((ind) => words.every((f) => qualHolds(graph, ind, QUALIFIERS[f])));
-  // A difference reports what the exclusion took away, so it may only name the
-  // qualifier where the clause's members really do satisfy it. A member the
-  // qualifier does not apply to at either polarity leaves by the same door, and
-  // saying it was tested would be a guess about a coverage fact nothing records.
-  if (excluded && !allHold(filter.filters)) return null;
-  // An intersection's members failed the filter, which is all that is proven,
-  // so the receipt negates it. A filter that is already a negative adjective
-  // would stack into "but it is not untested", so where the vocabulary carries
-  // the positive word AND every member satisfies it, the receipt says that
-  // instead.
-  const opposites = excluded || !filter.filters.every((f) => QUALIFIERS[f].value === false)
-    ? [] : filter.filters.map(oppositeQualifierWord);
-  const statable = opposites.length > 0 && opposites.every(Boolean) && allHold(opposites);
+ *  clause that held real entities until the next step took them away.
+ *
+ *  This walks the composition from the outside in and stops at the step that
+ *  turned a non-empty set into an empty one. `held` is that step's own input —
+ *  a boolean reads it straight off the fold's record, a relation hop off the
+ *  inner set it was about to traverse. Where nothing held anywhere, the walk
+ *  bottoms out on the clause that started empty and names that instead. Every
+ *  evaluation here happens on the empty path only, so a question that answered
+ *  pays nothing for it. */
+function emptiedBranch(graph, ast, opts) {
+  if (!ast || typeof ast !== "object") return null;
+  if (ast.node === "boolean") {
+    const { steps } = foldBoolean(graph, ast, opts);
+    const emptying = steps.find((s) => s.before.length && !s.after.length);
+    if (!emptying) return emptiedBranch(graph, steps[0]?.atom?.ast, opts);
+    const step = atomStep(graph, emptying.atom, emptying.before);
+    if (!step) return null;
+    // Only the seed ran before the emptying atom, so the seed's own clause is
+    // what the held set is. Any longer prefix is a composition no single clause
+    // states, and the receipt names its members instead of glossing it.
+    const source = steps.indexOf(emptying) === 1 ? steps[0].atom.ast : null;
+    return { held: heldSet(emptying.before, source, ast), step };
+  }
+  if (ast.node === "qualifier" && ast.inner?.node !== "membership" && ast.filters?.length) {
+    const inner = evalSet(graph, ast.inner, opts);
+    if (!inner.length) return emptiedBranch(graph, ast.inner, opts);
+    const step = qualifierStep(graph, ast.filters, false, inner);
+    return step ? { held: heldSet(inner, ast.inner, ast), step } : null;
+  }
+  if (ast.node === "reverseSet" || ast.node === "forwardSet" || ast.node === "membershipSet") {
+    const inner = evalSet(graph, ast.inner, opts);
+    if (!inner.length) return emptiedBranch(graph, ast.inner, opts);
+    const step = ast.node === "membershipSet"
+      ? (ast.entityType ? { type: "membership", entityType: ast.entityType } : null)
+      : { type: ast.node === "reverseSet" ? "reverse" : "forward", kind: ast.kind, entityType: ast.entityType || null };
+    return step ? { held: heldSet(inner, ast.inner, ast), step } : null;
+  }
+  const clause = quotableClause(ast);
+  return clause ? { leaf: clause } : null;
+}
+
+/** The set a step was handed, in the terms a receipt can state it: how many,
+ *  which kind, the clause that states it (where one does), and whether it is a
+ *  whole kind the index holds rather than a narrowed set. */
+function heldSet(members, sourceNode, ast) {
+  const clause = quotableClause(sourceNode);
   return {
-    count: held.length, entityType: clause.entityType || ast.entityType || null,
-    kind: clause.kind, object: clause.object,
-    filters: statable ? opposites : filter.filters,
-    negated: !excluded && !statable,
+    count: members.length,
+    entityType: sameClassOf(members) || clause?.entityType || ast?.entityType || null,
+    clause, wholeKind: sourceNode?.node === "allOfClass", members,
   };
 }
 
@@ -2783,6 +2910,132 @@ function qualifierBranchNote(parsed) {
   const kindPlural = nounFor(filtered.entityType || "Module", 2);
   const polarity = filtered.negated ? "" : "not ";
   return `Try "which ${kindPlural} are ${polarity}${listJoin(filtered.filters)}" for that branch on its own.`;
+}
+
+/** How many individuals of a kind the index holds at all. This is the fact
+ *  that separates "there are no functions here" from "there are functions here
+ *  and none of them answers the question" — one line used to claim both. */
+function kindPopulation(graph, entityType) {
+  if (!graph || !entityType) return null;
+  if (entityType === "Package") return packageIndividuals(graph).length;
+  return graph.individuals.filter((i) => i.class === entityType).length;
+}
+
+/** What the emptying step did, read for a held set of one and of several.
+ *  A closed set: one entry per step shape a composition can end on. */
+function stepPhrases(step) {
+  const kindNoun = (n) => (step.entityType ? nounFor(step.entityType, n) : null);
+  switch (step.type) {
+    case "qual": {
+      const words = listJoin(step.filters);
+      return step.negated
+        ? { one: `it is not ${words}`, many: `none of them is ${words}` }
+        : { one: `it is ${words}`, many: `all of them are ${words}` };
+    }
+    case "named":
+      return step.excluded
+        ? { one: `it is named "${step.term}"`, many: `all of them are named "${step.term}"` }
+        : { one: `it is not named "${step.term}"`, many: `none of them is named "${step.term}"` };
+    case "clause": {
+      const { clause } = step;
+      if (clause.passive) {
+        const phrase = passiveClausePhrase(clause);
+        return step.excluded
+          ? { one: `it is ${phrase}`, many: `all of them are ${phrase}` }
+          : { one: `it is not ${phrase}`, many: `none of them is ${phrase}` };
+      }
+      const bare = bareVerbFor(clause.kind);
+      const third = thirdPersonVerbFor(clause.kind);
+      return step.excluded
+        ? { one: `it ${third} ${clause.object} too`, many: `all of them ${bare} ${clause.object} too` }
+        : { one: `it does not ${bare} ${clause.object}`, many: `none of them ${third} ${clause.object}` };
+    }
+    case "reverse": {
+      const third = thirdPersonVerbFor(step.kind);
+      const subject = kindNoun(1) ? `no ${kindNoun(1)} in this index` : "nothing in this index";
+      return { one: `${subject} ${third} it`, many: `${subject} ${third} them` };
+    }
+    case "forward": {
+      const third = thirdPersonVerbFor(step.kind);
+      return { one: `it ${third} nothing in this index`, many: `none of them ${third} anything in this index` };
+    }
+    case "membership":
+      return { one: `it has no ${kindNoun(2)}`, many: `none of them has any ${kindNoun(2)}` };
+    case "entityKind":
+      return { one: `it is not a ${kindNoun(1)}`, many: `none of them is a ${kindNoun(1)}` };
+    default:
+      return null;
+  }
+}
+
+/** The set that reached the emptying step, said out loud. A whole kind says so
+ *  ("the index has 3 classes"); a clause-shaped set restates its clause; any
+ *  other composition names its members rather than glossing how they got
+ *  there. */
+function heldPhrases(held) {
+  const singular = nounFor(held.entityType, 1);
+  const plural = nounFor(held.entityType, 2);
+  if (held.owner) {
+    return { one: `${held.owner} has 1 ${singular}`, many: `${held.owner} has ${held.count} ${plural}` };
+  }
+  if (held.wholeKind) {
+    return { one: `the index has 1 ${singular}`, many: `the index has ${held.count} ${plural}` };
+  }
+  if (held.clause?.passive) {
+    const phrase = passiveClausePhrase(held.clause);
+    return { one: `1 ${singular} is ${phrase}`, many: `${held.count} ${plural} are ${phrase}` };
+  }
+  if (held.clause) {
+    return {
+      one: `1 ${singular} ${thirdPersonVerbFor(held.clause.kind)} ${held.clause.object}`,
+      many: `${held.count} ${plural} ${bareVerbFor(held.clause.kind)} ${held.clause.object}`,
+    };
+  }
+  const cited = compositeList(held.members);
+  return {
+    one: `1 ${singular} matched that far (${cited})`,
+    many: `${held.count} ${plural} matched that far (${cited})`,
+  };
+}
+
+/** The receipt for an empty composition: what held, what emptied it, and a
+ *  branch to ask on its own. A clause-shaped held set quotes its own clause;
+ *  anything else takes the caller's note, where the shape has one. Null where
+ *  the step may claim nothing, which leaves the caller its own honest empty. */
+function emptiedBranchLine(emptied, fallbackBranchNote = null) {
+  if (!emptied?.held) return null;
+  const step = stepPhrases(emptied.step);
+  if (!step) return null;
+  const held = emptied.held;
+  const phrases = heldPhrases(held);
+  const one = held.count === 1;
+  const branch = held.clause && !held.clause.passive && held.entityType
+    ? `Try "which ${nounFor(held.entityType, 2)} ${bareVerbFor(held.clause.kind)} ${held.clause.object}" for that branch on its own.`
+    : fallbackBranchNote;
+  return `${one ? phrases.one : phrases.many}, but ${one ? step.one : step.many}.${branch ? ` ${branch}` : ""}`;
+}
+
+/** The empty line for a composition whose first clause held nothing: the
+ *  clause itself is the whole answer, so it is stated instead of the reader
+ *  being told the kind is missing. */
+function emptyClauseLine(leaf) {
+  if (leaf.passive) {
+    const object = leaf.entityType ? `no ${nounFor(leaf.entityType, 2)}` : "nothing";
+    return `${leaf.object} ${thirdPersonVerbFor(leaf.kind)} ${object} in this index`;
+  }
+  const subject = leaf.entityType ? `no ${nounFor(leaf.entityType, 1)} in this index` : "nothing in this index";
+  return `${subject} ${thirdPersonVerbFor(leaf.kind)} ${leaf.object}`;
+}
+
+/** The last resort, and the one sentence that must never over-claim: an index
+ *  holding none of a kind and an index holding plenty of it are different
+ *  answers, so they get different words. */
+function emptyKindLine(graph, entityType) {
+  const total = kindPopulation(graph, entityType);
+  if (total === null) return `nothing in the index matches that${entityType ? ` (${nounFor(entityType, 2)})` : ""}.`;
+  if (total === 0) return `no ${nounFor(entityType, 2)} in this index.`;
+  if (total === 1) return `the index has 1 ${nounFor(entityType, 1)}, and it does not match that.`;
+  return `the index has ${total} ${nounFor(entityType, 2)}, and none of them matches that.`;
 }
 
 function renderComposite(parsed, result, graph) {
@@ -2890,7 +3143,12 @@ function renderComposite(parsed, result, graph) {
   // — inherited from <ancestor>: …"), never silently presented as the owner's own.
   if (result.compositeKind === "membership") {
     if (!result.matches.length) {
-      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
+      const receipt = emptiedBranchLine(result.emptied);
+      if (receipt) return { content: receipt, miss: true, ambiguous: false, matches: [] };
+      const lead = result.ownerLabel && result.entityType
+        ? `${result.ownerLabel} has no ${nounFor(result.entityType, 2)} in this index.`
+        : emptyKindLine(graph, result.entityType);
+      return { content: `${lead} ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
     }
     if (result.inheritedNotOwn) {
       const kindPlural = nounFor(result.entityType, 2);
@@ -3027,28 +3285,18 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    // The qualifier, not the clause, is what emptied this set — so name the
-    // entities the clause did hold and point at that branch on its own,
-    // instead of a blanket "nothing matches" beside an unrelated recovery.
-    const narrowed = result.narrowedFrom;
-    if (narrowed) {
-      const kindPlural = nounFor(narrowed.entityType || "Module", 2);
-      const filters = listJoin(narrowed.filters);
-      const clause = narrowed.negated
-        ? { one: `but it is not ${filters}`, many: `but none of them is ${filters}` }
-        : { one: `but it is ${filters}`, many: `but all of them are ${filters}` };
-      const held = narrowed.count === 1
-        ? `1 ${nounFor(narrowed.entityType || "Module", 1)} ${thirdPersonVerbFor(narrowed.kind)} ${narrowed.object}, ${clause.one}`
-        : `${narrowed.count} ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}, ${clause.many}`;
-      return {
-        content: `${held}. Try "which ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}" for that branch on its own.`,
-        miss: true, ambiguous: false, matches: [],
-      };
-    }
-    const hint = coverageGrainNote(parsed, result.entityType)
-      || qualifierBranchNote(parsed)
-      || touchesRephraseHint(graph);
-    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
+    // The step that emptied this set, not the whole question, is what the
+    // reader is missing — so name the entities that reached it and what it did
+    // to them, instead of a blanket "nothing matches" beside an unrelated
+    // recovery.
+    const branchNote = coverageGrainNote(parsed, result.entityType) || qualifierBranchNote(parsed);
+    const receipt = emptiedBranchLine(result.emptied, branchNote);
+    if (receipt) return { content: receipt, miss: true, ambiguous: false, matches: [] };
+    const hint = branchNote || touchesRephraseHint(graph);
+    const lead = result.emptied?.leaf
+      ? `${emptyClauseLine(result.emptied.leaf)}.`
+      : emptyKindLine(graph, result.entityType);
+    return { content: `${lead} ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
 }
@@ -4220,10 +4468,10 @@ function bareVerbFor(kind) {
 /** The 3rd-person singular of a relation's bare form, keeping any preposition
  *  the phrase carries: "inherit from" -> "inherits from". A one-member set
  *  otherwise read "1 class inherits Base" beside the plural's "classes inherit
- *  from Base" in the very next sentence. */
+ *  from Base" in the very next sentence. The vocabulary owns the suffix rule,
+ *  so "touch" reads "touches" rather than a bare +s. */
 function thirdPersonVerbFor(kind) {
-  const [head, ...rest] = String(bareVerbFor(kind)).split(" ");
-  return [`${head}s`, ...rest].join(" ");
+  return phraseForRelation(kind);
 }
 
 /** The passive participle of a relation ("uses" -> "used", "imports" ->

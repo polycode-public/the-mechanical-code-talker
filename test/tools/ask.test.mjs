@@ -1578,10 +1578,11 @@ test("ask(): two reduced relatives on one head compose to the intersection, each
 test("ask(): a stacked reduced-relative whose two clauses point apart is a receipted honest empty", () => {
   const graph = buildGraph();
   // Widget inherits Base but is defined in app/widget.mjs, not app/base.mjs, so
-  // the intersection is empty; the receipt still names the asked kind.
+  // the second clause is what emptied the intersection, and the receipt says so.
   const { content, tmct_ask } = ask(graph, "classes inherited from Base defined in app/base.mjs");
   assert.equal(tmct_ask.miss, true);
-  assert.match(content, /^nothing in the index matches that \(classes\)\./);
+  assert.match(content, /^1 class inherits from Base, but it is not defined in app\/base\.mjs\./);
+  assert.match(content, /Try "which classes inherit from Base" for that branch on its own\./);
 });
 
 test("ask(): the head noun's class filters the stacked-relative seed, so a forward defines leg never leaks a method into a classes answer", () => {
@@ -1610,10 +1611,11 @@ test("ask(): 'which of them are <kind>' narrows the prior set to that class", ()
   const prev = prior.tmct_ask.matches.map((m) => m.id);
   assert.ok(prev.length >= 3);
   // The prior set is all Modules, so narrowing it to functions empties it —
-  // and the receipt names the FILTER's kind, not the base set's.
+  // and the receipt names the entities the filter rejected, never the index.
   const empty = ask(miniWebappGraph, "which of them are functions", { prev });
   assert.equal(empty.tmct_ask.miss, true);
-  assert.match(empty.content, /^nothing in the index matches that \(functions\)\./);
+  assert.match(empty.content, /^3 modules matched that far \(.+\), but none of them is a function\./);
+  assert.doesNotMatch(empty.content, /nothing in the index/);
   // Narrowing to its own class keeps every member.
   const kept = ask(miniWebappGraph, "which of them are modules", { prev });
   assert.equal(kept.tmct_ask.miss, false);
