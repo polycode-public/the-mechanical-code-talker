@@ -1400,6 +1400,16 @@ Acceptance: `node --test test/adapters/memory-rows.test.mjs`; `npm run test:fast
 
 ## 6. Phase M1 — Backend D dispatch
 
+**BUILT** (2026-08-10, merged): `wrapRowBackend` with the seed overlay (putRows provably
+never receives a seed row), the two-live-handles supersession race pinned, the sidecars and
+research queue on rows (queue state monotone per title — queued → finished/passed-over —
+so a stale snapshot cannot resurrect a finished title), and one fold beyond the spec:
+`persistRowPayload` suppresses rows whose only change is the `mgx:updatedAt` audit stamp,
+because `recomputeSourceReliability` re-stamps every fact on every mutate and a raw byte
+diff would write the whole store per turn and let a stale handle clobber a concurrent
+supersession. The suppression is Backend D's alone — `diffRows` and the sqlite path are
+untouched for M3's byte-identity pin.
+
 **Owns** `src/adapters/memory/core.mjs` (the dispatch sites: `openMemoryBackend`,
 `loadMemory`, `persistMemory`, `loadSyllogiseState`/`saveSyllogiseState`,
 `loadNodeId`/`saveNodeId`, `isMemoryOrSqliteHandle` widened to cover row handles),
