@@ -109,6 +109,8 @@ public/news-browser.bundle.js
 public/news-fixtures.json
 public/claims-browser.bundle.js
 public/chat-seed.json
+server/turn-service/mid-seed.json
+server/turn-service/dist/
 public/reference-pack/
 public/viz-ticker.mjs
 public/sprites-pack/
