@@ -34,13 +34,12 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: M0 projection (Opus), the combined miss-lead round on chat.mjs (Opus), E1
-  assertion findings (Opus, slotted early in its between-M0-and-M1 window — core.mjs is its
-  until it lands). Landed: E0 (merged, 6049-test unit tier green), the screenshot capture
-  (both plates delivered, item closed below).
-- Queued: M1/M2/T1 after M0 → M3/M4 → M5/T0/T2/T4 → M6/M7/T3/T12/E2/E3 →
-  M8/T5/T6/T7/E4 → T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut
-  bedrock-meter pins. M1 additionally waits on E1 (core.mjs owner hand-back).
+- In flight: the combined miss-lead round on chat.mjs (Opus), E1 assertion findings (Opus,
+  owns core.mjs until it lands), M2 reference backend + conformance kit (Sonnet), T1
+  retrieval + calibration (Opus). Landed: M0 (merged), E0 (merged), the screenshot capture
+  (item closed below).
+- Queued: M1 after E1 → M3/M4 → M5/T0/T2/T4 → M6/M7/T3/T12/E2/E3 → M8/T5/T6/T7/E4 →
+  T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the

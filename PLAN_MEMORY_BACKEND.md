@@ -1348,6 +1348,13 @@ state immediately.
 
 ## 5. Phase M0 — the row projection (`rows.mjs`)
 
+**BUILT** (2026-08-10, merged to main): both modules plus 20 projection tests; round-trip
+identity holds as lossless-by-id plus a fixed point (assembly re-attaches the derived
+`supersededBy` last and Fact individuals return in content-addressed id order);
+`payloadToRows` takes `priorRows` so surviving rows keep their `ord` and a removal diffs
+minimally; an individual outside the closed rowClass set refuses by name with
+`BackendRejected`.
+
 **Owns** `src/adapters/memory/rows.mjs` (new), `src/adapters/memory/row-backend.mjs` (new:
 the contract doc-comment, `isRowBackend`, the row-shape validator), `test/adapters/memory-rows.test.mjs`
 (new). Serialized on `core.mjs` knowledge, no `core.mjs` edits yet. **Opus.**
