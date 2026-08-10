@@ -1,6 +1,6 @@
 {
   "name": "@polycode-projects/the-mechanical-code-talker",
-  "version": "5.0.46",
+  "version": "6.0.0",
   "private": false,
   "type": "module",
   "description": "The Mechanical Code Talker (tmct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; indexes a repo on request (tmct index) or reads any producer's graph.",
@@ -183,6 +183,7 @@
     "claim:news": "node scripts/news-rig.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
+    "build:row-service": "esbuild server/row-service/handler.mjs --bundle --platform=node --target=node20 --external:@aws-sdk/lib-dynamodb --external:@aws-sdk/client-dynamodb --outfile=server/row-service/dist/handler.js",
     "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
     "build:spider-fly-bundle": "node scripts/build-spider-fly-bundle.mjs",
     "build:plan-bundle": "node scripts/build-plan-bundle.mjs",
