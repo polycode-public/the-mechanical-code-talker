@@ -124,9 +124,10 @@ export function researchSources() {
  *  same registered source, "wikipedia" for backward compatibility with the
  *  original single-source config, "simple-wikipedia" so the news `kb_sources`
  *  list (news-sources.mjs) can name every source by the same id its own
- *  registry uses. */
+ *  registry uses. "simple-wikipedia-pack" names its offline sibling — the
+ *  shipped reference pack read as a research source, no network at all. */
 export const RESEARCH_SOURCE_CHOICES = Object.freeze([
-  "wikipedia", "wikidata", "simple-wikipedia", "wiktionary", "dbpedia",
+  "wikipedia", "wikidata", "simple-wikipedia", "simple-wikipedia-pack", "wiktionary", "dbpedia",
 ]);
 export const DEFAULT_RESEARCH_SOURCE_CHOICE = "wikipedia";
 
@@ -134,6 +135,7 @@ const CHOICE_TO_SOURCE_NAME = Object.freeze({
   wikipedia: "simple-wikipedia",
   wikidata: "wikidata",
   "simple-wikipedia": "simple-wikipedia",
+  "simple-wikipedia-pack": "simple-wikipedia-pack",
   wiktionary: "wiktionary",
   dbpedia: "dbpedia-lookup",
 });

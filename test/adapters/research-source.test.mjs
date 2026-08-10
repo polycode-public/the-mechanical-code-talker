@@ -15,15 +15,19 @@ import {
   researchSources,
 } from "../../src/adapters/corpus/research-source.mjs";
 import { getResearchProvider, registerResearchProvider, SIMPLE_WIKIPEDIA_ORIGIN } from "../../src/adapters/corpus/wikipedia-live.mjs";
-// Side-effect imports: registers the "wikidata", "wiktionary" and
-// "dbpedia-lookup" research sources so getResearchProvider has entries to
-// build for every new choice.
+import { SIMPLE_WIKIPEDIA_PACK_ORIGIN } from "../../src/adapters/corpus/simple-wikipedia-pack.mjs";
+// Side-effect imports: registers the "wikidata", "wiktionary",
+// "dbpedia-lookup" and "simple-wikipedia-pack" research sources so
+// getResearchProvider has entries to build for every new choice.
 import "../../src/adapters/corpus/wikidata-live.mjs";
 import "../../src/adapters/corpus/wiktionary-live.mjs";
 import "../../src/adapters/corpus/dbpedia-lookup-live.mjs";
 
 test("the choice vocabulary carries every source phase 2 adds, defaulting to wikipedia", () => {
-  assert.deepEqual([...RESEARCH_SOURCE_CHOICES], ["wikipedia", "wikidata", "simple-wikipedia", "wiktionary", "dbpedia"]);
+  assert.deepEqual(
+    [...RESEARCH_SOURCE_CHOICES],
+    ["wikipedia", "wikidata", "simple-wikipedia", "simple-wikipedia-pack", "wiktionary", "dbpedia"],
+  );
   assert.equal(DEFAULT_RESEARCH_SOURCE_CHOICE, "wikipedia");
 });
 
@@ -55,6 +59,11 @@ test("wiktionary resolves to itself", () => {
   assert.equal(researchSourceNameFor("wiktionary"), "wiktionary");
 });
 
+test("simple-wikipedia-pack resolves to itself, distinct from its live sibling", () => {
+  assert.equal(researchSourceNameFor("simple-wikipedia-pack"), "simple-wikipedia-pack");
+  assert.notEqual(researchSourceNameFor("simple-wikipedia-pack"), researchSourceNameFor("simple-wikipedia"));
+});
+
 test("getResearchProvider({source}) builds a provider for each new choice, and simple-wikipedia still targets simple.wikipedia.org", async () => {
   try {
     registerResearchProvider(null);
@@ -68,6 +77,10 @@ test("getResearchProvider({source}) builds a provider for each new choice, and s
 
     const wikipedia = getResearchProvider({ source: "wikipedia" });
     assert.equal(wikipedia.origin, SIMPLE_WIKIPEDIA_ORIGIN);
+
+    const pack = getResearchProvider({ source: "simple-wikipedia-pack" });
+    assert.equal(pack.name, "simple-wikipedia-pack");
+    assert.equal(pack.origin, SIMPLE_WIKIPEDIA_PACK_ORIGIN);
   } finally {
     registerResearchProvider(null);
   }

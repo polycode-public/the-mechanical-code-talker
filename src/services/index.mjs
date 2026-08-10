@@ -51,6 +51,8 @@ export { foldSessionLogs } from "./fold.mjs";
 // (docs/adapter-contract.md): registerProvider() plugs a producer in;
 // fetchEntities() is the one read path.
 export { fetchEntities, registerProvider } from "../adapters/source.mjs";
+export { registerResearchProvider } from "../adapters/corpus/wikipedia-live.mjs";
+export { registerResearchSource } from "../adapters/corpus/research-source.mjs";
 
 // `tmct init` onboarding.
 // init.mjs and toml-config.mjs each export a same-named `CONFIG_FILE`

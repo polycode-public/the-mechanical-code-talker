@@ -154,6 +154,7 @@ backend = ${JSON.stringify(config.memory.backend)}
 # this file > "wikipedia" (the built-in default).
 #   "wikipedia" — Simple English Wikipedia prose articles, CC BY-SA 4.0.
 #   "wikidata"  — Wikidata's structured claims, CC0 1.0.
+#   "simple-wikipedia-pack" — the shipped reference pack, offline, no network.
 source = ${JSON.stringify(config.research.source)}
 `;
   }
@@ -230,7 +231,7 @@ function seedRequested({ optSeed, configEnabled, env }) {
  * @param {string}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged into a
  *   FRESH config's `[memory] backend`, and selects which backend the corpus seed writes
  *   into (via src/adapters/memory/core.mjs's openMemoryBackend).
- * @param {string}  [opts.researchSource]  "wikipedia" | "wikidata" — merged into a
+ * @param {string}  [opts.researchSource]  "wikipedia" | "wikidata" | "simple-wikipedia-pack" — merged into a
  *   FRESH config's `[research] source`, the tmct.toml tier of the research lane's
  *   source precedence (src/services/chat-session.mjs createSession).
  * @returns {Promise<{
