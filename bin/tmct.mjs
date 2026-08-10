@@ -1426,7 +1426,13 @@ async function main() {
     const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
     const { newsTurn, resolveNewsConfig, createNewsState } = await import("../src/services/news.mjs");
     const { loadMemory, readFactRows, appendFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
-    const { loadTomlConfig } = await import("../src/adapters/toml-config.mjs");
+    // The same fetcher factory news.html's own session builds from
+    // (src/surfaces/web/news-browser-entry.mjs) — real sources over Node's
+    // own global fetch, each behind createNewsFetcher's courtesy gate so a
+    // CLI poll paces its requests exactly like every other surface.
+    const { newsSourceRecords, normalizeNewsSourceIds, createNewsFetcher, preflightNewsUrl } =
+      await import("../src/adapters/corpus/news-sources.mjs");
+    const { getResearchProvider } = await import("../src/adapters/corpus/wikipedia-live.mjs");
     const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
     // Same env > tmct.toml > default backend resolution as `tmct memory` — the
     // news facts must land in the store chat reads back.
@@ -1435,15 +1441,28 @@ async function main() {
     const store = { loadMemory, readFactRows, appendFacts };
     const memory = await loadMemory(memoryDir);
     const rows = readFactRows(memory);
-    const config = resolveNewsConfig(toml?.news);
+    // resolveNewsConfig unwraps `toml?.news` itself (the tmct.toml [news]
+    // table) — pass the whole toml, not its news sub-table, or a `[news]`
+    // table in tmct.toml is silently never read.
+    const config = resolveNewsConfig(toml);
     const state = createNewsState();
+    const newsFetchers = new Map();
+    for (const id of normalizeNewsSourceIds(config.sources)) {
+      const record = newsSourceRecords().find((r) => r.id === id);
+      if (record) newsFetchers.set(id, createNewsFetcher(record, { fetchImpl: fetch }));
+    }
+    const providers = {
+      newsFetchers,
+      getResearchProvider,
+      preflightNewsUrl: (url) => preflightNewsUrl(url, { fetchImpl: fetch }),
+    };
     let res;
     try {
       const line = rest.join(" ").trim();
       // Prepend `/news` to make parseNewsRequest recognize the subcommand.
       const newsLine = line ? `/news ${line}` : "/news poll";
       res = await newsTurn(newsLine, {
-        memoryDir, rows, store, config, state, now: () => new Date().toISOString(),
+        memoryDir, rows, store, config, state, providers, now: () => new Date().toISOString(),
       });
     } finally {
       await closeMemoryStore();
