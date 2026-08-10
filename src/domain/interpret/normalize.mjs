@@ -549,25 +549,57 @@ const CONDITIONAL_KIND_PLURAL = Object.freeze({
 });
 const CONDITIONAL_QUALIFIER_SRC =
   "public|private|protected|static|abstract|constant|re-?exported|exported|tested|covered|untested|uncovered";
-/** "if a/the <kind> <relation-verb> <object>, is/are it/that/they/this
- *  <qualifier>?" -> "<kind plural> <relation-gerund> <object> and <qualifier>".
- *  Closed to the two small tables above (both ends validated), so an
- *  unrecognized kind/verb/qualifier simply doesn't match — falls through to
- *  the ordinary grammar, which honestly misses on the untransformed "if …"
- *  text rather than risk a wrong composition. */
+/** consequent noun -> the qualifier it states. "has it got tests" and "does it
+ *  have tests" ask what "is it tested" asks, and the graph answers all three
+ *  off the same tests edge. Closed on purpose: a noun with no entry leaves the
+ *  whole conditional unmatched rather than being read as some near qualifier. */
+const CONDITIONAL_HAVE_NOUN_QUALIFIER = Object.freeze({
+  tests: "tested", "a test": "tested", "any tests": "tested",
+  coverage: "covered", "test coverage": "covered",
+});
+/** "if a/the <kind> <relation-verb> <object>, <consequent>?" ->
+ *  "<kind plural> <relation-gerund> <object> and <qualifier>". The consequent
+ *  is one of three closed phrasings: "is/are it <qualifier>", "has/have it got
+ *  <noun>", "does/do it have <noun>". Closed to the tables above (every end
+ *  validated), so an unrecognized kind/verb/qualifier/noun simply doesn't
+ *  match — it falls through to the ordinary grammar, which honestly misses on
+ *  the untransformed "if …" text rather than risk a wrong composition. */
 const CONDITIONAL_QUALIFIER_RE = new RegExp(
   "^if\\s+(?:a|an|the)?\\s*(" + Object.keys(CONDITIONAL_KIND_PLURAL).join("|") + ")\\s+"
   + "(" + Object.keys(CONDITIONAL_VERB_GERUND).join("|") + ")\\s+"
-  + "(.+?),\\s*(?:is|are)\\s+(?:it|that|they|this)\\s+"
-  + "(" + CONDITIONAL_QUALIFIER_SRC + ")\\??$",
+  + "(.+?),\\s*(?:"
+  + "(?:is|are)\\s+(?:it|that|they|this)\\s+(" + CONDITIONAL_QUALIFIER_SRC + ")"
+  + "|(?:has|have)\\s+(?:it|that|they|this)\\s+got\\s+(" + Object.keys(CONDITIONAL_HAVE_NOUN_QUALIFIER).join("|") + ")"
+  + "|(?:does|do)\\s+(?:it|that|they|this)\\s+have\\s+(" + Object.keys(CONDITIONAL_HAVE_NOUN_QUALIFIER).join("|") + ")"
+  + ")\\??$",
   "i",
 );
 
-/** Counterfactual deletion -> "which modules transitively import <X>" (the
- *  existing reverse-dependency closure). Exported so chat.mjs can recognize
- *  the same shape and prepend a hypothetical marker to the rendered answer. */
-export const COUNTERFACTUAL_RE =
-  /^if\s+(.+?)\s+(?:were|was)\s+(?:deleted|removed),?\s*what\s+(?:would|might|could)\s+(?:break|fail|be\s+affected)\??$/i;
+const COUNTERFACTUAL_GONE_SRC = "(?:were|was)\\s+(?:deleted|removed)";
+const COUNTERFACTUAL_BREAK_SRC = "what\\s+(?:would|might|could)\\s+(?:break|fail|be\\s+affected)";
+/** Counterfactual deletion, if-clause first. */
+export const COUNTERFACTUAL_RE = new RegExp(
+  "^if\\s+(.+?)\\s+" + COUNTERFACTUAL_GONE_SRC + ",?\\s*" + COUNTERFACTUAL_BREAK_SRC + "\\??$",
+  "i",
+);
+/** The same counterfactual with its if-clause last — "what would break if X
+ *  were removed". English puts a conditional either way round and the reading
+ *  is identical, so both orders resolve to the same subject. */
+export const COUNTERFACTUAL_POSTPOSED_RE = new RegExp(
+  "^" + COUNTERFACTUAL_BREAK_SRC + "\\s+if\\s+(.+?)\\s+" + COUNTERFACTUAL_GONE_SRC + "\\??$",
+  "i",
+);
+
+/** The entity a counterfactual-deletion question asks about, either word
+ *  order, or null when the question isn't one. Callers that need to mark the
+ *  answer hypothetical (chat.mjs) and callers that need to pick the closure
+ *  the subject actually has (ask.mjs) read the subject through here rather
+ *  than each matching one of the two orders. */
+export function counterfactualSubjectOf(text) {
+  const q = String(text || "").trim();
+  const m = q.match(COUNTERFACTUAL_RE) || q.match(COUNTERFACTUAL_POSTPOSED_RE);
+  return m ? m[1].trim() : null;
+}
 
 /** Apply the two conditional frames, qualifier composition first (more specific). */
 export function applyConditionalFrames(text) {
@@ -576,10 +608,14 @@ export function applyConditionalFrames(text) {
   if (qual) {
     const kind = CONDITIONAL_KIND_PLURAL[qual[1].toLowerCase()];
     const gerund = CONDITIONAL_VERB_GERUND[qual[2].toLowerCase()];
-    return `${kind} ${gerund} ${qual[3].trim()} and ${qual[4].toLowerCase()}`;
+    const haveNoun = qual[5] || qual[6];
+    const qualifier = qual[4]
+      ? qual[4].toLowerCase()
+      : CONDITIONAL_HAVE_NOUN_QUALIFIER[haveNoun.toLowerCase()];
+    return `${kind} ${gerund} ${qual[3].trim()} and ${qualifier}`;
   }
-  const cf = q.match(COUNTERFACTUAL_RE);
-  if (cf) return `which modules transitively import ${cf[1].trim()}`;
+  const subject = counterfactualSubjectOf(q);
+  if (subject) return `which modules transitively import ${subject}`;
   return q;
 }
 

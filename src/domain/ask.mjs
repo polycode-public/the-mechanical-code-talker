@@ -29,7 +29,7 @@ import {
   WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition,
   stripTrailingScopeFiller, stripTrailingTemporalAdverb, CALLS_VERB_REPORT_NOUNS,
 } from "./ask-vocab.mjs";
-import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
+import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, applyConditionalFrames, counterfactualSubjectOf, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -2515,7 +2515,28 @@ function evalComposite(graph, ast, opts = {}) {
   // qualifier listing ("which modules are tested") registers the same way, just
   // under its own lane name.
   const referents = setReferentsFor(entityType, matches, ast.node === "qualifier" ? "qualifierListing" : "compositeSet");
-  return { compositeKind: "set", matches, entityType, referents };
+  const narrowedFrom = matches.length ? null : qualifierEmptiedSet(graph, ast, opts);
+  return { compositeKind: "set", matches, entityType, referents, ...(narrowedFrom ? { narrowedFrom } : {}) };
+}
+
+/** An empty composite tells the reader nothing about WHICH branch emptied it.
+ *  Two very different answers read the same: a clause nothing satisfied, and a
+ *  clause that held real entities until the qualifier took them away. The
+ *  second is the one worth saying out loud, and it is exactly what a
+ *  conditional compiles to. The seed is re-evaluated once, on the empty path
+ *  only, so a question that answered pays nothing for it. */
+function qualifierEmptiedSet(graph, ast, opts) {
+  if (ast.node !== "boolean" || ast.atoms?.length !== 2) return null;
+  const [seed, filter] = ast.atoms;
+  if (seed.op !== "seed" || filter.op !== "intersection" || filter.kind !== "qual") return null;
+  const clause = seed.ast?.node === "clause" ? seed.ast.clause : null;
+  if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
+  const held = evalSet(graph, seed.ast, opts);
+  if (!held.length) return null;
+  return {
+    count: held.length, entityType: clause.entityType || ast.entityType || null,
+    kind: clause.kind, object: clause.object, filters: filter.filters,
+  };
 }
 
 // ---- compositional render: templated, same "honest miss vs cited hit"
@@ -2794,7 +2815,24 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
+    // A grain the graph records nothing at cannot be reported as a filter that
+    // rejected anything — that note keeps precedence over the narrowing below.
+    const grainNote = coverageGrainNote(parsed, result.entityType);
+    // The qualifier, not the clause, is what emptied this set — so name the
+    // entities the clause did hold and point at that branch on its own,
+    // instead of a blanket "nothing matches" beside an unrelated recovery.
+    const narrowed = grainNote ? null : result.narrowedFrom;
+    if (narrowed) {
+      const kindPlural = nounFor(narrowed.entityType || "Module", 2);
+      const held = narrowed.count === 1
+        ? `1 ${nounFor(narrowed.entityType || "Module", 1)} ${verbFor(narrowed.kind)} ${narrowed.object}, but it is not ${listJoin(narrowed.filters)}`
+        : `${narrowed.count} ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}, but none of them is ${listJoin(narrowed.filters)}`;
+      return {
+        content: `${held}. Try "which ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}" for that branch on its own.`,
+        miss: true, ambiguous: false, matches: [],
+      };
+    }
+    const hint = grainNote || touchesRephraseHint(graph);
     return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
@@ -3366,9 +3404,39 @@ function rankEntryPointModules(graph, term) {
  *  gets an honest "not supported yet" response, never a silent fallback to
  *  direct-only behavior. */
 function modifierIsWired(shape, kind, entityType) {
-  return shape === "reverse" && (kind === "imports" || kind === "calls") && (!entityType || entityType === "Module");
+  if (shape !== "reverse") return false;
+  if (kind === "imports" || kind === "calls") return !entityType || entityType === "Module";
+  if (kind === "inherits") return !entityType || entityType === "Class";
+  return false;
 }
 const TRANSITIVE_MAX_DEPTH = 8; // matches renderImpact's own default (codegraph.mjs)
+
+/** Every class below `ind` in the inherits hierarchy. A subclass edge whose
+ *  base sits in another module is recorded against an unresolved `ext:<Name>`
+ *  endpoint — the extractor declines to assert identity across modules — so an
+ *  id-strict walk reads a real hierarchy as flat. The direct reverse traversal
+ *  already falls back to matching those by name, and this closure reads them
+ *  the same way, one hop at a time. Cycle-safe, and sorted by label so the
+ *  answer is a pure function of the fact set. */
+function subclassClosure(graph, ind, kind) {
+  const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k));
+  const childrenOf = (parent) => {
+    const extId = `ext:${String(parent.label).toLowerCase()}`;
+    return edges
+      .filter((e) => e.object === parent.id || String(e.object).toLowerCase() === extId)
+      .map((e) => graph.byId.get(e.subject))
+      .filter(Boolean);
+  };
+  const found = new Map();
+  const queue = childrenOf(ind);
+  while (queue.length) {
+    const next = queue.shift();
+    if (found.has(next.id) || next.id === ind.id) continue;
+    found.set(next.id, next);
+    queue.push(...childrenOf(next));
+  }
+  return [...found.values()].sort((a, b) => String(a.label).localeCompare(String(b.label)));
+}
 
 /** A graph's own vocabulary nodes carry their definition text under one of
  *  these properties. A code entity's docstring rides `seon:hasDoc` and shares
@@ -3708,7 +3776,17 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
   // resolve to the same mixed closure — a deliberate scope decision, stated
   // honestly in the traversal receipt below.
   if (parsed.modifier === "transitive") {
-    const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH });
+    // A subsumption closure is its own walk: nothing imports or calls a class,
+    // so the dependency closure would answer an empty set for a hierarchy
+    // question the graph can answer exactly.
+    if (kind === "inherits") {
+      const descendants = subclassClosure(graph, objMatch, kind);
+      return {
+        matches: descendants, objMatch, candidates, ambiguous, matchedVia,
+        traversal: `subclass closure over inherits edges from ${objMatch.label}`,
+      };
+    }
+    const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH, includeCycleReturn: true });
     const matches = levels.flat().map((d) => graph.byId.get(d.id)).filter(Boolean);
     return {
       matches, objMatch, candidates, ambiguous, matchedVia,
@@ -4414,8 +4492,11 @@ function renderCore(parsed, result, graph) {
     const object = (result.objMatch && CONTEXT_PRONOUNS.includes(String(parsed.object || "").toLowerCase()))
       ? result.objMatch.label
       : parsed.object;
+    // A closure question searched more than the direct edge, so "directly"
+    // would understate what came back empty.
+    const reach = parsed.modifier === "transitive" ? "transitively" : "directly";
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
+      content: `No ${entityWord} found whose module ${reach} ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
     };
   }
@@ -5086,6 +5167,68 @@ const classLanesApply = (graph, parsed, result, rendered) => (rendered.ambiguous
   ? tieNamesAClass(graph, parsed, result)
   : !!rendered.miss);
 
+/** Is this individual part of the CODE graph — a module/file, or a symbol some
+ *  module holds? A taught memory fact can put a Class or a Variable in the same
+ *  store, and those carry no containing module. */
+function livesInCodeGraph(graph, ind) {
+  if (!ind?.class) return false;
+  if (ind.class === "Module" || ind.class === "File") return true;
+  return !!moduleIdOf(graph, ind);
+}
+
+/** A counterfactual deletion reads the closure its subject actually has.
+ *  interpret/normalize.mjs compiles the question to the reverse dependency
+ *  closure, which is the right reading for a module: what breaks is what
+ *  imports or calls it. Nothing imports a CLASS, so for a class the question
+ *  reads the subclass closure instead — deleting a base class breaks what
+ *  inherits from it. Returns the rewritten question, or null when the subject
+ *  is no class, resolves to nothing, or ties. */
+function counterfactualSubclassQuery(graph, query) {
+  const subject = counterfactualSubjectOf(query);
+  if (!subject) return null;
+  const resolved = resolveObject(graph, subject);
+  const ind = resolved?.ambiguous ? null : resolved?.match;
+  if (!ind || ind.class !== "Class") return null;
+  return `which classes transitively inherit from ${ind.label}`;
+}
+
+const SPECULATIVE_CONDITIONAL_RE = new RegExp(
+  "^if\\s+(.+?)\\s+(?:were|was|had|has|is|are|becomes?|became|gets?|got|stops?|stopped|starts?|started)\\s+"
+  + "[^,]*,?\\s*(?:would|will|could|might|should)\\b",
+  "i",
+);
+
+/** The conditional lane's boundary. The graph records what IS, so the one
+ *  hypothetical world it can evaluate is a deletion — the edges that would
+ *  break are edges it already holds. A rename, a speed, a test nobody wrote:
+ *  nothing in the fact set decides those, and the ordinary grammar answered
+ *  them by grabbing the nearest predicate it could see ("if fnAlpha were
+ *  renamed, would the tests still pass" compiled to a tests question about a
+ *  term called "fnAlpha renamed"). This says which conditionals it can read
+ *  instead. Fires only on a subject the CODE graph actually holds, so an
+ *  unknown term keeps the ordinary wall and a taught memory subject is never
+ *  answered with code-graph advice. */
+function speculativeConditionalRefusal(graph, query) {
+  const q = expandContractions(String(query || "")).trim();
+  if (counterfactualSubjectOf(q)) return null;
+  if (applyConditionalFrames(q) !== q) return null;
+  const m = q.match(SPECULATIVE_CONDITIONAL_RE);
+  if (!m) return null;
+  const resolved = resolveObject(graph, m[1].trim());
+  const ind = resolved?.ambiguous ? null : resolved?.match;
+  if (!ind || !livesInCodeGraph(graph, ind)) return null;
+  const closure = ind.class === "Class" ? "what inherits from it"
+    : ind.class === "Module" || ind.class === "File" ? "what imports or calls it"
+      : "what calls it";
+  return {
+    content: `I can't answer that — the index records what is, not what would be. What it can read about ${ind.label}: "what would break if ${ind.label} were deleted" (${closure}), or "/describe ${ind.label}" for the facts it holds.`,
+    tmct_ask: {
+      mechanical: true, parsed: null, canonical: null, matches: [], traversal: null,
+      miss: true, ambiguous: false, matchedVia: null, relaxed: null,
+    },
+  };
+}
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   if (isHelpRequest(query)) {
     return {
@@ -5096,6 +5239,9 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       },
     };
   }
+  const speculative = speculativeConditionalRefusal(graph, query);
+  if (speculative) return speculative;
+  query = counterfactualSubclassQuery(graph, query) || query;
   query = substituteLastCommitPhrase(graph, query);
   const directFull = parseQueryFull(query, { nlp });
   const direct = directFull.parsed;

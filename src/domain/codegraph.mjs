@@ -358,8 +358,16 @@ export function renderCompare(graph, indA, indB) {
 /** BFS the reverse of imports/calls edges from `ind` — "what would break".
  *  Diamonds collapse to shortest depth; cycles terminate via the visited set.
  *  `callsSymbol` is folded in too, coarsened to module level on read: it has
- *  no import-backing requirement, so it can reach dependents "calls" alone would miss. */
-export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
+ *  no import-backing requirement, so it can reach dependents "calls" alone would miss.
+ *
+ *  `includeCycleReturn` decides what an import cycle back to the seed means,
+ *  and the two callers genuinely want different things. An impact REPORT lists
+ *  the OTHER work a change reaches, and the module being changed is not other
+ *  work, so it stays out (the default). A dependency CLOSURE answers which
+ *  entities are inside it, and a module that reaches itself through a cycle is
+ *  inside its own — leaving it out makes the closure disagree with the edges it
+ *  just walked. */
+export function impactClosure(graph, ind, { maxDepth = 8, includeCycleReturn = false } = {}) {
   const dependents = new Map();
   const coveredBy = new Map(); // moduleId → [test labels]
   const addDependent = (objectId, subjectId, subjectLabel, via) => {
@@ -407,6 +415,21 @@ export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
       .map((dep) => ({ ...dep, tests: coveredBy.get(dep.id) || [] }))
       .sort((a, b) => String(a.label).localeCompare(String(b.label)));
     levels.push(withTests);
+  }
+  // bfsLevels seeds `visited` with the start node, so an edge that leads back
+  // to the seed is invisible to it. The return is placed one level below the
+  // shallowest dependent that carries it, and the edge chosen is the first in
+  // via order, so the answer is a pure function of the fact set.
+  for (let depth = 0; includeCycleReturn && depth < levels.length; depth += 1) {
+    const back = levels[depth]
+      .flatMap((dep) => (dependents.get(dep.id) || []).filter((d) => d.id === ind.id))
+      .sort((a, b) => String(a.via).localeCompare(String(b.via)));
+    if (!back.length) continue;
+    const returned = { ...back[0], tests: coveredBy.get(ind.id) || [] };
+    if (!levels[depth + 1]) levels[depth + 1] = [];
+    levels[depth + 1] = [...levels[depth + 1], returned]
+      .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+    break;
   }
   return levels;
 }

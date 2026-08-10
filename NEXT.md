@@ -31,15 +31,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The commit-window round is landed and
-  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`), and its own decision log re-ranks what
+  next tuning cycle, each its own measured round. The conditional-lane round is landed and
+  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`), and its own decision log re-ranks what
   is left:
   - [x] relative-embedded chain resolution
   - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
     by design, since a taught locative fact stores the located thing as its subject
   - [x] the temporal-window boundary in commit counting — measured in
     `reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`; the pool's tier-1 failures drop from nine to two
-  - [ ] a conditional-question lane
+  - [x] a conditional-question lane — measured in `reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`; the
+    cell goes 15/25 to 25/25 green and a hypothetical the fact set cannot decide refuses
   - [ ] a `named <X>` qualifier inside a boolean branch — `g-c2-rel-17` and `g-c2-rel-25`, the
     last two frontier rows in C2 relative-embedded
   - [ ] a negation-scope filter
@@ -47,6 +48,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     answers b, c and e; the tested importer b.mjs should be excluded
   - [ ] C2 pronoun-binding, 13/25 green with 12 frontier — the largest unexamined block; needs a
     diagnosis pass before it can be ranked against the rest
+  - [ ] B2 assert-recall, 16/25 green with 9 frontier and a 0.64 performance-vs-production band
+    gap, the widest in the pool — the capability answers, something in the production path
+    doesn't reach it
+  - [ ] A2 negation's four standing hard fails (`g-a2-neg-3`, `-4`, `-14`, `-24`) — byte-identical
+    across both arms of the 5.0.39 round, so nothing measured so far has touched them
   - [ ] `g-b2-coord-4` and `g-c1-presup-4`, the two tier-1 failures the pool has left. Different
     cells, so two small levers rather than one
   - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
@@ -54,7 +60,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Judge both chatbench arms against the same verdict-cache snapshot** — the 5.0.37 round
   scored four unchanged answers differently across its two arms, worth ±0.9 on a single case's
   mean, because each arm inherited a different partition of the cache
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note).
+  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note). The 5.0.39 round read the same
+  25 answers as 1.288 and 1.282 across two passes for the same reason.
+- [ ] **An empty composition names its emptied branch only for a seed clause plus one qualifier** —
+  the shape a conditional compiles to. An intersection of two clauses, a difference, and a
+  multi-step fold still answer "nothing in the index matches that". Carrying the intermediate
+  through `evalBoolean` instead of re-evaluating the seed covers all of them; it reaches every
+  composite lane and every miss text pinned against them, which is why the 5.0.39 round split it
+  out rather than folding it in (`reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`, decision log item 5).
 - [ ] **The judge context tells the judge that "touched by 2 commit(s)" is truthful for
   app/lib/a.mjs**, which the graded pool's own `^1 commit\.$` expectation denies — `run.mjs`'s
   `FIXTURE_CONTEXT`. It split `g-b2-count-temp-1`'s two draws between 2 and 0 on a correct answer
