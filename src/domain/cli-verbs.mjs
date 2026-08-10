@@ -219,7 +219,7 @@ export const CLI_VERBS = [
     prose: ["load a shared, read-only corpus band (wikidata-slice, wordnet-complete,"],
     flags: [
       { flag: "[--table <name>]", prose: ["conceptnet-full) into a DynamoDB row-backend table from a jsonl of", "wire-row-shaped facts (default table from TMCT_DYNAMO_TABLE); a", "source whose digest already matches the band's manifest is a no-op"] },
-      { flag: "[--source <path>]", prose: ["the band's jsonl (a T0 build pipeline's output, or any jsonl in the", "same wire-row shape)"] },
+      { flag: "[--source <path>]", prose: ["the band's jsonl (a scripts/corpus-bands/ build output, or any jsonl", "in the same wire-row shape)"] },
       { flag: "[--dry-run]", prose: ["report the row count and source digest without writing anything"] },
     ],
   },

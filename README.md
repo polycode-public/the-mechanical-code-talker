@@ -985,7 +985,7 @@ package or a bare user gets a working install in one command.
 
 Memory — the facts you teach tmct — lives behind a pluggable adapter seam. The CLI and library come with three backends: in-memory (ephemeral), SQLite (the CLI's default), and DynamoDB (for hosted deployments). You can inject a custom backend and tmct will read and write through it instead. The backend is a small async row store scoped to one session key — it needs eight methods (read, write, delete, and a couple of scalar sidecars). The published conformance suite validates that a custom backend meets the contract. See `docs/adapter-contract.md` for the full interface and `src/adapters/memory/row-backend-memory.mjs` for the reference implementation. Wire it into a session:
 
-```js
+```js skip=illustrative-import
 import { createSession } from "@polycode-projects/the-mechanical-code-talker";
 import { createMyBackend } from "./my-backend.mjs";
 
@@ -1206,6 +1206,21 @@ kill $SERVE_PID
        [--graph <path>]        the same thing. --graph names the graph file outright
        [--config <path>]       (repeatable), --config an alternate tmct.toml
   tmct cli digest '{…}'        architecture map + per-module context bundles
+```
+
+`tmct corpus` loads a shared, read-only corpus band into a DynamoDB
+row-backend table, or clears one; the deployed turn service reads the loaded
+bands per query:
+
+```output:help:corpus
+  tmct corpus load <band> [--table <name>] [--source <path>] [--dry-run]  load a shared, read-only corpus band (wikidata-slice, wordnet-complete,
+       [--table <name>]        conceptnet-full) into a DynamoDB row-backend table from a jsonl of
+                               wire-row-shaped facts (default table from TMCT_DYNAMO_TABLE); a
+                               source whose digest already matches the band's manifest is a no-op
+       [--source <path>]       the band's jsonl (a scripts/corpus-bands/ build output, or any jsonl
+                               in the same wire-row shape)
+       [--dry-run]             report the row count and source digest without writing anything
+  tmct corpus clear <band> [--table <name>]  physically delete every row and the manifest for one band
   tmct --help                  show this help
 ```
 
