@@ -164,8 +164,9 @@ export async function loadSeedPayload(fetcher, url, seedQuery, onProgress) {
  *   opts.onForget      when set, renders a "forget everything" button wired
  *                      to this callback; omitted, no button renders (a page
  *                      with no persistence to forget).
- *   opts.persistNote   when set (and onForget is set), a short note under the
- *                      forget button naming where the state lives.
+ *   opts.persistNote   when set, a short note naming where taught state
+ *                      lives (or that it isn't being saved), with or
+ *                      without the forget button above it.
  */
 export function renderStatsPanelInto(panelEl, stats, opts) {
   const { bandLabel, taughtHint, onForget = null, persistNote = null } = opts;
@@ -222,12 +223,15 @@ export function renderStatsPanelInto(panelEl, stats, opts) {
     forget.title = "clear what this device has saved and restart from the fresh seed";
     forget.addEventListener("click", onForget);
     panelEl.appendChild(forget);
-    if (persistNote) {
-      const note = document.createElement("p");
-      note.className = "persist-note";
-      note.textContent = persistNote;
-      panelEl.appendChild(note);
-    }
+  }
+  // The note stands on its own: a visit with nothing to forget (an
+  // unreachable service, an unpersisted mode) is exactly when the reader
+  // most needs to be told where taught facts are (not) going.
+  if (persistNote) {
+    const note = document.createElement("p");
+    note.className = "persist-note";
+    note.textContent = persistNote;
+    panelEl.appendChild(note);
   }
 }
 

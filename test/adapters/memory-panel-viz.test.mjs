@@ -203,17 +203,19 @@ test("renderStatsPanelInto: taught facts render most-recently-taught first, each
   assert.deepEqual(items.map((i) => i.children[1].textContent), ["teach:chat:b@t2", "teach:chat:a@t1"]);
 });
 
-test("renderStatsPanelInto: with no onForget, no forget button or persist note renders", () => {
+test("renderStatsPanelInto: with no onForget, no forget button renders but the persist note still does", () => {
   const panel = fakeElement("aside");
   const originalDocument = globalThis.document;
   globalThis.document = fakeDocument();
   try {
-    renderStatsPanelInto(panel, { total: 0, bandCounts: {}, taught: [] }, { bandLabel: bandLabelFor, persistNote: "kept on this device" });
+    renderStatsPanelInto(panel, { total: 0, bandCounts: {}, taught: [] }, { bandLabel: bandLabelFor, persistNote: "nothing is being saved this visit" });
   } finally {
     globalThis.document = originalDocument;
   }
   assert.equal(panel.children.some((c) => c.id === "forgetEverything"), false);
-  assert.equal(panel.children.some((c) => c.className === "persist-note"), false);
+  const note = panel.children.find((c) => c.className === "persist-note");
+  assert.ok(note, "a visit with nothing to forget still says where taught facts are (not) going");
+  assert.equal(note.textContent, "nothing is being saved this visit");
 });
 
 test("renderStatsPanelInto: with onForget, the forget button and its persist note render and the click wires through", () => {

@@ -17,7 +17,8 @@
 // never published — only the hosted demo site's public/ledger.html links to
 // it, as an optional sibling script the page degrades honestly without.
 import { vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm, applySeedPayload, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
+import { createInMemoryStore, normFactTerm, applySeedPayload, loadMemory, readFactRows, wrapRowBackend } from "../../adapters/memory/core.mjs";
+import { createHttpRowBackend, withOneRetryOnUnavailable } from "./http-row-backend.mjs";
 import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
@@ -45,14 +46,35 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  * traverses those facts while a code-structure question still refuses honestly.
  *
  * ledger-viz.mjs's own inline script calls computeLedgerDataFromPayload
- * (re-exported below) on `memoryDir.payload` after a turn whose record shows
- * a successful write (`via: "assert"` or `via: "retract"`, `miss: false`) to
- * re-derive the page's rows/terms/edges/stats and re-mount the same view a
- * fresh page load would have rendered — a plain query never re-derives.
+ * (re-exported below) on the session's current payload after a turn whose
+ * record shows a successful write (`via: "assert"` or `via: "retract"`,
+ * `miss: false`) to re-derive the page's rows/terms/edges/stats and re-mount
+ * the same view a fresh page load would have rendered — a plain query never
+ * re-derives.
+ *
+ * `awsSessionKey` (optional): the page's AWS-mode backend choice, the same
+ * seam chat-browser-entry.mjs's own createChatSession takes — given, the
+ * session's memory binds to `createHttpRowBackend({apiBase: "/", sessionKey:
+ * awsSessionKey, fetchImpl})` wrapped with `seedPayload` as its read-only
+ * seed overlay; omitted, memory stays the plain in-memory store. `fetchImpl`
+ * (optional) overrides the ambient `fetch` the row backend calls through —
+ * a test points it at a running row-service double.
  */
-export function createLedgerSession({ seedPayload = null, vocabSeeded = false } = {}) {
-  const memoryDir = createInMemoryStore();
-  applySeedPayload(memoryDir, seedPayload);
+export function createLedgerSession({
+  seedPayload = null, vocabSeeded = false, awsSessionKey = null,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+} = {}) {
+  // onOversizedRow: "drop" — see chat-browser-entry.mjs's own createChatSession
+  // for why: a real corpus seed's high-fan-out mgx:statedBy group is already
+  // over the row cap before this session teaches anything, and a session's
+  // own new fact adding one more edge to it can't fit one wire row either.
+  // The read side (core.mjs) always keeps every seed row regardless, so
+  // nothing about the seed itself is lossy — only that one property's
+  // cross-fact edge index stays as unwritable as the seed's own copy of it.
+  const memoryDir = awsSessionKey
+    ? wrapRowBackend(withOneRetryOnUnavailable(createHttpRowBackend({ apiBase: "/", sessionKey: awsSessionKey, fetchImpl })), { basePayload: seedPayload, onOversizedRow: "drop" })
+    : createInMemoryStore();
+  if (!awsSessionKey) applySeedPayload(memoryDir, seedPayload);
 
   const codeGraph = parseEntities({ individuals: [], objectProperties: [] });
 

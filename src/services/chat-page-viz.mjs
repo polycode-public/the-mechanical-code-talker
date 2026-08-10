@@ -367,6 +367,35 @@ export function inviteParamsFrom(search) {
 }
 
 /**
+ * The page's backend mode from its own query string: "aws" when
+ * `backend=aws` is present, "local" for anything else — absent, empty, or
+ * any other value, silently. Mode is a boot choice (the slider rewrites the
+ * URL and reloads rather than switching a live session), so this is the one
+ * place either mode is ever decided.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function resolveBackendMode(search) {
+  return new URLSearchParams(String(search || "")).get("backend") === "aws" ? "aws" : "local";
+}
+
+/**
+ * The current page address with its `backend` query parameter rewritten to
+ * match `mode` — "aws" written explicitly, anything else removed rather than
+ * written out as "local", so a plain reload never carries a redundant param.
+ * Every other query parameter and the hash survive untouched, so a slider
+ * flip never drops an invite the address was already carrying.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function backendModeUrl(pageUrl, mode) {
+  const url = new URL(String(pageUrl));
+  if (mode === "aws") url.searchParams.set("backend", "aws");
+  else url.searchParams.delete("backend");
+  return url.toString();
+}
+
+/**
  * The boot statusline while the big assets stream in — "loading the engine…
  * X MB / Y MB", aggregated across every asset currently downloading. `parts`
  * is an array of { loaded, total } byte counts (total 0 when the response
@@ -561,12 +590,17 @@ ${THEME_TOKENS_CSS}
      only) has no radio of its own — every radio clears when that mode is
      active, and the statusline names it instead. */
   .composer-wiki { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .4rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
-  fieldset.wikiMode { border: none; margin: 0; padding: 0; display: inline-flex; align-items: center; gap: .7rem; }
-  fieldset.wikiMode legend { padding: 0; margin-right: .15rem; font: inherit; color: inherit; }
-  fieldset.wikiMode label { display: inline-flex; align-items: center; gap: .28rem; cursor: pointer; white-space: nowrap; }
-  fieldset.wikiMode input[type="radio"] { margin: 0; accent-color: var(--corpus); }
+  fieldset.wikiMode, fieldset.backendMode { border: none; margin: 0; padding: 0; display: inline-flex; align-items: center; gap: .7rem; }
+  fieldset.wikiMode legend, fieldset.backendMode legend { padding: 0; margin-right: .15rem; font: inherit; color: inherit; }
+  fieldset.wikiMode label, fieldset.backendMode label { display: inline-flex; align-items: center; gap: .28rem; cursor: pointer; white-space: nowrap; }
+  fieldset.wikiMode input[type="radio"], fieldset.backendMode input[type="radio"] { margin: 0; accent-color: var(--corpus); }
   .synthRow { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
   .synthRow input[type="range"] { width: 88px; accent-color: var(--corpus); }
+
+  /* the backend row, above the wiki row: local (this browser, IndexedDB) or
+     AWS (an anonymous server-side session) — a boot choice, so picking one
+     reloads the page rather than switching a live session. */
+  .composer-backend { max-width: 720px; margin: 0 auto; padding: .5rem 1.1rem 0; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
   /* the research row: type a topic, and the page asks "research <topic>"
      then ticks "research next" turns through the queue — play/pause rides
@@ -751,6 +785,13 @@ ${shareOverlayHtml({ withTape: true })}
           placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
         <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
       </div>
+      <div class="composer-backend">
+        <fieldset class="backendMode" id="backendMode" title="local: everything you teach stays in this browser only (IndexedDB), never sent anywhere. AWS: the same engine, but taught facts save to an anonymous server-side session that expires after seven days, restored on reload. Switching reloads the page — a session is never moved between modes.">
+          <legend>backend</legend>
+          <label><input type="radio" name="backendMode" id="backendLocal" value="local" checked> local</label>
+          <label><input type="radio" name="backendMode" id="backendAws" value="aws"> AWS</label>
+        </fieldset>
+      </div>
       <div class="composer-wiki">
         <fieldset class="wikiMode" id="wikiMode" title="Off by default. &quot;when I don't know&quot;: a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, cited (CC BY-SA). &quot;always&quot;: every grounded answer also gets a cited Wikipedia read-out. Type /wiki supplement for that same read-out on grounded answers only, without switching this to always.">
           <legend>ask wikipedia</legend>
@@ -812,6 +853,8 @@ ${shareOverlayHtml({ withTape: true })}
   const nodeInitials = ${nodeInitials.toString()};
   const inviteLinkFor = ${inviteLinkFor.toString()};
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
+  const resolveBackendMode = ${resolveBackendMode.toString()};
+  const backendModeUrl = ${backendModeUrl.toString()};
   const tapeClock = ${tapeClock.toString()};
   const relativeWhen = ${relativeWhen.toString()};
   const shareStepStates = ${shareStepStates.toString()};
@@ -843,6 +886,19 @@ ${shareOverlayHtml({ withTape: true })}
   const wikiModeRadios = Array.prototype.slice.call(wikiModeFieldset.querySelectorAll('input[type="radio"]'));
   const synthSliderEl = el("synthSlider");
   const synthValueEl = el("synthValue");
+
+  // The backend mode is a boot choice, decided once from the URL this page
+  // was loaded with — never switched under a live session. The radios only
+  // ever reflect that choice and, on a change, rewrite the URL and reload;
+  // they never flip the running session's own store.
+  const backendModeFieldset = el("backendMode");
+  const backendModeRadios = Array.prototype.slice.call(backendModeFieldset.querySelectorAll('input[type="radio"]'));
+  const backendMode = resolveBackendMode(location.search);
+  for (const radio of backendModeRadios) radio.checked = radio.value === backendMode;
+  backendModeFieldset.addEventListener("change", function () {
+    const chosen = backendModeRadios.find((r) => r.checked);
+    location.href = backendModeUrl(location.href, chosen ? chosen.value : "local");
+  });
 
   // The wikipedia mode: "off" | "miss" (the radio's own value for what the
   // session calls plain true, a rescue on a clean miss) | "always". "supplement"
@@ -887,6 +943,25 @@ ${shareOverlayHtml({ withTape: true })}
   }
   function writeSynthBudget(n) {
     try { localStorage.setItem(SYNTH_BUDGET_KEY, String(n)); } catch { /* private mode — this visit still works */ }
+  }
+
+  // AWS mode's one local item: a session pointer, never facts (§2's own
+  // wording — the copy the stats panel shows repeats it). Read once at boot;
+  // minted fresh whenever none is stored yet, or after a purge discards one.
+  const AWS_SESSION_KEY = "tmct.chat.sessionKey";
+  function readAwsSessionKey() {
+    try { return localStorage.getItem(AWS_SESSION_KEY) || null; } catch { return null; }
+  }
+  function writeAwsSessionKey(key) {
+    try { localStorage.setItem(AWS_SESSION_KEY, key); } catch { /* private mode — this visit still works, just not restorable */ }
+  }
+  function discardAwsSessionKey() {
+    try { localStorage.removeItem(AWS_SESSION_KEY); } catch { /* already effectively gone this visit */ }
+  }
+  function mintAwsSessionKey() {
+    const key = crypto.randomUUID();
+    writeAwsSessionKey(key);
+    return key;
   }
 
   function scrollToEnd() {
@@ -1126,6 +1201,7 @@ ${shareOverlayHtml({ withTape: true })}
       synthesisBudget: readSynthBudget(),
       onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
       digestStructures: DIGEST_STRUCTURES,
+      awsSessionKey: (backendMode === "aws" && !persistenceUnavailable) ? awsSessionKey : undefined,
     });
   }
 
@@ -1164,6 +1240,11 @@ ${shareOverlayHtml({ withTape: true })}
   let restoredCount = 0;
   let siteVersion = "dev";
   let lastStatsTotal = null;
+  // AWS mode's own state: the minted/restored session pointer, and whether
+  // the row service ever answered this visit. Local mode never touches
+  // either — persist (IndexedDB) stays that mode's own persistence.
+  let awsSessionKey = null;
+  let persistenceUnavailable = false;
   window.tmctChatLastSave = null;
   window.tmct.lastSave = null;
 
@@ -1193,7 +1274,15 @@ ${shareOverlayHtml({ withTape: true })}
   async function forgetEverything() {
     clearTimeout(saveTimer);
     saveTimer = null;
-    if (persist) await persist.clear();
+    if (backendMode === "aws" && !persistenceUnavailable) {
+      if (window.tmct.session && window.tmct.page.discardAwsSession) {
+        try { await window.tmct.page.discardAwsSession(window.tmct.session.memoryDir); }
+        catch { /* best effort — the old session still expires on its own within seven days */ }
+      }
+      awsSessionKey = mintAwsSessionKey();
+    } else if (persist) {
+      await persist.clear();
+    }
     restoredCount = 0;
     // The room holds the OLD session's store, so it can't outlive the swap —
     // it would keep merging peers' facts into a store nothing reads any more.
@@ -1201,7 +1290,10 @@ ${shareOverlayHtml({ withTape: true })}
     dropRoom();
     await newSession();
     const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
-    addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
+    const note = backendMode === "aws" && !persistenceUnavailable
+      ? "forgot everything taught this session \\u2014 back to the fresh seed under a new anonymous session ("
+      : "forgot everything taught on this device \\u2014 back to the fresh seed (";
+    addSystemLine(note + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
   }
 
@@ -1225,10 +1317,15 @@ ${shareOverlayHtml({ withTape: true })}
     }
     lastStatsTotal = Number(stats.total || 0);
     renderFactPill();
+    const awsPersisting = backendMode === "aws" && !persistenceUnavailable;
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
-      onForget: persist ? forgetEverything : null,
-      persistNote: "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
+      onForget: (awsPersisting || persist) ? forgetEverything : null,
+      persistNote: backendMode === "aws"
+        ? (persistenceUnavailable
+          ? "the row service wasn't reachable this visit \\u2014 taught facts are not being saved anywhere."
+          : "taught facts are stored server-side against an anonymous session that expires after seven days.")
+        : "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
     });
   }
 
@@ -1649,14 +1746,23 @@ ${shareOverlayHtml({ withTape: true })}
   // first visit. Harder than "forget everything", which only swaps the live
   // session — this trusts nothing in memory and re-fetches the seed asset.
   //
-  // Both stores go, not just the payload: what you taught lives in IndexedDB,
-  // and the seed asset itself lives in the service worker's Cache Storage. A
-  // reset that cleared only the first would re-seed straight back out of a
-  // cached copy of an older seed, which is exactly what it promises not to do.
+  // Both stores go, not just the payload: what you taught lives in IndexedDB
+  // (local mode) or the row service (AWS mode), and the seed asset itself
+  // lives in the service worker's Cache Storage. A reset that cleared only
+  // the first would re-seed straight back out of a cached copy of an older
+  // seed, which is exactly what it promises not to do. In AWS mode the reset
+  // also discards the stored session pointer, so the reload it triggers
+  // mints a fresh one — the same "back to a first visit" promise, kept on
+  // the server side too.
   el("reinitStore").addEventListener("click", async () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     if (persist) await persist.clear();
+    if (backendMode === "aws" && !persistenceUnavailable && window.tmct.session && window.tmct.page.discardAwsSession) {
+      try { await window.tmct.page.discardAwsSession(window.tmct.session.memoryDir); }
+      catch { /* best effort — TTL still reclaims it within seven days */ }
+      discardAwsSessionKey();
+    }
     await clearSiteAssetCaches();
     window.location.reload();
   });
@@ -2410,36 +2516,93 @@ ${shareOverlayHtml({ withTape: true })}
     await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
     window.tmct.page.registerReferencePackProvider(fetchPackProvider);
-    if (window.tmct.page.openPersistedStore) {
-      persist = window.tmct.page.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
-    }
-    const savedRecord = persist ? await persist.load() : null;
     const initialMode = readWikiMode();
     setWikiModeRadios(initialMode);
     writeWikiMode(initialMode); // settles a legacy-key migration under the new key immediately, not only on the next radio change
     synthSliderEl.value = String(readSynthBudget());
     synthValueEl.textContent = synthSliderEl.value;
-    if (savedRecord && savedRecord.payload) {
+
+    // AWS mode boots straight into the row service under the stored (or
+    // freshly minted) session pointer — no separate consent step, unlike
+    // news.html's start press, since this page's engine is in-page either
+    // way and the mode was already chosen before this script ran. Local
+    // mode keeps its own IndexedDB restore path, byte-identical to before.
+    let savedRecord = null;
+    if (backendMode === "aws") {
+      awsSessionKey = readAwsSessionKey() || mintAwsSessionKey();
       await window.tmct.open({
-        seedPayload: savedRecord.payload,
-        vocabSeeded: true,
+        seedPayload: cloneSeed(),
+        vocabSeeded: Boolean(seedPayload),
         liveReference: liveReferenceForMode(initialMode),
         synthesisBudget: readSynthBudget(),
         onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
         digestStructures: DIGEST_STRUCTURES,
+        awsSessionKey: awsSessionKey,
       });
     } else {
-      await newSession();
+      if (window.tmct.page.openPersistedStore) {
+        persist = window.tmct.page.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
+      }
+      savedRecord = persist ? await persist.load() : null;
+      if (savedRecord && savedRecord.payload) {
+        await window.tmct.open({
+          seedPayload: savedRecord.payload,
+          vocabSeeded: true,
+          liveReference: liveReferenceForMode(initialMode),
+          synthesisBudget: readSynthBudget(),
+          onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+          digestStructures: DIGEST_STRUCTURES,
+        });
+      } else {
+        await newSession();
+      }
     }
     // The session now holds whatever the seed brought, so the phase settles
     // here rather than when the bytes landed: "ready" means queryable.
     if (window.tmct.seed.state !== "failed") setSeedPhase("ready");
-    const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
-    if (savedRecord) restoredCount = stats.taught.length;
-    const restoredNote = savedRecord
-      ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
-        + " from your last visit \\u2014 state kept best-effort on this device."
-      : "";
+
+    // AWS mode's first real read: an unreachable row service surfaces here,
+    // before "ready" is ever said, and the page falls through to running
+    // this visit unpersisted rather than failing to boot — the best-effort
+    // row every page keeps (§2's own wording): the engine is in-page, so a
+    // service outage never blocks the page, it only costs this visit's save.
+    let stats;
+    if (backendMode === "aws") {
+      try {
+        stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
+      } catch {
+        persistenceUnavailable = true;
+        await window.tmct.open({
+          seedPayload: cloneSeed(),
+          vocabSeeded: Boolean(seedPayload),
+          liveReference: liveReferenceForMode(initialMode),
+          synthesisBudget: readSynthBudget(),
+          onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+          digestStructures: DIGEST_STRUCTURES,
+        });
+        stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
+      }
+    } else {
+      stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
+    }
+
+    if (backendMode === "aws" && !persistenceUnavailable) restoredCount = stats.taught.length;
+    else if (savedRecord) restoredCount = stats.taught.length;
+
+    let restoredNote;
+    if (backendMode === "aws") {
+      restoredNote = persistenceUnavailable
+        ? " This visit couldn't reach the row service \\u2014 running unpersisted; nothing taught will be saved."
+        : (restoredCount
+          ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
+            + " from your last visit \\u2014 kept server-side against this anonymous session."
+          : "");
+    } else {
+      restoredNote = savedRecord
+        ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
+          + " from your last visit \\u2014 state kept best-effort on this device."
+        : "";
+    }
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats, bandLabelFor)
       + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);

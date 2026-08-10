@@ -38,7 +38,8 @@
 //     (see that module's header), so the call is harmless either way, never
 //     a load error and never a behavior change on the Node side.
 import { vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, applySeedPayload } from "../../adapters/memory/core.mjs";
+import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, applySeedPayload, wrapRowBackend, isRowHandle } from "../../adapters/memory/core.mjs";
+import { createHttpRowBackend, withOneRetryOnUnavailable } from "./http-row-backend.mjs";
 import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { memoryFactGraphPayload } from "../../domain/memory-facts.mjs";
@@ -89,6 +90,16 @@ import { graphAsk, enginePlan } from "./engine-surface.mjs";
  * unconditionally). Harmless to call more than once per page load: the table
  * is module-scope, last write wins, and every session created after this one
  * shares it.
+ *
+ * `awsSessionKey` (optional): the page's AWS-mode backend choice. Given, the
+ * session's memory binds to `createHttpRowBackend({apiBase: "/", sessionKey:
+ * awsSessionKey, fetchImpl})` wrapped with `seedPayload` as its read-only
+ * seed overlay (§3.1's basePayload — the seed is never written back to the
+ * service; only what a turn actually teaches lands as rows). Omitted (the
+ * default), memory stays the plain in-memory store it always was, seeded the
+ * same way. `fetchImpl` (optional) overrides the ambient `fetch` the row
+ * backend calls through — a page never passes it; a test points it at a
+ * running row-service double instead.
  *
  * Returns { memoryDir, sessionId, graph, codeGraph, refreshGraph, turn }.
  * `turn(line)` resolves to { answer, end, record, plan } and threads
@@ -141,10 +152,27 @@ function newsProvidersFor(config) {
   };
 }
 
-export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
+export function createChatSession({
+  seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null,
+  synthesisBudget = 12, digestStructures = null, awsSessionKey = null,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+} = {}) {
   setDigestStructures(digestStructures || []);
-  const memoryDir = createInMemoryStore();
-  applySeedPayload(memoryDir, seedPayload);
+  // onOversizedRow: "drop" — a WRITE-side posture only (core.mjs's own
+  // read-side base projection always keeps every seed row regardless, so the
+  // seed itself is never lossy). A real corpus seed's own high-fan-out
+  // property (mgx:statedBy: one edge per fact) is already over the row cap
+  // before this session ever teaches anything; a session's own new fact adds
+  // one more edge to that same, already-uncapped group, which can never fit
+  // one wire row either way. Dropping that one write is the visitor's own
+  // "turn is itself the last resort" case the option exists for: the fact
+  // itself still writes and answers correctly (it is its own separate row),
+  // only that property's cross-fact edge index stays exactly as unwritable
+  // as the seed's own copy of it already was.
+  const memoryDir = awsSessionKey
+    ? wrapRowBackend(withOneRetryOnUnavailable(createHttpRowBackend({ apiBase: "/", sessionKey: awsSessionKey, fetchImpl })), { basePayload: seedPayload, onOversizedRow: "drop" })
+    : createInMemoryStore();
+  if (!awsSessionKey) applySeedPayload(memoryDir, seedPayload);
 
   // A known-empty code graph: code-structure questions get the same honest
   // no-code-graph answer an un-pointed CLI session gives, never a crash. The
@@ -235,6 +263,15 @@ export async function researchedFactRows(memoryDir) {
     .map((row) => ({ subject: row.subject, predicate: row.predicate, object: row.object }));
 }
 
+/** The AWS-mode "forget everything"/"reset to seed" seam: marks every row
+ *  and meta entry this session's row backend holds absent server-side. A
+ *  no-op for a local (in-memory) session — there is nothing server-side to
+ *  discard, so a page can call this unconditionally on its own memoryDir
+ *  without first checking which mode it opened in. */
+export async function discardAwsSession(memoryDir) {
+  if (isRowHandle(memoryDir)) await memoryDir.impl.deleteAll();
+}
+
 // The page reaches the engine through the one shared surface: `tmct.open()`
 // opens this session, `tmct.turn()` runs the dock, `tmct.ask()` puts a
 // question to the session's own graph. What stays on `tmct.page` is what has
@@ -253,7 +290,7 @@ publishTmctSurface({
   page: {
     registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider,
     registerResearchProvider, registerNewsProvider, normFactTerm, vocabExampleHint, memoryStats,
-    openPersistedStore, exportFactsJsonl, researchedFactRows,
+    openPersistedStore, exportFactsJsonl, researchedFactRows, discardAwsSession,
     splitSentences: splitSentencesPreservingPaths,
   },
 });

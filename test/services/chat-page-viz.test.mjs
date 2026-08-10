@@ -14,6 +14,8 @@ import {
   nodeInitials,
   relativeWhen,
   provenanceChipFor,
+  resolveBackendMode,
+  backendModeUrl,
 } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
 import { latestProvenanceTimestamp } from "../../src/domain/p2p/facts.mjs";
@@ -234,6 +236,28 @@ test("an address with no offer carries no invite", () => {
     { offer: "BLOB", world: "", worldName: "" },
     "an offer alone still opens the join card; the blob's own envelope decides",
   );
+});
+
+test("resolveBackendMode: only an exact backend=aws parameter is AWS mode; anything else is local, silently", () => {
+  assert.equal(resolveBackendMode(""), "local", "absent is local");
+  assert.equal(resolveBackendMode("?backend=aws"), "aws");
+  assert.equal(resolveBackendMode("?backend=AWS"), "local", "matched case-sensitively, not fuzzed");
+  assert.equal(resolveBackendMode("?backend=local"), "local");
+  assert.equal(resolveBackendMode("?backend=dynamo"), "local", "an unknown value falls back to local rather than erroring");
+  assert.equal(resolveBackendMode("?backend="), "local");
+  assert.equal(resolveBackendMode("?other=1&backend=aws"), "aws", "reads regardless of position among other params");
+});
+
+test("backendModeUrl: rewrites the backend param alone, keeping every other param and the hash", () => {
+  const base = "https://tmct.example/chat.html?offer=BLOB&world=w1#frag";
+  const toAws = new URL(backendModeUrl(base, "aws"));
+  assert.equal(toAws.searchParams.get("backend"), "aws");
+  assert.equal(toAws.searchParams.get("offer"), "BLOB", "an unrelated param survives the rewrite");
+  assert.equal(toAws.hash, "#frag");
+
+  const backToLocal = new URL(backendModeUrl(toAws.toString(), "local"));
+  assert.equal(backToLocal.searchParams.has("backend"), false, "local is the absence of the param, not the literal string");
+  assert.equal(backToLocal.searchParams.get("offer"), "BLOB");
 });
 
 test("the page carries the sharing overlay, the join hero, the wave, and links to the help page", () => {

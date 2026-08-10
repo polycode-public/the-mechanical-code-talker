@@ -9,7 +9,9 @@
 //   - supersession is additive: the superseded record's row carries no backward
 //     pointer, assembly derives it, and two conflicting supersessions both land;
 //   - the per-row cap fails at projection time with the offending fact's
-//     provenance, or logs and skips under the drop posture;
+//     provenance, logs and skips under the drop posture, or keeps the row
+//     intact and silent under the keep posture (rows that never reach the
+//     wire, e.g. a read-only seed overlay's own base projection);
 //   - diffRows writes only what moved, for an append, a supersession and a
 //     retraction.
 
@@ -299,7 +301,18 @@ test("under the drop posture the oversized row is logged and skipped, and the re
   for (const row of rows) assert.ok(isValidRow(row), rowProblems(row).join("; "));
 });
 
-test("payloadToRows takes only the two documented oversize postures", async () => {
+test("under the keep posture the oversized row still projects, silently, never logged", async () => {
+  const { payload, oversized } = await payloadWithOneOversizedFact();
+  const logged = [];
+  const rows = payloadToRows(payload, { onOversizedRow: "keep", log: (line) => logged.push(line) });
+
+  assert.equal(logged.length, 0, "keep is for rows that never reach the wire — nothing here is worth a drop notice");
+  const row = rowFor(rows, oversized.id);
+  assert.ok(row, "the oversized row projects intact rather than being excluded");
+  assert.equal(rows.length, payload.individuals.length + payload.objectProperties.length);
+});
+
+test("payloadToRows takes only the three documented oversize postures", async () => {
   const payload = await loadMemory(await seededStore());
   assert.throws(() => payloadToRows(payload, { onOversizedRow: "ignore" }), TypeError);
 });
