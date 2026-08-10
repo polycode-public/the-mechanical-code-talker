@@ -38,12 +38,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   their operational budget (stateless open, O(rows-touched) turns, per-fact atomicity,
   row-level concurrency, opaque session keys, TTL pass-through, determinism, lazy SDK); tmct
   ships a conformance suite the sqlite backend passes (precedent: the repository-interface
-  conformance kit and the `./conformance` export). news.html becomes the second consumer
-  over an IndexedDB backend. Design landed: `PLAN_MEMORY_BACKEND.md` (row-backend interface
-  with `rowClass` as the §3.7 structural exclusion; the pk/sk term index settled now but
-  dormant in v1; phases M0-M7 tiered, with the sqlite refactor flagged as the risky phase
-  behind a byte-identical-storage pin). Execution starts when the phrase-fix worktree frees
-  chat.mjs — M0/M1/M3 serialize there.
+  conformance kit and the `./conformance` export). Operator redirection (2026-08-10): the
+  deployed news.html demo must BE the AWS architecture — a NEW row service in tmct's own
+  stack (server-minted session keys, HTTP row-backend client in the page, synchronous
+  writes, IndexedDB demoted to degraded mode, the never-sent-anywhere copy rewritten
+  honestly for this page only). A Fable revision wave is rewriting the plan's browser
+  half accordingly, adding the service phases and a known-sharp-edges section from the
+  operator's design review. Execution starts after the revision merges and the phrase-fix
+  worktree frees chat.mjs.
 - [ ] **bedrock-meter's embedded-path findings (inbox, 2026-08-09/10)** — in flight in two
   worktrees: (1) chat.mjs's `predicatePhrase` renders raw CURIEs for the `tmct:` predicates
   the lexicon itself mints ("latency tmct:needs result" reached their public page) while
