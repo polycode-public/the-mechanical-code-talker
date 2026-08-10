@@ -48,7 +48,8 @@ unknown extra fields are ignored (safe to extend). `src/adapters/graph-build.mjs
       "label": "app/a.mjs",                      // display + label-tier symbol resolution
       "class": "Module",                         // Module | Class | Function | Method | Attribute
                                                  //   | GlobalVariable | Commit | Session | …
-      "derived_from": ["git:e6a9419567f7"],      // provenance refs (git:<sha> count as attestation)
+      "derived_from": ["git:e6a9419567f7"],      // provenance refs; a touches edge, not a ref, is what
+                                                 //   makes a commit count as having touched the node
       "mentions": [],                            // [{id, count}] mention stats (may be empty)
       "attributes": [                            // typed literals; {prop, key, value} triples
         { "prop": "seon:hasDoc", "key": "doc", "value": "first docstring line" },

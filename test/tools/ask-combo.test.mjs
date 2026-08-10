@@ -28,6 +28,33 @@ const idOf = (label) => graph.individuals.find((i) => i.label === label).id;
 const runAsk = (q, opts = {}) => ask(graph, q, { nlp, ...opts });
 const labels = (r) => r.tmct_ask.matches.map((m) => m.label).sort();
 
+/** A three-module graph with whatever commit history a window test needs. The
+ *  committed fixture holds a single commit, which cannot show a boundary. */
+const WINDOW_MODULES = ["app/lib/x.mjs", "app/lib/y.mjs", "app/lib/z.mjs"];
+function windowGraph({ commits, touches, moduleProvenance = {} }) {
+  return parseEntities({
+    generated_at: "2026-06-30T00:00:00.000Z",
+    prefixes: { mgx: "urn:tmct:mgx#" },
+    classes: [
+      { name: "Module", count: WINDOW_MODULES.length, sample: WINDOW_MODULES },
+      { name: "Commit", count: commits.length, sample: commits.map((c) => c.label) },
+    ],
+    objectProperties: [
+      { predicate: "touches", prop: "mgx:touchedByCommit", count: touches.length, examples: touches },
+    ],
+    individuals: [
+      ...WINDOW_MODULES.map((path) => ({
+        id: `mod:${path}`, label: path, class: "Module",
+        derived_from: moduleProvenance[`mod:${path}`] || [], mentions: [], attributes: [],
+      })),
+      ...commits.map((c) => ({
+        id: c.id, label: c.label, class: "Commit", derived_from: [], mentions: [],
+        attributes: [{ prop: "mgx:commitDate", key: "date", value: c.date }],
+      })),
+    ],
+  });
+}
+
 // ============================================================================
 // LEVER 1 — B1 COMBO composition (pronoun-binding / discourse reference)
 // ============================================================================
@@ -89,29 +116,97 @@ test("count+temp grain: 'how many commits touched <symbol>' counts at SYMBOL gra
 });
 
 test("count+temp grain: 'how many commits touched <module>' stays at MODULE grain", () => {
-  // app/lib/a.mjs derives from two commit ids (git:abc1234, git:def5678) but carries
-  // only one touches edge (def5678 has no Commit individual of its own) — the count
-  // reads the module's own provenance, same as /describe's "touched by 2 commit(s)"
-  // attestation line, not the narrower touches-edge set.
-  assert.match(runAsk("how many commits touched app/lib/a.mjs").content, /^2 commits\.$/);
+  // app/lib/a.mjs carries one touches edge (from abc1234). Its derived_from also names
+  // git:def5678, a commit the index holds no individual for — outside the history this
+  // graph can count over, so it stays out of the total.
+  assert.match(runAsk("how many commits touched app/lib/a.mjs").content, /^1 commit\.$/);
   // a symbol with no touchesSymbol edge is an honest 0, not a module-grain false hit.
   assert.match(runAsk("how many commits touched fnAlpha").content, /^0 commits\.$/);
 });
 
-test("commit count reads provenance, not just touches edges, so it never undercounts", () => {
-  // app/lib/b.mjs derives from git:abc1234 but carries NO touches edge of its own
-  // (only app/lib/a.mjs does) — a touches-edge-only count returns the false "0
-  // commits" a provenance-backed count corrects to 1.
-  assert.match(runAsk("how many commits touched app/lib/b.mjs").content, /^1 commit\.$/);
-  // The same fix composes under a nested relative clause, the phrasing that first
-  // surfaced the bug: "the module that defines fnAlpha" resolves to app/lib/a.mjs,
-  // whose two-commit provenance the composed count must also read.
-  assert.match(runAsk("how many commits touched the module that defines fnAlpha").content, /^2 commits\.$/);
+test("a commit whose touch set the index records decides on its own, so a bare provenance ref adds nothing", () => {
+  // app/lib/b.mjs derives from git:abc1234 but abc1234's recorded touch set is
+  // {app/lib/a.mjs, Widget.render}. The graph has stated what that commit reached, so
+  // the ref cannot add b.mjs to it.
+  assert.match(runAsk("how many commits touched app/lib/b.mjs").content, /^0 commits\.$/);
+  // The count can never name a number the list cannot produce.
+  assert.equal(runAsk("which commits touched app/lib/b.mjs").tmct_ask.miss, true);
+  assert.match(runAsk("how many commits touched app/lib/a.mjs").content, /^1 commit\.$/);
+  assert.deepEqual(labels(runAsk("which commits touched app/lib/a.mjs")), ["abc1234"]);
+  // The same rule under a nested relative clause: "the module that defines fnAlpha"
+  // resolves to app/lib/a.mjs, "…that defines register" and "…that defines Widget" to
+  // app/lib/b.mjs.
+  assert.match(runAsk("how many commits touched the module that defines fnAlpha").content, /^1 commit\.$/);
+  assert.match(runAsk("how many commits touched the module that defines register").content, /^0 commits\.$/);
+  assert.match(runAsk("how many commits touched the module that defines Widget").content, /^0 commits\.$/);
   // A module with neither a touches edge nor derived_from provenance is still an
-  // honest zero — the fix adds provenance as a SOURCE, never fabricates one.
+  // honest zero.
   assert.match(runAsk("how many commits touched app/lib/c.mjs").content, /^0 commits\.$/);
   // An unresolvable object stays an honest miss (0), not the whole-graph reverse set.
   assert.match(runAsk("how many commits touched zebra.mjs").content, /^0 commits\.$/);
+});
+
+test("a provenance ref still counts when the index records no touch set for that commit at all", () => {
+  // The generous read the fixture cannot show: a truncated commit walk keeps the Commit
+  // individual and loses every touches edge, so the ref on the module is the only
+  // attestation left and it counts.
+  const truncated = windowGraph({
+    commits: [{ id: "commit-old", label: "old1111", date: "2026-06-01T09:00:00+00:00" }],
+    touches: [],
+    moduleProvenance: { "mod:app/lib/x.mjs": ["git:old1111"] },
+  });
+  assert.match(ask(truncated, "how many commits touched app/lib/x.mjs", { nlp }).content, /^1 commit\.$/);
+});
+
+// ============================================================================
+// The date-or-commit window, and its edges
+// ============================================================================
+
+test("a kind-headed window reads what the commits inside it touched", () => {
+  assert.deepEqual(labels(runAsk("which modules changed on 2026-06-28")), ["app/lib/a.mjs"]);
+  assert.match(runAsk("how many modules changed on 2026-06-28").content, /^1 module\.$/);
+  // the symbol grain answers off the same window
+  assert.deepEqual(labels(runAsk("which methods changed on 2026-06-28")), ["Widget.render"]);
+  // the bare shape still answers with the commits themselves
+  assert.match(runAsk("what changed on 2026-06-28").content, /abc1234/);
+});
+
+test("the window's edges: a commit on the boundary is in, one a day outside is not", () => {
+  const graph3 = windowGraph({
+    commits: [
+      { id: "commit-before", label: "aaa1111", date: "2026-06-27T23:00:00+00:00" },
+      { id: "commit-edge", label: "bbb2222", date: "2026-06-28T00:00:00+00:00" },
+      { id: "commit-after", label: "ccc3333", date: "2026-06-29T01:00:00+00:00" },
+    ],
+    touches: [
+      { subject: "commit-before", object: "mod:app/lib/x.mjs" },
+      { subject: "commit-edge", object: "mod:app/lib/y.mjs" },
+      { subject: "commit-after", object: "mod:app/lib/z.mjs" },
+    ],
+  });
+  const at = (q) => ask(graph3, q, { nlp }).tmct_ask.matches.map((m) => m.label).sort();
+  // "on" is the day itself: midnight on the boundary day is inside it, the day either
+  // side is not.
+  assert.deepEqual(at("which modules changed on 2026-06-28"), ["app/lib/y.mjs"]);
+  // "since" includes its own day, "after" excludes it, "before" excludes it too.
+  assert.deepEqual(at("which modules changed since 2026-06-28"), ["app/lib/y.mjs", "app/lib/z.mjs"]);
+  assert.deepEqual(at("which modules changed after 2026-06-28"), ["app/lib/z.mjs"]);
+  assert.deepEqual(at("which modules changed before 2026-06-28"), ["app/lib/x.mjs"]);
+  // A commit pivot takes the pivot's own day and drops the pivot itself.
+  assert.deepEqual(at("which modules changed since bbb2222"), ["app/lib/z.mjs"]);
+});
+
+test("a window the pivot can't bound refuses; a bounded but empty one answers honestly", () => {
+  // no date and no known commit → a refusal naming both supported pivot shapes
+  const unbounded = runAsk("which modules changed on wibble");
+  assert.equal(unbounded.tmct_ask.miss, true);
+  assert.match(unbounded.content, /isn't a recognized date/);
+  // the count shape refuses too, rather than reading as a grounded zero
+  assert.equal(runAsk("how many modules changed on wibble").tmct_ask.miss, true);
+  // a real date the index holds no commits for is an honest empty, not a guess
+  assert.equal(runAsk("which modules changed on 2020-01-01").tmct_ask.miss, true);
+  // a bounded window that no commit reached at the asked grain names the kind
+  assert.match(runAsk("which classes changed on 2026-06-28").content, /^no classes changed on 2026-06-28\.$/);
 });
 
 test("grain FIX: null-entityType 'what calls <fn>' reads the callsSymbol grain (Widget.render → fnAlpha)", () => {

@@ -289,10 +289,12 @@ test("renderImpact: a serves-only dependent renders, and its truncation counts t
   assert.match(text, /warning: partial edge lists \(serves: 1\/5\)/);
 });
 
-test("renderDescribe: edges both directions, commit attestation + provenance", () => {
+test("renderDescribe: edges both directions, ref attestation + provenance", () => {
   const text = renderDescribe(graph, graph.byId.get("mod:app/lib/a.mjs"));
   assert.match(text, /app\/lib\/a\.mjs — Module \(id: mod:app\/lib\/a\.mjs\)/);
-  assert.match(text, /attestation: touched by 2 commit\(s\)/);
+  // two provenance refs, one touching commit — the attestation line counts refs and
+  // leaves the touch count to the edge line below it.
+  assert.match(text, /attestation: 2 provenance ref\(s\)/);
   assert.match(text, /attribute: dotted = app\.lib\.a/);
   assert.match(text, /defines \[seon:declaresMethod\] \(1\) → fnAlpha/);
   assert.match(text, /← imports \[mgx:importsNamespace\] \(3\) by app\/lib\/b\.mjs, app\/lib\/c\.mjs, app\/lib\/e\.mjs/);

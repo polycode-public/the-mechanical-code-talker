@@ -516,6 +516,8 @@ function parseSetPhrase(text, nlp, depth) {
   if (negated) return negated;
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
+  const window = parseCommitFilter(w, lc);
+  if (window) return window;
   const definitionSite = parseDefinitionSiteMembership(w, lc, nlp, depth);
   if (definitionSite) return definitionSite;
   const nested = parseNested(w, lc, nlp, depth);
@@ -695,16 +697,33 @@ function parseTemporal(w, lc, nlp, depth = 0) {
 // when-shape above (which dates one named entity's touch history). "in"/
 // "during" are deliberately excluded — "what changed in <commit>" means that
 // commit's own touch-set instead.
+//
+// An entity kind may head the question ("which MODULES changed on 2026-06-28"),
+// which asks the same window and then reads what those commits touched at that
+// grain. Without it the sentence fell through to the flat shapes, which read the
+// date as an entity name and offered a confident ambiguity list about the index's
+// modules — the miss-over-guess contract's worst shape, over a window the graph
+// can bound exactly.
 const COMMIT_FILTER_OPS = new Set(["since", "before", "after", "on"]);
+const COMMIT_FILTER_LEADS = new Set(["what", "which"]);
 function parseCommitFilter(w, lc) {
-  if (lc[0] !== "what" || lc[1] !== "changed") return null;
-  let i = 2;
+  if (!COMMIT_FILTER_LEADS.has(lc[0])) return null;
+  let i = 1;
+  let entityType = null;
+  if (lc[i] !== "changed") {
+    const noun = entityNoun(lc[i]);
+    if (!noun || noun.placeholder) return null;
+    entityType = noun.entityType;
+    i += 1;
+  }
+  if (lc[i] !== "changed") return null;
+  i += 1;
   if (lc[i] === "ever") i += 1;
   if (!COMMIT_FILTER_OPS.has(lc[i])) return null;
   const op = lc[i];
   const pivotRaw = w.slice(i + 1).join(" ").trim();
-  if (!pivotRaw) return { node: "miss", reason: `"what changed ${op}" needs a date or commit afterward` };
-  return { node: "commitFilter", op, pivotRaw };
+  if (!pivotRaw) return { node: "miss", reason: `"changed ${op}" needs a date or commit afterward` };
+  return { node: "commitFilter", op, pivotRaw, entityType };
 }
 
 // "<kind> in|of <owner>" where the OWNER is itself a relative clause ("functions
@@ -1555,22 +1574,55 @@ function reverseOverSet(graph, kind, entityType, objectIds) {
 
 const GIT_PROV_REF_RE = /^git:(.+)$/i;
 
-/** How many distinct commits are attested to have touched a SET of entities —
- *  the same "touched by N commit(s)" convention renderDescribe's attestation
- *  line already uses (codegraph.mjs's turnRefCount), not the narrower "touches
- *  edge count" reverseOverSet(kind="touches") returns. A commit can be recorded
- *  in an entity's own `derived_from` provenance with no full Commit individual
- *  of its own (the ingester's touches-edge and provenance-ref writes can drift,
- *  e.g. a truncated commit walk) — reverseOverSet alone then undercounts, or
- *  misses entirely when NO touches edge survived. Deduped by short sha so a
- *  provenance ref naming a commit that DOES have a touches-edge individual
- *  isn't double-counted. */
+/** The shas a `git:<sha>` provenance ref is still allowed to attest a touch for.
+ *
+ *  A ref in an entity's `derived_from` names a commit. It does not say the commit
+ *  touched that entity, and it carries no date, so it can only be counted where
+ *  the graph has nothing better. Three cases, and the window is what separates
+ *  them:
+ *
+ *  - the graph holds the Commit AND records what it touched — that recorded touch
+ *    set is the index's own statement of the commit's reach, so it decides on its
+ *    own and the ref adds nothing;
+ *  - the graph holds the Commit but records no touch edge for it anywhere (a
+ *    truncated commit walk drops them) — the index is silent on its reach, so the
+ *    ref is the only attestation left and it counts;
+ *  - the graph holds no Commit for the sha — the index can neither name nor date
+ *    it, so it sits outside the history this graph can count over and stays
+ *    uncounted rather than being guessed into the total.
+ *
+ *  Returns the labels from case two, lowercased and sorted, so the count is a
+ *  pure function of the fact set whatever order the individuals arrived in. */
+function provenanceAttestableShas(graph) {
+  const withTouchSet = new Set();
+  for (const kind of ["touches", "touchesSymbol"]) {
+    for (const e of edgesOfKind(graph, kind)) {
+      const commit = graph.byId.get(e.subject);
+      if (commit?.class === "Commit") withTouchSet.add(String(commit.label || "").toLowerCase());
+    }
+  }
+  return graph.individuals
+    .filter((i) => i.class === "Commit")
+    .map((i) => String(i.label || "").toLowerCase())
+    .filter((label) => label && !withTouchSet.has(label))
+    .sort();
+}
+
+/** How many distinct commits inside this index's own recorded history are
+ *  attested to have touched a SET of entities. The touch edges reaching the set
+ *  are the spine; a `git:<sha>` provenance ref adds a commit only under
+ *  provenanceAttestableShas's rule above, so a count can never name a larger
+ *  number than "which commits touched X" can list. */
 function commitTouchCount(graph, objectIds) {
   const shas = new Set(reverseOverSet(graph, "touches", "Commit", objectIds).map((c) => String(c.label || "").toLowerCase()));
+  const attestable = provenanceAttestableShas(graph);
   for (const id of objectIds) {
     for (const ref of graph.byId.get(id)?.derived_from || []) {
       const m = GIT_PROV_REF_RE.exec(String(ref || ""));
-      if (m) shas.add(m[1].toLowerCase());
+      if (!m) continue;
+      const sha = m[1].toLowerCase();
+      const known = attestable.find((label) => label.startsWith(sha) || sha.startsWith(label));
+      if (known) shas.add(known);
     }
   }
   return shas.size;
@@ -1932,6 +1984,10 @@ function evalSet(graph, ast, opts) {
       const positive = new Set(forwardOverSet(graph, ast.kind, new Set([r.match.id])).map((x) => x.id));
       return graph.individuals.filter((i) => i.class === universeType && !positive.has(i.id));
     }
+    // A date-or-commit window as a set atom, so "how many modules changed on
+    // <date>" composes through the ordinary count path. An unresolved pivot is
+    // caught by the count branch before it can read as a bare zero.
+    case "commitFilter": return evalCommitFilter(graph, ast).matches;
     case "reverseSet": {
       const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
       return reverseOverSet(graph, ast.kind, ast.entityType, ids);
@@ -2148,7 +2204,7 @@ const COMMIT_FILTER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  *  here, beside the fully typed result, before render() flattens it all to a
  *  sentence; the session layer is what registers them into its record. */
 function evalCommitFilter(graph, ast) {
-  const { op, pivotRaw } = ast;
+  const { op, pivotRaw, entityType = null } = ast;
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10);
   let pivotDate = null;
   let pivotId = null;
@@ -2163,8 +2219,11 @@ function evalCommitFilter(graph, ast) {
       pivotDate = dateOf(match);
     }
   }
-  if (!pivotDate) return { compositeKind: "commitFilter", op, pivotRaw, pivotResolved: false, matches: [] };
-  const matches = graph.individuals
+  if (!pivotDate) return { compositeKind: "commitFilter", op, pivotRaw, entityType, pivotResolved: false, matches: [] };
+  // Two dates on the same day tie under a lexical compare, so the id breaks the
+  // tie: the window's answer must not depend on which order the individuals
+  // arrived in.
+  const inWindow = graph.individuals
     .filter((i) => i.class === "Commit" && i.id !== pivotId && dateOf(i))
     .filter((c) => {
       const d = dateOf(c);
@@ -2173,12 +2232,19 @@ function evalCommitFilter(graph, ast) {
       if (op === "after") return d > pivotDate;
       return d === pivotDate; // "on"
     })
-    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || String(a.id).localeCompare(String(b.id)));
+  // A kind-headed window reads what the qualifying commits touched at that
+  // grain; the bare shape answers with the commits themselves.
+  const touched = entityType && entityType !== "Commit" && entityType !== "Change"
+    ? uniqueById(inWindow.flatMap((c) => commitTouches(graph, c, entityType).matches))
+    : null;
+  const matches = touched || inWindow;
   const referents = [];
   if (matches.length) {
+    const setClass = touched ? entityType : "Commit";
     referents.push({
-      kind: "set", class: "Commit",
-      label: `${matches.length} commit${matches.length === 1 ? "" : "s"} ${op} ${pivotRaw}`,
+      kind: "set", class: setClass,
+      label: `${matches.length} ${nounFor(setClass, matches.length)} ${op} ${pivotRaw}`,
       ids: matches.map((c) => c.id),
       attrs: { count: matches.length, op, ...(pivotId ? { pivot: pivotId } : {}) },
       lane: "commitFilter",
@@ -2191,7 +2257,10 @@ function evalCommitFilter(graph, ast) {
       lane: "commitFilter",
     });
   }
-  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches, referents };
+  return {
+    compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true,
+    entityType, windowCount: inWindow.length, matches, referents,
+  };
 }
 
 /** Temporal over a nested set: the commits that touched any member of the
@@ -2395,6 +2464,13 @@ function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
   if (ast.node === "universal") return evalUniversal(graph, ast, opts);
   if (ast.node === "count") {
+    // A window the pivot can't bound refuses, so the count never reads as a
+    // grounded zero over a window nobody could place.
+    if (ast.base.node === "commitFilter") {
+      const window = evalCommitFilter(graph, ast.base);
+      if (!window.pivotResolved) return window;
+      return { compositeKind: "count", count: window.matches.length, entityType: ast.entityType, matches: [] };
+    }
     // "how many commits touched <X>" — count against provenance attestation
     // (commitTouchCount), not the bare touches-edge set evalSet(base) would
     // give: see commitTouchCount's own doc for why the two can disagree.
@@ -2641,8 +2717,17 @@ function renderComposite(parsed, result, graph) {
         miss: true, ambiguous: false, matches: [],
       };
     }
-    if (!result.matches.length) {
+    if (!result.windowCount) {
       return { content: `no commits recorded ${result.op} ${result.pivotRaw}.`, miss: true, ambiguous: false, matches: [] };
+    }
+    // A kind-headed window that no commit reached at that grain is an honest
+    // empty naming both the kind and the window, never the commit list.
+    if (result.entityType && result.entityType !== "Commit" && result.entityType !== "Change") {
+      const kindNoun = nounFor(result.entityType, result.matches.length || 2);
+      if (!result.matches.length) {
+        return { content: `no ${kindNoun} changed ${result.op} ${result.pivotRaw}.`, miss: true, ambiguous: false, matches: [] };
+      }
+      return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
     }
     const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
     const shown = result.matches.slice(0, HISTORY_CAP).map((c) => {

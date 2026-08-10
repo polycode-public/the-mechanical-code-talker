@@ -250,8 +250,12 @@ export function renderDescribe(graph, ind, { candidates = [] } = {}) {
   const lines = [];
   lines.push(`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`);
 
+  // Counts the entity's own provenance refs, which is not the same as the number
+  // of commits that touched it: a `turn:` ref is no commit at all, and a `git:`
+  // ref may name a commit this index never ingested. The touches edges below say
+  // what touched it; saying "touched by N commit(s)" here contradicted them.
   const refs = (ind.derived_from || []).filter(isProvRef);
-  if (refs.length) lines.push(`attestation: touched by ${refs.length} commit(s)`);
+  if (refs.length) lines.push(`attestation: ${refs.length} provenance ref(s)`);
 
   for (const a of ind.attributes || []) {
     lines.push(`attribute: ${a.key} = ${a.value}${a.prop ? ` [${a.prop}]` : ""}`);
