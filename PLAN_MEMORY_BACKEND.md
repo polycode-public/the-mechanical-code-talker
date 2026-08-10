@@ -1819,6 +1819,16 @@ Acceptance: the test file; `npm run test:fast`; the measured boot number recorde
 
 ## 20. Phase T4 — the enumeration marker
 
+**BUILT** (2026-08-10, merged): three byte-pinned templates in
+`src/domain/retrieval-marker.mjs` ("Corpus scope: …", the bounded variant stating scope
+rather than warning since bounded is the ordinary case, and the breaker-open "Answered
+without the corpus supplement" line that rides every answer when bands are configured);
+the seam is `runTurn/createSession/session.turn`'s optional `retrieval` option taking
+`retrieveSubgraph`'s metrics object unchanged, defaulting to no context so every existing
+caller is byte-identical; lanes self-declare via `ENUMERATION_LANES` with the set-shaped
+cascades deriving membership in one place; the §29.12 inventory guard is four rungs and
+mutation-tested. No judged round, per §20's decided posture.
+
 **Owns** `src/services/chat.mjs` (the enumeration lanes and templates), the corpus rows
 pinning marked and unmarked shapes, `test/adapters/chat-retrieval-marker.test.mjs` (new,
 including the lane-inventory guard). **Opus**, serialized on `chat.mjs`.

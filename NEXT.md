@@ -34,10 +34,10 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: T4 enumeration marker (Opus, owns chat.mjs + corpus pins), T3 turn handler
-  (Sonnet, owns server/turn-service/), T12 news worker + triggers (Sonnet, owns
-  server/news-worker/ + row-service handler routes). M9 landed (contract doc + README;
-  coordinator fixed one wrong import subpath on review).
+- In flight: T3 turn handler (Sonnet, owns server/turn-service/), T12 news worker +
+  triggers (Sonnet, owns server/news-worker/ + row-service handler routes), E3 read-back
+  caveats (Opus, owns chat.mjs). T4 landed (marker templates byte-pinned, lane inventory
+  mutation-tested); M9 landed (coordinator fixed one wrong import subpath on review).
   Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
   206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
   CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
