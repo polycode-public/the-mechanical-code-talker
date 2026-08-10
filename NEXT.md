@@ -29,38 +29,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **A pluggable memory-backend seam, built against bedrock-meter's spec, consumed by
-  news.html** — `../bedrock-meter/GRAPH_BACKEND_SPEC.md` (untracked, carried by the operator)
-  asks tmct to own the seam their S3-archive shim fakes today: `createSession`/`runTurn`
-  accept an injected backend object; the interface serves their seven access patterns
-  (append, read-by-term without whole-store scans, touched-facts, bookkeeping behind the
-  seam, bounded enumeration, supersession, structural exclusion of bookkeeping rows) under
-  their operational budget (stateless open, O(rows-touched) turns, per-fact atomicity,
-  row-level concurrency, opaque session keys, TTL pass-through, determinism, lazy SDK); tmct
-  ships a conformance suite every backend passes. The design is settled after three
-  operator revision rounds and awaits the operator's read before any build: tmct builds and
-  ships ALL backends in-tree (in-memory, sqlite, DynamoDB — no consumer adapters;
-  bedrock-meter imports `createDynamoRowBackend` and configures it), and the deployed
-  news.html demo IS the AWS architecture — an `/api/*` row service on the site's own stack,
-  no cookies and no session endpoints (client-minted UUIDv4 in `x-tmct-session`, strictly
-  validated, sessions created implicitly on first write, purge via `DELETE /api/rows
-  {all: true}`), synchronous writes, no local fact storage ever (only the session-pointer
-  UUID in localStorage, said plainly in the page copy), and a full abuse-risk table with
-  per-IP edge rate limiting, caps, TTL, billing alarm and a named kill switch. DOC ONLY:
-  nothing builds until the operator says build.
-- [ ] **The turn surface: the whole tmct engine as a consumer-hosted API, with a Dynamo
-  corpus supplement** — `PLAN_TURN_SERVICE.md`, designed on top of `PLAN_MEMORY_BACKEND.md`:
-  `POST /api/sessions/:uuid/turn` runs a full turn in Lambda with no egress but DynamoDB;
-  corpora too large to bundle (WordNet complete, full ConceptNet, Wikidata slices, a
-  wikipedia-derived band) live in shared read-only `corpus:<band>` partitions loaded by a
-  `tmct corpus load|clear` CLI verb from CI post-deploy or any credentialed shell;
-  retrieve-then-resolve feeds the unchanged synchronous engine a bounded deterministic
-  subgraph (k-hop expansion matched to the engine's own chase depths, full subClassOf
-  ancestry, fixed good-citizen budgets); a DynamoDB-backed circuit breaker degrades corpus
-  trouble to seed-plus-session — today's shipped product, with the answer marked; and
-  enumeration answers state their retrieval bounds rather than claiming completeness. tmct
-  stays offline; this surface is what a consumer hosts and tmct's deployment demos it.
-  DOC ONLY: nothing builds until the operator says build.
+- [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
+  plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
+  former turn-service plan: three in-tree backends (in-memory, sqlite, DynamoDB) behind one
+  published conformance kit, with bedrock-meter's integration reduced to configuration; the
+  deployed news.html running on an `/api/*` row service in tmct's own stack (client-minted
+  UUIDv4 sessions, path-scoped mutations, synchronous writes, soft deletes, a hard global
+  table cap with an atomic counter, week-default TTL, the full abuse table with a kill
+  switch); `POST /api/sessions/:uuid/turn` as the consumer-hosted turn surface with no
+  network but DynamoDB, fed by `corpus:<band>` partitions loaded via `tmct corpus load|clear`
+  from CI post-deploy; retrieve-then-resolve feeding the unchanged synchronous engine a
+  bounded deterministic subgraph under fixed good-citizen budgets; circuit breakers on both
+  transports (a `_meta` item on Lambda, page-lifetime state in the browser) covering the
+  external wiki and KB sources too; enumeration answers stating their retrieval bounds;
+  chat.html and ledger.html gaining a local/AWS backend slider with `?backend=aws` deep links
+  and mode-honest copy; and the home grid renamed the demo grid with nine deep-linked
+  buttons. DOC ONLY: nothing builds until the operator says build.
 - [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
   matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
   which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
