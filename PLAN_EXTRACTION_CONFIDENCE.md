@@ -317,6 +317,14 @@ enumerates its fields, so a replicated row arrives with none.
 
 ### E2 — the news gate declines findings (Sonnet, after E1)
 
+**BUILT** (2026-08-10, merged). Re-measured against the production seed (61,724 facts):
+`nyt-world.rss.xml` yields exactly `ceasefire terms`, `officials`, `talks` and zero
+scaffolding hubs, fixture byte-identical — the scaffolding sentence now stores nothing at
+all (E0's widened `fragment-term` discards it before storage), so where N4 recorded 6
+candidate terms and 5 hubs there are now 4 candidate terms and 3 hubs, with `geneva`
+correctly stopped by test E as seed prior knowledge. `wikimedia-featured.json` still yields
+0 hubs. 8 new tests across the domain/service/e2e files.
+
 **Owns** `src/domain/news-feed.mjs` (tests E/A read `row.extraction` for the
 `identifier-token`/`clause-fallback` subset; `mgx:nameFor` joins
 `GATE_IDENTITY_PREDICATES`; `looksLikeEntityTerm` particle widening),
