@@ -448,6 +448,19 @@ test("both fixture demo buttons replay their own recorded sample as corpus-tier 
       `the NYT replay's own fixture prose ("Talks Resume Over Ceasefire Terms") widens the ranked term list: before=${JSON.stringify(rankBeforeNyt)} after=${JSON.stringify(rankAfterNyt)}`,
     );
 
+    // The NYT fixture's fourth item exists to test feed-normalize.mjs's own
+    // guid-fallback path ("An item with no guid tag, so normalizeFeedItems
+    // falls back to the link."), not to read as news — its own two junk terms
+    // (`back to the link`, `normalizefeeditems`) must never reach the feed as
+    // cards, while the genuine report from the first item still does.
+    const afterNyt = await page.evaluate(() => window.tmct.session.buildFeed());
+    const hubsAfterNyt = afterNyt.items.map((it) => it.hub);
+    assert.ok(!hubsAfterNyt.includes("back to the link"), `the guid-fallback sentence's own fragment never heads a card: ${JSON.stringify(hubsAfterNyt)}`);
+    assert.ok(!hubsAfterNyt.includes("normalizefeeditems"), `the guid-fallback sentence's own identifier never heads a card: ${JSON.stringify(hubsAfterNyt)}`);
+    for (const genuine of ["ceasefire terms", "officials", "talks"]) {
+      assert.ok(hubsAfterNyt.includes(genuine), `"${genuine}" reads as a genuine report from the Talks/Geneva items: ${JSON.stringify(hubsAfterNyt)}`);
+    }
+
     // Consent was never given, so start()/poll() have still never run — both
     // fixture replays reached the graph without it.
     assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "neither fixture demo grants poll consent");
