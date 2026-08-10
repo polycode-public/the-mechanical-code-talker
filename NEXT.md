@@ -35,10 +35,10 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
 - In flight: T0 corpus bands + loader (Sonnet; told to reuse T1's band query helper),
-  M3 sqlite conformance (Opus, owns core.mjs under the byte-identity pin), M6 HTTP
-  client backend (Sonnet), M7 infra + deploy (Sonnet, owns infra/, .gitlab-ci.yml,
-  post-deploy-smoke), T4 enumeration marker (Opus, owns chat.mjs + corpus pins).
-  Landed: M0, M1, M2, M4, M5, T1, T2, E0, E1, E2 (NYT fixture at exactly 3 hubs), the
+  M3 sqlite conformance (Opus, owns core.mjs under the byte-identity pin), M7 infra +
+  deploy (Sonnet, owns infra/, .gitlab-ci.yml, post-deploy-smoke), T4 enumeration
+  marker (Opus, owns chat.mjs + corpus pins).
+  Landed: M0, M1, M2, M4, M5, M6, T1, T2, E0, E1, E2 (NYT fixture at exactly 3 hubs), the
   miss-lead round (report BENCHMARK_CEFR_ENGLISH_5.0.46.md; its whereSet/temporal
   remainder is an open item below), the screenshot capture (item closed below). Version
   rolled to 6.0.0 (operator: major).

@@ -1576,6 +1576,12 @@ Acceptance: `node --test test/server/row-service.test.mjs`; `npm run test:fast`.
 
 ## 11. Phase M6 — the HTTP client backend, conformance over the wire
 
+**BUILT** (2026-08-10, merged): `src/surfaces/web/http-row-backend.mjs`
+(`createHttpRowBackend({apiBase, sessionKey, fetchImpl})`, fetch-only), 21 tests running
+the full kit over the real three-layer stack (client → handler → reference backend) plus
+status-mapping pins; only `deleteAll()` retries once on 5xx (the idempotent purge), all
+other mutations are single-attempt with retry left to the caller.
+
 **Owns** `src/surfaces/web/http-row-backend.mjs` (new: `createHttpRowBackend({ apiBase,
 sessionKey, fetchImpl })`, the §3.1 contract over fetch — reads under the `x-tmct-session`
 header, mutations addressed to `/api/sessions/<sessionKey>/…` per §3.8's table — `deleteAll`
