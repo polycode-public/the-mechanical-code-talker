@@ -30,7 +30,7 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import {
-  bandPartitionKey, bandSortKeyForRow, buildBandManifest, MANIFEST_SORT_KEY,
+  bandPartitionKey, bandSortKeyForRow, buildBandManifest, bandLicenseInfo, MANIFEST_SORT_KEY,
 } from "../adapters/memory/corpus-bands.mjs";
 import { BackendRejected, BackendUnavailable, assertValidRow } from "../adapters/memory/row-backend.mjs";
 import { termQueryOverDocumentClient } from "./subgraph-retrieval.mjs";
@@ -148,8 +148,7 @@ export async function loadBand({
 
   const pk = bandPartitionKey(band);
   let rowCount = 0;
-  let license = existing?.license ?? null;
-  let notice = existing?.notice ?? null;
+  const { license, notice } = bandLicenseInfo(band);
 
   if (!dryRun) {
     const rows = [];

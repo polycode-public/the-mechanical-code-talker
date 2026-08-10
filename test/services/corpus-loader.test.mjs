@@ -44,6 +44,8 @@ test("loads a band's wire rows and writes the manifest last", async () => {
     const manifestItem = client.store.get(`${pk}|${MANIFEST_SORT_KEY}`);
     assert.equal(manifestItem.rowCount, 5);
     assert.equal(manifestItem.sourceDigest, await digestFile(path));
+    assert.equal(manifestItem.license, "CC-BY-4.0", "the band's own licence, not a per-call flag");
+    assert.equal(manifestItem.notice, "corpus/wordnet/LICENSE-NOTICE");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -74,6 +76,19 @@ test("a changed source reloads and updates the manifest's digest", async () => {
     assert.equal(second.status, "loaded");
     assert.equal(second.rowCount, 4);
     assert.notEqual(second.sourceDigest, first.sourceDigest);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a band outside the licence table loads with a null licence, honestly", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("a-consumer-owned-band", 1));
+  try {
+    await loadBand({ client, tableName: "t", band: "a-consumer-owned-band", source: path });
+    const status = await bandStatus({ client, tableName: "t", band: "a-consumer-owned-band" });
+    assert.equal(status.license, null);
+    assert.equal(status.notice, null);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

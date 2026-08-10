@@ -38,6 +38,23 @@ export const FIRST_CLASS_BANDS = Object.freeze([
 // here. Its own design doc covers the band when it lands.
 export const RESERVED_BAND_NAMES = Object.freeze(["simplewiki-derived"]);
 
+/** The licence and attribution notice each first-class band's content
+ *  carries — a property of the band's identity, not of any one load, so the
+ *  loader reads it from here rather than taking it as a per-invocation flag.
+ *  `notice` is a repo-relative path to the human-readable attribution file;
+ *  null when the licence carries no attribution burden. */
+export const BAND_LICENSES = Object.freeze({
+  "wikidata-slice": Object.freeze({ license: "CC0-1.0", notice: null }),
+  "wordnet-complete": Object.freeze({ license: "CC-BY-4.0", notice: "corpus/wordnet/LICENSE-NOTICE" }),
+  "conceptnet-full": Object.freeze({ license: "CC-BY-SA-4.0", notice: "corpus/conceptnet/conceptnet-full.NOTICE" }),
+});
+
+/** `{license, notice}` for `band`, or both null when the band carries no
+ *  entry here (a consumer's own band, outside the three first-class ones). */
+export function bandLicenseInfo(band) {
+  return BAND_LICENSES[band] ?? { license: null, notice: null };
+}
+
 /** `corpus:<band>` — the partition key every band's rows and manifest share. */
 export function bandPartitionKey(band) {
   if (!band || typeof band !== "string") throw new TypeError("bandPartitionKey needs a non-empty band name");

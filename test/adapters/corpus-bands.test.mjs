@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   BAND_PARTITION_PREFIX, FIRST_CLASS_BANDS, MANIFEST_SORT_KEY,
   bandPartitionKey, isBandPartitionKey, bandNameFromPartitionKey, bandSortKeyForRow,
-  buildBandManifest, bandFactRow,
+  buildBandManifest, bandFactRow, bandLicenseInfo,
 } from "../../src/adapters/memory/corpus-bands.mjs";
 import { rowProblems } from "../../src/adapters/memory/row-backend.mjs";
 
@@ -92,6 +92,19 @@ test("bandFactRow refuses an oversized projection before any write", () => {
     subject: "x", predicate: "rdfs:subClassOf", object: "y",
     provenance: "corpus:wordnet-complete " + "z".repeat(5000), band: "wordnet-complete",
   }));
+});
+
+test("bandLicenseInfo names every first-class band's licence and, when the licence needs one, a notice file", () => {
+  assert.deepEqual(bandLicenseInfo("wikidata-slice"), { license: "CC0-1.0", notice: null });
+  for (const band of ["wordnet-complete", "conceptnet-full"]) {
+    const info = bandLicenseInfo(band);
+    assert.ok(info.license);
+    assert.ok(info.notice, `${band} needs a notice file`);
+  }
+});
+
+test("bandLicenseInfo reads null, not a guess, for a band outside the table", () => {
+  assert.deepEqual(bandLicenseInfo("a-consumer-owned-band"), { license: null, notice: null });
 });
 
 test("MANIFEST_SORT_KEY is not a shape bandSortKeyForRow could ever produce", () => {
