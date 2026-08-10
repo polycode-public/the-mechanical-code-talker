@@ -195,6 +195,19 @@ test("throughSourceBreaker runs the work, counts only the systemic failures it s
   assert.deepEqual([...skipped], ["wikipedia"]);
 });
 
+test("the breaker is keyed by the source's own name while the reader gets the name it goes by in prose", async () => {
+  const registry = createSourceBreakerRegistry({ clock: steppedClock() });
+  let systemicFailures = 0;
+  const skipped = new Set();
+  const lookup = () => throughSourceBreaker("wikipedia-live", async () => { systemicFailures += 1; return null; }, {
+    registry, skipped, label: "Wikipedia", systemicFailuresOf: () => systemicFailures,
+  });
+
+  for (let i = 0; i < SOURCE_BREAKER_DEFAULTS.failureThreshold + 1; i += 1) await lookup();
+  assert.deepEqual([...skipped], ["Wikipedia"]);
+  assert.equal(registry.breakerFor("wikipedia-live").read().state, SOURCE_BREAKER_OPEN);
+});
+
 test("throughSourceBreaker leaves a source whose failures it cannot see closed", async () => {
   const registry = createSourceBreakerRegistry({ clock: steppedClock() });
   for (let i = 0; i < SOURCE_BREAKER_DEFAULTS.failureThreshold * 2; i += 1) {

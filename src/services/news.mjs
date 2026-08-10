@@ -663,6 +663,7 @@ async function lookupThroughBreaker(ctx, provider, sourceId, term, skipped) {
   }, {
     registry: ctx?.sourceBreakers ?? undefined,
     skipped,
+    label: provider?.label,
     systemicFailuresOf,
   });
   return { article, asked };

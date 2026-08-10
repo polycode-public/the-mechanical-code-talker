@@ -231,6 +231,7 @@ export function createWikidataLiveProvider({
   return {
     name: sourceName,
     origin,
+    label: WIKIDATA_SOURCE_LABEL,
 
     /** Opens this source's per-turn fetch budget (courtesy.mjs). */
     beginTurn() { gate.beginTurn(); },

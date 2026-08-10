@@ -13254,7 +13254,7 @@ async function throughLiveSourceBreaker(provider, sourceSkips, work) {
   const systemicFailuresOf = typeof provider?.stats === "function"
     ? () => provider.stats().systemicFailures ?? 0
     : null;
-  return throughSourceBreaker(source, work, { skipped: sourceSkips, systemicFailuresOf });
+  return throughSourceBreaker(source, work, { skipped: sourceSkips, label: provider?.label, systemicFailuresOf });
 }
 
 /** The live Wikipedia lookup for an already-gated key: the article, or null

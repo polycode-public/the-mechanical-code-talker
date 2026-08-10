@@ -131,6 +131,7 @@ export function createWiktionaryLiveProvider({
   return {
     name: sourceName,
     origin,
+    label: WIKTIONARY_SOURCE_LABEL,
 
     /** Opens this source's per-turn fetch budget (courtesy.mjs). */
     beginTurn() { gate.beginTurn(); },

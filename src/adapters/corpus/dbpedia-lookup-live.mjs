@@ -89,6 +89,7 @@ export function createDbpediaLookupLiveProvider({
   return {
     name: sourceName,
     origin,
+    label: DBPEDIA_LOOKUP_SOURCE_LABEL,
 
     /** Opens this source's per-turn fetch budget (courtesy.mjs). */
     beginTurn() { gate.beginTurn(); },

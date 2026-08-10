@@ -199,13 +199,16 @@ export function resetSourceBreakers() {
 export async function throughSourceBreaker(source, work, {
   registry = sourceBreakers(),
   skipped = null,
+  label = null,
   systemicFailuresOf = null,
 } = {}) {
   const name = String(source ?? "");
   if (!name) return await work();
   const decision = registry.breakerFor(name).decide();
   if (!decision.allowed) {
-    if (skipped && typeof skipped.add === "function") skipped.add(name);
+    // The breaker is keyed by the source's own name; the reader gets the name
+    // the source goes by in prose.
+    if (skipped && typeof skipped.add === "function") skipped.add(String(label || name));
     return null;
   }
   const before = typeof systemicFailuresOf === "function" ? Number(systemicFailuresOf()) || 0 : 0;

@@ -13,9 +13,12 @@ import {
   getLiveReferenceProvider,
   registerResearchProvider,
   getResearchProvider,
+  createSimpleWikipediaResearchSource,
   WIKIPEDIA_LIVE_ORIGIN,
   SIMPLE_WIKIPEDIA_ORIGIN,
   WIKIMEDIA_USER_AGENT,
+  WIKIPEDIA_SOURCE_LABEL,
+  SIMPLE_WIKIPEDIA_SOURCE_LABEL,
 } from "../../src/adapters/corpus/wikipedia-live.mjs";
 import { isReferenceArticleRow } from "../../src/domain/reference-pack.mjs";
 // Side-effect import: registers the "wikidata" research source so
@@ -289,6 +292,19 @@ test("getResearchProvider({source}) picks the config-selected research source, c
   } finally {
     registerResearchProvider(null);
   }
+});
+
+test("each source carries the name it goes by in prose, and reports what its fetches cost and hit", async () => {
+  const live = createWikipediaLiveProvider({ fetchImpl: async () => { throw new Error("no network in tests"); }, minIntervalMs: 0 });
+  assert.equal(live.label, WIKIPEDIA_SOURCE_LABEL);
+  assert.equal(createSimpleWikipediaResearchSource({ minIntervalMs: 0 }).label, SIMPLE_WIKIPEDIA_SOURCE_LABEL);
+
+  assert.deepEqual(
+    { fetches: live.stats().fetches, systemicFailures: live.stats().systemicFailures },
+    { fetches: 0, systemicFailures: 0 },
+  );
+  assert.equal(await live.lookup("quasar"), null);
+  assert.equal(live.stats().systemicFailures, 1, "a dead transport says the source is struggling");
 });
 
 test("registerLiveReferenceProvider swaps the active provider, and null restores the default", async () => {
