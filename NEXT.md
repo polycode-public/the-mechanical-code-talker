@@ -44,8 +44,9 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
 - Queued: T4 after chat.mjs hand-back → T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
   T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins (M9 dispatches
   when M3 lands).
-- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main and its pipeline went
-  green; batch 2 (M1/M2/M4/M5/T1/E1 + 6.0.0) ships when the gate suite at HEAD is green.
+- Pushes: batch 2 (M1/M2/M4/M5/T1/E1 + the 6.0.0 major) is on origin/main, gate suite
+  7696/0; its pipeline publishes 6.0.0. Batch 3 accumulates from here; M9's contract doc
+  follows in it.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
