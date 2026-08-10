@@ -19,6 +19,7 @@
 // own write path (core.mjs's Backend D) — so this module never calls it
 // separately.
 
+import { randomUUID } from "node:crypto";
 import { BackendUnavailable } from "../../src/adapters/memory/row-backend.mjs";
 import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
 import { wrapRowBackend, emptyMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
@@ -185,7 +186,18 @@ function withGlobalRowCap(backend, globalRowCapCounter) {
  *  table-wide cap: a turn's learned facts land on the same table a session's
  *  direct PUT does, so without this seam they would never count against
  *  §3.8's `TABLE_ROW_CAP`. Omitted, a turn's writes go uncapped — only ever
- *  correct for a deployment with no shared cap to honour. */
+ *  correct for a deployment with no shared cap to honour.
+ *
+ *  `invokeNewsWorker` (optional, `(sessionKey, {mode, cycleId, body}) =>
+ *  Promise`, the row service's own trigger seam) closes the feed's staleness
+ *  window: a turn whose `factsTouched` is non-empty fires one materialize-
+ *  mode invoke after the engine call, so the taught row reaches the news
+ *  feed within the next version poll rather than waiting on an unrelated
+ *  cycle. The invoke is fired, never awaited, before the response goes out,
+ *  and a rejection only logs — a stuck or failing worker never turns a
+ *  successful turn into a failed one; the feed just stays one cycle behind.
+ *  Omitted, a turn never materializes — only ever correct for a deployment
+ *  with no news worker wired up. */
 export function createTurnServiceHandler({
   createSessionBackend,
   seedPayload = null,
@@ -195,6 +207,7 @@ export function createTurnServiceHandler({
   breaker = null,
   counters,
   globalRowCapCounter = null,
+  invokeNewsWorker = null,
   fuzzyEnv = process.env,
   fuzzyConfig = undefined,
   now = () => Date.now(),
@@ -289,9 +302,14 @@ export function createTurnServiceHandler({
         narration: foldRetrievalIntoNarration(undefined, retrieval.metrics),
       });
     }
+    const factsTouched = result.factsTouched || [];
+    if (invokeNewsWorker && factsTouched.length) {
+      Promise.resolve(invokeNewsWorker(sessionKey, { mode: "materialize", cycleId: randomUUID(), body: {} }))
+        .catch((error) => log({ error: error.message, sessionKey }));
+    }
     return respond(200, {
       reply: result.answer,
-      factsTouched: result.factsTouched || [],
+      factsTouched,
       narration: foldRetrievalIntoNarration(result.narration, retrieval.metrics),
     });
   }
@@ -423,10 +441,40 @@ function lambdaResponseFromResult(result) {
   return { statusCode: result.status, headers: result.headers, body: result.body, isBase64Encoded: false };
 }
 
+let cachedLambdaClientPromise = null;
+async function loadLambdaClient() {
+  if (!cachedLambdaClientPromise) {
+    cachedLambdaClientPromise = (async () => {
+      const { LambdaClient } = await import("@aws-sdk/client-lambda");
+      return new LambdaClient({});
+    })();
+  }
+  return cachedLambdaClientPromise;
+}
+
+/** The materialize-on-teach invoke, in AWS: an `InvocationType: "Event"`
+ *  invoke of the same news worker function the row service's own trigger
+ *  routes call, so this returns as soon as the invoke is accepted, well
+ *  before the worker's own materialize cycle runs. The worker function's
+ *  name is a deployment parameter — the CDK phase that grants this Lambda
+ *  invoke rights on it also sets `NEWS_WORKER_FUNCTION_NAME`. */
+function createLambdaNewsWorkerInvoker({ functionName }) {
+  return async function invokeNewsWorker(sessionKey, { mode, cycleId, body }) {
+    const { InvokeCommand } = await import("@aws-sdk/client-lambda");
+    const client = await loadLambdaClient();
+    await client.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: "Event",
+      Payload: Buffer.from(JSON.stringify({ sessionKey, mode, cycleId, body })),
+    }));
+  };
+}
+
 /** The Lambda entry point esbuild bundles: a function-URL HTTP request
  *  through the same handler every other consumer of this file exercises.
- *  No egress beyond DynamoDB (§2) — every import above is either this
- *  package's own code or the AWS SDK. */
+ *  No outbound HTTP beyond AWS's own control plane (§2) — every import
+ *  above is either this package's own code or an AWS SDK client: DynamoDB
+ *  or the news worker's own Lambda invoke. */
 export const handler = async (event) => {
   const { tableName, ttlSeconds, turnRateLimit, tableRowCap, bands } = turnServiceConfigFromEnv();
   const [{ commandClient, convenienceClient }, { seedPayload, vocabulary }] = await Promise.all([
@@ -444,6 +492,7 @@ export const handler = async (event) => {
     breaker: bands.length ? createDynamoCorpusBreaker({ client: commandClient, tableName }) : null,
     counters: createDynamoTurnCounters({ client: commandClient, tableName, turnRateLimit }),
     globalRowCapCounter: createDynamoGlobalRowCapCounter({ client: commandClient, tableName, tableRowCap }),
+    invokeNewsWorker: createLambdaNewsWorkerInvoker({ functionName: process.env.NEWS_WORKER_FUNCTION_NAME }),
     log: () => {},
   });
   const result = await turnService.handle(requestFromLambdaEvent(event));

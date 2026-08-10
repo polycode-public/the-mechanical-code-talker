@@ -442,6 +442,12 @@ export class WebsiteStack extends Stack {
     // what it learned into the caller's own session partition (write) —
     // the same table the row service owns, never a copy of it.
     rowTable.grantReadWriteData(turnServiceFn);
+    // A turn whose factsTouched is non-empty fires the same materialize
+    // invoke the row service's own trigger routes fire — the news worker
+    // Lambda, so a taught fact reaches the feed within the next version
+    // poll instead of waiting on an unrelated cycle.
+    newsWorkerFn.grantInvoke(turnServiceFn);
+    turnServiceFn.addEnvironment("NEWS_WORKER_FUNCTION_NAME", newsWorkerFn.functionName);
 
     const turnServiceUrl = turnServiceFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
