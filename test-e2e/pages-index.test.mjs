@@ -44,7 +44,7 @@ test("every claim block names the page it opens in a filename chip that matches 
   const html = await readFile(INDEX, "utf8");
   const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
   const chips = [...grid.matchAll(/<span class="claim-page">([^<]+)/g)].map((m) => m[1].trim());
-  assert.deepEqual(chips, gridValues((p) => `${p}.html`, "mudiii.html?scenario=river"));
+  assert.deepEqual(chips, gridValues((p) => `${p}.html`, "mudiii.html"));
 });
 
 test("each demo page gets a feature section whose plate shows that page's screenshot and links to it", async () => {
@@ -129,7 +129,7 @@ test("the river-crossing cell sits right after mudiii's and deep-links straight 
     "the cell opens mudiii on the river scenario, in a new tab",
   );
   assert.match(cell, /<h3>The fox, the goat and the cabbage<\/h3>/, "the cell names the puzzle rather than the page");
-  assert.match(cell, /mudiii\.html\?scenario=river <svg/, "and names the address it opens");
+  assert.match(cell, /claim-page">mudiii\.html <svg/, "the chip shows the page name; the deep link stays on the href");
   // The scenario parameter is only worth linking if the page reads it.
   const viz = await readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8");
   assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
