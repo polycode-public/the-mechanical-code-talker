@@ -22,13 +22,16 @@ import { dispatchTool, dispatchToolStructured, loadGraph, TOOLS } from "../tools
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, moduleCountOf, packageCounts, modulesOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
-// How a stored fact predicate reads in English — one phrase per predicate the
-// two writers (the ACE grammar, the ConceptNet map) actually emit, shared
-// with the news feed's own paraphrase renderer (src/domain/news-feed.mjs)
-// instead of growing a twin. An unknown predicate renders verbatim rather
-// than being guessed around (see this file's own predicatePhrase, below,
-// which layers polarity/comparative/mechanical-fallback handling on top).
-import { FACT_PREDICATE_PHRASES } from "../domain/fact-phrase.mjs";
+// How a stored fact predicate reads in English — the curated table, the
+// reader over it, and the verb-surface folds the teach lane and the read-back
+// share. One implementation, in one place: the news feed's paraphrase
+// renderer, the news page's inline script and this file's answer path all
+// render a fact through the same function, so no two surfaces can disagree
+// about what a predicate says.
+import {
+  FACT_PREDICATE_PHRASES, TEACH_PARTICIPLE_SRC, predicatePhrase,
+  thirdPersonSingularSurface, baseVerbSurface, gerundVerbSurface,
+} from "../domain/fact-phrase.mjs";
 import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
@@ -37,7 +40,7 @@ import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
 import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import {
   CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, NEG_SUBCLASS_PREDICATE, capabilityBaseRate,
-  capabilityExtension, isNegatedPredicate, negatedPredicate, positivePredicate,
+  capabilityExtension, isNegatedPredicate, negatedPredicate,
   resolveCapabilityPolarity,
 } from "../domain/memory/capability.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
@@ -4477,12 +4480,7 @@ function splitTeachNegation(payload) {
   return { payload: `${m[1]} ${canFamily ? "can " : ""}${m[3]}`.trim(), negated: true };
 }
 const GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
-/** The closed participle set the relational teach frames read as "X is
- *  <participle> <prep> Y" — a past participle whose own form is the word, so it
- *  reads back with no morphology. Closed by list (templates over general
- *  grammar), so the frame can never widen onto an arbitrary "-ed" adjective. */
-const TEACH_PARTICIPLE_SRC = "connected|related|associated|linked|based|derived|composed|made|used|known|located|found|involved|concerned";
-/** The prepositions those participles take. A closed set, folded into the
+/** The prepositions TEACH_PARTICIPLE_SRC's participles take. A closed set, folded into the
  *  minted predicate (mgx:<participle>-<prep>) the same way PREP_SRC folds into
  *  the general-verb frame's. */
 const TEACH_PARTICIPLE_PREP_SRC = "with|to|from|by|of|in|on|for|as|about|into";
@@ -8000,89 +7998,6 @@ const WORLD_PLACEMENT_PREDICATES = new Set([
   "mgx:currently-in", "mgx:located-in", "mgx:fixed-in", "mgx:stands-locked-in", "mgx:works-in",
 ]);
 
-/** The MECHANICAL fallback for a predicate this table has no curated entry
- *  for — specifically generalVerbTeach's minted "mgx:<lemma>" predicates
- *  ("mgx:eat", "mgx:drive", …) — the mechanical INVERSE of singularizeSurface's
- *  own naive -s/-es/-ies fold used elsewhere in this file, same accepted-
- *  limitation trade (no real morphology; a handful of doubly-irregular verbs
- *  render slightly off but never wrong-MEANING). "has"/"have" never reach
- *  this fallback — generalVerbPredicate special-cases them onto the CURATED
- *  mgx:hasA entry above before a predicate is ever minted. Any OTHER unknown
- *  predicate (not the "mgx:<lemma>" shape — e.g. a stray/foreign CURIE) still
- *  renders verbatim. */
-function thirdPersonSingularSurface(lemma) {
-  const w = String(lemma || "");
-  // "have" should never reach this naive fallback at all
-  // (generalVerbPredicate special-cases it onto mgx:hasA before a predicate is
-  // ever minted), but if some OTHER path ever reaches here with it as typed —
-  // e.g. wink-nlp unavailable so lemma degrades to the raw verb — the naive
-  // "+s" rule would produce the wrong-MEANING "haves" instead of the correct
-  // irregular "has".
-  if (/^have$/i.test(w)) return "has";
-  if (/[a-z]y$/i.test(w) && !/[aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
-  if (/(?:s|x|z|ch|sh|o)$/i.test(w)) return `${w}es`;
-  return `${w}s`;
-}
-/** The INVERSE of thirdPersonSingularSurface — "eats" -> "eat", "flies" ->
- *  "fly", "has" -> "have". Do-support wants the bare infinitive after it
- *  ("does not EAT", never "does not eats"), and so does every derived
- *  forward yes/no reader ("does X cause Y"), so both fold through this one
- *  function and can never drift apart on a verb. */
-function baseVerbSurface(verb) {
-  const w = String(verb || "");
-  if (/^has$/i.test(w)) return "have";
-  if (/[a-z]ies$/i.test(w) && !/[aeiou]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
-  if (/(?:s|x|z|ch|sh|o)es$/i.test(w)) return w.slice(0, -2);
-  return w.replace(/s$/i, "");
-}
-/** The gerund surface of a 3sg-minted role predicate — "contains" -> "containing",
- *  "touches" -> "touching" — the naive INVERSE of the "-ing"-stripping fold
- *  verbPredicateFromSurface (ace.mjs) already accepts alongside a 3sg surface
- *  when parsing patterns 16, 17 and 19. Same accepted naive-morphology trade
- *  thirdPersonSingularSurface/baseVerbSurface already make. */
-function gerundVerbSurface(verb) {
-  const base = baseVerbSurface(verb);
-  return /[^aeiou]e$/i.test(base) && base.length > 2 ? `${base.slice(0, -1)}ing` : `${base}ing`;
-}
-function predicatePhrase(predicate) {
-  if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
-  const p = String(predicate || "");
-  // NEGATIVE polarity renders as its own positive phrase, negated — ONE branch
-  // for every predicate that can carry a polarity, curated or minted. The
-  // negative twins are deliberately absent from FACT_PREDICATE_PHRASES: the
-  // TRAILING_PREDICATE_MARKERS / REVERSE_PREDICATE_MARKERS /
-  // FORWARD_YESNO_MARKERS families all derive their vocabulary from that table,
-  // so an entry there would auto-mint readers for "what cannot X" and
-  // "does X cannot Y" that nobody wrote and nothing pins.
-  // The three surface shapes split exactly as FORWARD_YESNO_MARKERS splits
-  // them, for the same reason: a modal, a copula and a plain verb take
-  // different negations, and nothing else does.
-  const positive = positivePredicate(p);
-  if (positive) {
-    const phrase = predicatePhrase(positive);
-    if (phrase === "can") return "cannot";
-    if (phrase === "can be") return "cannot be";
-    if (phrase === "is" || phrase.startsWith("is ")) return `is not${phrase.slice(2)}`;
-    const [head, ...tail] = phrase.split(" ");
-    return ["does not", baseVerbSurface(head), ...tail].join(" ");
-  }
-  // a comparative renders as its copula surface: mgx:smaller-than ->
-  // "is smaller than" (never a 3sg fold — "smallers" isn't a word)
-  const comp = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(p);
-  if (comp) return `is ${comp[1].replace(/-/g, " ")} than`;
-  // a participle + preposition renders as its copula surface: mgx:connected-with
-  // -> "is connected with" (the participle is already a participle, so no 3sg
-  // fold — "connecteds" isn't a word)
-  const part = new RegExp(`^mgx:(${TEACH_PARTICIPLE_SRC})-([a-z]+)$`, "i").exec(p);
-  if (part) return `is ${part[1].toLowerCase()} ${part[2].toLowerCase()}`;
-  // a shared-attribute predicate: mgx:same-goal-as -> "has the same goal as"
-  const same = /^mgx:same-([a-z]+)-as$/i.exec(p);
-  if (same) return `has the same ${same[1].toLowerCase()} as`;
-  const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
-  if (!m) return predicate;
-  // a folded preposition renders back naturally: mgx:rest-on -> "rests on"
-  return `${thirdPersonSingularSurface(m[1])}${m[2] ? ` ${m[2]}` : ""}`;
-}
 const factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
 
 /** The mechanical INVERSE of generalVerbPredicate: recovers the bare role/verb

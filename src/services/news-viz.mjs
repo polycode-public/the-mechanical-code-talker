@@ -24,7 +24,7 @@ import {
   THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "./viz-theme.mjs";
 import { loadSeedPayload, fetchWithProgress, factTripleParts } from "./memory-panel-viz.mjs";
-import { predicatePhrase, factSentence, FACT_PREDICATE_PHRASES } from "../domain/fact-phrase.mjs";
+import { phraseRendererSource, FACT_PREDICATE_PHRASES } from "../domain/fact-phrase.mjs";
 import { NEWS_SOURCE_RECORDS } from "../adapters/corpus/news-sources.mjs";
 
 const DEFAULT_TITLE = "tmct news — a dashboard over the graph, fed on your say-so";
@@ -287,8 +287,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   const el = (id) => document.getElementById(id);
   const esc = ${escapeHtml.toString()};
   const FACT_PREDICATE_PHRASES = ${factPhrasesJson};
-  const predicatePhrase = ${predicatePhrase.toString()};
-  const factSentence = ${factSentence.toString()};
+  ${phraseRendererSource()}
   const factTripleParts = ${factTripleParts.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const loadSeedPayload = ${loadSeedPayload.toString()};

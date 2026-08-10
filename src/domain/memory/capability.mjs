@@ -21,7 +21,7 @@
 import { findIsaChain, buildSubClassSuccessors, SUBCLASS_PREDICATE, TYPE_PREDICATE } from "../syllogise.mjs";
 
 /** The negative-polarity CURIE prefix. A separate prefix, never an
- *  "mgx:not-<lemma>" mint: chat.mjs's predicatePhrase reads "mgx:not-fly" as
+ *  "mgx:not-<lemma>" mint: fact-phrase.mjs's predicatePhrase reads "mgx:not-fly" as
  *  lemma "not" plus tail "fly" and renders "nots fly", and its preposition fold
  *  is guarded on /^mgx:[a-z]+$/, which a hyphenated mint fails — so
  *  "a penguin cannot rest on water" would strand "on water" inside the object
