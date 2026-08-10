@@ -52,7 +52,10 @@ import {
 } from "../../domain/memory/retraction.mjs";
 import { admittedNodes, stableRecordIds } from "../../domain/memory/causal-stability.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
-import { BackendRejected, isRowBackend, rowBackendProblems, BOOKKEEPING_ROW_CLASS } from "./row-backend.mjs";
+import {
+  BackendRejected, BackendUnavailable, isRowBackend, rowBackendProblems, assertValidRow,
+  BOOKKEEPING_ROW_CLASS, ROW_BACKEND_KIND, ROW_BACKEND_CONTRACT_VERSION,
+} from "./row-backend.mjs";
 // The row-backend contract lives in its own module (a consumer imports it
 // without loading the engine); re-exported here so store consumers keep one
 // import site, the same way the trust and retraction vocabularies are.
@@ -684,9 +687,10 @@ function installSqliteWarningFilter() {
 }
 
 /** Open (creating if absent) a resident node:sqlite connection: a Backend C
- *  handle `{ backend: "sqlite", db, dbPath }`. `node:sqlite` is imported
- *  lazily — only opting into this backend ever loads it. Meant to be opened
- *  once per session; close via closeSqliteMemoryStore at session end. */
+ *  handle `{ backend: "sqlite", db, dbPath }`, carrying the row-backend methods
+ *  over its own tables. `node:sqlite` is imported lazily — only opting into
+ *  this backend ever loads it. Meant to be opened once per session; close via
+ *  closeSqliteMemoryStore at session end. */
 export async function createSqliteMemoryStore(dbPath) {
   installSqliteWarningFilter();
   const { DatabaseSync } = await import("node:sqlite");
@@ -695,7 +699,7 @@ export async function createSqliteMemoryStore(dbPath) {
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec(SQLITE_DDL);
   backfillFactsProjection(db);
-  const handle = { backend: BACKEND_SQLITE, db, dbPath };
+  const handle = attachSqliteRowMethods({ backend: BACKEND_SQLITE, db, dbPath });
   backfillFactHeads(handle);
   return handle;
 }
@@ -985,28 +989,13 @@ function buildSqlitePayloadFromRows(handle) {
   const individuals = db.prepare("SELECT json FROM individuals ORDER BY ord").all()
     .map((r) => JSON.parse(r.json));
 
-  const edgesForProp = db.prepare(
-    "SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ? ORDER BY rowid",
-  );
-  const objectProperties = db.prepare("SELECT prop, predicate, count FROM relations ORDER BY ord").all()
-    .map((r) => ({
-      predicate: r.predicate,
-      prop: r.prop,
-      count: r.count,
-      examples: edgesForProp.all(r.prop).map((e) => {
-        const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
-        if (e.extra) Object.assign(edge, JSON.parse(e.extra));
-        return edge;
-      }),
-    }));
-
   return {
     generated_at: getMeta("generated_at", empty.generated_at),
     memory: getMeta("memory", empty.memory),
     prefixes: getMeta("prefixes", empty.prefixes),
     vocabulary: getMeta("vocabulary", empty.vocabulary),
     classes: getMeta("classes", empty.classes),
-    objectProperties,
+    objectProperties: sqliteEdgeGroups(db).map((entry) => entry.group),
     individuals,
     proseIndex: getMeta("proseIndex", empty.proseIndex),
   };
@@ -1070,10 +1059,368 @@ function cacheDropGroupsExcept(cache, seenProps) {
   cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
 }
 
-/** Persist a mutated payload into a Backend C handle: per-row
- *  INSERT/REPLACE/DELETE diffed against what's already stored, in one
- *  transaction. Patches `handle.cachedPayload` in lockstep; a rolled-back
- *  write invalidates the cache instead of leaving a partial patch. */
+// ---- Backend C as a row store ---------------------------------------------
+// The store's own tables ALREADY hold rows: an individual is a row keyed by its
+// id, an edge group a row keyed by its prop, and the payload's scalars are meta
+// values. The projection below says so in both directions, so one set of
+// writers serves both callers — persistSqlitePayload, which diffs a mutated
+// payload into rows, and the published row-backend contract (row-backend.mjs)
+// the same handle answers.
+//
+// A row the tables cannot hand back byte for byte goes to `unmapped_rows`
+// verbatim instead: a record whose class no row class covers, an index term the
+// record itself does not imply, a bookkeeping entry, anything carrying its own
+// TTL. That table is created the first time such a row arrives, so a store
+// holding only tmct's own payload never grows one.
+
+const EDGE_GROUP_ROW_CLASS = "edge-group";
+const EDGE_GROUP_KEY_PREFIX = "edge-group:";
+
+const ROW_CLASS_BY_INDIVIDUAL_CLASS = new Map([
+  [FACT_CLASS, "fact"],
+  [SOURCE_CLASS, "source"],
+  [UTTERANCE_CLASS, "utterance"],
+  [MEMORY_SESSION_CLASS, "session"],
+  [RULE_CLASS, "rule"],
+  [RETRACTION_CLASS, "retraction"],
+]);
+
+const UNMAPPED_ROWS_TABLE = "unmapped_rows";
+const UNMAPPED_ROWS_DDL = `CREATE TABLE IF NOT EXISTS ${UNMAPPED_ROWS_TABLE} (
+  row_key TEXT PRIMARY KEY, row_class TEXT NOT NULL, term TEXT NOT NULL, json TEXT NOT NULL, expires_at INTEGER
+)`;
+const UNMAPPED_ROWS_PRESENT_SQL = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?";
+
+const individualRowJson = (ord, json) => `{"ord":${ord},"individual":${json}}`;
+const ROW_ORD_RE = /^\{"ord":(-?\d+),/;
+
+/** The ord a row carries, read off the front of its own json. */
+function ordOfRow(row) {
+  const match = ROW_ORD_RE.exec(row?.json || "");
+  if (match) return Number(match[1]);
+  try {
+    const ord = Number(JSON.parse(row.json).ord);
+    return Number.isFinite(ord) ? ord : 0;
+  } catch { return 0; }
+}
+
+/** One stored individual as a row. `json` is the blob the `individuals` table
+ *  holds, passed in so the row and the table can never disagree about it. */
+function individualRow(ind, ord, json) {
+  const rowClass = ROW_CLASS_BY_INDIVIDUAL_CLASS.get(ind?.class) || "";
+  return {
+    rowKey: String(ind.id),
+    rowClass,
+    term: rowClass === "fact" ? normFactTerm(individualKey(ind, "subject")) : "",
+    json: individualRowJson(ord, json),
+  };
+}
+
+/** One edge with its four columns first and any other key after, so a group
+ *  projected from a payload and the same group read back off the tables
+ *  serialize to the same bytes. */
+function canonicalEdge(edge) {
+  const canonical = {
+    subject: edge.subject,
+    object: edge.object,
+    subjectLabel: edge.subjectLabel ?? null,
+    objectLabel: edge.objectLabel ?? null,
+  };
+  for (const key of Object.keys(edge)) if (!STD_EDGE_KEYS.has(key)) canonical[key] = edge[key];
+  return canonical;
+}
+
+/** One edge group as a row, examples in stored order — that order is recency,
+ *  since a changed edge moves to the end of its group. */
+function edgeGroupRow(group, ord) {
+  const examples = (group.examples || []).map(canonicalEdge);
+  return {
+    rowKey: `${EDGE_GROUP_KEY_PREFIX}${group.prop}`,
+    rowClass: EDGE_GROUP_ROW_CLASS,
+    term: "",
+    json: JSON.stringify({
+      ord,
+      group: {
+        predicate: group.predicate ?? null,
+        prop: group.prop,
+        count: Number.isFinite(group.count) ? group.count : examples.length,
+        examples,
+      },
+    }),
+  };
+}
+
+/** Every edge group in the store, each with the `relations` ord it sorts by.
+ *  Edges come back in rowid order, which is the order they were last written. */
+function sqliteEdgeGroups(db) {
+  const byProp = new Map();
+  for (const r of db.prepare("SELECT prop, ord, predicate, count FROM relations ORDER BY ord, prop").all()) {
+    byProp.set(r.prop, {
+      ord: r.ord,
+      group: { predicate: r.predicate, prop: r.prop, count: r.count, examples: [] },
+    });
+  }
+  if (!byProp.size) return [];
+  for (const e of db.prepare("SELECT prop, subject, object, subject_label, object_label, extra FROM edges ORDER BY rowid").all()) {
+    const entry = byProp.get(e.prop);
+    if (!entry) continue;
+    const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
+    if (e.extra) Object.assign(edge, JSON.parse(e.extra));
+    entry.group.examples.push(edge);
+  }
+  return [...byProp.values()];
+}
+
+/** The rows the store's tables hold for the payload — its individuals and edge
+ *  groups, and nothing else. This is what a payload write diffs against, so a
+ *  verbatim row a consumer stored beside them is never in the diff and never
+ *  deleted as absent-from-payload. Classes and terms come off the columns, so
+ *  reading them parses no blob. */
+function sqlitePayloadStoreRows(handle) {
+  const rows = [];
+  const stored = handle.db.prepare(
+    "SELECT i.id AS id, i.ord AS ord, i.class AS class, i.json AS json, f.subject AS subject"
+    + " FROM individuals i LEFT JOIN facts f ON f.id = i.id ORDER BY i.ord, i.id",
+  ).all();
+  for (const r of stored) {
+    const rowClass = ROW_CLASS_BY_INDIVIDUAL_CLASS.get(r.class) || "";
+    rows.push({
+      rowKey: r.id,
+      rowClass,
+      term: rowClass === "fact" ? normFactTerm(r.subject || "") : "",
+      json: individualRowJson(r.ord, r.json),
+    });
+  }
+  for (const entry of sqliteEdgeGroups(handle.db)) rows.push(edgeGroupRow(entry.group, entry.ord));
+  return rows;
+}
+
+/** A mutated payload as rows, plus what a write needs to apply each of them. An
+ *  existing key keeps the ord it already had; a new one takes the next free
+ *  number in its own sequence, since individuals and relations number
+ *  separately, exactly as their tables do. */
+function sqlitePayloadRows(payload, priorRows) {
+  const priorOrd = new Map();
+  let nextIndividualOrd = 0;
+  let nextGroupOrd = 0;
+  for (const row of priorRows) {
+    const ord = ordOfRow(row);
+    priorOrd.set(row.rowKey, ord);
+    if (row.rowClass === EDGE_GROUP_ROW_CLASS) {
+      if (ord >= nextGroupOrd) nextGroupOrd = ord + 1;
+    } else if (ord >= nextIndividualOrd) nextIndividualOrd = ord + 1;
+  }
+
+  const rows = [];
+  const partsByKey = new Map();
+  for (const ind of payload.individuals || []) {
+    if (!ind?.id) continue;
+    const json = JSON.stringify(ind);
+    const rowKey = String(ind.id);
+    const ord = priorOrd.get(rowKey) ?? nextIndividualOrd++;
+    rows.push(individualRow(ind, ord, json));
+    partsByKey.set(rowKey, { kind: "individual", ord, individual: ind, json });
+  }
+  for (const group of payload.objectProperties || []) {
+    if (!group?.prop) continue;
+    const rowKey = `${EDGE_GROUP_KEY_PREFIX}${group.prop}`;
+    const ord = priorOrd.get(rowKey) ?? nextGroupOrd++;
+    const row = edgeGroupRow(group, ord);
+    rows.push(row);
+    partsByKey.set(rowKey, { kind: EDGE_GROUP_ROW_CLASS, ord, group: JSON.parse(row.json).group });
+  }
+  return { rows, partsByKey };
+}
+
+/** What a row is as far as the store's own tables are concerned: an individual
+ *  or an edge group when they can hand it back byte for byte, null when only
+ *  the verbatim table can hold it. */
+function nativeRowParts(row) {
+  if (row.expiresAt !== undefined) return null; // no column carries a TTL stamp
+  let record;
+  try { record = JSON.parse(row.json); } catch { return null; }
+  if (!record || typeof record !== "object" || !Number.isFinite(record.ord)) return null;
+
+  if (row.rowClass === EDGE_GROUP_ROW_CLASS) {
+    const group = record.group;
+    if (!group?.prop) return null;
+    const rebuilt = edgeGroupRow(group, record.ord);
+    if (rebuilt.rowKey !== row.rowKey || rebuilt.term !== row.term || rebuilt.json !== row.json) return null;
+    return { kind: EDGE_GROUP_ROW_CLASS, ord: record.ord, group };
+  }
+
+  const ind = record.individual;
+  if (!ind?.id) return null;
+  const json = JSON.stringify(ind);
+  const rebuilt = individualRow(ind, record.ord, json);
+  if (rebuilt.rowKey !== row.rowKey || rebuilt.rowClass !== row.rowClass) return null;
+  if (rebuilt.term !== row.term || rebuilt.json !== row.json) return null;
+  return { kind: "individual", ord: record.ord, individual: ind, json };
+}
+
+/** The state one write transaction carries: the statements it reuses, the cache
+ *  it patches in lockstep, and the groups and (subject, predicate) pairs it
+ *  touched, so the two derived tables re-materialise for exactly what moved and
+ *  nothing else. A group whose records are all untouched cannot have moved —
+ *  its base carries no recency, so only its own records can change it. */
+function sqliteWriteContext(handle, { cache = null } = {}) {
+  const db = handle.db;
+  return {
+    db,
+    cache,
+    touchedGroups: new Set(),
+    touchedPairs: new Set(),
+    hasUnmappedRows: !!db.prepare(UNMAPPED_ROWS_PRESENT_SQL).get(UNMAPPED_ROWS_TABLE),
+    unmapped: null,
+    upsertInd: db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)"),
+    upsertFact: db.prepare(FACT_PROJECTION_UPSERT_SQL),
+    deleteInd: db.prepare("DELETE FROM individuals WHERE id = ?"),
+    deleteFact: db.prepare("DELETE FROM facts WHERE id = ?"),
+    getFact: db.prepare("SELECT triple_hash, subject, predicate FROM facts WHERE id = ?"),
+    upsertRel: db.prepare("INSERT OR REPLACE INTO relations(prop, ord, predicate, count) VALUES (?, ?, ?, ?)"),
+    edgesForProp: db.prepare("SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ?"),
+    upsertEdge: db.prepare("INSERT OR REPLACE INTO edges(prop, subject, object, subject_label, object_label, extra) VALUES (?, ?, ?, ?, ?, ?)"),
+    deleteEdge: db.prepare("DELETE FROM edges WHERE prop = ? AND subject = ? AND object = ?"),
+    deleteGroupEdges: db.prepare("DELETE FROM edges WHERE prop = ?"),
+    deleteRel: db.prepare("DELETE FROM relations WHERE prop = ?"),
+  };
+}
+
+/** The verbatim table's statements, creating the table the first time a write
+ *  actually needs it. */
+function unmappedStatements(ctx) {
+  if (!ctx.unmapped) {
+    ctx.db.exec(UNMAPPED_ROWS_DDL);
+    ctx.hasUnmappedRows = true;
+    ctx.unmapped = {
+      upsert: ctx.db.prepare(`INSERT OR REPLACE INTO ${UNMAPPED_ROWS_TABLE}(row_key, row_class, term, json, expires_at) VALUES (?, ?, ?, ?, ?)`),
+      remove: ctx.db.prepare(`DELETE FROM ${UNMAPPED_ROWS_TABLE} WHERE row_key = ?`),
+    };
+  }
+  return ctx.unmapped;
+}
+
+/** Drop a key from the verbatim table, so no key ever lives in both lanes.
+ *  Skipped whole for a store that has never held a verbatim row. */
+function dropUnmappedRow(ctx, rowKey) {
+  if (ctx.hasUnmappedRows) unmappedStatements(ctx).remove.run(rowKey);
+}
+
+function writeIndividualRow(ctx, { ord, individual, json }) {
+  ctx.upsertInd.run(individual.id, ord, individual.class ?? null, individual.label ?? null, json);
+  // The queryable projection of the blob just written, same transaction — every
+  // write path that reaches a Fact (teach, corpus seed, entailment, migration, a
+  // trust recompute) lands here, so none can leave the two out of step.
+  if (individual.class === FACT_CLASS) {
+    ctx.upsertFact.run(...factProjectionValues(individual, json));
+    ctx.touchedGroups.add(factGroupId(individual.id));
+    ctx.touchedPairs.add(subjectPredicateKey(individualKey(individual, "subject"), individualKey(individual, "predicate")));
+  }
+  dropUnmappedRow(ctx, String(individual.id));
+  if (ctx.cache) cacheUpsertIndividual(ctx.cache, individual);
+}
+
+/** A group's edges, diffed WITHIN the group and scoped to its own rows
+ *  (edges_by_prop) rather than the whole edges table — a group that gains one
+ *  new edge (statedBy, touched by nearly every appendFact call) writes exactly
+ *  that one row, not the group's entire history. */
+function writeEdgeGroupRow(ctx, { ord, group }) {
+  const existingByKey = new Map(
+    ctx.edgesForProp.all(group.prop).map((r) => [`${r.subject} ${r.object}`, r]),
+  );
+  const newKeys = new Set();
+  const cacheGroup = ctx.cache ? cacheGroupFor(ctx.cache, group.prop) : null;
+  for (const e of group.examples || []) {
+    const key = `${e.subject} ${e.object}`;
+    newKeys.add(key);
+    const extraKeys = Object.keys(e).filter((k) => !STD_EDGE_KEYS.has(k));
+    const extra = extraKeys.length ? JSON.stringify(Object.fromEntries(extraKeys.map((k) => [k, e[k]]))) : null;
+    const existing = existingByKey.get(key);
+    const unchanged = existing
+      && (existing.subject_label ?? null) === (e.subjectLabel ?? null)
+      && (existing.object_label ?? null) === (e.objectLabel ?? null)
+      && (existing.extra ?? null) === (extra ?? null);
+    if (unchanged) continue;
+    ctx.upsertEdge.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
+    if (cacheGroup) cacheUpsertEdge(cacheGroup, e, extraKeys);
+  }
+  for (const key of existingByKey.keys()) {
+    if (newKeys.has(key)) continue;
+    const [s, o] = key.split(" ");
+    ctx.deleteEdge.run(group.prop, s, o);
+  }
+  if (cacheGroup) cacheDropEdgesExcept(cacheGroup, newKeys);
+  const count = Number.isFinite(group.count) ? group.count : (group.examples || []).length;
+  ctx.upsertRel.run(group.prop, ord, group.predicate ?? null, count);
+  dropUnmappedRow(ctx, `${EDGE_GROUP_KEY_PREFIX}${group.prop}`);
+  if (cacheGroup) { cacheGroup.predicate = group.predicate ?? null; cacheGroup.count = count; }
+}
+
+function writeUnmappedRow(ctx, row) {
+  unmappedStatements(ctx).upsert.run(row.rowKey, row.rowClass, row.term, row.json, row.expiresAt ?? null);
+}
+
+/** Apply rows to the store's tables. `knownParts` is what the payload
+ *  projection already worked out for the rows it minted, so the write path does
+ *  not re-derive what it just built. */
+function writeSqliteRows(ctx, rows, knownParts = null) {
+  for (const row of rows) {
+    const parts = knownParts?.get(row.rowKey) || nativeRowParts(row);
+    if (!parts) { writeUnmappedRow(ctx, row); continue; }
+    if (parts.kind === EDGE_GROUP_ROW_CLASS) writeEdgeGroupRow(ctx, parts);
+    else writeIndividualRow(ctx, parts);
+  }
+}
+
+/** Remove rows by key from whichever lane holds them. A retracted record's own
+ *  group and (subject, predicate) are read off the projection BEFORE the row
+ *  goes, since once it is gone there is nothing left to read them off. */
+function deleteSqliteRows(ctx, rowKeys) {
+  const droppedIndividuals = new Set();
+  const droppedProps = new Set();
+  for (const rowKey of rowKeys) {
+    if (rowKey.startsWith(EDGE_GROUP_KEY_PREFIX)) {
+      const prop = rowKey.slice(EDGE_GROUP_KEY_PREFIX.length);
+      ctx.deleteGroupEdges.run(prop);
+      ctx.deleteRel.run(prop);
+      droppedProps.add(prop);
+    } else {
+      const gone = ctx.getFact.get(rowKey);
+      if (gone) {
+        ctx.touchedGroups.add(gone.triple_hash);
+        ctx.touchedPairs.add(subjectPredicateKey(gone.subject, gone.predicate));
+      }
+      ctx.deleteInd.run(rowKey);
+      ctx.deleteFact.run(rowKey); // a no-op for a non-Fact id; keeps the projection from outliving its blob
+      droppedIndividuals.add(rowKey);
+    }
+    dropUnmappedRow(ctx, rowKey);
+  }
+  if (ctx.cache && droppedIndividuals.size) {
+    ctx.cache.individuals = ctx.cache.individuals.filter((i) => !droppedIndividuals.has(i?.id));
+  }
+  if (ctx.cache && droppedProps.size) {
+    ctx.cache.objectProperties = ctx.cache.objectProperties.filter((g) => !droppedProps.has(g?.prop));
+  }
+}
+
+/** Re-materialise the derived tables for what a write touched, inside that
+ *  write's own transaction, so no reader can ever see one without the other. */
+function recomputeDerivedTables(ctx, foldSource, headIndex) {
+  if (!ctx.touchedGroups.size) return;
+  const foldCtx = factFoldContext(foldSource);
+  recomputeFactHeads(ctx.db, foldCtx, ctx.touchedGroups, headIndex);
+  recordObjectSupersessions(ctx.db, foldCtx, ctx.touchedPairs);
+}
+
+/** Persist a mutated payload into a Backend C handle: the payload projected to
+ *  rows, diffed against the rows already stored, and only the difference
+ *  written, in one transaction. Patches `handle.cachedPayload` in lockstep; a
+ *  rolled-back write invalidates the cache instead of leaving a partial patch.
+ *
+ *  The 4 KB wire cap the row contract enforces is not applied here: it protects
+ *  a network hop, and a local file store holds a seed's whole statedBy group in
+ *  one row. */
 function persistSqlitePayload(handle, payload) {
   const db = handle.db;
   const empty = emptyMemory();
@@ -1096,130 +1443,163 @@ function persistSqlitePayload(handle, payload) {
       cache.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
     }
 
-    // individuals: a real per-row upsert, only for an id that is new or whose
-    // JSON actually changed since the last persist — every other row is left
-    // untouched (no whole-table rewrite).
-    const getInd = db.prepare("SELECT ord, json FROM individuals WHERE id = ?");
-    const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
-    let nextOrd = maxOrd + 1;
-    const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
-    const upsertFact = db.prepare(FACT_PROJECTION_UPSERT_SQL);
-    const seenIds = new Set();
-    // Every group and every (subject, predicate) this write reaches, so the two
-    // derived tables are re-materialised for exactly what moved and nothing
-    // else. A group whose records are all untouched cannot have moved: its base
-    // carries no recency, so only its own records can change it.
-    const touchedGroups = new Set();
-    const touchedPairs = new Set();
-    for (const ind of payload.individuals || []) {
-      seenIds.add(ind.id);
-      const json = JSON.stringify(ind);
-      const existing = getInd.get(ind.id);
-      if (existing && existing.json === json) continue; // unchanged — skip the write entirely (cache already matches)
-      const ord = existing ? existing.ord : nextOrd++;
-      upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
-      // The queryable projection of the blob just written, same transaction —
-      // every write path that reaches a Fact (teach, corpus seed, entailment,
-      // migration, a trust recompute) lands here, so none can leave the two
-      // out of step.
-      if (ind.class === FACT_CLASS) {
-        upsertFact.run(...factProjectionValues(ind, json));
-        touchedGroups.add(factGroupId(ind.id));
-        touchedPairs.add(subjectPredicateKey(individualKey(ind, "subject"), individualKey(ind, "predicate")));
-      }
-      if (cache) cacheUpsertIndividual(cache, ind);
-    }
-    // Removal (what removeFacts' retraction lands as — every append path only
-    // ever adds): a cheap index-only scan of the primary-key column, never the
-    // JSON payload.
-    const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
-    const deleteFact = db.prepare("DELETE FROM facts WHERE id = ?");
-    const getFact = db.prepare("SELECT triple_hash, subject, predicate FROM facts WHERE id = ?");
-    for (const row of db.prepare("SELECT id FROM individuals").all()) {
-      if (seenIds.has(row.id)) continue;
-      // Read the projection before dropping it: a retracted record's own group
-      // and (subject, predicate) still have to be re-materialised, and once the
-      // row is gone there is nothing left to read them off.
-      const gone = getFact.get(row.id);
-      if (gone) {
-        touchedGroups.add(gone.triple_hash);
-        touchedPairs.add(subjectPredicateKey(gone.subject, gone.predicate));
-      }
-      deleteInd.run(row.id);
-      deleteFact.run(row.id); // a no-op for a non-Fact id; keeps the projection from outliving its blob
-    }
-    if (cache) cacheDropIndividualsExcept(cache, seenIds);
-
-    // objectProperties/edges: per-edge diff WITHIN each group, scoped to that
-    // group's own rows (edges_by_prop) rather than the whole edges table — a
-    // group that gains one new edge (e.g. statedBy, touched by nearly every
-    // appendFact call) writes exactly that one new row, not the group's
-    // entire history.
-    const getRelOrd = db.prepare("SELECT ord FROM relations WHERE prop = ?");
-    const maxRelOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM relations").get().m;
-    let nextRelOrd = maxRelOrd + 1;
-    const upsertRel = db.prepare("INSERT OR REPLACE INTO relations(prop, ord, predicate, count) VALUES (?, ?, ?, ?)");
-    const edgesForProp = db.prepare("SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ?");
-    const upsertEdge = db.prepare("INSERT OR REPLACE INTO edges(prop, subject, object, subject_label, object_label, extra) VALUES (?, ?, ?, ?, ?, ?)");
-    const deleteEdge = db.prepare("DELETE FROM edges WHERE prop = ? AND subject = ? AND object = ?");
-    const seenProps = new Set();
-    for (const group of payload.objectProperties || []) {
-      seenProps.add(group.prop);
-      const existingRows = edgesForProp.all(group.prop);
-      const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\u0000${r.object}`, r]));
-      const newKeys = new Set();
-      const cacheGroup = cache ? cacheGroupFor(cache, group.prop) : null;
-      for (const e of group.examples || []) {
-        const key = `${e.subject}\u0000${e.object}`;
-        newKeys.add(key);
-        const extraKeys = Object.keys(e).filter((k) => !STD_EDGE_KEYS.has(k));
-        const extra = extraKeys.length ? JSON.stringify(Object.fromEntries(extraKeys.map((k) => [k, e[k]]))) : null;
-        const existing = existingByKey.get(key);
-        const unchanged = existing
-          && (existing.subject_label ?? null) === (e.subjectLabel ?? null)
-          && (existing.object_label ?? null) === (e.objectLabel ?? null)
-          && (existing.extra ?? null) === (extra ?? null);
-        if (unchanged) continue;
-        upsertEdge.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
-        if (cacheGroup) cacheUpsertEdge(cacheGroup, e, extraKeys);
-      }
-      for (const key of existingByKey.keys()) {
-        if (newKeys.has(key)) continue;
-        const [s, o] = key.split("\u0000");
-        deleteEdge.run(group.prop, s, o);
-      }
-      if (cacheGroup) cacheDropEdgesExcept(cacheGroup, newKeys);
-      const relCount = Number.isFinite(group.count) ? group.count : (group.examples || []).length;
-      const relOrd = getRelOrd.get(group.prop)?.ord ?? nextRelOrd++;
-      upsertRel.run(group.prop, relOrd, group.predicate ?? null, relCount);
-      if (cacheGroup) { cacheGroup.predicate = group.predicate ?? null; cacheGroup.count = relCount; }
-    }
-    for (const row of db.prepare("SELECT prop FROM relations").all()) {
-      if (seenProps.has(row.prop)) continue;
-      db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
-      db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
-    }
-    if (cache) cacheDropGroupsExcept(cache, seenProps);
-
-    // The derived tables, re-materialised in the SAME transaction as the
-    // records they summarise, so no reader can ever see one without the other.
-    if (touchedGroups.size) {
-      const ctx = factFoldContext(payload);
-      recomputeFactHeads(db, ctx, touchedGroups, handle.cachedFactHeads);
-      recordObjectSupersessions(db, ctx, touchedPairs);
-    }
+    const ctx = sqliteWriteContext(handle, { cache });
+    const before = sqlitePayloadStoreRows(handle);
+    const { rows: after, partsByKey } = sqlitePayloadRows(payload, before);
+    const { puts, deletes } = diffRows(before, after);
+    writeSqliteRows(ctx, puts, partsByKey);
+    deleteSqliteRows(ctx, deletes);
+    recomputeDerivedTables(ctx, payload, handle.cachedFactHeads);
 
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
     // The cache may hold a partially-applied patch at this point (some of the
-    // loop bodies above already mutated it before the failure) that was never
+    // writes above already mutated it before the failure) that was never
     // actually committed to SQLite — never trust it silently. Drop it so the
     // next loadMemory() call does an honest full rebuild instead.
     handle.cachedPayload = undefined;
     handle.cachedFactHeads = undefined;
     throw e;
   }
+}
+
+// ---- The row-backend contract, over the same tables ------------------------
+
+/** Every verbatim row still live, expired ones filtered out the way the
+ *  reference backend filters its own. */
+function readUnmappedRows(db) {
+  if (!db.prepare(UNMAPPED_ROWS_PRESENT_SQL).get(UNMAPPED_ROWS_TABLE)) return [];
+  const now = Math.floor(Date.now() / 1000);
+  const rows = [];
+  for (const r of db.prepare(`SELECT row_key, row_class, term, json, expires_at FROM ${UNMAPPED_ROWS_TABLE}`).all()) {
+    if (r.expires_at !== null && r.expires_at <= now) continue;
+    const row = { rowKey: r.row_key, rowClass: r.row_class, term: r.term, json: r.json };
+    if (r.expires_at !== null) row.expiresAt = r.expires_at;
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Run `write` in one transaction, then drop the caches: a row write reaches
+ *  the tables without going through the payload those caches mirror, so the
+ *  next read rebuilds from the tables rather than from a payload that no longer
+ *  describes them. */
+function inSqliteRowTransaction(handle, write) {
+  const db = handle.db;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    write(sqliteWriteContext(handle));
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  } finally {
+    handle.cachedPayload = null;
+    handle.cachedFactHeads = null;
+  }
+}
+
+const SQLITE_TABLES = Object.freeze([
+  "meta", "individuals", "relations", "edges", "facts", "fact_heads", "fact_object_supersessions",
+]);
+
+/** Give a Backend C handle the published row-backend methods (row-backend.mjs).
+ *  They read and write the same seven tables the payload path does, so a
+ *  consumer holding the store as a row backend and tmct holding it as a memory
+ *  store see one store rather than two. */
+function attachSqliteRowMethods(handle) {
+  return Object.assign(handle, {
+    async readRows() {
+      return [...sqlitePayloadStoreRows(handle), ...readUnmappedRows(handle.db)];
+    },
+
+    async readRowsByTerm(term) {
+      return (await handle.readRows()).filter((row) => row.term === term);
+    },
+
+    async putRows(candidateRows) {
+      // Validate every row before writing any of them, so a batch carrying one
+      // malformed row is refused whole rather than half-applied.
+      const validated = (candidateRows || []).map((row) => assertValidRow(row));
+      if (!validated.length) return;
+      inSqliteRowTransaction(handle, (ctx) => {
+        writeSqliteRows(ctx, validated);
+        recomputeDerivedTables(ctx, buildSqlitePayloadFromRows(handle), null);
+      });
+    },
+
+    async deleteRows(rowKeys) {
+      const keys = [...(rowKeys || [])];
+      if (!keys.length) return;
+      inSqliteRowTransaction(handle, (ctx) => {
+        deleteSqliteRows(ctx, keys);
+        recomputeDerivedTables(ctx, buildSqlitePayloadFromRows(handle), null);
+      });
+    },
+
+    async readMeta(key) {
+      const row = handle.db.prepare("SELECT v FROM meta WHERE k = ?").get(key);
+      return row ? row.v : null;
+    },
+
+    async putMeta(key, value) {
+      handle.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(key, String(value));
+      handle.cachedPayload = null;
+      handle.cachedFactHeads = null;
+    },
+
+    async deleteAll() {
+      const db = handle.db;
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const table of SQLITE_TABLES) db.exec(`DELETE FROM ${table}`);
+        if (db.prepare(UNMAPPED_ROWS_PRESENT_SQL).get(UNMAPPED_ROWS_TABLE)) db.exec(`DELETE FROM ${UNMAPPED_ROWS_TABLE}`);
+        db.exec("COMMIT");
+      } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
+      } finally {
+        handle.cachedPayload = null;
+        handle.cachedFactHeads = null;
+      }
+    },
+
+    async close() {
+      closeSqliteMemoryStore(handle);
+    },
+  });
+}
+
+/** A sqlite file as an injectable row backend: the same store
+ *  `createSqliteMemoryStore` opens, presented under the published contract. The
+ *  connection opens on the first call, so constructing one touches no disk and
+ *  needs no await. */
+export function createSqliteRowBackend(dbPath) {
+  let opening = null;
+  let closed = false;
+  const handle = () => {
+    if (closed) throw new BackendUnavailable("this row backend was closed and can no longer be used");
+    opening = opening || createSqliteMemoryStore(dbPath);
+    return opening;
+  };
+  const through = (method) => async (...args) => (await handle())[method](...args);
+  return {
+    kind: ROW_BACKEND_KIND,
+    contractVersion: ROW_BACKEND_CONTRACT_VERSION,
+    readRows: through("readRows"),
+    readRowsByTerm: through("readRowsByTerm"),
+    putRows: through("putRows"),
+    deleteRows: through("deleteRows"),
+    readMeta: through("readMeta"),
+    putMeta: through("putMeta"),
+    deleteAll: through("deleteAll"),
+    async close() {
+      const open = opening ? await opening : null;
+      closed = true;
+      if (open) closeSqliteMemoryStore(open);
+    },
+  };
 }
 
 /** Atomic write of raw text (temp in the same dir + rename) — the discipline
