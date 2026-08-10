@@ -13,6 +13,7 @@
 // point adds routing or validation logic of its own; they only wire the
 // core function to a transport and a storage choice.
 
+import { randomUUID } from "node:crypto";
 import {
   BackendRejected, BackendUnavailable, rowProblems,
 } from "../../src/adapters/memory/row-backend.mjs";
@@ -21,6 +22,13 @@ import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dy
 export const MAX_ROW_SERVICE_BODY_BYTES = 256 * 1024;
 export const DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR = 120;
 export const MUTATION_RATE_WINDOW_SECONDS = 3600;
+export const DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR = 12;
+export const CYCLE_RATE_WINDOW_SECONDS = 3600;
+// A lock held longer than this belongs to a crashed worker, not a live one —
+// the next trigger acquires it rather than 409ing a session forever.
+export const CYCLE_LOCK_STALE_MS = 5 * 60 * 1000;
+const META_CYCLE_KEY = "cycle";
+const META_FEED_KEY = "feed";
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -106,20 +114,24 @@ function errorFromBackendFailure(error) {
 const ROWS_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/rows$/;
 const META_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/meta\/([^/]+)$/;
 const META_READ_PATH = /^\/api\/meta\/([^/]+)$/;
+const CYCLE_TRIGGER_PATH = /^\/api\/sessions\/([^/]+)\/(poll|enrich|ingest)$/;
+const FEED_READ_PATH = /^\/api\/feed$/;
 
 /** The row-service core: routing, validation, caps, error mapping. Takes no
- *  storage dependency but the two seams every route needs —
+ *  storage dependency but the seams every route needs —
  *  `createSessionBackend(sessionKey)` for a §3.1 backend scoped to that
- *  session, and `counters` for the table-wide cap and the per-session
- *  mutation rate, neither of which any one session's backend can answer on
- *  its own. `ttlSeconds` (null when unset) is stamped onto every row this
- *  service writes; the shipped backends do their own TTL bookkeeping only
- *  when constructed with a `ttlSeconds` of their own, so a consumer wiring
- *  `createDynamoRowBackend` behind this handler leaves it null and lets the
- *  service stamp rows once, not twice. */
+ *  session, `counters` for the table-wide cap and the per-session mutation
+ *  and cycle rates, and `invokeNewsWorker(sessionKey, { mode, cycleId, body })`
+ *  for the trigger routes' async invoke — none of which any one session's
+ *  backend can answer on its own. `ttlSeconds` (null when unset) is stamped
+ *  onto every row this service writes; the shipped backends do their own
+ *  TTL bookkeeping only when constructed with a `ttlSeconds` of their own,
+ *  so a consumer wiring `createDynamoRowBackend` behind this handler leaves
+ *  it null and lets the service stamp rows once, not twice. */
 export function createRowServiceHandler({
   createSessionBackend,
   counters,
+  invokeNewsWorker,
   ttlSeconds = null,
   now = () => Math.floor(Date.now() / 1000),
   log = () => {},
@@ -127,8 +139,12 @@ export function createRowServiceHandler({
   if (typeof createSessionBackend !== "function") {
     throw new TypeError("createRowServiceHandler needs a createSessionBackend(sessionKey) function");
   }
-  if (!counters || typeof counters.incrementGlobalRowCount !== "function" || typeof counters.incrementMutationRate !== "function") {
-    throw new TypeError("createRowServiceHandler needs a counters seam with incrementGlobalRowCount and incrementMutationRate");
+  const REQUIRED_COUNTER_METHODS = ["incrementGlobalRowCount", "incrementMutationRate", "incrementCycleRate", "acquireCycleLock", "releaseCycleLock"];
+  if (!counters || REQUIRED_COUNTER_METHODS.some((m) => typeof counters[m] !== "function")) {
+    throw new TypeError(`createRowServiceHandler needs a counters seam with ${REQUIRED_COUNTER_METHODS.join(", ")}`);
+  }
+  if (typeof invokeNewsWorker !== "function") {
+    throw new TypeError("createRowServiceHandler needs an invokeNewsWorker(sessionKey, { mode, cycleId, body }) function");
   }
 
   const stampRowExpiry = (row) => (ttlSeconds == null ? row : { ...row, expiresAt: now() + ttlSeconds });
@@ -249,6 +265,76 @@ export function createRowServiceHandler({
     return respond(204);
   }
 
+  async function handleGetFeed(request) {
+    const gate = resolveSessionKey(request, {});
+    if (gate.response) return gate.response;
+    const backend = await createSessionBackend(gate.sessionKey);
+    let raw;
+    try {
+      raw = await backend.readMeta(META_FEED_KEY);
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    if (raw === null || raw === undefined) return fail(404, "no materialized feed for this session yet");
+    let feed;
+    try { feed = JSON.parse(raw); } catch { return fail(500, "the stored feed document is not valid JSON"); }
+    return respond(200, { feed });
+  }
+
+  /** POST /api/sessions/:uuid/poll|enrich|ingest: validate, acquire the
+   *  session's cycle lock, stamp a running cycle marker for the page's own
+   *  display, async-invoke the news worker, and answer before the cycle
+   *  runs. One running cycle per session (409, via the lock — never a
+   *  read-then-write race on the marker document, since two triggers can
+   *  land in the same tick); the cycle rate and the ordinary mutation rate
+   *  both count a trigger (429 either way). The lock releases once the
+   *  invoked cycle settles, or on its own once `CYCLE_LOCK_STALE_MS` has
+   *  passed, so a crashed worker never wedges a session. */
+  async function handleCycleTrigger(request, pathSessionKey, kind) {
+    const gate = resolveSessionKey(request, { pathSessionKey });
+    if (gate.response) return gate.response;
+    const { sessionKey } = gate;
+    const malformed = rejectMalformedMutation(request);
+    if (malformed) return malformed;
+
+    const parsed = parseJsonBody(request);
+    if (parsed.error) return fail(400, parsed.error);
+    const body = parsed.value || {};
+
+    if (kind === "ingest") {
+      const hasText = typeof body.text === "string" && body.text.trim().length > 0;
+      const hasRows = Array.isArray(body.rows) && body.rows.length > 0;
+      if (hasText === hasRows) return fail(400, "the body must carry exactly one of text or rows");
+    }
+
+    const nowSeconds = now();
+    const nowMsVal = nowSeconds * 1000;
+    const nowIso = new Date(nowMsVal).toISOString();
+
+    const lockOk = await counters.acquireCycleLock(sessionKey, { nowMsVal, staleMs: CYCLE_LOCK_STALE_MS });
+    if (!lockOk) return fail(409, "a cycle is already running for this session");
+
+    const cycleRateOk = await counters.incrementCycleRate(sessionKey);
+    if (!cycleRateOk) { await counters.releaseCycleLock(sessionKey); return fail(429, "this session's cycle rate is over its hourly limit"); }
+    const mutationRateOk = await counters.incrementMutationRate(sessionKey);
+    if (!mutationRateOk) { await counters.releaseCycleLock(sessionKey); return fail(429, "this session's mutation rate is over its hourly limit"); }
+
+    const backend = await createSessionBackend(sessionKey);
+    const cycleId = randomUUID();
+    try {
+      await backend.putMeta(META_CYCLE_KEY, JSON.stringify({ cycleId, kind, state: "running", startedAt: nowIso, sources: {} }));
+    } catch (error) {
+      await counters.releaseCycleLock(sessionKey);
+      return errorFromBackendFailure(error);
+    }
+
+    Promise.resolve(invokeNewsWorker(sessionKey, { mode: kind, cycleId, body }))
+      .catch((error) => log({ error: error.message, cycleId }))
+      .finally(() => counters.releaseCycleLock(sessionKey));
+
+    return respond(202, { cycleId });
+  }
+
   /** `request` is transport-neutral: `{ method, path, headers (lowercased
    *  keys), query, body (a string or "") }`. Both `local.mjs` and the Lambda
    *  entry below adapt their own transport into this shape and adapt the
@@ -273,6 +359,11 @@ export function createRowServiceHandler({
         return await handlePutMeta(request, metaMutation[1], decodeURIComponent(metaMutation[2]));
       }
 
+      if (method === "GET" && FEED_READ_PATH.test(path)) return await handleGetFeed(request);
+
+      const cycleTrigger = path.match(CYCLE_TRIGGER_PATH);
+      if (cycleTrigger && method === "POST") return await handleCycleTrigger(request, cycleTrigger[1], cycleTrigger[2]);
+
       return fail(404, "no such row-service route");
     } catch (error) {
       log({ error: error.message });
@@ -296,6 +387,8 @@ export function createRowServiceHandler({
 const GLOBAL_COUNTER_SK = "counter";
 const META_PARTITION_KEY = "_meta";
 const RATE_SK_PREFIX = "rate#";
+const CYCLE_RATE_SK_PREFIX = "cyclerate#";
+const CYCLE_LOCK_SK_PREFIX = "cyclelock#";
 
 let cachedDynamoClientPromise = null;
 async function loadDocumentClient() {
@@ -315,7 +408,12 @@ async function loadDocumentClient() {
  *  `UpdateCommand`s: the condition either the item doesn't exist yet or the
  *  running count still leaves room, so a call that would cross the limit
  *  fails the condition and applies nothing. */
-function createDynamoCounters({ client, tableName, tableRowCap, mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS, now = () => Math.floor(Date.now() / 1000) }) {
+function createDynamoCounters({
+  client, tableName, tableRowCap,
+  mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS,
+  cycleRateLimit = DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR, cycleRateWindowSeconds = CYCLE_RATE_WINDOW_SECONDS,
+  now = () => Math.floor(Date.now() / 1000),
+}) {
   async function conditionalAdd({ sk, amount, limit, expiresAt }) {
     const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
     try {
@@ -351,6 +449,39 @@ function createDynamoCounters({ client, tableName, tableRowCap, mutationRateLimi
         limit: mutationRateLimit,
         expiresAt: now() + mutationRateWindowSeconds,
       });
+    },
+    async incrementCycleRate(sessionKey) {
+      return conditionalAdd({
+        sk: `${CYCLE_RATE_SK_PREFIX}${sessionKey}`,
+        amount: 1,
+        limit: cycleRateLimit,
+        expiresAt: now() + cycleRateWindowSeconds,
+      });
+    },
+    /** The trigger routes' one-cycle-per-session lock: a conditional
+     *  `UpdateCommand` that only lands when no lock is held, or the held one
+     *  is older than `staleMs` — the same settle-every-race shape every
+     *  other conditional write here uses, so two triggers landing in the
+     *  same millisecond can never both acquire it. */
+    async acquireCycleLock(sessionKey, { nowMsVal, staleMs }) {
+      const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
+      try {
+        await client.send(new UpdateCommand({
+          TableName: tableName,
+          Key: { pk: META_PARTITION_KEY, sk: `${CYCLE_LOCK_SK_PREFIX}${sessionKey}` },
+          UpdateExpression: "SET lockedAt = :now",
+          ConditionExpression: "attribute_not_exists(lockedAt) OR lockedAt <= :staleFloor",
+          ExpressionAttributeValues: { ":now": nowMsVal, ":staleFloor": nowMsVal - staleMs },
+        }));
+        return true;
+      } catch (error) {
+        if (error?.name === "ConditionalCheckFailedException") return false;
+        throw new BackendUnavailable(`the row-service cycle lock update failed: ${error.message}`, { cause: error });
+      }
+    },
+    async releaseCycleLock(sessionKey) {
+      const { DeleteCommand } = await import("@aws-sdk/lib-dynamodb");
+      await client.send(new DeleteCommand({ TableName: tableName, Key: { pk: META_PARTITION_KEY, sk: `${CYCLE_LOCK_SK_PREFIX}${sessionKey}` } }));
     },
     /** Rewrites the counter to a physical count. Not conditional: the daily
      *  reconcile is the one caller allowed to move the counter down. */
@@ -403,6 +534,34 @@ function rowServiceConfigFromEnv() {
   return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, tableRowCap };
 }
 
+let cachedLambdaClientPromise = null;
+async function loadLambdaClient() {
+  if (!cachedLambdaClientPromise) {
+    cachedLambdaClientPromise = (async () => {
+      const { LambdaClient } = await import("@aws-sdk/client-lambda");
+      return new LambdaClient({});
+    })();
+  }
+  return cachedLambdaClientPromise;
+}
+
+/** The trigger routes' async-invoke seam in AWS: an `InvocationType: "Event"`
+ *  invoke of the news worker function, so this call returns as soon as the
+ *  invoke request is accepted, before the cycle itself runs. The worker
+ *  function's name is a deployment parameter — the CDK phase that wires this
+ *  Lambda's IAM policy to invoke it also sets `NEWS_WORKER_FUNCTION_NAME`. */
+function createLambdaNewsWorkerInvoker({ functionName }) {
+  return async function invokeNewsWorker(sessionKey, { mode, cycleId, body }) {
+    const { InvokeCommand } = await import("@aws-sdk/client-lambda");
+    const client = await loadLambdaClient();
+    await client.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: "Event",
+      Payload: Buffer.from(JSON.stringify({ sessionKey, mode, cycleId, body })),
+    }));
+  };
+}
+
 /** The Lambda entry point esbuild bundles. A `{"mode":"reconcile"}` event
  *  (the daily EventBridge rule's static input) runs the physical recount;
  *  anything else is a function-URL HTTP request through the same handler
@@ -420,6 +579,7 @@ export const handler = async (event) => {
   const rowService = createRowServiceHandler({
     createSessionBackend: (sessionKey) => createDynamoRowBackend({ client, tableName, sessionKey, softDelete: true }),
     counters,
+    invokeNewsWorker: createLambdaNewsWorkerInvoker({ functionName: process.env.NEWS_WORKER_FUNCTION_NAME }),
     ttlSeconds,
     log: () => {},
   });

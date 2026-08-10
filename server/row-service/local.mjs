@@ -14,7 +14,12 @@
 import { createServer } from "node:http";
 
 import { createRowMemoryBackend } from "../../src/adapters/memory/row-backend-memory.mjs";
-import { createRowServiceHandler, DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, MUTATION_RATE_WINDOW_SECONDS } from "./handler.mjs";
+import {
+  createRowServiceHandler, DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, MUTATION_RATE_WINDOW_SECONDS,
+  DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR, CYCLE_RATE_WINDOW_SECONDS,
+} from "./handler.mjs";
+import { createLocalNewsWorker } from "../news-worker/local.mjs";
+import { createInMemorySourceGate } from "../news-worker/handler.mjs";
 
 const DEFAULT_TABLE_ROW_CAP = 2_000_000;
 const DEFAULT_TTL_DAYS = 7;
@@ -23,10 +28,26 @@ function createInMemoryCounters({
   tableRowCap,
   mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR,
   mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS,
+  cycleRateLimit = DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR,
+  cycleRateWindowSeconds = CYCLE_RATE_WINDOW_SECONDS,
   now = () => Math.floor(Date.now() / 1000),
 }) {
   let globalRowCount = 0;
   const mutationWindows = new Map(); // sessionKey -> { count, resetAt }
+  const cycleWindows = new Map(); // sessionKey -> { count, resetAt }
+  const cycleLocks = new Map(); // sessionKey -> lockedAtMs
+
+  function incrementWindow(windows, sessionKey, limit, windowSeconds) {
+    const currentTime = now();
+    let window = windows.get(sessionKey);
+    if (!window || window.resetAt <= currentTime) {
+      window = { count: 0, resetAt: currentTime + windowSeconds };
+      windows.set(sessionKey, window);
+    }
+    if (window.count >= limit) return false;
+    window.count += 1;
+    return true;
+  }
 
   return {
     async incrementGlobalRowCount(n) {
@@ -35,15 +56,22 @@ function createInMemoryCounters({
       return true;
     },
     async incrementMutationRate(sessionKey) {
-      const currentTime = now();
-      let window = mutationWindows.get(sessionKey);
-      if (!window || window.resetAt <= currentTime) {
-        window = { count: 0, resetAt: currentTime + mutationRateWindowSeconds };
-        mutationWindows.set(sessionKey, window);
-      }
-      if (window.count >= mutationRateLimit) return false;
-      window.count += 1;
+      return incrementWindow(mutationWindows, sessionKey, mutationRateLimit, mutationRateWindowSeconds);
+    },
+    async incrementCycleRate(sessionKey) {
+      return incrementWindow(cycleWindows, sessionKey, cycleRateLimit, cycleRateWindowSeconds);
+    },
+    // Synchronous under the hood — no await anywhere in this function body —
+    // so two "concurrent" triggers for the same session can never interleave
+    // between the check and the set, even though callers `await` the result.
+    async acquireCycleLock(sessionKey, { nowMsVal, staleMs }) {
+      const existing = cycleLocks.get(sessionKey);
+      if (existing !== undefined && nowMsVal - existing < staleMs) return false;
+      cycleLocks.set(sessionKey, nowMsVal);
       return true;
+    },
+    async releaseCycleLock(sessionKey) {
+      cycleLocks.delete(sessionKey);
     },
     // Not part of the counters seam handler.mjs calls — reconcile drives
     // this directly, the same way the AWS reconcile mode rewrites its item.
@@ -67,13 +95,24 @@ function readRequestBody(req) {
  *  parameters (`TABLE_ROW_CAP`, `TTL_DAYS`) so a test can fill a tiny cap
  *  or shrink the rate window rather than waiting out the real defaults.
  *  `now` is a clock hook threading through to both the row TTL stamp and
- *  the mutation-rate window, for deterministic tests. */
+ *  the mutation-rate window, for deterministic tests.
+ *
+ *  `newsWorker` (all optional) wires the poll/enrich/ingest trigger routes'
+ *  worker: `fetchersFor(config)`, `getResearchProvider`, `seedPayload`,
+ *  `seedStamp`, `nowMs`, `budgetMs` pass straight through to
+ *  `createLocalNewsWorker` — a test supplies fixture fetchers per source the
+ *  same way `news-fixture:` replay does in-page. Every trigger runs the
+ *  worker in-process without the route awaiting it, so a test that needs the
+ *  cycle finished before asserting calls `drainNewsWorkers()`. */
 export async function createLocalRowService({
   tableRowCap = DEFAULT_TABLE_ROW_CAP,
   ttlDays = DEFAULT_TTL_DAYS,
   mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR,
   mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS,
+  cycleRateLimit = DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR,
+  cycleRateWindowSeconds = CYCLE_RATE_WINDOW_SECONDS,
   now = () => Math.floor(Date.now() / 1000),
+  newsWorker: newsWorkerOptions = {},
   log = () => {},
 } = {}) {
   const sessionBackends = new Map();
@@ -86,12 +125,42 @@ export async function createLocalRowService({
     return backend;
   };
 
-  const counters = createInMemoryCounters({ tableRowCap, mutationRateLimit, mutationRateWindowSeconds, now });
+  const counters = createInMemoryCounters({ tableRowCap, mutationRateLimit, mutationRateWindowSeconds, cycleRateLimit, cycleRateWindowSeconds, now });
   const ttlSeconds = ttlDays == null ? null : ttlDays * 86400;
+
+  const sourceGate = newsWorkerOptions.sourceGate ?? createInMemorySourceGate();
+  const newsWorker = createLocalNewsWorker({
+    getSessionBackend,
+    fetchersFor: newsWorkerOptions.fetchersFor,
+    getResearchProvider: newsWorkerOptions.getResearchProvider,
+    seedPayload: newsWorkerOptions.seedPayload,
+    seedStamp: newsWorkerOptions.seedStamp,
+    now: newsWorkerOptions.now,
+    nowMs: newsWorkerOptions.nowMs,
+    budgetMs: newsWorkerOptions.budgetMs,
+    sourceGate,
+    log: newsWorkerOptions.log,
+  });
+
+  const pendingNewsWorkerCycles = [];
+  async function invokeNewsWorker(sessionKey, { mode, cycleId, body }) {
+    const promise = newsWorker.runCycle({ sessionKey, cycleId, mode, body });
+    pendingNewsWorkerCycles.push(promise);
+    return promise;
+  }
+  /** Awaits every cycle the trigger routes have fired so far — the local
+   *  double's stand-in for "poll the marker until it says done", since the
+   *  worker here runs in-process and a real test should not sleep-poll for
+   *  something it can simply await. */
+  async function drainNewsWorkers() {
+    const pending = pendingNewsWorkerCycles.splice(0, pendingNewsWorkerCycles.length);
+    await Promise.allSettled(pending);
+  }
 
   const rowService = createRowServiceHandler({
     createSessionBackend: getSessionBackend,
     counters,
+    invokeNewsWorker,
     ttlSeconds,
     now,
     log,
@@ -130,5 +199,5 @@ export async function createLocalRowService({
     await new Promise((resolve) => server.close(resolve));
   }
 
-  return { url, close, reconcile, readGlobalRowCount: counters.readGlobalRowCount };
+  return { url, close, reconcile, readGlobalRowCount: counters.readGlobalRowCount, drainNewsWorkers };
 }
