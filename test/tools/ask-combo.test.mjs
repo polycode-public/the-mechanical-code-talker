@@ -644,6 +644,46 @@ test("a negation that empties a clause names the branch that held and what was t
   assert.match(r.content, /Try "which classes inherit from Base" for that branch on its own\./);
 });
 
+test("a qualifier that empties a whole kind offers that qualifier's own branch, not the commit nudge", () => {
+  // fnAlpha is the only function and d/handler.mjs re-exports it, so the
+  // complement really is empty and the answer is right — the nudge beside it
+  // was about commits, which this question never mentions.
+  const r = runAsk("which functions are not exported");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^nothing in the index matches that \(functions\)\./);
+  assert.match(r.content, /Try "which functions are exported" for that branch on its own\./);
+  assert.doesNotMatch(r.content, /who touched/);
+});
+
+test("the branch a whole-kind qualifier offers is one the parser accepts and answers", () => {
+  const r = runAsk("which functions are exported");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["fnAlpha"]);
+});
+
+test("a positive whole-kind qualifier that empties offers the negative branch instead", () => {
+  const r = runAsk("which classes are static");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /Try "which classes are not static" for that branch on its own\./);
+  assert.doesNotMatch(r.content, /who touched/);
+});
+
+test("a qualifier over a set a clause already narrowed keeps the general nudge", () => {
+  // The clause can be what emptied this one, so naming the qualifier's branch
+  // would point past the gap.
+  const r = runAsk("modules importing scripts/g.mjs but not tested");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /for that branch on its own/);
+});
+
+test("a disjunction of two dotted module paths unions both import sets", () => {
+  const r = runAsk("which modules import app/lib/a.mjs or app/lib/b.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), [
+    "app/functions/d/handler.mjs", "app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs",
+  ]);
+});
+
 test("a double negation refuses rather than guessing when nothing supports the inner clause", () => {
   // Nothing imports scripts/g.mjs, so "but not tested" has no set to exclude
   // from and there is no held branch to name.

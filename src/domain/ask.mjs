@@ -2746,6 +2746,45 @@ function coverageGrainNote(parsed, entityType) {
   return `This index records tests edges module to module, so a ${noun} counts as covered exactly when the module it lives in is tested — ask about that module to see the coverage itself.`;
 }
 
+/** The two shapes that filter a whole kind by a qualifier and nothing else:
+ *  the plain "which functions are exported", and the boolean the negative
+ *  polarity compiles to. Both carry the same two facts — which kind, which
+ *  adjective — and the third says which way the question ran. */
+function wholeKindQualifierFilter(parsed) {
+  if (parsed?.node === "qualifier" && parsed.inner?.node === "allOfClass" && parsed.filters?.length) {
+    return { entityType: parsed.inner.entityType || parsed.entityType, filters: parsed.filters, negated: false };
+  }
+  if (parsed?.node !== "boolean" || parsed.atoms?.length !== 2) return null;
+  const [seed, filter] = parsed.atoms;
+  if (seed.op !== "seed" || seed.ast?.node !== "allOfClass") return null;
+  if (filter.kind !== "qual" || !filter.filters?.length) return null;
+  if (filter.op !== "difference" && filter.op !== "intersection") return null;
+  return {
+    entityType: seed.ast.entityType || parsed.entityType,
+    filters: filter.filters,
+    negated: filter.op === "difference",
+  };
+}
+
+/** The branch to point at when a qualifier emptied a set drawn from a whole
+ *  kind. "which functions are not exported" takes every function the index
+ *  holds and removes the exported ones, so the qualifier is the only thing
+ *  that can have emptied it, and the exported functions are the branch worth
+ *  offering. The polarity flips to the side the question did not ask about,
+ *  and both phrasings are ones the parser accepts, so the nudge can never name
+ *  a shape that misses.
+ *
+ *  Only an unrestricted set qualifies. Once a clause narrows it first, that
+ *  clause may be what emptied it, and naming the qualifier's branch would
+ *  point past the real gap. */
+function qualifierBranchNote(parsed) {
+  const filtered = wholeKindQualifierFilter(parsed);
+  if (!filtered) return null;
+  const kindPlural = nounFor(filtered.entityType || "Module", 2);
+  const polarity = filtered.negated ? "" : "not ";
+  return `Try "which ${kindPlural} are ${polarity}${listJoin(filtered.filters)}" for that branch on its own.`;
+}
+
 function renderComposite(parsed, result, graph) {
   if (result.compositeMiss) {
     if (result.reason === "no-prev") {
@@ -3006,7 +3045,9 @@ function renderComposite(parsed, result, graph) {
         miss: true, ambiguous: false, matches: [],
       };
     }
-    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
+    const hint = coverageGrainNote(parsed, result.entityType)
+      || qualifierBranchNote(parsed)
+      || touchesRephraseHint(graph);
     return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
