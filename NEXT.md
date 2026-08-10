@@ -34,8 +34,9 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- Wave 1 (in flight): M0 projection (Opus), E0 detectors (Opus), the combined miss-lead round
-  on chat.mjs (Opus), the news screenshot capture (Sonnet).
+- Wave 1 (in flight): M0 projection (Opus), the combined miss-lead round on chat.mjs (Opus).
+  Landed from wave 1: E0 (merged to main, 6049-test unit tier green), the screenshot capture
+  (both plates delivered, item closed below).
 - Queued behind it: M1/M2/T1 → M3/M4 → M5/T0/T2/E1/T4 → M6/M7/T3/T12/E2/E3 →
   M8/T5/T6/T7/E4 → T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut
   bedrock-meter pins.
@@ -82,11 +83,11 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   `PLAN_MEMORY_BACKEND.md`'s M1/M3 on core.mjs; the fluent-meta-commentary residual is
   recorded with the NER horizon. Closes the scaffolding-prose false positive and
   bedrock-meter's confidence-marker ask.
-- [ ] **Capture both news screenshot candidates with Playwright and present them** — the
-  capture pipeline now photographs the honest empty feed, and the open content call is empty
-  plate vs a baked fixture poll. Produce both shots myself (the empty state as captured today,
-  and a variant with the recorded fixture replayed before capture) and put them in front of
-  the operator so the decision is made looking at the actual plates.
+- [ ] **The news screenshot content call** — both candidates are captured and presented at
+  https://claude.ai/code/artifact/dd7de58f-bdeb-4114-abb8-8330218ed5cf (A: the honest empty
+  plate, pipeline-identical; B: the fixture poll, needs the pipeline to bake the poll and a
+  feed scroll). Open: the operator picks the plate; the winner gets re-captured after the
+  thin-client rebuild flips the page.
 
 ## Discipline
 
