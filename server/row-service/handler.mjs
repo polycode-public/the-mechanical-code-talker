@@ -1,0 +1,428 @@
+// handler.mjs — the row service: a same-origin HTTP surface over a §3.1 row
+// backend. `createRowServiceHandler` is the whole thing — routing, session
+// validation, request caps, and error mapping — and it never touches
+// storage directly: every read or write goes through the backend the caller
+// injects, plus a small `counters` seam for the two things no session-scoped
+// backend can answer (a table-wide cap, a per-session mutation rate).
+//
+// `local.mjs` mounts this core on node:http over the in-memory reference
+// backend — the test double every later phase runs against. `handler`
+// (below) is the AWS entry point: esbuild bundles this file as the Lambda's
+// code, so it also holds the Lambda-event adapter, the real DynamoDB row
+// backend construction, and the DynamoDB-backed counters. Neither entry
+// point adds routing or validation logic of its own; they only wire the
+// core function to a transport and a storage choice.
+
+import {
+  BackendRejected, BackendUnavailable, rowProblems,
+} from "../../src/adapters/memory/row-backend.mjs";
+import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
+
+export const MAX_ROW_SERVICE_BODY_BYTES = 256 * 1024;
+export const DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR = 120;
+export const MUTATION_RATE_WINDOW_SECONDS = 3600;
+
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidSessionKey(value) {
+  return typeof value === "string" && UUID_V4_PATTERN.test(value);
+}
+
+const SESSION_HEADER = "x-tmct-session";
+
+function redactSessionSegment(path) {
+  return path.replace(/\/sessions\/[^/]+/, "/sessions/<redacted>");
+}
+
+function jsonBody(payload) {
+  return payload === undefined ? "" : JSON.stringify(payload);
+}
+
+function respond(status, payload) {
+  return { status, headers: payload === undefined ? {} : { "content-type": "application/json" }, body: jsonBody(payload) };
+}
+
+function fail(status, message) {
+  return respond(status, { error: { message } });
+}
+
+function requestBodyBytes(request) {
+  return Buffer.byteLength(request.body || "", "utf8");
+}
+
+function hasJsonContentType(request) {
+  if (!request.body) return true;
+  const contentType = request.headers?.["content-type"];
+  return typeof contentType === "string" && contentType.split(";")[0].trim().toLowerCase() === "application/json";
+}
+
+function parseJsonBody(request) {
+  try {
+    return { value: request.body ? JSON.parse(request.body) : {} };
+  } catch {
+    return { error: "the request body is not valid JSON" };
+  }
+}
+
+function sessionHeaderValue(request) {
+  return request.headers?.[SESSION_HEADER];
+}
+
+/** The shared guard every mutating route runs first: the caps and the
+ *  content-type check, before anything about the body's shape is asked.
+ *  Returns an early response on rejection, or null to continue. */
+function rejectMalformedMutation(request) {
+  if (requestBodyBytes(request) > MAX_ROW_SERVICE_BODY_BYTES) {
+    return fail(413, `the request body is over the ${MAX_ROW_SERVICE_BODY_BYTES}-byte cap`);
+  }
+  if (!hasJsonContentType(request)) return fail(400, "the request body must be application/json");
+  return null;
+}
+
+/** The session-key gate every route runs: the path segment (mutations) and
+ *  the header (reads, and mutations that also sent one) are each checked
+ *  against the strict v4 shape before any storage call, and a mutation
+ *  carrying both must have them agree. Returns the session key on success,
+ *  or an early response on rejection. */
+function resolveSessionKey(request, { pathSessionKey } = {}) {
+  const headerKey = sessionHeaderValue(request);
+  if (pathSessionKey !== undefined) {
+    if (!isValidSessionKey(pathSessionKey)) return { response: fail(400, "the session key in the path is not a valid v4 UUID") };
+    if (headerKey !== undefined && headerKey !== pathSessionKey) {
+      return { response: fail(400, "the session key in the path and the x-tmct-session header disagree") };
+    }
+    return { sessionKey: pathSessionKey };
+  }
+  if (!isValidSessionKey(headerKey)) return { response: fail(400, "the x-tmct-session header is missing or not a valid v4 UUID") };
+  return { sessionKey: headerKey };
+}
+
+function errorFromBackendFailure(error) {
+  if (error instanceof BackendRejected) return fail(400, error.message);
+  if (error instanceof BackendUnavailable) return fail(503, error.message);
+  throw error;
+}
+
+const ROWS_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/rows$/;
+const META_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/meta\/([^/]+)$/;
+const META_READ_PATH = /^\/api\/meta\/([^/]+)$/;
+
+/** The row-service core: routing, validation, caps, error mapping. Takes no
+ *  storage dependency but the two seams every route needs —
+ *  `createSessionBackend(sessionKey)` for a §3.1 backend scoped to that
+ *  session, and `counters` for the table-wide cap and the per-session
+ *  mutation rate, neither of which any one session's backend can answer on
+ *  its own. `ttlSeconds` (null when unset) is stamped onto every row this
+ *  service writes; the shipped backends do their own TTL bookkeeping only
+ *  when constructed with a `ttlSeconds` of their own, so a consumer wiring
+ *  `createDynamoRowBackend` behind this handler leaves it null and lets the
+ *  service stamp rows once, not twice. */
+export function createRowServiceHandler({
+  createSessionBackend,
+  counters,
+  ttlSeconds = null,
+  now = () => Math.floor(Date.now() / 1000),
+  log = () => {},
+} = {}) {
+  if (typeof createSessionBackend !== "function") {
+    throw new TypeError("createRowServiceHandler needs a createSessionBackend(sessionKey) function");
+  }
+  if (!counters || typeof counters.incrementGlobalRowCount !== "function" || typeof counters.incrementMutationRate !== "function") {
+    throw new TypeError("createRowServiceHandler needs a counters seam with incrementGlobalRowCount and incrementMutationRate");
+  }
+
+  const stampRowExpiry = (row) => (ttlSeconds == null ? row : { ...row, expiresAt: now() + ttlSeconds });
+
+  async function handleGetRows(request) {
+    const gate = resolveSessionKey(request, {});
+    if (gate.response) return gate.response;
+    const backend = await createSessionBackend(gate.sessionKey);
+    const termParam = request.query?.term;
+    const classParam = request.query?.class;
+    let rows;
+    try {
+      rows = termParam
+        ? (typeof backend.readRowsByTerm === "function"
+          ? await backend.readRowsByTerm(termParam)
+          : (await backend.readRows()).filter((row) => row.term === termParam))
+        : await backend.readRows();
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    if (classParam) rows = rows.filter((row) => row.rowClass === classParam);
+    return respond(200, { rows });
+  }
+
+  async function handleGetMeta(request, key) {
+    const gate = resolveSessionKey(request, {});
+    if (gate.response) return gate.response;
+    const backend = await createSessionBackend(gate.sessionKey);
+    let value;
+    try {
+      value = await backend.readMeta(key);
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    if (value === null || value === undefined) return fail(404, "no meta value under that key");
+    return respond(200, { value });
+  }
+
+  async function handlePutRows(request, pathSessionKey) {
+    const gate = resolveSessionKey(request, { pathSessionKey });
+    if (gate.response) return gate.response;
+    const { sessionKey } = gate;
+    const malformed = rejectMalformedMutation(request);
+    if (malformed) return malformed;
+
+    const parsed = parseJsonBody(request);
+    if (parsed.error) return fail(400, parsed.error);
+    const puts = parsed.value?.puts;
+    if (!Array.isArray(puts) || puts.length === 0) return fail(400, "the body must carry a non-empty puts array");
+
+    const stamped = puts.map(stampRowExpiry);
+    for (const row of stamped) {
+      const problems = rowProblems(row);
+      if (problems.length) return fail(400, `invalid row ${JSON.stringify(row?.rowKey ?? null)}: ${problems.join("; ")}`);
+    }
+
+    const rateOk = await counters.incrementMutationRate(sessionKey);
+    if (!rateOk) return fail(429, "this session's mutation rate is over its hourly limit");
+    const capOk = await counters.incrementGlobalRowCount(stamped.length);
+    if (!capOk) return fail(507, "the table has reached its configured row cap");
+
+    const backend = await createSessionBackend(sessionKey);
+    try {
+      await backend.putRows(stamped);
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    return respond(204);
+  }
+
+  async function handleDeleteRows(request, pathSessionKey) {
+    const gate = resolveSessionKey(request, { pathSessionKey });
+    if (gate.response) return gate.response;
+    const { sessionKey } = gate;
+    const malformed = rejectMalformedMutation(request);
+    if (malformed) return malformed;
+
+    const parsed = parseJsonBody(request);
+    if (parsed.error) return fail(400, parsed.error);
+    const body = parsed.value || {};
+    const hasRowKeys = Array.isArray(body.rowKeys);
+    const hasAll = body.all === true;
+    if (hasRowKeys === hasAll) return fail(400, "the body must carry exactly one of rowKeys or {all: true}");
+
+    const rateOk = await counters.incrementMutationRate(sessionKey);
+    if (!rateOk) return fail(429, "this session's mutation rate is over its hourly limit");
+
+    const backend = await createSessionBackend(sessionKey);
+    try {
+      if (hasAll) await backend.deleteAll();
+      else await backend.deleteRows(body.rowKeys);
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    return respond(204);
+  }
+
+  async function handlePutMeta(request, pathSessionKey, key) {
+    const gate = resolveSessionKey(request, { pathSessionKey });
+    if (gate.response) return gate.response;
+    const { sessionKey } = gate;
+    const malformed = rejectMalformedMutation(request);
+    if (malformed) return malformed;
+
+    const parsed = parseJsonBody(request);
+    if (parsed.error) return fail(400, parsed.error);
+    if (typeof parsed.value?.value !== "string") return fail(400, "the body must carry a string value");
+
+    const rateOk = await counters.incrementMutationRate(sessionKey);
+    if (!rateOk) return fail(429, "this session's mutation rate is over its hourly limit");
+
+    const backend = await createSessionBackend(sessionKey);
+    try {
+      await backend.putMeta(key, parsed.value.value);
+    } catch (error) {
+      return errorFromBackendFailure(error);
+    }
+    return respond(204);
+  }
+
+  /** `request` is transport-neutral: `{ method, path, headers (lowercased
+   *  keys), query, body (a string or "") }`. Both `local.mjs` and the Lambda
+   *  entry below adapt their own transport into this shape and adapt the
+   *  `{ status, headers, body }` result back out. */
+  async function handle(request) {
+    const method = request.method?.toUpperCase();
+    const path = request.path || "/";
+    log({ method, path: redactSessionSegment(path) });
+
+    try {
+      if (method === "GET" && path === "/api/rows") return await handleGetRows(request);
+
+      const metaRead = path.match(META_READ_PATH);
+      if (method === "GET" && metaRead) return await handleGetMeta(request, decodeURIComponent(metaRead[1]));
+
+      const rowsMutation = path.match(ROWS_MUTATION_PATH);
+      if (rowsMutation && method === "PUT") return await handlePutRows(request, rowsMutation[1]);
+      if (rowsMutation && method === "DELETE") return await handleDeleteRows(request, rowsMutation[1]);
+
+      const metaMutation = path.match(META_MUTATION_PATH);
+      if (metaMutation && method === "PUT") {
+        return await handlePutMeta(request, metaMutation[1], decodeURIComponent(metaMutation[2]));
+      }
+
+      return fail(404, "no such row-service route");
+    } catch (error) {
+      log({ error: error.message });
+      return fail(500, "the row service failed unexpectedly");
+    }
+  }
+
+  return { handle };
+}
+
+// ---------------------------------------------------------------------------
+// The AWS entry point. Bundled directly as the Lambda's code
+// (`npm run build:row-service`), invoked either by the function URL (a
+// row-service HTTP request, API Gateway payload format 2.0) or by the daily
+// EventBridge rule with a static `{"mode":"reconcile"}` input. Both paths
+// share one lazily-built document client per execution environment; a fresh
+// `createSessionBackend` result per call is still the rule (§3.6), since
+// building the wrapper object is cheap and keeps every invocation's session
+// scoping honest even when the container is reused.
+
+const GLOBAL_COUNTER_SK = "counter";
+const META_PARTITION_KEY = "_meta";
+const RATE_SK_PREFIX = "rate#";
+
+let cachedDynamoClientPromise = null;
+async function loadDocumentClient() {
+  if (!cachedDynamoClientPromise) {
+    cachedDynamoClientPromise = (async () => {
+      const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
+      const { DynamoDBDocumentClient } = await import("@aws-sdk/lib-dynamodb");
+      return DynamoDBDocumentClient.from(new DynamoDBClient({}));
+    })();
+  }
+  return cachedDynamoClientPromise;
+}
+
+/** The counters seam over raw DynamoDB items in the same table the row
+ *  backend uses, under the reserved `_meta` partition no valid v4 session
+ *  key can ever collide with. Both counters are single conditional
+ *  `UpdateCommand`s: the condition either the item doesn't exist yet or the
+ *  running count still leaves room, so a call that would cross the limit
+ *  fails the condition and applies nothing. */
+function createDynamoCounters({ client, tableName, tableRowCap, mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS, now = () => Math.floor(Date.now() / 1000) }) {
+  async function conditionalAdd({ sk, amount, limit, expiresAt }) {
+    const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
+    try {
+      await client.send(new UpdateCommand({
+        TableName: tableName,
+        Key: { pk: META_PARTITION_KEY, sk },
+        UpdateExpression: expiresAt === undefined
+          ? "ADD #count :amount"
+          : "ADD #count :amount SET #expiresAt = if_not_exists(#expiresAt, :expiresAt)",
+        ConditionExpression: "attribute_not_exists(#count) OR #count <= :threshold",
+        ExpressionAttributeNames: expiresAt === undefined
+          ? { "#count": "count" }
+          : { "#count": "count", "#expiresAt": "expiresAt" },
+        ExpressionAttributeValues: expiresAt === undefined
+          ? { ":amount": amount, ":threshold": limit - amount }
+          : { ":amount": amount, ":threshold": limit - amount, ":expiresAt": expiresAt },
+      }));
+      return true;
+    } catch (error) {
+      if (error?.name === "ConditionalCheckFailedException") return false;
+      throw new BackendUnavailable(`the row-service counter update failed: ${error.message}`, { cause: error });
+    }
+  }
+
+  return {
+    async incrementGlobalRowCount(n) {
+      return conditionalAdd({ sk: GLOBAL_COUNTER_SK, amount: n, limit: tableRowCap });
+    },
+    async incrementMutationRate(sessionKey) {
+      return conditionalAdd({
+        sk: `${RATE_SK_PREFIX}${sessionKey}`,
+        amount: 1,
+        limit: mutationRateLimit,
+        expiresAt: now() + mutationRateWindowSeconds,
+      });
+    },
+    /** Rewrites the counter to a physical count. Not conditional: the daily
+     *  reconcile is the one caller allowed to move the counter down. */
+    async setGlobalRowCount(n) {
+      const { PutCommand } = await import("@aws-sdk/lib-dynamodb");
+      await client.send(new PutCommand({ TableName: tableName, Item: { pk: META_PARTITION_KEY, sk: GLOBAL_COUNTER_SK, count: n } }));
+    },
+  };
+}
+
+/** The daily reconcile: a paginated `Scan` (`Select: "COUNT"`) over the
+ *  whole table, physical and unfiltered, so a soft-deleted row still counts
+ *  until TTL takes it — then the counter is rewritten from that number.
+ *  Drift between reconciles only ever pushes the counter up (§29.7), so
+ *  this is the one place it comes back down. */
+async function reconcileTableRowCount({ client, tableName, counters }) {
+  const { ScanCommand } = await import("@aws-sdk/lib-dynamodb");
+  let total = 0;
+  let exclusiveStartKey;
+  do {
+    const result = await client.send(new ScanCommand({ TableName: tableName, Select: "COUNT", ExclusiveStartKey: exclusiveStartKey }));
+    total += result.Count || 0;
+    exclusiveStartKey = result.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+  await counters.setGlobalRowCount(total);
+  return total;
+}
+
+function requestFromLambdaEvent(event) {
+  const headers = {};
+  for (const [key, value] of Object.entries(event.headers || {})) headers[key.toLowerCase()] = value;
+  let body = event.body || "";
+  if (event.isBase64Encoded && body) body = Buffer.from(body, "base64").toString("utf8");
+  return {
+    method: event.requestContext?.http?.method || "GET",
+    path: event.rawPath || "/",
+    headers,
+    query: event.queryStringParameters || {},
+    body,
+  };
+}
+
+function lambdaResponseFromResult(result) {
+  return { statusCode: result.status, headers: result.headers, body: result.body, isBase64Encoded: false };
+}
+
+function rowServiceConfigFromEnv() {
+  const ttlDays = process.env.TTL_DAYS ? Number(process.env.TTL_DAYS) : 7;
+  const tableRowCap = process.env.TABLE_ROW_CAP ? Number(process.env.TABLE_ROW_CAP) : 2_000_000;
+  return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, tableRowCap };
+}
+
+/** The Lambda entry point esbuild bundles. A `{"mode":"reconcile"}` event
+ *  (the daily EventBridge rule's static input) runs the physical recount;
+ *  anything else is a function-URL HTTP request through the same handler
+ *  every other consumer of this file exercises. */
+export const handler = async (event) => {
+  const { tableName, ttlSeconds, tableRowCap } = rowServiceConfigFromEnv();
+  const client = await loadDocumentClient();
+  const counters = createDynamoCounters({ client, tableName, tableRowCap });
+
+  if (event?.mode === "reconcile") {
+    const total = await reconcileTableRowCount({ client, tableName, counters });
+    return { reconciled: total };
+  }
+
+  const rowService = createRowServiceHandler({
+    createSessionBackend: (sessionKey) => createDynamoRowBackend({ client, tableName, sessionKey, softDelete: true }),
+    counters,
+    ttlSeconds,
+    log: () => {},
+  });
+  const result = await rowService.handle(requestFromLambdaEvent(event));
+  return lambdaResponseFromResult(result);
+};
