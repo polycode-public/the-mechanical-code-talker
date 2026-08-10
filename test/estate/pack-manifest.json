@@ -537,6 +537,7 @@
   "src/surfaces/web/digest-client.mjs",
   "src/surfaces/web/engine-surface.mjs",
   "src/surfaces/web/graph-ask-browser-entry.mjs",
+  "src/surfaces/web/http-row-backend.mjs",
   "src/surfaces/web/idb-persist.mjs",
   "src/surfaces/web/ingest-browser-entry.mjs",
   "src/surfaces/web/ledger-browser-entry.mjs",
