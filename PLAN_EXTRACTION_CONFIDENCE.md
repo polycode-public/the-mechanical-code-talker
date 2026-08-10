@@ -337,6 +337,14 @@ scaffolding hubs; the other fixtures unchanged.
 
 ### E3 — the visible caveat on read-back (`chat.mjs`) (Opus, after E1)
 
+**BUILT** (2026-08-10, merged): `factLineTail(f)` owns every fact line's tail (caveat then
+citation); all seven hand-rolled citation composers converge on `citedFactPhrase` (the two
+the plan named plus five identical siblings); composite renderers declare a finding from
+any row behind the line; `memoryFacts` now carries `extraction` through (it dropped it —
+without that the caveat was invisible on the raw-Fact lanes); the chain splice runs by
+suffix match ahead of the whole tail. 9 caveat tests + 4 byte-pinned corpus rows; the
+trailer chain and marker tests stay green; no judged round per the guard posture.
+
 **Owns** `src/services/chat.mjs` (`renderFactLine` at ~8098 applies `findingCaveat(f)`
 beside the citation, the same slot the corpusWeak "possibly:" hedge already proves out; the
 enumerated inline composers — the union, enumeration, only-line and chain renderers and the
