@@ -1,6 +1,6 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend, the AWS row service behind the deployed demos, and a consumer-hosted turn surface over a Dynamo corpus
 
-Status: DESIGN, revised six times. The first draft made news.html an IndexedDB consumer; the
+Status: DESIGN, revised seven times. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every
 backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and
@@ -18,7 +18,14 @@ absorbed the turn-service plan whole — this document now also owns the consume
 surface, the Dynamo corpus supplement and its loader, retrieve-then-resolve, and the circuit
 breakers — generalized the good-citizen pattern to the external research and reference sources,
 gave chat.html and ledger.html an opt-in AWS backend mode behind a slider and a query
-parameter, and renamed the home grid to the demo grid with nine deep-linked buttons. The consumer
+parameter, and renamed the home grid to the demo grid with nine deep-linked buttons. The seventh
+(same day) fixed the operator's remaining calls: the turn Lambda bundles the full xl seed
+(§3.18); three corpus bands ship first-class with the Wikidata slice as the demo's loaded set
+and the wikipedia-derived band deferred to its own future design doc (§3.13); the AWS spend is
+approved in full (§3.8); the build, when it comes, runs as one continuous campaign (§28); T1
+calibrates the retrieval budgets from measurements before anything consumes them (§3.15.1);
+fuzzy retrieval ships on, mode-configurable and per-request togglable (§3.15.2); and T4 is
+guarded by tier-1 alone, the judge spend declined (§20). The consumer
 requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
@@ -125,8 +132,9 @@ and the reference lanes are in-process library calls.
 
 **The offline research and reference sources.** `researchSource: "simple-wikipedia-pack"` and
 the shipped reference pack already serve wiki-backed lookups with zero network. On the turn
-surface they are the wiki story; the wikipedia-derived corpus band extends the same posture to
-much larger data.
+surface they are the wiki story; the deferred wikipedia-derived band (§3.13,
+`PLAN_WIKIPEDIA_BAND.md`) would extend the same posture to much larger data when its own
+design lands.
 
 **The external sources and their manners today.** The live research adapters (wikipedia,
 wikidata) fetch over HTTPS behind a 2 s per-source courtesy throttle. The news page's KB
@@ -192,8 +200,9 @@ order on read never carries meaning.
   tmct's own deployment exists to demonstrate it working end to end. Every consumer-facing
   sentence in docs and site copy frames it that way.
 - **No egress from the turn Lambda.** Its only network is DynamoDB. No live wikipedia, no
-  outbound HTTP of any kind. Wiki-backed search is served by the wikipedia-derived corpus band
-  and the shipped reference pack; every fact a turn can ground comes from a committed or loaded
+  outbound HTTP of any kind. Wiki-backed search is served by the shipped reference pack and
+  the loaded corpus bands (the deferred wikipedia-derived band extends it when its own plan
+  lands); every fact a turn can ground comes from a committed or loaded
   source, and its provenance says which.
 - **Every remote call is a good citizen.** Dynamo corpus Queries and external source fetches
   alike run under declared budgets, back off inside them, degrade honestly, and sit behind a
@@ -470,6 +479,7 @@ path, and the first write under a fresh key creates the session implicitly.
 | DELETE /api/sessions/:uuid/rows | deleteRows / deleteAll | 204 | **soft delete, never physical**: body `{rowKeys:[…]}` marks the named rows deleted (an UpdateItem stamping `deletedAt` — §3.10's soft-delete mode) for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` marks every session row and meta entry. Nothing is removed from the table, the global counter never decrements, and TTL alone reclaims the items (§29.4) |
 | GET /api/meta/:key | readMeta | 200 `{value}` / 404 | key in `x-tmct-session`; client maps 404 to null; a soft-deleted meta entry reads as absent |
 | PUT /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
+| GET /api/corpus/:band/rows?term=X&fuzzy=0\|1 | `queryBandTerm` (§3.14) | 200 `{rows:[…]}` | lands with T6. Read-only, no session key, band name validated against the configured band list (404 otherwise); one sort-key prefix Query per requested term, `fuzzy=1` adding the term's deterministic variants (§3.15.2); page-capped; serves the pages' corpus enrichment and nothing writes through it |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
 (`GET /api/rows?class=fact&term=X` → a sort-key prefix query) because the sk layout (§3.3) makes
@@ -560,6 +570,11 @@ already runs `cdk deploy` on the same stack; the job gains the `build:row-servic
 UUID, GET it back, DELETE with `{all: true}`, against the deployed origin — measurement after
 release, never a test tier.
 
+**Spend, approved.** The operator signed off the full posture on 2026-08-10: the WAF
+rate rules (~$8/month), the CloudWatch billing and table alarms (~$1/month), and the
+on-demand table and Lambda (pennies at demo traffic) — roughly $9–10/month standing plus
+usage. The infra phases (M7, T6) carry no separate spend gate.
+
 ### 3.9 The abuse surface, enumerated
 
 An anonymous write API on a public page, addressed by client-minted keys. The structural
@@ -579,6 +594,7 @@ every attack below is bounded to the attacker's own sessions and the account's b
 | session fixation / chosen keys | the strict UUIDv4 format check rejects any attacker-shaped or low-entropy key, and the page only ever uses a key it minted itself or one from its own localStorage — never from the URL or another origin |
 | stored XSS through fact text (a taught fact carrying markup, read back into the DOM) | render-side escaping is already the page's rule — answer text lands via text nodes, never markup injection — and M8's e2e pins it: teach a fact containing a script tag through the real flow, reload from the service double, assert zero script execution and the literal text on screen. Isolation (above) bounds a miss to self-XSS even before the pin |
 | enumeration / cross-session reads | structural: 122 bits of key entropy, the format check as the floor, no endpoint that lists or returns keys, and an unknown key reading as an empty session (a probe learns nothing) |
+| corpus read flooding (the one sessionless route) | the corpus read (§3.8) serves public reference data, so the exposure is cost, not confidentiality: the same per-IP WAF rule covers `/api/*` whole, the route is one page-capped Query per term (fuzzy adds a capped variant count, §3.15.2), reserved concurrency queues the rest, and the read is `ConsistentRead: false` — eventually consistent is fine for a never-mutated band and halves the read cost |
 
 ### 3.10 The DynamoDB backend ships in the library
 
@@ -686,7 +702,7 @@ One route joins the row service's table (§3.8):
 
 | method + path | success | notes |
 | --- | --- | --- |
-| POST /api/sessions/:uuid/turn | 200 `{reply, factsTouched, narration}` | body `{text}`, ≤ 4 KB (413 above); the key rides the path because a turn can write, same strict v4 rule, implicit session creation on the first learning turn; 429 over the turn rate; 507 surfaces as the `BackendUnavailable` posture — the turn still answers, learned facts are not persisted, and the reply says so |
+| POST /api/sessions/:uuid/turn | 200 `{reply, factsTouched, narration}` | body `{text, retrieval?: {fuzzy}}`, ≤ 4 KB (413 above) — the optional `retrieval.fuzzy` is §3.15.2's per-request override, most specific rung of the mode ladder; the key rides the path because a turn can write, same strict v4 rule, implicit session creation on the first learning turn; 429 over the turn rate; 507 surfaces as the `BackendUnavailable` posture — the turn still answers, learned facts are not persisted, and the reply says so |
 
 The handler's sequence, `server/turn-service/handler.mjs`:
 
@@ -721,10 +737,27 @@ it) and retrieval read amplification (the §3.15.1 budgets and per-session meter
 
 ### 3.13 The corpus supplement: shared read-only partitions
 
-Corpora too large to bundle live in the same table under band partitions:
+Corpora too large to bundle live in the same table under band partitions. Three bands are
+first-class deliverables of this plan — their build pipelines ship in-tree (T0) and any
+credentialed operator loads or clears them with the CLI verb (§3.14):
 
-- pk `corpus:<band>` (e.g. `corpus:wordnet-complete`, `corpus:conceptnet-full`,
-  `corpus:wikidata-slice`, `corpus:simplewiki-derived`); sk `fact#<term>#<rowKey>`, the same
+- **`corpus:wikidata-slice`** — CC0, no attribution burden. **The demo's loaded set**: the CI
+  post-deploy job loads this band and only this band.
+- **`corpus:wordnet-complete`** — the WordNet licence (permissive, attribution in the band's
+  NOTICE); load-ready, not loaded by the demo.
+- **`corpus:conceptnet-full`** — CC BY-SA. Load-ready, not loaded by the demo; its pipeline
+  emits a NOTICE alongside the jsonl (the `commonsenseqa-sample.NOTICE` precedent), the
+  loader writes the licence into the band manifest, and citations of its facts carry the
+  attribution — whoever loads it owns serving that NOTICE wherever the band's answers appear.
+
+A fourth, the wikipedia-derived band (`corpus:simplewiki-derived` — extracted article facts
+at a scale the reference pack doesn't attempt), is future work with its own design doc:
+`PLAN_WIKIPEDIA_BAND.md`, authored as a stub-scoped design reference by T10. This plan ships
+the partition naming and nothing else for it.
+
+The partition layout, shared by every band:
+
+- pk `corpus:<band>`; sk `fact#<term>#<rowKey>`, the same
   layout as session fact rows (§3.3), so a term read is one `begins_with` Query;
 - rows are §3.2 wire rows: content-addressed `rowKey`, `rowClass: "fact"`, canonical
   `term`, `json` ≤ 4 KB, **no `expiresAt`** — bands never expire;
@@ -732,9 +765,12 @@ Corpora too large to bundle live in the same table under band partitions:
   sourceDigest}` — the loader's idempotency check and the citation's version;
 - outside the global session counter (§3.8): the cap protects against anonymous writes, and
   bands are written only by the credentialed loader;
-- unreachable through the public API by construction: every service route validates the
-  session key as a UUIDv4, and `corpus:<band>` is not one. No new validation is needed; the
-  existing check is the wall.
+- unwritable through the public API by construction: every session route validates its key as
+  a UUIDv4, and `corpus:<band>` is not one, so no anonymous caller can write a band. Reads get
+  exactly one deliberate route — the read-only, term-scoped corpus read (§3.8's table, landing
+  with T6) that serves the pages' corpus enrichment (§3.15.2). Band data is public reference
+  content; the route exposes nothing a bundled corpus doesn't, and its abuse surface is a
+  §3.9 row.
 
 Band fact provenance is stamped at load time from the band's source, in the existing corpus
 grammar (`corpus:<name>`), with the manifest version available to citations. No new provenance
@@ -746,8 +782,9 @@ grammar.
 `tmct corpus clear <band> [--table <name>]`, following `cli-verbs.mjs`'s pattern (one
 `CLI_VERBS` entry, `bin/tmct.mjs` dispatch, help text in the two-column layout).
 
-- **Load**: stream the band source (a jsonl of wire-row-shaped facts, produced by per-band
-  build scripts out of this plan's scope for anything not already in-tree), write with
+- **Load**: stream the band source (a jsonl of wire-row-shaped facts, produced by the T0
+  build pipelines for the three first-class bands; any other band supplies its own jsonl in
+  the same shape), write with
   `BatchWriteItem` in 25s, bounded concurrency, backoff on throttle. Content-addressed keys
   make re-runs idempotent overwrites. The manifest row is written last; a run that dies
   mid-load leaves individually valid rows and a stale manifest, and the re-run completes it.
@@ -777,9 +814,10 @@ The sequence, in `src/domain/retrieval-plan.mjs` (pure) and
 `src/services/subgraph-retrieval.mjs` (executes the plan over a document client):
 
 1. **Term extraction** (pure): the turn text's content terms, folded through `normFactTerm`
-   and the lexicon's lemma/plural folds, plus deterministic fuzzy variants — a fixed edit
-   distance over the lexicon's own vocabulary with the real-word collision table as the guard,
-   no scoring, no ranking, capped per term. Sorted output.
+   and the lexicon's lemma/plural folds, plus — when the fuzzy mode is on (§3.15.2; on by
+   default) — deterministic fuzzy variants: a fixed edit distance over the lexicon's own
+   vocabulary with the real-word collision table as the guard, no scoring, no ranking, capped
+   per term. Sorted output.
 2. **Hop plan** (pure): for each term, a k-hop relation expansion (k fixed at 2, matching the
    engine's two-hop alias chase; a config constant, not a request option) plus the full
    `rdfs:subClassOf` ancestry chain (the ontology is shallow; ancestry is what the one-hop
@@ -793,10 +831,13 @@ The sequence, in `src/domain/retrieval-plan.mjs` (pure) and
 5. The engine runs. It cannot tell a retrieved fact from a seed fact; provenance carries the
    difference into citations.
 
-Determinism: steps 1–3 are pure functions of (turn text, corpus state, fixed caps). Sorted
+Determinism: steps 1–3 are pure functions of (turn text, fuzzy mode, corpus state, fixed
+caps). The fuzzy mode is an input like the text — same query, same mode, same corpus gives
+the same subgraph; flipping the mode is asking a different retrieval, honestly. Sorted
 traversal means a budget cut always lands at the same row for the same inputs. The conformance
 of this claim is a unit test feeding the same plan twice and demanding identical subgraphs,
-and once more with a lowered budget demanding a reproducible prefix.
+once more with a lowered budget demanding a reproducible prefix, and once per fuzzy mode
+demanding each mode's own stable answer.
 
 What this does not cover, honestly: a term that only becomes relevant *mid-resolution*, beyond
 k hops from any query term, stays outside the subgraph and reads as an honest miss — exactly
@@ -807,9 +848,14 @@ horizon (§30) if measurement ever shows the bounds pinching.
 #### 3.15.1 The retrieval budgets
 
 All fixed constants, one frozen exported object (`RETRIEVAL_BUDGETS` in
-`subgraph-retrieval.mjs`), changed only by a code change:
+`subgraph-retrieval.mjs`), changed only by a code change. **The numbers below are starting
+hypotheses, not decisions.** T1 ships its measurement harness before anything consumes these
+budgets: it replays a committed query set against the fixture band, publishes
+subgraph-size/latency/budget-hit tables (and the same tables with fuzzy off — §3.15.2), and
+the frozen constants are set from those measurements, recorded in T1's build marker, before
+T3's handler ever reads them.
 
-| budget | default | trips into |
+| budget | starting hypothesis | trips into |
 | --- | --- | --- |
 | fuzzy variants per term | 4 | fewer variants |
 | hop depth k | 2 | plan truncation |
@@ -827,6 +873,33 @@ All fixed constants, one frozen exported object (`RETRIEVAL_BUDGETS` in
   cannot monopolize table throughput.
 - Every turn's narration carries the retrieval metrics — subgraph size, Queries issued, which
   budget tripped — which is the tuning instrument for k and the caps.
+
+#### 3.15.2 The fuzzy mode: on by default, configurable, per-request
+
+Fuzzy variant expansion ships enabled. Its relevance over a large corpus is unmeasured, which
+is exactly why T1's harness runs its whole calibration set twice — fuzzy on and off — and
+publishes both tables; the budgets bound the cost either way, and §29.15 records the accepted
+worst case (wasted rows inside the budget, never a wrong answer).
+
+The mode resolves the same way every tmct option does, most specific first:
+
+1. **per request** — the turn endpoint's body accepts an optional `retrieval: {fuzzy: boolean}`;
+   the corpus read route carries it as `?fuzzy=0|1` (§3.8);
+2. **environment** — `TMCT_RETRIEVAL_FUZZY=0|1`;
+3. **config** — `tmct.toml`'s `[retrieval] fuzzy = true|false`;
+4. **default** — on.
+
+**Where news.html meets it.** The page never calls the turn endpoint (§30); its corpus
+contact is the enrichment path. In AWS mode a `dynamo-corpus` KB source joins the page's
+enrichment roster (registered through the same source registry the other KB sources use),
+fetching the corpus read route for each fact-ungrounded term — the loaded demo band, term-
+scoped, read-only. The page surfaces a visible fuzzy toggle beside its other enrichment
+controls: on, the source's requests carry `fuzzy=1`, the route queries the term's
+deterministic variants too, and whatever grounds joins the session's rows with band
+provenance — the operator's "include the fuzzy-matched terms in the subgraph", at the page's
+enrichment grain. The toggle goes live at T8, which is when the source can exist: it needs
+T0's bands and T6's route, and until then the page has no corpus-touching request. Local mode
+never touches the corpus; the toggle renders only in AWS mode.
 
 ### 3.16 Good citizens and circuit breakers, on both transports
 
@@ -919,12 +992,18 @@ point-answers, and a lane-inventory test asserting every enumeration-class lane 
 
 ### 3.18 Cold start and the seed band
 
-The xl band set is 63,470 facts, ~93.5 MB raw JSON; parsing it is a multi-second cold start
-and the reason the corpus-in-Dynamo path exists. The turn tier bundles the tier-1 seed (the
-same bands `tmct init` seeds by default) and nothing larger; everything xl-sized and beyond
-lives in corpus bands behind retrieval. T3's acceptance measures the cold boot with the
-bundled band and publishes the number in the plan's build marker; provisioned concurrency is
-the named fallback lever if that measurement disappoints, priced, and not the plan.
+The turn tier bundles the **full xl band set** — 63,470 facts, ~93.5 MB raw JSON, well inside
+the Lambda layer limit — the operator's call: a cold start pays the multi-second parse, and in
+exchange the Lambda answers exactly like the browser demo even with every corpus band
+unreachable, because the breaker's skip mode (§3.16) then runs over the same seed the deployed
+pages ship. The near-empty-boot alternative (bundle almost nothing, lean on corpus retrieval
+for the base) is rejected: it would make the surface's baseline competence depend on DynamoDB
+being up, and a breaker-open turn would be a much poorer product than the one the browser
+already demonstrates. Corpus bands exist for the corpora *larger* than xl (§3.13), not to slim
+the seed. Warm invocations pay nothing — the parsed payload lives for the container's
+lifetime. T3's acceptance measures the cold boot with the xl bundle and publishes the number
+in the plan's build marker; provisioned concurrency is the named fallback lever if that
+measurement disappoints, priced when needed, and not the plan.
 
 ### 3.19 Page backend modes: the slider and the query parameter
 
@@ -1225,26 +1304,44 @@ IAM, the TTL value, their live e2e, the S3-path retirement.
 
 ---
 
-## 16. Phase T0 — corpus bands and the loader
+## 16. Phase T0 — corpus bands, the loader, and the three band pipelines
 
 **Owns** `src/adapters/memory/corpus-bands.mjs` (new), `src/services/corpus-loader.mjs` (new),
 `src/domain/cli-verbs.mjs` (the `corpus` entry), `bin/tmct.mjs` (dispatch),
 `test/adapters/corpus-bands.test.mjs`, `test/services/corpus-loader.test.mjs` (new; the loader
 over M4's fake document client, including idempotent re-run, digest no-op, mid-load-death
-recovery, clear). **Sonnet**, after M4.
+recovery, clear) — plus the three first-class band build pipelines under
+`scripts/corpus-bands/` (new: `build-wikidata-slice.mjs`, `build-wordnet-complete.mjs`,
+`build-conceptnet-full.mjs`), each reading its upstream dump from an operator-supplied path
+and emitting the §3.14 jsonl beside a manifest-ready digest; the ConceptNet pipeline also
+emits its CC BY-SA NOTICE and the WordNet pipeline its licence attribution, which the loader
+carries into the band manifest (§3.13). The Wikidata slice's selection rule (which entities
+and relations make the slice) is committed inside its pipeline and recorded in this phase's
+build marker when it lands. Pipelines are tested over committed miniature dump fixtures — no
+network and no real dump in CI; running a real dump is an operator act. **Sonnet**, after M4.
 
 Acceptance: `node --test test/adapters/corpus-bands.test.mjs test/services/corpus-loader.test.mjs`;
+the pipeline test files over the miniature fixtures;
 `node --test test/adapters/cli-verbs.test.mjs`; `npm run test:fast`; CLI smoke.
 
-## 17. Phase T1 — the retrieval module
+## 17. Phase T1 — the retrieval module, calibrated before consumed
 
 **Owns** `src/domain/retrieval-plan.mjs` (new, pure), `src/services/subgraph-retrieval.mjs`
-(new), `test/domain/retrieval-plan.test.mjs`, `test/services/subgraph-retrieval.test.mjs`
-(new; determinism twice-same, budget-cut prefix reproducibility, every budget's trip path,
-backoff-inside-budget, the metrics record). **Opus** — it composes the lexicon fold, the
-collision table, and the hop plan, and its determinism claims carry the surface.
+(new), the calibration harness (`scripts/corpus-bands/calibrate-retrieval.mjs`, new: replays a
+committed query set against the fixture band over the fake client and prints the
+subgraph-size/latency/budget-hit tables), `test/domain/retrieval-plan.test.mjs`,
+`test/services/subgraph-retrieval.test.mjs` (new; determinism twice-same and per fuzzy mode,
+budget-cut prefix reproducibility, every budget's trip path, backoff-inside-budget, the
+metrics record, the mode-resolution ladder of §3.15.2). **Opus** — it composes the lexicon
+fold, the collision table, and the hop plan, and its determinism claims carry the surface.
 
-Acceptance: the two test files; `npm run test:fast`.
+The order inside the phase is fixed: the harness runs first — the full calibration set twice,
+fuzzy on and fuzzy off — its tables land in this phase's build marker, and `RETRIEVAL_BUDGETS`
+is set from those measurements (§3.15.1). T3 consumes calibrated constants, never the starting
+hypotheses.
+
+Acceptance: the two test files; the harness run recorded in the build marker;
+`npm run test:fast`.
 
 ## 18. Phase T2 — the corpus breaker
 
@@ -1273,7 +1370,15 @@ Acceptance: the test file; `npm run test:fast`; the measured boot number recorde
 pinning marked and unmarked shapes, `test/adapters/chat-retrieval-marker.test.mjs` (new,
 including the lane-inventory guard). **Opus**, serialized on `chat.mjs`.
 
-Acceptance: the test file; the corpus runners for the new rows; `node --test
+The phase is guarded by tier-1 alone: its pins, the corpus rows, and the free 1,075-case
+replay both arms — no judged round. The operator declined the judge spend, and the accepted
+risk is stated: the marker's trailing lines land in prose the CEFR judge scores, so a wording
+that reads as hedging could move judged cells unseen until some later judged round crosses
+them. The marker templates are written once and pinned byte-for-byte, which is the cheap half
+of the protection.
+
+Acceptance: the test file; the corpus runners for the new rows; the tier-1 replay both arms
+with zero regressions; `node --test
 test/tools/ask.test.mjs`; `npm run test:fast`; ask bundle rebuilt.
 
 ## 21. Phase T5 — the turn service end to end
@@ -1287,16 +1392,21 @@ network, no AWS.
 
 Acceptance: the e2e file; `npm run test:fast`.
 
-## 22. Phase T6 — turn infra and the CI load job
+## 22. Phase T6 — turn infra, the corpus read route, and the CI load job
 
 **Owns** the turn Lambda constructs in `infra/` (function, reserved concurrency parameter,
-the `/api/sessions/*/turn` behavior wiring), the `corpus:load` post-deploy CI job
-(`.gitlab-ci.yml`: runs `tmct corpus load` per configured band over OIDC; the digest no-op
-makes it cheap every pipeline), and the post-deploy smoke's turn probe (one live turn under a
-fresh UUID). **Sonnet**, after T3.
+the `/api/sessions/*/turn` behavior wiring), the corpus read route
+(`GET /api/corpus/:band/rows` per §3.8's table — one `queryBandTerm` call in the row-service
+handler, band name validated against the configured list, `fuzzy=1` expanding through the T1
+variant machinery, eventually consistent reads; its handler tests join
+`test/server/row-service.test.mjs`), the `corpus:load` post-deploy CI job
+(`.gitlab-ci.yml`: runs `tmct corpus load wikidata-slice` over OIDC — the demo's one loaded
+band (§3.13); the digest no-op makes it cheap every pipeline), and the post-deploy smoke's
+turn probe (one live turn under a fresh UUID) plus a corpus-route probe (one term read against
+the loaded band). **Sonnet**, after T3.
 
-Acceptance: `npx tsc --noEmit` in `infra/`; the CI lint job; the smoke script dry-run against
-the double.
+Acceptance: `npx tsc --noEmit` in `infra/`; `node --test test/server/row-service.test.mjs`;
+the CI lint job; the smoke script dry-run against the double.
 
 ## 23. Phase T7 — the external sources join the pattern
 
@@ -1317,7 +1427,7 @@ existing miss and fallback shapes; the courtesy throttle is unchanged.
 
 Acceptance: the named test files; `npm run test:fast`; ask bundle rebuilt.
 
-## 24. Phase T8 — page backend modes
+## 24. Phase T8 — page backend modes and the news corpus toggle
 
 **Owns** `src/surfaces/web/chat-browser-entry.mjs` and `src/services/chat-page-viz.mjs` (the
 slider, the `?backend=aws` boot switch, the copy flip), `src/surfaces/web/ledger-browser-entry.mjs`
@@ -1326,8 +1436,15 @@ and `src/services/ledger-viz.mjs` (the same treatment), unit coverage for the mo
 reloads), and the two pages' e2e files driving both modes against the M5 double mounted
 same-origin (the M8 pattern): local mode byte-identical to today including its privacy copy;
 AWS mode minting the UUID, writing through the service, restoring on reload, showing the
-server-side copy with the local-only wording absent; no data crossing modes. **Sonnet**,
-after M6 and M8.
+server-side copy with the local-only wording absent; no data crossing modes.
+
+Also owns the news page's corpus enrichment (§3.15.2): the `dynamo-corpus` KB source in
+`src/surfaces/web/news-browser-entry.mjs` (registered in AWS mode only, fetching the T6
+corpus read route for fact-ungrounded terms), the visible fuzzy toggle beside the page's
+enrichment controls in `src/services/news-viz.mjs`, and their pins — the source grounding a
+term from the fixture band through the local double with band provenance on the stored fact,
+the toggle flipping `fuzzy=0|1` on the request, and the toggle absent in any mode without the
+source. **Sonnet**, after M6, M8, T0, and T6.
 
 Acceptance: the touched e2e and unit files; `npm run test:fast`.
 
@@ -1345,8 +1462,11 @@ Acceptance: both page specs; the estate tier; `npm run test:fast`.
 
 **Owns** `docs/adapter-contract.md` (the turn surface section beside M9's backend section),
 `README.md` (one consumer paragraph: host it yourself, load your bands, the demo is our
-deployment), and the site copy the M8 and T8/T9 phases touch, extended with the
-consumer-hosted framing. **Haiku**, after T5 and T9. Docs gate only.
+deployment), the site copy the M8 and T8/T9 phases touch, extended with the
+consumer-hosted framing, and `PLAN_WIKIPEDIA_BAND.md` (new: the stub-scoped design reference
+§3.13 defers to — the band's goal, the extraction question it must answer, and the pointer
+back to this plan's partition layout and loader; a scoping doc for a future design wave, not
+an execution plan). **Haiku**, after T5 and T9. Docs gate only.
 
 ## 27. Phase T11 — consumer handoff
 
@@ -1357,6 +1477,11 @@ bands work identically over their table), and what stays theirs. **Haiku**, last
 ---
 
 ## 28. Concurrency and model tiers
+
+**The campaign shape, decided:** when the operator's build go comes, every phase below runs as
+one continuous campaign under the standing merge/gate/push cadence — no review pauses between
+phase groups. The gates are the phases' own acceptance lists and the full suite at each push
+moment, nothing else.
 
 | phase | files | tier | after | parallel with |
 | --- | --- | --- | --- | --- |
@@ -1371,15 +1496,15 @@ bands work identically over their table), and what stays theirs. **Haiku**, last
 | M8 news.html wiring | news-browser-entry.mjs, news e2e | Sonnet | M1, M6 | M9 prep |
 | M9 docs (backend) | contract doc, README | Haiku | M6, M7 | — |
 | M10 handoff (backend) | bedrock-meter inbox | Haiku | all M | — |
-| T0 bands + loader | corpus-bands.mjs, corpus-loader.mjs, cli-verbs.mjs | Sonnet | M4 | T1, T2 |
-| T1 retrieval | retrieval-plan.mjs, subgraph-retrieval.mjs | Opus | M0 | T0, T2 |
+| T0 bands + loader + pipelines | corpus-bands.mjs, corpus-loader.mjs, cli-verbs.mjs, scripts/corpus-bands/ | Sonnet | M4 | T1, T2 |
+| T1 retrieval + calibration harness | retrieval-plan.mjs, subgraph-retrieval.mjs, calibrate-retrieval.mjs | Opus | M0 | T0, T2 |
 | T2 corpus breaker | dynamo-circuit-breaker.mjs | Sonnet | M4 | T0, T1 |
 | T3 turn handler | server/turn-service/ | Sonnet | T0–T2, M5 | T4 |
 | T4 enumeration marker | chat.mjs, corpus rows | Opus | T1 | T3 |
 | T5 turn e2e | turn-service e2e | Sonnet | T3, T4 | T6 |
-| T6 turn infra + CI load | infra/, .gitlab-ci.yml | Sonnet | T3 | T5 |
+| T6 turn infra + corpus route + CI load | infra/, row-service handler, .gitlab-ci.yml | Sonnet | T3 | T5 |
 | T7 external-source manners | research adapters, chat.mjs, news.mjs, source-breaker.mjs | Opus | T4 | T8 |
-| T8 page modes | chat/ledger entries + viz, page e2e | Sonnet | M6, M8 | T7 |
+| T8 page modes + news corpus toggle | chat/ledger entries + viz, news entry + viz, page e2e | Sonnet | M6, M8, T0, T6 | T7 |
 | T9 demo grid | index.html, site.css, share.mjs, page specs | Sonnet | T8 | — |
 | T10 docs (surface) | contract doc, README, site copy | Haiku | T5, T9 | — |
 | T11 handoff (surface) | bedrock-meter inbox | Haiku | all | — |
@@ -1469,6 +1594,13 @@ ships with it and says so, not that it hides.
     irrelevant rows. The collision table already exists to guard exactly this class; variants
     stay capped, deterministic, and unranked, so the worst case is wasted rows inside the
     budget, never a wrong answer — grounding still has to succeed on the engine's own terms.
+    T1's harness measures both modes before the budgets freeze, and the per-request knob
+    (§3.15.2) means a bad experience is one toggle from an exact-only comparison.
+16. **The xl cold start.** Bundling the full xl seed (§3.18) puts a multi-second parse on
+    every cold Lambda start, by the operator's explicit trade: baseline competence must not
+    depend on DynamoDB. Accepted with the number to be measured and published in T3's build
+    marker; warm containers pay nothing, and provisioned concurrency is the priced lever if
+    the cold tail ever matters at real traffic.
 
 And the two build risks carried from the first draft: **the M3 sqlite refactor** rewrites
 Backend C's persistence internals under a byte-identical-storage pin — the before/after dump
@@ -1496,10 +1628,10 @@ its standing pointer:
 - **Local persistence for news.html, in any form.** The page's durability is the service and
   nothing else (§3.7); rows kept locally across a lost connection would fork from the server
   copy, which is the merge problem above.
-- **Band build pipelines.** Producing the jsonl for WordNet-complete, full ConceptNet, or a
-  wikidata slice from their upstream dumps is per-band tooling with its own licensing
-  diligence, planned per band when a band is wanted. T0 ships the loader and a fixture band;
-  it does not ship the corpora.
+- **The wikipedia-derived band.** The three first-class bands' pipelines are in scope (T0);
+  the wikipedia-derived band is not — extracting article facts at scale is its own design
+  problem, deferred to `PLAN_WIKIPEDIA_BAND.md` (a stub-scoped design reference T10 authors).
+  The partition name is reserved (§3.13) and nothing else here builds toward it.
 - **The browser pages as thin clients.** Every page keeps its in-page engine in every mode —
   that is the product claim. No page calls the turn endpoint; the turn surface exists for
   consumers hosting tmct, and tmct's own deployment demos it.
