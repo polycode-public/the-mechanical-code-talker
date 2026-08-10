@@ -2790,7 +2790,10 @@ function emptiedBranch(graph, ast, opts) {
   if (!ast || typeof ast !== "object") return null;
   if (ast.node === "boolean") {
     const { steps } = foldBoolean(graph, ast, opts);
-    const emptying = steps.find((s) => s.before.length && !s.after.length);
+    // The LAST step that emptied a non-empty set is the one that decided this
+    // answer: a union later in the fold can refill a set an earlier step
+    // emptied, and then the earlier step is not what the reader is missing.
+    const emptying = [...steps].reverse().find((s) => s.before.length && !s.after.length);
     if (!emptying) return emptiedBranch(graph, steps[0]?.atom?.ast, opts);
     const step = atomStep(graph, emptying.atom, emptying.before);
     if (!step) return null;
