@@ -102,13 +102,19 @@ function permissiveRowServiceCounters() {
   };
 }
 
-/** A row service (with a real, in-process news worker) and a turn service,
- *  hand-composed over ONE shared session-backend registry — the pattern
- *  test-e2e/turn-service.test.mjs uses for its own cross-service purge test.
- *  `createLocalRowService` (every other test in this file) keeps its own
- *  private registry, so the chat specs build both services themselves here,
- *  over a registry they can hand to both — the only way a chat-taught
- *  fact's later materialization can see the row the turn service wrote. */
+/** A row service (with a real, in-process news worker) and a turn service
+ *  (with its OWN real, in-process news worker, the turn handler's own
+ *  materialize-on-teach seam), hand-composed over ONE shared session-backend
+ *  registry — the pattern test-e2e/turn-service.test.mjs uses for its own
+ *  cross-service purge test. `createLocalRowService` (every other test in
+ *  this file) keeps its own private registry, so the chat specs build both
+ *  services themselves here, over a registry they can hand to both — the
+ *  only way a chat-taught fact's later materialization can see the row the
+ *  turn service wrote, and the only way the two services' own separate
+ *  in-process workers (one per Lambda in production, same seam here) agree
+ *  on what a session's rows are. `drainNewsWorkers()` awaits every cycle
+ *  either service has fired so far, its own trigger routes and the turn
+ *  handler's materialize invoke alike. */
 async function withChatAndFeedServices({ newsWorker: newsWorkerOptions = {}, turnService: turnServiceOptions = {} } = {}) {
   const sessionBackends = new Map();
   const getSessionBackend = (sessionKey) => {
@@ -134,6 +140,7 @@ async function withChatAndFeedServices({ newsWorker: newsWorkerOptions = {}, tur
   async function drainNewsWorkers() {
     const pending = pendingNewsWorkerCycles.splice(0, pendingNewsWorkerCycles.length);
     await Promise.allSettled(pending);
+    await turnService.drainNewsWorkers();
   }
 
   const rowService = createRowServiceHandler({
@@ -623,7 +630,7 @@ test("pressing start unlocks chat; a taught fact's reply carries a citation and 
   }
 });
 
-test("a chat-taught fact reaches the feed only at the next materialization, not immediately", async () => {
+test("a chat-taught fact reaches the feed through the standing version poll, with no cycle button pressed", async () => {
   const services = await withChatAndFeedServices({
     newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) },
   });
@@ -638,18 +645,16 @@ test("a chat-taught fact reaches the feed only at the next materialization, not 
     await page.locator("#chatSend").click();
     await waitForChatTurns(page, "graph", 1);
 
-    // The standing refresh loop only ever refetches on a feedVersion bump,
-    // and a chat turn never materializes one (§29's staleness window) — a
-    // beat past the loop's own floor interval is long enough to prove
-    // nothing moved, without asserting on the very next tick.
-    await page.waitForTimeout(2500);
-    const graphSizeRightAfterChat = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
-    assert.equal(graphSizeRightAfterChat, graphSizeBefore, "the chat-taught row sits in the store, but the rendered feed still shows the last materialization");
+    // The turn handler's own materialize invoke runs in-process on this
+    // double, fired but not awaited by the turn itself — draining it here
+    // stands in for the seconds the real invoke takes in AWS, so the
+    // assertion below is checking the page's standing poll, not racing the
+    // worker to finish.
+    await services.drainNewsWorkers();
 
-    await page.locator("#enrichNow").click();
-    await waitFor(page, () => document.getElementById("enrichNow").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "enrich settling" });
-    const graphSizeAfterEnrich = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
-    assert.ok(graphSizeAfterEnrich > graphSizeBefore, `enrich's own materialization picked up the chat-taught row: ${graphSizeBefore} -> ${graphSizeAfterEnrich}`);
+    await waitFor(page, (before) => Number(document.querySelector("#tileGraphSize [data-value]").textContent) > before, {
+      timeoutMs: READY_TIMEOUT_MS, label: "the standing loop picking up the chat-taught row with no button pressed", arg: graphSizeBefore,
+    });
   } finally {
     await context.close();
   }

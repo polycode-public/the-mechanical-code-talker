@@ -11,9 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createLocalTurnService } from "../../server/turn-service/local.mjs";
-import { vocabularyFromSeed } from "../../server/turn-service/handler.mjs";
+import { createTurnServiceHandler, vocabularyFromSeed } from "../../server/turn-service/handler.mjs";
 import { main as buildMidSeed, MID_BUNDLE_BANDS } from "../../server/turn-service/build-seed.mjs";
 import { bandFactRow } from "../../src/adapters/memory/corpus-bands.mjs";
+import { createRowMemoryBackend } from "../../src/adapters/memory/row-backend-memory.mjs";
 import { PERSIST_UNAVAILABLE_TEXT } from "../../src/services/chat.mjs";
 
 const SESSION = "01890000-0000-4000-8000-0000000000f1";
@@ -194,6 +195,57 @@ test("a question routed through the ask engine reports the graph's honest emptin
   } finally {
     await service.close();
   }
+});
+
+/** A minimal handler over a fresh in-memory backend and a spy
+ *  `invokeNewsWorker`, bypassing `createLocalTurnService`'s own local news
+ *  worker so these specs check the seam's own call/no-call/failure behavior
+ *  directly, independent of what a real materialize cycle does with it. */
+function directTurnHandler({ invokeNewsWorker } = {}) {
+  return createTurnServiceHandler({
+    createSessionBackend: () => createRowMemoryBackend({}),
+    counters: { async incrementTurnRate() { return true; } },
+    invokeNewsWorker,
+  });
+}
+
+function directTurnRequest(sessionKey, text) {
+  return {
+    method: "POST",
+    path: `/api/sessions/${sessionKey}/turn`,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  };
+}
+
+test("a turn that teaches a fact fires one materialize invoke, carrying the session key and a fresh cycle id", async () => {
+  const calls = [];
+  const turnService = directTurnHandler({ invokeNewsWorker: async (sessionKey, args) => { calls.push({ sessionKey, ...args }); } });
+  const result = await turnService.handle(directTurnRequest(SESSION, "remember that zorblatt is a dog"));
+  assert.equal(result.status, 200);
+  assert.equal(calls.length, 1, "the teach turn fired exactly one invoke");
+  assert.equal(calls[0].sessionKey, SESSION);
+  assert.equal(calls[0].mode, "materialize");
+  assert.equal(typeof calls[0].cycleId, "string");
+  assert.ok(calls[0].cycleId.length > 0);
+});
+
+test("a turn that touches no facts fires no materialize invoke", async () => {
+  const calls = [];
+  const turnService = directTurnHandler({ invokeNewsWorker: async (...args) => { calls.push(args); } });
+  const result = await turnService.handle(directTurnRequest(SESSION, "hello"));
+  assert.equal(result.status, 200);
+  assert.deepEqual(JSON.parse(result.body).factsTouched, []);
+  assert.equal(calls.length, 0, "a turn that learned nothing never reaches the news worker");
+});
+
+test("a materialize invoke that rejects never fails the turn that fired it", async () => {
+  const turnService = directTurnHandler({ invokeNewsWorker: async () => { throw new Error("the worker function is unreachable"); } });
+  const result = await turnService.handle(directTurnRequest(SESSION, "remember that zorblatt is a dog"));
+  assert.equal(result.status, 200);
+  const body = JSON.parse(result.body);
+  assert.ok(body.factsTouched.length > 0, "the teach itself still landed");
+  assert.match(body.reply.toLowerCase(), /zorblatt/, "the reply is unaffected by the invoke's own failure");
 });
 
 test("vocabularyFromSeed collects single-word terms from a payload's own facts", () => {

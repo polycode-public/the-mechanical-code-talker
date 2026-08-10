@@ -22,6 +22,8 @@ import { createDynamoCorpusBreaker, CORPUS_BREAKER_PARTITION_KEY, CORPUS_BREAKER
 import { loadBand } from "../../src/services/corpus-loader.mjs";
 import { termQueryOverDocumentClient } from "../../src/services/subgraph-retrieval.mjs";
 import { createTurnServiceHandler, DEFAULT_TURN_RATE_LIMIT_PER_HOUR, TURN_RATE_WINDOW_SECONDS } from "./handler.mjs";
+import { createLocalNewsWorker } from "../news-worker/local.mjs";
+import { createInMemorySourceGate } from "../news-worker/handler.mjs";
 
 const DEFAULT_TABLE_NAME = "local-turn-service";
 
@@ -243,7 +245,21 @@ async function loadFixtureBand({ client, tableName, band, rows }) {
  *  from one shared factory, the same pattern `row-service/local.mjs` uses to
  *  hand its own registry to the news worker. Supplying one hands this
  *  double ownership of nobody's backends, so `close()` leaves them open for
- *  whichever caller built them. */
+ *  whichever caller built them.
+ *
+ *  `newsWorker` (all optional) wires the materialize-on-teach invoke the
+ *  same way `row-service/local.mjs` wires its own trigger routes: a local
+ *  news worker built over this double's own `getSessionBackend`, so a turn
+ *  whose `factsTouched` is non-empty runs a real in-process materialize
+ *  cycle rather than a stub. `fetchersFor`, `getResearchProvider`,
+ *  `seedPayload`, `seedStamp`, `now`, `nowMs`, `budgetMs`, `sourceGate`,
+ *  `log` pass straight through to `createLocalNewsWorker` — irrelevant to
+ *  materialize mode (it never fetches), but there for a caller that shares
+ *  one `sourceGate`/registry across both services the way
+ *  `test-e2e/pages-news-feed.test.mjs`'s chat specs do. The invoke runs
+ *  without the turn awaiting it, matching the AWS seam; `drainNewsWorkers()`
+ *  on the returned object awaits every materialize cycle fired so far, for a
+ *  test that needs the feed settled before it reads it back. */
 export async function createLocalTurnService({
   seedPayload = { individuals: [] },
   fixtureBand = null,
@@ -254,6 +270,7 @@ export async function createLocalTurnService({
   now = () => Math.floor(Date.now() / 1000),
   sleep = undefined,
   getSessionBackend: sharedGetSessionBackend = null,
+  newsWorker: newsWorkerOptions = {},
   log = () => {},
 } = {}) {
   const bandClient = createFakeConvenienceClient();
@@ -275,6 +292,33 @@ export async function createLocalTurnService({
 
   const globalRowCapCounter = createInMemoryGlobalRowCapCounter(tableRowCap);
 
+  const newsWorker = createLocalNewsWorker({
+    getSessionBackend,
+    fetchersFor: newsWorkerOptions.fetchersFor,
+    getResearchProvider: newsWorkerOptions.getResearchProvider,
+    seedPayload: newsWorkerOptions.seedPayload,
+    seedStamp: newsWorkerOptions.seedStamp,
+    now: newsWorkerOptions.now,
+    nowMs: newsWorkerOptions.nowMs,
+    budgetMs: newsWorkerOptions.budgetMs,
+    sourceGate: newsWorkerOptions.sourceGate ?? createInMemorySourceGate(),
+    log: newsWorkerOptions.log,
+  });
+  const pendingNewsWorkerCycles = [];
+  async function invokeNewsWorker(sessionKey, { mode, cycleId, body }) {
+    const promise = newsWorker.runCycle({ sessionKey, cycleId, mode, body });
+    pendingNewsWorkerCycles.push(promise);
+    return promise;
+  }
+  /** Awaits every materialize cycle the turn handler has fired so far — this
+   *  double's stand-in for "wait for the async invoke to land", since the
+   *  worker here runs in-process and a test should await it rather than
+   *  sleep-poll for something it can simply await. */
+  async function drainNewsWorkers() {
+    const pending = pendingNewsWorkerCycles.splice(0, pendingNewsWorkerCycles.length);
+    await Promise.allSettled(pending);
+  }
+
   const turnService = createTurnServiceHandler({
     createSessionBackend: getSessionBackend,
     seedPayload,
@@ -283,6 +327,7 @@ export async function createLocalTurnService({
     breaker: bands.length ? createDynamoCorpusBreaker({ client: metaClient, tableName, clock: () => now() * 1000 }) : null,
     counters: createInMemoryTurnRateCounter({ turnRateLimit, turnRateWindowSeconds, now }),
     globalRowCapCounter,
+    invokeNewsWorker,
     now: () => now() * 1000,
     sleep,
     log,
@@ -323,5 +368,6 @@ export async function createLocalTurnService({
   return {
     url, close, bandClient, breakerStore: metaClient.store, forceBreakerOpen,
     readGlobalRowCount: globalRowCapCounter.readGlobalRowCount,
+    drainNewsWorkers, getSessionBackend,
   };
 }
