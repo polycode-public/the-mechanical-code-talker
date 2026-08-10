@@ -12,6 +12,9 @@
 // reason: neither is a per-session concern, so neither belongs inside any
 // one session's backend.
 import { createServer } from "node:http";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { createRowMemoryBackend } from "../../src/adapters/memory/row-backend-memory.mjs";
 import {
@@ -20,9 +23,67 @@ import {
 } from "./handler.mjs";
 import { createLocalNewsWorker } from "../news-worker/local.mjs";
 import { createInMemorySourceGate } from "../news-worker/handler.mjs";
+import { loadBand } from "../../src/services/corpus-loader.mjs";
+import { termQueryOverDocumentClient } from "../../src/services/subgraph-retrieval.mjs";
 
 const DEFAULT_TABLE_ROW_CAP = 2_000_000;
 const DEFAULT_TTL_DAYS = 7;
+const DEFAULT_CORPUS_TABLE_NAME = "local-row-service-corpus";
+
+/** A convenience-shaped fake (`.query`) over an in-memory Map — the corpus
+ *  band partition this double serves `GET /api/corpus/:band/rows` from.
+ *  Understands exactly the pk-plus-`begins_with(sk, …)` Query
+ *  `termQueryOverDocumentClient` sends, one page at a time, the same
+ *  deliberate narrowness `server/turn-service/local.mjs`'s own fake uses. */
+function createFakeCorpusConvenienceClient() {
+  const store = new Map();
+  const storeKey = (pk, sk) => `${pk}|${sk}`;
+  return {
+    store,
+    async put({ Item }) {
+      store.set(storeKey(Item.pk, Item.sk), { ...Item });
+      return {};
+    },
+    async get({ Key }) {
+      const item = store.get(storeKey(Key.pk, Key.sk));
+      return { Item: item ? { ...item } : undefined };
+    },
+    async query({ KeyConditionExpression, ExpressionAttributeValues, Limit, ExclusiveStartKey }) {
+      const pk = ExpressionAttributeValues[":pk"];
+      let matches = [...store.values()].filter((item) => item.pk === pk);
+      if (KeyConditionExpression.includes("begins_with")) {
+        const prefix = ExpressionAttributeValues[":sk"];
+        matches = matches.filter((item) => item.sk.startsWith(prefix));
+      } else if (KeyConditionExpression !== "pk = :pk") {
+        throw new Error(`local row service: unrecognized key condition "${KeyConditionExpression}"`);
+      }
+      matches.sort((a, b) => (a.sk < b.sk ? -1 : a.sk > b.sk ? 1 : 0));
+      const startIndex = ExclusiveStartKey ? matches.findIndex((item) => item.sk === ExclusiveStartKey.sk) + 1 : 0;
+      const limit = Limit || matches.length;
+      const page = matches.slice(startIndex, startIndex + limit);
+      const more = startIndex + page.length < matches.length;
+      const last = page.at(-1);
+      return {
+        Items: page.map((item) => ({ ...item })),
+        LastEvaluatedKey: more && last ? { pk: last.pk, sk: last.sk } : undefined,
+      };
+    },
+  };
+}
+
+/** Loads `rows` (wire rows, e.g. built with `bandFactRow`) into `band` on a
+ *  fresh fake convenience client, through the real loader — this double's
+ *  fixture band takes the exact write path a deployed loader run would. */
+async function loadFixtureBand({ client, tableName, band, rows }) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-row-service-"));
+  const path = join(dir, "band.jsonl");
+  try {
+    await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""));
+    if (rows.length) await loadBand({ client, tableName, band, source: path });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
 
 function createInMemoryCounters({
   tableRowCap,
@@ -103,7 +164,16 @@ function readRequestBody(req) {
  *  `createLocalNewsWorker` — a test supplies fixture fetchers per source the
  *  same way `news-fixture:` replay does in-page. Every trigger runs the
  *  worker in-process without the route awaiting it, so a test that needs the
- *  cycle finished before asserting calls `drainNewsWorkers()`. */
+ *  cycle finished before asserting calls `drainNewsWorkers()`.
+ *
+ *  `fixtureBand` (optional, `{name, rows}`) loads a small corpus band of
+ *  wire rows through the real loader, into a corpus-shaped fake convenience
+ *  client separate from the session store — the same fixture-loading
+ *  pattern `server/turn-service/local.mjs` uses — so a test can exercise
+ *  `GET /api/corpus/:band/rows` against real band content. `corpusBands`
+ *  overrides the configured band allow-list directly; omitted, it defaults
+ *  to `[fixtureBand.name]` when a fixture is given, else `[]` (every band
+ *  404s, the shape a deployment with no corpus table wiring needs). */
 export async function createLocalRowService({
   tableRowCap = DEFAULT_TABLE_ROW_CAP,
   ttlDays = DEFAULT_TTL_DAYS,
@@ -113,6 +183,9 @@ export async function createLocalRowService({
   cycleRateWindowSeconds = CYCLE_RATE_WINDOW_SECONDS,
   now = () => Math.floor(Date.now() / 1000),
   newsWorker: newsWorkerOptions = {},
+  fixtureBand = null,
+  corpusBands = fixtureBand ? [fixtureBand.name] : [],
+  corpusTableName = DEFAULT_CORPUS_TABLE_NAME,
   log = () => {},
 } = {}) {
   const sessionBackends = new Map();
@@ -127,6 +200,14 @@ export async function createLocalRowService({
 
   const counters = createInMemoryCounters({ tableRowCap, mutationRateLimit, mutationRateWindowSeconds, cycleRateLimit, cycleRateWindowSeconds, now });
   const ttlSeconds = ttlDays == null ? null : ttlDays * 86400;
+
+  const corpusClient = createFakeCorpusConvenienceClient();
+  if (fixtureBand) {
+    await loadFixtureBand({ client: corpusClient, tableName: corpusTableName, band: fixtureBand.name, rows: fixtureBand.rows });
+  }
+  const queryCorpusTerm = corpusBands.length
+    ? termQueryOverDocumentClient({ client: corpusClient, tableName: corpusTableName })
+    : null;
 
   const sourceGate = newsWorkerOptions.sourceGate ?? createInMemorySourceGate();
   const newsWorker = createLocalNewsWorker({
@@ -162,6 +243,8 @@ export async function createLocalRowService({
     counters,
     invokeNewsWorker,
     ttlSeconds,
+    corpusBands,
+    queryCorpusTerm,
     now,
     log,
   });
@@ -199,5 +282,5 @@ export async function createLocalRowService({
     await new Promise((resolve) => server.close(resolve));
   }
 
-  return { url, close, reconcile, readGlobalRowCount: counters.readGlobalRowCount, drainNewsWorkers };
+  return { url, close, reconcile, readGlobalRowCount: counters.readGlobalRowCount, drainNewsWorkers, corpusClient };
 }

@@ -111,6 +111,7 @@ public/claims-browser.bundle.js
 public/chat-seed.json
 server/turn-service/mid-seed.json
 server/turn-service/dist/
+server/news-worker/dist/
 public/reference-pack/
 public/viz-ticker.mjs
 public/sprites-pack/

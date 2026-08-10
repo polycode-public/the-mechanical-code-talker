@@ -1,12 +1,13 @@
-// The post-deploy smoke script's row-service probe, proven against the same
+// The post-deploy smoke script's row-service probes, proven against the same
 // local double the row-service handler's own tests use — no AWS reachable,
-// and none needed: the probe only ever talks HTTP to whatever base URL it's
+// and none needed: each probe only ever talks HTTP to whatever base URL it's
 // handed.
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createLocalRowService } from "../../server/row-service/local.mjs";
-import { rowServiceRoundTrip } from "../../scripts/post-deploy-smoke.mjs";
+import { rowServiceRoundTrip, corpusReadProbe } from "../../scripts/post-deploy-smoke.mjs";
+import { bandFactRow } from "../../src/adapters/memory/corpus-bands.mjs";
 
 test("the round trip PUTs, reads back, and deletes its own row against a local double", async () => {
   const service = await createLocalRowService();
@@ -23,4 +24,26 @@ test("the round trip PUTs, reads back, and deletes its own row against a local d
 
 test("a missing row service reports the failure instead of throwing past the caller", async () => {
   await assert.rejects(() => rowServiceRoundTrip("http://127.0.0.1:1"), /fetch failed|ECONNREFUSED/);
+});
+
+test("the corpus probe reads its WordNet-only term back from a loaded band", async () => {
+  const rows = [
+    bandFactRow({ subject: "dolphin", predicate: "rdfs:subClassOf", object: "mammal", provenance: "corpus:wordnet-complete", band: "wordnet-complete", ord: 0 }),
+  ];
+  const service = await createLocalRowService({ fixtureBand: { name: "wordnet-complete", rows } });
+  try {
+    const rowCount = await corpusReadProbe(service.url);
+    assert.equal(rowCount, 1);
+  } finally {
+    await service.close();
+  }
+});
+
+test("an unconfigured corpus band reports the failure instead of throwing past the caller", async () => {
+  const service = await createLocalRowService();
+  try {
+    await assert.rejects(() => corpusReadProbe(service.url), /returned 404/);
+  } finally {
+    await service.close();
+  }
 });

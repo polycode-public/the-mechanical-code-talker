@@ -1,17 +1,19 @@
 // scripts/post-deploy-smoke.mjs — after a publish, check that what the world
 // sees matches what we built. Reads package.json's version, then asks npm's
 // registry and the Pages home page what they are serving. Both must agree.
-// It also round-trips one row through the deployed row service, the same
-// same-origin `/api/*` surface the page itself calls.
+// It also round-trips one row through the deployed row service, one live
+// turn through the deployed turn service, and one corpus-band term read —
+// same same-origin `/api/*` surface the page itself calls.
 //
 // Registry and Pages both lag a publish by a minute or two, so an early
 // disagreement means nothing. This polls, and reports one only once the
-// attempts run out. It reads public endpoints, so it needs no token; the row
-// round trip mints its own session key, so it needs no session either.
+// attempts run out. It reads public endpoints, so it needs no token; every
+// probe that needs a session mints its own, so none needs one either.
 //
 // Run it after publish:npm and pages. With nothing published, it reports the
-// disagreement it exists to catch. `rowServiceRoundTrip` is exported so a
-// test can point it at a local double instead of the live origin.
+// disagreement it exists to catch. `rowServiceRoundTrip`, `turnServiceRoundTrip`
+// and `corpusReadProbe` are exported so a test can point them at a local
+// double instead of the live origin.
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -148,6 +150,50 @@ export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
   return sessionKey;
 }
 
+/** POST one turn under a fresh session key, the same round trip the news
+ *  page's chat area and any other turn-service caller takes. Throws unless
+ *  the deployed turn service answers 200 with real reply text; on success
+ *  returns the minted session key. `baseUrl` defaults to the deployed
+ *  origin; a test passes a local double's URL instead. */
+export async function turnServiceRoundTrip(baseUrl = API_BASE_URL) {
+  const origin = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const sessionKey = randomUUID();
+  const res = await fetch(`${origin}/api/sessions/${sessionKey}/turn`, {
+    method: "POST",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "content-type": "application/json", "user-agent": `${name} post-deploy-smoke` },
+    body: JSON.stringify({ text: "hello" }),
+  });
+  if (res.status !== 200) throw new Error(`POST /api/sessions/:uuid/turn returned ${res.status}, not 200`);
+  const { reply } = await res.json();
+  if (typeof reply !== "string" || !reply.trim()) throw new Error("the turn service answered with no reply text");
+  return sessionKey;
+}
+
+// A term the bundled mid-band seed never carries (§3.18 moved WordNet's
+// depth out of the Lambda's own seed and into this band) — the same
+// wordnet-complete/dolphin pairing test/services/turn-handler.test.mjs uses
+// to prove a corpus-band round trip. Only present once the CI corpus:load
+// job has loaded wordnet-complete for real, which is the point of the probe.
+const CORPUS_PROBE_BAND = "wordnet-complete";
+const CORPUS_PROBE_TERM = "dolphin";
+
+/** GET one term from a loaded corpus band, no session key. Throws unless the
+ *  band answers 200 with at least one row; on success returns the row
+ *  count. `baseUrl` defaults to the deployed origin; a test passes a local
+ *  double's URL instead. */
+export async function corpusReadProbe(baseUrl = API_BASE_URL) {
+  const origin = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const res = await fetch(`${origin}/api/corpus/${CORPUS_PROBE_BAND}/rows?term=${CORPUS_PROBE_TERM}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "cache-control": "no-cache", "user-agent": `${name} post-deploy-smoke` },
+  });
+  if (!res.ok) throw new Error(`GET /api/corpus/${CORPUS_PROBE_BAND}/rows returned ${res.status}, not 200`);
+  const { rows } = await res.json();
+  if (!rows.length) throw new Error(`no rows for the WordNet-only probe term "${CORPUS_PROBE_TERM}" — is ${CORPUS_PROBE_BAND} loaded?`);
+  return rows.length;
+}
+
 /** One pass over every endpoint. Never throws; the caller decides when to give up. */
 async function checkOnce() {
   const results = {};
@@ -158,6 +204,8 @@ async function checkOnce() {
     ["mudiii", mudiiiPage],
     ["models", modelBytes],
     ["api", rowServiceRoundTrip],
+    ["turn", turnServiceRoundTrip],
+    ["corpus", corpusReadProbe],
   ]) {
     try {
       results[label] = { value: await read() };
@@ -167,31 +215,33 @@ async function checkOnce() {
   }
   const ok = results.npm.value === version && results.pages.value === version
     && Boolean(results.vendor.value) && Boolean(results.mudiii.value) && Boolean(results.models.value)
-    && Boolean(results.api.value);
+    && Boolean(results.api.value) && Boolean(results.turn.value) && Boolean(results.corpus.value);
   return { results, ok };
 }
 
 const describe = (r) => r.error ?? r.value;
 
 async function main() {
-  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}, and that precompressed assets and the row service serve`);
+  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}, and that precompressed assets, the row service, the turn service and the corpus read serve`);
   let last;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     last = await checkOnce();
-    const { npm, pages, vendor, api } = last.results;
-    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)} vendor-encoding=${describe(vendor)} api=${describe(api)}`);
+    const { npm, pages, vendor, api, turn, corpus } = last.results;
+    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)} vendor-encoding=${describe(vendor)} api=${describe(api)} turn=${describe(turn)} corpus=${describe(corpus)}`);
     if (last.ok) {
-      console.log(`both serve ${version}, vendor/wink.js serves content-encoding: ${vendor.value}, and the row service round-tripped session ${api.value}`);
+      console.log(`both serve ${version}, vendor/wink.js serves content-encoding: ${vendor.value}, the row service round-tripped session ${api.value}, the turn service answered session ${turn.value}, and the corpus read returned ${corpus.value} row(s)`);
       return 0;
     }
     if (attempt < ATTEMPTS) await sleep(DELAY_MS);
   }
-  const { npm, pages, vendor, api } = last.results;
+  const { npm, pages, vendor, api, turn, corpus } = last.results;
   console.error(`after ${ATTEMPTS} attempts, the deploy did not verify.`);
   console.error(`  npm:    ${describe(npm)}`);
   console.error(`  pages:  ${describe(pages)}`);
   console.error(`  vendor: ${describe(vendor)}`);
   console.error(`  api:    ${describe(api)}`);
+  console.error(`  turn:   ${describe(turn)}`);
+  console.error(`  corpus: ${describe(corpus)}`);
   if (vendor.error) {
     console.error(
       "  the vendor probe failing means precompressed serving on this deployment is still documented-but-unverified"
@@ -200,6 +250,12 @@ async function main() {
   }
   if (api.error) {
     console.error("  the api probe failing means the row service did not accept, return, or delete its own smoke row.");
+  }
+  if (turn.error) {
+    console.error("  the turn probe failing means the turn service did not answer its own smoke turn.");
+  }
+  if (corpus.error) {
+    console.error(`  the corpus probe failing means ${CORPUS_PROBE_BAND} is not loaded, or the corpus read route is not serving it.`);
   }
   return 1;
 }

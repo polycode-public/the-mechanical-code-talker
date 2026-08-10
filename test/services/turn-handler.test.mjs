@@ -109,6 +109,36 @@ test("a taught fact survives to a later turn on a fresh handle, and stays out of
   }
 });
 
+test("a turn's learned rows count toward the shared global row cap; a full table answers without persisting", async () => {
+  const service = await createLocalTurnService({ tableRowCap: 0 });
+  try {
+    const taught = await postTurn(service, SESSION, { text: "remember that zorblatt is a dog" });
+    assert.equal(taught.status, 200, "the turn still answers even though its write was refused");
+    assert.deepEqual(taught.json.factsTouched, [], "the cap refused the write before anything landed");
+    assert.equal(typeof taught.json.reply, "string");
+    assert.ok(taught.json.reply.length > 0);
+    assert.equal(service.readGlobalRowCount(), 0, "a refused write never increments the counter");
+
+    const recalled = await postTurn(service, SESSION, { text: "what is zorblatt" });
+    assert.equal(recalled.status, 200);
+    assert.doesNotMatch(recalled.json.reply.toLowerCase(), /dog/, "nothing was actually learned");
+  } finally {
+    await service.close();
+  }
+});
+
+test("a generous cap counts a turn's writes without refusing them", async () => {
+  const service = await createLocalTurnService({ tableRowCap: 1000 });
+  try {
+    const taught = await postTurn(service, SESSION, { text: "remember that zorblatt is a dog" });
+    assert.equal(taught.status, 200);
+    assert.ok(taught.json.factsTouched.length > 0, "the write went through under a cap with room");
+    assert.ok(service.readGlobalRowCount() > 0, "the turn's writes counted toward the shared cap");
+  } finally {
+    await service.close();
+  }
+});
+
 test("a question the seed cannot ground answers from the fixture band, marked supplemented", async () => {
   const service = await createLocalTurnService({ fixtureBand: { name: "wordnet-complete", rows: DOLPHIN_ROWS } });
   try {
