@@ -11,12 +11,13 @@ import assert from "node:assert/strict";
 import {
   clampNewsConfig, pollNewsSources, ingestNewsSnapshot, enrichTopTerms, reprocessAfterGrounding,
   isVocabGroundedTerm, isFactGroundedTerm, ingestUploadedFactRows, buildFeed, cycleMetrics, createNewsState,
-  filterRankedTermEntries,
+  filterRankedTermEntries, newsTurn,
 } from "../../src/services/news.mjs";
 import { openMemoryBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
 import { renderNewsParagraph } from "../../src/domain/news-feed.mjs";
 import { createTermLedger, bumpTerms, ledgerPayload, ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
+import { createSourceBreakerRegistry, SOURCE_BREAKER_DEFAULTS } from "../../src/domain/source-breaker.mjs";
 import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
 
 const FIXED_NOW = "2026-08-08T00:00:00.000Z";
@@ -363,10 +364,100 @@ test("an enriched term arrives with the relations its article states, and reads 
   assert.match(paragraph, /lighthouse/, "and it carries the relation the lookup found");
 });
 
+/** A KB source that answers nothing and reports why: `systemic` says whether
+ *  each failure was the source struggling (a throttle or a timeout) or just
+ *  an absent article. */
+function countingKbSource(source, { systemic }) {
+  const seen = { lookups: 0, systemicFailures: 0 };
+  const provider = {
+    name: source,
+    origin: "https://example.org",
+    provenanceTag: (term) => `research:${source}:${term}`,
+    stats: () => ({ systemicFailures: seen.systemicFailures }),
+    async lookup() {
+      seen.lookups += 1;
+      if (systemic) seen.systemicFailures += 1;
+      return null;
+    },
+  };
+  return { provider, seen };
+}
+
+function ledgerWith(counts) {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map(counts), "item-1", FIXED_NOW, new Map());
+  return ledgerPayload(ledger);
+}
+
+test("a KB source that keeps failing is skipped for the rest of the session, and the term it never reached waits instead of entering the negative cache", async () => {
+  const threshold = SOURCE_BREAKER_DEFAULTS.failureThreshold;
+  const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"].slice(0, threshold);
+  const config = clampNewsConfig({ kbSources: ["wikidata"], enrichTermsPerCycle: threshold });
+  const state = { ...createNewsState(), ledger: ledgerWith(terms.map((t, i) => [t, terms.length - i])) };
+  const { ctx } = await makeCtx({ config, state });
+  const { provider, seen } = countingKbSource("wikidata", { systemic: true });
+  ctx.providers.getResearchProvider = () => provider;
+  ctx.sourceBreakers = createSourceBreakerRegistry();
+
+  const first = await enrichTopTerms(ctx);
+  assert.deepEqual(first.skippedSources, [], "the source answered every term in the first cycle");
+  assert.equal(seen.lookups, threshold, "each term cost one lookup");
+
+  const ledger = ledgerFromPayload(ctx.state.ledger);
+  bumpTerms(ledger, new Map([["omega", 9]]), "item-2", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  const second = await enrichTopTerms(ctx);
+  assert.equal(seen.lookups, threshold, "the failing source is never asked again");
+  assert.deepEqual(second.skippedSources, ["wikidata"]);
+  assert.deepEqual(second.missed, [], "a term nobody asked about is not a term nobody knows");
+  assert.equal(
+    ledgerFromPayload(ctx.state.ledger).terms.get("omega").status,
+    "pending",
+    "the term waits for a cycle that can actually reach a source",
+  );
+});
+
+test("a KB source that simply has no article keeps being asked, however often it answers nothing", async () => {
+  const rounds = SOURCE_BREAKER_DEFAULTS.failureThreshold * 2;
+  const terms = Array.from({ length: rounds }, (_, i) => `term${i}`);
+  const config = clampNewsConfig({ kbSources: ["wikidata"], enrichTermsPerCycle: 10 });
+  const state = { ...createNewsState(), ledger: ledgerWith(terms.map((t, i) => [t, terms.length - i])) };
+  const { ctx } = await makeCtx({ config, state });
+  const { provider, seen } = countingKbSource("wikidata", { systemic: false });
+  ctx.providers.getResearchProvider = () => provider;
+  ctx.sourceBreakers = createSourceBreakerRegistry();
+
+  const result = await enrichTopTerms(ctx);
+  assert.equal(seen.lookups, rounds, "an empty answer is an answer, so the source stays in use");
+  assert.deepEqual(result.skippedSources, []);
+  assert.equal(result.missed.length, rounds, "and every term is honestly a miss");
+});
+
+test("an enrich turn says which source it stopped asking", async () => {
+  const threshold = SOURCE_BREAKER_DEFAULTS.failureThreshold;
+  const terms = Array.from({ length: threshold }, (_, i) => `term${i}`);
+  const config = clampNewsConfig({ kbSources: ["wikidata"], enrichTermsPerCycle: threshold });
+  const state = { ...createNewsState(), ledger: ledgerWith(terms.map((t, i) => [t, terms.length - i])) };
+  const { ctx } = await makeCtx({ config, state });
+  const { provider } = countingKbSource("wikidata", { systemic: true });
+  ctx.providers.getResearchProvider = () => provider;
+  ctx.sourceBreakers = createSourceBreakerRegistry();
+
+  await enrichTopTerms(ctx);
+  const ledger = ledgerFromPayload(ctx.state.ledger);
+  bumpTerms(ledger, new Map([["omega", 9]]), "item-2", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  const turn = await newsTurn("/news enrich", ctx);
+  assert.match(turn.text, /Skipped wikidata\. That source kept failing, so this session stopped asking it\./);
+  assert.equal(turn.miss, false, "a reported skip is information, not an empty turn");
+});
+
 test("enrichTopTerms with nothing pending is a clean no-op", async () => {
   const { ctx } = await makeCtx();
   const result = await enrichTopTerms(ctx);
-  assert.deepEqual(result, { enriched: [], missed: [], aborted: false, facts: 0, derived: 0 });
+  assert.deepEqual(result, { enriched: [], missed: [], aborted: false, skippedSources: [], facts: 0, derived: 0 });
 });
 
 // ---- reprocessing -----------------------------------------------------------

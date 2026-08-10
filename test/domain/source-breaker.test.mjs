@@ -13,6 +13,7 @@ import {
   resetSourceBreakers,
   throughSourceBreaker,
   sourceSkipNoteLine,
+  sourceSkipStatusLine,
   isSystemicSourceFailure,
   isSystemicSourceStatus,
   failureCountFromOutcome,
@@ -228,4 +229,16 @@ test("the skip note names the sources, reads the same for any order, and is null
   );
   assert.equal(sourceSkipNoteLine(["wikipedia", "wikidata"]), sourceSkipNoteLine(["wikidata", "wikipedia"]));
   assert.equal(sourceSkipNoteLine(["wikipedia", "wikipedia"]), sourceSkipNoteLine(["wikipedia"]));
+});
+
+test("a cycle reports the same skip as a status rather than as an answer", () => {
+  assert.equal(sourceSkipStatusLine([]), null);
+  assert.equal(
+    sourceSkipStatusLine(["wikidata"]),
+    "Skipped wikidata. That source kept failing, so this session stopped asking it.",
+  );
+  assert.equal(
+    sourceSkipStatusLine(["wiktionary", "wikidata"]),
+    "Skipped wikidata and wiktionary. Those sources kept failing, so this session stopped asking them.",
+  );
 });

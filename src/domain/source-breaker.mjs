@@ -225,14 +225,32 @@ function listNames(sources) {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** The sentence that explains a skip, singular or plural. The wording is
+ *  written once, here, because it lands in prose a reader judges the whole
+ *  product by. */
+function skipReason(many) {
+  return many
+    ? "Those sources kept failing, so this session stopped asking them."
+    : "That source kept failing, so this session stopped asking it.";
+}
+
+function skipLine(sources, lead) {
+  const names = listNames(sources);
+  if (!names) return null;
+  const many = names.includes(" and ");
+  return `${lead} ${names}. ${skipReason(many)}`;
+}
+
 /** The trailing line an answer carries when a skipped source changed what
  *  served it. Null when nothing was skipped, so an ordinary turn is
  *  byte-identical to a run without this seam. */
 export function sourceSkipNoteLine(sources) {
-  const names = listNames(sources);
-  if (!names) return null;
-  const many = [...new Set([...(sources ?? [])].map((s) => String(s ?? "").trim()).filter(Boolean))].length > 1;
-  return many
-    ? `Answered without ${names}. Those sources kept failing, so this session stopped asking them.`
-    : `Answered without ${names}. That source kept failing, so this session stopped asking it.`;
+  return skipLine(sources, "Answered without");
+}
+
+/** The same fact stated by a cycle rather than an answer: an enrichment pass
+ *  reports what it skipped, since a term nobody asked about is not a term
+ *  nobody knows. */
+export function sourceSkipStatusLine(sources) {
+  return skipLine(sources, "Skipped");
 }
