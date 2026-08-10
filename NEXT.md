@@ -43,8 +43,8 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
 - Queued: M3 after M1 → M5/T0/T2/T4 → M6/M7/T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
   T9/M10/T10/T11. E3 additionally waits on the miss-round handing chat.mjs back. The
   M0–M4+M9 push is the npm cut bedrock-meter pins.
-- Pushes: batch 1 (through the M0 marker commit) is full-suite green (7529/7529) and queued —
-  gitlab.com SSH is refusing connections on 22 and 443; retrying at each merge moment.
+- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main; batch 2 (M2+E1+tracker)
+  accumulates locally and ships after the next full-suite run at its push moment.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
