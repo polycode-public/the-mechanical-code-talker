@@ -30,7 +30,7 @@
     <p class="eyebrow">On this page</p>
     <ol class="about-crumbs">
         <li><a href="#what">What it demonstrates</a></li>
-        <li><a href="#play">Chat you can replay</a></li>
+        <li><a href="#play">What you can try</a></li>
         <li><a href="#shots">What it looks like</a></li>
         <li><a href="#inference">What it works out</a></li>
         <li><a href="#build">How it is built</a></li>
@@ -44,32 +44,35 @@
     <header class="about-head">
       <p class="eyebrow">demonstration 2 of 11 &middot; news.html</p>
       <h1>A feed that only ships what grounds</h1>
-      <p class="lede">This page polls real news sources, but only on your say-so, and it only turns what comes back into facts it can point at. What it can't ground goes on a ranked list instead of into a made-up sentence.</p>
+      <p class="lede">This page polls real news sources, but only on your say-so, and it only turns what comes back into facts it can point at. What it can't ground goes on a ranked list instead of into a made-up sentence. A worker running in AWS Lambda does the polling and the grounding; this page only renders what it reports.</p>
     </header>
 
     <section class="about-section" id="what">
       <h2>What it demonstrates</h2>
-      <p>chat.html answers a question you ask. news.html asks its own questions, on a timer, of five real feeds: a Wikimedia featured-articles feed, Hacker News, USGS earthquakes, and two more you can switch on, NYT World News and Wikinews. Nothing fetches until you click start.</p>
-      <p>The page opens on a seven-part dashboard: how many feed items it has built, how many terms it has met but can't yet ground, how many facts came from news, the graph's current size, how many sources are live, a ranked list of the ungrounded terms, and a per-source health strip.</p>
-      <p>Ground a term and its old items get reprocessed with the new fact in them. Every item still names its sources and shows a trust chip, the same tiers the ledger page uses.</p>
-      <a class="next-link" href="#play"><span class="next-label">Next</span> Chat you can replay <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <p>news.html carries no engine of its own. Press start, enrich now, or teach it something, and the browser sends one request to a same-origin <code>/api/</code> route. A news worker Lambda does the real work: it polls the sources, grounds what it can against your session's own graph, ranks what it can't, and writes a feed document the page reads back with <code>GET /api/feed</code>.</p>
+      <p>Five real feeds are on by default, and every one of them polls when you press start: a Wikimedia featured-articles feed, Hacker News, USGS earthquakes, NYT World News, and Wikinews. Untick a source's checkbox to leave it out of the next poll.</p>
+      <p>The page opens on the same seven-part dashboard as before: how many feed items it has built, how many terms it has met but can't yet ground, how many facts came from news, the graph's current size, how many sources reported in the last cycle, a ranked list of the ungrounded terms, and a per-source health strip.</p>
+      <p>Ground a term and the worker folds the new fact into the cards that mention it, the next time it materializes the feed. Every item still names its sources and shows a trust chip, the same tiers the ledger page uses.</p>
+      <p>news.html deliberately demos the hosted architecture a consumer would run. It uses the same row service, worker, and turn endpoint tmct ships, with the browser reduced to render-and-controls. The offline-in-your-browser claim stays with the other demo pages.</p>
+      <a class="next-link" href="#play"><span class="next-label">Next</span> What you can try <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
     <section class="about-section" id="play">
-      <h2>Chat you can replay</h2>
-      <p>Before you click anything, the feed already shows a few items, built only from the graph's own seed facts. Each one carries a label so it never reads as live news.</p>
-      <pre class="transcript"><span class="cite">feed.items: 2 &middot; from the seed graph — start to poll live sources</span></pre>
-      <p>Two buttons replay a real recorded response through the exact live pipeline, with the network switched off. Nothing here is scripted output; it is the same ingest, grounding and paraphrase code a live poll runs.</p>
-      <pre class="transcript"><span class="you">click: replay recorded NYT sample</span>
-<span class="cite">a new item lands, tagged news-fixture:, tier corpus</span>
-<span class="you">click: replay recorded Wikipedia sample</span>
-<span class="cite">a second item lands the same way</span></pre>
-      <p class="source-note">Asserted in <code>test/adapters/news-browser-entry.test.mjs</code>: a fixture replay lands facts tagged <code>news-fixture:</code> at the corpus trust tier, with zero fetches, whether or not you have ever clicked start.</p>
-      <p>Teach it something directly and it grounds on the spot. The teach panel has two ready-made examples: a short paragraph and a ten-line fact set.</p>
+      <h2>What you can try</h2>
+      <p>Before you press anything, the feed is empty and the page has made no request at all. That is the honest first-visit state, not a placeholder feed.</p>
+      <pre class="transcript"><span class="cite">no news yet — the feed only shows named people, places and events the worker has reported. press start to fetch some.</span></pre>
+      <p>Press start and the browser posts to the poll trigger, gets a 202 back with a cycle id, and waits for the worker to finish before it renders the cards. The button reads &ldquo;start polling live sources&rdquo; until you press it, then &ldquo;poll now&rdquo; on every visit after, because the consent preference sticks.</p>
+      <pre class="transcript"><span class="you">click: start polling live sources</span>
+<span class="cite">POST /api/sessions/&lt;uuid&gt;/poll answers 202, a cycle id comes back</span>
+<span class="cite">the page waits for feedVersion to move, then renders the materialized feed</span></pre>
+      <p class="source-note">Asserted in <code>test/adapters/news-browser-entry.test.mjs</code> and <code>test-e2e/pages-news-feed.test.mjs</code>: no request fires before any press; <code>start()</code> mints the session key, persists consent, and settles once its own poll cycle materializes; and the page never requests the old seed asset or an engine bundle, before or after.</p>
+      <p>Teach it something directly and the same ingest trigger grounds it on the spot. The teach panel still has two ready-made examples: a short paragraph and a two-line fact set.</p>
       <pre class="transcript"><span class="you">teach: "A ceasefire is a formal agreement to stop fighting. A tariff is a tax on imported goods."</span>
 <span class="cite">terms.ungrounded drops by one for each term the sentence grounds</span></pre>
-      <p>Click start and it polls for real. The button reads &ldquo;start polling live sources&rdquo; until you click it, then &ldquo;poll now&rdquo; on every visit after, because a preference remembers that you asked once.</p>
-      <p class="source-note">Asserted in <code>test/adapters/news-browser-entry.test.mjs</code>: zero fetches happen before <code>start()</code>; calling it fires the first poll and writes the consent preference; a fresh session sharing the same preference store polls on load without asking again.</p>
+      <p>If the service doesn't answer, the page says so instead of guessing: &ldquo;The news service isn't answering right now, so there's nothing to show. Reload the page to try again.&rdquo; Every button disables until a later request gets through.</p>
+      <p>Stop &amp; forget deletes every row and the materialized feed under your session key, then forgets the key itself. A reload after that reads as a first visit, the same as if you had never pressed anything.</p>
+      <p class="source-note">Asserted in <code>test-e2e/pages-news-feed.test.mjs</code>: stop &amp; forget purges the session server-side, discards the local key, and a reload reads back as first-visit; and killing the row service leaves the page honestly idle, with every control disabled until the service answers again.</p>
+      <p>A chat area is landing next, right under the teach panel. It will carry the same session key to <code>POST /api/sessions/&lt;uuid&gt;/turn</code>, with replies coming back straight away instead of through a poll.</p>
       <a class="next-link" href="#shots"><span class="next-label">Next</span> What it looks like <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
@@ -86,18 +89,18 @@
     <section class="about-section" id="inference">
       <h2>What it works out</h2>
       <p><strong>Grounded is two different questions.</strong> A term is vocab-grounded when the lexicon knows the word at all, and fact-grounded when the graph holds at least one fact about it. &ldquo;Ceasefire&rdquo; is a real English word the parser reads fine, and the graph might still hold nothing about it — the ranked list labels that case &ldquo;parseable but knowledge-free&rdquo;, and labels a word the parser can't read at all &ldquo;unknown word&rdquo;, so the two problems never look like one.</p>
-      <p><strong>Ranking is an invitation, not a verdict.</strong> The ungrounded list is sorted by how often a term turned up, most first. A term at the top of the list isn't wrong or bad, it's just the biggest gap the graph has right now. Ground it and it drops off the list; the knowledge-base loop tries the top few terms itself, each poll.</p>
+      <p><strong>Ranking is an invitation, not a verdict.</strong> The ungrounded list is sorted by how often a term turned up, most first. A term at the top of the list isn't wrong or bad, it's just the biggest gap the graph has right now. Ground it and it drops off the list; the worker's own enrichment tries the top few terms itself, each cycle.</p>
       <p><strong>A source that fails is reported as a failure.</strong> Every fetch goes through one courtesy gate: a timeout, a rate limit or a dead source all read back as a failed poll, never as a fact. Three failures in a row and the source auto-disables itself, visibly, rather than quietly going stale.</p>
-      <p><strong>A miss can expire.</strong> A term the knowledge-base loop tried and got nothing back for sits in a negative cache for a day, so the loop doesn't keep re-asking a source that just said no. It comes back into play once the cache expires, or the moment you switch on a source that hasn't tried it yet.</p>
+      <p><strong>A miss can expire.</strong> A term the enrichment cycle tried and got nothing back for sits in a negative cache for a day, so it doesn't keep re-asking a source that just said no. It comes back into play once the cache expires, or the moment you switch on a source that hasn't tried it yet.</p>
       <p><strong>What it retrieves.</strong> Each feed item is built around one hub term and everything within two hops of it in the graph, so it reads as a set of grounded sentences about one thing, with sources named underneath, never as a rewritten article.</p>
       <a class="next-link" href="#build"><span class="next-label">Next</span> How it is built <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
 
     <section class="about-section" id="build">
       <h2>How it is built</h2>
-      <p><code>src/services/news.mjs</code> is the one place every surface goes through: this page, chat.html's own <code>/news</code> command, the CLI verb, and a plain JS import all call the same functions, so no surface can drift from what the others do.</p>
-      <p>Feed parsing is string scanning over RSS, Atom and JSON Feed, plus the three sources' own JSON shapes, in <code>src/domain/feed-normalize.mjs</code> — no XML library, because a domain module can only import other domain modules. Every fetch runs through <code>createCourtesyGate</code>, the same single-slot, rate-limited, timeout-bound gate every other live source in this repo already uses.</p>
-      <p>The page is static with no backend of its own, so it can only read a source the browser itself can fetch. Every source in the registry was checked from a real browser tab hitting the live URL before it shipped; a source that only worked from curl, not a browser, was dropped from the default list rather than shipped broken.</p>
+      <p><code>src/services/news.mjs</code> is still the one place every surface goes through: the CLI's <code>tmct news</code> verb, chat.html's own <code>/news</code> command, and now <code>server/news-worker/handler.mjs</code>, the Lambda this page's poll, enrich and ingest triggers invoke. No surface can drift from what the others do.</p>
+      <p>Feed parsing is string scanning over RSS, Atom and JSON Feed, plus the sources' own JSON shapes, in <code>src/domain/feed-normalize.mjs</code> — no XML library, because a domain module can only import other domain modules. Every fetch runs through <code>createCourtesyGate</code>, the same single-slot, rate-limited, timeout-bound gate every other live source in this repo already uses. It runs inside the worker now, not the browser, so the worker's own outbound HTTP is allow-listed to exactly the source roster and the knowledge-base hosts it looks terms up against, nothing else.</p>
+      <p>The row service, the worker, and the turn endpoint are the same stack a consumer would host: an anonymous, per-session partition in DynamoDB, a seven-day TTL, and one materialized feed document the worker rewrites after every cycle. <code>server/row-service/README.md</code> and <code>PLAN_MEMORY_BACKEND.md</code>'s own thin-client section carry the full design.</p>
       <p>Grounding reuses the same ingest path chat.html's own teach turn uses: strict facts from sentences the grammar fully reads, a lower-confidence optimistic tier for the rest. A bounded syllogism round runs after each batch, so a handful of new facts can chain into a few more without anyone asking a follow-up question.</p>
       <a class="next-link" href="#papers"><span class="next-label">Next</span> Related work <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
@@ -110,7 +113,7 @@
         <li>Reiter, &ldquo;On Closed World Data Bases&rdquo;, in <em>Logic and Data Bases</em>, Plenum, 1978, pp. 55&ndash;76.<span class="ref-note">The open world assumption. A term with no fact yet is a gap in the graph, not a claim that nothing exists to know.</span></li>
         <li>Winer, &ldquo;RSS 2.0 Specification&rdquo;, Berkman Klein Center for Internet &amp; Society, 2003 (revised 2009).<span class="ref-note">The wire format behind the NYT World and Wikinews feeds.</span></li>
         <li>Nottingham and Sayre, eds., RFC 4287, &ldquo;The Atom Syndication Format&rdquo;, IETF, December 2005.<span class="ref-note">The second feed format the parser reads.</span></li>
-        <li>Ungerleider et al., &ldquo;JSON Feed Version 1.1&rdquo;, jsonfeed.org, 2020.<span class="ref-note">The third; also the add-by-URL demo target, since jsonfeed.org's own feed is the one CORS-clean JSON Feed found in source research.</span></li>
+        <li>Ungerleider et al., &ldquo;JSON Feed Version 1.1&rdquo;, jsonfeed.org, 2020.<span class="ref-note">The third feed format the parser reads.</span></li>
       </ul>
       <a class="next-link" href="#credits"><span class="next-label">Next</span> Credits and further reading <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M12 4.5v14M6.5 13l5.5 5.5L17.5 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     </section>
@@ -119,10 +122,10 @@
       <h2>Credits and further reading</h2>
       <p>The sources this page can read, and what each one costs to use.</p>
       <ul class="refs">
-        <li>Wikimedia featured feed, Hacker News and USGS earthquakes are on by default: no key, no cost, checked from a real browser tab before shipping.</li>
-        <li>NYT World News is off by default. Its feed is published for personal, non-commercial use with attribution, so this page links every NYT item back to the story and names the outlet, and leaves turning it on to you.</li>
-        <li>Wikinews is off by default too — its own front page currently announces the Wikimedia Foundation closing the site, so the health row here is what tells you if that feed goes quiet.</li>
-        <li>Simple English Wikipedia, Wikidata and Wiktionary back the knowledge-base loop by default; DBpedia Lookup and English Wikipedia are switchable extras.</li>
+        <li>Wikimedia featured feed, Hacker News and USGS earthquakes are on by default: no key, no cost.</li>
+        <li>NYT World News is on by default too. Its feed is published for personal, non-commercial use with attribution, so this page links every NYT item back to the story and names the outlet.</li>
+        <li>Wikinews is on by default as well — its own front page currently announces the Wikimedia Foundation closing the site, so the health row here is what tells you if that feed goes quiet.</li>
+        <li>Simple English Wikipedia, Wikidata and Wiktionary back the worker's knowledge-base lookups by default. DBpedia Lookup and English Wikipedia sit in the registry too, but this page has no control that switches them on.</li>
         <li><a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>, &ldquo;Standards and bibliography&rdquo;, for the full reference list.</li>
       </ul>
       <a class="next-link" href="./sprites-about.html"><span class="next-label">Next demo</span> The sprite library <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
