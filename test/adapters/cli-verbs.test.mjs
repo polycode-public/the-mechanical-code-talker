@@ -47,7 +47,7 @@ test("the unknown-invocation line names the same verbs the help does", () => {
 test("the unknown-invocation line quotes what was typed and reads as one sentence", () => {
   const message = unknownInvocationMessage("frobnicate --hard");
   assert.match(message, /^tmct: unknown invocation "frobnicate --hard"\. Use `chat`, /);
-  assert.match(message, /, or `cli digest …`\.\n$/);
+  assert.match(message, /, or `corpus clear`\.\n$/);
 });
 
 test("the syllogise help names the mechanism, not just the verb: a forward-chaining materialisation over OWL 2 RL rules", () => {
