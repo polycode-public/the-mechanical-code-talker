@@ -134,10 +134,10 @@ footer {
 }
 .hero-install .ps1 { color: var(--muted); }
 
-/* ---- claim grid (each claim links to the page that shows it) --------------------- */
+/* ---- demo grid (each card links to the page it demonstrates) --------------------- */
 .band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.75rem; }
 .band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.6rem; }
-.claim-grid {
+.demo-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
   gap: 1rem; margin: 0 0 1rem;
 }
@@ -155,19 +155,19 @@ footer {
 .claim .claim-icon.dual svg { width: 22px; height: 22px; }
 .claim h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
 .claim p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
-.claim .claim-page {
+.claim .demo-page {
   margin-top: auto; align-self: flex-start;
   font: 0.7rem/1 var(--font-mono);
   color: var(--muted); background: var(--bg);
   border: 1px solid var(--line); border-radius: 999px;
   padding: 0.32em 0.8em;
 }
-.claim:hover .claim-page, .claim:focus-visible .claim-page {
+.claim:hover .demo-page, .claim:focus-visible .demo-page {
   color: var(--entail); border-color: var(--entail);
 }
 
 /* ---- new-tab cue: every demo-page link opens in a new tab -------------------------
-   .newtab-icon is the inline glyph inside .claim-page/.open-link; .plate-frame's own
+   .newtab-icon is the inline glyph inside .demo-page/.open-link; .plate-frame's own
    override turns it into an absolutely-positioned corner badge, since that family has
    no inline text to hang the glyph on. */
 .newtab-icon { display: inline-block; vertical-align: -0.15em; width: 0.85em; height: 0.85em; color: currentColor; }
@@ -200,7 +200,7 @@ footer {
   outline-offset: 4px;
 }
 /* .plate-frame has no inline text to hang the new-tab glyph on, so it becomes
-   a pill badge in the frame's top-right corner instead, echoing .claim-page's
+   a pill badge in the frame's top-right corner instead, echoing .demo-page's
    own pill styling. */
 .plate-frame .newtab-icon {
   position: absolute; top: 0.85rem; right: 0.85rem; width: 20px; height: 20px;
@@ -326,14 +326,14 @@ footer {
 
 /* ---- per-card actions: an info link and a share control -------------------------
    .claim is itself a link, so these two cannot sit inside it. The cell wraps both
-   and positions the actions over the card's bottom-right corner, where .claim-page's
+   and positions the actions over the card's bottom-right corner, where .demo-page's
    own pill leaves the row free. */
-.claim-cell { position: relative; display: flex; }
-.claim-cell > .claim { flex: 1 1 auto; }
-/* The actions share the card's last line with .claim-page's filename pill. The
+.demo-cell { position: relative; display: flex; }
+.demo-cell > .claim { flex: 1 1 auto; }
+/* The actions share the card's last line with .demo-page's filename pill. The
    pill is left-aligned and the actions are pinned right, so the pill only has
    to stay on one line to keep its new-tab glyph out of their way. */
-.claim-cell > .claim .claim-page { white-space: nowrap; }
+.demo-cell > .claim .demo-page { white-space: nowrap; }
 .claim-actions {
   position: absolute; right: 0.85rem; bottom: 0.95rem;
   display: flex; gap: 0.4rem;

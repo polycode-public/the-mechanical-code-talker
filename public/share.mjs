@@ -46,6 +46,21 @@ const POSTS = {
         text: "Ask a plain yes/no question the cheap lanes miss and it falls through to a real DL tableau proof: 12 of the 48 hardest benchmark questions now come back as a proved yes with premises cited, 8 more report the contradiction hiding in their own premises, and a proof that runs out of budget stays an honest miss." },
     ],
   },
+  "chat-aws": {
+    title: "The same chat, backed by a server session",
+    posts: [
+      { angle: "what it is", to: "chat.html?backend=aws",
+        text: "The same chat engine as chat.html, with what you teach it saved to an anonymous server session instead of this browser." },
+      { angle: "why it exists", to: "chat-about.html#build",
+        text: "One slider on chat.html decides where taught facts live: this browser's own storage, or a server session that follows you to another device." },
+      { angle: "the honest miss still holds", to: "chat-about.html#inference",
+        text: "Moving the store to a server changes nothing about what counts as an answer. A refusal is still a refusal, whichever backend holds the facts behind it." },
+      { angle: "how long it lasts", to: "chat-about.html#papers",
+        text: "A server session is anonymous and expires after seven days. Nothing you teach it outlives that, and none of it copies back into your browser's own local store." },
+      { angle: "a real exchange", to: "chat-about.html#play",
+        text: "Teach it that Rover is a dog with the slider on AWS, reload the page, and it still knows. The fact lives in the session now, not in this browser." },
+    ],
+  },
   news: {
     title: "A feed that only ships what grounds",
     posts: [
