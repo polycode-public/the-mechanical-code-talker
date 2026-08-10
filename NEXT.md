@@ -34,16 +34,16 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: the combined miss-lead round on chat.mjs (Opus), E2 news-gate consumption
-  (Sonnet, owns news-feed.mjs), T0 corpus bands + loader (Sonnet; told to reuse T1's band
-  query helper), M3 sqlite conformance (Opus, owns core.mjs under the byte-identity
-  pin), M6 HTTP client backend (Sonnet), M7 infra + deploy (Sonnet, owns infra/,
-  .gitlab-ci.yml, post-deploy-smoke). Landed: M0, M1, M2, M4, M5, T1, T2 (breaker;
-  mode constants now in domain/retrieval-modes.mjs), E0, E1, the screenshot capture
-  (item closed below). Version rolled to 6.0.0 (operator: major).
-- Queued: T4 after chat.mjs hand-back → T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
-  T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins (M9 dispatches
-  when M3 lands).
+- In flight: E2 news-gate consumption (Sonnet, owns news-feed.mjs), T0 corpus bands +
+  loader (Sonnet; told to reuse T1's band query helper), M3 sqlite conformance (Opus,
+  owns core.mjs under the byte-identity pin), M6 HTTP client backend (Sonnet), M7 infra
+  + deploy (Sonnet, owns infra/, .gitlab-ci.yml, post-deploy-smoke), T4 enumeration
+  marker (Opus, owns chat.mjs + corpus pins). Landed: M0, M1, M2, M4, M5, T1, T2, E0,
+  E1, the miss-lead round (report BENCHMARK_CEFR_ENGLISH_5.0.46.md; its whereSet/temporal
+  remainder is an open item below), the screenshot capture (item closed below). Version
+  rolled to 6.0.0 (operator: major).
+- Queued: E3 after T4 → T3 after T0 → T12 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
+  T9/M10/T10/T11. M9 dispatches when M3 lands.
 - Pushes: batch 2 (M1/M2/M4/M5/T1/E1 + the 6.0.0 major) is on origin/main, gate suite
   7696/0; its pipeline publishes 6.0.0. Batch 3 accumulates from here; M9's contract doc
   follows in it.
