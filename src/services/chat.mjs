@@ -38,6 +38,7 @@ import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
 import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
+import { BACKEND_REJECTED_CODE, BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 import {
   CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, NEG_SUBCLASS_PREDICATE, capabilityBaseRate,
   capabilityExtension, isNegatedPredicate, negatedPredicate,
@@ -3437,9 +3438,33 @@ const PLACE_ADVERB_OBJECT_RE = /^(?:anywhere|everywhere|nowhere|somewhere)$/i;
  *  tag to a "teach" Source (trust prior in memory/trust.mjs). */
 const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessionId}` : ""}${ts ? `@${ts}` : ""}`;
 
+/** The store could not be reached or refused service (a 429, a 507, a network
+ *  failure). The same write may well land later, so the turn says so and the
+ *  session carries on with nothing persisted. Read by code, never by message
+ *  text. */
+const isPersistUnavailable = (error) => error?.code === BACKEND_UNAVAILABLE_CODE;
+/** The store refused the input itself (an oversized row, a malformed key).
+ *  Retrying changes nothing, so this one travels all the way out of the turn
+ *  carrying the row and provenance the backend named. */
+const isPersistRejected = (error) => error?.code === BACKEND_REJECTED_CODE;
+/** Let a store refusal out of a write helper's own catch. Every other failure
+ *  (a malformed slot, a missing grammar, an unparsable sentence) keeps
+ *  degrading to null the way it always has. */
+function rethrowPersistFailure(error) {
+  if (isPersistUnavailable(error) || isPersistRejected(error)) throw error;
+}
+/** What a turn says when the store would not take its write. The sentence is
+ *  closed and lane-neutral: it never names the fact, so a taught fact, a
+ *  taught rule and a retraction all report the same truth. */
+export const PERSIST_UNAVAILABLE_TEXT = "I understood that, but I couldn't save it. My memory isn't taking writes right now, so nothing changed. We can keep talking, and you can tell me again later.";
+const PERSIST_UNAVAILABLE_VIA = "persist-unavailable";
+const persistUnavailableAnswer = () => ({ text: PERSIST_UNAVAILABLE_TEXT, via: PERSIST_UNAVAILABLE_VIA, miss: true });
+
 /** Reify one teach-lane fact + confirm (shared by the property and ownership
  *  frames). Lazy + failure-tolerated: a write failure degrades to null (the
- *  teach-miss text stands), never a crash. */
+ *  teach-miss text stands), never a crash. A store refusal is the exception —
+ *  it travels, so the turn reports why nothing was stored instead of blaming
+ *  the vocabulary. */
 async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "", observedAt = "", dateText = "" }) {
   try {
     const { appendFact, normFactTerm } = await import("../adapters/memory/core.mjs");
@@ -3457,7 +3482,8 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
     // acknowledgment shows it was registered rather than silently dropped.
     const dateSuffix = observedAt && dateText ? ` (as of ${dateText})` : "";
     return { text: `noted — remembered: ${s} ${phrase} ${o}${dateSuffix}`, via: "assert", miss: false };
-  } catch {
+  } catch (error) {
+    rethrowPersistFailure(error);
     return null;
   }
 }
@@ -6007,7 +6033,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
       // nothing stored under that triple — fall through to the ordinary cascade
-    } catch { /* store unavailable — fall through */ }
+    } catch (error) { rethrowPersistFailure(error); /* nothing readable under that triple — fall through */ }
   }
   const retractForgetMatch = !retractNotMatch && memoryDir && !QUESTION_LEAD_RE.test(forgetSrc)
     ? forgetSrc.match(RETRACT_FORGET_RE) : null;
@@ -6430,7 +6456,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         });
         if (stored) return stored;
       }
-    } catch { /* store unavailable — the frame declines rather than storing blind */ }
+    } catch (error) { rethrowPersistFailure(error); /* the collection isn't readable — the frame declines rather than storing blind */ }
   }
 
   // RELATIONAL FACT — "<Name> is the <role> of <Name>". Grouped with the
@@ -6527,7 +6553,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   // FILTER RULE TEACH — "a <name> is a <base> who is <property>": stores a
@@ -6552,7 +6578,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   // RECURSIVE RULE TEACH — "a <name> is a <baseCase>, or a <recStep> of a
@@ -6581,7 +6607,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   // ACTION-RULE TEACH — the five action frames plus the render binding (see
@@ -6617,7 +6643,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   const actionSigPassive = ownSrc.match(ACTION_SIGNATURE_PASSIVE_RE);
@@ -6642,7 +6668,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
             via: "assert", miss: false,
           };
         }
-      } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+      } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
     }
   }
 
@@ -6678,7 +6704,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   const precondComp = ownSrc.match(ACTION_PRECOND_COMPARATIVE_RE);
@@ -6716,7 +6742,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   const actionConstraint = ownSrc.match(ACTION_CONSTRAINT_TEACH_RE);
@@ -6741,7 +6767,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   const actionEffect = ownSrc.match(ACTION_EFFECT_TEACH_RE);
@@ -6797,7 +6823,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           via: "assert", miss: false,
         };
       }
-    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    } catch (error) { rethrowPersistFailure(error); /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   const rendersAs = ownSrc.match(RENDERS_AS_TEACH_RE);
@@ -16334,11 +16360,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
+    // A store that refuses the write is reported as itself. Left to fall
+    // through, every frame in the lane declines in turn and the answer blames
+    // the vocabulary for something the vocabulary had nothing to do with.
+    let taught = null;
+    try {
+      taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
+    } catch (error) {
+      if (!isPersistUnavailable(error)) throw error;
+      taught = persistUnavailableAnswer();
+    }
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       if (!taught.miss) dialogueLaneOverride = "teach";
-      note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${taught.miss ? "but the payload could not be stored" : "reified into .tmct/memory"}`);
+      const teachOutcome = taught.via === PERSIST_UNAVAILABLE_VIA ? "but the store would not take the write"
+        : taught.miss ? "but the payload could not be stored"
+          : "reified into .tmct/memory";
+      note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${teachOutcome}`);
       // `deduced` was computed straight off envelope.parsed alone, but the
       // structural grammar has no business parsing a teach-shaped sentence at
       // all, so it would otherwise be confidently WRONG or silently absent.
@@ -17762,7 +17800,8 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         .join(", "),
     };
     return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
-  } catch {
+  } catch (error) {
+    rethrowPersistFailure(error);
     return null; // grammar unavailable / write failed — fall through to the engine
   }
 }
@@ -18486,9 +18525,21 @@ async function answerWithoutFillerPrefix(input, options, missed) {
 export async function runTurn(input, options = {}) {
   const memoryDir = options?.memoryDir ?? null;
   const before = await factRowSnapshot(memoryDir);
-  let result = await dispatchTurn(input, options);
-  const rescued = await answerWithoutFillerPrefix(input, options, result);
-  if (rescued) result = rescued;
+  let result;
+  try {
+    result = await dispatchTurn(input, options);
+    const rescued = await answerWithoutFillerPrefix(input, options, result);
+    if (rescued) result = rescued;
+  } catch (error) {
+    // Every write lane the dispatcher reaches — a rule teach, a retraction, a
+    // game's board snapshot — reports a refused store the same way the teach
+    // lane does. A rejected input is a different thing and travels on,
+    // carrying the row and provenance the backend named.
+    if (!isPersistUnavailable(error)) throw error;
+    result = plainTurn(String(input ?? "").trim(), PERSIST_UNAVAILABLE_TEXT, {
+      via: PERSIST_UNAVAILABLE_VIA, miss: true, focus: options?.focus ?? null,
+    });
+  }
   if (!result || typeof result !== "object") return result;
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
@@ -19137,17 +19188,26 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // Gated on memoryDir: only a session shell provides a write target, so a bare
   // runTurn (tests, library callers) stays pure and falls through to the engine.
   if (memoryDir) {
-    const asserted = await assertTurn(workingLine, ctx);
+    let asserted = null;
+    let taxonomy = null;
+    try {
+      asserted = await assertTurn(workingLine, ctx);
+      // Bare declarative taxonomy (hyphenated-instance membership, article-led
+      // kind-of) — see bareTaxonomyTeach. Checked here because the ask engine
+      // would otherwise parse these statements as inherits QUESTIONS.
+      if (!asserted) taxonomy = await bareTaxonomyTeach(workingLine, ctx);
+    } catch (error) {
+      if (!isPersistUnavailable(error)) throw error;
+      note(trace, "lane: declarative teach — the sentence parsed, but the store would not take the write");
+      const refusedTurn = plainTurn(workingLine, PERSIST_UNAVAILABLE_TEXT, { via: PERSIST_UNAVAILABLE_VIA, miss: true, focus });
+      return withLast(refusedTurn, "teach/remember a new fact");
+    }
     if (asserted) {
       note(trace, "goal: teach/remember a new fact (declarative ACE sentence)");
       note(trace, "lane: assertTurn — grammar/ace.mjs parseAce matched a full triple with no residue");
       asserted.lane = "teach";
       return withLast(asserted, "teach/remember a new fact");
     }
-    // Bare declarative taxonomy (hyphenated-instance membership, article-led
-    // kind-of) — see bareTaxonomyTeach. Checked here because the ask engine
-    // would otherwise parse these statements as inherits QUESTIONS.
-    const taxonomy = await bareTaxonomyTeach(workingLine, ctx);
     if (taxonomy) {
       note(trace, "goal: teach/remember a new fact (bare declarative taxonomy)");
       note(trace, "lane: bareTaxonomyTeach — hyphenated-instance or article-led kind-of declarative, stored before the ask engine could parse it as a question");

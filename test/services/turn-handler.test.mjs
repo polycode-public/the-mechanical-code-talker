@@ -14,6 +14,7 @@ import { createLocalTurnService } from "../../server/turn-service/local.mjs";
 import { vocabularyFromSeed } from "../../server/turn-service/handler.mjs";
 import { main as buildMidSeed, MID_BUNDLE_BANDS } from "../../server/turn-service/build-seed.mjs";
 import { bandFactRow } from "../../src/adapters/memory/corpus-bands.mjs";
+import { PERSIST_UNAVAILABLE_TEXT } from "../../src/services/chat.mjs";
 
 const SESSION = "01890000-0000-4000-8000-0000000000f1";
 const OTHER_SESSION = "01890000-0000-4000-8000-0000000000f2";
@@ -115,8 +116,11 @@ test("a turn's learned rows count toward the shared global row cap; a full table
     const taught = await postTurn(service, SESSION, { text: "remember that zorblatt is a dog" });
     assert.equal(taught.status, 200, "the turn still answers even though its write was refused");
     assert.deepEqual(taught.json.factsTouched, [], "the cap refused the write before anything landed");
-    assert.equal(typeof taught.json.reply, "string");
-    assert.ok(taught.json.reply.length > 0);
+    assert.ok(
+      taught.json.reply.includes(PERSIST_UNAVAILABLE_TEXT),
+      `the reply says the store refused the write, got: ${taught.json.reply}`,
+    );
+    assert.doesNotMatch(taught.json.reply, /as a word I know/, "the vocabulary is not what stopped the write");
     assert.equal(service.readGlobalRowCount(), 0, "a refused write never increments the counter");
 
     const recalled = await postTurn(service, SESSION, { text: "what is zorblatt" });
