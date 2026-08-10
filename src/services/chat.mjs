@@ -150,6 +150,33 @@ const goalNoun = (entityType) => (entityType ? `${String(entityType).toLowerCase
  *  runAsk's fact-lane goal revision and withDeducedGoal's fact-reader field. */
 const TAUGHT_FACT_LOOKUP_GOAL = "look up a taught fact about a subject/verb/object";
 
+/** The narration's name for the store a turn read from. The memory token is a
+ *  backend HANDLE, not a path, so interpolating it renders "[object Object]"
+ *  in a trace a host may show its own users. The backend kind is the part
+ *  that stays true across machines and runs. */
+function memoryBackendLabel(memoryDir) {
+  if (!memoryDir) return "none";
+  if (typeof memoryDir === "string") return "files";
+  return typeof memoryDir.backend === "string" ? memoryDir.backend : "unknown";
+}
+
+/**
+ * A fact lane answered a turn the grammar declined. Two lines written before
+ * any lane ran describe the PARSE attempt — "no parse stood", and a goal
+ * deduced from a parse that is null — so a trace that leaves them alone reads
+ * as though nothing resolved the turn, while its own decision and lane lines
+ * say a remembered fact did. Restate both.
+ *
+ * Trace only: `deduced` itself is left alone, because it also drives the
+ * answer's own "Goal (inferred)" line, and which turns carry that line is a
+ * product decision each lane makes for itself.
+ */
+function noteFactLaneTookTheTurn(trace, { parsed, deduced, goal = TAUGHT_FACT_LOOKUP_GOAL }) {
+  if (parsed) return;
+  note(trace, "pattern: the grammar declined, and the fact layer claimed the turn from the remembered store (revised — the earlier line reports the parse attempt, not what answered)");
+  if (!deduced) note(trace, `goal: ${goal} (revised — no parse stood, so the goal the turn served is the fact lookup that answered)`);
+}
+
 /** Deduce a one-line goal statement from the ask engine's parsed AST — either
  *  the plain-clause form ({shape,kind,entityType,object[,subject]}) or the
  *  compositional form ({node:...}, ask.mjs's §compositional grammar). Returns
@@ -15499,6 +15526,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "lane: (0) WHAT ELSE — \"what else is/about X\" recognized off the raw query, before the relaxation cascade could quietly drop \"else\" and reduce it to a plain \"what is X\"");
       note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
       note(trace, `goal: ${deduced} (revised — the raw \"what else\" phrasing was recognized directly, not the relaxed/reparsed envelope)`);
+      if (!recordMiss) noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
     }
   }
   // (0a) ARCHITECTURE OVERVIEW — see ARCH_OVERVIEW_PHRASES. Answered here,
@@ -15895,6 +15923,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
       note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
     }
+    if (via === "fact") noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
   } else if (isConversationalCandidate && habitualGroundingHint) {
     // A bare habitual teach ("penguins swim") naming a subject grounded
     // nowhere: an honest, actionable grounding hint beats the orientation
@@ -16031,7 +16060,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       }
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
       if (typeof fact.trust === "number") entailedTrust = fact.trust; // live-chase trust (see the `entailedTrust` declaration above)
-      note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memoryDir=${memoryDir})`);
+      note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memory backend=${memoryBackendLabel(memoryDir)})`);
       note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
       // Mirrors the TEACH lane's own goal revision below: `deduced` was
       // computed off envelope.parsed alone, but a general-verb direct
@@ -16051,6 +16080,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         deduced = deduceGoalFromParsed({ shape: "meta", object: definedTerm });
         note(trace, `goal: ${deduced} (revised — "define X" answered from the vocabulary store, not the code index)`);
       }
+      if (via === "fact") noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
       // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
@@ -16153,6 +16183,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (syn.pending) factPending = syn.pending;
       note(trace, "lane: (3b) ONTOLOGY SYNONYM EXPANSION — a last-resort synonym of the term had direct facts");
       note(trace, "source: .tmct/memory Facts, reached via a known synonym (cited in the answer itself)");
+      noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
     }
   }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
@@ -16366,6 +16397,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         if (fact.pending) factPending = fact.pending;
         note(trace, "lane: (4h) CHILD PACK — a clean miss on a lexicon term pulled the term's triples from the shipped child pack into memory, and the question was re-answered from the store");
         note(trace, `source: child pack ${CHILD_PACK_NAME} — ${learned.count} fact(s) appended as ${childProvenanceTag(key)}, answer served from .tmct/memory Facts`);
+        noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
       }
     }
     if (miss && recordMiss && via === "composed" && key) {
@@ -16484,6 +16516,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
               via = "fact";
               recordMiss = false;
               note(trace, "lane: (4x) ADJECTIVE-QUALIFIED HEAD NOUN — the full phrase grounded nothing, so the answer is the head noun's, with the phrase named as unheld");
+              noteFactLaneTookTheTurn(trace, { parsed: envelope?.parsed, deduced });
             } else {
               teachOffer = unknownVocabTermOffer(cleanTerm);
             }

@@ -127,3 +127,66 @@ test("createSession: default narrate is OFF, and /narrate on|off mutates the han
     await rm(repo, { recursive: true, force: true });
   }
 });
+
+test("no narrated turn ever renders an object into its trace", async () => {
+  const repo = await repoWithFixtureGraph("stringify");
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" }, ephemeral: true, narrate: true });
+    const turns = [
+      "remember that a heart has a valve",
+      "what is a heart",
+      "does a heart have a valve",
+      "what else is a heart",
+      "which modules import a.mjs",
+      "hello",
+      "what is a florblewidget",
+    ];
+    for (const q of turns) {
+      const r = await s.turn(q);
+      assert.doesNotMatch(r.answer, /\[object [A-Z]\w*\]/, `an object stringified into the trace for "${q}"`);
+    }
+    await s.close();
+  } finally {
+    clearCache();
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("the memory-facts lane names its backend kind, not the backend handle", async () => {
+  const repo = await repoWithFixtureGraph("backend");
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" }, ephemeral: true, narrate: true });
+    await s.turn("what is a kettle");
+    const r = await s.turn("what do you know about a kettle");
+    assert.match(r.answer, /lane: \(3\) memory facts .*\(memory backend=sqlite\)/);
+    await s.close();
+  } finally {
+    clearCache();
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+// A fact lane answering a turn the grammar declined leaves two lines behind
+// that describe the PARSE attempt. Unrevised, the trace says nothing resolved
+// while its own lane line says a remembered fact did.
+test("a fact-lane turn's goal and pattern lines say what actually answered", async () => {
+  const repo = await repoWithFixtureGraph("coherent");
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" }, ephemeral: true, narrate: true });
+    await s.turn("what is a kettle");
+    const r = await s.turn("what do you know about a kettle");
+    assert.match(r.answer, /decision: via=fact/);
+    assert.match(r.answer, /pattern: no parse stood/);
+    assert.match(r.answer, /pattern: the grammar declined, and the fact layer claimed the turn/);
+    assert.match(r.answer, /goal: look up a taught fact about a subject\/verb\/object \(revised/);
+    // The trace explains the turn; it does not change what the turn answered.
+    assert.doesNotMatch(r.answer.split("--- narrate ---")[0], /Goal \(inferred\)/);
+    await s.close();
+  } finally {
+    clearCache();
+    await rm(repo, { recursive: true, force: true });
+  }
+});
