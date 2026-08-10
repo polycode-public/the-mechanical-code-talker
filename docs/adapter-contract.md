@@ -368,3 +368,65 @@ Expect tmct to:
 - Call `readMeta` and `putMeta` for scalars (watermark, node id) with last-write-wins semantics.
 - Construct a fresh backend per session. Never reuse one across sessions.
 - Close the backend when the session ends; further calls may error.
+
+---
+
+# The turn surface adapter contract
+
+tmct's turn operation is a synchronous engine that reads facts, answers questions, and persists learned rows. This surface wraps the engine in an HTTP API. You provide the request (text), the backend provides the session store and corpus source, and the surface returns the answer plus what the turn learned.
+
+## The turn endpoint
+
+One route wraps the engine:
+
+| method | path | request | success | notes |
+| --- | --- | --- | --- | --- |
+| POST | /api/sessions/:uuid/turn | `{text, retrieval?: {fuzzy}}` | 200 `{reply, factsTouched, narration}` | session key rides the path (strict v4 format); body ≤ 4 KB; optional `retrieval.fuzzy` overrides the retrieval mode (§3.15.2 names the rungs); first learning turn creates the session implicitly; turn rate is per-session (30/hour default); 429 when rate limit is hit; 507 when the global table cap is reached or the backend is down — the turn still answers, learned facts are not persisted, and the reply says so |
+
+## The handler sequence
+
+`POST /api/sessions/:uuid/turn` invokes:
+
+1. **Validate** — key shape, body size, content type (same rules as the row service §3.8);
+2. **Load session** — construct a fresh row backend for the session; call `loadMemory` to assemble the working payload;
+3. **Retrieve** — fetch a bounded subgraph from corpus bands (§3.15) unless a circuit breaker says skip;
+4. **Run** — call `runTurn` with seed + corpus subgraph + session assembled together (same engine, byte-identical to the library);
+5. **Persist** — `persistMemory` writes only the rows the turn changed (delta writes; soft-delete rules apply as in §3.8);
+6. **Reply** — return `{reply, factsTouched, narration}` where `reply` is the text answer, `factsTouched` keeps its published shape, and `narration` matches what `--narrate` would emit.
+
+Retrieved corpus facts are read-only per turn. Only what the engine learns persists to the session. A fact cited in the answer names its source: session facts cite their `teach:` provenance, corpus facts cite their `corpus:<band>@<version>` provenance.
+
+## Rate and concurrency
+
+Each session has its own 30-turns-per-hour counter (default, deployment parameter). An atomic counter row tracks it; TTL manages cleanup. The edge rate limit (§3.9) covers all `/api/*` requests per IP. The turn Lambda's reserved concurrency (default 5) is separate from the row service's (10).
+
+Concurrent turns on one session are allowed. Fact rows are content-addressed, so concurrent writers land distinct rows or the same row with identical content. Metadata (watermark, node id) use last-write-wins; a regression costs one recompute. No turn-serialization guarantee is required from the consumer.
+
+## Error semantics
+
+Errors map to the row backend's two classes (§3.1, section 5):
+
+- **400 / 413** → `BackendRejected` (the input was invalid: an oversized row, malformed session key, oversized request body);
+- **429 / 507 / 5xx** → `BackendUnavailable` (the turn still answers, learned facts are not persisted; the consumer's page degrades gracefully).
+
+A consumer catches by class or by `code`, never by message text.
+
+## The first page consumer
+
+`news.html` is the reference implementation. The same session UUID that the feed uses is the turn endpoint's session key. The reply is immediate (`200 {reply, factsTouched, narration}`); learned rows land in the session partition alongside the materialized feed. When the turn's `factsTouched` is non-empty, the handler async-invokes the news worker in materialize mode before responding — the reply is immediate, the feed catches up seconds later on the next page poll.
+
+Other pages (chat.html, ledger.html) run their engines in-page and do not call this endpoint. The turn surface is for consumers hosting the engine themselves.
+
+## Corpus bands and the loader
+
+Corpus data lives in the same table under reserved partitions (pk `corpus:<band>`). Three bands ship with tmct:
+
+- `corpus:wikidata-slice` — CC0, no attribution burden;
+- `corpus:wordnet-complete` — Open English WordNet, CC-BY-4.0, attribution in the band manifest;
+- `corpus:conceptnet-full` — CC BY-SA 4.0, share-alike.
+
+A fourth band, `corpus:simplewiki-derived` (extracted article facts), is future work; `PLAN_WIKIPEDIA_BAND.md` scopes it.
+
+Load or clear bands with `tmct corpus load <band> [--table <name>]` and `tmct corpus clear <band>`. Content-addressed keys make re-runs idempotent. The loader streams jsonl from the band's source, writes with bounded concurrency and backoff, and computes a manifest digest for idempotency checks. Both commands are operator tools — credentials are ambient, never embedded. A consumer hosting the turn surface runs the same CLI verb against their own table.
+
+Band facts carry their provenance (`corpus:<band>@<version>`) in citations. No new provenance grammar for bands; they use the same existing corpus grammar tmct's shipped corpora already use.
