@@ -1,6 +1,6 @@
-// A teach/read-back turn per predicate family, asserting the wording chat.mjs
-// rendered before it was repointed at src/domain/fact-phrase.mjs's shared
-// FACT_PREDICATE_PHRASES table is unchanged — the same table, one binding.
+// A teach/read-back turn per predicate family: what a chat answer actually
+// says for each curated entry, end to end through the store, rather than the
+// renderer's own unit view of the table.
 // owl:unionOf/complementOf/oneOf/differentFrom already have their own
 // dedicated read-back coverage in
 // test/adapters/teach-negative-and-enumeration.test.mjs; this file covers the
