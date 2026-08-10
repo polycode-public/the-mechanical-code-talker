@@ -35,11 +35,13 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
 - In flight: the combined miss-lead round on chat.mjs (Opus), E1 assertion findings (Opus,
-  owns core.mjs until it lands), M2 reference backend + conformance kit (Sonnet), T1
-  retrieval + calibration (Opus). Landed: M0 (merged), E0 (merged), the screenshot capture
+  owns core.mjs until it lands), T1 retrieval + calibration (Opus), M4 DynamoDB backend
+  (Sonnet, owns package.json). Landed: M0, M2, E0 (all merged), the screenshot capture
   (item closed below).
-- Queued: M1 after E1 → M3/M4 → M5/T0/T2/T4 → M6/M7/T3/T12/E2/E3 → M8/T5/T6/T7/E4 →
+- Queued: M1 after E1 → M3 → M5/T0/T2/T4 → M6/M7/T3/T12/E2/E3 → M8/T5/T6/T7/E4 →
   T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins.
+- Pushes: batch 1 (through the M0 marker commit) is full-suite green (7529/7529) and queued —
+  gitlab.com SSH is refusing connections on 22 and 443; retrying at each merge moment.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
