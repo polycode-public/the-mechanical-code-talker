@@ -45,22 +45,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   chat.html and ledger.html gaining a local/AWS backend slider with `?backend=aws` deep links
   and mode-honest copy; and the home grid renamed the demo grid with nine deep-linked
   buttons. DOC ONLY: nothing builds until the operator says build.
-- [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
-  matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
-  which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
-  samples on both arms of `g-b1-neg-11` name this sentence unprompted and score honesty 0 for it,
-  on an answer whose verdict is correct
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`). The lead heads 121 of the 1,075 answers across 15
-  cells — B2 relative-embedded (23), C2 garden-path (19), C1 relative-embedded (16) lead it — so
-  separating "this kind is empty" from "nothing satisfied the filter" is a judged round over those
-  cells rather than a spot fix.
-- [ ] **An empty composition names its emptied branch only for a seed clause plus one qualifier** —
-  the 5.0.41 round widened it to the negative polarity, so both "and tested" and "but not tested"
-  now name what held. An intersection of two clauses, a difference of two clause sets, and a
-  multi-step fold still answer "nothing in the index matches that", and every miss left in
-  `C1:negation+relative-embedded` is one of those, so the cell's floor is this receipt. Carrying the
-  intermediate through `evalBoolean` instead of re-evaluating the seed covers all of them; it
-  reaches every composite lane and every miss text pinned against them.
+- [ ] **One combined round: the composite miss lead + the empty-composition receipt**
+  (operator: combined, 2026-08-10) — the two share one miss-text surface, so one Opus round
+  redesigns it once and measures once. (a) "nothing in the index matches that (functions)"
+  claims the kind is empty when the filter emptied it — both judge samples on both arms of
+  `g-b1-neg-11` scored honesty 0 for it on a correct verdict; the lead heads 121 of 1,075
+  answers across 15 cells (B2 relative-embedded 23, C2 garden-path 19, C1 relative-embedded
+  16). Separate "this kind is empty" from "nothing satisfied the filter". (b) An empty
+  composition names its emptied branch only for a seed clause plus one qualifier; an
+  intersection of two clauses, a difference, and a multi-step fold still answer the generic
+  line, and every miss left in `C1:negation+relative-embedded` is one of those. Carry the
+  intermediate through `evalBoolean` instead of re-evaluating the seed. One judged round over
+  the affected cells, answer-identity-controlled view leading (the deleted instrument items'
+  recorded noise makes the raw view unreadable at this signal size).
 - [ ] **The newsworthiness gate's one measured false positive: scaffolding prose reads as
   news** — `archive/PLAN_NEWSWORTHINESS.md`'s N4 marker records "back to the link" and
   "normalizefeeditems" heading cards on the NYT fixture: the fixture's own test-scaffolding
