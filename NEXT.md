@@ -37,15 +37,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   seam, bounded enumeration, supersession, structural exclusion of bookkeeping rows) under
   their operational budget (stateless open, O(rows-touched) turns, per-fact atomicity,
   row-level concurrency, opaque session keys, TTL pass-through, determinism, lazy SDK); tmct
-  ships a conformance suite the sqlite backend passes (precedent: the repository-interface
-  conformance kit and the `./conformance` export). Operator redirection (2026-08-10): the
-  deployed news.html demo must BE the AWS architecture — a NEW row service in tmct's own
-  stack (server-minted session keys, HTTP row-backend client in the page, synchronous
-  writes, IndexedDB demoted to degraded mode, the never-sent-anywhere copy rewritten
-  honestly for this page only). A Fable revision wave is rewriting the plan's browser
-  half accordingly, adding the service phases and a known-sharp-edges section from the
-  operator's design review. Execution starts after the revision merges and the phrase-fix
-  worktree frees chat.mjs.
+  ships a conformance suite every backend passes. The design is settled after three
+  operator revision rounds and awaits the operator's read before any build: tmct builds and
+  ships ALL backends in-tree (in-memory, sqlite, DynamoDB — no consumer adapters;
+  bedrock-meter imports `createDynamoRowBackend` and configures it), and the deployed
+  news.html demo IS the AWS architecture — an `/api/*` row service on the site's own stack,
+  no cookies and no session endpoints (client-minted UUIDv4 in `x-tmct-session`, strictly
+  validated, sessions created implicitly on first write, purge via `DELETE /api/rows
+  {all: true}`), synchronous writes, no local fact storage ever (only the session-pointer
+  UUID in localStorage, said plainly in the page copy), and a full abuse-risk table with
+  per-IP edge rate limiting, caps, TTL, billing alarm and a named kill switch. DOC ONLY:
+  nothing builds until the operator says build.
 - [ ] **bedrock-meter's embedded-path findings (inbox, 2026-08-09/10)** — in flight in two
   worktrees: (1) chat.mjs's `predicatePhrase` renders raw CURIEs for the `tmct:` predicates
   the lexicon itself mints ("latency tmct:needs result" reached their public page) while
