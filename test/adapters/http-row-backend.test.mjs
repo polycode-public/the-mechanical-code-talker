@@ -4,13 +4,16 @@
 // reference backend. Three real layers, no fakes, for every check the kit
 // runs. Beyond the kit, this file pins the client's own promises: the
 // §3.8 status-code error mapping, the 404-on-meta-read-maps-to-null read,
-// and the retry-once rule `deleteAll` alone carries.
+// the retry-once rule `deleteAll` alone carries, and `withOneRetryOnUnavailable`
+// — the opt-in consumer-side wrapper chat.html/ledger.html's AWS mode binds
+// every method through, for the one race a large read-only seed overlay's
+// own first-load row projection can hit against a same-process test double.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
 import { createLocalRowService } from "../../server/row-service/local.mjs";
-import { createHttpRowBackend } from "../../src/surfaces/web/http-row-backend.mjs";
+import { createHttpRowBackend, withOneRetryOnUnavailable } from "../../src/surfaces/web/http-row-backend.mjs";
 import { runMemoryBackendConformance } from "../../src/tools/memory-backend-conformance.mjs";
 import { BackendRejected, BackendUnavailable } from "../../src/adapters/memory/row-backend.mjs";
 
@@ -128,6 +131,46 @@ test("a keyed delete and a put do not retry on a 5xx", async () => {
   const putBackend = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl: putFetch });
   await assert.rejects(putBackend.putRows([{ rowKey: "x", rowClass: "fact", term: "", json: "{}" }]), BackendUnavailable);
   assert.equal(putFetch.calls.length, 1, "a put gets one attempt, unlike deleteAll");
+});
+
+test("withOneRetryOnUnavailable: a put that fails once with a network error succeeds on the retry", async () => {
+  const fetchImpl = scriptedFetch([new TypeError("fetch failed"), emptyResponse(204)]);
+  const raw = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl });
+  const backend = withOneRetryOnUnavailable(raw);
+  await backend.putRows([{ rowKey: "x", rowClass: "fact", term: "", json: "{}" }]);
+  assert.equal(fetchImpl.calls.length, 2, "the network failure earned exactly one retry");
+});
+
+test("withOneRetryOnUnavailable: a read that fails once with a network error succeeds on the retry", async () => {
+  const fetchImpl = scriptedFetch([new TypeError("fetch failed"), jsonResponse(200, { rows: [] })]);
+  const raw = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl });
+  const backend = withOneRetryOnUnavailable(raw);
+  assert.deepEqual(await backend.readRows(), []);
+  assert.equal(fetchImpl.calls.length, 2);
+});
+
+test("withOneRetryOnUnavailable: still fails as BackendUnavailable when the retry also fails, and tries no further", async () => {
+  const fetchImpl = scriptedFetch([new TypeError("fetch failed"), new TypeError("fetch failed"), emptyResponse(204)]);
+  const raw = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl });
+  const backend = withOneRetryOnUnavailable(raw);
+  await assert.rejects(backend.putRows([{ rowKey: "x", rowClass: "fact", term: "", json: "{}" }]), BackendUnavailable);
+  assert.equal(fetchImpl.calls.length, 2, "one attempt plus one retry, never a third");
+});
+
+test("withOneRetryOnUnavailable: a validation failure (BackendRejected) never retries — a retry can't fix bad input", async () => {
+  const fetchImpl = scriptedFetch([jsonResponse(400, { error: { message: "refused" } })]);
+  const raw = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl });
+  const backend = withOneRetryOnUnavailable(raw);
+  await assert.rejects(backend.putRows([{ rowKey: "x", rowClass: "fact", term: "", json: "{}" }]), BackendRejected);
+  assert.equal(fetchImpl.calls.length, 1, "no retry was spent on a request that was never going to succeed");
+});
+
+test("withOneRetryOnUnavailable: deleteAll keeps its own single retry rather than stacking a second one", async () => {
+  const fetchImpl = scriptedFetch([emptyResponse(503), emptyResponse(204)]);
+  const raw = createHttpRowBackend({ apiBase: "http://example.invalid", sessionKey: randomUUID(), fetchImpl });
+  const backend = withOneRetryOnUnavailable(raw);
+  await backend.deleteAll();
+  assert.equal(fetchImpl.calls.length, 2, "deleteAll's own retry fires once, not once more on top");
 });
 
 test("readRows sends the session key in the header; a mutation addresses it in the path", async () => {

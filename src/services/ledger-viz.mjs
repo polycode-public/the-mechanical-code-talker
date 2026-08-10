@@ -540,6 +540,34 @@ function sparkCaptionHtml(stats) {
     : "cumulative facts, teach order";
 }
 
+/**
+ * The page's backend mode from its own query string: "aws" when
+ * `backend=aws` is present, "local" for anything else — absent, empty, or
+ * any other value, silently. Mode is a boot choice (the slider rewrites the
+ * URL and reloads rather than switching a live session), so this is the one
+ * place either mode is ever decided.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function resolveBackendMode(search) {
+  return new URLSearchParams(String(search || "")).get("backend") === "aws" ? "aws" : "local";
+}
+
+/**
+ * The current page address with its `backend` query parameter rewritten to
+ * match `mode` — "aws" written explicitly, anything else removed rather than
+ * written out as "local", so a plain reload never carries a redundant param.
+ * Every other query parameter and the hash survive untouched.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function backendModeUrl(pageUrl, mode) {
+  const url = new URL(String(pageUrl));
+  if (mode === "aws") url.searchParams.set("backend", "aws");
+  else url.searchParams.delete("backend");
+  return url.toString();
+}
+
 /** One complete, self-contained document: the ledger, segment rail,
  *  worth-a-look panel, breadcrumb/search, two-hop minimap, and (when the
  *  memory-ask bundle is present) the ask-the-graph chat dock, all over the
@@ -585,7 +613,15 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   // session store, so they appear only where that bundle is offered — the
   // demo site, never the CLI's self-contained tmct viz page.
   const ingestHtml = ledgerBundleAvailable
-    ? `<div class="docktools">
+    ? `<div class="backendrow" title="local: everything taught here lives in this browser tab only, and nothing survives a reload. AWS: taught facts save to an anonymous server-side session that expires after seven days, and reload where you left off. Switching reloads the page — a session is never moved between modes.">
+          <fieldset class="backendMode" id="backendMode">
+            <legend class="mono">backend</legend>
+            <label><input type="radio" name="backendMode" id="backendLocal" value="local" checked> local</label>
+            <label><input type="radio" name="backendMode" id="backendAws" value="aws"> AWS</label>
+          </fieldset>
+          <p class="backendnote mono" id="backendNote"></p>
+        </div>
+        <div class="docktools">
           <button type="button" id="ingestToggle" class="dockbtn">ingest text&hellip;</button>
           <button type="button" id="exportFacts" class="dockbtn">export facts</button>
         </div>
@@ -764,6 +800,15 @@ ${DASH_DARK_CHROME_CSS}
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .6rem; min-width: 0; }
   .chatask input:disabled { opacity: .6; }
   .chatnote { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin: 0; }
+  /* local (this tab only) or AWS (an anonymous server-side session) — a boot
+     choice, so picking one reloads the page rather than switching a live
+     session. backendNote states whichever mode's promise is actually live. */
+  .backendrow { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem; }
+  fieldset.backendMode { border: none; margin: 0; padding: 0; display: inline-flex; align-items: center; gap: .5rem; font-size: .68rem; color: var(--muted); }
+  fieldset.backendMode legend { padding: 0; margin-right: .1rem; }
+  fieldset.backendMode label { display: inline-flex; align-items: center; gap: .22rem; cursor: pointer; white-space: nowrap; font-size: .72rem; }
+  fieldset.backendMode input[type="radio"] { margin: 0; accent-color: var(--corpus); }
+  .backendnote { font-size: .68rem; color: var(--muted); margin: 0; }
   .docktools { display: flex; gap: .5rem; margin-top: .55rem; }
   .dockbtn { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: .22rem .6rem; background: var(--bg); cursor: pointer; }
   .dockbtn:hover { color: var(--ink); border-color: var(--ink); }
@@ -847,6 +892,8 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
   const DAY = 86400000;
   const facetCounts = ${facetCounts.toString()};
+  const resolveBackendMode = ${resolveBackendMode.toString()};
+  const backendModeUrl = ${backendModeUrl.toString()};
   const el = (id) => document.getElementById(id);
   const esc = ${escapeHtml.toString()};
   // Aliased so the dashboard/sparkline builders below (toString-embedded
@@ -1167,6 +1214,44 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       return d;
     };
 
+    // The backend mode is a boot choice, decided once from the URL this page
+    // was loaded with — never switched under a live session. The radios only
+    // ever reflect that choice and, on a change, rewrite the URL and reload.
+    const backendModeFieldset = el("backendMode");
+    const backendModeRadios = Array.prototype.slice.call(backendModeFieldset.querySelectorAll('input[type="radio"]'));
+    const backendMode = resolveBackendMode(location.search);
+    for (const radio of backendModeRadios) radio.checked = radio.value === backendMode;
+    backendModeFieldset.addEventListener("change", function () {
+      const chosen = backendModeRadios.find((r) => r.checked);
+      location.href = backendModeUrl(location.href, chosen ? chosen.value : "local");
+    });
+    const backendNoteEl = el("backendNote");
+    backendNoteEl.textContent = backendMode === "aws"
+      ? "taught facts save to an anonymous server-side session that expires after seven days."
+      : "taught facts stay in this browser tab only, and are lost on reload.";
+
+    // AWS mode's one local item: a session pointer, never facts. Resolved
+    // once, eagerly, so the FIRST dock turn (not just a later one) already
+    // knows whether to bind the session's memory to the row service.
+    const AWS_SESSION_KEY = "tmct.ledger.sessionKey";
+    function mintAwsSessionKey() {
+      const key = crypto.randomUUID();
+      try { localStorage.setItem(AWS_SESSION_KEY, key); } catch { /* private mode — this visit still works, just not restorable */ }
+      return key;
+    }
+    let awsSessionKey = null;
+    if (backendMode === "aws") {
+      let stored = null;
+      try { stored = localStorage.getItem(AWS_SESSION_KEY); } catch { stored = null; }
+      awsSessionKey = stored || mintAwsSessionKey();
+    }
+
+    // A row-backed session's memory has no .payload of its own (the
+    // in-memory store's shape) — its current state lives in .cachedPayload,
+    // kept fresh in place after every turn. .impl is present on a row
+    // handle alone, so it doubles as the branch test.
+    const payloadOf = (memoryDir) => (memoryDir.impl ? memoryDir.cachedPayload : memoryDir.payload);
+
     let session = null;
     // Serializes every engine-touching call through this one dock — the same
     // posture plan-viz.mjs's own chat-assert dock takes with its withLock,
@@ -1204,11 +1289,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     async function ensureSession() {
       if (session) return session;
       await tryLoadWink();
-      session = await tmct.open({ seedPayload: PAYLOAD });
+      session = await tmct.open({ seedPayload: PAYLOAD, awsSessionKey: awsSessionKey || undefined });
       // From here the live store is the source of truth for the digest, so a
       // digest of a term taught this session reads its fresh facts — the store
       // grows in place, so this one closure stays current.
-      getLivePayload = () => session.memoryDir.payload;
+      getLivePayload = () => payloadOf(session.memoryDir);
       return session;
     }
 
@@ -1230,7 +1315,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
           pending.className = "a" + (taught ? " taught" : (record && record.miss ? " miss" : ""));
           pending.innerHTML = taught ? '<span class="tag">taught</span>' + body : body;
           if (taught) {
-            const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(payloadOf(live.memoryDir), {});
             applyLedgerData(fresh);
           } else if (!(record && record.miss)) {
             // Only a genuine answer (never a miss) tries to resolve a
@@ -1298,7 +1383,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
               const r = await tmct.turn(sentence);
               if (r.record && r.record.miss === false && r.record.via === "assert") grounded += 1;
             }
-            const fresh = tmct.page.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(payloadOf(s.memoryDir), {});
             applyLedgerData(fresh);
             const skipped = sentences.length - grounded;
             statusEl.textContent = countLabel(sentences.length, "sentence")
@@ -1373,7 +1458,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
               researchQueue = result.research;
               renderResearchControls();
               if (!missed) {
-                const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
+                const fresh = tmct.page.computeLedgerDataFromPayload(payloadOf(live.memoryDir), {});
                 applyLedgerData(fresh);
               }
             }

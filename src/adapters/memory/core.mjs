@@ -796,7 +796,13 @@ async function readRowPayload(handle) {
   if (!handle.cachedPayload) {
     const empty = emptyMemory();
     const stored = await collectRows(handle.impl.readRows());
-    handle.baseRows = payloadToRows(handle.basePayload || empty);
+    // "keep": the base overlay's own rows never reach the wire (persistRowPayload
+    // excludes every seed key from every write via seedOnlyKeys below), so the
+    // per-row byte cap that protects a real backend's real item-size limit has
+    // nothing to protect here — capping it would silently drop a real corpus
+    // band's own high-fan-out property (one edge per fact is normal, not a
+    // pathology) and break every read that depends on it.
+    handle.baseRows = payloadToRows(handle.basePayload || empty, { onOversizedRow: "keep" });
     handle.storedRows = stored.filter((row) => row?.rowClass !== BOOKKEEPING_ROW_CLASS);
     handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), {
       meta: {

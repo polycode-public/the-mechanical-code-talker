@@ -109,14 +109,20 @@ function ordAssigner(priorRows) {
   };
 }
 
-/** Refuse or drop an oversized row. The default posture throws: one fact that
- *  big is an extraction pathology and the turn should fail loudly, naming the
- *  provenance that produced it. A consumer whose turn is itself the last resort
- *  passes `onOversizedRow: "drop"` instead, and the turn completes with
- *  everything else persisted. */
+/** Refuse, drop, or keep an oversized row. The default posture throws: one
+ *  fact that big is an extraction pathology and the turn should fail loudly,
+ *  naming the provenance that produced it. A consumer whose turn is itself
+ *  the last resort passes `onOversizedRow: "drop"` instead, and the turn
+ *  completes with everything else persisted. `"keep"` is for rows that will
+ *  never actually reach the wire — a read-only seed overlay's own projection
+ *  (core.mjs's `readRowPayload`), never a caller-facing choice: the cap
+ *  protects a real backend's real per-item limit, which does not apply to a
+ *  base payload `persistRowPayload` already excludes from every write
+ *  (`seedOnlyKeys`). Silent — an oversized seed row is not a pathology, it's
+ *  what a real corpus band's own high-fan-out property looks like. */
 function admitRow(row, provenance, { onOversizedRow, log }) {
   const bytes = rowJsonBytes(row);
-  if (bytes <= MAX_ROW_BYTES) return true;
+  if (bytes <= MAX_ROW_BYTES || onOversizedRow === "keep") return true;
   const where = provenance ? ` (provenance: ${provenance})` : "";
   const detail = `${row.rowClass} row ${row.rowKey} serializes to ${bytes} bytes, over the ${MAX_ROW_BYTES}-byte cap${where}`;
   if (onOversizedRow === "drop") {
@@ -127,16 +133,18 @@ function admitRow(row, provenance, { onOversizedRow, log }) {
 }
 
 const warnToConsole = (message) => console.warn(message);
+const OVERSIZED_ROW_POSTURES = new Set(["throw", "drop", "keep"]);
 
 /** Project a memory payload into wire rows.
  *
  *  `priorRows` are the rows this payload was last projected as; pass them and
  *  every unchanged row comes back byte-identical, so `diffRows` writes only
- *  what actually moved. `onOversizedRow` is "throw" (default) or "drop", and
- *  `log` takes the drop notices. */
+ *  what actually moved. `onOversizedRow` is "throw" (default), "drop", or
+ *  "keep" (rows that never reach the wire — see `admitRow`), and `log` takes
+ *  the drop notices. */
 export function payloadToRows(payload, { priorRows = null, onOversizedRow = "throw", log = warnToConsole } = {}) {
-  if (onOversizedRow !== "throw" && onOversizedRow !== "drop") {
-    throw new TypeError(`onOversizedRow must be "throw" or "drop", got ${JSON.stringify(onOversizedRow)}`);
+  if (!OVERSIZED_ROW_POSTURES.has(onOversizedRow)) {
+    throw new TypeError(`onOversizedRow must be "throw", "drop", or "keep", got ${JSON.stringify(onOversizedRow)}`);
   }
   const ordFor = ordAssigner(priorRows);
   const posture = { onOversizedRow, log };

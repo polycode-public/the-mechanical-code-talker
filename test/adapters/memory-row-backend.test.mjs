@@ -370,6 +370,54 @@ test("a store carrying no seed reads back only what its session wrote", async ()
   );
 });
 
+/** A payload standing in for a real corpus band's own high-fan-out property
+ *  (one edge per fact) already over the per-row cap before any session ever
+ *  teaches anything — MAX_ROW_BYTES's own module isn't imported here to keep
+ *  this fixture's size independent of that constant's exact value; "20000"
+ *  is comfortably past it either way. */
+async function seedPayloadWithOversizedGroup() {
+  const seed = await seedPayload();
+  seed.objectProperties.push({
+    prop: "mgx:hugeGroup",
+    examples: [{ subject: "s", object: "o", extra: "x".repeat(20000) }],
+  });
+  return seed;
+}
+
+test("the seed overlay's own base rows never cap out on read, even one already over the per-row limit", async () => {
+  const seed = await seedPayloadWithOversizedGroup();
+  // onOversizedRow left at its default ("throw") on purpose: the base
+  // overlay's own read never consults the handle's configured posture — see
+  // core.mjs's readRowPayload.
+  const dir = wrapRowBackend(spyBackend().backend, { basePayload: seed });
+
+  const loaded = await loadMemory(dir);
+  const hugeGroup = loaded.objectProperties.find((g) => g.prop === "mgx:hugeGroup");
+  assert.ok(hugeGroup, "the oversized seed group reads back intact rather than being dropped or throwing");
+  assert.equal(hugeGroup.examples.length, 1);
+});
+
+test("a write that would re-project an already-oversized seed group throws by default, naming the row", async () => {
+  const dir = wrapRowBackend(spyBackend().backend, { basePayload: await seedPayloadWithOversizedGroup() });
+  await assert.rejects(
+    appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 }),
+    (error) => {
+      assert.equal(error.code, "TMCT_BACKEND_REJECTED");
+      assert.equal(error.rowKey, "edge-group:mgx:hugeGroup");
+      return true;
+    },
+  );
+});
+
+test("under onOversizedRow: \"drop\", the same write completes and the oversized seed row is still never written back", async () => {
+  const spy = spyBackend();
+  const dir = wrapRowBackend(spy.backend, { basePayload: await seedPayloadWithOversizedGroup(), onOversizedRow: "drop" });
+  await appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 });
+  const writtenKeys = spy.calls.putRows.flat();
+  assert.ok(writtenKeys.length, "the session's own fact still writes");
+  assert.equal(writtenKeys.includes("edge-group:mgx:hugeGroup"), false, "the oversized seed row is never written back");
+});
+
 // ---- two live handles -------------------------------------------------------
 
 test("two handles racing on one store both land, and neither deletes the other's rows", async () => {

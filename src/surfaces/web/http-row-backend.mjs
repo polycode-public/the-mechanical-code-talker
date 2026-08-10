@@ -148,3 +148,42 @@ export function createHttpRowBackend({ apiBase, sessionKey, fetchImpl = fetch } 
     },
   };
 }
+
+function retryOnceOnUnavailable(fn) {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (err) {
+      if (!(err instanceof BackendUnavailable)) throw err;
+      return fn(...args);
+    }
+  };
+}
+
+/** Wraps a row backend so every method retries once on `BackendUnavailable`
+ *  — a network-level failure, never `BackendRejected`, which a retry cannot
+ *  fix. Every method here is safe to repeat: reads are read-only,
+ *  `putRows`/`deleteRows` are upserts/keyed-deletes the service already
+ *  documents as per-row atomic (a repeat just upserts or re-marks the same
+ *  rows), and `deleteAll` already carries its own retry. The one race this
+ *  covers: a consumer whose memory binds a large read-only seed as its base
+ *  overlay (`wrapRowBackend`'s `basePayload`) does one CPU-heavy row
+ *  projection the first time that session's memory is read — long enough,
+ *  in a same-process test double, to occasionally land the very next
+ *  network call on a socket the server had already begun tearing down.
+ *  Real deployments (browser ↔ a separate Lambda-backed service) don't
+ *  share an event loop with the store, so this is a same-process artifact,
+ *  not a form of casual unreliability to paper over broadly — hence one
+ *  retry, not a backoff loop. */
+export function withOneRetryOnUnavailable(rowBackend) {
+  const wrapped = {
+    ...rowBackend,
+    readRows: retryOnceOnUnavailable(rowBackend.readRows),
+    putRows: retryOnceOnUnavailable(rowBackend.putRows),
+    deleteRows: retryOnceOnUnavailable(rowBackend.deleteRows),
+    readMeta: retryOnceOnUnavailable(rowBackend.readMeta),
+    putMeta: retryOnceOnUnavailable(rowBackend.putMeta),
+  };
+  if (typeof rowBackend.readRowsByTerm === "function") wrapped.readRowsByTerm = retryOnceOnUnavailable(rowBackend.readRowsByTerm);
+  return wrapped;
+}
