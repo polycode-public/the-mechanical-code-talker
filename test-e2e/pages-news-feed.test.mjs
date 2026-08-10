@@ -1,42 +1,20 @@
-// news.html's UX contract (PLAN_NEWS_FEED.md section 2), states S1 through
-// S5, driven in a real browser against fixture-served api.wikimedia.org and
-// simple.wikipedia.org endpoints — no test here touches a real third party.
-// Every source but one contemporary and one knowledge-base source is
-// unchecked before the start action, so the request surface this file
-// fixture-routes stays small and every count in it is exact.
-//
-// The page starves requestAnimationFrame and Playwright's injected pollers
-// while it streams and indexes the chat seed, so a locator wait or
-// waitForFunction times out against provably rendered content — this file
-// samples window.tmct.session/window.tmct.news on a sleep-then-evaluate
-// loop throughout, the pattern scripts/gen-screenshots.mjs's own news ready
-// check already proved out, and reads the session's own structured verbs
-// (rank(), requestLog, health, metrics) rather than scraping rendered text.
+// news.html's thin-client contract (PLAN_MEMORY_BACKEND.md's news.html-
+// goes-thin revision), driven in a real browser against the real row
+// service (server/row-service/local.mjs) with its in-process news worker
+// (server/news-worker/local.mjs), fixture-routed fetchers standing in for
+// the live sources. The page itself makes no third-party request of its own
+// — every fixture-served fetch in these tests happens inside the worker,
+// never inside the browser — so this file's own network assertions are
+// about the page's requests to `/api/*` alone.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { createLocalRowService } from "../server/row-service/local.mjs";
 
-const READY_TIMEOUT_MS = 180_000;
-// The bound a click's own effect must land inside once the page is past its
-// one-time boot cost (seed fetch, parse and first render) — an order of
-// magnitude under READY_TIMEOUT_MS, so a regression that makes a later
-// interaction pay the boot cost again fails loudly rather than just fitting
-// inside the same generous budget everything else uses.
-const INTERACTION_TIMEOUT_MS = 45_000;
-// The responsiveness contract: an in-page evaluate round trip must answer
-// within this bound even while the seed streams and indexes. The bound sits
-// well under the multi-second freeze it guards against while leaving CI
-// hardware headroom over the ~1.5s worst stretch a healthy boot has shown.
-const ROUND_TRIP_BUDGET_MS = 2500;
-// The same contract while a poll is mid-ingest. The floor here is one
-// sentence's own recognizer pass, which the ingest cannot split — the ingest
-// yields the thread between passes, so this bound is a few of those, not the
-// whole article and nothing like the whole poll.
-const POLL_ROUND_TRIP_BUDGET_MS = 8000;
+const READY_TIMEOUT_MS = 30_000;
+const INTERACTION_TIMEOUT_MS = 15_000;
 
 let siteDir;
 let server;
@@ -44,7 +22,6 @@ let browser;
 
 before(async () => {
   siteDir = buildDemoSiteSnapshot();
-  cpSync(join(repoRoot, "public", "chat-seed.json"), join(siteDir, "chat-seed.json"));
   server = await serveDirectory(siteDir);
   browser = await chromium.launch();
 });
@@ -52,175 +29,90 @@ before(async () => {
 after(async () => {
   await browser?.close();
   await server?.close();
-  if (siteDir) rmSync(siteDir, { recursive: true, force: true });
+  if (siteDir) { const { rmSync } = await import("node:fs"); rmSync(siteDir, { recursive: true, force: true }); }
 });
 
-async function openNewsPage() {
+function fixtureFetcher(id, titles) {
+  return {
+    id,
+    async fetchItems() {
+      return {
+        items: titles.map((title, i) => ({
+          id: `${id}:${i}`, guid: String(i), title, url: `https://example.com/${id}/${i}`, summary: "", publishedAt: "", sourceId: id,
+        })),
+        bytes: 240,
+      };
+    },
+  };
+}
+
+function fetchersFor(ids, titles) {
+  return (config) => {
+    const map = new Map();
+    for (const id of config.sources) if (ids.includes(id)) map.set(id, fixtureFetcher(id, titles));
+    return map;
+  };
+}
+
+/** Every one of this file's own service instances, closed together in
+ *  `after` — a test that starts one and forgets to close it would otherwise
+ *  leak a listening port past the file's own run. */
+const openServices = [];
+async function withRowService(options = {}) {
+  const service = await createLocalRowService(options);
+  openServices.push(service);
+  return service;
+}
+after(async () => { await Promise.all(openServices.map((s) => s.close())); });
+
+/** Proxies the page's own same-origin `/api/*` requests to `service.url` —
+ *  the CloudFront `/api/*` behavior's local stand-in. Every request this
+ *  page ever makes for its API traffic resolves against `document.location`
+ *  (root-relative paths), so this is the one seam a test needs to point that
+ *  traffic at a double instead of a real deployment. Requests to anything
+ *  else are aborted, the same "nothing but this page's own origin, ever"
+ *  guard the other demo-page e2e specs run. */
+async function openNewsPage(service) {
   const context = await browser.newContext();
   const page = await context.newPage();
   const pageErrors = [];
   page.on("pageerror", (err) => pageErrors.push(String(err)));
+  const apiRequests = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    apiRequests.push({ method: request.method(), url: request.url() });
+    const target = new URL(new URL(request.url()).pathname + new URL(request.url()).search, service.url);
+    const headers = await request.allHeaders();
+    delete headers.host;
+    try {
+      const response = await fetch(target, {
+        method: request.method(),
+        headers,
+        body: ["GET", "HEAD"].includes(request.method()) ? undefined : request.postData(),
+      });
+      const body = Buffer.from(await response.arrayBuffer());
+      const responseHeaders = {};
+      response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+      await route.fulfill({ status: response.status, headers: responseHeaders, body });
+    } catch {
+      await route.abort("connectionfailed");
+    }
+  });
   await page.route((url) => !url.href.startsWith(server.origin), (route) => route.abort());
   await page.goto(`${server.origin}/news.html`, { waitUntil: "load" });
-  return { context, page, pageErrors };
+  return { context, page, pageErrors, apiRequests };
 }
 
-/** Poll a predicate on a timer rather than a locator/waitForFunction wait —
- *  see the file header. Resolves the predicate's own truthy return value,
- *  or throws once `timeoutMs` elapses with nothing but falsy reads. */
-async function waitFor(page, predicate, { timeoutMs = READY_TIMEOUT_MS, pollMs = 2000, label = "condition", arg } = {}) {
+async function waitFor(page, predicate, { timeoutMs = READY_TIMEOUT_MS, pollMs = 200, label = "condition", arg } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    await page.waitForTimeout(pollMs);
     const result = arg === undefined ? await page.evaluate(predicate) : await page.evaluate(predicate, arg);
     if (result) return result;
+    await page.waitForTimeout(pollMs);
   }
   throw new Error(`${label} never became true within ${timeoutMs}ms`);
 }
 
-/** Serves one contemporary item from the wikimedia-featured mostread shape
- *  (section 4.1's real wire shape). Its title carries three halves on
- *  purpose: a copular sentence the ingest grammar reads but the
- *  newsworthiness gate bands background (an identity fact, PLAN_NEWS_FEED.md
- *  section 17.3 rule 2 — "what a thing is", never a report); a relation
- *  sentence carrying a fresh measurement, which the gate DOES admit and is
- *  what actually fact-grounds and hubs quokka; and a verbless fragment whose
- *  two terms ("rottnest", "sightings") no triple can form from — those two
- *  are what the fact-ungrounded ledger admits, and what enrichment then
- *  works. */
-async function routeWikimediaFeatured(page) {
-  await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    headers: { "access-control-allow-origin": "*" },
-    body: JSON.stringify({
-      mostread: {
-        articles: [{
-          normalizedtitle: "A quokka is a marsupial. Quokka has a population of 12000. Rottnest sightings, wetlands, dry-season counts.",
-          extract: "",
-          wikibase_item: "",
-          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Quokka" } },
-        }],
-      },
-    }),
-  }));
-}
-
-/** PLAN_NEWSWORTHINESS.md section 4's own worked example: a report naming
- *  Kumamoto and a fresh population figure — a single digit-anchored sentence
- *  keeps the whole fact inside subgraphAround's own two-hop cap, unlike an
- *  added identity clause ("Kumamoto is a city"), which would route the
- *  card's two-hop walk through the seed's own densely-connected "city" class
- *  and crowd this poll's own fact out of it. */
-async function routeWikimediaKumamoto(page) {
-  await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    headers: { "access-control-allow-origin": "*" },
-    body: JSON.stringify({
-      mostread: {
-        articles: [{
-          normalizedtitle: "Kumamoto has a population of 1738000.",
-          extract: "",
-          wikibase_item: "",
-          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Kumamoto_Prefecture" } },
-        }],
-      },
-    }),
-  }));
-}
-
-/** A poll that fetches successfully but reports nothing — the honest "no
- *  articles today" case the empty state must still cover after a real poll,
- *  not just before the first one. */
-async function routeWikimediaEmpty(page) {
-  await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    headers: { "access-control-allow-origin": "*" },
-    body: JSON.stringify({ mostread: { articles: [] } }),
-  }));
-}
-
-/** Serves Simple English Wikipedia's opensearch + REST summary round trip
- *  for exactly one term, "rottnest" — every other opensearch query gets a
- *  clean empty-suggestions reply, the honest "nothing found" shape a real
- *  miss reads as, so an enrichment attempt against any other pending term
- *  (here, "sightings") resolves to a miss rather than a network error. */
-async function routeSimpleWikipediaOneHit(page) {
-  let openSearchCalls = 0;
-  await page.route("https://simple.wikipedia.org/**", (route) => {
-    const url = route.request().url();
-    let body;
-    if (url.includes("action=opensearch")) {
-      openSearchCalls += 1;
-      const term = decodeURIComponent(new URL(url).searchParams.get("search") || "");
-      body = term === "rottnest" ? JSON.stringify(["rottnest", ["Rottnest"], [""], [""]]) : JSON.stringify([term, [], [], []]);
-    } else {
-      body = JSON.stringify({
-        title: "Rottnest",
-        extract: "A rottnest is an island.",
-        revision: "101",
-        content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Rottnest" } },
-      });
-    }
-    return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body });
-  });
-  return { openSearchCallCount: () => openSearchCalls };
-}
-
-/** Serves the mostread shape a live Wikipedia featured poll returns: several
- *  articles whose extracts run past one clause each. Two of them ground a
- *  clean class fact (background, under the newsworthiness gate); the other
- *  two carry the shapes that used to lose their subject on the way in — a
- *  trailing "It has a geographic area of …" and a bare "The gunman had
- *  earlier killed …" — whose predicate remainders once reached the graph as
- *  terms and titled a card of their own (readsAsEntityTerm/looksLikeEntityTerm
- *  now rejects both). The Quokka and Nonthaburi Province articles each carry
- *  a relation sentence with a fresh measurement — what actually anchors a
- *  card under test A (PLAN_NEWSWORTHINESS.md section 2); an article that is
- *  identity fact or ungrounded prose alone never heads one. */
-async function routeWikimediaArticleSet(page) {
-  const article = (title, extract) => ({
-    normalizedtitle: title,
-    displaytitle: title,
-    extract,
-    wikibase_item: title.replace(/\s+/g, "_"),
-    content_urls: { desktop: { page: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}` } },
-  });
-  await page.route("https://api.wikimedia.org/**", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    headers: { "access-control-allow-origin": "*" },
-    body: JSON.stringify({
-      mostread: {
-        articles: [
-          article("Tariff", "A tariff is a tax imposed on imported goods and services."),
-          article("Quokka", "A quokka is a marsupial. Quokka has a population of 12000. Rottnest sightings, wetlands, dry-season counts."),
-          article("Nonthaburi Province", "Nonthaburi Province is a province of Thailand. It has a geographic area of 7,409 square kilometres (2,861 sq mi) and a population of 1,683,115."),
-          article("Bang Bua Thong shooting", "The gunman had earlier killed his two grandparents in Bang Bua Thong prior to the shooting."),
-        ],
-      },
-    }),
-  }));
-}
-
-// A card's title names a thing. These words open a predicate remainder or a
-// new clause, so a title starting with one is a sentence the ingest lost the
-// subject of rather than an article's own subject.
-const FRAGMENT_LEAD_WORDS = new Set([
-  "and", "or", "but", "because", "since", "although", "though", "while", "so", "that", "which",
-  "is", "are", "was", "were", "be", "been", "being", "has", "have", "had",
-  "of", "in", "on", "at", "for", "to", "with", "from", "by", "as", "into", "over", "under",
-]);
-
-function firstWordOf(title) {
-  return String(title).trim().toLowerCase().split(/\s+/)[0].replace(/^[^a-z0-9]+/, "");
-}
-
-/** Resolves once the feed's own render has finished: the count line names a
- *  total and that many cards are on screen. A card renders per yielded tick,
- *  so reading the list mid-render sees an arbitrary prefix of it. */
 function waitForFeedRendered(page, label = "the feed finishing its render") {
   return waitFor(page, () => {
     const match = /^(\d+) articles?$/.exec(document.getElementById("feedCount").textContent || "");
@@ -229,574 +121,247 @@ function waitForFeedRendered(page, label = "the feed finishing its render") {
   }, { label });
 }
 
-/** Unchecks every default source but the one named, so the request surface
- *  a test fixture-routes stays exact — `kind` picks the contemporary or
- *  knowledge-base checkbox group. Toggles the on-page checkboxes, letting
- *  the page's own change handler commit config.sources/config.kbSources
- *  exactly the way a visitor's click would. */
-async function keepOnlySource(page, kind, keepId) {
-  const ids = kind === "kb"
-    ? ["simple-wikipedia", "wikidata", "wiktionary"]
-    : ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"];
-  for (const id of ids) {
-    const box = page.locator(`[data-source-toggle][value="${id}"]`);
-    if (id === keepId) await box.check();
-    else await box.uncheck();
-  }
-}
-
-test("the start button click moves the page through S1-S5: the empty state before any route releases, status chips and the request log update from a fixture-fulfilled poll, the ranked list matches fixture arithmetic, a KB hit grounds a term and reprocesses the item it came from, a KB miss enters the negative cache and is not retried, and the interval control re-arms nextPollAt", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
+test("before any press, the page makes no /api/ request at all and shows the honest first-visit empty state", async () => {
+  const service = await withRowService({});
+  const { context, page, apiRequests } = await openNewsPage(service);
   try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
+    await waitFor(page, () => (document.getElementById("feedCount").textContent || "").trim().length > 0, { label: "the first paint's own empty render" });
+    assert.equal(apiRequests.length, 0, `no /api/ request fired before any press: ${JSON.stringify(apiRequests)}`);
+    assert.match(await page.locator("#feedEmpty").innerText(), /no news yet/);
+    assert.equal(await page.evaluate(() => window.localStorage.length), 0, "nothing at all is in localStorage before the first press");
+    const statuses = await page.locator("[data-source-status]").allInnerTexts();
+    assert.ok(statuses.every((s) => s === "not yet polled"), `no source reads as polled before any press: ${JSON.stringify(statuses)}`);
+  } finally {
+    await context.close();
+  }
+});
 
-    // S1: the seed graph alone never heads a card — the feed only shows
-    // entity-anchored reports a poll brought in, so before any route has
-    // been given a chance to release, the feed is the designed empty state.
-    const s1 = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(s1.items, [], "S1: nothing has been reported yet");
-    assert.equal(s1.seedFallback, false, "S1: the seed fallback has retired from the feed path");
-    assert.equal((await page.evaluate(() => window.tmct.session.requestLog)).length, 0, "S1: nothing has been requested yet");
-    const statusesBeforeStart = await page.locator("[data-source-status]").allInnerTexts();
-    assert.ok(statusesBeforeStart.every((s) => s === "off" || s === "not yet polled"), `S1: no source status chip reads as polled yet: ${JSON.stringify(statusesBeforeStart)}`);
-
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", "simple-wikipedia");
-    await routeWikimediaFeatured(page);
-    const kb = await routeSimpleWikipediaOneHit(page);
-
-    // The button CLICK itself is what this turn asserts — its own effect,
-    // not a call into the session bypassing the DOM.
+test("pressing start mints a v4 session key, persists it beside the consent preference, and no other localStorage key ever appears", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka is a marsupial."]) } });
+  const { context, page } = await openNewsPage(service);
+  try {
     await page.locator("#newsStart").click();
-    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() (poll + enrich) settling" });
-    assert.deepEqual(pageErrors, [], "a real poll+enrich cycle against fulfilled routes never throws");
-
-    // S2: the wikimedia-featured status chip flipped off "not yet polled",
-    // and the request log gained a row for the fulfilled route, with a
-    // plausible byte count and an "ok" status.
-    const wikimediaChip = await page.locator('[data-source-id="wikimedia-featured"] [data-source-status]').innerText();
-    assert.equal(wikimediaChip, "ok", `the wikimedia-featured status chip flips to ok after the start click: ${wikimediaChip}`);
-    const log = await page.evaluate(() => window.tmct.session.requestLog);
-    const wikimediaRows = log.filter((r) => r.url.includes("api.wikimedia.org"));
-    assert.equal(wikimediaRows.length, 1, `exactly one wikimedia-featured request logged: ${JSON.stringify(log)}`);
-    assert.ok(wikimediaRows[0].bytes > 0, "the logged request carries a plausible byte count");
-    assert.equal(wikimediaRows[0].status, "ok", "a fulfilled route reads as a healthy poll");
-    assert.equal(await page.locator("#requestLogBody tr").count(), 1, "the request log table itself gained the same one row");
-
-    // S3/S4: quokka fact-grounded on arrival (the poll's own copular fact),
-    // so it never enters the ledger; the verbless fragment's two terms did.
-    // rottnest (the KB hit) grounds through enrichment; sightings (the KB
-    // miss) is missed rather than guessed.
-    const ranked = await page.evaluate(() => window.tmct.session.rank({ limit: 20 }));
-    const byTerm = new Map(ranked.map((r) => [r.term, r]));
-    assert.equal(byTerm.get("quokka"), undefined, `a term the poll itself grounded never enters the ledger: ${JSON.stringify(ranked)}`);
-    assert.equal(byTerm.get("rottnest")?.count, 1, `rottnest ranks with count 1: ${JSON.stringify(ranked)}`);
-    // Two passes read the fragment: the poll's own ingest, then the
-    // reprocess the rottnest grounding triggered — the ledger counts
-    // occurrences per processed sentence, so the still-missed term shows 2.
-    assert.equal(byTerm.get("sightings")?.count, 2, `sightings ranks with the two processed passes counted: ${JSON.stringify(ranked)}`);
-
-    const health = await page.evaluate(() => window.tmct.session.health);
-    assert.equal(health.find((h) => h.sourceId === "wikimedia-featured")?.lastStatus, "ok");
-
-    // The newsworthiness gate (PLAN_NEWS_FEED.md section 17): the poll's own
-    // "quokka is a marsupial" sentence and the KB enrichment's "rottnest is
-    // an island" sentence are BOTH identity facts, and the KB one also
-    // carries research: provenance — background either way, never a card of
-    // their own. The population sentence is what actually hubs quokka.
-    const feedAfterEnrich = await page.evaluate(() => window.tmct.session.buildFeed());
-    const hubs = feedAfterEnrich.items.map((i) => i.hub);
-    const quokkaItem = feedAfterEnrich.items.find((it) => it.hub === "quokka");
-    assert.ok(quokkaItem, `a quokka item exists from the poll's own population fact: ${JSON.stringify(hubs)}`);
-    assert.equal(feedAfterEnrich.seedFallback, false, "the windowed news facts drive the feed, not the seed fallback");
-    assert.ok(!hubs.includes("rottnest"), `an identity-only, research-tagged fact never heads its own card: ${JSON.stringify(hubs)}`);
-    // quokka is already a densely-connected seeded animal (several identity
-    // classes, dozens of taxonomy facts), so which identity class opens the
-    // paragraph and which rows survive the item's own row cap both depend on
-    // content-addressed id order, not on anything this test pins. What IS
-    // pinned: the poll's own population fact is what made quokka a hub at
-    // all, so it survives into the reported paragraph, and the seed's own
-    // dense taxonomy is large enough that some of it always gets collapsed.
-    assert.match(quokkaItem.paragraph, /population/, "the poll's own reported fact is in the card's own paragraph");
-    assert.ok(quokkaItem.background.length > 0, "the seed's own dense taxonomy around quokka rides as background, not as the card's reported content");
-    assert.ok(quokkaItem.backgroundParagraph.length > 0, "the collapsed line renders over that background");
-
-    // Negative cache: a second enrich attempt does not re-query a term
-    // already marked missed within its TTL.
-    const callsBeforeSecondEnrich = kb.openSearchCallCount();
-    await page.locator("#enrichNow").click();
-    // enrichNow's own handler doesn't disable the button — it clears
-    // #controlsStatus back to "" once window.tmct.session.enrich() settles,
-    // the one DOM signal the click actually leaves behind.
-    await waitFor(page, () => document.getElementById("controlsStatus").textContent === "", { timeoutMs: 15000, pollMs: 1000, label: "the second enrich settling" });
-    assert.equal(kb.openSearchCallCount(), callsBeforeSecondEnrich, "sightings is not re-queried while its negative-cache TTL holds");
-
-    // S5: the interval control re-arms nextPollAt and clamps below the floor.
-    await page.selectOption("#pollInterval", "5");
-    const nextPollAt = await page.evaluate(() => window.tmct.session.nextPollAt);
-    assert.ok(nextPollAt, "changing the interval arms nextPollAt");
-    await page.evaluate(() => window.tmct.session.setInterval(1));
-    const clamped = await page.evaluate(() => window.tmct.session.config.pollMinutes);
-    assert.equal(clamped, 5, "a sub-floor interval clamps up to the poll floor");
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start settling" });
+    const stored = await page.evaluate(() => {
+      const out = {};
+      for (let i = 0; i < window.localStorage.length; i += 1) { const k = window.localStorage.key(i); out[k] = window.localStorage.getItem(k); }
+      return out;
+    });
+    const keys = Object.keys(stored);
+    assert.equal(keys.length, 2, `only the consent preference and the session pointer are ever stored locally: ${JSON.stringify(stored)}`);
+    assert.match(stored["tmct.news.sessionKey"], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, "the stored key is a v4 UUID");
+    assert.equal(stored["tmct.news.started"], "on");
   } finally {
     await context.close();
   }
 });
 
-test("the operator's own newsworthiness examples: no concept card ever renders, the recorded Kumamoto report heads its own card, and an empty poll still yields the empty state", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
+test("start polls through a 202, the cards render once the cycle materializes, and neither the seed asset nor an engine chunk is ever requested", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page, pageErrors, apiRequests } = await openNewsPage(service);
   try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    // On first paint, with no poll: the empty state, never one of the
-    // concept cards the retired seed fallback used to serve ("purse",
-    // "drawer", "cars", "finding information", "entertaining" among them).
-    // Checked structurally — no item at all, and specifically none at the
-    // corpus tier a concept card would carry — never by enumerating that
-    // five-word list, since the point is the fallback mechanism itself is
-    // gone, not that this particular list happens to be absent today.
-    const seedOnly = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(seedOnly.items, [], "the seed graph alone never heads a card");
-    assert.equal(await page.locator("#feed .item").count(), 0, "no card is on screen before any poll");
-    // #feedCount starts empty in the static markup and only paintFeed() ever
-    // writes to it, so its own non-empty text is what actually proves the
-    // page's first render finished — #feedEmpty's visibility is not that
-    // signal, since it starts un-hidden before any JS has run at all.
-    await waitFor(page, () => (document.getElementById("feedCount").textContent || "").trim().length > 0, { label: "the first render's own completion" });
-    assert.match(await page.locator("#feedEmpty").innerText(), /no news yet/, "the empty state names what the feed shows and how to fill it");
-
-    // A poll reporting one fresh, digit-anchored fact about a named place:
-    // the Kumamoto item heads its own card, and no corpus-tier card joins it.
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", null);
-    await routeWikimediaKumamoto(page);
-    await page.locator("#pollOnce").click();
-    await waitFor(page, () => document.getElementById("pollOnce").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the Kumamoto poll settling" });
-    assert.deepEqual(pageErrors, [], "a real poll over the Kumamoto fixture never throws");
-
-    const afterKumamoto = await page.evaluate(() => window.tmct.session.buildFeed());
-    const hubsAfterKumamoto = afterKumamoto.items.map((i) => i.hub);
-    assert.ok(hubsAfterKumamoto.includes("kumamoto"), `the Kumamoto population report heads its own card: ${JSON.stringify(hubsAfterKumamoto)}`);
-    assert.ok(!afterKumamoto.items.some((it) => it.tier === "corpus"), `no corpus-tier card joins the Kumamoto item: ${JSON.stringify(afterKumamoto.items.map((i) => ({ hub: i.hub, tier: i.tier })))}`);
-
-    // stop & forget clears this poll's own facts; a later poll that fetches
-    // successfully but reports nothing still yields the empty state, never
-    // a fallback to whatever the seed graph happens to hold regardless.
-    await page.locator("#stopForget").click();
-    await waitFor(page, () => document.getElementById("stopForget").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the purge settling" });
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await routeWikimediaEmpty(page);
-    await page.locator("#pollOnce").click();
-    await waitFor(page, () => document.getElementById("pollOnce").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the empty poll settling" });
-    assert.deepEqual(pageErrors, [], "a real poll that reports nothing never throws");
-
-    const afterEmptyPoll = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(afterEmptyPoll.items, [], "an empty poll reads back as no report, not a fallback");
-    assert.equal(await page.locator("#feed .item").count(), 0, "no card is on screen after the empty poll");
-    assert.match(await page.locator("#feedEmpty").innerText(), /no news yet/, "the empty state reverts to its default copy once a poll has run, rather than keeping the earlier purge line");
-  } finally {
-    await context.close();
-  }
-});
-
-test("both fixture demo buttons replay their own recorded sample as corpus-tier items with the network fully blocked, each a real DOM click asserted by its own distinct effect", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
-  try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    const before = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(before.items, [], "before any replay, nothing has been reported yet");
-    assert.equal(await page.evaluate(() => window.tmct.session.requestLog.length), 0, "neither replay button has fired yet");
-
-    // "replay recorded Wikipedia sample": a real click, asserted by the
-    // page's own status text and by the fixture's own "A tariff is a tax..."
-    // extract (test/fixtures/news/wikimedia-featured.json) actually
-    // grounding a fact. That fact is an identity statement, though — under
-    // the newsworthiness gate (PLAN_NEWSWORTHINESS.md section 2) an identity
-    // fact never heads a card, whoever reported it, so the feed stays empty
-    // rather than promoting a definition to a report.
-    const rankBeforeWikipedia = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
-    await page.locator("#replayWikipedia").click();
-    await waitFor(page, () => document.getElementById("controlsStatus").textContent === "replayed wikimedia-featured", { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the Wikipedia replay button's own effect" });
-    assert.deepEqual(pageErrors, [], "replaying the Wikipedia fixture never throws");
-
-    const rankAfterWikipedia = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
-    // "negotiations" is unique to this fixture's own "Ceasefire negotiations"
-    // extract — the NYT fixture below mentions "ceasefire" too (a different
-    // headline), so this is the term that actually distinguishes THIS click's
-    // own effect rather than one the two fixtures' prose happens to share.
-    assert.ok(
-      rankAfterWikipedia.some((r) => r.term === "negotiations") && rankAfterWikipedia.length > rankBeforeWikipedia.length,
-      `the Wikipedia replay's own fixture prose ("Ceasefire negotiations are talks...") reaches the ledger: before=${JSON.stringify(rankBeforeWikipedia)} after=${JSON.stringify(rankAfterWikipedia)}`,
-    );
-    const afterWikipedia = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(afterWikipedia.items, [], "an identity-only report grounds a fact but never heads a card, so the feed stays empty");
-
-    // "replay recorded NYT sample": a second, independent click, whose own
-    // effect (test/fixtures/news/nyt-world.rss.xml's own "ceasefire"/
-    // "tariff" prose) is distinct from the Wikipedia replay above — this is
-    // what proves BOTH buttons wire to their own fixture, not one button's
-    // effect read twice.
-    const rankBeforeNyt = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
-    await page.locator("#replayNyt").click();
-    await waitFor(page, () => document.getElementById("controlsStatus").textContent === "replayed nyt-world", { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the NYT replay button's own effect" });
-    assert.deepEqual(pageErrors, [], "replaying the NYT fixture never throws");
-
-    const rankAfterNyt = await page.evaluate(() => window.tmct.session.rank({ limit: 50 }));
-    assert.ok(
-      rankAfterNyt.some((r) => r.term === "ceasefire") || rankAfterNyt.length > rankBeforeNyt.length,
-      `the NYT replay's own fixture prose ("Talks Resume Over Ceasefire Terms") widens the ranked term list: before=${JSON.stringify(rankBeforeNyt)} after=${JSON.stringify(rankAfterNyt)}`,
-    );
-
-    // The NYT fixture's fourth item exists to test feed-normalize.mjs's own
-    // guid-fallback path ("An item with no guid tag, so normalizeFeedItems
-    // falls back to the link."), not to read as news — its own two junk terms
-    // (`back to the link`, `normalizefeeditems`) must never reach the feed as
-    // cards, while the genuine report from the first item still does.
-    const afterNyt = await page.evaluate(() => window.tmct.session.buildFeed());
-    const hubsAfterNyt = afterNyt.items.map((it) => it.hub);
-    assert.ok(!hubsAfterNyt.includes("back to the link"), `the guid-fallback sentence's own fragment never heads a card: ${JSON.stringify(hubsAfterNyt)}`);
-    assert.ok(!hubsAfterNyt.includes("normalizefeeditems"), `the guid-fallback sentence's own identifier never heads a card: ${JSON.stringify(hubsAfterNyt)}`);
-    for (const genuine of ["ceasefire terms", "officials", "talks"]) {
-      assert.ok(hubsAfterNyt.includes(genuine), `"${genuine}" reads as a genuine report from the Talks/Geneva items: ${JSON.stringify(hubsAfterNyt)}`);
-    }
-
-    // Consent was never given, so start()/poll() have still never run — both
-    // fixture replays reached the graph without it.
-    assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "neither fixture demo grants poll consent");
-    assert.equal((await page.evaluate(() => window.tmct.session.requestLog)).length, 0, "neither fixture replay makes a network request of its own");
-  } finally {
-    await context.close();
-  }
-});
-
-test("poll now reads back as pressed at once, keeps answering while it ingests a multi-article payload, moves the graph tiles off zero, and titles every card with a subject", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
-  try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", null);
-    await routeWikimediaArticleSet(page);
-
-    const tileValue = (id) => page.evaluate((tileId) => Number(document.querySelector(`#${tileId} [data-value]`).textContent), id);
-    assert.equal(await tileValue("tileFactsFromNews"), 0, "nothing has been polled yet, so no fact came from news");
+    const beforeSourceStatus = await page.locator('[data-source-id="wikimedia-featured"] [data-source-status]').innerText();
+    assert.equal(beforeSourceStatus, "not yet polled");
 
     await page.locator("#newsStart").click();
-
-    // The click's own affordance, read back before anything is awaited on the
-    // poll itself: the button is out of action and says so.
-    const pressed = await page.evaluate(() => {
-      const btn = document.getElementById("newsStart");
-      return { disabled: btn.disabled, busy: btn.getAttribute("aria-busy"), label: btn.textContent, status: document.getElementById("controlsStatus").textContent };
-    });
-    assert.equal(pressed.disabled, true, "the button disables on the click itself");
-    assert.equal(pressed.busy, "true", "the button marks itself busy on the click itself");
-    assert.equal(pressed.label, "polling…", "the button says what it is doing");
-    assert.equal(pressed.status, "polling…", "the status line says what it is doing");
-
-    // The page keeps answering while the ingest runs. Each sample is asserted
-    // where it lands: one long stretch of blocked main thread reads as a
-    // single large sample, and asserting inline turns it into the exact
-    // over-budget failure rather than a confusing sample count.
-    const pollSamples = [];
-    let settled = false;
-    const deadline = Date.now() + READY_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      const startedAt = Date.now();
-      settled = await page.evaluate(() => document.getElementById("newsStart").disabled === false);
-      const ms = Date.now() - startedAt;
-      pollSamples.push(ms);
-      assert.ok(ms < POLL_ROUND_TRIP_BUDGET_MS, `round trip ${pollSamples.length - 1} answered in ${ms}ms during the poll, over the ${POLL_ROUND_TRIP_BUDGET_MS}ms budget: ${JSON.stringify(pollSamples)}`);
-      if (settled) break;
-      await page.waitForTimeout(250);
-    }
-    assert.ok(settled, `the poll settled inside ${READY_TIMEOUT_MS}ms: ${JSON.stringify(pollSamples)}`);
-    assert.ok(pollSamples.length >= 2, `the page answered more than once while the poll ran: ${JSON.stringify(pollSamples)}`);
-    assert.deepEqual(pageErrors, [], "a real poll over the fulfilled route never throws");
-
-    // The two graph tiles read the store the poll just wrote into. The
-    // news tile was 0 before the click, so its own rise is both the
-    // assertion and the signal that the post-poll render has landed.
-    const factsFromNews = await waitFor(page, () => Number(document.querySelector("#tileFactsFromNews [data-value]").textContent) || 0, {
-      timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the poll's own facts reaching the graph tile",
-    });
-    const graphSize = await tileValue("tileGraphSize");
-    assert.ok(graphSize > 0, `the graph tile counts the seeded store: ${graphSize}`);
-    assert.ok(factsFromNews <= graphSize, `news facts are a subset of the graph: ${factsFromNews} of ${graphSize}`);
-
-    // Every rendered card is titled by a thing, never by the tail of a
-    // sentence whose subject the ingest lost.
-    await waitForFeedRendered(page, "the post-poll feed render");
-    const titles = await page.locator("#feed .item .hub").allInnerTexts();
-    assert.ok(titles.length > 0, "the poll leaves a rendered feed behind");
-    for (const title of titles) {
-      assert.ok(!FRAGMENT_LEAD_WORDS.has(firstWordOf(title)), `a card title never opens with a bare verb phrase or conjunction: ${JSON.stringify(title)}`);
-      assert.ok(title.trim().split(/\s+/).length <= 6, `a card title names a thing rather than a clause: ${JSON.stringify(title)}`);
-    }
-  } finally {
-    await context.close();
-  }
-});
-
-test("poll once is live from the first paint and schedules nothing; stop polling wakes while a cycle runs and disarms the next poll", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
-  try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", null);
-    await routeWikimediaFeatured(page);
-
-    // Before anything has been pressed: poll once is offered, stop polling
-    // has nothing to stop.
-    const atRest = await page.evaluate(() => ({
-      pollOnceDisabled: document.getElementById("pollOnce").disabled,
-      stopDisabled: document.getElementById("stopPolling").disabled,
-    }));
-    assert.equal(atRest.pollOnceDisabled, false, "poll once is enabled before any start");
-    assert.equal(atRest.stopDisabled, true, "stop polling is out of action while nothing polls");
-
-    await page.locator("#pollOnce").click();
     const pressed = await page.evaluate(() => ({
-      disabled: document.getElementById("pollOnce").disabled,
-      busy: document.getElementById("pollOnce").getAttribute("aria-busy"),
-      stopDisabled: document.getElementById("stopPolling").disabled,
+      disabled: document.getElementById("newsStart").disabled,
+      busy: document.getElementById("newsStart").getAttribute("aria-busy"),
     }));
-    assert.equal(pressed.disabled, true, "poll once reads back as pressed at once");
-    assert.equal(pressed.busy, "true", "and marks itself busy");
-    assert.equal(pressed.stopDisabled, false, "stop polling wakes for the running cycle");
+    assert.equal(pressed.disabled, true, "the button disables on the click itself");
+    assert.equal(pressed.busy, "true");
 
-    await waitFor(page, () => document.getElementById("pollOnce").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "poll once settling" });
-    assert.deepEqual(pageErrors, [], "a poll-once cycle against fulfilled routes never throws");
-    assert.equal(await page.locator("#pollOnce").innerText(), "poll once", "the button goes back to its own label");
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    assert.deepEqual(pageErrors, [], "a real poll cycle never throws in-page");
 
-    const afterOnce = await page.evaluate(() => ({
-      consented: window.tmct.session.consented,
-      pref: window.localStorage.getItem("tmct.news.started"),
-      nextPollAt: window.tmct.session.nextPollAt,
-      requests: window.tmct.session.requestLog.length,
-    }));
-    assert.ok(afterOnce.requests > 0, "the press really did poll");
-    assert.equal(afterOnce.consented, false, "one poll is not a standing consent");
-    assert.equal(afterOnce.pref, null, "poll once records nothing for the next visit");
-    assert.equal(afterOnce.nextPollAt, "", "poll once schedules no next poll");
-    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), true, "with nothing running or armed, stop polling goes quiet again");
+    const total = await waitForFeedRendered(page, "the post-poll feed render");
+    assert.ok(total > 0, "the poll produced at least one card");
+    const hub = await page.locator("#feed .item .hub").first().innerText();
+    assert.equal(hub, "quokka");
 
-    // start does arm the next poll, and stop polling takes it back out.
-    await page.locator("#newsStart").click();
-    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() settling" });
-    assert.ok(await page.evaluate(() => window.tmct.session.nextPollAt), "start armed the next poll");
-    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), false, "stop polling is live while a poll is scheduled");
+    const afterSourceStatus = await page.locator('[data-source-id="wikimedia-featured"] [data-source-status]').innerText();
+    assert.equal(afterSourceStatus, "ok");
 
-    await page.locator("#stopPolling").click();
-    assert.equal(await page.evaluate(() => window.tmct.session.nextPollAt), "", "stop polling cancels the scheduled poll");
-    assert.equal(await page.evaluate(() => document.getElementById("stopPolling").disabled), true, "with nothing left to stop it goes quiet");
-    assert.match(await page.locator("#controlsStatus").innerText(), /stopped/, "the status line says polling stopped");
+    const requestedUrls = apiRequests.map((r) => r.url).concat(await page.evaluate(() =>
+      performance.getEntriesByType("resource").map((e) => e.name)));
+    assert.ok(!requestedUrls.some((u) => /chat-seed\.json/.test(u)), `no seed asset was ever requested: ${JSON.stringify(requestedUrls.filter((u) => u.includes("seed")))}`);
+    assert.ok(!requestedUrls.some((u) => /wink|chat-browser|research-browser|ledger-browser/.test(u)), `no other page's engine chunk was ever requested: ${JSON.stringify(requestedUrls)}`);
+    assert.ok(requestedUrls.some((u) => u.endsWith("news-browser.bundle.js")), "the page's own thin bundle did load");
   } finally {
     await context.close();
   }
 });
 
-test("the feed scrolls inside its own box, re-orders on the sort control, and narrows to a picked keyword pill", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
+test("once a triggered cycle settles, the page makes no further /api/ request while idle — the version poll backs off to nothing", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page } = await openNewsPage(service);
   try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    // The seed graph alone never heads a card, so this test polls a
-    // multi-article payload first — routeWikimediaArticleSet's own quokka
-    // and Nonthaburi Province articles each carry a digit-anchored relation,
-    // enough distinct hubs to exercise sort and pill-filter meaningfully.
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", null);
-    await routeWikimediaArticleSet(page);
     await page.locator("#newsStart").click();
-    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() (poll + enrich) settling" });
-    assert.deepEqual(pageErrors, [], "a real poll against fulfilled routes never throws");
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
 
-    const total = await waitForFeedRendered(page, "the post-poll feed's own render");
+    const requestsBeforeIdle = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/")).length);
+    await page.waitForTimeout(2000);
+    const requestsAfterIdle = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/")).length);
+    assert.equal(requestsAfterIdle, requestsBeforeIdle, "no standing poll loop fires while nothing is in flight");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a taught fact carrying a script tag reaches the DOM as literal text once a real report cards its hub, and the tag never executes, even after a reload from the double", async () => {
+  // The teach panel's own ingest never heads a card on its own — a card
+  // only exists for a hub a genuine news report named inside the window
+  // (the newsworthiness gate) — so this exercises the real path the plan's
+  // own abuse-surface row describes: a taught fact's text reaches the DOM
+  // once it rides along as a card's background, the same way any taught
+  // identity fact does for a hub a live report also touched.
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A widget has a population of 12000."]) } });
+  const { context, page, pageErrors } = await openNewsPage(service);
+  try {
+    await page.locator("#teachText").fill('{"subject":"widget","predicate":"rdf:type","object":"<script>window.__tmctPwned=true</script>"}');
+    await page.locator("#teachIngest").click();
+    await waitFor(page, () => document.getElementById("teachIngest").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "the ingest trigger settling" });
+    assert.deepEqual(pageErrors, [], "ingesting a fact row that carries a script tag never throws");
+
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
+    assert.equal(await page.evaluate(() => window.__tmctPwned), undefined, "the script tag never executed on the first render");
+
+    const cardHtml = await page.locator('#feed .item[data-item-id]').first().innerHTML();
+    assert.match(cardHtml, /&lt;script&gt;/, "the tag reaches the card as escaped, literal text");
+    assert.ok(!/<script>window\.__tmctPwned/.test(cardHtml), "the tag never lands as a live element in the card's own markup");
+
+    await page.reload({ waitUntil: "load" });
+    await waitFor(page, () => (document.getElementById("feedCount").textContent || "").trim().length > 0, { label: "the reload's own render" });
+    assert.equal(await page.evaluate(() => window.__tmctPwned), undefined, "the script tag still never executes after a reload restores the same card from the double");
+    const cardHtmlAfterReload = await page.locator('#feed .item[data-item-id]').first().innerHTML();
+    assert.match(cardHtmlAfterReload, /&lt;script&gt;/, "the escaped text survives the reload path too");
+  } finally {
+    await context.close();
+  }
+});
+
+test("stop & forget purges the session server-side, discards the local key, and a reload reads back as first-visit", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page } = await openNewsPage(service);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    const cardsBefore = await waitForFeedRendered(page, "the post-poll feed render");
+    assert.ok(cardsBefore > 0);
+    const sessionKey = await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey"));
+
+    await page.locator("#stopForget").click();
+    await waitFor(page, () => document.getElementById("stopForget").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "the purge settling" });
+
+    assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey")), null, "the local pointer is discarded");
+    assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.started")), null, "the consent preference is discarded");
+    assert.equal(await page.locator("#feed .item").count(), 0, "no card survives on screen");
+
+    const rowsAfter = await fetch(`${service.url}/api/rows`, { headers: { "x-tmct-session": sessionKey } });
+    assert.deepEqual((await rowsAfter.json()).rows, [], "zero readable rows remain under the purged key");
+    const feedAfter = await fetch(`${service.url}/api/feed`, { headers: { "x-tmct-session": sessionKey } });
+    assert.equal(feedAfter.status, 404, "no materialized feed document remains under the purged key");
+
+    await page.reload({ waitUntil: "load" });
+    await waitFor(page, () => (document.getElementById("feedCount").textContent || "").trim().length > 0, { label: "the reloaded page's own first render" });
+    assert.equal(await page.locator("#newsStart").innerText(), "start polling live sources", "the reload reads back as first-visit");
+    assert.match(await page.locator("#feedEmpty").innerText(), /no news yet/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("reload restores an already-started session with exactly one GET /api/feed, never a fresh poll", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page } = await openNewsPage(service);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
+
+    const secondOpen = await openNewsPage(service);
+    try {
+      // A fresh browser context standing in for a reload: it shares nothing
+      // with the first page's own localStorage, so it seeds its own copy of
+      // the same stored key before navigating, then reloads against it —
+      // the exact shape a real reload of the same tab takes.
+      const sessionKey = await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey"));
+      await secondOpen.page.evaluate((key) => {
+        window.localStorage.setItem("tmct.news.sessionKey", key);
+        window.localStorage.setItem("tmct.news.started", "on");
+      }, sessionKey);
+      await secondOpen.page.reload({ waitUntil: "load" });
+      await waitFor(secondOpen.page, () => (document.getElementById("feedCount").textContent || "").trim().length > 0, { label: "the restored render" });
+
+      const total = await waitForFeedRendered(secondOpen.page, "the restored feed render");
+      assert.ok(total > 0, "the restored session shows the previously materialized feed");
+      const feedGets = secondOpen.apiRequests.filter((r) => r.method === "GET" && new URL(r.url).pathname === "/api/feed");
+      assert.equal(feedGets.length, 1, `exactly one GET /api/feed restored the page: ${JSON.stringify(secondOpen.apiRequests)}`);
+      assert.ok(!secondOpen.apiRequests.some((r) => /\/(poll|enrich|ingest)$/.test(new URL(r.url).pathname)), "a reload never fires a fresh trigger of its own");
+    } finally {
+      await secondOpen.context.close();
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("killing the row service leaves the page honestly idle: feed-and-chat-unavailable, controls disabled, and a working reload once the service returns", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page } = await openNewsPage(service);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
+
+    await service.close();
+
+    await page.reload({ waitUntil: "load" });
+    await waitFor(page, () => document.getElementById("serviceUnavailable").classList.contains("shown"), { timeoutMs: INTERACTION_TIMEOUT_MS, label: "the unavailable banner appearing" });
+    const disabled = await page.evaluate(() => ({
+      start: document.getElementById("newsStart").disabled,
+      enrich: document.getElementById("enrichNow").disabled,
+      stopForget: document.getElementById("stopForget").disabled,
+      teach: document.getElementById("teachIngest").disabled,
+    }));
+    assert.deepEqual(disabled, { start: true, enrich: true, stopForget: true, teach: true }, "every network-facing control is out of action");
+    assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey") !== null), true, "the stored pointer survives an unreachable service — nothing here needs to be recomputed to keep it");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the feed sorts client-side over the document's own keys and narrows to a picked pill, without asking the server again", async () => {
+  const service = await withRowService({
+    newsWorker: {
+      fetchersFor: fetchersFor(
+        ["wikimedia-featured"],
+        ["A quokka has a population of 12000.", "Nonthaburi has a population of 1683115."],
+      ),
+    },
+  });
+  const { context, page, apiRequests } = await openNewsPage(service);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    const total = await waitForFeedRendered(page, "the post-poll feed render");
     assert.ok(total > 1, `the poll renders more than one card: ${total}`);
 
-    // Its own scroll: the box is shorter than the page and taller content
-    // moves inside it rather than running the page off the bottom.
-    const box = await page.evaluate(() => {
-      const feed = document.getElementById("feed");
-      feed.scrollTop = 400;
-      return {
-        overflowY: getComputedStyle(feed).overflowY,
-        clientHeight: feed.clientHeight,
-        scrollHeight: feed.scrollHeight,
-        scrollTop: feed.scrollTop,
-        viewportHeight: window.innerHeight,
-      };
-    });
-    assert.equal(box.overflowY, "auto", "the feed owns its own scrollbar");
-    assert.ok(box.clientHeight < box.viewportHeight, `the feed box is shorter than the viewport: ${JSON.stringify(box)}`);
-    assert.ok(box.scrollHeight > box.clientHeight, `the cards overflow the box rather than the page: ${JSON.stringify(box)}`);
-    assert.ok(box.scrollTop > 0, `the box actually scrolls: ${JSON.stringify(box)}`);
-
-    // The sort control re-orders what is already rendered, on the item's own
-    // key rather than on anything the card happens to print.
-    const feed = await page.evaluate(() => window.tmct.session.buildFeed());
-    const itemByHub = new Map(feed.items.map((it) => [it.hub, it]));
-    const renderedHubs = async () => (await page.locator("#feed .item .hub").allInnerTexts()).map((t) => t.trim());
-    const beforeSort = await renderedHubs();
-
-    for (const [mode, keyOf] of [["facts", (it) => it.factIds.length], ["changed", (it) => it.changedCount]]) {
-      await page.selectOption("#feedSort", mode);
-      const hubs = await renderedHubs();
-      assert.equal(hubs.length, beforeSort.length, `sorting by ${mode} never drops a card`);
-      const keys = hubs.map((hub) => keyOf(itemByHub.get(hub)));
-      for (let i = 1; i < keys.length; i += 1) {
-        assert.ok(keys[i - 1] >= keys[i], `sorting by ${mode} really is descending: ${JSON.stringify(keys)}`);
-      }
-    }
+    const requestsBeforeSort = apiRequests.length;
+    await page.selectOption("#feedSort", "facts");
     await page.selectOption("#feedSort", "newest");
+    assert.equal(apiRequests.length, requestsBeforeSort, "sorting never asks the server for anything");
 
-    // The pills are built from the articles' own key terms, and picking one
-    // narrows the list to the articles that name it.
     const pillTerms = await page.locator("#feedPills .pill").allInnerTexts();
     assert.ok(pillTerms.length > 0, "the feed offers filter pills built from its own articles");
     const allTitles = await page.locator("#feed .item .hub").allInnerTexts();
-    const picked = pillTerms[0];
-    await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).click();
+    await page.locator(`#feedPills .pill[data-pill-term="${pillTerms[0]}"]`).click();
     const narrowedTitles = await page.locator("#feed .item .hub").allInnerTexts();
-    assert.ok(narrowedTitles.length > 0, `picking "${picked}" leaves at least the article it came from`);
-    assert.ok(narrowedTitles.length < allTitles.length, `picking "${picked}" narrows the list: ${narrowedTitles.length} of ${allTitles.length}`);
-    assert.equal(await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).getAttribute("aria-pressed"), "true", "the picked pill reads as pressed");
-    assert.match(await page.locator("#feedCount").innerText(), /of \d+ articles$/, "the count says how much of the feed is showing");
-
-    await page.locator(`#feedPills .pill[data-pill-term="${picked}"]`).click();
-    assert.equal((await page.locator("#feed .item .hub").allInnerTexts()).length, allTitles.length, "unpicking the pill restores the whole list");
-
-    // The whole feed section still fits a 320px-wide screen.
-    await page.setViewportSize({ width: 320, height: 640 });
-    const narrow = await page.evaluate(() => ({
-      pageScrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-      pillsVisible: document.querySelectorAll("#feedPills .pill").length,
-      sortVisible: document.getElementById("feedSort").getBoundingClientRect().width > 0,
-    }));
-    assert.ok(narrow.pageScrollWidth <= narrow.clientWidth + 1, `nothing pushes the page sideways at 320px: ${JSON.stringify(narrow)}`);
-    assert.ok(narrow.pillsVisible > 0, "the pills survive the narrow layout");
-    assert.ok(narrow.sortVisible, "the sort control survives the narrow layout");
-  } finally {
-    await context.close();
-  }
-});
-
-test("stop & forget clears the start preference and purges the articles; a reload of the same page reads back as first-visit", async () => {
-  const { context, page, pageErrors } = await openNewsPage();
-  try {
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "S1 seeded phase" });
-
-    // The seed graph alone never heads a card, so this test polls a real,
-    // route-stubbed source first — quokka's own digit-anchored population
-    // fact is what gives stop & forget an actual article to purge.
-    await keepOnlySource(page, "contemporary", "wikimedia-featured");
-    await keepOnlySource(page, "kb", null);
-    await routeWikimediaFeatured(page);
-
-    await page.locator("#newsStart").click();
-    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { label: "start() settling" });
-    assert.equal(await page.evaluate(() => window.tmct.session.consented), true, "start() records consent");
-    assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.started")), "on", "consent persists as the page's own preference");
-    const cardsBefore = await waitForFeedRendered(page, "the post-poll feed's own render");
-    assert.ok(cardsBefore > 0, `the page has articles on screen before the purge: ${cardsBefore}`);
-
-    await page.locator("#stopForget").click();
-    await waitFor(page, () => document.getElementById("stopForget").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the purge settling" });
-    assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "stop & forget revokes consent immediately, in this same session");
-    assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.started")), null, "stop & forget clears the persisted preference");
-
-    // The articles themselves go, not just the preference: no card on
-    // screen, an empty feed from the session, and the count line saying so.
-    assert.equal(await page.locator("#feed .item").count(), 0, "no article card survives stop & forget");
-    const purgedFeed = await page.evaluate(() => window.tmct.session.buildFeed());
-    assert.deepEqual(purgedFeed.items, [], "the session rebuilds an empty feed, never seed-graph cards in the articles' place");
-    assert.equal(await page.locator("#feedCount").innerText(), "0 articles", "the count line reads back as empty");
-    assert.match(await page.locator("#feedEmpty").innerText(), /articles are gone/, "the empty feed says why it is empty");
-    assert.equal(await page.locator("#requestLogBody tr").count(), 0, "the request log is cleared with the articles");
-
-    // The reload pays the seed's own boot cost again — there is no
-    // persistence layer under news.html (unlike chat.html's IndexedDB
-    // snapshot), so this is a second full load, not a cache hit.
-    await page.reload({ waitUntil: "load" });
-    await waitFor(page, () => window.tmct?.news?.phase && window.tmct.news.phase !== "seeding", { label: "the reloaded page's own seeded phase" });
-    assert.deepEqual(pageErrors, [], "the reloaded page never throws");
-    assert.equal(await page.evaluate(() => window.tmct.session.consented), false, "the reload reads the cleared preference back as first-visit");
-    assert.equal(await page.locator("#newsStart").innerText(), "start polling live sources", "the reloaded page shows the first-visit button label, not \"poll now\"");
-    assert.equal(await page.locator("#requestLogBody tr").count(), 0, "the reloaded first-visit page has not polled anything on its own");
-  } finally {
-    await context.close();
-  }
-});
-
-test("the page answers an in-page round trip within the responsiveness budget at several points while the seed streams and indexes, and a replay-button click lands without paying the seed's own boot cost again", async () => {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  try {
-    await page.route((url) => !url.href.startsWith(server.origin), (route) => route.abort());
-    await page.goto(`${server.origin}/news.html`, { waitUntil: "load" });
-
-    // Sample a trivial evaluate() round trip repeatedly across the page's
-    // whole one-time boot cost — fetching and JSON-parsing the seed
-    // ("seeding"), then building and rendering the feed (the "seeded"
-    // phase's own first renderAll(), the heavier of the two: it walks the
-    // whole graph to classify every row and read its prior terms). The
-    // sampling condition is #feedCount's own text actually landing — it
-    // starts empty in the static markup and paintFeed() is the only thing
-    // that ever writes to it, so a non-empty count is unambiguous proof the
-    // first render finished, whether it landed on a card or the empty
-    // state. #feedEmpty's own visibility is NOT that signal: it starts
-    // un-hidden in the static markup before any JS has run at all, so
-    // checking it alone would read "ready" at the very first sample, before
-    // the seed has even started fetching. #feed .item is kept as a second,
-    // earlier-firing check for the rare case a card renders before the
-    // count line's own write lands. Rather than the phase flag alone: the
-    // phase flips to "seeded" before that first render starts, so a loop
-    // gated on the phase flag samples only the smaller fetch/parse window.
-    //
-    // Each sample's own round trip is asserted the moment it lands, not
-    // batched at the end: a CDP evaluate() call cannot return early or
-    // report partial progress, so ONE stretch of a busy main thread reads
-    // as one large sample rather than several small ones swallowed inside
-    // it — asserting inline is what turns that stretch into the exact
-    // "over budget" failure it is, instead of a confusing sample-count
-    // shortfall. At least 2 samples (one before the boot work starts, one
-    // spanning it) is what a first-and-last measurement structurally
-    // guarantees; the loop takes more whenever the main thread actually
-    // yields in between.
-    const roundTripSamples = [];
-    const deadline = Date.now() + READY_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      const startedAt = Date.now();
-      const firstRenderReady = await page.evaluate(() => {
-        const item = document.querySelector("#feed .item");
-        if (item) {
-          const r = item.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) return true;
-        }
-        return (document.getElementById("feedCount").textContent || "").trim().length > 0;
-      });
-      const ms = Date.now() - startedAt;
-      roundTripSamples.push(ms);
-      assert.ok(ms < ROUND_TRIP_BUDGET_MS, `round-trip sample ${roundTripSamples.length - 1} answered in ${ms}ms, over the ${ROUND_TRIP_BUDGET_MS}ms budget: ${JSON.stringify(roundTripSamples)}`);
-      if (firstRenderReady) break;
-      await page.waitForTimeout(1000);
-    }
-    assert.ok(roundTripSamples.length >= 2, `at least 2 round trips were sampled across boot: got ${roundTripSamples.length}`);
-
-    // Once boot has paid its one-time cost (the loop above only exits once
-    // phase has left "seeding"), a replay-button click's own effect must
-    // land well inside INTERACTION_TIMEOUT_MS — an order of magnitude under
-    // READY_TIMEOUT_MS — never re-paying anything like the seed's own boot
-    // cost for a click that only touches a small, bundled fixture.
-    const clickedAt = Date.now();
-    await page.locator("#replayWikipedia").click();
-    await waitFor(page, () => document.getElementById("controlsStatus").textContent === "replayed wikimedia-featured", { timeoutMs: INTERACTION_TIMEOUT_MS, pollMs: 500, label: "the replay click's own effect" });
-    const elapsedMs = Date.now() - clickedAt;
-    assert.ok(elapsedMs < INTERACTION_TIMEOUT_MS, `the replay click's effect landed in ${elapsedMs}ms, without waiting for the seed-derived feed to rebuild from scratch`);
+    assert.ok(narrowedTitles.length < allTitles.length, `picking a pill narrows the list: ${narrowedTitles.length} of ${allTitles.length}`);
+    assert.equal(apiRequests.length, requestsBeforeSort, "filtering by pill never asks the server for anything either");
   } finally {
     await context.close();
   }

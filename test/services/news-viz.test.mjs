@@ -1,7 +1,8 @@
-// news-viz: renderNewsHtml structural pins — the dashboard tiles, the
-// controls row, the request log, the two fixture-replay demo buttons, and
-// the consent gate's own promise that every third-party URL this page names
-// sits inside one fenced block.
+// news-viz: renderNewsHtml structural pins — the dashboard tiles, the thin
+// controls row (start, enrich, stop & forget — no client-side engine or
+// recurring timer left to control), the request log, the privacy copy, the
+// unavailable banner, and the consent gate's own promise that every
+// third-party URL this page names sits inside one fenced block.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderNewsHtml } from "../../src/services/news-viz.mjs";
@@ -23,7 +24,7 @@ test("renderNewsHtml: exactly one h1, and the eyebrow renders before it as a sib
 test("renderNewsHtml: the dashboard carries all seven labelled tiles/panels", () => {
   const html = renderNewsHtml();
   const labels = [
-    "feed.items", "terms.ungrounded", "facts.from-news", "graph.size", "sources.live",
+    "feed.items", "terms.ungrounded", "facts.from-news", "graph.size", "sources.reporting",
     "terms.ranked", "sources.per-source",
   ];
   for (const label of labels) {
@@ -31,50 +32,61 @@ test("renderNewsHtml: the dashboard carries all seven labelled tiles/panels", ()
   }
 });
 
-test("renderNewsHtml: the start button, the request log, and the controls row all render", () => {
+test("renderNewsHtml: the thin controls row renders start, enrich and stop & forget, and carries no recurring-poll or add-source control", () => {
   const html = renderNewsHtml();
   assert.match(html, /id="newsStart"[^>]*>start polling live sources</);
-  assert.match(html, /id="requestLog"/);
-  assert.match(html, /id="pollInterval"/);
+  assert.match(html, /id="enrichNow"[^>]*>enrich now</);
   assert.match(html, /id="stopForget"[^>]*>stop &amp; forget</);
-  assert.match(html, /id="enrichNow"/);
-  assert.match(html, /id="addSourceUrl"/);
-  assert.match(html, /id="addSourceBtn"/);
+  assert.match(html, /id="requestLog"/);
+  for (const goneId of ["pollOnce", "stopPolling", "pollInterval", "addSourceUrl", "addSourceBtn", "replayNyt", "replayWikipedia"]) {
+    assert.ok(!html.includes(`id="${goneId}"`), `the in-page engine's own "${goneId}" control has left the page`);
+  }
 });
 
-test("renderNewsHtml: poll once ships alongside start, and stop polling ships disabled until there is something to stop", () => {
+test("renderNewsHtml: every control the page fires talks to the session's own trigger verbs, never an in-page engine call", () => {
   const html = renderNewsHtml();
-  assert.match(html, /id="pollOnce"[^>]*>poll once</, "the poll-once button is in the markup, not conditional on any state");
-  assert.match(html, /id="stopPolling"[^>]*>stop polling</, "the stop control is in the markup too");
-  assert.match(html, /id="stopPolling" disabled/, "it starts disabled — nothing is polling on a first paint");
-  assert.match(html, /session\.pollOnce\(\)/, "poll once runs one cycle and schedules nothing");
-  assert.match(html, /session\.stopPolling\(\)/, "stop polling calls the session's own stop");
-  assert.match(html, /session\.busy \|\| session\.nextPollAt/, "the stop control is live while a cycle runs or a timer is armed");
+  assert.match(html, /session\.start\(/, "start mints the session and polls");
+  assert.match(html, /session\.enrich\(\)/, "enrich now runs its own trigger");
+  assert.match(html, /session\.revokeConsent\(\)/, "stop & forget purges through the session");
+  assert.match(html, /session\.ingestText\(/, "the teach panel's prose path posts the ingest trigger");
+  assert.match(html, /session\.ingestRows\(/, "the teach panel's row path posts the ingest trigger");
+  assert.match(html, /session\.fetchFeed\(\)/, "the page reads the materialized feed rather than building one");
 });
 
-test("renderNewsHtml: the two named fixture-replay demo buttons render", () => {
-  const html = renderNewsHtml();
-  assert.match(html, /id="replayNyt"[^>]*>replay recorded NYT sample</);
-  assert.match(html, /id="replayWikipedia"[^>]*>replay recorded Wikipedia sample</);
-});
-
-test("renderNewsHtml: the two teach-panel example buttons render, and the panel takes a .jsonl file", () => {
+test("renderNewsHtml: the teach panel's two example buttons render, and the file drop takes .txt/.md/.jsonl only", () => {
   const html = renderNewsHtml();
   assert.match(html, /id="exampleProse"[^>]*>example: prose</);
   assert.match(html, /id="exampleJsonl"[^>]*>example: facts \(\.jsonl\)</);
-  assert.match(html, /accept="\.txt,\.md,\.json,\.jsonl"/);
+  assert.match(html, /accept="\.txt,\.md,\.jsonl"/);
+});
+
+test("renderNewsHtml: the privacy copy states the anonymous session, the seven-day expiry and stop & forget's own promise, with no local-persistence claim", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /anonymous/i);
+  assert.match(html, /seven days/);
+  assert.match(html, /[Ss]top & forget/);
+  assert.ok(!/stays on this device|never (leaves|sent anywhere)/i.test(html), "news.html makes the server-side promise, never chat.html's local-only one");
+});
+
+test("renderNewsHtml: an unreachable-service banner exists, starts hidden, and disables the network-facing controls", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /id="serviceUnavailable"/);
+  assert.match(html, /class="unavailable" id="serviceUnavailable"/, "the banner starts without the 'shown' class");
+  assert.match(html, /setUnavailable/);
+});
+
+test("renderNewsHtml: the page leaves an empty chat mount below the teach panel, unclaimed", () => {
+  const html = renderNewsHtml();
+  const teachIdx = html.indexOf('id="teachPanel"');
+  const mountIdx = html.indexOf('id="chatMount"');
+  assert.ok(teachIdx !== -1 && mountIdx > teachIdx, "the chat mount sits after the teach panel");
+  assert.match(html, /<section id="chatMount"[^>]*><\/section>/, "the mount carries no markup of its own yet");
 });
 
 test("renderNewsHtml: an untrusted title never breaks out of its element", () => {
   const html = renderNewsHtml({ title: '</title><script>alert(1)</script>' });
   assert.ok(!html.includes("<script>alert(1)</script>"), "the title's own markup never lands unescaped");
   assert.ok(html.includes("&lt;/title&gt;&lt;script&gt;"), "the title is escaped in place");
-});
-
-test("renderNewsHtml: an untrusted seed stamp lands only inside a JSON string literal, never breaking the script", () => {
-  const html = renderNewsHtml({ seedStamp: '";document.title="pwned";"' });
-  assert.ok(!html.includes('";document.title="pwned";"'), "the raw stamp never appears unescaped");
-  assert.ok(html.includes(JSON.stringify('";document.title="pwned";"')), "it lands as a JSON-escaped string literal instead");
 });
 
 test("renderNewsHtml: every https:// this page names sits inside the one fenced sources block", () => {
@@ -91,29 +103,17 @@ test("renderNewsHtml: every https:// this page names sits inside the one fenced 
   assert.ok(html.slice(start, end).includes("https://"), "the block itself does carry the source registry's real URLs");
 });
 
-test("renderNewsHtml: the sources block lists every registered source once, toggle plus homepage plus status", () => {
-  const html = renderNewsHtml();
-  for (const id of ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"]) {
-    assert.match(html, new RegExp(`data-source-id="${id}"`), `source "${id}" has a toggle row`);
-  }
-});
-
-test("renderNewsHtml: the sources block separates the polled news feeds from the reference works, every news feed ticked", () => {
+test("renderNewsHtml: the sources block lists every registered source once, homepage plus status, and only the contemporary group carries a toggle", () => {
   const html = renderNewsHtml();
   const pollRoster = html.slice(html.indexOf('id="pollRoster"'), html.indexOf('id="lookupRoster"'));
-  const lookupRoster = html.slice(html.indexOf('id="lookupRoster"'));
-  assert.match(html, /news feeds — polled when you press start or poll once/);
-  assert.match(html, /reference works — looked up to explain a term, never polled/);
+  const lookupRoster = html.slice(html.indexOf('id="lookupRoster"'), html.indexOf("<!-- sources:end -->"));
   for (const id of ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"]) {
     assert.match(pollRoster, new RegExp(`data-source-id="${id}"`), `"${id}" sits in the poll roster`);
-    assert.match(
-      pollRoster,
-      new RegExp(`value="${id}" checked`),
-      `"${id}" is ticked to poll on a first visit`,
-    );
+    assert.match(pollRoster, new RegExp(`data-source-toggle value="${id}"`), `"${id}" carries a poll-narrowing checkbox`);
   }
   for (const id of ["simple-wikipedia", "wikidata", "wiktionary", "dbpedia-lookup", "english-wikipedia"]) {
     assert.match(lookupRoster, new RegExp(`data-source-id="${id}"`), `"${id}" sits in the lookup roster`);
+    assert.ok(!lookupRoster.includes("data-source-toggle"), "the reference-works group offers no checkbox — the worker's own lookup has no client-supplied roster");
     assert.ok(!pollRoster.includes(`data-source-id="${id}"`), `"${id}" is never offered as a poll target`);
   }
 });
@@ -125,22 +125,25 @@ test("renderNewsHtml: a card's collapsed background line renders only when backg
   assert.match(html, /item\.backgroundParagraph\s*\?/, "the block is conditional on the item actually carrying background content");
 });
 
-test("renderNewsHtml: the empty feed state names what the feed actually shows and how to fill it, never the retired seed-fallback line", () => {
+test("renderNewsHtml: a card renders straight from factLines/factCount, never from a raw fact row lookup", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /item\.factLines/, "the fact list reads the document's own pre-rendered lines");
+  assert.match(html, /item\.factCount/, "the count line reads the document's own count, honest about a trim");
+  assert.ok(!html.includes("factRows("), "no client-side call ever asks for a raw fact row");
+});
+
+test("renderNewsHtml: the empty feed state names what the feed actually shows and how to fill it", () => {
   const html = renderNewsHtml();
   assert.match(html, /id="feedEmpty"[^>]*>no news yet/, "the feed pane's own empty state carries the entity-anchored design copy");
-  assert.ok(!html.includes("the seed graph builds the first ones"), "the concept-card fallback's own line has retired with it");
 });
 
-test("renderNewsHtml: the empty state hides itself the moment a card is on screen, whether from a first render or a later poll", () => {
+test("renderNewsHtml: the empty state hides itself the moment a card is on screen", () => {
   const html = renderNewsHtml();
   assert.match(html, /emptyEl\.hidden\s*=\s*shown\.length\s*>\s*0/, "paintFeed hides #feedEmpty whenever any card matches the active filters");
-  assert.match(html, /el\("feedEmpty"\)\.hidden\s*=\s*true/, "a card appended straight off a poll also hides the empty state on its own");
 });
 
-test("renderNewsHtml: start and poll once both revert the empty state to its default copy, so a poll that reports nothing after a purge never keeps showing the purge line", () => {
+test("renderNewsHtml: start reverts the empty state to its default copy, so a poll that reports nothing after a purge never keeps showing the purge line", () => {
   const html = renderNewsHtml();
-  const startHandler = html.slice(html.indexOf("startBtn.addEventListener"), html.indexOf("el(\"pollOnce\").addEventListener"));
-  const pollOnceHandler = html.slice(html.indexOf("el(\"pollOnce\").addEventListener"), html.indexOf("el(\"stopPolling\").addEventListener"));
+  const startHandler = html.slice(html.indexOf("startBtn.addEventListener"), html.indexOf('el("enrichNow").addEventListener'));
   assert.match(startHandler, /emptyFeedText\s*=\s*DEFAULT_EMPTY_FEED_TEXT/, "start reverts the empty-feed copy before its own press runs");
-  assert.match(pollOnceHandler, /emptyFeedText\s*=\s*DEFAULT_EMPTY_FEED_TEXT/, "poll once reverts the empty-feed copy before its own press runs");
 });
