@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "5.0.27",
+  "tmctVersion": "6.0.2",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -16,7 +16,20 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "8205cffc90155880cf6838a70f17626743062f9dce28bbbbe11fcfa04718dd94"
+      "sha256": "dbbfd78b6b788b5500fae5e63ecb85576df4b8663e204fb1651caeda852dc0d0"
+    },
+    {
+      "page": "ledger",
+      "file": "ledger.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "5bbed398739dcf84b20a00b7dc436fcbf925ec0326cd6cb57fa2cf1b0faa29b0"
     },
     {
       "page": "plan",
@@ -29,7 +42,20 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "864367dda026f0048c5b1f14a104a63d8fc2cb5e8d7fd4b9e4fbf2148a3a93a8"
+      "sha256": "5eae8d82600929f8eb166b0043dfa67550c426a54997ce058603e1260d86bd1a"
+    },
+    {
+      "page": "mudiii",
+      "file": "mudiii.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "aabd84376f271ed6d907a2aefba810c6e8473f093ac93f27ade027881f9dd633"
     },
     {
       "page": "adventure",
@@ -45,19 +71,6 @@
       "sha256": "7f008936165d838f3259bb5b712dc9bfbf43898c296b2454d443354754c06b31"
     },
     {
-      "page": "ledger",
-      "file": "ledger.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "591b403bfb673d1d02adc584ec8edbb40d00782a18dc9eff02240de4e4b3f136"
-    },
-    {
       "page": "sprites",
       "file": "sprites.png",
       "viewport": {
@@ -68,20 +81,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "6ef268692ece5f082f76f807896581c9747eb1bb8d1ad8706481aa6f0c8549c9"
-    },
-    {
-      "page": "mudiii",
-      "file": "mudiii.png",
-      "viewport": {
-        "width": 1024,
-        "height": 600
-      },
-      "png": {
-        "width": 1024,
-        "height": 600
-      },
-      "sha256": "aabd84376f271ed6d907a2aefba810c6e8473f093ac93f27ade027881f9dd633"
+      "sha256": "196745e9f497dd7282f2397899be9505cb5be8e48a60661f31bcbb371d85cd98"
     },
     {
       "page": "news",
