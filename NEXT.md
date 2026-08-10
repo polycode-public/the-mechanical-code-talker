@@ -48,6 +48,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   UUID in localStorage, said plainly in the page copy), and a full abuse-risk table with
   per-IP edge rate limiting, caps, TTL, billing alarm and a named kill switch. DOC ONLY:
   nothing builds until the operator says build.
+- [ ] **The turn surface: the whole tmct engine as a consumer-hosted API, with a Dynamo
+  corpus supplement** — `PLAN_TURN_SERVICE.md`, designed on top of `PLAN_MEMORY_BACKEND.md`:
+  `POST /api/sessions/:uuid/turn` runs a full turn in Lambda with no egress but DynamoDB;
+  corpora too large to bundle (WordNet complete, full ConceptNet, Wikidata slices, a
+  wikipedia-derived band) live in shared read-only `corpus:<band>` partitions loaded by a
+  `tmct corpus load|clear` CLI verb from CI post-deploy or any credentialed shell;
+  retrieve-then-resolve feeds the unchanged synchronous engine a bounded deterministic
+  subgraph (k-hop expansion matched to the engine's own chase depths, full subClassOf
+  ancestry, fixed good-citizen budgets); a DynamoDB-backed circuit breaker degrades corpus
+  trouble to seed-plus-session — today's shipped product, with the answer marked; and
+  enumeration answers state their retrieval bounds rather than claiming completeness. tmct
+  stays offline; this surface is what a consumer hosts and tmct's deployment demos it.
+  DOC ONLY: nothing builds until the operator says build.
 - [ ] **bedrock-meter's embedded-path findings (inbox, 2026-08-09/10)** — in flight in two
   worktrees: (1) chat.mjs's `predicatePhrase` renders raw CURIEs for the `tmct:` predicates
   the lexicon itself mints ("latency tmct:needs result" reached their public page) while
