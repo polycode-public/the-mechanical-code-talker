@@ -434,3 +434,46 @@ test("a relation with no converse defined stays an honest miss rather than a gue
   assert.equal(flat.tmct_ask.miss, true);
   assert.doesNotMatch(flat.content, /Widget/);
 });
+
+// ============================================================================
+// A `named <X>` QUALIFIER INSIDE A BOOLEAN BRANCH — the branch keeps the member
+// of its own set whose name is X, instead of inheriting the previous branch's
+// verb and reading the name as that verb's object
+// ============================================================================
+
+test("named filter: a boolean branch narrows the relative clause's set to the module it names", () => {
+  // b.test.mjs covers b.mjs AND d/handler.mjs; the name picks one of the two.
+  assert.deepEqual(labels(runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/lib/b.mjs")),
+    ["Widget"]);
+  const other = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/functions/d/handler.mjs");
+  assert.equal(other.tmct_ask.miss, true);
+  assert.doesNotMatch(other.content, /Widget/);
+});
+
+test("named filter: the name is matched exactly, so an unknown name refuses instead of emptying the set", () => {
+  const r = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/lib/zebra.mjs");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no module named "app\/lib\/zebra\.mjs" in this index\./);
+  assert.doesNotMatch(r.content, /Widget/);
+});
+
+test("named filter: a name the index holds under another kind says which kind it found", () => {
+  // `register` is a global variable in the fixture, so no module answers to it.
+  const r = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named register");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /"register" names a variable here, not a module\./);
+  // Same for a class name in a slot that asks for a module.
+  assert.match(runAsk("which modules import app/lib/a.mjs and named Widget").content,
+    /"Widget" names a class here, not a module\./);
+});
+
+test("named filter: it composes with the other boolean ops over a plain relation branch", () => {
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs and named app/lib/b.mjs")), ["app/lib/b.mjs"]);
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs but not named app/lib/b.mjs")),
+    ["app/lib/c.mjs", "app/lib/e.mjs"]);
+});
+
+test("named filter: 'called' reads as a name only after a copula, so the passive `calls` verb is untouched", () => {
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs and are called app/lib/b.mjs")), ["app/lib/b.mjs"]);
+  assert.deepEqual(labels(runAsk("which functions are called by Widget.render")), ["fnAlpha"]);
+});
