@@ -226,6 +226,35 @@ Mutation is additive. A supersession carries `mgx:supersedes: [oldId]` in the js
 
 The 4 KB cap fails before the network. tmct rejects an oversized row at projection time with `BackendRejected`, before any write leaves the process. The default posture is throw. A backend constructed with `onOversizedRow: "drop"` logs the row's provenance and skips it; the turn completes with everything else persisted.
 
+### Extraction findings
+
+The extractor records named structural findings about how a sentence was parsed. Findings ride the json's per-assertion `mgx:extractionFinding` property (space-joined list of finding names) and surface in assembled rows under the per-row `extraction` union field.
+
+**The findings vocabulary** — a closed set of named detectors:
+
+| finding | meaning |
+| --- | --- |
+| `identifier-token` | an endpoint's raw surface is an identifier (camelCase, snake_case, dotted, or path-like) |
+| `clause-fallback` | the row grounded from a clause fragment after the whole sentence declined |
+| `pronoun-carry` | the subject was substituted from the paragraph's pronoun carry, not stated in the sentence |
+| `definitional-frame` | the row is a `mgx:nameFor` edge minted from a definitional copula frame ("the name for Y") |
+
+`relative-clause-verb` and `fragment-term` are decline reasons: candidates bearing these findings are not stored at all, named only in the ingest result.
+
+**The absence rule** — a fact row with no findings listed carries an absent (or empty-array) `extraction` field. Absent means no findings were recorded for this sentence, never that the sentence was checked and found structurally clean. A consumer must not treat absence as a guarantee of clean reading; the distinction is honest: rows written by builds that detect findings either carry them or genuinely triggered none.
+
+**The caveat templates** — a read-back answer that leans on a finding-bearing row says so in a short caveat beside the citation:
+
+| finding | caveat |
+| --- | --- |
+| `clause-fallback` | `(read from a clause fragment)` |
+| `pronoun-carry` | `(subject carried from the previous sentence)` |
+| `identifier-token` | `(identifier token)` |
+
+`definitional-frame` needs no caveat: its own phrase ("is the name for") already says how the row was read. Decline reasons (never stored) carry no caveats.
+
+**Helper** — `findingCaveat(finding)` (exported from `src/domain/fact-phrase.mjs` and the `./phrase` subpath) takes a row, a bare finding name, or a list of them, and returns the space-joined caveats those findings map to, in table order. Returns `""` when it has nothing to declare. Consumers render the caveat (if present) between the fact text and its citation: `<fact> <caveat(s)> (source: <provenance>)`.
+
 ## 3. The index key
 
 For fact rows, `term` is the normalized subject term. The recommended table layout:
