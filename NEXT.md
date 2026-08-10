@@ -31,8 +31,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The commit-window round is landed and
-  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`), and its own decision log re-ranks what
+  next tuning cycle, each its own measured round. The `named <X>` round is landed and
+  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`), and its own decision log re-ranks what
   is left:
   - [x] relative-embedded chain resolution
   - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
@@ -40,8 +40,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - [x] the temporal-window boundary in commit counting — measured in
     `reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`; the pool's tier-1 failures drop from nine to two
   - [ ] a conditional-question lane
-  - [ ] a `named <X>` qualifier inside a boolean branch — `g-c2-rel-17` and `g-c2-rel-25`, the
-    last two frontier rows in C2 relative-embedded
+  - [x] a `named <X>` qualifier inside a boolean branch — measured in
+    `reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`; both rows compile and C2 relative-embedded is
+    25/25 green
   - [ ] a negation-scope filter
   - [ ] `g-c1-neg-rel-19` — "modules importing the module that defines fnAlpha but not tested"
     answers b, c and e; the tested importer b.mjs should be excluded
@@ -54,7 +55,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Judge both chatbench arms against the same verdict-cache snapshot** — the 5.0.37 round
   scored four unchanged answers differently across its two arms, worth ±0.9 on a single case's
   mean, because each arm inherited a different partition of the cache
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note).
+  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note). The 5.0.39 round put the leftover
+  noise at the same size as a small lever's whole signal, so it now gates how small a lever the
+  rig can measure.
 - [ ] **The judge context tells the judge that "touched by 2 commit(s)" is truthful for
   app/lib/a.mjs**, which the graded pool's own `^1 commit\.$` expectation denies — `run.mjs`'s
   `FIXTURE_CONTEXT`. It split `g-b2-count-temp-1`'s two draws between 2 and 0 on a correct answer
