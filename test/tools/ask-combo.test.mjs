@@ -223,3 +223,66 @@ test("reverse zero-hit: honest empty with the traditional phrasing; the receipt 
   assert.doesNotMatch(r.content, /\(traversal:/, "the prose is plain words now");
   assert.equal(r.tmct_ask.traversal, "tests edges where object = app/lib/f.mjs", "receipt kept on the envelope for the why-path");
 });
+
+// ============================================================================
+// RELATIVE-EMBEDDED CHAIN RESOLUTION — a relative clause resolves to real
+// entities first, then the outer question runs over that result
+// ============================================================================
+
+test("relative chain: the defines hop reads a symbol's recorded site when the index carries no defines edge", () => {
+  // Button and Widget.render are sited in the fixture but carry no defines edge;
+  // the where-lane already answers off that site, so the defines hop must agree.
+  assert.deepEqual(labels(runAsk("which module defines Button")), ["app/lib/c.mjs"]);
+  assert.deepEqual(labels(runAsk("which module defines Widget.render")), ["app/lib/b.mjs"]);
+});
+
+test("relative chain: a three-hop chain resolves inner-first through a site-backed defines hop", () => {
+  assert.deepEqual(labels(runAsk("what imports the module that defines the method that calls fnAlpha")),
+    ["app/functions/d/handler.mjs"]);
+  assert.deepEqual(labels(runAsk("which modules import the module that defines the class that inherits from Widget")),
+    ["app/functions/d/handler.mjs"]);
+});
+
+test("relative chain: cochange is symmetric over a composed set, the same flip the single-entity query makes", () => {
+  const flat = labels(runAsk("which modules cochange with app/lib/a.mjs"));
+  assert.deepEqual(flat, ["app/lib/b.mjs", "app/lib/c.mjs"]);
+  assert.deepEqual(labels(runAsk("which modules cochange with the module that defines the function that Widget.render calls")), flat);
+});
+
+test("relative chain: the relative clause can sit in the outer verb's subject slot with the verb dangling", () => {
+  assert.deepEqual(labels(runAsk("which class the class that inherits from Widget inherits from")), ["Widget"]);
+  assert.deepEqual(labels(runAsk("which module defines the class that the class that inherits from Widget inherits from")),
+    ["app/lib/b.mjs"]);
+});
+
+test("relative chain: a membership owner that is itself a relative clause resolves as a set, never as free text", () => {
+  // Importers of a.mjs are b, c and e, and none of them defines a function, so
+  // the honest answer is empty. Reading the clause as one term lands on a.mjs
+  // and confidently answers fnAlpha.
+  const r = runAsk("list functions in the module that imports app/lib/a.mjs");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /fnAlpha/);
+  // The same shape over an owner that does define functions still answers.
+  assert.deepEqual(labels(runAsk("functions defined in the module that scripts/g.mjs calls")), ["fnAlpha"]);
+});
+
+test("relative chain: 'where is <relative clause> defined' cites the resolved entity, not the wordiest name in the clause", () => {
+  assert.match(runAsk("where is the class that inherits from Widget defined").content,
+    /^Button is defined in app\/lib\/c\.mjs at lines 1-10\./);
+  assert.match(runAsk("where is the method that calls fnAlpha defined").content,
+    /^function Widget\.render\(\) is defined in app\/lib\/b\.mjs at lines 5-9\./);
+  // The flat single-entity form is untouched.
+  assert.match(runAsk("where is Widget defined").content, /^Widget is defined in app\/lib\/b\.mjs at lines 1-30\./);
+});
+
+test("relative chain: a clause nothing satisfies refuses instead of citing the nearest named entity", () => {
+  const r = runAsk("where is the class that inherits from Button defined");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /is defined in/);
+});
+
+test("relative chain: a chain whose inner relation has no reading refuses, and names nothing on the way past", () => {
+  const r = runAsk("which tests cover the module that defines the class that Widget.render belongs to");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /app\/lib\/b\.mjs|app\/unit-tests\/b\.test\.mjs/);
+});
