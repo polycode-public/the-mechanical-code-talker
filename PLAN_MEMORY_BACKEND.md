@@ -1,8 +1,11 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend: injected row stores, a conformance kit, and the deployed news demo running on a tmct-owned AWS row service
 
-Status: DESIGN, revised once. The first draft made news.html an IndexedDB consumer; the operator
+Status: DESIGN, revised twice. The first draft made news.html an IndexedDB consumer; the operator
 redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture, fronted by
-a new row service in tmct's own stack. The consumer requirements it answers are bedrock-meter's
+a new row service in tmct's own stack. The second revision (same day) moved every backend into the
+library: there is no consumer-written adapter — tmct builds, tests, demos, and ships the DynamoDB
+backend in-tree, and a consumer's integration is configuration. The consumer requirements it
+answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
 `src/adapters/memory/core.mjs` routes every read and write through one opaque `memoryDir` token
@@ -11,20 +14,23 @@ today, and this plan turns that token's closed set into an open one.
 This plan is written to be built by Sonnet-tier implementers with no further design work, with
 the two `core.mjs` phases marked for Opus. Every phase names its module paths, data structures,
 function signatures, test files, and acceptance commands. The hard decisions (the interface, the
-row shape, the index key, where bookkeeping lives, the service's endpoints and caps, what the
-conformance suite can and cannot check) are fixed here, in writing.
+row shape, the index key, where bookkeeping lives, which backends ship in the library, the
+service's endpoints and caps, what the conformance suite can and cannot check) are fixed here,
+in writing.
 
 The feature in one paragraph: `createSession`/`runTurn` accept an injected backend object beside
 today's `"memory"`/`"sqlite"` strings. The backend is a small async row store bound to one opaque
 session key. tmct assembles its working payload from the backend's rows, writes back only the
-rows a turn changed, and keeps every sidecar behind the same object. tmct ships the contract as a
-published conformance kit, the way the repository interface already ships one. Four
-implementations prove it: the in-tree in-memory reference backend, the existing sqlite backend
-refactored to pass the same suite, an HTTP client backend, and the server side of that client — a
-new row service in tmct's own AWS stack (Lambda + DynamoDB behind the existing CloudFront
-distribution) that the deployed news.html writes its session facts through. bedrock-meter's
-DynamoDB adapter is a further consumer, on their side, over their own table, against the
-published suite.
+rows a turn changed, and keeps every sidecar behind the same object. The library ships three
+backends, all first-class in-tree code passing one published conformance suite: in-memory (the
+reference implementation and the suite's own fixture), sqlite (the CLI's store, refactored onto
+the same contract), and DynamoDB (`createDynamoRowBackend` — a consumer hands it a document
+client, a table name, and a TTL policy, and writes no storage code). An HTTP client backend
+carries the same contract over the wire, and the deployed news.html demos the whole stack end to
+end: page → HTTP client → row service in tmct's own AWS stack (Lambda behind the existing
+CloudFront distribution) → the library's own DynamoDB backend → table. bedrock-meter embeds tmct
+and configures the shipped DynamoDB backend over their own table; nothing on the storage path is
+theirs to build.
 
 ---
 
@@ -99,17 +105,24 @@ order on read never carries meaning.
   consumers parse them.
 - **`factsTouched` keeps its row shape** — `{id, subject, predicate, object, provenance}` plus
   the additive fields 5.0.32 and later carry.
+- **Storage code ships in the library.** Every backend a supported consumer needs is built,
+  tested, and demonstrated in-tree; embedding tmct against DynamoDB is configuration (a client,
+  a table name, a TTL policy), never storage code. The conformance kit stays published for
+  anyone who chooses to build a custom backend anyway; no supported path requires one.
 - **The graph and lexicon are read-only inputs per session and out of scope.** Only mutable
   session memory moves behind the seam. The reference pack stays bundled and offline.
 - **The privacy split is explicit and honest.** chat.html's promise — taught facts kept
   best-effort on this device, never sent anywhere — is unchanged, to the word. news.html makes a
   different promise and says so on the page: facts taught or polled there are stored server-side
-  against an anonymous session, expire after seven days, and "stop & forget" deletes them.
-  Neither page borrows the other's wording.
+  against an anonymous session addressed by a random key kept in this browser, expire after
+  seven days, and "stop & forget" deletes them. The one local item beyond the existing consent
+  preference is that key — a session pointer, never facts — and the copy says so. Neither page
+  borrows the other's wording.
 - **Best-effort in the browser, honest everywhere.** The service being unreachable never blocks
   the page: the seed is a static asset and the in-page payload needs no store, so the visit
   runs — without persistence, saying so. A failed write surfaces visibly, never as a silently
-  dropped row, and nothing is ever stored locally on the news page.
+  dropped row, and no fact is ever stored locally on the news page — localStorage holds the
+  consent preference and the session pointer, nothing else.
 - **Fixture-true testing.** No test reaches live AWS. The service's own handler, run locally
   over the reference backend, is the test double; the live check is the post-deploy smoke probe,
   which is measurement, not a test tier.
@@ -145,9 +158,11 @@ A custom backend is an object the consumer constructs and injects. tmct binds it
 Decisions folded into that shape:
 
 - **Session binding at construction.** The object is already scoped to one opaque session key
-  the consumer chose (spec §4). tmct never sees the key, the table name, credentials, or an SDK.
-  This matches how `memoryDir` is per-session today. (The browser is the one consumer that never
-  sees the key either — §3.8's service minted it and holds it in an HttpOnly cookie.)
+  the consumer chose (spec §4). The engine never sees the key, the table name, credentials, or
+  an SDK — they live inside the backend object; for the shipped DynamoDB backend that means an
+  injected, consumer-credentialed document client (§3.10), never bundled credentials. This
+  matches how `memoryDir` is per-session today. (In the browser the page itself mints the key
+  and holds it in localStorage — §3.7; the engine still never sees it.)
 - **Batch, then per-row atomicity.** `putRows` takes the batch (`appendFacts`' research fan-out
   lands in one call, spec §3.1) and promises only per-row atomicity. A batch that half-lands
   leaves individually valid rows, which is exactly what the spec asks and what row-keyed KV
@@ -247,7 +262,7 @@ replaces two whole-archive S3 round trips plus a whole-store write-back. The row
 bound the cold-open response for the browser consumer: 1,000 rows × 4 KB is a 4 MB worst case,
 and a real news session is tens of kilobytes. The stricter reading of "O(rows actually read
 this turn)" — term-indexed partial reads feeding a lazy resolver — is a real engine change
-(async reads inside currently-synchronous folds) and is the named horizon (§16), which is why
+(async reads inside currently-synchronous folds) and is the named horizon (§17), which is why
 the index key is settled now: when core starts calling `readRowsByTerm`, no adapter or table
 changes.
 
@@ -276,17 +291,23 @@ where its session rows live:
 ```
 news.html (engine in-page, seed graph as basePayload, never persisted)
   └─ injected backend: createHttpRowBackend()  — the §3.1 contract over fetch,
-     same-origin /api/*, credentials included, no key in JS
+     same-origin /api/*, the page-minted session key in an x-tmct-session header
        └─ CloudFront behavior /api/* on the existing distribution
             └─ row service Lambda (§3.8)
-                 └─ DynamoDB session table (pk = server-minted session key)
+                 └─ DynamoDB session table (pk = the validated session key)
 ```
 
-- **The session starts at consent.** Before the visitor presses start, the page makes zero API
-  calls and runs in-memory over the seed — the same posture as today, where nothing is fetched
-  before that press. The start press mints the server session (POST /api/session) beside the
-  poll consent it already grants. The e2e pins pre-consent network silence through the page's
-  own request log plus route interception.
+- **The page mints the session, at consent.** Before the visitor presses start, the page makes
+  zero API calls and runs in-memory over the seed — the same posture as today, where nothing is
+  fetched before that press. The start press mints a UUIDv4 in page JS, stores it in
+  localStorage, and constructs the HTTP backend with it; the server learns the key on the first
+  write and creates the session implicitly — there is no session endpoint. The e2e pins
+  pre-consent network silence through the page's own request log plus route interception.
+- **What lives locally is a pointer, never facts.** localStorage holds exactly two things: the
+  existing start-consent preference and the session UUID. The UUID is an address, not data — no
+  fact, row, or article text is ever stored on the device — and the page's copy says exactly
+  that. The key is never read from the URL or any cross-origin channel: localStorage or a fresh
+  mint, nothing else.
 - **Writes are synchronous.** A turn is not done until its rows are durable: `persistMemory`
   awaits the PUT. The cost is one round trip per mutating turn — the diff batches a whole
   poll's stored facts into one `putRows` call — roughly 20–60 ms from the UK to eu-west-2 and
@@ -294,79 +315,85 @@ news.html (engine in-page, seed graph as basePayload, never persisted)
   already spend seconds ingesting. Honesty over latency, chosen deliberately.
 - **Unreachable service: the visit runs without persistence, and says so.** The page boots
   regardless — the seed is a static asset and the in-page payload assembly needs no store. If
-  the mint or the cold-open GET fails, or a write fails mid-visit, the page states through the
-  existing status affordances that persistence is unavailable; the visit continues on the
-  in-page payload alone, further writes are not attempted until the page reloads, and a reload
-  in that state starts fresh. Nothing is ever stored locally on this page — no IndexedDB, no
-  localStorage beyond the existing start-consent preference — so an unpersisted visit's rows
-  live exactly as long as the tab.
+  the cold-open GET fails, or a write fails mid-visit, the page states through the existing
+  status affordances that persistence is unavailable; the visit continues on the in-page
+  payload alone, further writes are not attempted until the page reloads, and a reload retries
+  against the same stored key. No facts are ever stored locally — no IndexedDB, no fact rows in
+  localStorage — so an unpersisted visit's rows live exactly as long as the tab.
 - **The copy tells the truth.** The consent moment and the page's persistence note say: facts
-  taught or polled here are stored against an anonymous session on our server, expire after
-  seven days, and "stop & forget" deletes them now. "Stop & forget" wires its purge to
-  `deleteAll()` (DELETE /api/session), keeps its existing in-page retraction behaviour, and
-  the e2e extends to assert the server side reports zero rows afterwards (against the local
-  double). chat.html's local-only promise is untouched.
-- **Reload restores the session.** A returning visit re-opens against the cookie's session:
-  one GET /api/rows, and the feed rebuilds from real rows. Schema drift is guarded
-  server-side: the session stores the seed-content stamp as a meta value, and a mismatch
-  expires the session rather than assembling rows across versions.
+  taught or polled here are stored against an anonymous session on our server, addressed by a
+  random key kept in this browser, expiring after seven days; "stop & forget" deletes them now.
+  "Stop & forget" wires its purge to `deleteAll()` (DELETE /api/rows with `{all: true}`),
+  discards the stored UUID, keeps its existing in-page retraction behaviour, and the e2e
+  extends to assert the server side reports zero rows afterwards (against the local double).
+  chat.html's local-only promise is untouched.
+- **Reload restores the session.** A returning visit re-opens against the stored key: one
+  GET /api/rows, and the feed rebuilds from real rows. Schema drift is guarded server-side:
+  the session stores the seed-content stamp as a meta value, and a mismatch expires the
+  session rather than assembling rows across versions.
 
 The point of this consumer is unchanged from the first draft, sharpened: it proves the contract
-end to end over HTTP against real service code before bedrock-meter writes their adapter, and it
+end to end over HTTP against the real service code and the real shipped DynamoDB backend, and it
 makes the public demo the architecture rather than a simulation of it.
 
 ### 3.8 The row service
 
-A new, tmct-owned service in the site's own stack. Nothing in it is bedrock-meter's: their
-deployment keeps their own table and adapter (§3.9).
+A new, tmct-owned service in the site's own stack, storing rows through the library's own
+DynamoDB backend (§3.10). bedrock-meter's deployment is separate: same shipped backend, their
+own table (§3.11).
 
-**Endpoints.** All same-origin under `/api/`, JSON only, cookie-authenticated except the mint:
+**Endpoints.** All same-origin under `/api/`, JSON only. There are no session endpoints: every
+request carries the client-minted session key in an `x-tmct-session` header, and the first
+write under a fresh key creates the session implicitly.
 
 | method + path | contract call | success | notes |
 | --- | --- | --- | --- |
-| POST /api/session | — (mint) | 201 + Set-Cookie | valid cookie already present → 200, same session |
-| GET /api/rows | readRows | 200 `{rows:[…]}` | one response; the row cap makes pagination unnecessary, and the handler 500s loudly rather than truncating if that assumption ever breaks |
-| PUT /api/rows | putRows | 204 | body `{puts:[row…]}`; whole batch validated before any apply |
-| DELETE /api/rows | deleteRows | 204 | body `{rowKeys:[…]}`; missing keys are a no-op |
+| GET /api/rows | readRows | 200 `{rows:[…]}` | an unknown key reads as an empty session; one response — the row cap makes pagination unnecessary, and the handler 500s loudly rather than truncating if that assumption ever breaks |
+| PUT /api/rows | putRows | 204 | body `{puts:[row…]}`; whole batch validated before any apply; first write under a fresh key is the implicit mint |
+| DELETE /api/rows | deleteRows / deleteAll | 204 | body `{rowKeys:[…]}` for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` purges the session — rows, then meta, then the counter rows (§16.4) |
 | GET /api/meta/:key | readMeta | 200 `{value}` / 404 | client maps 404 to null |
 | PUT /api/meta/:key | putMeta | 204 | body `{value}` |
-| DELETE /api/session | deleteAll | 204 + cookie cleared | rows, then meta, then the session marker (§15.4) |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
 (`GET /api/rows?class=fact&term=X` → a sort-key prefix query) because the sk layout (§3.3) makes
 it one line; nothing calls it until the term-lazy horizon lands.
 
-**Sessions and auth.** POST /api/session mints a UUID and returns it only as an HttpOnly,
-Secure, SameSite=Strict cookie scoped to `Path=/api`, `Max-Age` = the TTL. The browser never
-chooses or reads the key — the pk is server-controlled, which closes the write-anywhere hole an
-attacker-supplied key would open. Cross-site requests carry no cookie (SameSite=Strict) and the
-service serves no CORS headers, so only the site's own pages can use it. No accounts, no
-tokens, nothing identifying: the session is anonymous by construction and TTL is the garbage
-collector.
+**Sessions and auth.** The client mints a UUIDv4 and sends it on every request in
+`x-tmct-session`. The handler validates the format strictly — the exact v4 shape, version and
+variant bits included, rejecting anything else with a 400 — so a chosen low-entropy key is
+impossible and the keyspace is the full 122 random bits. A missing or malformed header is a
+400 before any storage call. There are no cookies, no accounts, no tokens, nothing
+identifying: the session is anonymous by construction, the key is the only credential, its
+holder is its owner, and TTL is the garbage collector. The service serves no CORS headers, so
+no cross-origin page can call it from a browser; non-browser callers are bounded by the edge
+rate limit and the caps (§3.9).
 
 **Caps, fixed here.** At most 1,000 rows per session (a PUT that would exceed it → 409, nothing
 applied); at most 4,096 bytes of `json` per row (400); at most 256 KB request body (413); at
 most 120 mutating requests per session per hour (429; an atomic counter row with its own TTL —
 the one place the service uses DynamoDB's `ADD`); Lambda reserved concurrency 10 as the blunt
-account-level bound. Every row, meta value, and the session marker carry `expiresAt` = mint
-time + 7 days (env-configurable), enforced by DynamoDB-native TTL.
+account-level bound. Every row, meta value, and counter row carries `expiresAt` = its own
+write time + 7 days (env-configurable), enforced by DynamoDB-native TTL — implicit sessions
+have no mint moment, so expiry is per row and a session is gone when its last row is. The
+threats these caps answer, and the ones they don't, are enumerated in §3.9.
 
 **Error semantics, pinned for the client and the kit.** 400/409/413 → `BackendRejected` (the
-turn errors; the session stays networked); 401 → the client re-mints once and retries once,
-then surfaces; 429, 5xx, and network failure → `BackendUnavailable` (the turn reports it and
+turn errors; the session stays networked; a 400 on the session header is a client bug, not a
+retry case); 429, 5xx, and network failure → `BackendUnavailable` (the turn reports it and
 the visit continues without persistence per §3.7). 4xx validation failures apply nothing; a
-5xx mid-batch may
-leave rows applied, which is the contract's own half-landed-batch stance (§3.1).
+5xx mid-batch may leave rows applied, which is the contract's own half-landed-batch stance
+(§3.1).
 
-**The handler is in-repo and backend-agnostic — that is the whole trick.** `server/row-service/`
+**The handler is in-repo, backend-agnostic, and contains no storage code.** `server/row-service/`
 (new, top-level, excluded from the npm `files` array — the published library ships no Lambda)
 holds `handler.mjs`: parse, validate, enforce caps, then call a §3.1 row backend. In AWS that
-backend is `dynamo-row-backend.mjs` in the same directory (lazy `@aws-sdk/lib-dynamodb` import;
-the SDK is marked external in the bundle because the Lambda Node runtime ships it, so the repo
-gains no production dependency). Locally the SAME handler mounts on `node:http` over the M2
-in-memory reference backend — `server/row-service/local.mjs` — and that is the test double:
-real routing, real validation, real error semantics, fake storage. The service is itself a
-consumer of the seam it fronts.
+backend is the library's own `createDynamoRowBackend` (§3.10), imported from
+`src/adapters/memory/row-backend-dynamo.mjs` — the service is the first consumer of the shipped
+backend, so the deployed demo exercises the exact code a library consumer installs. The SDK is
+marked external in the bundle because the Lambda Node runtime ships it. Locally the SAME handler
+mounts on `node:http` over the M2 in-memory reference backend — `server/row-service/local.mjs` —
+and that is the test double: real routing, real validation, real error semantics, fake storage.
+The service is itself a consumer of the seam it fronts, twice over.
 
 **Deploy path.** The service is new constructs inside the existing `infra/` stack: a
 `dynamodb.Table` (pk `sessionKey`, sk `sk`, TTL attribute `expiresAt`, on-demand billing), a
@@ -375,19 +402,90 @@ consumer of the seam it fronts.
 `distribution.addBehavior("/api/*", …)` on the distribution `website-stack.ts` already owns —
 same origin as the site, no new DNS, no CORS. CI's existing `deploy:website` job deploys it (it
 already runs `cdk deploy` on the same stack; the job gains the `build:row-service` step).
-`scripts/post-deploy-smoke.mjs` gains the live probe: mint a session, PUT one row, GET it back,
-DELETE the session, against the deployed origin — measurement after release, never a test tier.
+`scripts/post-deploy-smoke.mjs` gains the live probe: PUT one row under a fresh page-style
+UUID, GET it back, DELETE with `{all: true}`, against the deployed origin — measurement after
+release, never a test tier.
 
-### 3.9 bedrock-meter's consumer story, unchanged
+### 3.9 The abuse surface, enumerated
 
-Their Lambda-embedded path injects their own adapter over their own table; this plan's service
-is not on their path, and their spec's §7/§8 stay theirs. Their offered seam (single-table
-`pk`/`sk`, `put/get/update/del/query(skPrefix)/batchGet/add`) adapts in roughly a hundred
-lines: `readRows` → `query("")` paginated; `putRows` → looped `put` (their seam has no batch
-write; per-row atomicity holds either way); `readRowsByTerm` → `query("fact#<term>#")`; meta →
-`put`/`get` under `sk = "meta#<key>"`; `deleteAll` → `query` then looped `del` (documented as
-their seam's cost, no native truncate). The adapter and its tests are theirs (spec §7); the
-acceptance is that it passes the published suite unmodified.
+An anonymous write API on a public page, addressed by client-minted keys. The structural
+defense is isolation: a session's pk is a full-entropy UUIDv4 its holder minted, the strict
+format check (§3.8) keeps the keyspace at 122 random bits, and no endpoint reads or returns
+any key but the caller's own — so one session can never read or write another's rows, and
+every attack below is bounded to the attacker's own sessions and the account's bill.
+
+| risk | mitigation |
+| --- | --- |
+| write flooding (implicit creation makes every fresh-UUID write a mint) | a WAF rate-based rule on the distribution scoped to `/api/*` — per-IP, 300 requests per 5 minutes; the one new edge construct, roughly $8/month; writes also queue behind Lambda reserved concurrency 10 |
+| storage flooding inside the caps (many sessions, each individually legal) | the arithmetic is bounded and stated: one IP sustaining the WAF ceiling creates ≤ ~86,000 sessions/day, each capped at 4 MB, all reaped by the 7-day per-row TTL; on-demand billing plus the billing alarm below turns the residue into a page, never a surprise invoice |
+| cost attack (Lambda invocations, table writes) | reserved concurrency 10 caps compute; the on-demand table plus a CloudWatch estimated-charges alarm (threshold set in the stack, $20/month to start); the kill switch is removing the `/api/*` behavior from the distribution — one CDK deploy or a console action — after which the page degrades to §3.7's unpersisted mode and keeps working |
+| cross-site request forgery | effectively gone by construction: there is no ambient credential — no cookie rides a cross-site request, and a cross-origin page cannot know the victim's UUID. The no-CORS posture and the `application/json` content-type check stay as hygiene |
+| session-key theft | the key is page-readable by design (localStorage, sent in a header), so exfiltrating it requires running script in the page — the stored-XSS row below — and the prize is one anonymous, 7-day, self-owned session; no cross-session pivot exists. The key never appears in a URL, a response body, or any cross-origin channel |
+| session fixation / chosen keys | the strict UUIDv4 format check rejects any attacker-shaped or low-entropy key, and the page only ever uses a key it minted itself or one from its own localStorage — never from the URL or another origin |
+| stored XSS through fact text (a taught fact carrying markup, read back into the DOM) | render-side escaping is already the page's rule — answer text lands via text nodes, never markup injection — and M8's e2e pins it: teach a fact containing a script tag through the real flow, reload from the service double, assert zero script execution and the literal text on screen. Isolation (above) bounds a miss to self-XSS even before the pin |
+| enumeration / cross-session reads | structural: 122 bits of key entropy, the format check as the floor, no endpoint that lists or returns keys, and an unknown key reading as an empty session (a probe learns nothing) |
+
+### 3.10 The DynamoDB backend ships in the library
+
+`src/adapters/memory/row-backend-dynamo.mjs` — first-class library code, not service glue:
+
+```js
+createDynamoRowBackend({
+  client,          // an @aws-sdk/lib-dynamodb DynamoDBDocumentClient the consumer constructs
+                   // and credentials; tmct bundles no credentials and builds no client
+  tableName,
+  sessionKey,      // the pk; opaque, consumer-chosen (the row service passes the caller's validated key)
+  ttlSeconds = null,                                        // null → no expiresAt stamped
+  attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt" },  // fit an existing table
+})
+```
+
+- **Ops mapping.** `readRows` → one paginated Query on the pk; `readRowsByTerm` → Query with
+  `begins_with(sk, "fact#<term>#")`; `putRows` → looped PutCommand (per-row atomicity is the
+  contract; batch write APIs' partial-failure bookkeeping buys nothing here); `deleteRows` →
+  looped DeleteCommand; meta → Get/Put under `sk = "meta#<key>"`; `deleteAll` → Query then
+  looped Delete, rows → meta → counter rows, the §16.4 ordering.
+- **Lazy SDK, exactly.** The module imports nothing from AWS at load. The first storage call
+  runs `await import("@aws-sdk/lib-dynamodb")` once and caches the command constructors.
+  `package.json` declares `"peerDependencies": { "@aws-sdk/lib-dynamodb": ">=3" }` with
+  `"peerDependenciesMeta": { "@aws-sdk/lib-dynamodb": { "optional": true } }` — installing tmct
+  pulls no AWS code, importing the module performs no IO, and a consumer without the SDK fails
+  at first use with a named error saying what to install. An in-tree test pins
+  module-load-without-SDK.
+- **Published surface.** A `./memory-backends` export subpath (entry
+  `src/adapters/memory/backends-exports.mjs` re-exporting `createRowMemoryBackend`,
+  `createDynamoRowBackend`, and `isRowBackend`), following the `./envelope`/`./news`/
+  `./memory-backend-conformance` precedents; pack manifest regenerated the standard way.
+- **Conformance in-tree, no network.** The full kit runs against `createDynamoRowBackend` over
+  an injected fake document client (`test/adapters/fake-dynamo-document-client.mjs`): a
+  deliberate mirror of the backend's own call shapes — Query/Put/Delete/Get over a Map keyed
+  `pk|sk`, `begins_with` on the sort key — not a DynamoDB emulator, and it validates the key
+  expressions the backend is specified to emit. No dynamodb-local, and nothing in CI touches
+  AWS. Setting `TMCT_DYNAMO_LIVE_TABLE` (never set in CI) points the same conformance file at a
+  real table for a hand-run pass; the deployed path's standing live check is the post-deploy
+  smoke probe (§3.8).
+
+### 3.11 bedrock-meter's integration: configuration, not code
+
+There is no bedrock-meter adapter. Their Lambda imports the shipped backend and configures it:
+
+```js
+import { createDynamoRowBackend } from "@polycode-projects/the-mechanical-code-talker/memory-backends";
+const memoryBackend = createDynamoRowBackend({
+  client, tableName, sessionKey, ttlSeconds: 7 * 86_400,
+});
+const session = createSession({ memoryBackend /* … */ });
+```
+
+They own the table (or a keyspace of an existing one — `attributeNames` fits their single-table
+layout), the IAM on their Lambda role, and the TTL value. tmct owns every line of storage code
+and its tests; the first draft's hundred-line Store-seam adaptation is superseded, because
+nothing needs adapting when the backend ships finished. Their spec's §7 offer — they build the
+adapter and its conformance tests — is answered differently: the backend and its suite run ship
+in tmct, and their integration surface is the constructor above. What stays theirs (spec §7/§8):
+the table and IAM, their live e2e (cross-container read-back), the S3-path retirement, and
+their §4 latency numbers, measured on their own deployment. The published suite remains
+available to any consumer who chooses a custom store anyway.
 
 ---
 
@@ -404,10 +502,10 @@ acceptance is that it passes the published suite unmodified.
 | bookkeeping exclusion | yes | a `rowClass: "bookkeeping"` row round-trips but never surfaces in `rowsToPayload`'s answer-facing individuals |
 | determinism / order independence | yes | one row set, two arrival orders, identical assembled payloads |
 | ≤ 4 KB rows | yes | the projection rejects an oversized row at `payloadToRows` time with a named error |
-| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/401/409/413/429/500 and the client must map each per §3.8 |
+| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/409/413/429/500 and the client must map each per §3.8 |
 | TTL enforcement | no — adapter-documented | time-driven; the suite asserts only that `expiresAt` round-trips untouched |
-| latency budget | no — consumer-measured | bedrock-meter's e2e owns the §4 numbers for their path; the smoke probe records the service's, as measurement |
-| lazy SDK, no import-time IO | no — adapter-documented | stated in the contract doc; unobservable from inside the suite |
+| latency budget | no — consumer-measured | the smoke probe records the service's numbers as measurement; bedrock-meter's e2e measures their own deployment |
+| lazy SDK, no import-time IO | partly — in-tree pin | the kit cannot see imports, but the shipped DynamoDB backend pins it directly: the module loads with the SDK absent, and only the first storage call requires it (§3.10) |
 
 ---
 
@@ -484,30 +582,51 @@ true-by-analogy.
 Acceptance: `node --test test/adapters/memory-sqlite-conformance.test.mjs` plus the existing
 memory/store test files; `npm run test:fast`.
 
-## 9. Phase M4 — the row service handler and its local double
+## 9. Phase M4 — the DynamoDB backend, in-tree
+
+**Owns** `src/adapters/memory/row-backend-dynamo.mjs` (new: §3.10's construction and ops
+mapping), `src/adapters/memory/backends-exports.mjs` (new: the `./memory-backends` entry),
+`package.json` (the export subpath; the optional peer-dependency declaration per §3.10),
+`test/estate/pack-manifest.json` (regenerated the standard way),
+`test/adapters/fake-dynamo-document-client.mjs` (new: the client double per §3.10),
+`test/adapters/memory-dynamo-conformance.test.mjs` (new). **Sonnet**, after M2, parallel with
+M3.
+
+The conformance test runs the FULL kit against the backend over the fake client, plus the
+backend-specific pins: the module loads with no SDK installed and the first call without it
+fails with the named install hint; the key expressions the backend emits match §3.3's layout
+exactly; `ttlSeconds` stamps `expiresAt` and null stamps nothing; `attributeNames` remaps every
+expression; `deleteAll` deletes rows, then meta, then the counter rows. Setting
+`TMCT_DYNAMO_LIVE_TABLE` reruns the same file against a real table by hand; CI never sets it.
+
+Acceptance: `node --test test/adapters/memory-dynamo-conformance.test.mjs test/estate/pack.test.mjs`;
+a consumer-style import through the exports map proving `./memory-backends` resolves;
+`npm run test:fast`.
+
+## 10. Phase M5 — the row service handler and its local double
 
 **Owns** `server/row-service/handler.mjs` (new: routing, validation, caps, error semantics per
-§3.8, calling an injected §3.1 backend), `server/row-service/dynamo-row-backend.mjs` (new: the
-service's own DynamoDB implementation, lazy SDK, sk layout per §3.3),
-`server/row-service/local.mjs` (new: the handler on `node:http` over the M2 reference backend —
-the test double every later phase uses), `server/row-service/README.md` (one page: run locally,
-env vars `TABLE_NAME`/`TTL_DAYS`, what deploys it), `test/server/row-service.test.mjs` (new).
-**Sonnet**, after M2. The dynamo backend's unit tests run against an injected fake document
-client — no AWS, no network; the kit cannot reach DynamoDB from CI and does not try (the smoke
-probe is the live check).
+§3.8, calling an injected §3.1 backend — no storage code; the AWS entry constructs the M4
+backend), `server/row-service/local.mjs` (new: the handler on `node:http` over the M2 reference
+backend — the test double every later phase uses), `server/row-service/README.md` (one page:
+run locally, env vars `TABLE_NAME`/`TTL_DAYS`, what deploys it),
+`test/server/row-service.test.mjs` (new). **Sonnet**, after M2 and M4.
 
-The handler tests drive every endpoint through `local.mjs`: mint/reuse/clear of the session
-cookie, each cap answering its status code with nothing applied on 4xx, the mutation-rate
-counter, batch validation before any apply, and the delete ordering of §15.4.
+The handler tests drive every endpoint through `local.mjs`: the session-header gate (a valid
+v4 accepted; missing, malformed, wrong-version, and wrong-variant keys each 400 before any
+storage call), implicit creation on a fresh key's first write, an unknown key reading as an
+empty session, each cap answering its status code with nothing applied on 4xx, the
+mutation-rate counter, batch validation before any apply, the JSON-only content-type rejection
+(§3.9), the `{all: true}` purge beside the keyed delete, and the delete ordering of §16.4.
 
 Acceptance: `node --test test/server/row-service.test.mjs`; `npm run test:fast`.
 
-## 10. Phase M5 — the HTTP client backend, conformance over the wire
+## 11. Phase M6 — the HTTP client backend, conformance over the wire
 
 **Owns** `src/surfaces/web/http-row-backend.mjs` (new: `createHttpRowBackend({ apiBase,
-fetchImpl })`, the §3.1 contract over fetch with credentials included, the §3.8 error mapping,
-the one 401 re-mint retry), `test/adapters/http-row-backend.test.mjs` (new). **Sonnet**, after
-M4.
+sessionKey, fetchImpl })`, the §3.1 contract over fetch, the `x-tmct-session` header on every
+request, `deleteAll` as the `{all: true}` delete, the §3.8 error mapping),
+`test/adapters/http-row-backend.test.mjs` (new). **Sonnet**, after M5.
 
 Its test file runs the FULL conformance kit against the client pointed at `local.mjs` — three
 real layers (client → handler → reference backend), no fakes — plus the scripted error double
@@ -515,14 +634,15 @@ for §4's mapping row.
 
 Acceptance: `node --test test/adapters/http-row-backend.test.mjs`; `npm run test:fast`.
 
-## 11. Phase M6 — infra and deploy
+## 12. Phase M7 — infra and deploy
 
 **Owns** `infra/lib/website-stack.ts` (the table, the Lambda from the built bundle, the
 function URL + OAC, `addBehavior("/api/*", …)`, reserved concurrency, TTL env),
 `package.json` (`build:row-service`: esbuild `handler.mjs` → `server/row-service/dist/`, SDK
 external), `.gitlab-ci.yml` (`deploy:website` gains the `build:row-service` step),
-`scripts/post-deploy-smoke.mjs` (the live probe: mint → put → read → delete against the
-deployed origin, polled with the same patience the version check uses). **Sonnet**, after M4;
+`scripts/post-deploy-smoke.mjs` (the live probe: put one row under a fresh UUID → read it
+back → delete `{all: true}`, against the deployed origin, polled with the same patience the
+version check uses). **Sonnet**, after M5;
 the stack change deploys through the existing job on the next main push, no new pipeline
 surface. The first deploy lands the table empty; there is nothing to migrate.
 
@@ -530,57 +650,63 @@ Acceptance: `npx tsc --noEmit` in `infra/`; `npm run build:row-service` emits a 
 `node --test test/server/row-service.test.mjs` still green; the smoke probe runs against
 `local.mjs` in a dry-run mode so the script itself is tested without AWS.
 
-## 12. Phase M7 — news.html consumes it
+## 13. Phase M8 — news.html consumes it
 
 **Owns** `src/surfaces/web/news-browser-entry.mjs` (construction: `createHttpRowBackend` with
-the seed as `basePayload`; mint-at-consent; the persistence-unavailable fall-through of §3.7;
-`revokeConsent` calling `deleteAll()`), `src/services/news-viz.mjs` (the honest persistence
-copy at the consent moment and beside stop & forget; the persistence-unavailable status line),
-`test/adapters/news-browser-entry.test.mjs`, `test-e2e/pages-news-feed.test.mjs`.
-**Sonnet**, after M1 and M5.
+the seed as `basePayload`; the UUID minted in-page at consent and kept in localStorage; the
+persistence-unavailable fall-through of §3.7; `revokeConsent` calling `deleteAll()` and
+discarding the stored key), `src/services/news-viz.mjs` (the honest persistence copy at the
+consent moment and beside stop & forget — including the session-pointer-in-this-browser line;
+the persistence-unavailable status line), `test/adapters/news-browser-entry.test.mjs`,
+`test-e2e/pages-news-feed.test.mjs`. **Sonnet**, after M1 and M6.
 
 The e2e mounts `local.mjs` on the same static server the snapshot is served from, under
 `/api/` — same-origin, fixture-true, never AWS. Pins: zero `/api/` requests before the start
-press; a poll's stored facts arrive as one PUT; a reload rebuilds the feed from the double's
-rows; stop & forget leaves the double reporting zero rows and the cookie cleared; killing the
-double mid-visit flips the page to the persistence-unavailable status line, the visit
-continues, and no local storage appears. The news
-e2e's hard-won waits (sleep-then-evaluate loops, `waitUntil: "load"`, the seed copy into the
-snapshot) all stay as they are.
+press; the start press writes exactly one new localStorage key, a valid UUIDv4, and every
+`/api/` request carries it in `x-tmct-session`; a poll's stored facts arrive as one PUT; a
+reload rebuilds the feed from the double's rows under the same key; stop & forget leaves the
+double reporting zero rows and the stored key discarded; killing the double mid-visit flips
+the page to the persistence-unavailable status line, the visit continues, and localStorage
+holds nothing beyond the consent preference and the session pointer — no fact text, ever. The
+news e2e's hard-won waits (sleep-then-evaluate loops, `waitUntil: "load"`, the seed copy into
+the snapshot) all stay as they are.
 
 Acceptance: `node --test test/adapters/news-browser-entry.test.mjs`;
 `node --disable-warning=ExperimentalWarning --test test-e2e/pages-news-feed.test.mjs`;
 `npm run test:fast`.
 
-## 13. Phase M8 — the contract page and README
+## 14. Phase M9 — the contract page and README
 
 **Owns** `docs/adapter-contract.md` (a memory-backend section beside the existing provider
 seam: the §3.1 method table, the row shape, the key recommendation, the endpoint table, the
 adapter-documented items from §4), `README.md` (a short consumer paragraph: inject an object,
-run the suite, link to the contract doc). **Haiku**, after M5 and M6. Docs gate only:
+run the suite, link to the contract doc). **Haiku**, after M6 and M7. Docs gate only:
 `npm run check:links`, estate tier, `test:fast`.
 
-## 14. Phase M9 — hand it to bedrock-meter
+## 15. Phase M10 — hand it to bedrock-meter
 
 **Owns** `~/.claude/inboxes/bedrock-meter.md` (append-only note). **Haiku**, last. The note
-names: the export subpath and kit entry point, the contract doc location, the row shape and
-recommended pk/sk layout (§3.3), the meta keys and the queue-as-rows change, the §4 split
-between conformance-checked and adapter-documented, that tmct's own site now runs the seam
-over HTTP against a tmct-owned table (theirs stays theirs), and the two spec asks answered
-differently than written — reads are session-scoped per §3.5 with the term-read path settled
-but dormant, and `deleteAll` over their Store shape is query-then-delete. Their spec §7/§8
-items (the adapter, its tests, the live e2e, S3-path retirement) stay theirs.
+names: the `./memory-backends` subpath and the `createDynamoRowBackend` constructor (§3.11's
+snippet verbatim), the `attributeNames` fit for their existing single-table layout, the
+`./memory-backend-conformance` kit location, the contract doc, the meta keys and the
+queue-as-rows change, the §4 split between conformance-checked and adapter-documented, that
+tmct's own site now runs the same shipped backend live against a tmct-owned table (theirs
+stays theirs), and the three spec asks answered differently than written — reads are
+session-scoped per §3.5 with the term-read path settled but dormant; `deleteAll` is
+query-then-delete under the hood; and their §7 adapter offer is superseded because the
+backend ships finished. What stays theirs: the table and IAM, the TTL value, their live
+e2e, the S3-path retirement.
 
 ---
 
-## 15. Known sharp edges
+## 16. Known sharp edges
 
 The operator's design review named six. Each gets a stance here; "accepted" means the plan
 ships with it and says so, not that it hides.
 
 1. **The cold open is a partition scan, not O(rows-touched).** Accepted for v1 (§3.5): the
    engine is synchronous over one payload, the caps bound the scan, and the sk layout means
-   the term-lazy fix (§16) lands with no storage migration. The spec's stricter reading is
+   the term-lazy fix (§17) lands with no storage migration. The spec's stricter reading is
    deferred engine work, named as such.
 2. **Concurrent supersession under last-write-wins.** Fixed by representation, not accepted:
    §3.2 makes supersession additive rows, M0 tests the union assembly, M1 races two live
@@ -592,10 +718,11 @@ ships with it and says so, not that it hides.
    ETag in v1; if the staleness bites a real consumer, an `If-None-Match` on GET /api/rows is
    the cheap add and the endpoint table leaves room for it.
 4. **`deleteAll` is query-then-delete, non-atomic.** Accepted, ordered, and made retryable:
-   the service deletes rows, then meta, then the session marker, so a crash mid-way leaves a
-   session that still looks live and a retried DELETE finishes the job; the client retries
-   the idempotent DELETE once on 5xx; TTL reaps whatever survives both. A half-deleted
-   session can never look like a fresh one.
+   the delete runs rows, then meta, then the counter rows, and the purge is idempotent — a
+   crash mid-way leaves a smaller session and a retried DELETE finishes the job; the client
+   retries the idempotent `{all: true}` DELETE once on 5xx; TTL reaps whatever survives both,
+   and the page discards its stored key regardless, so the visitor's pointer to the residue
+   is gone even when a fragment waits for TTL.
 5. **The 4 KB cap as a runtime failure.** Mitigated at the earliest honest point (§3.2): the
    projection throws before the network with the offending fact's provenance named, the M0
    boundary test pins it, and the service 400 is the backstop. Discovery stays possible at
@@ -612,7 +739,7 @@ comparison is the guard, and a differing dump stops the phase; **the browser see
 must never leak into writes — M1's diff runs against base ⊕ rows by construction and its
 seeded-base test asserts `putRows` never receives a seed row.
 
-## 16. Not in this plan
+## 17. Not in this plan
 
 The spec's own non-goals (§9), adopted: cross-session shared knowledge, search, multi-region,
 sqlite-store migration, answer-composition changes. Also out, each with its standing pointer:
