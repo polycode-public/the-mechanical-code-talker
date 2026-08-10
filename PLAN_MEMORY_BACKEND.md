@@ -1639,6 +1639,15 @@ Acceptance: `npx tsc --noEmit` in `infra/`; `npm run build:row-service` emits a 
 
 ## 13. Phase M8 — news.html goes thin
 
+**BUILT** (2026-08-10, merged): the page is render-and-controls at 7.2 KB minified (the
+seed fetch, wink vendor, in-page engine, poll timer, add-source-by-url and both replay
+buttons all left; net −1,031 lines across the entry/viz pair), rendering the feed
+document whole; teach POSTs the ingest trigger; stop & forget purges and discards the
+key; the e2e pins zero idle /api/ requests, the stored-XSS teach, and the honest-idle
+unavailable state. Seams left: `fetchFeedVersion()` for T13's poll loop and an unclaimed
+`#chatMount` section for T14. `public/news-about.html` still described the old
+architecture — its rewrite runs as its own dispatch beside T13.
+
 **Owns** `src/surfaces/web/news-browser-entry.mjs` (the thin rewrite: the session mint at
 consent; the API client for feed/version/triggers/purge; the render path fed by the feed
 document instead of the in-page store; the teach panel posting the ingest trigger; the
