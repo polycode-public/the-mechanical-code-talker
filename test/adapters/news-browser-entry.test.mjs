@@ -11,7 +11,10 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createLocalRowService } from "../../server/row-service/local.mjs";
-import { createNewsSession, NEWS_START_PREF_KEY, NEWS_SESSION_PREF_KEY, parseJsonlRows } from "../../src/surfaces/web/news-browser-entry.mjs";
+import { createLocalTurnService } from "../../server/turn-service/local.mjs";
+import {
+  createNewsSession, NEWS_START_PREF_KEY, NEWS_SESSION_PREF_KEY, parseJsonlRows, turnCitationLines,
+} from "../../src/surfaces/web/news-browser-entry.mjs";
 
 function memoryPrefs() {
   const map = new Map();
@@ -168,9 +171,99 @@ test("a 5xx response also marks the session unavailable", async () => {
 test("the session's public surface carries every verb the page calls", () => {
   const { prefs } = memoryPrefs();
   const session = createNewsSession({ prefs, fetchImpl: neverFetch() });
-  for (const verb of ["fetchFeed", "fetchFeedVersion", "fetchCycle", "onFeedUpdate", "start", "enrich", "ingestText", "ingestRows", "revokeConsent", "destroy"]) {
+  for (const verb of ["fetchFeed", "fetchFeedVersion", "fetchCycle", "onFeedUpdate", "start", "enrich", "ingestText", "ingestRows", "turn", "revokeConsent", "destroy"]) {
     assert.equal(typeof session[verb], "function", `session.${verb} is a function`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// turn() — the chat area's one call, against a real turn-service double.
+// Self-contained (no shared backend with the row service double above):
+// these tests exercise the client wrapper's own request/response handling —
+// the citation building, the fuzzy override, the 429 wording, the
+// unavailable flag — not the cross-service materialization flow, which the
+// news feed's own end-to-end spec covers.
+
+const turnService = await createLocalTurnService({});
+after(async () => { await turnService.close(); });
+
+function sessionAgainstTurnService(extra = {}) {
+  const { prefs } = memoryPrefs();
+  return createNewsSession({ prefs, fetchImpl: fetchAgainst(turnService.url), ...extra });
+}
+
+test("turn() posts the text, mints its own session key, and returns the reply, factsTouched and their phrase-layer citations", async () => {
+  const session = sessionAgainstTurnService();
+  const result = await session.turn("remember that zorblatt is a dog");
+  assert.ok(session.sessionKey, "turn() minted a session key, the same implicit-creation rule every trigger follows");
+  assert.match(result.reply, /zorblatt/i);
+  assert.ok(result.factsTouched.length > 0, "teaching through chat wrote at least one fact row");
+  assert.ok(result.citations.some((line) => /zorblatt/.test(line) && /dog/.test(line)), `a citation names the taught fact: ${JSON.stringify(result.citations)}`);
+  session.destroy();
+});
+
+test("turn() answers an honest miss with no citations when nothing was taught", async () => {
+  const session = sessionAgainstTurnService();
+  const result = await session.turn("what is a zorptronic");
+  assert.match(result.reply, /don't know "zorptronic"/);
+  assert.deepEqual(result.factsTouched, []);
+  assert.deepEqual(result.citations, []);
+  session.destroy();
+});
+
+test("turn()'s fuzzy option rides the body as retrieval.fuzzy, and is omitted entirely when not supplied", async () => {
+  const bodies = [];
+  const spyFetch = async (path, init) => {
+    if (String(path).includes("/turn")) bodies.push(JSON.parse(init.body));
+    return fetchAgainst(turnService.url)(path, init);
+  };
+  const session = createNewsSession({ prefs: memoryPrefs().prefs, fetchImpl: spyFetch });
+  await session.turn("hello", { fuzzy: true });
+  await session.turn("hello", { fuzzy: false });
+  await session.turn("hello");
+  assert.deepEqual(bodies, [
+    { text: "hello", retrieval: { fuzzy: true } },
+    { text: "hello", retrieval: { fuzzy: false } },
+    { text: "hello" },
+  ]);
+  session.destroy();
+});
+
+test("turn() rejects a 429 with a rate-limit message distinct from the generic unavailable wording, and never marks the session unavailable", async () => {
+  const limited = await createLocalTurnService({ turnRateLimit: 1 });
+  try {
+    const session = createNewsSession({ prefs: memoryPrefs().prefs, fetchImpl: fetchAgainst(limited.url) });
+    await session.turn("hello");
+    await assert.rejects(() => session.turn("hello again"), /sent a lot of chat messages/);
+    assert.equal(session.unavailable, false, "a turn-rate cap is not the service being down");
+    session.destroy();
+  } finally {
+    await limited.close();
+  }
+});
+
+test("turn() marks the session unavailable on a network failure, matching every other request", async () => {
+  const brokenFetch = async () => { throw new Error("connection refused"); };
+  const session = createNewsSession({ prefs: memoryPrefs().prefs, fetchImpl: brokenFetch });
+  await assert.rejects(() => session.turn("hello"), /could not reach the news service/);
+  assert.equal(session.unavailable, true);
+  session.destroy();
+});
+
+test("turnCitationLines renders factsTouched through the phrase layer, appending an extraction caveat when the row carries one", () => {
+  const lines = turnCitationLines([
+    { subject: "zorblatt", predicate: "rdfs:subClassOf", object: "dog" },
+    { subject: "tariff", predicate: "rdf:type", object: "tax", extraction: ["clause-fallback"] },
+  ]);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /zorblatt.*dog/);
+  assert.match(lines[1], /tariff.*tax.*\(read from a clause fragment\)/);
+});
+
+test("turnCitationLines answers an empty list for no rows, never throwing on null or undefined", () => {
+  assert.deepEqual(turnCitationLines([]), []);
+  assert.deepEqual(turnCitationLines(null), []);
+  assert.deepEqual(turnCitationLines(undefined), []);
 });
 
 test("fetchCycle answers null before any cycle has run, then the finished marker once one has", async () => {

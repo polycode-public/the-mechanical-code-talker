@@ -6,10 +6,18 @@
 // the news worker Lambda, against this session's own row partition — the
 // same `pollNewsSources`/`enrichTopTerms`/`buildFeed` calls the CLI's `tmct
 // news` verb runs, just running there instead of here. This module is the
-// thin client over that: mint a session key, call the row service's five
-// routes, and hand the result to the page's own render code
+// thin client over that: mint a session key, call the row and turn
+// services' routes, and hand the result to the page's own render code
 // (src/services/news-viz.mjs's inline script). Nothing here parses a feed,
-// extracts a fact, or ranks a term.
+// extracts a fact, ranks a term, or renders an answer.
+//
+// The chat area's one call, `turn()`, is the odd one out: it answers
+// synchronously (POST /api/sessions/<uuid>/turn) rather than through a
+// trigger-and-settle cycle, and it never touches the materialized feed at
+// all — a taught fact lands as a session row the same way an ingest trigger's
+// row does, and reaches the feed only at whatever poll/enrich/ingest cycle
+// materializes next. This module says nothing about that timing either way;
+// it just reports what the turn itself returned.
 //
 // The one rule every method below honours: NOTHING here calls the row
 // service until the visitor presses something, unless a session key already
@@ -26,6 +34,7 @@
 
 import { createHttpRowBackend } from "./http-row-backend.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
+import { factSentence, findingCaveat } from "../../domain/fact-phrase.mjs";
 
 const SESSION_HEADER = "x-tmct-session";
 const DEFAULT_CYCLE_POLL_MS = 400;
@@ -96,11 +105,25 @@ export function parseJsonlRows(text) {
   return rows;
 }
 
+/** One line per row a turn's own write touched, through the phrase layer —
+ *  `factSentence` turned into English, with any extraction caveat appended.
+ *  No provenance tag rides along: a chat-taught row's own tag names this
+ *  session and this moment, which the visitor already knows from having just
+ *  typed it, so citing it back would be noise rather than information —
+ *  unlike a corpus-grounded answer's citation, which names something the
+ *  visitor could not otherwise know. */
+export function turnCitationLines(factsTouched) {
+  return (factsTouched || []).map((row) => {
+    const caveat = findingCaveat(row);
+    return caveat ? `${factSentence(row)} ${caveat}` : factSentence(row);
+  });
+}
+
 /**
- * The thin API session over the row service's news-facing routes:
+ * The thin API session over the row and turn services' news-facing routes:
  * `{ sessionKey, consented, unavailable, fetchFeed, fetchFeedVersion,
  * fetchCycle, onFeedUpdate, start, poll, enrich, ingestText, ingestRows,
- * revokeConsent, destroy }`.
+ * turn, revokeConsent, destroy }`.
  *
  * `fetchImpl` defaults to the ambient `fetch`, so a page never has to pass
  * one; every path this module requests is root-relative ("/api/…"), which a
@@ -406,6 +429,52 @@ export function createNewsSession({
     /** The teach panel's uploaded-`.jsonl` path. */
     async ingestRows(rows, { onCycle } = {}) {
       return triggerAndSettle("ingest", { rows }, { onCycle });
+    },
+
+    /** POST /api/sessions/:uuid/turn — the chat area's one call. Mints the
+     *  session key on a first call the same way every trigger does; never
+     *  requires `start()`'s own consent by itself, the page decides whether
+     *  to gate its own control on that. `fuzzy`, when supplied, rides the
+     *  body as `retrieval: {fuzzy}`, the same per-request override
+     *  `enrich()` threads through its own trigger.
+     *
+     *  Resolves to `{reply, factsTouched, citations, narration}`: `reply` is
+     *  the turn's own answer text, already worded for display; `citations`
+     *  is `factsTouched` read through the phrase layer (`turnCitationLines`),
+     *  one line per row this turn wrote; `narration` is the turn's trace.
+     *  Never touches the feed, and never claims anything about it — a
+     *  learned row reaches `GET /api/feed` only at whatever cycle
+     *  materializes next, which this call has no way to know or wait for.
+     *
+     *  A 429 (this session's hourly turn cap) rejects with a message already
+     *  worded for direct display, distinct from the generic unavailable
+     *  wording — the rate limit is not the service being down. Any other
+     *  non-2xx, a thrown fetch, or a 5xx all reject the same way every other
+     *  request does and mark `unavailable` accordingly. */
+    async turn(text, { fuzzy } = {}) {
+      const key = ensureSessionKey();
+      const body = { text };
+      if (fuzzy !== undefined) body.retrieval = { fuzzy: Boolean(fuzzy) };
+      const response = await request(`/api/sessions/${key}/turn`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (response.status === 429) {
+        throw new Error("this session has sent a lot of chat messages this hour — wait a bit and try again.");
+      }
+      if (!response.ok) {
+        const errBody = await readJsonOrNull(response);
+        throw new Error(errBody?.error?.message || `the turn failed (status ${response.status})`);
+      }
+      const parsed = await readJsonOrNull(response);
+      const factsTouched = Array.isArray(parsed?.factsTouched) ? parsed.factsTouched : [];
+      return {
+        reply: typeof parsed?.reply === "string" ? parsed.reply : "",
+        factsTouched,
+        citations: turnCitationLines(factsTouched),
+        narration: typeof parsed?.narration === "string" ? parsed.narration : "",
+      };
     },
 
     /** Purges every row and meta entry this session's key reaches, then

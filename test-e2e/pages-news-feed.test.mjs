@@ -6,12 +6,26 @@
 // — every fixture-served fetch in these tests happens inside the worker,
 // never inside the browser — so this file's own network assertions are
 // about the page's requests to `/api/*` alone.
+//
+// The chat specs further down compose a SECOND service, the turn service,
+// alongside the row service — hand-built over one shared session-backend
+// registry the same way test-e2e/turn-service.test.mjs composes its own
+// cross-service purge test, extended here with a real news worker so a
+// chat-taught fact's next materialization is the genuine §3.12 flow. This
+// file's own `withRowService` keeps its private registry for every other
+// test; only the chat specs need the shared one, so only they pay for it.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 import { createLocalRowService } from "../server/row-service/local.mjs";
+import { createRowServiceHandler } from "../server/row-service/handler.mjs";
+import { createLocalNewsWorker } from "../server/news-worker/local.mjs";
+import { createInMemorySourceGate } from "../server/news-worker/handler.mjs";
+import { createRowMemoryBackend } from "../src/adapters/memory/row-backend-memory.mjs";
+import { createLocalTurnService } from "../server/turn-service/local.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const INTERACTION_TIMEOUT_MS = 15_000;
@@ -65,13 +79,107 @@ async function withRowService(options = {}) {
 }
 after(async () => { await Promise.all(openServices.map((s) => s.close())); });
 
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+/** The counters seam `createRowServiceHandler` needs, permissive throughout
+ *  — the chat specs below exercise the turn-and-materialize flow, not the
+ *  row service's own rate limits, which the row-service-only specs above
+ *  already cover. */
+function permissiveRowServiceCounters() {
+  return {
+    async incrementGlobalRowCount() { return true; },
+    async incrementMutationRate() { return true; },
+    async incrementCycleRate() { return true; },
+    async acquireCycleLock() { return true; },
+    async releaseCycleLock() {},
+  };
+}
+
+/** A row service (with a real, in-process news worker) and a turn service,
+ *  hand-composed over ONE shared session-backend registry — the pattern
+ *  test-e2e/turn-service.test.mjs uses for its own cross-service purge test.
+ *  `createLocalRowService` (every other test in this file) keeps its own
+ *  private registry, so the chat specs build both services themselves here,
+ *  over a registry they can hand to both — the only way a chat-taught
+ *  fact's later materialization can see the row the turn service wrote. */
+async function withChatAndFeedServices({ newsWorker: newsWorkerOptions = {}, turnService: turnServiceOptions = {} } = {}) {
+  const sessionBackends = new Map();
+  const getSessionBackend = (sessionKey) => {
+    let backend = sessionBackends.get(sessionKey);
+    if (!backend) {
+      backend = createRowMemoryBackend({});
+      sessionBackends.set(sessionKey, backend);
+    }
+    return backend;
+  };
+
+  const newsWorker = createLocalNewsWorker({
+    getSessionBackend,
+    fetchersFor: newsWorkerOptions.fetchersFor,
+    sourceGate: createInMemorySourceGate(),
+  });
+  const pendingNewsWorkerCycles = [];
+  async function invokeNewsWorker(sessionKey, { mode, cycleId, body }) {
+    const promise = newsWorker.runCycle({ sessionKey, cycleId, mode, body });
+    pendingNewsWorkerCycles.push(promise);
+    return promise;
+  }
+  async function drainNewsWorkers() {
+    const pending = pendingNewsWorkerCycles.splice(0, pendingNewsWorkerCycles.length);
+    await Promise.allSettled(pending);
+  }
+
+  const rowService = createRowServiceHandler({
+    createSessionBackend: getSessionBackend,
+    counters: permissiveRowServiceCounters(),
+    invokeNewsWorker,
+  });
+  const rowServer = createServer(async (req, res) => {
+    const parsedUrl = new URL(req.url, "http://localhost");
+    const headers = {};
+    for (const [key, value] of Object.entries(req.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value[0] : value;
+    const body = await readRequestBody(req);
+    const result = await rowService.handle({
+      method: req.method, path: parsedUrl.pathname, headers, query: Object.fromEntries(parsedUrl.searchParams), body,
+    });
+    res.writeHead(result.status, result.headers);
+    res.end(result.body || "");
+  });
+  await new Promise((resolve) => rowServer.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${rowServer.address().port}`;
+
+  const turnService = await createLocalTurnService({ getSessionBackend, ...turnServiceOptions });
+
+  async function close() {
+    await turnService.close();
+    for (const backend of sessionBackends.values()) await backend.close();
+    await new Promise((resolve) => rowServer.close(resolve));
+  }
+
+  const composed = { url, turnServiceUrl: turnService.url, drainNewsWorkers, close };
+  openServices.push(composed);
+  return composed;
+}
+
 /** Proxies the page's own same-origin `/api/*` requests to `service.url` —
  *  the CloudFront `/api/*` behavior's local stand-in. Every request this
  *  page ever makes for its API traffic resolves against `document.location`
  *  (root-relative paths), so this is the one seam a test needs to point that
  *  traffic at a double instead of a real deployment. Requests to anything
  *  else are aborted, the same "nothing but this page's own origin, ever"
- *  guard the other demo-page e2e specs run. */
+ *  guard the other demo-page e2e specs run.
+ *
+ *  `service.turnServiceUrl`, when present (only `withChatAndFeedServices`'s
+ *  composed object carries one), takes every request whose path ends in
+ *  `/turn` — the one route CloudFront would route to a different Lambda
+ *  behind the very same `/api/*` behavior. */
 async function openNewsPage(service) {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -81,7 +189,9 @@ async function openNewsPage(service) {
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     apiRequests.push({ method: request.method(), url: request.url(), postData: request.postData() });
-    const target = new URL(new URL(request.url()).pathname + new URL(request.url()).search, service.url);
+    const pathname = new URL(request.url()).pathname;
+    const base = (service.turnServiceUrl && pathname.endsWith("/turn")) ? service.turnServiceUrl : service.url;
+    const target = new URL(pathname + new URL(request.url()).search, base);
     const headers = await request.allHeaders();
     delete headers.host;
     try {
@@ -121,6 +231,14 @@ function waitForFeedRendered(page, label = "the feed finishing its render") {
   }, { label });
 }
 
+function waitForChatTurns(page, kind, count) {
+  return waitFor(
+    page,
+    (arg) => document.querySelectorAll(`#chatLog .chatturn.${arg.kind}`).length >= arg.count,
+    { arg: { kind, count }, timeoutMs: INTERACTION_TIMEOUT_MS, label: `${count} .chatturn.${kind} row(s)` },
+  );
+}
+
 test("before any press, the page makes no /api/ request at all and shows the honest first-visit empty state", async () => {
   const service = await withRowService({});
   const { context, page, apiRequests } = await openNewsPage(service);
@@ -131,6 +249,8 @@ test("before any press, the page makes no /api/ request at all and shows the hon
     assert.equal(await page.evaluate(() => window.localStorage.length), 0, "nothing at all is in localStorage before the first press");
     const statuses = await page.locator("[data-source-status]").allInnerTexts();
     assert.ok(statuses.every((s) => s === "not yet polled"), `no source reads as polled before any press: ${JSON.stringify(statuses)}`);
+    assert.equal(await page.locator("#chatInput").isDisabled(), true, "chat waits for the start press before this session has consented to anything");
+    assert.equal(await page.locator("#chatSend").isDisabled(), true);
   } finally {
     await context.close();
   }
@@ -419,8 +539,12 @@ test("killing the row service leaves the page honestly idle: feed-and-chat-unava
       enrich: document.getElementById("enrichNow").disabled,
       stopForget: document.getElementById("stopForget").disabled,
       teach: document.getElementById("teachIngest").disabled,
+      chatInput: document.getElementById("chatInput").disabled,
+      chatSend: document.getElementById("chatSend").disabled,
     }));
-    assert.deepEqual(disabled, { start: true, enrich: true, stopForget: true, teach: true }, "every network-facing control is out of action");
+    assert.deepEqual(disabled, {
+      start: true, enrich: true, stopForget: true, teach: true, chatInput: true, chatSend: true,
+    }, "every network-facing control is out of action, chat included");
     assert.equal(await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey") !== null), true, "the stored pointer survives an unreachable service — nothing here needs to be recomputed to keep it");
   } finally {
     await context.close();
@@ -455,6 +579,126 @@ test("the feed sorts client-side over the document's own keys and narrows to a p
     const narrowedTitles = await page.locator("#feed .item .hub").allInnerTexts();
     assert.ok(narrowedTitles.length < allTitles.length, `picking a pill narrows the list: ${narrowedTitles.length} of ${allTitles.length}`);
     assert.equal(apiRequests.length, requestsBeforeSort, "filtering by pill never asks the server for anything either");
+  } finally {
+    await context.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The chat area — the turn endpoint's page consumer (§3.12). Every spec
+// below runs against `withChatAndFeedServices`, the composed row-plus-turn
+// double, since a chat-taught fact's own materialization needs both
+// services sharing one session-backend registry.
+
+test("pressing start unlocks chat; a taught fact's reply carries a citation and a collapsible trace", async () => {
+  const services = await withChatAndFeedServices({});
+  const { context, page } = await openNewsPage(services);
+  try {
+    assert.equal(await page.locator("#chatInput").isDisabled(), true, "chat starts disabled, matching the first-visit gate");
+
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    assert.equal(await page.locator("#chatInput").isDisabled(), false, "chat unlocks once start has been pressed once");
+
+    await page.locator("#chatInput").fill("remember that zorblatt is a dog");
+    await page.locator("#chatSend").click();
+    await waitForChatTurns(page, "graph", 1);
+
+    const youText = await page.locator("#chatLog .chatturn.you .chatbubble").first().innerText();
+    assert.equal(youText, "remember that zorblatt is a dog", "the visitor's own message renders back verbatim");
+
+    const replyText = await page.locator("#chatLog .chatturn.graph .chatbubble").first().innerText();
+    assert.match(replyText, /zorblatt/i);
+
+    const learnedText = await page.locator("#chatLog .chatlearned").first().innerText();
+    assert.match(learnedText, /zorblatt/);
+    assert.match(learnedText, /dog/);
+
+    const trace = page.locator("#chatLog details.chattrace").first();
+    assert.equal(await trace.locator("summary").innerText(), "trace");
+    await trace.locator("summary").click();
+    assert.match(await trace.locator("pre").innerText(), /retrieval:/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a chat-taught fact reaches the feed only at the next materialization, not immediately", async () => {
+  const services = await withChatAndFeedServices({
+    newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) },
+  });
+  const { context, page } = await openNewsPage(services);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
+    const graphSizeBefore = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
+
+    await page.locator("#chatInput").fill("remember that widget is a dog");
+    await page.locator("#chatSend").click();
+    await waitForChatTurns(page, "graph", 1);
+
+    // The standing refresh loop only ever refetches on a feedVersion bump,
+    // and a chat turn never materializes one (§29's staleness window) — a
+    // beat past the loop's own floor interval is long enough to prove
+    // nothing moved, without asserting on the very next tick.
+    await page.waitForTimeout(2500);
+    const graphSizeRightAfterChat = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
+    assert.equal(graphSizeRightAfterChat, graphSizeBefore, "the chat-taught row sits in the store, but the rendered feed still shows the last materialization");
+
+    await page.locator("#enrichNow").click();
+    await waitFor(page, () => document.getElementById("enrichNow").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "enrich settling" });
+    const graphSizeAfterEnrich = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
+    assert.ok(graphSizeAfterEnrich > graphSizeBefore, `enrich's own materialization picked up the chat-taught row: ${graphSizeBefore} -> ${graphSizeAfterEnrich}`);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a chat message and its reply both reach the DOM as literal text, and a script tag inside either never executes", async () => {
+  const services = await withChatAndFeedServices({});
+  const { context, page, pageErrors } = await openNewsPage(services);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+
+    await page.locator("#chatInput").fill("what is <script>window.__tmctPwned=true</script>");
+    await page.locator("#chatSend").click();
+    await waitForChatTurns(page, "graph", 1);
+
+    assert.deepEqual(pageErrors, [], "neither bubble's own rendering ever throws");
+    assert.equal(await page.evaluate(() => window.__tmctPwned), undefined, "the exact tag the visitor typed never executes");
+
+    const youHtml = await page.locator("#chatLog .chatturn.you .chatbubble").first().innerHTML();
+    assert.match(youHtml, /&lt;script&gt;/, "the visitor's own message reaches the DOM as escaped, literal text");
+    assert.ok(!/<script>window\.__tmctPwned/.test(youHtml), "the tag never lands as a live element in the you bubble");
+
+    const replyHtml = await page.locator("#chatLog .chatturn.graph .chatbubble").first().innerHTML();
+    assert.match(replyHtml, /&lt;script&gt;/, "the server's own echoed reply reaches the DOM as escaped, literal text too");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a session's hourly turn cap renders inside the chat log as its own rate message, and never disables chat the way an unreachable service does", async () => {
+  const services = await withChatAndFeedServices({ turnService: { turnRateLimit: 1 } });
+  const { context, page } = await openNewsPage(services);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+
+    await page.locator("#chatInput").fill("hello");
+    await page.locator("#chatSend").click();
+    await waitForChatTurns(page, "graph", 1);
+
+    await page.locator("#chatInput").fill("hello again");
+    await page.locator("#chatSend").click();
+    await waitForChatTurns(page, "error", 1);
+
+    const errorText = await page.locator("#chatLog .chatturn.error .chatbubble").first().innerText();
+    assert.match(errorText, /sent a lot of chat messages/);
+    assert.equal(await page.locator("#chatInput").isDisabled(), false, "a rate cap is not the service being down — chat stays usable");
+    assert.equal(await page.evaluate(() => document.getElementById("serviceUnavailable").classList.contains("shown")), false);
   } finally {
     await context.close();
   }

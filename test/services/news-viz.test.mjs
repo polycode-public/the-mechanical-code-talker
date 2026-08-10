@@ -92,12 +92,37 @@ test("renderNewsHtml: an unreachable-service banner exists, starts hidden, and d
   assert.match(html, /setUnavailable/);
 });
 
-test("renderNewsHtml: the page leaves an empty chat mount below the teach panel, unclaimed", () => {
+test("renderNewsHtml: the chat area sits after the teach panel, with an input, a send button and a log", () => {
   const html = renderNewsHtml();
   const teachIdx = html.indexOf('id="teachPanel"');
   const mountIdx = html.indexOf('id="chatMount"');
-  assert.ok(teachIdx !== -1 && mountIdx > teachIdx, "the chat mount sits after the teach panel");
-  assert.match(html, /<section id="chatMount"[^>]*><\/section>/, "the mount carries no markup of its own yet");
+  assert.ok(teachIdx !== -1 && mountIdx > teachIdx, "the chat area sits after the teach panel");
+  assert.match(html, /id="chatLog"/);
+  assert.match(html, /id="chatInput"[^>]*disabled/, "chat starts disabled — no consent yet");
+  assert.match(html, /id="chatSend"[^>]*disabled/, "the send button starts disabled too");
+});
+
+test("renderNewsHtml: the chat form posts through session.turn, never a fetch of its own", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /session\.turn\(/, "the chat area talks to the session's own turn verb");
+  assert.match(html, /chatForm.*addEventListener\("submit"/s, "the send button submits a form rather than firing its own click handler");
+});
+
+test("renderNewsHtml: a chat reply's text, its learned-fact citations and its trace all land through textContent, never innerHTML", () => {
+  const html = renderNewsHtml();
+  const chatSection = html.slice(html.indexOf("function chatBubble"), html.indexOf("function renderRequestLog"));
+  assert.match(chatSection, /bubble\.textContent\s*=\s*text/, "a chat bubble's text is a text node, not markup");
+  assert.match(chatSection, /li\.textContent\s*=\s*line/, "each learned-fact citation line is a text node");
+  assert.match(chatSection, /pre\.textContent\s*=\s*result\.narration/, "the trace block's text is a text node");
+  assert.ok(!chatSection.includes(".innerHTML"), "nothing in the chat rendering path builds markup from a string");
+});
+
+test("renderNewsHtml: chat stays disabled until start has been pressed at least once, then joins the shared unavailable posture", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /updateChatAvailability/, "the chat gate has its own named function");
+  assert.match(html, /!session\.consented \|\| session\.unavailable/, "chat needs both consent and a reachable service");
+  const setUnavailableBody = html.slice(html.indexOf("function setUnavailable("), html.indexOf("function setUnavailable(") + 400);
+  assert.match(setUnavailableBody, /updateChatAvailability\(\)/, "setUnavailable also updates chat's own gate");
 });
 
 test("renderNewsHtml: an untrusted title never breaks out of its element", () => {
