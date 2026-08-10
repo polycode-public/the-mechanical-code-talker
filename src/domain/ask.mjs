@@ -29,7 +29,7 @@ import {
   WORLD_RELATIONS, WORLD_NOUN_TO_RELATION, WORLD_PREDICATES, locativePreposition,
   stripTrailingScopeFiller, stripTrailingTemporalAdverb, CALLS_VERB_REPORT_NOUNS,
 } from "./ask-vocab.mjs";
-import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
+import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, applyConditionalFrames, counterfactualSubjectOf, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -3366,9 +3366,39 @@ function rankEntryPointModules(graph, term) {
  *  gets an honest "not supported yet" response, never a silent fallback to
  *  direct-only behavior. */
 function modifierIsWired(shape, kind, entityType) {
-  return shape === "reverse" && (kind === "imports" || kind === "calls") && (!entityType || entityType === "Module");
+  if (shape !== "reverse") return false;
+  if (kind === "imports" || kind === "calls") return !entityType || entityType === "Module";
+  if (kind === "inherits") return !entityType || entityType === "Class";
+  return false;
 }
 const TRANSITIVE_MAX_DEPTH = 8; // matches renderImpact's own default (codegraph.mjs)
+
+/** Every class below `ind` in the inherits hierarchy. A subclass edge whose
+ *  base sits in another module is recorded against an unresolved `ext:<Name>`
+ *  endpoint — the extractor declines to assert identity across modules — so an
+ *  id-strict walk reads a real hierarchy as flat. The direct reverse traversal
+ *  already falls back to matching those by name, and this closure reads them
+ *  the same way, one hop at a time. Cycle-safe, and sorted by label so the
+ *  answer is a pure function of the fact set. */
+function subclassClosure(graph, ind, kind) {
+  const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k));
+  const childrenOf = (parent) => {
+    const extId = `ext:${String(parent.label).toLowerCase()}`;
+    return edges
+      .filter((e) => e.object === parent.id || String(e.object).toLowerCase() === extId)
+      .map((e) => graph.byId.get(e.subject))
+      .filter(Boolean);
+  };
+  const found = new Map();
+  const queue = childrenOf(ind);
+  while (queue.length) {
+    const next = queue.shift();
+    if (found.has(next.id) || next.id === ind.id) continue;
+    found.set(next.id, next);
+    queue.push(...childrenOf(next));
+  }
+  return [...found.values()].sort((a, b) => String(a.label).localeCompare(String(b.label)));
+}
 
 /** A graph's own vocabulary nodes carry their definition text under one of
  *  these properties. A code entity's docstring rides `seon:hasDoc` and shares
@@ -3708,6 +3738,16 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
   // resolve to the same mixed closure — a deliberate scope decision, stated
   // honestly in the traversal receipt below.
   if (parsed.modifier === "transitive") {
+    // A subsumption closure is its own walk: nothing imports or calls a class,
+    // so the dependency closure would answer an empty set for a hierarchy
+    // question the graph can answer exactly.
+    if (kind === "inherits") {
+      const descendants = subclassClosure(graph, objMatch, kind);
+      return {
+        matches: descendants, objMatch, candidates, ambiguous, matchedVia,
+        traversal: `subclass closure over inherits edges from ${objMatch.label}`,
+      };
+    }
     const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH });
     const matches = levels.flat().map((d) => graph.byId.get(d.id)).filter(Boolean);
     return {
@@ -4414,8 +4454,11 @@ function renderCore(parsed, result, graph) {
     const object = (result.objMatch && CONTEXT_PRONOUNS.includes(String(parsed.object || "").toLowerCase()))
       ? result.objMatch.label
       : parsed.object;
+    // A closure question searched more than the direct edge, so "directly"
+    // would understate what came back empty.
+    const reach = parsed.modifier === "transitive" ? "transitively" : "directly";
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
+      content: `No ${entityWord} found whose module ${reach} ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
     };
   }
@@ -5086,6 +5129,68 @@ const classLanesApply = (graph, parsed, result, rendered) => (rendered.ambiguous
   ? tieNamesAClass(graph, parsed, result)
   : !!rendered.miss);
 
+/** Is this individual part of the CODE graph — a module/file, or a symbol some
+ *  module holds? A taught memory fact can put a Class or a Variable in the same
+ *  store, and those carry no containing module. */
+function livesInCodeGraph(graph, ind) {
+  if (!ind?.class) return false;
+  if (ind.class === "Module" || ind.class === "File") return true;
+  return !!moduleIdOf(graph, ind);
+}
+
+/** A counterfactual deletion reads the closure its subject actually has.
+ *  interpret/normalize.mjs compiles the question to the reverse dependency
+ *  closure, which is the right reading for a module: what breaks is what
+ *  imports or calls it. Nothing imports a CLASS, so for a class the question
+ *  reads the subclass closure instead — deleting a base class breaks what
+ *  inherits from it. Returns the rewritten question, or null when the subject
+ *  is no class, resolves to nothing, or ties. */
+function counterfactualSubclassQuery(graph, query) {
+  const subject = counterfactualSubjectOf(query);
+  if (!subject) return null;
+  const resolved = resolveObject(graph, subject);
+  const ind = resolved?.ambiguous ? null : resolved?.match;
+  if (!ind || ind.class !== "Class") return null;
+  return `which classes transitively inherit from ${ind.label}`;
+}
+
+const SPECULATIVE_CONDITIONAL_RE = new RegExp(
+  "^if\\s+(.+?)\\s+(?:were|was|had|has|is|are|becomes?|became|gets?|got|stops?|stopped|starts?|started)\\s+"
+  + "[^,]*,?\\s*(?:would|will|could|might|should)\\b",
+  "i",
+);
+
+/** The conditional lane's boundary. The graph records what IS, so the one
+ *  hypothetical world it can evaluate is a deletion — the edges that would
+ *  break are edges it already holds. A rename, a speed, a test nobody wrote:
+ *  nothing in the fact set decides those, and the ordinary grammar answered
+ *  them by grabbing the nearest predicate it could see ("if fnAlpha were
+ *  renamed, would the tests still pass" compiled to a tests question about a
+ *  term called "fnAlpha renamed"). This says which conditionals it can read
+ *  instead. Fires only on a subject the CODE graph actually holds, so an
+ *  unknown term keeps the ordinary wall and a taught memory subject is never
+ *  answered with code-graph advice. */
+function speculativeConditionalRefusal(graph, query) {
+  const q = expandContractions(String(query || "")).trim();
+  if (counterfactualSubjectOf(q)) return null;
+  if (applyConditionalFrames(q) !== q) return null;
+  const m = q.match(SPECULATIVE_CONDITIONAL_RE);
+  if (!m) return null;
+  const resolved = resolveObject(graph, m[1].trim());
+  const ind = resolved?.ambiguous ? null : resolved?.match;
+  if (!ind || !livesInCodeGraph(graph, ind)) return null;
+  const closure = ind.class === "Class" ? "what inherits from it"
+    : ind.class === "Module" || ind.class === "File" ? "what imports or calls it"
+      : "what calls it";
+  return {
+    content: `I can't answer that — the index records what is, not what would be. What it can read about ${ind.label}: "what would break if ${ind.label} were deleted" (${closure}), or "/describe ${ind.label}" for the facts it holds.`,
+    tmct_ask: {
+      mechanical: true, parsed: null, canonical: null, matches: [], traversal: null,
+      miss: true, ambiguous: false, matchedVia: null, relaxed: null,
+    },
+  };
+}
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   if (isHelpRequest(query)) {
     return {
@@ -5096,6 +5201,9 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       },
     };
   }
+  const speculative = speculativeConditionalRefusal(graph, query);
+  if (speculative) return speculative;
+  query = counterfactualSubclassQuery(graph, query) || query;
   query = substituteLastCommitPhrase(graph, query);
   const directFull = parseQueryFull(query, { nlp });
   const direct = directFull.parsed;

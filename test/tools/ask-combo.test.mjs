@@ -434,3 +434,77 @@ test("a relation with no converse defined stays an honest miss rather than a gue
   assert.equal(flat.tmct_ask.miss, true);
   assert.doesNotMatch(flat.content, /Widget/);
 });
+
+// ============================================================================
+// THE CONDITIONAL LANE — a conditional over facts the graph holds compiles to a
+// real traversal; a hypothetical nothing in the fact set decides refuses and
+// names the readings it does have.
+// ============================================================================
+
+test("counterfactual: both word orders of the deletion question read the same closure", () => {
+  const fronted = runAsk("if app/lib/a.mjs were deleted, what would break");
+  const postposed = runAsk("what would break if app/lib/a.mjs were removed");
+  assert.deepEqual(labels(fronted), labels(postposed));
+  assert.deepEqual(labels(fronted), [
+    "app/functions/d/handler.mjs", "app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs",
+    "app/lib/f.mjs", "scripts/g.mjs",
+  ]);
+  assert.match(fronted.tmct_ask.traversal, /reverse dependency closure over imports\+calls edges/);
+});
+
+test("counterfactual: deleting a class reads the subclass closure, since nothing imports a class", () => {
+  const widget = runAsk("if Widget were deleted, what would break");
+  assert.deepEqual(labels(widget), ["Button"]);
+  assert.match(widget.tmct_ask.traversal, /subclass closure over inherits edges from Widget/);
+  // A leaf class breaks nothing, and says so rather than reaching for importers.
+  const button = runAsk("if Button were deleted, what would break");
+  assert.equal(button.tmct_ask.miss, true);
+  assert.match(button.content, /transitively inherits Button/);
+});
+
+test("counterfactual: an import cycle puts the subject inside its own closure", () => {
+  // app/lib/e.mjs imports app/lib/f.mjs and app/lib/f.mjs imports app/lib/e.mjs.
+  assert.deepEqual(labels(runAsk("if app/lib/e.mjs were deleted, what would break")),
+    ["app/lib/e.mjs", "app/lib/f.mjs"]);
+  assert.deepEqual(labels(runAsk("what would break if app/lib/f.mjs were removed")),
+    ["app/lib/e.mjs", "app/lib/f.mjs"]);
+});
+
+test("counterfactual: a module nothing depends on breaks nothing, and the receipt says the closure was walked", () => {
+  const r = runAsk("what would break if app/functions/d/handler.mjs were removed");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /transitively imports app\/functions\/d\/handler\.mjs/);
+});
+
+test("conditional qualifier: 'has it got tests' and 'does it have tests' read what 'is it tested' reads", () => {
+  const expected = ["app/lib/b.mjs"];
+  assert.deepEqual(labels(runAsk("if a module imports app/lib/a.mjs, is it tested")), expected);
+  assert.deepEqual(labels(runAsk("if a module imports app/lib/a.mjs, has it got tests")), expected);
+  assert.deepEqual(labels(runAsk("if a module imports app/lib/a.mjs, does it have tests")), expected);
+});
+
+test("conditional qualifier: no importer satisfies the consequent, so the answer is empty rather than the bare importer", () => {
+  const r = runAsk("if a module imports app/lib/f.mjs, has it got tests");
+  assert.equal(r.tmct_ask.miss, true);
+  // app/lib/e.mjs imports f.mjs but has no tests — naming it would answer the
+  // antecedent and drop the consequent.
+  assert.doesNotMatch(r.content, /app\/lib\/e\.mjs/);
+});
+
+test("a hypothetical the fact set cannot decide refuses and names the conditionals it can read", () => {
+  const renamed = runAsk("if fnAlpha were renamed, would the tests still pass");
+  assert.equal(renamed.tmct_ask.miss, true);
+  assert.match(renamed.content, /records what is, not what would be/);
+  assert.match(renamed.content, /what would break if fnAlpha were deleted/);
+  // No guessed answer smuggled in under a nearby predicate.
+  assert.doesNotMatch(renamed.content, /Yes —|No —/);
+  const faster = runAsk("if app/lib/a.mjs were faster, would users notice");
+  assert.equal(faster.tmct_ask.miss, true);
+  assert.match(faster.content, /what imports or calls it/);
+});
+
+test("a hypothetical about a term the index never heard of keeps the ordinary wall, not code-graph advice", () => {
+  const r = runAsk("if the moon were made of cheese, would anything break");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /records what is, not what would be/);
+});

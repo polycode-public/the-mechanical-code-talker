@@ -408,6 +408,24 @@ export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
       .sort((a, b) => String(a.label).localeCompare(String(b.label)));
     levels.push(withTests);
   }
+  // An import cycle brings the closure back to its own seed: e.mjs imports
+  // f.mjs and f.mjs imports e.mjs, so e.mjs really is one of the things a
+  // change to e.mjs reaches. bfsLevels seeds `visited` with the start node, so
+  // the return edge is invisible to it and the closure came back disagreeing
+  // with the edges it had just walked. The return is placed one level below
+  // the shallowest dependent that carries it, and the edge chosen is the first
+  // in id order, so the answer is a pure function of the fact set.
+  for (let depth = 0; depth < levels.length; depth += 1) {
+    const back = levels[depth]
+      .flatMap((dep) => (dependents.get(dep.id) || []).filter((d) => d.id === ind.id))
+      .sort((a, b) => String(a.via).localeCompare(String(b.via)));
+    if (!back.length) continue;
+    const returned = { ...back[0], tests: coveredBy.get(ind.id) || [] };
+    if (!levels[depth + 1]) levels[depth + 1] = [];
+    levels[depth + 1] = [...levels[depth + 1], returned]
+      .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+    break;
+  }
   return levels;
 }
 

@@ -47,7 +47,7 @@ import {
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
   locativePreposition,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix, QUESTION_LEAD_RE, fillerClausePrefix, leadsInterrogative } from "../domain/interpret/normalize.mjs";
+import { counterfactualSubjectOf, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint, datedTeachSuffix, QUESTION_LEAD_RE, fillerClausePrefix, leadsInterrogative } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -16655,19 +16655,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "source: local committed corpus slice (licence-cited in the aside itself)");
     }
   }
-  // Counterfactual marker: "if X were deleted, what would break" compiles to a REAL traversal
-  // (interpret/normalize.mjs's COUNTERFACTUAL_RE rewrite, "which modules
-  // transitively import X") — but the consequent is hypothetical, so a plain
-  // traversal answer would over-claim it as present-tense fact. normalize.mjs
-  // only rewrites the QUESTION; this names the SAME raw query shape here (the
-  // one seam that sees both the original text and the final answer) and marks
-  // the answer as conditional. Gated to a genuine non-miss composed traversal
-  // — a counterfactual that happens to miss keeps its ordinary honest-miss
-  // wording, never a fabricated "hypothetically" wrapper around a blank.
-  const counterfactualSubject = String(query).trim().match(COUNTERFACTUAL_RE);
+  // Counterfactual marker: "if X were deleted, what would break" (either word
+  // order) compiles to a REAL traversal — the reverse dependency closure for a
+  // module, the subclass closure for a class — but the consequent is
+  // hypothetical, so a plain traversal answer would over-claim it as
+  // present-tense fact. interpret/normalize.mjs only rewrites the QUESTION;
+  // this names the SAME raw query shape here (the one seam that sees both the
+  // original text and the final answer) and marks the answer as conditional.
+  // Gated to a genuine non-miss composed traversal — a counterfactual that
+  // happens to miss keeps its ordinary honest-miss wording, never a fabricated
+  // "hypothetically" wrapper around a blank.
+  const counterfactualSubject = counterfactualSubjectOf(query);
   if (!recordMiss && via === "composed" && counterfactualSubject) {
-    answer = `hypothetically, if ${counterfactualSubject[1].trim()} were removed: ${answer}`;
-    note(trace, `intermediate: COUNTERFACTUAL_RE matched — compiled to a real traversal, wrapped as hypothetical ("${counterfactualSubject[1].trim()}" removed)`);
+    answer = `hypothetically, if ${counterfactualSubject} were removed: ${answer}`;
+    note(trace, `intermediate: counterfactual conditional matched — compiled to a real traversal, wrapped as hypothetical ("${counterfactualSubject}" removed)`);
   }
   // LIVE SUPPLEMENT (/wiki supplement, and its superset /wiki always): a
   // grounded answer also carries what Wikipedia says about its subject —

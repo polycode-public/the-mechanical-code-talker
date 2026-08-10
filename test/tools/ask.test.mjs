@@ -535,15 +535,21 @@ test("traverse(): reverse+transitive+calls reaches the real impactClosure path (
   assert.match(result.traversal, /reverse dependency closure over imports\+calls edges/);
 });
 
-test("ask(): transitive + inherits (no closure primitive for this kind) is an HONEST \"not supported\" miss, never silently identical to the direct answer", () => {
-  const graph = buildGraph();
-  const direct = ask(graph, "which classes inherit from Base");
-  const transitive = ask(graph, "which classes transitively inherit from Base");
-  assert.equal(direct.tmct_ask.miss, false);
-  assert.equal(transitive.tmct_ask.miss, true);
-  assert.match(transitive.content, /"transitive" modifier isn't supported for "inherits"/);
-  // the exact regression class this test guards against: silently behaving as if
-  // "transitively" had never been said, i.e. matching the direct answer's content.
+test("ask(): \"which classes transitively inherit from X\" walks the subclass closure and reaches a grandchild the direct question never names", () => {
+  const hierarchy = [
+    { path: "app/shape.mjs", dotted: "app.shape", imports: [], calls: [],
+      defines: [{ name: "Shape", kind: "class", lineno: 1, decorators: [] }] },
+    { path: "app/round.mjs", dotted: "app.round", imports: [], calls: [],
+      defines: [{ name: "Round", kind: "class", lineno: 1, decorators: [], bases: ["Shape"] }] },
+    { path: "app/circle.mjs", dotted: "app.circle", imports: [], calls: [],
+      defines: [{ name: "Circle", kind: "class", lineno: 1, decorators: [], bases: ["Round"] }] },
+  ];
+  const graph = parseEntities(buildEntities(hierarchy, [], {}));
+  const direct = ask(graph, "which classes inherit from Shape");
+  const transitive = ask(graph, "which classes transitively inherit from Shape");
+  assert.deepEqual(direct.tmct_ask.matches.map((m) => m.label).sort(), ["Round"]);
+  assert.deepEqual(transitive.tmct_ask.matches.map((m) => m.label).sort(), ["Circle", "Round"]);
+  assert.match(transitive.tmct_ask.traversal, /subclass closure over inherits edges/);
   assert.notEqual(transitive.content, direct.content);
 });
 
