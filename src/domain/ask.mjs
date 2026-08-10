@@ -2515,7 +2515,28 @@ function evalComposite(graph, ast, opts = {}) {
   // qualifier listing ("which modules are tested") registers the same way, just
   // under its own lane name.
   const referents = setReferentsFor(entityType, matches, ast.node === "qualifier" ? "qualifierListing" : "compositeSet");
-  return { compositeKind: "set", matches, entityType, referents };
+  const narrowedFrom = matches.length ? null : qualifierEmptiedSet(graph, ast, opts);
+  return { compositeKind: "set", matches, entityType, referents, ...(narrowedFrom ? { narrowedFrom } : {}) };
+}
+
+/** An empty composite tells the reader nothing about WHICH branch emptied it.
+ *  Two very different answers read the same: a clause nothing satisfied, and a
+ *  clause that held real entities until the qualifier took them away. The
+ *  second is the one worth saying out loud, and it is exactly what a
+ *  conditional compiles to. The seed is re-evaluated once, on the empty path
+ *  only, so a question that answered pays nothing for it. */
+function qualifierEmptiedSet(graph, ast, opts) {
+  if (ast.node !== "boolean" || ast.atoms?.length !== 2) return null;
+  const [seed, filter] = ast.atoms;
+  if (seed.op !== "seed" || filter.op !== "intersection" || filter.kind !== "qual") return null;
+  const clause = seed.ast?.node === "clause" ? seed.ast.clause : null;
+  if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
+  const held = evalSet(graph, seed.ast, opts);
+  if (!held.length) return null;
+  return {
+    count: held.length, entityType: clause.entityType || ast.entityType || null,
+    kind: clause.kind, object: clause.object, filters: filter.filters,
+  };
 }
 
 // ---- compositional render: templated, same "honest miss vs cited hit"
@@ -2794,7 +2815,24 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
+    // A grain the graph records nothing at cannot be reported as a filter that
+    // rejected anything — that note keeps precedence over the narrowing below.
+    const grainNote = coverageGrainNote(parsed, result.entityType);
+    // The qualifier, not the clause, is what emptied this set — so name the
+    // entities the clause did hold and point at that branch on its own,
+    // instead of a blanket "nothing matches" beside an unrelated recovery.
+    const narrowed = grainNote ? null : result.narrowedFrom;
+    if (narrowed) {
+      const kindPlural = nounFor(narrowed.entityType || "Module", 2);
+      const held = narrowed.count === 1
+        ? `1 ${nounFor(narrowed.entityType || "Module", 1)} ${verbFor(narrowed.kind)} ${narrowed.object}, but it is not ${listJoin(narrowed.filters)}`
+        : `${narrowed.count} ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}, but none of them is ${listJoin(narrowed.filters)}`;
+      return {
+        content: `${held}. Try "which ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}" for that branch on its own.`,
+        miss: true, ambiguous: false, matches: [],
+      };
+    }
+    const hint = grainNote || touchesRephraseHint(graph);
     return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
@@ -3748,7 +3786,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         traversal: `subclass closure over inherits edges from ${objMatch.label}`,
       };
     }
-    const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH });
+    const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH, includeCycleReturn: true });
     const matches = levels.flat().map((d) => graph.byId.get(d.id)).filter(Boolean);
     return {
       matches, objMatch, candidates, ambiguous, matchedVia,

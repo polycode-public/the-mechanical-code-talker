@@ -17,7 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { impactClosure, parseEntities } from "../../src/domain/codegraph.mjs";
 import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
 import { parseQuery, ask } from "../../src/domain/ask.mjs";
 
@@ -470,6 +470,16 @@ test("counterfactual: an import cycle puts the subject inside its own closure", 
     ["app/lib/e.mjs", "app/lib/f.mjs"]);
 });
 
+test("the impact report and the dependency closure read a cycle differently, and each says which it walked", () => {
+  const e = graph.individuals.find((i) => i.label === "app/lib/e.mjs");
+  // The report lists the OTHER work a change reaches — the module being changed
+  // is not other work.
+  assert.deepEqual(impactClosure(graph, e).flat().map((d) => d.label), ["app/lib/f.mjs"]);
+  // The closure answers which entities are inside it, and e.mjs reaches itself.
+  assert.deepEqual(impactClosure(graph, e, { includeCycleReturn: true }).flat().map((d) => d.label),
+    ["app/lib/f.mjs", "app/lib/e.mjs"]);
+});
+
 test("counterfactual: a module nothing depends on breaks nothing, and the receipt says the closure was walked", () => {
   const r = runAsk("what would break if app/functions/d/handler.mjs were removed");
   assert.equal(r.tmct_ask.miss, true);
@@ -507,4 +517,26 @@ test("a hypothetical about a term the index never heard of keeps the ordinary wa
   const r = runAsk("if the moon were made of cheese, would anything break");
   assert.equal(r.tmct_ask.miss, true);
   assert.doesNotMatch(r.content, /records what is, not what would be/);
+});
+
+test("an empty composition says which branch emptied it and points at the branch that held", () => {
+  // app/lib/e.mjs imports app/lib/f.mjs and carries no tests, so the clause held
+  // an entity and the qualifier took it away.
+  const r = runAsk("if a module imports app/lib/f.mjs, has it got tests");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^1 module imports app\/lib\/f\.mjs, but it is not tested\./);
+  assert.match(r.content, /Try "which modules import app\/lib\/f\.mjs"/);
+  // The same receipt on the plain composition the conditional compiles to.
+  assert.match(runAsk("which modules import app/lib/f.mjs and are tested").content,
+    /^1 module imports app\/lib\/f\.mjs, but it is not tested\./);
+  const many = runAsk("which modules import app/lib/a.mjs and are exported");
+  assert.match(many.content, /^3 modules import app\/lib\/a\.mjs, but none of them is exported\./);
+});
+
+test("a clause nothing satisfied keeps the plain empty message — there is no held branch to name", () => {
+  // Nothing imports scripts/g.mjs at all, so the qualifier never got a set to reject.
+  const r = runAsk("if a module imports scripts/g.mjs, is it tested");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^nothing in the index matches that \(modules\)\./);
+  assert.doesNotMatch(r.content, /but none of them|but it is not/);
 });
