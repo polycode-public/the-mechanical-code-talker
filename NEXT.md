@@ -29,6 +29,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **A pluggable memory-backend seam, built against bedrock-meter's spec, consumed by
+  news.html** — `../bedrock-meter/GRAPH_BACKEND_SPEC.md` (untracked, carried by the operator)
+  asks tmct to own the seam their S3-archive shim fakes today: `createSession`/`runTurn`
+  accept an injected backend object; the interface serves their seven access patterns
+  (append, read-by-term without whole-store scans, touched-facts, bookkeeping behind the
+  seam, bounded enumeration, supersession, structural exclusion of bookkeeping rows) under
+  their operational budget (stateless open, O(rows-touched) turns, per-fact atomicity,
+  row-level concurrency, opaque session keys, TTL pass-through, determinism, lazy SDK); tmct
+  ships a conformance suite the sqlite backend passes (precedent: the repository-interface
+  conformance kit and the `./conformance` export). news.html becomes the second consumer:
+  its session memory runs through the same seam over a browser backend. A Fable design wave
+  is drafting `PLAN_MEMORY_BACKEND.md`.
 - [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
   matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
   which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
