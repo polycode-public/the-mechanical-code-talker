@@ -101,6 +101,37 @@ test("extract-facts-from-text: --out writes the same JSONL to a file instead of 
   }
 });
 
+test("extract-facts-from-text: the summary names every declined candidate by its finding", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-extract-declines-"));
+  const file = join(dir, "declines.txt");
+  await writeFile(file, [
+    "In engineering, latency is a measure for the time period that needs to be waited to see a result.",
+    "An item with no guid tag, so normalizeFeedItems falls back to the link.",
+  ].join(" "), "utf8");
+
+  const logged = [];
+  const errored = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = (line) => logged.push(line);
+  console.error = (line) => errored.push(line);
+  let result;
+  try {
+    result = await main([file, "--optimistic"]);
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  const findings = result.declined.map((d) => d.finding).sort();
+  assert.deepEqual(findings, ["fragment-term", "relative-clause-verb"]);
+  const summary = errored.join("\n");
+  assert.match(summary, /2 candidates declined on how the sentence read/);
+  assert.match(summary, /relative-clause-verb 1/);
+  assert.match(summary, /fragment-term 1/);
+});
+
 test("extract-facts-from-text: --repo writes straight into that repo's tmct memory, tagged and trust-scored", async () => {
   const repoDir = await mkdtemp(join(tmpdir(), "tmct-extract-repo-"));
   const file = join(repoDir, "sample.txt");
