@@ -335,7 +335,9 @@ async function ingestSnapshotFacts(ctx, snapshot) {
   const lex = lexicon || loadLexicon();
   const text = joinTitleAndSummary(snapshot.title, snapshot.summary);
   const sourceTag = `news:${snapshot.sourceId}@${snapshot.id}`;
-  const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon: lex, observedAt: nowVal });
+  const result = await ingestText(text, {
+    memoryDir, sourceTag, optimistic: true, lexicon: lex, observedAt: nowVal, findings: true,
+  });
   invalidateCache(cache);
 
   const allFacts = [...result.extracted, ...result.optimistic];
@@ -623,7 +625,7 @@ async function ingestResearchArticle(ctx, term, provider, article) {
   if (prose) {
     ingested = await ingestText(prose, {
       memoryDir, sourceTag: provenance, optimistic: true,
-      lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now),
+      lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now), findings: true,
     });
     invalidateCache(ctx.cache);
   }

@@ -15,6 +15,10 @@ export {
   thirdPersonSingularSurface,
   baseVerbSurface,
   gerundVerbSurface,
+  // The short caveat a row carrying an extraction finding reads with, so an
+  // embedding host renders the same honesty beside the same rows tmct does.
+  FINDING_CAVEATS,
+  findingCaveat,
 } from "./fact-phrase.mjs";
 
 // Provenance: the `reference:<pack>:<Title>@<revid>` tag a reference-grounded
