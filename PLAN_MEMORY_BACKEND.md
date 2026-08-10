@@ -1938,6 +1938,17 @@ Acceptance: the named test files; `npm run test:fast`; ask bundle rebuilt.
 
 ## 24. Phase T8 — page backend modes and the news corpus toggle
 
+**BUILT** (2026-08-10, merged; the news-side toggle landed with T13 as §28 sequenced):
+chat.html and ledger.html gain the slider + `?backend=aws` deep link (the URL always wins
+on the next boot; local is the absence of the param), mode-honest copy swapped whole, and
+the unreachable-AWS visit runs unpersisted and says so in the boot line AND the memory
+panel — the shared panel renderer previously only showed its persist note beside the
+forget button, which silently hid the unreachable warning (the coordinator finished the
+phase after two agent stalls and fixed that renderer guard). Two support folds: the seed
+overlay projects under a new `onOversizedRow: "keep"` posture (overlay rows never reach
+the wire, so the per-item cap has nothing to protect), and `withOneRetryOnUnavailable`
+wraps the HTTP backend's methods with a single retry. 10 e2e + 105 unit tests.
+
 **Owns** `src/surfaces/web/chat-browser-entry.mjs` and `src/services/chat-page-viz.mjs` (the
 slider, the `?backend=aws` boot switch, the copy flip), `src/surfaces/web/ledger-browser-entry.mjs`
 and `src/services/ledger-viz.mjs` (the same treatment), unit coverage for the mode resolution

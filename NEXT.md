@@ -34,16 +34,16 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: T8 chat/ledger backend modes (Sonnet, resumed once after a stall; scope
-  clarified to chat/ledger only), the turn-triggers-materialization fold (Sonnet, owns
-  turn-service + the infra grant; T14 found §3.12's invoke was prose-only). Landed
-  since the last tracker move: T13, the graph-less config guard, the cap-refusal
-  wording fix, T14 (the chat area on news.html, XSS-pinned, honest about feed
-  staleness).
-- Queued: T9 after T8 → T10/M10/T11 tail. After T14: a fresh `npm run gen:screenshots`
-  news capture (news.png still shows the pre-flip UI). Operator step recorded by T6:
-  wikidata-slice and conceptnet-full stay empty until their raw dumps are downloaded
-  and loaded by hand with `tmct corpus load`.
+- In flight: T9 demo grid (Sonnet), the news.png recapture (Sonnet). Landed since the
+  last tracker move: T13, T14, the graph-less config guard, the cap-refusal wording
+  fix, the turn-triggers-materialization fold, T8 (the coordinator finished it after
+  two agent stalls — the shared panel renderer was hiding the persist note whenever
+  the forget button was absent; fixed with the pin flipped).
+- Queued: T10/M10/T11 tail after T9. Deploy blocker: pipelines #760/#761's failed
+  deploys left an orphaned `tmct-prod-prod-rows` table (RETAIN on rollback) that
+  collides with re-creation — needs `aws sso login --profile tmct-prod`, then the
+  coordinator verifies it's the empty orphan and deletes it. Operator step recorded
+  by T6: wikidata-slice and conceptnet-full band loads need hand-downloaded dumps.
   Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
   206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
   CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
