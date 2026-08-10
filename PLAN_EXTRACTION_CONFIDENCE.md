@@ -10,18 +10,24 @@ article extractor minted from one Simple English Wikipedia sentence, and bedrock
 standing ask for a way to decline unsure rows without guessing which ones are good.
 
 This plan is written to be built by Sonnet-tier implementers with no further design work, with
-the `extract-facts.mjs` phase marked Opus (its blast radius is the whole unit tier — every
-ingest caller stores what it mints). Every phase names its module paths, function signatures,
-test files and acceptance commands.
+three phases marked Opus: the `extract-facts.mjs` detectors (blast radius: the whole unit
+tier — every ingest caller stores what it mints), the `core.mjs`/ontology assertion field,
+and the `chat.mjs` read-back caveats (answer prose across every fact-rendering lane). Every
+phase names its module paths, function signatures, test files and acceptance commands. The
+phases run inside `PLAN_MEMORY_BACKEND.md`'s continuous campaign under one build go, slotted
+at the file-safe points section 5 names.
 
 The feature in one paragraph: `ingestText` gains a small set of structural detectors. A
-candidate the detectors show was mis-read (a verb picked out of a relative clause, a
-definitional frame read as classification, a clause fragment posing as a term) is declined,
-and the decline reason is reported in the ingest result. A candidate that is kept but carries
-a structural caveat (an identifier-shaped token, a clause-fallback read, a pronoun-carried
-subject) is stored with the finding on its assertion record. The news gate stops such rows
-heading cards. bedrock-meter reads the findings off `factsTouched` and applies its own policy.
-Nothing anywhere is a number; a finding is a fact about the parse, checked by a test.
+candidate the detectors show was mis-read (a verb picked out of a relative clause, a clause
+fragment posing as a term) is declined, and the decline reason is reported in the ingest
+result. A definitional frame ("X is the name for Y") declines the false isa and mints the
+honest edge instead: `X mgx:nameFor Y`. A candidate that is kept but carries a structural
+caveat (an identifier-shaped token, a clause-fallback read, a pronoun-carried subject) is
+stored with the finding on its assertion record, and a read-back answer that leans on such a
+row says so in a short curated caveat beside its citation. The news gate stops
+`identifier-token` and `clause-fallback` rows heading cards. bedrock-meter reads the findings
+off `factsTouched` and applies its own policy. Nothing anywhere is a number; a finding is a
+fact about the parse, checked by a test.
 
 ---
 
@@ -82,25 +88,33 @@ made-up decimal would be exactly the guessing the constitution exists to prevent
 declines findings by name, so its policy is legible ("we decline identifier-token rows") and
 testable on both sides of the seam.
 
-A finding is used one of two ways, decided per detector in 2.3:
+A finding is used one of three ways, decided per detector in 2.3:
 
 - **A decline reason.** The candidate is wrong, not merely weak: it is never stored, and the
   reason is reported in the ingest result (`declined`, below) and the CLI summary. The
   existing fragment retraction already works this way without the name.
+- **A decline plus an honest replacement.** The definitional frame declines the false isa
+  and mints the edge the sentence actually states (`mgx:nameFor`), finding attached.
 - **An attached finding.** The candidate is plausible and kept, and the finding rides its
-  assertion record so a consumer can decline it later. What is junk in one context (an
-  identifier heading a news card) is a real fact in another (a code document teaching what
-  `normalizeFeedItems` does), so the extractor keeps it and the consumer chooses.
+  assertion record so a consumer can decline it later — and tmct's own read-back names it in
+  a visible caveat (2.5). What is junk in one context (an identifier heading a news card) is
+  a real fact in another (a code document teaching what `normalizeFeedItems` does), so the
+  extractor keeps it and the consumer chooses.
 
 ### 2.2 The vocabulary
 
-Decline reasons (candidate suppressed; nothing stored):
+Decline reasons (candidate suppressed; nothing stored under that reading):
 
 | finding | meaning |
 | --- | --- |
-| `definitional-frame` | the copula object is a definitional head ("the name/word/term for Y") — a definition, not a classification |
 | `relative-clause-verb` | the relation verb sits in a relative clause that does not restrict the copula object just read |
 | `fragment-term` | an endpoint fails `readsAsEntityTerm` (existing behaviour, now named, plus the 2.3 widening) |
+
+One finding is both a decline and a mint:
+
+| finding | meaning |
+| --- | --- |
+| `definitional-frame` | the copula object is a definitional head ("the name/word/term for Y"): the isa is declined, and the honest edge `subject mgx:nameFor <Y's head run>` is minted in its place, carrying this finding attached |
 
 Attached findings (candidate stored; finding on the assertion):
 
@@ -109,6 +123,7 @@ Attached findings (candidate stored; finding on the assertion):
 | `identifier-token` | an endpoint's raw surface is an identifier (camelCase, snake_case, dotted, or path-like) |
 | `clause-fallback` | the row grounded from a clause fragment after the whole sentence declined |
 | `pronoun-carry` | the subject was substituted from the paragraph's pronoun carry, not stated in the sentence |
+| `definitional-frame` | (on the minted `mgx:nameFor` row) the row came from a definitional copula frame |
 
 The optimistic tier itself carries no finding: its provenance kind already says the tier, and
 repeating it would make one fact claim the same caveat twice.
@@ -133,12 +148,42 @@ below the tier's certainty bar. The volcano mint is pinned as a regression in bo
 
 **`definitional-frame`** — in `copulaObjectAt`, an object head in the closed set
 `DEFINITIONAL_HEADS = {name, word, term, label, title}` whose next token is "for" or "of"
-declines the isa. Nothing is minted in its place: `mgx:denotes` exists but its declared
-semantics are a provider's glossary edge (`src/domain/ask-vocab.mjs`), and minting it from
-optimistic prose would launder a guess into a provider-tier shape. The sentence's other
-content is still read — with the copula frame declined, Pass 2b runs, where the
-relative-clause rule above declines "needs" as well. The latency sentence therefore mints
-nothing, and the ingest result says why, twice, by name.
+declines the isa and mints the honest edge instead: `subject mgx:nameFor <object>`, where
+the object is the noun run the existing scan reads after the "for"/"of" — for the latency
+sentence, "time period" (the `isNounish` run ends before the relative pronoun "that", and
+`readsAsEntityTerm("time period")` passes). The minted row carries `definitional-frame` as
+an attached finding and stores under the same tier and provenance the declined isa would
+have used.
+
+The predicate is new and deliberately declared, not lexicon-minted:
+
+- **`mgx:nameFor`** — subject is a name for the object's concept. It lives in the `mgx:`
+  namespace beside the other conversational relation predicates the extractor already mints
+  with declared entries (`mgx:hasPrerequisite`, `mgx:mannerOf`), and its orientation matches
+  the surface frame one-to-one. `mgx:denotes`/`tmct:denotes` stay untouched: the ontology
+  declares them "Provider-declared" glossary edges (`ontology/tmct-core.ttl`), and reusing
+  them would launder extraction prose into a provider-tier shape — the exact objection that
+  previously argued for minting nothing.
+- Declared in `ontology/tmct-core.ttl` as an `owl:ObjectProperty` with an `rdfs:comment`
+  naming its extraction-tier origin and an `rdfs:seeAlso tmct:denotes` pointing at the
+  provider-tier cousin; `ontology/memory-shapes.ttl` needs no fact-predicate change (SHACL
+  constrains assertion-level properties, not the fact-predicate vocabulary), and the
+  estate's ontology tests re-run in E1.
+- Rendered by the curated table: `FACT_PREDICATE_PHRASES` gains
+  `"mgx:nameFor": "is the name for"` (`src/domain/fact-phrase.mjs`), so the unified
+  `predicatePhrase` and the `./phrase` subpath serve it with no further work, and read-back
+  says "latency is the name for time period (source: …)".
+- Banded background in the news gate structurally: `mgx:nameFor` joins
+  `GATE_IDENTITY_PREDICATES` (`src/domain/news-feed.mjs:86`) — a definition is never a card
+  head, independent of findings.
+- The ask side reads it back through lane 3 like any stored fact via the phrase entry; a
+  richer what-is composition (the definitional line joining the synthesized answer) is a
+  recorded follow-on, not this plan.
+
+The sentence's other content is still read — with the isa declined, Pass 2b runs, where the
+relative-clause rule above declines "needs". The latency sentence therefore mints exactly
+one edge, `latency mgx:nameFor time period`, and the ingest result names one decline
+(`relative-clause-verb`) and one definitional mint.
 
 **`fragment-term` widening** — `readsAsEntityTerm` additionally rejects a multi-word term
 whose leading token tags ADV (`FRAGMENT_LEAD_TAGS` gains ADV for the multi-word case only) or
@@ -164,15 +209,36 @@ tag rule, preserving the domain layer's no-wink posture.
 
 ### 2.5 How consumers decline
 
-- **The news gate.** `newsworthyHubs`' tests E and A reject a row whose `extraction` union is
-  non-empty from heading a card or anchoring novelty; `splitCardRows` may still show it as
-  background. One rule, all findings: extraction uncertainty is never card-heading evidence.
-  The gate already takes `readsAsEntityTerm` by injection, and findings arrive as row data,
-  so the domain layer needs no new import.
+- **The news gate.** `newsworthyHubs`' tests E and A reject a row from heading a card or
+  anchoring novelty when its `extraction` union contains `identifier-token` or
+  `clause-fallback`; `splitCardRows` may still show it as background. `pronoun-carry` rows
+  MAY head — the subject came from the same paragraph's own prose, and barring them would
+  suppress legitimate hubs (the two-line policy the operator chose over the blanket rule).
+  `definitional-frame` rows never reach the question: `mgx:nameFor` is banded background by
+  `GATE_IDENTITY_PREDICATES`. The gate already takes `readsAsEntityTerm` by injection, and
+  findings arrive as row data, so the domain layer needs no new import.
 - **bedrock-meter.** Reads `extraction` off `factsTouched` and declines by name. Their demo
   guard (re-asking on a throwaway memory) can retire for marked rows.
-- **tmct's own read-back.** Unchanged. A stored fact stays answerable; `/memory` and the
-  narration may name findings, but no chat lane starts declining stored facts in this plan.
+- **tmct's own read-back: a visible caveat.** A stored fact stays answerable — no chat lane
+  declines stored facts — but an answer that leans on a finding-bearing row says so. A short
+  curated template per attached finding rides beside the source citation:
+
+  | finding | caveat |
+  | --- | --- |
+  | `clause-fallback` | `(read from a clause fragment)` |
+  | `pronoun-carry` | `(subject carried from the previous sentence)` |
+  | `identifier-token` | `(identifier token)` |
+
+  `definitional-frame` needs no caveat: its phrase ("is the name for") already says how the
+  row was read. The seam is `renderFactLine` (`src/services/chat.mjs:8098`) — the one
+  fact-line renderer, which already carries the per-row trust hedge ("possibly: …" for
+  corpusWeak rows), so the caveat is the same pattern one field over. A shared
+  `findingCaveat(f)` helper is exported beside `factPhrase` in `src/domain/fact-phrase.mjs`
+  (so the `./phrase` subpath serves it and consumers can render identically), and the few
+  inline `factPhrase(f) + " (source: …)"` composers in chat.mjs (the union, enumeration,
+  only-line and chain renderers, and the two local `cite` helpers near lines 8318 and 8337)
+  apply the same helper — enumerated in the phase, not left to be found. Templates are
+  byte-pinned in corpus rows.
 
 ### 2.6 Compatibility
 
@@ -189,9 +255,10 @@ builds that detect findings either carry them or genuinely triggered none.
 | --- | --- |
 | "normalizeFeedItems falls back to the link." (news fixture) | subject marked `identifier-token`, object declined `fragment-term` — no stored fact survives with a card-headable term; the fixture keeps its guid-fallback duty untouched |
 | the same sentence in a code document fed to `tmct extract` | stored, marked `identifier-token`; a code-graph consumer accepts the finding and keeps the fact |
-| "latency is the name for the time period that needs …" | nothing stored; declines `definitional-frame` and `relative-clause-verb`, both named in the result |
+| "latency is the name for the time period that needs …" | stores exactly `latency mgx:nameFor time period` (marked `definitional-frame`, reads back "latency is the name for time period"); declines `relative-clause-verb` for the "needs" mint, named in the result |
 | "a volcano is a mountain that has lava" | both facts mint exactly as today; pinned as the adjacency regression |
-| "A cell is a unit, and it divides." pronoun retry | stored, marked `pronoun-carry` |
+| "A cell is a unit, and it divides." pronoun retry | stored, marked `pronoun-carry`; MAY head a news card (the gate's subset rule); reads back with "(subject carried from the previous sentence)" |
+| a `clause-fallback` row read back in chat | answered, with "(read from a clause fragment)" beside the citation |
 | fluent meta-commentary with clean structure ("The parser stores the feed.") | extracts today, extracts after this plan — no structural tell exists; recorded as the residual in section 7 |
 
 ---
@@ -201,26 +268,36 @@ builds that detect findings either carry them or genuinely triggered none.
 ### E0 — the detectors and declines (`extract-facts.mjs`) (Opus)
 
 **Owns** `src/services/extract-facts.mjs`, `test/adapters/extract-facts-from-text.test.mjs`
-(extend), a new `test/adapters/extract-facts-findings.test.mjs`. Deliver: the three decline
-detectors (2.3), the `fragment-term` widening, the ingest result gaining
-`declined: [{ sentence, finding, candidate }]`, and the CLI summary naming decline counts by
-finding. The identifier-token detector lands here too but only computes; attachment waits for
-E1's storage field (E0 stores nothing new). Unit tests: the latency sentence end to end (zero
-rows, two named declines), the volcano regression both shapes, "back to the link" declined,
-identifier detection on camelCase/snake/dotted/path tokens, one-word exemption intact.
+(extend), a new `test/adapters/extract-facts-findings.test.mjs`. Deliver: the decline
+detectors (2.3), the `fragment-term` widening, the definitional mint (the `mgx:nameFor` row
+minted where the isa declined — the ontology and phrase entries land in E1, so E0 mints
+behind the same flag that gates attachment and the pins assert the candidate shape), the
+ingest result gaining `declined: [{ sentence, finding, candidate }]` and
+`minted: [{ sentence, finding, fact }]`, and the CLI summary naming both counts by finding.
+The identifier-token detector lands here too but only computes; attachment waits for E1's
+storage field (E0 stores nothing new). Unit tests: the latency sentence end to end (one
+`mgx:nameFor` candidate, one named decline), the volcano regression both shapes, "back to
+the link" declined, identifier detection on camelCase/snake/dotted/path tokens, one-word
+exemption intact.
 
 Blast radius: this file's changes reach every ingest caller — run the full unit tier
 (`test/adapters`, `test/domain`, `test/services`, `test/corpus`) before the commit, plus
 `npm run test:fast`. Acceptance: those runs green; `node --test test/adapters/extract-facts-findings.test.mjs`.
 
-### E1 — findings on the assertion record (Opus)
+### E1 — findings on the assertion record, and the declared predicate (Opus)
 
 **Owns** `src/adapters/memory/core.mjs` (`appendFact`/`appendFacts` optional `extraction`,
-row exposure and union), `ontology/memory-shapes.ttl`, `ontology/tmct-core.ttl`,
-`src/domain/memory/touched-facts.mjs` if the shape needs it, `test/adapters/memory-extraction-findings.test.mjs`
-(new). `ingestText` attaches `identifier-token`, `clause-fallback`, `pronoun-carry` at its two
-`appendFact` call sites. Tests: SHACL accepts the property, per-assertion scoping (clean
-re-assert carries nothing), row union, `factsTouched` additive field, absent-on-old-rows.
+row exposure and union), `ontology/memory-shapes.ttl`, `ontology/tmct-core.ttl`
+(`mgx:extractionFinding` AND the `mgx:nameFor` declaration per 2.3),
+`src/domain/fact-phrase.mjs` (the `"mgx:nameFor": "is the name for"` entry plus the
+`findingCaveat` helper's table — export only; chat wiring is E3),
+`src/domain/memory/touched-facts.mjs` if the shape needs it,
+`test/adapters/memory-extraction-findings.test.mjs` (new), `test/domain/fact-phrase.test.mjs`
+(extend). `ingestText` attaches `identifier-token`, `clause-fallback`, `pronoun-carry` and
+the definitional mint's `definitional-frame` at its `appendFact` call sites. Tests: SHACL
+accepts the property, per-assertion scoping (clean re-assert carries nothing), row union,
+`factsTouched` additive field, absent-on-old-rows, the `mgx:nameFor` phrase render, the
+latency sentence storing its one edge end to end.
 
 Serialization note: `core.mjs` is also `PLAN_MEMORY_BACKEND.md`'s M1/M3 file. Whichever plan
 builds second rebases on the other's landed `core.mjs`; the additive field itself is
@@ -230,20 +307,37 @@ Acceptance: the new test file, `test/estate/*.test.mjs` (the ontology changed), 
 
 ### E2 — the news gate declines findings (Sonnet, after E1)
 
-**Owns** `src/domain/news-feed.mjs` (tests E/A read `row.extraction`; `looksLikeEntityTerm`
-particle widening), `test/domain/news-feed.test.mjs`, `test/services/news-service.test.mjs`,
-`test-e2e/pages-news-feed.test.mjs`. Re-measure the fixtures the N4 marker measured and
-record the numbers in this section's build marker. Acceptance target: `nyt-world.rss.xml`
-yields exactly its three genuine hubs (`ceasefire terms`, `officials`, `talks`) and zero
+**Owns** `src/domain/news-feed.mjs` (tests E/A read `row.extraction` for the
+`identifier-token`/`clause-fallback` subset; `mgx:nameFor` joins
+`GATE_IDENTITY_PREDICATES`; `looksLikeEntityTerm` particle widening),
+`test/domain/news-feed.test.mjs`, `test/services/news-service.test.mjs`,
+`test-e2e/pages-news-feed.test.mjs`. A `pronoun-carry`-only row heading a card is a pinned
+positive, not a regression. Re-measure the fixtures the N4 marker measured and record the
+numbers in this section's build marker. Acceptance target: `nyt-world.rss.xml` yields
+exactly its three genuine hubs (`ceasefire terms`, `officials`, `talks`) and zero
 scaffolding hubs; the other fixtures unchanged.
 
-### E3 — docs and the consumer note (Haiku, after E2)
+### E3 — the visible caveat on read-back (`chat.mjs`) (Opus, after E1)
 
-**Owns** `docs/adapter-contract.md` (the findings vocabulary and the absence rule beside the
-`factsTouched` contract), `README.md` only if it documents `factsTouched` fields, and an
-append-only note to `~/.claude/inboxes/bedrock-meter.md`: the vocabulary, the decline-by-name
-pattern, per-assertion scoping, absence semantics, and that the latency row is now never
-minted at all. Docs gate: `npm run check:links`, estate tier, `test:fast`.
+**Owns** `src/services/chat.mjs` (`renderFactLine` at ~8098 applies `findingCaveat(f)`
+beside the citation, the same slot the corpusWeak "possibly:" hedge already proves out; the
+enumerated inline composers — the union, enumeration, only-line and chain renderers and the
+two local `cite` helpers near 8318/8337 — converge on the same helper),
+`test/adapters/chat-*.test.mjs` (a new caveat lane file), `test/corpus/grammar.jsonl`
+(byte-pinned caveat rows: a clause-fallback read-back, a pronoun-carry read-back, an
+identifier-token read-back, and a clean row asserting NO caveat). Ask-bundle rebuild after.
+Guard: tier-1 pins and the byte-pinned templates only — no judged round, consistent with
+the memory-backend plan's T4 posture; the accepted risk is section 7's new sharp edge.
+
+### E4 — docs and the consumer note (Haiku, after E2 and E3)
+
+**Owns** `docs/adapter-contract.md` (the findings vocabulary, the absence rule, the caveat
+templates and `findingCaveat` beside the `factsTouched` contract), `README.md` only if it
+documents `factsTouched` fields, and an append-only note to
+`~/.claude/inboxes/bedrock-meter.md`: the vocabulary, the decline-by-name pattern,
+per-assertion scoping, absence semantics, the `mgx:nameFor` predicate and its phrase, and
+the read-back caveats their page will now show. Docs gate: `npm run check:links`, estate
+tier, `test:fast`.
 
 ---
 
@@ -251,25 +345,40 @@ minted at all. Docs gate: `npm run check:links`, estate tier, `test:fast`.
 
 | phase | files | tier | after |
 | --- | --- | --- | --- |
-| E0 detectors | extract-facts.mjs | Opus | — |
-| E1 assertion field | core.mjs, ontology, touched-facts | Opus | E0 |
+| E0 detectors + mint | extract-facts.mjs | Opus | — |
+| E1 assertion field + predicate | core.mjs, ontology, fact-phrase.mjs, touched-facts | Opus | E0 |
 | E2 gate consumption | news-feed.mjs + news tests | Sonnet | E1 |
-| E3 docs + handoff | adapter-contract.md, inbox | Haiku | E2 |
+| E3 read-back caveats | chat.mjs + caveat pins | Opus | E1 |
+| E4 docs + handoff | adapter-contract.md, inbox | Haiku | E2, E3 |
 
-E0→E1 serialize (E1 attaches what E0 computes). `core.mjs` serializes against
-`PLAN_MEMORY_BACKEND.md`'s M1/M3 as noted in E1. The full suite runs at the coordinator's
-push moments; each phase's acceptance list is its blast radius, except E0's, which is the
-whole unit tier by declared necessity.
+E0→E1 serialize (E1 attaches what E0 computes); E2 and E3 run in parallel after E1
+(different files). The full suite runs at the coordinator's push moments; each phase's
+acceptance list is its blast radius, except E0's, which is the whole unit tier by declared
+necessity.
+
+**One build go, interleaved with the memory-backend campaign.** The E-phases run inside
+`PLAN_MEMORY_BACKEND.md`'s continuous campaign under the same go, slotted at the
+file-ownership-safe points so go-time scheduling is mechanical:
+
+- **E0** (`extract-facts.mjs`): any time — no M/T phase owns the file.
+- **E1** (`core.mjs`, plus `fact-phrase.mjs`): between M0 and M1, or immediately after M3 —
+  never concurrent with M1 or M3, which own `core.mjs`.
+- **E2** (`news-feed.mjs`): after E1, not concurrent with M8 (the news-page wiring phase).
+- **E3** (`chat.mjs`): after E1, not concurrent with T4 or T7, which own `chat.mjs`.
+- **E4**: after E2 and E3, anywhere.
 
 ## 6. Acceptance
 
 1. Replaying the NYT fixture through the news pipeline yields three hubs and no term from the
    scaffolding sentence, with the fixture file byte-identical.
-2. The latency sentence stores nothing under either tier; the ingest result names
-   `definitional-frame` and `relative-clause-verb` declines.
+2. The latency sentence stores exactly one edge, `latency mgx:nameFor time period`, marked
+   `definitional-frame`, reading back as "latency is the name for time period (source: …)";
+   the ingest result names the `relative-clause-verb` decline and the definitional mint.
 3. The volcano sentence stores both its facts, unchanged.
 4. A code-document ingest keeps identifier facts, marked; `factsTouched` shows the finding.
-5. Every pre-existing corpus row, pin and fixture measurement not named above is unchanged.
+5. A read-back answer over a finding-bearing row carries its byte-pinned caveat; a clean
+   row carries none; a `pronoun-carry` row may head a news card.
+6. Every pre-existing corpus row, pin and fixture measurement not named above is unchanged.
 
 ## 7. Sharp edges and the horizon
 
@@ -287,3 +396,13 @@ whole unit tier by declared necessity.
   a bindable verb. That is the safe side of the bar: a lost true mint, never a false one.
 - **E0's blast radius is real.** The last change to this file's guards re-pointed corpus
   rows and e2e pins across four suites. Budget the phase accordingly.
+- **Caveat prose lands in judged answers.** The read-back caveats change answer text in
+  lanes the CEFR judge scores; the operator chose visible honesty over benchmark stability.
+  The guard is tier-1 pins plus byte-pinned templates — no judged round is mandated, the
+  same accepted posture as the memory-backend plan's T4 enumeration marker. If a later
+  judged cycle moves on caveat-bearing cells, the templates are the first suspect and the
+  pins say exactly what they rendered.
+- **`mgx:nameFor`'s object is the scan's noun run, not the full complement.** "the time
+  period that needs to be waited to see a result" stores as "time period" — the honest head
+  run, losing the relative clause's qualification. That is the safe side: a shorter true
+  object, never a fragment or a guess.
