@@ -211,7 +211,16 @@ async function loadFixtureBand({ client, tableName, band, rows }) {
  *  `turnRateLimit`/`now`/`sleep` mirror the deployment parameters and the
  *  clock hook, for deterministic tests. `breakerStore` and `bandClient` on
  *  the returned object expose the two fakes' underlying Maps, so a test can
- *  seed breaker state (open/half-open) or inspect band writes directly. */
+ *  seed breaker state (open/half-open) or inspect band writes directly.
+ *
+ *  `getSessionBackend` (optional) lets a caller supply the SAME
+ *  session-backend registry another local double already owns — the row
+ *  service's own real "stop & forget" purge (`deleteAll()`) only reaches
+ *  what a later turn reads back when both sides construct their backend
+ *  from one shared factory, the same pattern `row-service/local.mjs` uses to
+ *  hand its own registry to the news worker. Supplying one hands this
+ *  double ownership of nobody's backends, so `close()` leaves them open for
+ *  whichever caller built them. */
 export async function createLocalTurnService({
   seedPayload = { individuals: [] },
   fixtureBand = null,
@@ -220,6 +229,7 @@ export async function createLocalTurnService({
   turnRateWindowSeconds = TURN_RATE_WINDOW_SECONDS,
   now = () => Math.floor(Date.now() / 1000),
   sleep = undefined,
+  getSessionBackend: sharedGetSessionBackend = null,
   log = () => {},
 } = {}) {
   const bandClient = createFakeConvenienceClient();
@@ -229,7 +239,7 @@ export async function createLocalTurnService({
   if (fixtureBand) await loadFixtureBand({ client: bandClient, tableName, band: fixtureBand.name, rows: fixtureBand.rows });
 
   const sessionBackends = new Map();
-  const getSessionBackend = (sessionKey) => {
+  const ownGetSessionBackend = (sessionKey) => {
     let backend = sessionBackends.get(sessionKey);
     if (!backend) {
       backend = createRowMemoryBackend({ clock: now });
@@ -237,6 +247,7 @@ export async function createLocalTurnService({
     }
     return backend;
   };
+  const getSessionBackend = sharedGetSessionBackend ?? ownGetSessionBackend;
 
   const turnService = createTurnServiceHandler({
     createSessionBackend: getSessionBackend,

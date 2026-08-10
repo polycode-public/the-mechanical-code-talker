@@ -239,7 +239,12 @@ export function createTurnServiceHandler({
         memoryDir,
         sessionId: sessionKey,
         narrate: true,
-        retrieval: { mode: retrieval.metrics.mode, bounded: retrieval.metrics.bounded },
+        // `bands` rides along so the enumeration honesty marker can tell a
+        // bandless deployment's seed-session mode (no line) from a
+        // breaker-open skip with bands configured (the absent-supplement
+        // line) — dropping it here silently strips the marker from every
+        // breaker-open turn.
+        retrieval: { mode: retrieval.metrics.mode, bounded: retrieval.metrics.bounded, bands: retrieval.metrics.bands },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
