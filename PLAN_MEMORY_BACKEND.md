@@ -1597,6 +1597,14 @@ Acceptance: `node --test test/adapters/http-row-backend.test.mjs`; `npm run test
 
 ## 12. Phase M7 — infra and deploy
 
+**BUILT** (2026-08-10, merged): the table, Lambda (reserved concurrency 10), function URL +
+OAC, `/api/*` behavior, and daily reconcile rule join `WebsiteStack`; the WAF rate rule and
+the $20 estimated-charges alarm live in a new us-east-1 `EdgeGuardStack` crossed in via
+`crossRegionReferences` (both are region-locked, the same constraint the ACM cert already
+works around); `deploy:website` gains `npm run build:row-service`; the post-deploy smoke
+gains the row round-trip probe, and its live check no longer fires as a module-load side
+effect (a latent bug the probe work surfaced). Verified by `cdk synth`, never a live deploy.
+
 **Owns** `infra/lib/website-stack.ts` (the table, the Lambda from the built bundle, the
 function URL + OAC, `addBehavior("/api/*", …)`, reserved concurrency, the two deployment
 parameters — `TTL_DAYS` default 7 and `TABLE_ROW_CAP` default 2,000,000 — as Lambda env, and
@@ -1692,6 +1700,17 @@ IAM, the TTL value, their live e2e, the S3-path retirement.
 ---
 
 ## 16. Phase T0 — corpus bands, the loader, and the three band pipelines
+
+**BUILT** (2026-08-10, merged): band identity/manifest/wire-row builder in
+`corpus-bands.mjs` (adapters), the loader plus `queryBandTerm` in
+`src/services/corpus-loader.mjs` (moved there from the planned adapters home — the layering
+guard forbids adapters importing T1's services-layer Query helper), the
+`tmct corpus load|clear` verb pair, and the three pipelines with miniature fixtures. The
+WordNet pipeline ran for real: 206,357 rows (285 MB). The ConceptNet and Wikidata pipelines
+are fixture-tested only — no raw dump was available locally; T6's CI load job is where they
+first run at scale. Corpus surface takes `DynamoDBDocument.from` convenience clients; the
+session row backend takes `DynamoDBDocumentClient.from` — one `DynamoDBClient`, wrapped
+two ways.
 
 **Owns** `src/adapters/memory/corpus-bands.mjs` (new), `src/services/corpus-loader.mjs` (new),
 `src/domain/cli-verbs.mjs` (the `corpus` entry), `bin/tmct.mjs` (dispatch),
