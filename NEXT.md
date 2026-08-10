@@ -43,8 +43,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   transports (a `_meta` item on Lambda, page-lifetime state in the browser) covering the
   external wiki and KB sources too; enumeration answers stating their retrieval bounds;
   chat.html and ledger.html gaining a local/AWS backend slider with `?backend=aws` deep links
-  and mode-honest copy; and the home grid renamed the demo grid with nine deep-linked
-  buttons. DOC ONLY: nothing builds until the operator says build.
+  and mode-honest copy; the home grid renamed the demo grid with nine deep-linked buttons;
+  and (tenth revision) news.html as a FULLY THIN client — no in-page graph, no seed fetch,
+  a server-materialized feed document polled by version, and a chat area below the teach
+  panel that is the turn endpoint's first page consumer. DOC ONLY: nothing builds until the
+  operator says build.
 - [ ] **One combined round: the composite miss lead + the empty-composition receipt**
   (operator: combined, 2026-08-10) — the two share one miss-text surface, so one Opus round
   redesigns it once and measures once. (a) "nothing in the index matches that (functions)"
