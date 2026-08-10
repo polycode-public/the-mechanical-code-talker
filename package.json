@@ -53,7 +53,8 @@
     "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs",
     "./news": "./src/services/news-exports.mjs",
     "./phrase": "./src/domain/phrase-exports.mjs",
-    "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs"
+    "./envelope": "./test-benchmarks/agentbench/envelope-reader.mjs",
+    "./memory-backend-conformance": "./src/tools/memory-backend-conformance.mjs"
   },
   "files": [
     "bin/",
