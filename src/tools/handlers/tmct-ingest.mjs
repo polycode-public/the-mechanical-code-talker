@@ -27,7 +27,9 @@ export async function tmct_ingest(args, { config, ingest }) {
   const optimistic = args?.optimistic === true;
   const { dir, close } = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
   try {
-    const result = await ingest(text, { memoryDir: dir, config, sourceTag: "tool", optimistic, canonical: true });
+    const result = await ingest(text, {
+      memoryDir: dir, config, sourceTag: "tool", optimistic, canonical: true, findings: true,
+    });
     const grounded = result.extracted.length + result.optimistic.length;
     const header = `${result.sentences} sentence(s), ${result.recognized} recognized`
       + (optimistic ? `, ${result.optimistic.length} optimistic candidate(s)` : "")

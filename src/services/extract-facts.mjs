@@ -726,6 +726,18 @@ export function identifierTermsIn(sentence) {
   return terms;
 }
 
+/** The findings one stored row carries: whatever the sentence's own reading
+ *  contributed (a clause fallback, a carried pronoun subject), plus
+ *  `identifier-token` when either endpoint's stored key came from an
+ *  identifier-shaped token. `identifierTerms` null means this run records no
+ *  findings at all, so nothing is attached. */
+function findingsForRow(fact, readingFindings, identifierTerms) {
+  if (!identifierTerms) return [];
+  const named = [...readingFindings];
+  if (identifierTerms.has(fact.subject) || identifierTerms.has(fact.object)) named.push("identifier-token");
+  return named;
+}
+
 // A host that shares one thread with a UI hands the thread back through this;
 // a Node run leaves it unset and pays nothing.
 let ingestYield = null;
@@ -793,16 +805,22 @@ function canonicalLines(facts, storeRows) {
  *                 ingested fact.
  *     config      a loaded config; derived from the write dir when absent.
  *     lexicon     a loaded lexicon; the core vocabulary when absent.
- *     findings    mint the edge a definitional frame states (`mgx:nameFor`)
- *                 where the false isa was declined. Off by default.
+ *     findings    record how each sentence read: mint the edge a definitional
+ *                 frame states (`mgx:nameFor`) where the false isa was
+ *                 declined, and attach the kept findings (`identifier-token`,
+ *                 `clause-fallback`, `pronoun-carry`, `definitional-frame`) to
+ *                 the assertions this call writes. Off by default; the declines
+ *                 themselves are reported either way.
  *
  * Returns { sentences, recognized, extracted, optimistic, skipped, declined,
  * minted, canonical? }.
  *   recognized — strict-recognized sentence count.
  *   extracted  — strict fact rows ({subject, predicate, object, provenance,
- *                quantifier, sentence}).
+ *                quantifier, sentence}), plus `extraction` when the row was
+ *                stored carrying findings.
  *   optimistic — fuzzy candidate rows ({subject, predicate, object, provenance,
- *                sentence}); always [] unless options.optimistic.
+ *                sentence}, same optional `extraction`); always [] unless
+ *                options.optimistic.
  *   skipped    — sentences neither tier grounded.
  *   declined   — every candidate a detector turned down, as
  *                { sentence, finding, candidate }.
@@ -919,11 +937,22 @@ export async function ingestText(text, {
         currentSentence = sentence;
         const cleaned = stripCitationResidue(sentence);
         cleanedSentences.push(cleaned);
+        // The stored term keys this sentence names with an identifier-shaped
+        // token, read off the surface before normFactTerm folds the shape away.
+        // Null when this run records no findings.
+        const identifierTerms = findings ? identifierTermsIn(cleaned) : null;
+        // How the strict tier reached its rows, when it did: the whole sentence
+        // carries nothing, a later candidate is a clause fragment, and the
+        // pronoun retry carried its subject in from an earlier sentence.
+        let readingFindings = [];
         // Whole sentence first, then each closed-marker clause as a fallback.
         let rows = null;
-        for (const candidate of clauseCandidates(cleaned, { nlp })) {
-          rows = await strictRows(candidate);
-          if (rows) break;
+        const candidates = clauseCandidates(cleaned, { nlp });
+        for (let i = 0; i < candidates.length; i += 1) {
+          rows = await strictRows(candidates[i]);
+          if (!rows) continue;
+          if (i > 0) readingFindings = ["clause-fallback"];
+          break;
         }
         // Bounded pronoun carry: a "they/it/these/those/this …" sentence the
         // recognizer skipped is retried once with the paragraph's last grounded
@@ -935,6 +964,7 @@ export async function ingestText(text, {
         const threaded = stripLeadingDiscourseAdverb(cleaned);
         if (!rows && carrySubject && PRONOUN_LEAD_RE.test(threaded)) {
           rows = await strictRows(threaded.replace(PRONOUN_LEAD_RE, `${articledSubject(carrySubject)} `));
+          if (rows) readingFindings = ["pronoun-carry"];
         }
         if (rows) {
           recognizedSentences += 1;
@@ -942,13 +972,16 @@ export async function ingestText(text, {
           if (subjects.size === 1) carrySubject = [...subjects][0];
           const tag = `extracted:${sourceTag}`;
           for (const row of rows) {
+            const extraction = findingsForRow(row, readingFindings, identifierTerms);
             await appendFact(dir, {
               subject: row.subject, predicate: row.predicate, object: row.object,
               provenance: tag, quantifier: row.quantifier || "", observedAt,
+              ...(extraction.length ? { extraction } : {}),
             });
             extracted.push({
               subject: row.subject, predicate: row.predicate, object: row.object,
               provenance: tag, quantifier: row.quantifier || "", sentence,
+              ...(extraction.length ? { extraction } : {}),
             });
             taggedIds.add(row.id);
           }
@@ -959,22 +992,30 @@ export async function ingestText(text, {
         if (!optimistic) continue;
         const reading = optimisticReading(cleaned, { lexicon: lex, nlp, findings });
         for (const { finding, candidate } of reading.declined) declined.push({ sentence, finding, candidate });
-        const candidates = [];
+        const keptCandidates = [];
         for (const t of reading.triples) {
-          if (readsAsEntityFact(t, termNlp)) candidates.push(t);
+          if (readsAsEntityFact(t, termNlp)) keptCandidates.push(t);
           else declined.push({ sentence, finding: "fragment-term", candidate: t });
         }
+        // A minted edge rides its own finding: minted[].fact is the very object
+        // the candidate list holds, so the mint and its row match by identity
+        // rather than by re-deriving the triple.
+        const mintFindings = new Map();
         for (const { finding, fact } of reading.minted) {
-          if (candidates.includes(fact)) minted.push({ sentence, finding, fact });
+          if (!keptCandidates.includes(fact)) continue;
+          minted.push({ sentence, finding, fact });
+          mintFindings.set(fact, finding);
         }
-        if (!candidates.length) continue;
+        if (!keptCandidates.length) continue;
         optimisticSentences += 1;
         const tag = `optimistic-extract:${sourceTag}`;
-        for (const t of candidates) {
+        for (const t of keptCandidates) {
+          const extraction = findingsForRow(t, mintFindings.has(t) ? [mintFindings.get(t)] : [], identifierTerms);
           const written = await appendFact(dir, {
             subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
+            ...(extraction.length ? { extraction } : {}),
           });
-          optimisticFacts.push({ ...t, provenance: tag, sentence });
+          optimisticFacts.push({ ...t, provenance: tag, sentence, ...(extraction.length ? { extraction } : {}) });
           taggedIds.add(written.id);
         }
       }
@@ -1058,7 +1099,7 @@ export async function main(argv = process.argv.slice(2)) {
     result = await ingestText(text, {
       memoryDir: store ? store.dir : null,
       config: repoRoot ? loadConfig(process.env, repoRoot) : null,
-      sourceTag, optimistic, canonical,
+      sourceTag, optimistic, canonical, findings: true,
     });
   } finally {
     if (store) await store.close();

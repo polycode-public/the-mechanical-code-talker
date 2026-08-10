@@ -417,7 +417,9 @@ export function createNewsSession({
       forgotten = false;
       const nowVal = typeof now === "function" ? now() : now;
       const sourceTag = `teach:upload:${fileLabel}@${nowVal}`;
-      const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal });
+      const result = await ingestText(text, {
+        memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal, findings: true,
+      });
       cache.rows = null;
       foldedRows = null;
       return { facts: result.extracted.length + result.optimistic.length, sentences: result.sentences };
@@ -469,7 +471,9 @@ export function createNewsSession({
       for (const snapshot of items) {
         const text = [snapshot.title, snapshot.summary].filter(Boolean).join(". ");
         const sourceTag = `news-fixture:${sourceId}@${snapshot.id}`;
-        const result = await ingestText(text, { memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal });
+        const result = await ingestText(text, {
+          memoryDir, sourceTag, optimistic: true, lexicon, observedAt: nowVal, findings: true,
+        });
         const allFacts = [...result.extracted, ...result.optimistic];
         snapshot.factIds = allFacts.map((f) => factIdFor(normFactTerm(f.subject), normFactPredicate(f.predicate), normFactTerm(f.object)));
         factsTotal += allFacts.length;

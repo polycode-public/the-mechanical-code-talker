@@ -128,6 +128,14 @@ mgx:FactShape a sh:NodeShape ;
         sh:message "mgx:observedAt, when present, must be one parseable instant — valid time (when the asserting party witnessed the claim), distinct from mgx:createdAt's transaction time. Stored only when a caller supplies one; never fabricated, never backfilled." ;
     ] ;
     sh:property [
+        sh:path mgx:extractionFinding ;
+        sh:datatype xsd:string ;
+        sh:minCount 0 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "mgx:extractionFinding, when present, must name at least one finding from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame (a space-joined LIST, since one assertion can carry several). Absent — never empty — when the write recorded none, which means no findings were recorded rather than that the sentence read cleanly." ;
+    ] ;
+    sh:property [
         sh:path mgx:supersedes ;
         sh:datatype xsd:string ;
         sh:minCount 0 ;

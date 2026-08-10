@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   FACT_PREDICATE_PHRASES, predicatePhrase, factSentence, phraseRendererSource,
   baseVerbSurface, thirdPersonSingularSurface,
+  FINDING_CAVEATS, findingCaveat,
 } from "../../src/domain/fact-phrase.mjs";
 
 test("predicatePhrase returns a curated phrase for every table entry", () => {
@@ -82,6 +83,42 @@ test("factSentence renders one sentence per predicate family", () => {
   assert.equal(factSentence({ subject: "a knife", predicate: "mgx:usedFor", object: "cutting" }), "a knife is used for cutting");
   assert.equal(factSentence({ subject: "a lamp", predicate: "mgx:currently-in", object: "the study" }), "a lamp is in the study");
   assert.equal(factSentence({ subject: "a dog", predicate: "mgx:bark", object: "loudly" }), "a dog barks loudly");
+});
+
+// The extraction tier's definitional edge. The minted-verb fallback would read
+// "mgx:nameFor" as "nameFors", so the curated table has to answer it first.
+test("the definitional edge reads as its curated phrase, not a folded verb surface", () => {
+  assert.equal(predicatePhrase("mgx:nameFor"), "is the name for");
+  assert.equal(
+    factSentence({ subject: "latency", predicate: "mgx:nameFor", object: "time period" }),
+    "latency is the name for time period",
+  );
+});
+
+test("findingCaveat renders one short template per kept finding, and nothing for a clean row", () => {
+  assert.equal(findingCaveat("clause-fallback"), "(read from a clause fragment)");
+  assert.equal(findingCaveat("pronoun-carry"), "(subject carried from the previous sentence)");
+  assert.equal(findingCaveat("identifier-token"), "(identifier token)");
+  // A fact row is the shape a renderer actually holds.
+  assert.equal(
+    findingCaveat({ subject: "cell", predicate: "rdfs:subClassOf", object: "unit", extraction: ["pronoun-carry"] }),
+    "(subject carried from the previous sentence)",
+  );
+  // Nothing recorded, nothing said.
+  assert.equal(findingCaveat({ subject: "cell", predicate: "rdfs:subClassOf", object: "unit" }), "");
+  assert.equal(findingCaveat([]), "");
+  assert.equal(findingCaveat(undefined), "");
+  // The definitional frame's own phrase already says how the row was read.
+  assert.equal(findingCaveat("definitional-frame"), "");
+  // A decline reason names a candidate that was never stored.
+  assert.equal(findingCaveat("relative-clause-verb"), "");
+});
+
+test("a row carrying several findings reads them in the table's order, not the row's", () => {
+  const caveat = "(read from a clause fragment) (identifier token)";
+  assert.equal(findingCaveat(["clause-fallback", "identifier-token"]), caveat);
+  assert.equal(findingCaveat(["identifier-token", "clause-fallback"]), caveat);
+  assert.equal(Object.keys(FINDING_CAVEATS).length, 3, "the caveat table is closed");
 });
 
 test("phraseRendererSource carries everything the reader stands on", () => {

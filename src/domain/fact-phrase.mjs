@@ -44,6 +44,7 @@ export const FACT_PREDICATE_PHRASES = Object.freeze({
   "mgx:hasPrerequisite": "requires",
   "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
   "mgx:rendersAs": "renders as", // the render-template binding ("a disk renders as a block")
+  "mgx:nameFor": "is the name for", // the definitional frame's edge ("latency is the name for time period")
   "mgx:synonym": "means the same as",
   "mgx:antonym": "is the opposite of",
   "mgx:similarTo": "is similar to",
@@ -172,6 +173,45 @@ export function predicatePhrase(predicate) {
 /** "a heart has a valve" from one { subject, predicate, object } fact row. */
 export function factSentence(row) {
   return `${row.subject} ${predicatePhrase(row.predicate)} ${row.object}`;
+}
+
+/**
+ * The short curated caveat each KEPT extraction finding reads as beside a
+ * citation. One template per finding, byte-pinned, so an answer that leans on a
+ * row the extractor had something to say about says so in the same words every
+ * time.
+ *
+ * `definitional-frame` is deliberately absent: its own phrase ("is the name
+ * for") already says how the row was read, so a caveat would repeat it. So are
+ * the decline reasons — a declined candidate was never stored, so no answer can
+ * lean on it.
+ */
+export const FINDING_CAVEATS = Object.freeze({
+  "clause-fallback": "(read from a clause fragment)",
+  "pronoun-carry": "(subject carried from the previous sentence)",
+  "identifier-token": "(identifier token)",
+});
+
+/**
+ * The caveat text for one fact row's findings, or "" when it has none to
+ * declare. Takes a row ({ extraction: [...] }, readFactRows' shape), a bare
+ * finding name, or a list of them, so a renderer can pass whatever it holds.
+ *
+ * A row carrying several findings reads them in the table's own order above,
+ * never the row's, so the same finding set always renders the same string.
+ * Returns the caveats alone — the caller owns the space before them and the
+ * citation after.
+ */
+export function findingCaveat(finding) {
+  const named = typeof finding === "string"
+    ? [finding]
+    : Array.isArray(finding) ? finding : finding?.extraction;
+  if (!Array.isArray(named) || !named.length) return "";
+  const held = new Set(named.map((f) => String(f)));
+  return Object.entries(FINDING_CAVEATS)
+    .filter(([name]) => held.has(name))
+    .map(([, caveat]) => caveat)
+    .join(" ");
 }
 
 /** The phrase layer as browser source, for a generated page that renders fact
