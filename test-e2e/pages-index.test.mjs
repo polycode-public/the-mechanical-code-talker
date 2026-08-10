@@ -23,18 +23,28 @@ const publicFile = (name) => fileURLToPath(new URL(`../public/${name}`, import.m
 
 const PAGE_ORDER = DEMO_PAGES;
 
-test("the claim grid lists exactly one claim link per demo page, in the page order", async () => {
+// The grid carries one cell per demo page plus one deep-link cell into
+// mudiii's river scenario, sitting right after mudiii's own cell since it is
+// the same engine and page, not a demo page of its own.
+const mudiiiAt = PAGE_ORDER.indexOf("mudiii");
+const gridValues = (map, riverValue) => [
+  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map(map),
+  riverValue,
+  ...PAGE_ORDER.slice(mudiiiAt + 1).map(map),
+];
+
+test("the claim grid lists one cell per demo page plus the river deep-link cell, in that order", async () => {
   const html = await readFile(INDEX, "utf8");
   const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
   const hrefs = [...grid.matchAll(/<a class="claim" href="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(hrefs, PAGE_ORDER.map((p) => `./${p}.html`));
+  assert.deepEqual(hrefs, gridValues((p) => `./${p}.html`, "./mudiii.html?scenario=river"));
 });
 
 test("every claim block names the page it opens in a filename chip that matches its href", async () => {
   const html = await readFile(INDEX, "utf8");
   const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
   const chips = [...grid.matchAll(/<span class="claim-page">([^<]+)/g)].map((m) => m[1].trim());
-  assert.deepEqual(chips, PAGE_ORDER.map((p) => `${p}.html`));
+  assert.deepEqual(chips, gridValues((p) => `${p}.html`, "mudiii.html?scenario=river"));
 });
 
 test("each demo page gets a feature section whose plate shows that page's screenshot and links to it", async () => {
@@ -103,31 +113,42 @@ test("the news example sits between the news and sprites feature plates and show
   assert.match(section, /1\. wombat \(2\) — unknown word/, "the example shows the engine's real ranked ungrounded-term list");
 });
 
-test("the river-crossing puzzle has its own link, straight onto the scenario mudiii.html reads from the URL", async () => {
+test("the river-crossing cell sits right after mudiii's and deep-links straight onto the scenario mudiii.html reads from the URL", async () => {
   const html = await readFile(INDEX, "utf8");
-  const start = html.indexOf('<section class="showcase" id="river-puzzle">');
-  assert.ok(start !== -1, "the river crossing is its own band on the home page");
-  const band = html.slice(start, html.indexOf("</section>", start));
+  const gridStart = html.indexOf('<div class="claim-grid">');
+  const gridEnd = html.indexOf('<section class="capabilities"');
+  const mudiiiAt = html.indexOf('data-share-demo="mudiii"');
+  const riverAt = html.indexOf('data-share-demo="river"');
+  assert.ok(gridStart !== -1 && mudiiiAt !== -1 && riverAt !== -1, "both cells are on the page");
+  assert.ok(gridStart < mudiiiAt && mudiiiAt < riverAt && riverAt < gridEnd, "the river cell sits right after mudiii's, inside the grid");
+  const cellStart = html.lastIndexOf('<div class="claim-cell">', riverAt);
+  const cell = html.slice(cellStart, html.indexOf("</div>", riverAt));
   assert.match(
-    band,
-    /<a class="showcase-card" href="\.\/mudiii\.html\?scenario=river" target="_blank" rel="noopener noreferrer">/,
-    "the card opens mudiii on the river scenario, in a new tab",
+    cell,
+    /<a class="claim" href="\.\/mudiii\.html\?scenario=river" target="_blank" rel="noopener noreferrer">/,
+    "the cell opens mudiii on the river scenario, in a new tab",
   );
-  assert.match(band, /mudiii\.html\?scenario=river<\/span>/, "and names the address it opens");
-  assert.match(band, /fox, the goat and the cabbage/i, "the band names the puzzle rather than the page");
+  assert.match(cell, /<h3>The fox, the goat and the cabbage<\/h3>/, "the cell names the puzzle rather than the page");
+  assert.match(cell, /mudiii\.html\?scenario=river <svg/, "and names the address it opens");
   // The scenario parameter is only worth linking if the page reads it.
   const viz = await readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8");
   assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
 });
 
-test("the river-crossing card carries its own info link and share button, sharing mudiii's about page", async () => {
+test("the river-crossing cell carries its own info link and share button, sharing mudiii's about page", async () => {
   const html = await readFile(INDEX, "utf8");
-  const start = html.indexOf('<section class="showcase" id="river-puzzle">');
-  const band = html.slice(start, html.indexOf("</section>", start));
-  assert.match(band, /<a class="card-btn" href="\.\/mudiii-about\.html">/, "About points at the shared mudiii about page, not a new one");
-  assert.match(band, /<button class="card-btn share-btn" type="button" data-share-demo="river">/, "the Share button names its own share-target key");
-  const labels = [...band.matchAll(/<span class="sr-only">(About|Share) /g)].length;
+  const riverAt = html.indexOf('data-share-demo="river"');
+  const cellStart = html.lastIndexOf('<div class="claim-cell">', riverAt);
+  const cell = html.slice(cellStart, html.indexOf("</div>", riverAt));
+  assert.match(cell, /<a class="card-btn" href="\.\/mudiii-about\.html">/, "About points at the shared mudiii about page, not a new one");
+  assert.match(cell, /<button class="card-btn share-btn" type="button" data-share-demo="river">/, "the Share button names its own share-target key");
+  const labels = [...cell.matchAll(/<span class="sr-only">(About|Share) /g)].length;
   assert.equal(labels, 2, "both the info link and the share button carry an accessible name");
+});
+
+test("no feature section exists for the river cell: it is a deep link into mudiii's own scenario, not a demo page with its own plate", async () => {
+  const html = await readFile(INDEX, "utf8");
+  assert.doesNotMatch(html, /id="feature-river"/, "the river cell demands no feature section or plate of its own");
 });
 
 test("the research example sits between the sprites and ledger feature plates and shows a real research-lane transcript", async () => {
@@ -218,22 +239,18 @@ test("the shared stylesheet carries the neutral palette and rounded-sans type, n
   assert.doesNotMatch(css, /--border:/, "the old --border token name is gone");
 });
 
-test("every claim card carries an info link to its about page and a share button naming its demo", async () => {
+test("every claim cell carries an info link to its about page and a share button naming its demo", async () => {
   const html = await readFile(INDEX, "utf8");
-  // Scoped to the claim-grid section's own closing tag, not as far as
-  // capabilities: the showcase bands sitting between them (the river card
-  // among them) carry their own info link and share button and must not be
-  // swept into this count.
   const gridStart = html.indexOf('<div class="claim-grid">');
   const grid = html.slice(gridStart, html.indexOf("</section>", gridStart));
   const infoHrefs = [...grid.matchAll(/<a class="card-btn" href="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(infoHrefs, PAGE_ORDER.map((p) => `./${aboutPageOf(p)}`));
+  assert.deepEqual(infoHrefs, gridValues((p) => `./${aboutPageOf(p)}`, "./mudiii-about.html"));
   const shared = [...grid.matchAll(/data-share-demo="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(shared, PAGE_ORDER, "one share button per demo, in the page order");
+  assert.deepEqual(shared, gridValues((p) => p, "river"), "one share button per cell, in the grid order");
   // Both controls are icon-only, so each needs the sr-only label the new-tab
   // hint already uses; an unlabelled icon button reads as nothing.
   const labels = [...grid.matchAll(/<span class="sr-only">(About|Share) /g)].length;
-  assert.equal(labels, PAGE_ORDER.length * 2, "each info link and each share button carries an accessible name");
+  assert.equal(labels, (PAGE_ORDER.length + 1) * 2, "each info link and each share button carries an accessible name");
 });
 
 test("the capability table lists every demo page once, and every column has at least one demo", async () => {

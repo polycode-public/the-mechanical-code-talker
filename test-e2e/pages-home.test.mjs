@@ -24,6 +24,16 @@ import { DEMO_PAGES, aboutPageOf } from "../scripts/site-pages.mjs";
 
 const PAGE_ORDER = DEMO_PAGES;
 
+// The grid carries one cell per demo page plus one deep-link cell into
+// mudiii's river scenario, sitting right after mudiii's own cell since it is
+// the same engine and page, not a demo page of its own.
+const mudiiiAt = PAGE_ORDER.indexOf("mudiii");
+const gridHrefs = [
+  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map((p) => `./${p}.html`),
+  "./mudiii.html?scenario=river",
+  ...PAGE_ORDER.slice(mudiiiAt + 1).map((p) => `./${p}.html`),
+];
+
 // Plates whose screenshot the capture script has not written yet. The page
 // styles these to degrade to a framed panel with alt text; here they excuse
 // the one console error their 404 logs. Once the PNGs exist the filter
@@ -113,14 +123,14 @@ test("the page embeds no live widget: no iframe, no #tmct-chat, no chat engine s
   }
 });
 
-test("the claim grid shows one claim block per demo page, each a link onto its page, in the page order", async () => {
+test("the claim grid shows one claim block per demo page plus the river deep-link block, each a link, in that order", async () => {
   const { context, page } = await openHomePage();
   try {
     await page.locator(".claim-grid").waitFor({ state: "visible" });
     const claims = page.locator("a.claim");
-    assert.equal(await claims.count(), PAGE_ORDER.length, "one claim block per demo page");
+    assert.equal(await claims.count(), PAGE_ORDER.length + 1, "one claim block per demo page, plus the river cell");
     const hrefs = await claims.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    assert.deepEqual(hrefs, PAGE_ORDER.map((p) => `./${p}.html`));
+    assert.deepEqual(hrefs, gridHrefs);
   } finally {
     await context.close();
   }
@@ -210,7 +220,7 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
 test("the showcase links to the Polycode family projects", async () => {
   const { context, page } = await openHomePage();
   try {
-    const cards = page.locator("section.showcase:not(#claims-teaser):not(#river-puzzle) .showcase-card");
+    const cards = page.locator("section.showcase:not(#claims-teaser) .showcase-card");
     await cards.first().waitFor({ state: "visible" });
     assert.equal(await cards.count(), 3, "three family showcase cards");
     const teaser = page.locator('#claims-teaser .showcase-card[href="./claims.html"]');
@@ -221,7 +231,7 @@ test("the showcase links to the Polycode family projects", async () => {
       "https://gitlab.com/polycode-projects/bedrock-meter",
       "https://gitlab.com/polycode-projects/the-quiet-feed",
     ]);
-    const text = await page.locator("section.showcase:not(#claims-teaser):not(#river-puzzle)").innerText();
+    const text = await page.locator("section.showcase:not(#claims-teaser)").innerText();
     assert.match(text, /Seonix/);
     assert.match(text, /Bedrock Meter/);
     assert.match(text, /The Quiet Feed/);
@@ -230,28 +240,30 @@ test("the showcase links to the Polycode family projects", async () => {
   }
 });
 
-test("the river-crossing card opens mudiii on that scenario in a new tab", async () => {
+test("the river cell opens mudiii on that scenario in a new tab, right where mudiii's own cell sits", async () => {
   const { context, page } = await openHomePage();
   try {
-    const card = page.locator('#river-puzzle .showcase-card[href="./mudiii.html?scenario=river"]');
+    const cell = page.locator('.claim-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
+    const card = cell.locator('a.claim[href="./mudiii.html?scenario=river"]');
     await card.waitFor({ state: "visible" });
     assert.equal(await card.getAttribute("target"), "_blank", "it leaves the home page standing behind it");
     assert.equal(await card.getAttribute("rel"), "noopener noreferrer");
-    const text = await page.locator("#river-puzzle").innerText();
-    assert.match(text, /fox, the goat and the cabbage/i, "the card names the puzzle rather than the page");
+    const text = await cell.innerText();
+    assert.match(text, /fox, the goat and the cabbage/i, "the cell names the puzzle rather than the page");
   } finally {
     await context.close();
   }
 });
 
-test("the river-crossing card offers an info link to mudiii's about page and its own share sheet", async () => {
+test("the river cell offers an info link to mudiii's about page and its own share sheet, with 5+ distinct posts", async () => {
   const { context, page } = await openHomePage();
   try {
-    const info = page.locator('#river-puzzle a.card-btn');
+    const cell = page.locator('.claim-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
+    const info = cell.locator("a.card-btn");
     assert.equal(await info.getAttribute("href"), "./mudiii-about.html", "About shares mudiii's own about page rather than a new one");
     assert.match(await info.innerText(), /^About /, "the info link has a readable name, not a bare icon");
 
-    const share = page.locator('#river-puzzle button.share-btn');
+    const share = cell.locator("button.share-btn");
     assert.equal(await share.getAttribute("data-share-demo"), "river", "the share button names its own share-target key");
     await share.click();
     const sheet = page.locator("dialog.share-sheet");
@@ -263,6 +275,9 @@ test("the river-crossing card offers an info link to mudiii's about page and its
     assert.equal(new Set(texts).size, texts.length, "each river post says something different");
     await sheet.locator(".share-close").click();
     await sheet.waitFor({ state: "hidden" });
+
+    await info.click();
+    await page.waitForURL(/mudiii-about\.html$/);
   } finally {
     await context.close();
   }
@@ -397,18 +412,24 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
 
 // ---- the about pages, and the two controls that reach them ------------------------
 
+const gridCells = [
+  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
+  { name: "river", about: "./mudiii-about.html", share: "river" },
+  ...PAGE_ORDER.slice(mudiiiAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
+];
+
 test("every claim card offers an info link to its about page and a share button, both with an accessible name", async () => {
   const { context, page } = await openHomePage();
   try {
     const cells = page.locator(".claim-cell");
-    assert.equal(await cells.count(), PAGE_ORDER.length, "one cell per demo");
-    for (const [i, name] of PAGE_ORDER.entries()) {
+    assert.equal(await cells.count(), gridCells.length, "one cell per demo, plus the river cell");
+    for (const [i, { name, about, share: shareKey }] of gridCells.entries()) {
       const cell = cells.nth(i);
       const info = cell.locator("a.card-btn");
-      assert.equal(await info.getAttribute("href"), `./${aboutPageOf(name)}`, `${name}'s info link points at its about page`);
+      assert.equal(await info.getAttribute("href"), about, `${name}'s info link points at its about page`);
       assert.match(await info.innerText(), /^About /, `${name}'s info link has a readable name, not a bare icon`);
       const share = cell.locator("button.share-btn");
-      assert.equal(await share.getAttribute("data-share-demo"), name, `${name}'s share button names its demo`);
+      assert.equal(await share.getAttribute("data-share-demo"), shareKey, `${name}'s share button names its demo`);
       assert.match(await share.innerText(), /^Share /, `${name}'s share button has a readable name`);
     }
   } finally {
