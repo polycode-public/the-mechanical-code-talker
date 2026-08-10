@@ -306,6 +306,15 @@ projection-safe (the wire row serializes whole records).
 
 Acceptance: the new test file, `test/estate/*.test.mjs` (the ontology changed), `npm run test:fast`.
 
+**LANDED.** `row.extraction` is the union, `row.assertions[].extraction` the per-hop list, both
+absent when nothing was recorded. The write gate takes the four kept findings and refuses
+anything else, so declining by name is testable on both sides. `findingCaveat(rowOrFinding)`
+and `FINDING_CAVEATS` export from `src/domain/fact-phrase.mjs` and the `./phrase` subpath. The
+`findings` option stays off by default; every in-repo ingest path (the news pipeline, the
+browser's teach and fixture-replay paths, `tmct_ingest`, the `tmct extract` CLI) passes it true.
+P2P replication does not yet carry findings across the wire — `p2p-room.mjs`'s wire fact
+enumerates its fields, so a replicated row arrives with none.
+
 ### E2 — the news gate declines findings (Sonnet, after E1)
 
 **Owns** `src/domain/news-feed.mjs` (tests E/A read `row.extraction` for the
