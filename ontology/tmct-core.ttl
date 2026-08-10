@@ -233,6 +233,11 @@ mgx:observedAt a owl:DatatypeProperty ;
   rdfs:range xsd:dateTime ;
   rdfs:comment "OPTIONAL valid time: when the asserting party WITNESSED the claim, as against mgx:createdAt's transaction time (when this store recorded it). The split is Snodgrass's (TSQL2) and SQL:2011's application-time vs system-versioned axes, simplified to an instant rather than a period. It is what lets a stale article read today lose to an eyewitness report from yesterday, which ingestion order gets exactly backwards. Stored only when a caller supplies one — never fabricated, never backfilled by migration." .
 
+mgx:extractionFinding a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:comment "OPTIONAL: the space-joined structural findings the extractor recorded about how it read the sentence THIS assertion came from, from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame. Each is a mechanical property of the parse with its own detector and its own tests — never a confidence score, which is the guessing tmct's honest-miss promise exists to prevent. It sits on the assertion record rather than the triple, so a second source stating the same thing cleanly inherits no caveat. Absent means no findings were recorded, never that the sentence was checked and read cleanly." .
+
 mgx:supersedes a owl:DatatypeProperty ;
   rdfs:domain tmct:Fact ;
   rdfs:range xsd:string ;
@@ -995,6 +1000,20 @@ mgx:usedFor a owl:ObjectProperty ;
   rdfs:label "usedFor" ;
   rdfs:seeAlso cn:UsedFor ;
   rdfs:comment "Corpus relation, mirrored from ConceptNet /r/UsedFor: \"a {start} is used for {end}\"." .
+
+# ---------------------------------------------------------------------------
+# 1e. Extraction-tier relations (urn:tmct:mgx#).
+#
+#     Predicates the prose extractor mints from a sentence's own structure,
+#     rather than from ConceptNet or a teach frame. They are declared here
+#     instead of minted from a lemma because the surface frame that produces
+#     them is closed and named, so the predicate is too.
+# ---------------------------------------------------------------------------
+
+mgx:nameFor a owl:ObjectProperty ;
+  rdfs:label "nameFor" ;
+  rdfs:seeAlso tmct:denotes ;
+  rdfs:comment "Subject is a name for the object's concept — the edge a definitional copula frame states (\"latency is the name for the time period …\"), minted at the EXTRACTION tier where that frame's false class membership was declined. Reads back through the curated phrase table as \"is the name for\". seeAlso tmct:denotes, the provider-tier cousin: the two say the same thing from different mouths, and they stay separate so extracted prose is never laundered into a provider-declared shape." .
 
 # ---------------------------------------------------------------------------
 # 1f. Game-world vocabulary (the worlds pack, corpus/worlds/).

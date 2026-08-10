@@ -6,6 +6,20 @@
 // only fires on genuine malformation, never a sparse-but-valid write.
 
 const MEMORY_CLASSES = new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
+
+// The closed vocabulary of structural findings an assertion record may carry —
+// what the extractor observed about how it read the sentence, never a score.
+// Only the findings that are KEPT live here: a decline reason names a candidate
+// that was never stored, so it has no record to ride. A consumer declines by
+// name, which is only testable on both sides of the seam if the names are a
+// closed set, so an unlisted one is a violation rather than a pass-through.
+export const EXTRACTION_FINDINGS = Object.freeze([
+  "identifier-token",   // an endpoint's raw surface was an identifier, not a word
+  "clause-fallback",    // the row grounded from a clause fragment after the whole sentence declined
+  "pronoun-carry",      // the subject was substituted from the paragraph's pronoun carry
+  "definitional-frame", // the row came from a definitional copula frame ("X is the name for Y")
+]);
+const EXTRACTION_FINDING_SET = new Set(EXTRACTION_FINDINGS);
 const RULE_KINDS = new Set([
   "compose2", "filter", "recursive",
   "action-signature", "action-precond", "action-effect", "action-constraint",
@@ -98,6 +112,16 @@ function checkFact(ind, violations) {
   const observedAt = attrValue(ind, "mgx:observedAt");
   if (observedAt !== undefined && !Number.isFinite(Date.parse(observedAt))) {
     violations.push(`mgx:observedAt, when present, must be a parseable instant (got ${JSON.stringify(observedAt)})`);
+  }
+  const extraction = attrValue(ind, "mgx:extractionFinding");
+  if (extraction !== undefined) {
+    const found = extraction.split(" ").filter(Boolean);
+    if (!found.length) violations.push("mgx:extractionFinding, when present, must name at least one finding");
+    for (const finding of found) {
+      if (!EXTRACTION_FINDING_SET.has(finding)) {
+        violations.push(`mgx:extractionFinding must name findings from the closed vocabulary ${EXTRACTION_FINDINGS.join(" | ")} (got ${JSON.stringify(finding)})`);
+      }
+    }
   }
   for (const prop of SUPERSESSION_LINK_PROPS) {
     const links = attrValue(ind, prop);

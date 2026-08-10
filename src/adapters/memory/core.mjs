@@ -122,6 +122,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
   { prop: "mgx:sourceId", note: "the assertion key a Fact record is filed under — the Source id of the ONE party asserting it, which is also the @-suffix of the record's own id. `src:none` when no tag names a Source, so every record has a key rather than a hole" },
   { prop: "mgx:observedAt", note: "OPTIONAL valid time: when the asserting party WITNESSED the claim, as against mgx:createdAt's transaction time (when this store recorded it). A stale article read today loses to an eyewitness report from yesterday. Stored only when a caller supplies one — never fabricated, never backfilled" },
+  { prop: "mgx:extractionFinding", note: "OPTIONAL: the space-joined structural findings the extractor recorded about how THIS assertion's sentence was read, from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame. Per assertion, never per triple: a later clean re-assertion of the same triple carries none. Absence means no findings were recorded, never that the sentence was checked and read cleanly" },
   { prop: "mgx:supersedes", note: "the record id(s) this one replaced when its own source re-asserted the triple with a newer embedded timestamp. A space-joined LIST; absent, never empty, until the first supersession" },
   { prop: "mgx:supersededBy", note: "the record id(s) that replaced this one. Its presence is what makes a record a demoted leaf rather than a live head, and the group fold skips it: a source's past belief is not a second vote for the present one. A LIST, because one source with two live replicas can fork before they sync" },
   { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
@@ -301,6 +302,13 @@ const OBSERVED_AT_PROP = "mgx:observedAt";      // valid time: when the assertin
 const SOURCE_ID_PROP = "mgx:sourceId";          // the assertion key this record is filed under
 const SUPERSEDES_PROP = "mgx:supersedes";       // the id(s) this record replaced; absent until the first supersession
 const SUPERSEDED_BY_PROP = "mgx:supersededBy";  // the id(s) that replaced this record; absent on a live head
+
+/** How the extractor read the sentence one assertion came from — a space-joined
+ *  list from the closed EXTRACTION_FINDINGS vocabulary, absent when the write
+ *  recorded none. It sits on the assertion record rather than the triple, so a
+ *  second source stating the same thing cleanly inherits no caveat. */
+export const EXTRACTION_FINDING_PROP = "mgx:extractionFinding";
+export { EXTRACTION_FINDINGS } from "./shacl.mjs";
 
 /** The Source key a Fact's provenance union projects onto: the first tag that
  *  derives one, since the tags of one fact are asserted in arrival order and
@@ -2063,6 +2071,20 @@ function nextChainVersion(head) {
   return deepest + 1;
 }
 
+/** A write's extraction findings, deduped and codepoint-sorted. The sort is
+ *  what keeps the stored string a pure function of the finding SET: two stores
+ *  handed the same findings in different orders hold byte-identical records,
+ *  and the read-time union below reads the same either way. */
+function normalizeExtractionFindings(extraction) {
+  if (!Array.isArray(extraction)) return [];
+  const names = new Set();
+  for (const raw of extraction) {
+    const name = normText(raw);
+    if (name) names.add(name);
+  }
+  return [...names].sort();
+}
+
 /**
  * Plan ONE source's assertion of one triple: the record it wants to write, plus
  * the demotion that implies when the source is replacing its own earlier belief.
@@ -2078,7 +2100,7 @@ function nextChainVersion(head) {
  *     which is what keeps a re-seed and a duplicate mesh path idempotent.
  */
 function planFactAssertion(payload, spec) {
-  const { groupId, s, p, o, label, tokens, group, createdAt, observedAt, quantifier, environments } = spec;
+  const { groupId, s, p, o, label, tokens, group, createdAt, observedAt, quantifier, environments, extraction = [] } = spec;
   const recordId = `${groupId}@${group.sourceId}`;
   const idx = memoryIndexOf(payload);
   const head = idx ? idx.individualsById.get(recordId) : payload.individuals.find((x) => x?.id === recordId);
@@ -2092,17 +2114,24 @@ function planFactAssertion(payload, spec) {
   let observedAtVal = observedAt;
   let supersedes = [];
   let quantifierVal = quantifier;
+  let extractionVal = extraction;
 
   if (head) {
     const current = { assertedAt: embeddedTagTimestamp(headTags), observedAt: headAttr(OBSERVED_AT_PROP) };
     if (supersedesPriorAssertion(incoming, current)) {
       demote = { head, id: `${recordId}#v${nextChainVersion(head)}` };
       supersedes = [demote.id];
+      // A fresh belief is read fresh: the new head carries only the findings
+      // this write recorded, and the demoted leaf keeps its own.
     } else {
       tags = [...new Set([...headTags, ...group.tags])];
       createdAtVal = headAttr(CREATED_AT_PROP) || createdAtVal;
       observedAtVal = observedAt || headAttr(OBSERVED_AT_PROP);
       supersedes = headAttr(SUPERSEDES_PROP).split(" ").filter(Boolean);
+      // The same source saying the same thing again unions its findings on,
+      // exactly as its tags union: a re-delivery never erases how the first
+      // reading of this assertion went.
+      extractionVal = normalizeExtractionFindings([...headAttr(EXTRACTION_FINDING_PROP).split(" "), ...extraction]);
     }
     // A re-assert carrying no quantifier never SILENTLY erases one already
     // recorded — the same first-write-wins discipline createdAt keeps.
@@ -2121,6 +2150,7 @@ function planFactAssertion(payload, spec) {
       { prop: SOURCE_ID_PROP, key: "sourceId", value: group.sourceId },
       ...(tags.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: tags.join(" | ") }] : []),
       ...(observedAtVal ? [{ prop: OBSERVED_AT_PROP, key: "observedAt", value: observedAtVal }] : []),
+      ...(extractionVal.length ? [{ prop: EXTRACTION_FINDING_PROP, key: "extraction", value: extractionVal.join(" ") }] : []),
       ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
       ...(quantifierVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: quantifierVal }] : []),
       ...(environments ? [{ prop: "mgx:factJustification", key: "justification", value: environments.map((e) => e.join(" ")).join(" | ") }] : []),
@@ -2309,9 +2339,12 @@ function compactFactGroup(payload, groupId) {
  *  source's own lineage, never a duplicate. `premiseTrusts`/`ruleConfidence`
  *  optionally engage trust.mjs's entailed hook; `observedAt` records when the
  *  asserting party WITNESSED the claim, which is not when this store heard it.
- *  Validated against ontology/memory-shapes.ttl (memory/shacl.mjs) before the
- *  write. Returns { id } — the group id, the public fact id every reader uses. */
-export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", observedAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
+ *  `extraction` is the closed-vocabulary finding list saying how the extractor
+ *  read the sentence this assertion came from, recorded on the record rather
+ *  than the triple. Validated against ontology/memory-shapes.ttl
+ *  (memory/shacl.mjs) before the write. Returns { id } — the group id, the
+ *  public fact id every reader uses. */
+export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", observedAt = "", quantifier = "", extraction, premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
   const p = normFactPredicate(predicate);
   const o = normFactTerm(object);
@@ -2320,6 +2353,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);
+  const findings = normalizeExtractionFindings(extraction);
   await mutateMemory(dir, async (payload) => {
     const groups = assertionGroupsFor(payload, groupId, normText(provenance), createdAt);
     for (const id of groups.length ? [] : restateFactGroup(payload, groupId, { quantifier: q })) {
@@ -2328,6 +2362,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
     for (const group of groups) {
       const plan = planFactAssertion(payload, {
         groupId, s, p, o, label: labelOf(text), tokens, group, createdAt, observedAt, quantifier: q,
+        extraction: findings,
       });
       await assertIndividualValid(plan.candidate); // the SHACL gate -- throws, never writes, on a violation
       for (const id of applyFactAssertion(payload, plan)) {
@@ -2375,8 +2410,9 @@ function normalizeJustificationEnvironments(justification) {
  *  not thrown. Optional per-fact `premiseTrusts`/`ruleConfidence` (batched
  *  entailed-hook passthrough) and `justification` (premise fact ids — a flat
  *  list, or a list of lists for multiple independent derivations — stored as
- *  mgx:factJustification's ' | '-separated environments, last-write-wins).
- *  Returns { ids, appended, skipped }. */
+ *  mgx:factJustification's ' | '-separated environments, last-write-wins), and
+ *  optional per-fact `extraction` (appendFact's finding list, same per-assertion
+ *  scoping). Returns { ids, appended, skipped }. */
 export async function appendFacts(dir, facts) {
   const prepared = [];
   let skipped = 0;
@@ -2394,6 +2430,7 @@ export async function appendFacts(dir, facts) {
       createdAt: f?.createdAt || "",
       observedAt: f?.observedAt || "",
       quantifier: normText(f?.quantifier),
+      extraction: normalizeExtractionFindings(f?.extraction),
       premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : undefined,
       ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : undefined,
       environments: normalizeJustificationEnvironments(f?.justification),
@@ -2419,7 +2456,7 @@ export async function appendFacts(dir, facts) {
         const plan = planFactAssertion(payload, {
           groupId: f.id, s: f.s, p: f.p, o: f.o, label: labelOf(f.text), tokens: f.tokens,
           group, createdAt: f.createdAt, observedAt: f.observedAt, quantifier: f.quantifier,
-          environments: f.environments,
+          environments: f.environments, extraction: f.extraction,
         });
         for (const id of applyFactAssertion(payload, plan)) {
           if (seen.has(id)) continue;
@@ -2848,6 +2885,11 @@ export async function resolveRelationChaseReverse(memory, name, objectTerm, help
  * the per-record hop list, for a reader that wants to see WHICH source said it
  * and when rather than one blended number.
  *
+ * `extraction` joins both levels when any assertion recorded a finding: the
+ * row's union for a consumer deciding whether to lean on the triple at all,
+ * each hop's own list for one that needs to know which reading produced it.
+ * Absent — never empty — when nothing was recorded.
+ *
  * The fold reads live HEADS only. A record its own source has since superseded
  * is that source's PAST belief, not a second vote for the present one; folding
  * it back in would let one source's edit history inflate its own corroboration.
@@ -2961,6 +3003,7 @@ function foldFactGroup(id, heads, ctx) {
   const sourceIds = [];
   const sourceTypes = [];
   const tags = new Set();
+  const findings = new Set();
   const environments = [];
   const seenEnvironment = new Set();
   let quantifier = "";
@@ -3008,11 +3051,14 @@ function foldFactGroup(id, heads, ctx) {
     }
     const createdAt = attrOf(head, CREATED_AT_PROP);
     const observedAt = attrOf(head, OBSERVED_AT_PROP);
+    const extraction = attrOf(head, EXTRACTION_FINDING_PROP).split(" ").filter(Boolean);
+    for (const finding of extraction) findings.add(finding);
     assertions.push({
       id: head.id, sourceId, sourceType,
       provenance: headTags.join(" | "),
       createdAt,
       ...(observedAt ? { observedAt } : {}),
+      ...(extraction.length ? { extraction } : {}),
       ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
       assertedAt: assertionTimestampFor(headTags, createdAt),
     });
@@ -3045,6 +3091,12 @@ function foldFactGroup(id, heads, ctx) {
     provenance: [...tags].sort().join(" | "),
     quantifier, // "" unless a plural class-membership teach set one
     sourceIds, sourceTypes,
+    // Every finding any live assertion of this triple carries, unioned the same
+    // way the provenance tags above are, and ABSENT when there are none. A
+    // consumer that needs to know which source read it that way reads the
+    // per-assertion `extraction` in the hop list instead. Absence means no
+    // findings were recorded — never that the sentence read cleanly.
+    ...(findings.size ? { extraction: [...findings].sort() } : {}),
     // `environments`: every persisted premise set (empty unless entailed);
     // `justification`: their deduped union in first-occurrence order, for
     // readers that only need "which premises does this fact cite at all".
