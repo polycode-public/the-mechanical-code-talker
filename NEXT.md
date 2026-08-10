@@ -35,17 +35,17 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
 - In flight: the combined miss-lead round on chat.mjs (Opus), E2 news-gate consumption
-  (Sonnet, owns news-feed.mjs), M5 row service handler (Sonnet, owns server/row-service/),
-  T0 corpus bands + loader (Sonnet, owns corpus-bands/loader/cli-verbs/scripts/
-  corpus-bands; told to reuse T1's band query helper), T2 corpus breaker (Sonnet; told to
-  classify failures with T1's isSystemicFailure), M3 sqlite conformance (Opus, owns
-  core.mjs under the byte-identity pin). Landed: M0, M1, M2, M4, T1 (budgets calibrated
-  and frozen, see its plan marker), E0, E1, the screenshot capture (item closed below).
-- Queued: T4 after chat.mjs hand-back → M6/M7/T3/T12/E3 → M8/T5/T6/T7/E4 →
-  T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins
-  (M9 dispatches when M3 lands; M6/M7 follow M5).
-- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main; batch 2 (M2+E1+M4)
-  accumulates locally and ships after the next full-suite run at its push moment.
+  (Sonnet, owns news-feed.mjs), T0 corpus bands + loader (Sonnet; told to reuse T1's band
+  query helper), T2 corpus breaker (Sonnet; told to classify failures with T1's
+  isSystemicFailure), M3 sqlite conformance (Opus, owns core.mjs under the byte-identity
+  pin), M6 HTTP client backend (Sonnet), M7 infra + deploy (Sonnet, owns infra/,
+  .gitlab-ci.yml, post-deploy-smoke). Landed: M0, M1, M2, M4, M5, T1, E0, E1, the
+  screenshot capture (item closed below). Version rolled to 6.0.0 (operator: major).
+- Queued: T4 after chat.mjs hand-back → T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
+  T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins (M9 dispatches
+  when M3 lands).
+- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main and its pipeline went
+  green; batch 2 (M1/M2/M4/M5/T1/E1 + 6.0.0) ships when the gate suite at HEAD is green.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
