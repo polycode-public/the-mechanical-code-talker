@@ -91,24 +91,27 @@ const ALREADY_PEER_LABELED = /^teach:peer:/;
  *  same tag again, so the union stops growing once every peer has seen it. */
 /** `observedAtBySegment` maps a STORED (pre-relabel) tag to the observedAt its
  *  own record carries, when it has one — the dated-teach frame's own
- *  `mgx:observedAt`, threaded onto the wire fact each tag becomes. Returns
- *  `{ tag, observedAt }` pairs, deduped by the RELABELED tag (the first
- *  observedAt seen for a given output tag wins, matching the prior de-dup by
- *  tag string alone). */
-function wireProvenanceTags(provenance, identity, fallbackTimestamp, observedAtBySegment) {
+ *  `mgx:observedAt`, threaded onto the wire fact each tag becomes.
+ *  `extractionBySegment` does the same for that record's own extraction
+ *  findings, so a peer replicating the tag reads back the same findings the
+ *  original assertion recorded. Returns `{ tag, observedAt, extraction }`
+ *  triples, deduped by the RELABELED tag (the first value seen for a given
+ *  output tag wins, matching the prior de-dup by tag string alone). */
+function wireProvenanceTags(provenance, identity, fallbackTimestamp, observedAtBySegment, extractionBySegment) {
   const stored = String(provenance || "").split(" | ").filter(Boolean);
-  if (!stored.length) return [{ tag: "", observedAt: undefined }];
+  if (!stored.length) return [{ tag: "", observedAt: undefined, extraction: undefined }];
   const byTag = new Map();
   for (const segment of stored) {
     const observedAt = observedAtBySegment?.get(segment);
+    const extraction = extractionBySegment?.get(segment);
     const tag = ALREADY_PEER_LABELED.test(segment) ? segment : (() => {
       const assertedAt = latestProvenanceTimestamp(segment);
       const timestamp = assertedAt === null ? fallbackTimestamp : new Date(assertedAt).toISOString();
       return relabelForBroadcast(segment, identity.displayName, timestamp, identity.nodeId);
     })();
-    if (!byTag.has(tag)) byTag.set(tag, observedAt);
+    if (!byTag.has(tag)) byTag.set(tag, { observedAt, extraction });
   }
-  return [...byTag].map(([tag, observedAt]) => ({ tag, observedAt }));
+  return [...byTag].map(([tag, meta]) => ({ tag, ...meta }));
 }
 
 /** This store's own node id, minted on first use and never regenerated: it
@@ -137,28 +140,34 @@ const isFactShaped = (f) => !!f
  *  every hop and never settle. Sending each tag on its own row keeps the merge
  *  idempotent, and a repeated triple inside one batch unions correctly.
  *
- *  `mgx:observedAt` is record content the same way the tag is: each of
- *  row.assertions is one live head, and its own `provenance` (that head's own
- *  tags) is the join key back to which outgoing wire fact carries its
- *  observedAt. A dated taught fact's broadcast carries the date, so a peer
- *  that receives it can resolve it against a fresher OR staler claim the same
- *  way the local store already does (memory/resolution.mjs's
- *  effectiveObservedAt chain). */
+ *  `mgx:observedAt` and `mgx:extractionFinding` are both record content the
+ *  same way the tag is: each of row.assertions is one live head, and its own
+ *  `provenance` (that head's own tags) is the join key back to which outgoing
+ *  wire fact carries its observedAt and its extraction findings. A dated
+ *  taught fact's broadcast carries the date, so a peer that receives it can
+ *  resolve it against a fresher OR staler claim the same way the local store
+ *  already does (memory/resolution.mjs's effectiveObservedAt chain), and a
+ *  finding-bearing assertion's broadcast carries its findings, so a peer
+ *  renders the same caveat the origin did rather than reading a clean
+ *  reading that never happened. Sent per assertion, never unioned at the wire
+ *  layer — the row's own union is a read-time fold over exactly these
+ *  per-assertion values, so unioning again here would double up on merge. */
 const toWireFacts = (row, identity, fallbackTimestamp) => {
   const observedAtBySegment = new Map();
+  const extractionBySegment = new Map();
   for (const a of row.assertions || []) {
-    if (!a.observedAt) continue;
-    for (const segment of String(a.provenance || "").split(" | ").filter(Boolean)) {
-      observedAtBySegment.set(segment, a.observedAt);
-    }
+    const segments = String(a.provenance || "").split(" | ").filter(Boolean);
+    if (a.observedAt) for (const segment of segments) observedAtBySegment.set(segment, a.observedAt);
+    if (a.extraction?.length) for (const segment of segments) extractionBySegment.set(segment, a.extraction);
   }
-  return wireProvenanceTags(row.provenance, identity, fallbackTimestamp, observedAtBySegment)
-    .map(({ tag, observedAt }) => ({
+  return wireProvenanceTags(row.provenance, identity, fallbackTimestamp, observedAtBySegment, extractionBySegment)
+    .map(({ tag, observedAt, extraction }) => ({
       subject: row.subject,
       predicate: row.predicate,
       object: row.object,
       provenance: tag,
       ...(observedAt ? { observedAt } : {}),
+      ...(extraction?.length ? { extraction } : {}),
     }));
 };
 
@@ -462,6 +471,11 @@ export function createP2pRoom({
       // this is the passthrough that lets a dated taught fact's wire fact
       // reach it at all.
       ...(typeof f.observedAt === "string" && f.observedAt ? { observedAt: f.observedAt } : {}),
+      // Same passthrough for the extraction findings the origin recorded on
+      // this same assertion — appendFacts dedupes and sorts them the same way
+      // a local write does, so a merged record reads back exactly as its
+      // origin stored it.
+      ...(Array.isArray(f.extraction) && f.extraction.length ? { extraction: f.extraction } : {}),
     }))) : { ids: [] };
     await sortFactIndividualsById();
     await refreshRows();
