@@ -1,6 +1,6 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend, the AWS row service behind the deployed demos, and a consumer-hosted turn surface over a Dynamo corpus
 
-Status: DESIGN, revised nine times. The first draft made news.html an IndexedDB consumer; the
+Status: DESIGN, revised ten times. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every
 backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and
@@ -39,7 +39,13 @@ the corpus-migration framing the seventh missed: the turn Lambda bundles the mid
 (persona, SEON, the code corpuses — a one-second-class parse), WordNet and ConceptNet return
 per-query from their corpus bands as supersets of what the bundle gave up, and all three bands
 become the demo's loaded set with tmct's own deployment owning their attribution (§3.13,
-§3.18). The consumer
+§3.18). The tenth makes news.html a true thin client (operator directive): the page carries no
+in-page graph at all — no seed fetch, no engine assembly, no in-page ingest — the news worker
+materializes the feed server-side after every change and the page renders `GET /api/feed`,
+teaches flow through an async ingest trigger, a chat area joins the page below the teach panel
+as the turn endpoint's first page consumer, and the previous unpersisted-but-functional
+degraded mode is recorded as considered-and-replaced (§3.7, §3.21, §3.22, phases M8/T12–T14).
+The consumer
 requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
@@ -61,9 +67,11 @@ backends, all first-class in-tree code passing one published conformance suite: 
 reference implementation and the suite's own fixture), sqlite (the CLI's store, refactored onto
 the same contract), and DynamoDB (`createDynamoRowBackend` — a consumer hands it a document
 client, a table name, and a TTL policy, and writes no storage code). An HTTP client backend
-carries the same contract over the wire, and the deployed news.html demos the whole stack end to
-end: page → HTTP client → row service in tmct's own AWS stack (Lambda behind the existing
-CloudFront distribution) → the library's own DynamoDB backend → table. bedrock-meter embeds tmct
+carries the same contract over the wire, and the deployed news.html demos the whole stack as a
+true thin client: the page renders a feed the news worker materializes server-side, its teaches
+and its chat run through the service's endpoints, and no graph is ever assembled in the browser
+— page → `/api/*` on the existing CloudFront distribution → row/turn/news-worker Lambdas → the
+library's own DynamoDB backend → table. bedrock-meter embeds tmct
 and configures the shipped DynamoDB backend over their own table; nothing on the storage path is
 theirs to build. On top of the same table, `POST /api/sessions/:uuid/turn` runs a full tmct
 turn in a Lambda with no network but DynamoDB — the whole engine as a consumer-hosted API tmct
@@ -214,16 +222,21 @@ order on read never carries meaning.
   from every read immediately, with physical removal finishing inside that seven-day window.
   The one local item beyond the existing consent preference is that key — a session pointer,
   never facts — and the copy says so. No page or mode ever shows a promise it is not keeping.
-- **Best-effort in the browser, honest everywhere.** The service being unreachable never blocks
-  the page: the seed is a static asset and the in-page payload needs no store, so the visit
-  runs — without persistence, saying so. A failed write surfaces visibly, never as a silently
-  dropped row, and no fact is ever stored locally on the news page — localStorage holds the
-  consent preference and the session pointer, nothing else.
+- **Best-effort in the browser, honest everywhere.** On chat.html and ledger.html the service
+  being unreachable never blocks the page: their engines are in-page, so an AWS-mode visit
+  runs without persistence and says so. news.html is the deliberate exception (§3.7): it is a
+  thin client with nothing to compute locally, so an unreachable service leaves the page
+  booted, labelled feed-and-chat-unavailable, and idle — stated plainly, never dressed as a
+  working mode. A failed write surfaces visibly on every page, never as a silently dropped
+  row, and no fact is ever stored locally on the news page — localStorage holds the consent
+  preference and the session pointer, nothing else.
 - **Fixture-true testing.** No test reaches live AWS. The service's own handler, run locally
   over the reference backend, is the test double; the live check is the post-deploy smoke probe,
   which is measurement, not a test tier.
 - **tmct is offline; the hosted surfaces are consumer-hosted, and tmct demos them.** The
-  browser demo stays the product claim, untouched: the engine in your page, deterministic. The
+  browser demo stays the product claim on the pages that make it — chat.html, ledger.html, and
+  the rest keep the engine in your page, deterministic. news.html is the one thin page: it
+  demos the hosted architecture instead, and no offline claim attaches to it (§3.7). The
   row service and the turn API are the architecture a consumer hosts (bedrock-meter-style), and
   tmct's own deployment exists to demonstrate it working end to end. Every consumer-facing
   sentence in docs and site copy frames it that way.
@@ -418,9 +431,10 @@ layer needs no change.
 basePayload }`. `loadMemory` on it assembles `basePayload ⊕ rowsToPayload(await
 impl.readRows())` and caches; `persistMemory` diffs the mutated payload against the cache and
 issues `putRows`/`deleteRows` for the delta only, patching the cache in lockstep exactly as the
-sqlite path does. `basePayload` is a read-only overlay for seed graphs (the browser case, §3.7):
-seed rows are never written back, and the diff runs against base plus rows so only
-session-written deltas persist.
+sqlite path does. `basePayload` is a read-only overlay for seed graphs — the turn Lambda's and the
+news worker's bundled seeds (§3.18, §3.22) and a consumer's own overlay corpus (§3.11,
+bedrock-meter's ~1,400-fact case): seed rows are never written back, and the diff runs
+against base plus rows so only session-written deltas persist.
 
 ### 3.5 Statelessness and the latency budget, stated honestly
 
@@ -459,66 +473,66 @@ changes.
   assembled payload is a pure function of the row set (§3.2's sort). The conformance suite
   feeds one row set in two different orders and demands identical payloads.
 
-### 3.7 news.html: the deployed demo runs on the row service
+### 3.7 news.html: the deployed demo is a thin client
 
-The deployed news page IS the AWS architecture. The engine still runs in-page; what changes is
-where its session rows live:
+The deployed news page IS the AWS architecture, all the way down (operator directive, tenth
+revision): the page carries **no in-page graph**. No seed fetch, no engine bundle, no payload
+assembly, no in-page ingest — the engine lives in the Lambdas, the feed is materialized
+server-side (§3.22), and the page is render-and-controls over five service calls:
 
 ```
-news.html (engine in-page, seed graph as basePayload, never persisted)
-  └─ injected backend: createHttpRowBackend()  — the §3.1 contract over fetch,
-     same-origin /api/*; reads carry the page-minted session key in an
-     x-tmct-session header, mutations address /api/sessions/<uuid>/…
+news.html (render + controls only; no engine, no seed, no graph)
+  ├─ GET  /api/feed                       the materialized feed document (§3.22)
+  ├─ GET  /api/meta/feedVersion           the refresh loop's cheap poll
+  ├─ POST /api/sessions/<uuid>/poll|enrich|ingest   async triggers → news worker
+  ├─ POST /api/sessions/<uuid>/turn       the chat area (§3.12)
+  └─ DELETE /api/sessions/<uuid>/rows {all:true}    stop & forget
        └─ CloudFront behavior /api/* on the existing distribution
-            └─ row service Lambda (§3.8)
-                 └─ DynamoDB session table (pk = the validated session key)
+            └─ row service / turn service / news worker Lambdas
+                 └─ DynamoDB session table + corpus bands
 ```
 
-- **The page mints the session, at consent.** Before the visitor presses start, the page makes
-  zero API calls and runs in-memory over the seed — the same posture as today, where nothing is
-  fetched before that press. The start press mints a UUIDv4 in page JS, stores it in
-  localStorage, and constructs the HTTP backend with it; the server learns the key on the first
-  write and creates the session implicitly — there is no session endpoint. The e2e pins
-  pre-consent network silence through the page's own request log plus route interception.
-- **What lives locally is a pointer, never facts.** localStorage holds exactly two things: the
-  existing start-consent preference and the session UUID. The UUID is an address, not data — no
-  fact, row, or article text is ever stored on the device — and the page's copy says exactly
-  that. The key is never sourced from the URL or any cross-origin channel: localStorage or a
-  fresh mint, nothing else. (Outbound, the key does appear in the page's own mutating request
-  paths — §3.8 states the logging consequence and its mitigation.)
-- **Writes are synchronous.** A turn is not done until its rows are durable: `persistMemory`
-  awaits the PUT. The cost is one round trip per mutating turn — the diff batches a whole
-  poll's stored facts into one `putRows` call — roughly 20–60 ms from the UK to eu-west-2 and
-  100–300 ms from far geographies, paid once per poll cycle or teach, on a page whose polls
-  already spend seconds ingesting. Honesty over latency, chosen deliberately. (This describes
-  the page's own writes — teaches, and the M8→T13 intermediate state's in-page polls; from
-  T13 the poll/enrich cycles run server-side per §3.21 and the page's writes are teaches and
-  triggers.)
-- **Unreachable service: the visit runs without persistence, and says so.** The page boots
-  regardless — the seed is a static asset and the in-page payload assembly needs no store. If
-  the cold-open GET fails, or a write fails mid-visit, the page states through the existing
-  status affordances that persistence is unavailable; the visit continues on the in-page
-  payload alone, further writes are not attempted until the page reloads, and a reload retries
-  against the same stored key. No facts are ever stored locally — no IndexedDB, no fact rows in
-  localStorage — so an unpersisted visit's rows live exactly as long as the tab.
-- **The copy tells the truth, both halves of it.** The consent moment and the page's
-  persistence note say: facts taught or polled here are stored against an anonymous session on
-  our server, addressed by a random key kept in this browser, expiring after seven days;
-  "stop & forget" hides everything immediately — the rows are unreadable from the moment of
-  the press — and physical removal finishes inside the seven-day window. "Stop & forget"
-  wires its purge to `deleteAll()` (DELETE /api/sessions/:uuid/rows with `{all: true}`),
-  discards the stored UUID, keeps its existing in-page retraction behaviour, and the e2e
-  extends to assert the server reports zero readable rows afterwards (against the local
-  double) — the observable check, satisfied whether the storage removed or tombstoned them.
-  chat.html's local-mode promise is untouched (§3.19).
-- **Reload restores the session.** A returning visit re-opens against the stored key: one
-  GET /api/rows, and the feed rebuilds from real rows. Schema drift is guarded server-side:
-  the session stores the seed-content stamp as a meta value, and a mismatch expires the
-  session rather than assembling rows across versions.
+- **The page mints the session, at consent.** Unchanged: before the start press, zero API
+  calls; the press mints a UUIDv4 in page JS, keeps it in localStorage beside the consent
+  preference, and the first write creates the session implicitly. What lives locally is that
+  pointer, never facts, and the copy says so.
+- **The page's whole data surface is the feed document.** Cards, ranked terms, tiles, source
+  panel status, request log, cycle status — everything rendered comes from `GET /api/feed`
+  (§3.22's contents), refreshed when `feedVersion` moves. Sort and filter run client-side over
+  the document's own per-card sort keys; nothing recomputes.
+- **Teaches are asynchronous ingest.** The teach panel's textarea and file drop POST the text
+  or rows to the ingest trigger (§3.8); the worker runs the same `ingestText`/
+  `ingestUploadedFactRows` the page ran in-page before, under the session's rows, and
+  re-materializes. The teach status line reads the cycle marker, exactly as poll progress does.
+- **The chat area is the turn endpoint's first page consumer** (§3.12): a chat section below
+  the teach panel, same session UUID, replies synchronous, taught facts landing as session
+  rows and reaching the feed at the next materialization (§3.22 states the flow and its
+  staleness).
+- **Unreachable service: the page is honestly idle.** It boots — the shell is static — and
+  states feed-and-chat-unavailable; controls disable; nothing is computable locally; a reload
+  retries against the stored key. The previous design (an in-page engine over the static seed,
+  running unpersisted when the service failed) is **considered and replaced**: the operator
+  chose the thin client over per-visit offline capability for this page — the offline claim
+  lives on the pages whose engines are in-page, and news.html demos the hosted architecture
+  instead. With no engine and no seed on the page, there is nothing for a degraded mode to
+  compute with, and pretending otherwise would be a simulation.
+- **The copy tells the truth, both halves of it.** As before: anonymous session, random key
+  kept in this browser, seven-day expiry; stop & forget hides everything immediately (rows AND
+  the materialized feed document, §3.22) and physical removal finishes inside the window.
+  "Stop & forget" wires to `deleteAll()` and discards the stored UUID; the e2e asserts the
+  double reports zero readable rows and no feed document afterwards.
+- **Reload restores the session.** One `GET /api/feed` against the stored key and the page
+  renders where it left off; the seed-stamp guard moves server-side with the engine (the
+  worker stamps the seed version into session meta and expires a mismatched session rather
+  than mixing rows across versions).
+- **What the page sheds, measured honestly.** The ~7 MB gzipped seed fetch and the multi-MB
+  engine bundle both leave this page; the thin bundle is the renderer, the controls, the API
+  client, and the version-poll loop. T13 re-measures the page in `reports/PAGE_WEIGHTS.md`
+  and publishes the before/after.
 
-The point of this consumer is unchanged from the first draft, sharpened: it proves the contract
-end to end over HTTP against the real service code and the real shipped DynamoDB backend, and it
-makes the public demo the architecture rather than a simulation of it.
+The point of this consumer, sharpened again: it proves the whole hosted architecture — row
+store, worker, materialization, turn endpoint — end to end on a public page, exactly the stack
+a consumer would host, with the browser reduced to what a consumer's own thin client would be.
 
 ### 3.8 The row service
 
@@ -540,6 +554,9 @@ path, and the first write under a fresh key creates the session implicitly.
 | GET /api/corpus/:band/rows?term=X&fuzzy=0\|1 | `queryBandTerm` (§3.14) | 200 `{rows:[…]}` | lands with T6. Read-only, no session key, band name validated against the configured band list (404 otherwise); one sort-key prefix Query per requested term, `fuzzy=1` adding the term's deterministic variants (§3.15.2); page-capped; the public corpus read (and the smoke probe's target) |
 | POST /api/sessions/:uuid/poll | — (async trigger, §3.21) | 202 `{cycleId}` | lands with T12. Validates, stamps the cycle marker in session meta, async-invokes the news worker, returns immediately; 409 while a cycle is already running for the session; 429 over the cycle rate; body may carry `{sources:[…]}` to narrow the roster |
 | POST /api/sessions/:uuid/enrich | — (async trigger, §3.21) | 202 `{cycleId}` | lands with T12. Same shape; body may carry `{fuzzy: 0\|1}` — §3.15.2's per-request rung riding the trigger, read by the worker's corpus source |
+| POST /api/sessions/:uuid/ingest | — (async trigger, §3.21) | 202 `{cycleId}` | lands with T12. The teach panel's server-side path: body `{text}` (pasted prose) or `{rows:[…]}` (the upload shapes `ingestUploadedFactRows` already validates), ≤ 256 KB; validates and stamps like poll/enrich, worker mode `ingest` runs the same `ingestText`/`ingestUploadedFactRows` the page ran in-page before, then re-materializes; counted in the cycle rate and the mutation rate |
+| GET /api/feed | — (materialized read, §3.22) | 200 `{feed}` / 404 | lands with T12. Key in `x-tmct-session`; returns the session's materialized feed document whole — one item read, no assembly; 404 before the first materialization (the page renders its empty state); a purged session 404s (the document is soft-deleted with the rows) |
+| GET /api/meta/feedVersion | readMeta | 200 `{value}` / 404 | the page's refresh poll (§3.22) — one eventually-consistent point read; 404 reads as version 0 |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
 (`GET /api/rows?class=fact&term=X` → a sort-key prefix query) because the sk layout (§3.3) makes
@@ -657,7 +674,9 @@ every attack below is bounded to the attacker's own sessions and the account's b
 | corpus read flooding (the one sessionless route) | the corpus read (§3.8) serves public reference data, so the exposure is cost, not confidentiality: the same per-IP WAF rule covers `/api/*` whole, the route is one page-capped Query per term (fuzzy adds a capped variant count, §3.15.2), reserved concurrency queues the rest, and the read is `ConsistentRead: false` — eventually consistent is fine for a never-mutated band and halves the read cost |
 | cycle-trigger flooding (a poll trigger buys a whole worker run) | one running cycle per session (409), the per-session cycle rate (default 12/hour), triggers counted in the mutation rate, the same per-IP WAF rule, and the worker's own reserved concurrency (default 5) as the compute ceiling — a flood of triggers queues and 409s, it cannot fan out workers (§3.21) |
 | worker egress abuse (the one Lambda with outbound HTTP) | the allow-list is the source roster and KB hosts, compiled into the worker — no caller-supplied URL is ever fetched except through `/news add`'s existing preflight, which keeps its https-only and validation rules; the shared per-source courtesy throttle in `_meta` bounds the aggregate rate at the sources regardless of worker count, and the per-source breakers stop a failing source being hammered (§3.21) |
-| version-poll flooding (the page's refresh loop) | `GET /api/meta/graphVersion` is one eventually-consistent point read (~$0.125/million); the page's own backoff stretches the interval while idle, and the WAF rule bounds a hostile poller like any other `/api/*` caller |
+| version-poll flooding (the page's refresh loop) | `GET /api/meta/feedVersion` is one eventually-consistent point read (~$0.125/million); the page's own backoff stretches the interval while idle, and the WAF rule bounds a hostile poller like any other `/api/*` caller |
+| feed-read flooding | `GET /api/feed` is one item read of a ≤ 350 KB document (§3.22) — pennies per million at on-demand rates; the page only refetches on a version change, and the WAF rule bounds everyone else |
+| ingest-trigger flooding (pasted prose buys worker extraction compute) | the 256 KB body cap, the shared per-session cycle rate (an ingest is a cycle), the mutation-rate counter, one running cycle per session (409), and the worker's reserved concurrency — the same box the poll trigger lives in; a flood queues and 409s, it cannot fan out workers |
 
 ### 3.10 The DynamoDB backend ships in the library
 
@@ -809,6 +828,16 @@ band provenance.
 the same per-IP WAF rule at the edge (§3.9), and the turn Lambda's own reserved concurrency
 (deployment parameter, default 5) separate from the row service's 10. Lambda timeout 10 s; the
 retrieval wall budget (§3.15.1) keeps the turn's storage phase far inside it.
+
+**Its first page consumer: the news chat** (tenth revision). news.html gains a chat area —
+§3.7's page has no in-page engine, so its chat is this endpoint: same session UUID as the feed,
+the reply synchronous (`200 {reply, factsTouched, narration}`), and the turn's learned rows
+landing in the same partition the feed materializes from. When a turn's `factsTouched` is
+non-empty, the handler async-invokes the news worker in materialize mode before responding
+(§3.22) — the reply is immediate, the feed catches up seconds later, and the chat rendering
+says nothing about the feed (the feed's own refresh loop shows the change when it lands). The
+turn-rate limits above apply to the page's chat exactly as to any consumer; chat.html and
+ledger.html still never call this endpoint — their engines are in-page (§3.19).
 
 **What the turn surface inherits without change.** The session model, key validation, implicit
 creation, path-scoped mutation, caps, soft deletes, TTL, global cap and counter, error
@@ -983,8 +1012,9 @@ The mode resolves the same way every tmct option does, most specific first:
 3. **config** — `tmct.toml`'s `[retrieval] fuzzy = true|false`;
 4. **default** — on.
 
-**Where news.html meets it.** The page never calls the turn endpoint (§30); its corpus
-contact is the enrichment path, which runs server-side once §3.21's worker lands. The
+**Where news.html meets it.** The page's corpus contact is the enrichment path, which runs
+server-side in §3.21's worker (the page's chat also reaches the corpus through the turn
+endpoint's own retrieval, §3.12 — that path follows the turn body's `retrieval.fuzzy` rung). The
 `dynamo-corpus` KB source joins the enrichment roster (registered through the same source
 registry the other KB sources use) — in the worker it queries the band partitions directly
 (`queryBandTerm`, no HTTP hop); in the M8→T13 intermediate state, and for the local double,
@@ -1142,8 +1172,9 @@ Decisions folded in:
   not amended; in local mode the server wording is absent. The e2e pins both directions.
 - **news.html has no slider.** Its mode is the architecture (§3.7); the page states the
   server-side promise always.
-- **The engine stays in-page in both modes.** Neither mode calls the turn endpoint; the pages
-  never become thin clients (§30).
+- **The engine stays in-page in both modes, on these pages.** chat.html and ledger.html never
+  call the turn endpoint in either mode. news.html is the deliberate exception: a thin client
+  with no in-page engine (§3.7), whose chat is the turn endpoint (§3.12).
 
 ### 3.20 The demo grid: renamed, nine buttons
 
@@ -1207,15 +1238,15 @@ throttle and the per-source breaker state live in `_meta` items (sk `breaker#sou
 `throttle#<id>`), so ALL worker invocations share one throttle per source instead of each
 Lambda pacing independently — the 2 s courtesy gate, made global.
 
-**The page's refresh loop.** Every mutating service write (worker or page) bumps a monotonic
-`graphVersion` meta value (an atomic `ADD` beside the write). The page polls
-`GET /api/meta/graphVersion` — one cheap read on the existing meta route, ~2 s interval with
-backoff toward ~10 s while nothing changes — and refetches `GET /api/rows` only when the
-version moves, rebuilding the feed client-side from the fresh rows (assembly and rendering
-stay in-page; the engine is unchanged). The cycle marker (`GET /api/meta/cycle`) drives the
-same phase UI the page shows today — per-source chips, "polling…", the request-log lines —
-now reporting the worker's progress. No push infrastructure; polling a version counter is the
-whole mechanism.
+**The page's refresh loop.** Every mutating service write still bumps the monotonic
+`graphVersion` meta value (an atomic `ADD` beside the write — the row-level signal any
+consumer can watch), and every completed materialization bumps `feedVersion` (§3.22). The
+page polls `GET /api/meta/feedVersion` — one cheap point read, ~2 s interval with backoff
+toward ~10 s while nothing changes — and refetches `GET /api/feed` only when the version
+moves; it renders the document, computes nothing (§3.7). The cycle marker
+(`GET /api/meta/cycle`) drives the same phase UI the page shows today — per-source chips,
+"polling…", the request-log lines — reporting the worker's progress. No push infrastructure;
+polling a version counter is the whole mechanism.
 
 **Caps.** One running cycle per session (the 409); N cycles per session per hour (deployment
 parameter, default 12 — a poll is worth many row writes); the worker's own reserved
@@ -1223,11 +1254,73 @@ concurrency (deployment parameter, default 5) separate from the row service's an
 service's; the worker Lambda timeout sized to a full roster poll with the abort budget inside
 it. Trigger requests count toward the session's mutation rate.
 
-**Sequencing, honestly.** M8 lands the row-backend wiring with the page still ingesting
-in-page — a working intermediate state where a poll's facts arrive as one PUT from the
-browser. T13 then moves the cycle server-side: the press becomes a trigger, the in-page
-ingest path stays as the local-double test path and the engine's own code, and the deployed
-page's polls run in the worker from that phase on.
+**Sequencing, honestly.** The tenth revision removed the intermediate in-page state: there
+is no point building backend-swap wiring for an engine the page is about to lose. The thin
+page (M8) depends on the worker, the materializer, and the turn handler existing first —
+§28's table carries the reordered dependencies — and until M8 lands, the deployed page keeps
+running exactly as it does today. The in-page ingest path survives in the library (it IS the
+engine's code, and the worker runs it); only the page stops hosting it.
+
+### 3.22 The materialized feed
+
+The worker owns the feed. After every cycle (poll, enrich, ingest) and after every learning
+turn (§3.12), the news worker runs the real feed pipeline server-side — `buildFeed` with the
+newsworthiness gate, `rankedTerms` over the ledger, the tile stats, the per-card fact
+expansions rendered through the same `factRows` read the page's drill-down used — and writes
+one **feed document** into session meta (key `feed`), then bumps `feedVersion`.
+
+**The document's contents** — everything the page renders, so the page computes nothing:
+
+- `items[]`: per card — `hub`, `paragraph`, `tier`, `newName`, `sources` (title + url),
+  `backgroundParagraph`, `factLines[]` (the drill-down, pre-rendered through the shared
+  phrase layer, trimmed per the size rule below), `factCount`, and the client-side sort keys
+  the pills need (`observedMs`, `factCount`, `changedCount`);
+- `rankedTerms` (the panel's rows), `stats` (`graphSize`, `factsFromNews` — the tiles),
+  `sourceStatus` (the per-source roster lines), `requestLog` (the worker's fetch log),
+  `builtAt`, and the cycle summary.
+
+**Size, stated against the plan's own rules.** The 4 KB cap is for fact rows; the feed
+document is one meta item and DynamoDB's hard ceiling is 400 KB. The arithmetic at the
+shipped `itemCap` (30 cards): paragraph + background + sources + keys ≈ 1.2 KB per card, and
+the drill-downs dominate — up to ~60 facts per card at ~150 B a line would be ~9 KB per card,
+~300 KB per feed, uncomfortably near the ceiling. The rule: **`factLines` trims to the first
+24 lines per card** (deterministic order, the document carries `factCount` so the card says
+"…and N more"), giving ≈ 4.8 KB per card and ≈ 150–200 KB per document worst case; the
+serializer enforces a hard 350 KB bound and, if a pathological feed still exceeds it, drops
+whole cards' `factLines` from the feed's tail upward (deterministic, `trimmed: true` on the
+document) until it fits. Chunking across items was considered and rejected: a single item
+keeps the read atomic (one GET, no torn feed between chunks) and the trim rule keeps the
+single item honest. The trimmed drill-down is a display bound, not a data bound — the rows
+themselves are all in the store.
+
+**When materialization runs, and the staleness it costs.** At cycle end, always (poll,
+enrich, ingest). After a learning turn, the turn handler async-invokes the worker in
+**materialize mode** — no fetching, no extraction: load rows, build the document, write,
+bump — so a taught fact reaches the feed seconds after its turn replied (invoke + load +
+build + write; low single-digit seconds at session scale). The alternative — waiting for the
+next poll cycle — was rejected: a taught fact that never surfaces until an unrelated poll is
+a broken promise, and the cost of the chosen shape is one cheap worker invocation per
+feed-changing write, bounded by the turn and mutation rates. Between the write's
+acknowledgement and the materialization's completion the feed shows the previous state; that
+window is the design's whole staleness, it is seconds long, and the version poll closes it
+without user action.
+
+**The worker's seed posture** (it owns the engine now, so this is explicit): the news worker
+bundles the **full xl seed**, not §3.18's mid set. Two reasons, both correctness rather than
+taste: grounding parity — the page's ingest has always grounded against the full 61k
+vocabulary, and a mid-band worker would ground less and enrich more, silently changing the
+page's behaviour; and the newsworthiness gate — `priorTerms`/`isNovelTerm` and
+`isVocabGroundedTerm` read the assembled store's vocabulary, so a worker missing WordNet and
+ConceptNet would read half the dictionary as "novel" and wave junk hubs through the
+entity-anchored gate. The worker is asynchronous behind a 202, so its cold start hides where
+the turn Lambda's could not — the xl parse costs seconds on a path that already takes
+seconds. The turn Lambda keeps the mid set (§3.18 unchanged): its lexicon-driven teach
+grounding does not depend on the seed bands, and the feed's novelty judgements always run in
+the worker with the full universe.
+
+**Purge.** `deleteAll()` soft-deletes the feed document and both version counters with the
+rows; `GET /api/feed` 404s from the moment of the press, and the page clears to its empty
+state immediately.
 
 ---
 
@@ -1491,40 +1584,41 @@ Acceptance: `npx tsc --noEmit` in `infra/`; `npm run build:row-service` emits a 
 `node --test test/server/row-service.test.mjs` still green; the smoke probe runs against
 `local.mjs` in a dry-run mode so the script itself is tested without AWS.
 
-## 13. Phase M8 — news.html consumes it
+## 13. Phase M8 — news.html goes thin
 
-**Owns** `src/surfaces/web/news-browser-entry.mjs` (construction: `createHttpRowBackend` with
-the seed as `basePayload`; the UUID minted in-page at consent and kept in localStorage; the
-persistence-unavailable fall-through of §3.7; `revokeConsent` calling `deleteAll()` and
-discarding the stored key), `src/services/news-viz.mjs` (the honest persistence copy at the
-consent moment and beside stop & forget — including the session-pointer-in-this-browser line;
-the persistence-unavailable status line), `test/adapters/news-browser-entry.test.mjs`,
-`test-e2e/pages-news-feed.test.mjs`. **Sonnet**, after M1 and M6.
+**Owns** `src/surfaces/web/news-browser-entry.mjs` (the thin rewrite: the session mint at
+consent; the API client for feed/version/triggers/purge; the render path fed by the feed
+document instead of the in-page store; the teach panel posting the ingest trigger; the
+feed-and-chat-unavailable state; `revokeConsent` calling `deleteAll()` and discarding the
+key), `src/services/news-viz.mjs` (rendering from the document — cards from `factLines` +
+`factCount`, pills over the document's sort keys, tiles from `stats`, the phase UI from the
+cycle marker; the honest copy per §3.7), `scripts/build-news-bundle.mjs` (the thin bundle:
+renderer + controls + client; the engine chunks and the seed loading leave this page),
+`test/adapters/news-browser-entry.test.mjs`, `test-e2e/pages-news-feed.test.mjs`. **Sonnet**,
+after M5, T12, and T3 (the chat area itself is T14, but the page shell it mounts in lands
+here).
 
 Implementation notes (from the code survey): `createNewsSession`
-(news-browser-entry.mjs:133) builds `memoryDir = createInMemoryStore();
-applySeedPayload(memoryDir, seedPayload)` — the AWS-mode swap replaces exactly those two
-lines with the wrapped row backend carrying `seedPayload` as `basePayload`, and everything
-downstream threads the same `memoryDir` token untouched. Preserve the session's `store`
-wrapper verbatim: its `foldedRows` cache with `foldedRows = null` invalidation on every
-`appendFacts`/`removeFacts` is the page's fold-once-per-write-epoch performance contract.
-`revokeConsent` is at :498 — it already raises the `forgotten` flag and resets state; it
-gains the `deleteAll()` call and the key discard. The consent preference rides `prefStore`
-(`localStoragePrefStore()` under `NEWS_START_PREF_KEY`) — the session UUID joins it as a
-second key, same store, never a third mechanism.
+(news-browser-entry.mjs:133) and its `store` wrapper with the `foldedRows` cache exist to
+serve the in-page engine — the thin page does not construct them; what survives of the entry
+module is consent, the pref store (`localStoragePrefStore` under `NEWS_START_PREF_KEY`, the
+UUID joining it), the API client, and the render wiring. The teach panel
+(`news-viz.mjs:254`, `#teachPanel` — textarea, file drop, `teachIngest`) keeps its exact UI;
+its ingest handler becomes the trigger POST and its status line reads the cycle marker. The
+seed-copy-into-snapshot mechanics the news e2e carries exist because the PAGE loaded the
+seed; this page stops needing them (they stay for the other pages' specs — do not touch the
+helper).
 
-The e2e mounts `local.mjs` on the same static server the snapshot is served from, under
-`/api/` — same-origin, fixture-true, never AWS. Pins: zero `/api/` requests before the start
-press; the start press writes exactly one new localStorage key, a valid UUIDv4, and every
-`/api/` request carries it — reads in `x-tmct-session`, mutations in the
-`/api/sessions/<uuid>/…` path; a poll's stored facts arrive as one PUT; a
-reload rebuilds the feed from the double's rows under the same key; stop & forget leaves the
-double reporting zero readable rows — marked and excluded is enough, physically gone is not
-asserted — and the stored key discarded; killing the double mid-visit flips
-the page to the persistence-unavailable status line, the visit continues, and localStorage
-holds nothing beyond the consent preference and the session pointer — no fact text, ever. The
-news e2e's hard-won waits (sleep-then-evaluate loops, `waitUntil: "load"`, the seed copy into
-the snapshot) all stay as they are.
+The e2e mounts M5's `local.mjs` double WITH T12's in-process worker (the double must
+materialize, or the page has nothing to render). Pins: zero `/api/` requests before consent;
+the press mints the UUID; **no request for the seed asset and no engine chunk load, ever** —
+the thin claim, asserted by the page's own request log; press poll → 202 → the feed document
+appears → cards render with zero in-page ingest; the version poll backs off while idle;
+teach-panel text → ingest trigger → re-materialized feed shows the taught fact; stop &
+forget → feed 404 + zero readable rows + key discarded; kill the double → the
+feed-and-chat-unavailable state, controls disabled, localStorage still holding nothing
+beyond the preference and the pointer. The waits stay sleep-then-evaluate with
+`waitUntil: "load"`.
 
 Acceptance: `node --test test/adapters/news-browser-entry.test.mjs`;
 `node --disable-warning=ExperimentalWarning --test test-e2e/pages-news-feed.test.mjs`;
@@ -1755,7 +1849,17 @@ in-process), the shared-throttle/breaker `_meta` items through T2's module,
 double: 202-then-rows-appear, per-source progress in the marker, the 409 while running, a
 stale marker replaced, the abort budget stopping between articles with `state` done-partial,
 `graphVersion` monotonic across the cycle's writes, the shared throttle read by two
-concurrent "invocations"). **Sonnet**, after M5 and T0; parallel with T3.
+concurrent "invocations"). **Plus the materializer (§3.22), tenth revision:** the worker's
+cycle-end materialization and its standalone materialize mode (the turn handler's invoke
+target and the ingest trigger's finish), the feed-document serializer with the 24-line
+`factLines` trim and the 350 KB hard bound, `feedVersion`, the ingest trigger route, and the
+worker bundling the full xl seed (§3.22's grounding-parity and gate-correctness reasoning —
+its tests pin that a WordNet-only term does NOT read as novel in the worker). Test additions:
+a cycle ends with a document whose cards match the store's rows; materialize mode rebuilds
+without fetching (fetchers asserted uncalled); the trim rule at a fabricated 60-fact card
+(24 lines + the count); the 350 KB bound's deterministic card-tail trim with `trimmed: true`;
+ingest trigger end to end (text in → rows → document reflects); purge soft-deletes the
+document (feed 404). **Sonnet**, after M5 and T0; parallel with T3.
 
 Implementation notes: the ctx the worker builds is `createNewsSession`'s own shape
 (news-browser-entry.mjs:213 — `{memoryDir, store, cache, lexicon, config, state, providers,
@@ -1767,25 +1871,40 @@ double's fetchers.
 
 Acceptance: the test file; `npm run test:fast`.
 
-## 27b. Phase T13 — the page on the server-side cycle
+## 27b. Phase T13 — the refresh loop, the cycle UI, and the page weights
 
-**Owns** `src/surfaces/web/news-browser-entry.mjs` (the poll/enrich presses become trigger
-POSTs in AWS mode; the `graphVersion` polling loop with backoff; rows refetched on version
-change and the feed rebuilt; the cycle marker driving the existing phase UI; stop cancels by
-writing the marker's stop request — the worker's `shouldAbort` reads it between sources),
-`src/services/news-viz.mjs` (the phase UI reading worker progress; the fuzzy toggle riding
-the enrich trigger per §3.15.2), `test-e2e/pages-news-feed.test.mjs` (the AWS-mode cycle
-against the M5 double + T12's in-process worker: press poll → 202 → rows appear without a
-page-side ingest, the version poll backing off while idle, stop honoured between sources,
-the fuzzy toggle's flag observed by the double). **Sonnet**, after M8 and T12.
-
-Between M8 and this phase the deployed page ingests in-page (§3.21's sequencing note) — a
-working state, not a broken one; this phase is the flip.
+**Owns** `src/surfaces/web/news-browser-entry.mjs` (the `feedVersion` polling loop with
+backoff; refetch-on-change; stop writing the marker's stop request — the worker's
+`shouldAbort` reads it between sources), `src/services/news-viz.mjs` (the cycle marker
+driving the phase UI; the fuzzy toggle riding the enrich trigger per §3.15.2),
+`reports/PAGE_WEIGHTS.md` (re-measured: the thin page's before/after — the shed seed fetch
+and engine bundle, published), `test-e2e/pages-news-feed.test.mjs` (the loop pins: version
+poll backs off while idle; a worker cycle's document lands without any page-side ingest;
+stop honoured between sources; the fuzzy flag observed by the double). **Sonnet**, after M8
+and T12; parallel with T9.
 
 Acceptance: the e2e file; `node --test test/adapters/news-browser-entry.test.mjs`;
 `npm run test:fast`.
 
----
+## 27c. Phase T14 — the news chat area
+
+**Owns** `src/services/news-viz.mjs` (the chat section below `#teachPanel`: transcript,
+input row, send; each turn rendering the reply as text nodes, citations through the shared
+`./phrase` layer from `factsTouched`, and a collapsible narration block presented the way
+chat.html presents its trace; disabled state joining the feed-unavailable posture),
+`src/surfaces/web/news-browser-entry.mjs` (the turn POST against the session UUID; a
+non-empty `factsTouched` sets the local expectation that the feed will move — no page-side
+computation, the version poll does the rest; 429 rendered as the rate message,
+`BackendUnavailable` as the chat-unavailable state), `test-e2e/pages-news-feed.test.mjs`
+(the chat pins against the double + in-process worker: a teach turn returns its reply with
+citations; the taught row lands in the double; the next materialization's document carries
+it and the rendered feed shows it — the full §3.12 flow; a turn while the double is down
+renders the unavailable state, nothing lost silently). **Sonnet**, after M8 and T3.
+
+The turn-rate limits (§3.12) apply as to any consumer; the chat adds no new abuse surface
+beyond the turn rows already in §3.9.
+
+Acceptance: the e2e file; `npm run test:fast`.
 
 ## 28. Concurrency and model tiers
 
@@ -1808,7 +1927,7 @@ pause there; the cut is a version number their side can depend on, not a review 
 | M5 service handler + double | server/row-service/ | Sonnet | M2, M4 | M6 prep |
 | M6 HTTP client | http-row-backend.mjs | Sonnet | M5 | M7 |
 | M7 infra + deploy | infra/, CI | Sonnet | M5 | M6 |
-| M8 news.html wiring | news-browser-entry.mjs, news e2e | Sonnet | M1, M6 | M9 prep |
+| M8 news.html goes thin | news-browser-entry.mjs, news-viz.mjs, build-news-bundle.mjs, news e2e | Sonnet | M5, T3, T12 | M9 prep |
 | M9 docs (backend) | contract doc, README | Haiku | M6, M7 | — |
 | M10 handoff (backend) | bedrock-meter inbox | Haiku | all M | — |
 | T0 bands + loader + pipelines | corpus-bands.mjs, corpus-loader.mjs, cli-verbs.mjs, scripts/corpus-bands/ | Sonnet | M4 | T1, T2 |
@@ -1823,13 +1942,16 @@ pause there; the cut is a version number their side can depend on, not a review 
 | T9 demo grid | index.html, site.css, share.mjs, page specs | Sonnet | T8 | — |
 | T10 docs (surface) | contract doc, README, site copy | Haiku | T5, T9 | — |
 | T11 handoff (surface) | bedrock-meter inbox | Haiku | all | — |
-| T12 news worker + triggers | server/news-worker/, row-service handler | Sonnet | M5, T0 | T3 |
-| T13 page on the server cycle | news-browser-entry.mjs, news-viz.mjs, news e2e | Sonnet | M8, T12 | T9 |
+| T12 news worker + triggers + materializer | server/news-worker/, row-service handler | Sonnet | M5, T0 | T3 |
+| T13 refresh loop + cycle UI + page weights | news-browser-entry.mjs, news-viz.mjs, PAGE_WEIGHTS.md, news e2e | Sonnet | M8, T12 | T9 |
+| T14 news chat area | news-viz.mjs, news-browser-entry.mjs, news e2e | Sonnet | M8, T3 | T9 |
 
 `core.mjs` serializes M0-knowledge → M1 → M3. `chat.mjs` serializes T4 → T7 and either
 against anything else touching it. `news-browser-entry.mjs`/`news-viz.mjs` serialize
-M8 → T13 (and T8's corpus toggle lands between them or with T13 — same files, one owner at a
-time). `package.json` is touched in M2 and M4 only. T6's CI load job is demo-blocking on all
+M8 → T13 → T14 in that order (T8's news-side fuzzy toggle lands with T13 — same files, one
+owner at a time). M8's dependency on T12 and T3 pulls the news-page work to the campaign's
+back half; the deployed page runs exactly as today until M8's push, then flips thin in one
+release. `package.json` is touched in M2 and M4 only. T6's CI load job is demo-blocking on all
 three T0 pipelines (§3.18 moved WordNet and ConceptNet out of the bundle, so their bands are
 base competence, not extras). The full suite runs at the coordinator's push moments; each
 phase's acceptance list is its blast radius.
@@ -1925,6 +2047,23 @@ ships with it and says so, not that it hides.
     that a thin answer came from the degraded mode and not from the engine — and T4's pins
     cover the marker in breaker-open mode explicitly.
 
+17. **The feed's staleness window is the design.** Between a write's acknowledgement and the
+    materializer's finish, `GET /api/feed` serves the previous document — seconds, closed by
+    the version poll without user action (§3.22). Accepted: the alternative (the page
+    computing anything) is the in-page graph this revision removed. The chat states nothing
+    about the feed for exactly this reason.
+18. **The feed document has a ceiling and a trim.** One meta item, 400 KB hard, 350 KB
+    enforced, `factLines` trimmed at 24 per card and whole-card-tail trimmed beyond that,
+    `trimmed: true` when it happens (§3.22). The drill-down bound is display-only — the rows
+    are all in the store — but a reader of a trimmed card sees 24 lines and a count, and the
+    document says so rather than pretending completeness.
+19. **news.html has no offline anything, and the worker is heavy on purpose.** The dead
+    degraded mode is a decision, recorded in §3.7 — an unreachable service leaves the page
+    honestly idle. And the worker bundles the full xl seed where the turn Lambda bundles the
+    mid set (§3.22): grounding parity and the novelty gate's prior-term universe are
+    correctness, and the 202 hides the cold start. Anyone "optimizing" the worker onto the
+    mid set re-opens the junk-hub hole the newsworthiness plan closed.
+
 And the two build risks carried from the first draft: **the M3 sqlite refactor** rewrites
 Backend C's persistence internals under a byte-identical-storage pin — the before/after dump
 comparison is the guard, and a differing dump stops the phase; **the browser seed overlay**
@@ -1955,6 +2094,8 @@ its standing pointer:
   the wikipedia-derived band is not — extracting article facts at scale is its own design
   problem, deferred to `PLAN_WIKIPEDIA_BAND.md` (a stub-scoped design reference T10 authors).
   The partition name is reserved (§3.13) and nothing else here builds toward it.
-- **The browser pages as thin clients.** Every page keeps its in-page engine in every mode —
-  that is the product claim. No page calls the turn endpoint; the turn surface exists for
-  consumers hosting tmct, and tmct's own deployment demos it.
+- **chat.html and ledger.html as thin clients.** Those pages keep their in-page engines in
+  every mode — that is the product claim, and they never call the turn endpoint. news.html is
+  the one thin page, by the operator's tenth-revision directive (§3.7); extending that shape
+  to any other page is out of scope here and would be its own decision against the same
+  product claim.
