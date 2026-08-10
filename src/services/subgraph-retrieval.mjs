@@ -16,7 +16,10 @@ import {
   buildRetrievalPlan, expandedTerms, ancestryTerms,
 } from "../domain/retrieval-plan.mjs";
 import { loadLexicon } from "../domain/grammar/lexicon.mjs";
-import { BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
+import { isSystemicFailure } from "../adapters/memory/systemic-failure.mjs";
+import { SUPPLEMENTED_MODE, SEED_SESSION_MODE } from "../domain/retrieval-modes.mjs";
+
+export { isSystemicFailure, SUPPLEMENTED_MODE, SEED_SESSION_MODE };
 
 /** The retrieval budgets, set from what scripts/corpus-bands/calibrate-retrieval.mjs
  *  measured over the committed WordNet and ConceptNet corpora. Changing one is
@@ -63,38 +66,6 @@ export const RETRIEVAL_BUDGETS = Object.freeze({
   queryRetries: 2,
   backoffBaseMs: 25,
 });
-
-/** Retrieval ran and the answer stands on the corpus supplement as well as the
- *  seed and the session. */
-export const SUPPLEMENTED_MODE = "supplemented";
-
-/** No corpus read happened, because no bands are configured or the breaker is
- *  open. The
- *  answer stands on the bundled seed and the session alone. */
-export const SEED_SESSION_MODE = "seed-session";
-
-const THROTTLE_ERROR_NAMES = new Set([
-  "ProvisionedThroughputExceededException",
-  "RequestLimitExceeded",
-  "ThrottlingException",
-  "TooManyRequestsException",
-  "InternalServerError",
-  "ServiceUnavailable",
-  "TimeoutError",
-  "AbortError",
-]);
-
-/** Does this failure mean the store itself is in trouble? Only these count
- *  toward a breaker: throttles, 5xx and timeouts. An empty result is an answer,
- *  and a rejected input is a bug in the caller, so neither is systemic. */
-export function isSystemicFailure(error) {
-  if (!error) return false;
-  if (error.code === BACKEND_UNAVAILABLE_CODE) return true;
-  if (error.retryable === true || error.$retryable?.throttling === true) return true;
-  if (THROTTLE_ERROR_NAMES.has(error.name)) return true;
-  const status = error.status ?? error.$metadata?.httpStatusCode;
-  return status === 429 || (typeof status === "number" && status >= 500);
-}
 
 /** Is fuzzy variant expansion on for this turn? Most specific setting wins:
  *  the request, then the environment, then the config file, then the default,
