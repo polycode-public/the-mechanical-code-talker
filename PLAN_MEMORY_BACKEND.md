@@ -1749,6 +1749,14 @@ Acceptance: the two test files; the harness run recorded in the build marker;
 
 ## 18. Phase T2 — the corpus breaker
 
+**BUILT** (2026-08-10, merged): `createDynamoRowBackend`-adjacent
+`dynamo-circuit-breaker.mjs` with `decide()/report()/readState()`, state in the reserved
+`_meta`/`breaker#corpus` item, transitions by conditional write (concurrent racers pinned in
+tests), 11 tests. The mode constants moved to `src/domain/retrieval-modes.mjs` and the
+failure classifier to `src/adapters/memory/systemic-failure.mjs` so the breaker never
+imports upward from adapters into services; `subgraph-retrieval.mjs` re-exports both under
+its original names.
+
 **Owns** `src/adapters/memory/dynamo-circuit-breaker.mjs` (new; over an injected document
 client, the `_meta` item, §3.16's machine), `test/adapters/dynamo-circuit-breaker.test.mjs`
 (new; the full state machine over the fake client, the conditional-write races — two

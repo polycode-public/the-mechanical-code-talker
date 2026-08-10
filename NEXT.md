@@ -36,11 +36,11 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
 
 - In flight: the combined miss-lead round on chat.mjs (Opus), E2 news-gate consumption
   (Sonnet, owns news-feed.mjs), T0 corpus bands + loader (Sonnet; told to reuse T1's band
-  query helper), T2 corpus breaker (Sonnet; told to classify failures with T1's
-  isSystemicFailure), M3 sqlite conformance (Opus, owns core.mjs under the byte-identity
+  query helper), M3 sqlite conformance (Opus, owns core.mjs under the byte-identity
   pin), M6 HTTP client backend (Sonnet), M7 infra + deploy (Sonnet, owns infra/,
-  .gitlab-ci.yml, post-deploy-smoke). Landed: M0, M1, M2, M4, M5, T1, E0, E1, the
-  screenshot capture (item closed below). Version rolled to 6.0.0 (operator: major).
+  .gitlab-ci.yml, post-deploy-smoke). Landed: M0, M1, M2, M4, M5, T1, T2 (breaker;
+  mode constants now in domain/retrieval-modes.mjs), E0, E1, the screenshot capture
+  (item closed below). Version rolled to 6.0.0 (operator: major).
 - Queued: T4 after chat.mjs hand-back → T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
   T9/M10/T10/T11. The M0–M4+M9 push is the npm cut bedrock-meter pins (M9 dispatches
   when M3 lands).
