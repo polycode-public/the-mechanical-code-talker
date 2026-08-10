@@ -1701,6 +1701,22 @@ the pipeline test files over the miniature fixtures;
 
 ## 17. Phase T1 — the retrieval module, calibrated before consumed
 
+**BUILT** (2026-08-10, merged): `retrieval-plan.mjs` (pure domain), `subgraph-retrieval.mjs`
+(`retrieveSubgraph` with injected `queryTerm`, clock and sleep), and the calibration harness,
+55 tests. Budgets frozen from measurement over 54,174 real-shaped band rows: hopDepth 2,
+rowsPerQueryPage 200 (heaviest measured term returned 92), totalRows 1,000 (folding 5,000
+cost 61 ms and 5.3 MB — a third of the bundled seed for one question), totalQueries 64
+(a wide turn spends 20–30 on its own terms; 8 rounds of 8 in flight), fuzzyVariantsPerTerm 6
+(the widest one-distance tie was 5), wallTimeMs 300, inFlightQueries 8, retries 2 at 25 ms
+base backoff. A grounded turn under these budgets: 64–70 queries, 194–809 rows, ≤97 ms with
+no network; an unbounded run wants 5,789–11,961 queries because the subClassOf closure
+branches — so `bounded: true` is the norm on corpus-supplemented answers and T4's marker
+carries weight on essentially every one, not an edge case. Calibration also caught a
+function-word filter eating real terms ("always") and metrics conflating planned with read
+terms — both fixed. `isSystemicFailure` is exported for T2's breaker; T3 should pass the
+bundled seed's own term set as the fuzzy vocabulary (the grammar lexicon misses common
+nouns) and reconcile `queryBandTerm` onto `termQueryOverDocumentClient`.
+
 **Owns** `src/domain/retrieval-plan.mjs` (new, pure), `src/services/subgraph-retrieval.mjs`
 (new), the calibration harness (`scripts/corpus-bands/calibrate-retrieval.mjs`, new: replays a
 committed query set against the fixture band over the fake client and prints the

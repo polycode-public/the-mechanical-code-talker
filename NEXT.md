@@ -34,12 +34,14 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: the combined miss-lead round on chat.mjs (Opus), T1 retrieval + calibration
-  (Opus), M1 Backend D dispatch (Opus, owns core.mjs/chat-session.mjs/init.mjs/
-  research-queue-store.mjs), E2 news-gate consumption (Sonnet, owns news-feed.mjs), M5 row
-  service handler (Sonnet, owns server/row-service/), T0 corpus bands + loader (Sonnet,
-  owns corpus-bands/loader/cli-verbs/scripts/corpus-bands), T2 corpus breaker (Sonnet).
-  Landed: M0, M2, M4, E0, E1, the screenshot capture (item closed below).
+- In flight: the combined miss-lead round on chat.mjs (Opus), M1 Backend D dispatch (Opus,
+  owns core.mjs/chat-session.mjs/init.mjs/research-queue-store.mjs), E2 news-gate
+  consumption (Sonnet, owns news-feed.mjs), M5 row service handler (Sonnet, owns
+  server/row-service/), T0 corpus bands + loader (Sonnet, owns corpus-bands/loader/
+  cli-verbs/scripts/corpus-bands; told to reuse T1's band query helper), T2 corpus breaker
+  (Sonnet; told to classify failures with T1's isSystemicFailure). Landed: M0, M2, M4,
+  T1 (budgets calibrated and frozen, see its plan marker), E0, E1, the screenshot capture
+  (item closed below).
 - Queued: M3 after M1 → T4 after T1 + chat.mjs hand-back → M6/M7/T3/T12/E3 →
   M8/T5/T6/T7/E4 → T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut
   bedrock-meter pins.
