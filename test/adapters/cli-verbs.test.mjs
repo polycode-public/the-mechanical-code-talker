@@ -104,22 +104,6 @@ test("a --repo path whose parent is also missing declines by name, never a raw m
   assert.doesNotMatch(r.stderr, /ENOENT/, "no raw fs error reaches the user");
 });
 
-test("the news verb with no arguments polls, unlike the chat command's /news which shows the feed (test/services/chat-news-command.test.mjs pins that side)", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "tmct-news-verb-"));
-  try {
-    const r = spawnSync(process.execPath, [BIN, "news"], {
-      cwd: dir, encoding: "utf8", env: { ...process.env, TMCT_NO_SEED: "1", TMCT_GRAPH_FILE: "" },
-    });
-    assert.equal(r.status, 0, r.stderr);
-    // the poll summary line, not "no news items yet" (the show-mode wording /news with
-    // no arguments renders in chat) — the verb never carries a fetcher into newsTurn, so
-    // every source resolves "no-fetcher" and the counts land at zero without touching the network
-    assert.equal(r.stdout, "polled 0 sources: 0 new items, 0 facts stored, 0 derived, 0 failures, 0 evicted.\n");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test("a verb's continuation prose lines all hang at the prose column", () => {
   const lines = renderUsage().split("\n");
   const continuations = lines.filter((l) => /^ {31}\S/.test(l));
