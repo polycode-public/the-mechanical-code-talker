@@ -33,9 +33,10 @@ const MUDIII_BUSY_TURN_THRESHOLD = 12;
 // rather than mid-step: the scene eases a one-cell move over 250ms.
 const SCENE_SETTLE_MS = 1_200;
 const MUDIII_READY_TIMEOUT_MS = 60_000;
-// news.html builds its first feed items from the chat seed, which is a
-// 90 MB artifact the page has to fetch and index before an item exists.
-const NEWS_READY_TIMEOUT_MS = 120_000;
+// news.html is a thin client with no seed to stream — its first paint is the
+// honest empty state, immediately. The timeout stays generous only because
+// its own ready check is a sleep-then-evaluate loop rather than a plain wait.
+const NEWS_READY_TIMEOUT_MS = 15_000;
 const MUDIII_BUSY_TIMEOUT_MS = 60_000;
 
 // Same order as DEMO_PAGES in site-pages.mjs, which is also the order the
@@ -59,19 +60,13 @@ const READY_CHECKS = {
   ledger: (page) => page.locator(".dash").waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   sprites: (page) => page.locator(".card").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
   news: async (page) => {
-    // The page starves both requestAnimationFrame and the injected pollers
-    // while it streams and indexes the seed, so every waitFor variant times
-    // out even though the render is provably finished — a plain
-    // sleep-then-evaluate loop is the one sampling path that answers. The
-    // seed graph alone never heads a card (the feed only shows entity-
-    // anchored reports a poll brought in), so "rendered" here means either a
-    // card exists or the feed's own empty state has painted in its place —
-    // read off #feedCount's own text landing, not #feedEmpty's visibility:
-    // that element starts un-hidden in the static markup before any JS has
-    // run at all, so checking it alone reads "ready" before the seed has
-    // even started fetching. #feedCount starts empty and only paintFeed()
-    // ever writes to it, so a non-empty count is unambiguous proof the
-    // first render actually finished.
+    // A thin client with no session yet renders the honest empty state on
+    // its own first paint — no card exists until a real press starts a
+    // cycle, which this capture never does — so "rendered" here means
+    // #feedCount's own text has landed. #feedEmpty's visibility is not that
+    // signal: it starts un-hidden in the static markup before any JS has
+    // run at all, so checking it alone would read "ready" instantly,
+    // whether or not the page's own script has actually run yet.
     const deadline = Date.now() + NEWS_READY_TIMEOUT_MS;
     let ready = false;
     while (Date.now() < deadline) {

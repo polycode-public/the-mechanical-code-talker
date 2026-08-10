@@ -1,40 +1,35 @@
-// news-viz.mjs — news.html: a dashboard over the news capability
-// (PLAN_NEWS_FEED.md section 13), on the ledger.html dashboard precedent
-// (src/services/ledger-viz.mjs: `.dash`/`.kpirow`/`.tile`/`.tile-bars`, the
-// same THEME_TOKENS_CSS palette) with chat.html's seed-loading shell
-// (src/services/chat-page-viz.mjs: SEED_STAMP/SEED_BYTES, the tmct.seed
-// phase pill, loadSeedPayload/fetchWithProgress).
+// news-viz.mjs — news.html: a thin client over the row service's news
+// routes (PLAN_MEMORY_BACKEND.md's news.html-goes-thin revision), on the
+// ledger.html dashboard precedent (src/services/ledger-viz.mjs: `.dash`/
+// `.kpirow`/`.tile`/`.tile-bars`, the same THEME_TOKENS_CSS palette).
 //
-// The page's one behavioural promise, restated everywhere it matters: NO
-// third-party request fires before the visitor presses start (or, on a
-// returning visit, before the page replays that same consent). Every
-// `https://` string this renderer emits — every source's homepage link, the
-// embedded source-registry JSON the source-toggle list reads — sits inside
-// the ONE fenced block `<!-- sources:start -->` … `<!-- sources:end -->`, so
-// that promise is mechanically checkable: nothing outside that block ever
-// names a third party.
+// This page carries no engine and no seed. Every card, tile, bar, source
+// status line and request-log row it ever shows is read straight off one
+// document — `GET /api/feed` — and nothing here recomputes any of it. The
+// only client-side work is: mint a session key at the first press, POST the
+// three trigger routes (poll/enrich/ingest) on their own press, wait for the
+// cycle each one starts to materialize, and render the document that comes
+// back. src/surfaces/web/news-browser-entry.mjs is the whole of that; this
+// file is markup, CSS and the inline script wiring DOM to it.
 //
-// Every fetched or user-supplied string this page will ever show (a feed
-// item's title/summary, a source's display name, an uploaded fact row) goes
-// through escapeHtml at render time — the second half of the two-layer
-// sanitisation rule (constitution, PLAN_NEWS_FEED.md section 3); the first
-// half (stripMarkup at parse time) already ran in the domain/adapter layers
-// this page's engine calls.
+// Every fetched or user-supplied string this page ever shows (a card's
+// paragraph, a fact line, a source name, teach-panel text) goes through
+// escapeHtml at render time — the page's one sanitisation layer, since
+// nothing here parses raw prose itself; that already happened server-side,
+// in the worker, before the string ever reached this document.
 import {
   THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson, demoEyebrowHtml, EYEBROW_LINKS_CSS,
 } from "./viz-theme.mjs";
-import { loadSeedPayload, fetchWithProgress, factTripleParts } from "./memory-panel-viz.mjs";
-import { phraseRendererSource, FACT_PREDICATE_PHRASES } from "../domain/fact-phrase.mjs";
 import { NEWS_SOURCE_RECORDS } from "../adapters/corpus/news-sources.mjs";
 
-const DEFAULT_TITLE = "tmct news — a dashboard over the graph, fed on your say-so";
+const DEFAULT_TITLE = "tmct news — a feed the graph only shows what it can ground";
 
 const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
 
 /** One `.tile` cell for the KPI row — the zero-state every tile renders in
- *  before the first poll, since the dashboard's own JS overwrites every
- *  number once the session opens. Static markup only; the live numbers are
- *  a client-side re-render (see the inline script's `renderAll`). */
+ *  before the first render call, since the page's own JS overwrites every
+ *  number the moment a feed document (real or empty) is in hand. Static
+ *  markup only. */
 function kpiTileHtml(label, id) {
   return `<div class="tile" id="${escapeHtml(id)}">
     <span class="tile-label">${escapeHtml(label)}</span>
@@ -53,8 +48,13 @@ function barPanelHtml(label, id) {
 function sourceRowsHtml(kind) {
   return NEWS_SOURCE_RECORDS.filter((r) => (kind === "kb" ? r.kind === "kb" : r.kind !== "kb")).map((r) => {
     const cls = r.kind === "kb" ? "kb" : "contemporary";
+    // Only the contemporary group offers a checkbox: it narrows the NEXT
+    // poll trigger's own `{sources:[...]}` body, never a fetch of its own.
+    // The kb group has no client-supplied roster in the hosted worker, so
+    // it renders as plain status, not a control.
+    const toggle = kind === "kb" ? "" : `<input type="checkbox" data-source-toggle value="${escapeHtml(r.id)}" ${r.enabledByDefault ? "checked" : ""}>`;
     return `<label class="sourcerow ${cls}" data-source-id="${escapeHtml(r.id)}">
-      <input type="checkbox" data-source-toggle value="${escapeHtml(r.id)}" ${r.enabledByDefault ? "checked" : ""}>
+      ${toggle}
       <span class="sourcename">${escapeHtml(r.name)}</span>
       <a class="sourcehome" href="${escapeHtml(r.homepage)}" target="_blank" rel="noopener">homepage</a>
       <span class="sourcestatus" data-source-status>not yet polled</span>
@@ -63,18 +63,18 @@ function sourceRowsHtml(kind) {
 }
 
 /** The one fenced region carrying every third-party URL this page ever
- *  names, in two groups the visitor can tell apart: the news feeds a poll
- *  fetches, and the reference works enrichment looks unknown terms up in. A
- *  reference work is never polled — ticking it arms the lookup, nothing
- *  else. Nothing fetches merely because this markup rendered. */
+ *  names — every source's own homepage link, and the embedded source
+ *  registry the panel reads. No fetch happens because this markup rendered;
+ *  the worker does the fetching, server-side, and only after a trigger this
+ *  page's own click sent it. */
 function sourcesConfigBlockHtml() {
   return `<!-- sources:start -->
   <div class="sources" id="sourcesConfig" aria-label="News sources">
-    <h2 class="tile-label" id="pollRosterLabel">news feeds — polled when you press start or poll once</h2>
+    <h2 class="tile-label" id="pollRosterLabel">news feeds — the worker polls these when you press start, narrowed to what's checked</h2>
     <div class="sourcegroup" id="pollRoster" aria-labelledby="pollRosterLabel">
       ${sourceRowsHtml("contemporary")}
     </div>
-    <h2 class="tile-label" id="lookupRosterLabel">reference works — looked up to explain a term, never polled</h2>
+    <h2 class="tile-label" id="lookupRosterLabel">reference works — the worker looks a term up here to explain it, never polled</h2>
     <div class="sourcegroup" id="lookupRoster" aria-labelledby="lookupRosterLabel">
       ${sourceRowsHtml("kb")}
     </div>
@@ -108,6 +108,9 @@ ${THEME_TOKENS_CSS}
   .bbtrack { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
   .bbfill { display: block; height: 100%; background: var(--ink); opacity: .6; border-radius: 99px; }
   .bbn { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .privacy { font-size: .78rem; color: var(--muted); margin: 0 0 .8rem; max-width: 46rem; }
+  .unavailable { display: none; background: var(--alert-soft); border: 1px solid var(--alert); border-radius: 6px; padding: .6rem .8rem; margin-bottom: 1rem; font-size: .84rem; }
+  .unavailable.shown { display: block; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .6rem .7rem; margin-bottom: 1rem; }
   .btn { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .65rem; background: var(--bg); }
   .btn:hover { color: var(--ink); border-color: var(--ink); }
@@ -118,8 +121,7 @@ ${THEME_TOKENS_CSS}
   .btn[aria-busy="true"]::after { content: ""; display: inline-block; width: .5em; height: .5em; margin-left: .45em; border-radius: 50%; background: currentColor; animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .btn[aria-busy="true"]::after { animation: none; opacity: .7; } }
-  select, .urlinput { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
-  .urlinput { flex: 1 1 12rem; min-width: 8rem; }
+  select { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
   .sources { display: flex; flex-direction: column; gap: .3rem; margin: .6rem 0; }
   .sources h2 { margin: .6rem 0 .1rem; }
   .sourcegroup { display: flex; flex-direction: column; gap: .3rem; }
@@ -132,7 +134,7 @@ ${THEME_TOKENS_CSS}
   .reqlog { margin-bottom: 1rem; max-width: 100%; overflow-x: auto; }
   .reqlog table { width: 100%; table-layout: fixed; border-collapse: collapse; font-family: ${MONO_STACK}; font-size: .7rem; }
   .reqlog th, .reqlog td { text-align: left; padding: .2rem .4rem; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-  .reqlog tbody:empty::after { content: "no requests yet — nothing has fetched before you press start"; }
+  .reqlog tbody:empty::after { content: "no requests yet — nothing has been polled before you press start"; }
   .feedwrap { margin-bottom: 1.2rem; }
   .feedbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .45rem; }
   .feedbar label { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
@@ -146,14 +148,14 @@ ${THEME_TOKENS_CSS}
   .item { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; }
   .item .hub { font-weight: 700; font-size: 1.05rem; }
   .item .tier { font-family: ${MONO_STACK}; font-size: .64rem; padding: .05rem .5rem; border-radius: 99px; border: 1px solid var(--line); margin-left: .5rem; }
-  .item .seedtag { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); margin-left: .5rem; }
+  .item .newtag { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--taught); margin-left: .5rem; }
   .item .paragraph { margin: .4rem 0; }
   .item .sources-links { font-size: .74rem; color: var(--muted); }
   .item details.facts summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--corpus); cursor: pointer; }
   .item details.background summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
   .item details.background p { margin: .35rem 0 0; color: var(--muted); }
   .item .factrow { font-family: ${MONO_STACK}; font-size: .68rem; padding: .15rem 0; border-bottom: 1px dotted var(--line); }
-  .item .facttriple { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); padding-left: .6rem; }
+  .item .factrow.factmore { color: var(--muted); border-bottom: none; }
   .empty { color: var(--muted); font-size: .85rem; border: 1px dashed var(--line); border-radius: 6px; padding: .8rem 1rem; }
   .teach { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .7rem .85rem; margin-bottom: 1rem; }
   .teach textarea { width: 100%; box-sizing: border-box; min-height: 90px; font-family: ${MONO_STACK}; font-size: .76rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; }
@@ -161,18 +163,13 @@ ${THEME_TOKENS_CSS}
   .pagelog { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); max-height: 140px; overflow-y: auto; border-top: 1px solid var(--line); padding-top: .4rem; }
 `;
 
-/** `renderNewsHtml({ title, seedStamp, seedBytes, digestStructures })` — one
- *  self-contained document: the dashboard, the controls row (start / poll
- *  interval / stop & forget / source toggles / add-by-URL / enrich now / the
- *  two fixture-replay demo buttons), the request log, the feed, and the
- *  teach panel. `seedStamp`/`seedBytes` feed the same chat-seed.json loading
- *  contract chat.html's own shell uses (chat-page-viz.mjs); `digestStructures`
- *  rides through unused today, the same build-time plumbing every other
- *  generated page threads even before it has its own digest affordance. */
-export function renderNewsHtml({ title = DEFAULT_TITLE, seedStamp = "", seedBytes = 0, digestStructures = [] } = {}) {
-  const digestJson = embedJson(Array.isArray(digestStructures) ? digestStructures : []);
-  const factPhrasesJson = embedJson(FACT_PREDICATE_PHRASES);
-
+/** `renderNewsHtml({ title })` — one self-contained document: the dashboard,
+ *  the controls row (start/poll, enrich now, stop & forget), the source
+ *  panel, the request log, the feed, and the teach panel. Everything below
+ *  the teach panel is left unclaimed for the chat area this page will grow
+ *  next — an empty `#chatMount` section, not a placeholder for engine work
+ *  of its own. */
+export function renderNewsHtml({ title = DEFAULT_TITLE } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -188,8 +185,12 @@ ${NEWS_STYLE}
 </head>
 <body>
 <main>
-  <div class="eyebrow"><span>${demoEyebrowHtml("news", "news")}</span><span id="seedPill" data-sub></span></div>
-  <h1 class="visually-hidden">news — a dashboard over the graph, fed on your say-so</h1>
+  <div class="eyebrow"><span>${demoEyebrowHtml("news", "news")}</span><span id="sessionPill" data-sub></span></div>
+  <h1 class="visually-hidden">news — a feed the graph only shows what it can ground</h1>
+
+  <p class="privacy">This session is anonymous. Pressing start keeps a random key for it in this browser; everything you poll or teach here is stored against that key on the server for seven days. Stop &amp; forget hides all of it at once, and the stored copies are gone for good within that same week.</p>
+
+  <div class="unavailable" id="serviceUnavailable" role="alert">The news service isn't answering right now, so there's nothing to show. Reload the page to try again.</div>
 
   <section class="dash" id="dash" aria-label="News metrics">
     <div class="kpirow">
@@ -197,7 +198,7 @@ ${NEWS_STYLE}
       ${kpiTileHtml("terms.ungrounded", "tileTermsUngrounded")}
       ${kpiTileHtml("facts.from-news", "tileFactsFromNews")}
       ${kpiTileHtml("graph.size", "tileGraphSize")}
-      ${kpiTileHtml("sources.live", "tileSourcesLive")}
+      ${kpiTileHtml("sources.reporting", "tileSourcesLive")}
     </div>
     <div class="barpanels">
       ${barPanelHtml("terms.ranked", "panelTermsRanked")}
@@ -207,28 +208,15 @@ ${NEWS_STYLE}
 
   <div class="controls" id="controls">
     <button type="button" class="btn primary" id="newsStart">start polling live sources</button>
-    <button type="button" class="btn" id="pollOnce">poll once</button>
-    <button type="button" class="btn" id="stopPolling" disabled>stop polling</button>
-    <label class="mono" for="pollInterval">poll every</label>
-    <select id="pollInterval">
-      <option value="0">off</option>
-      <option value="5">5 min</option>
-      <option value="15" selected>15 min</option>
-      <option value="60">60 min</option>
-    </select>
-    <button type="button" class="btn ghost" id="stopForget">stop &amp; forget</button>
     <button type="button" class="btn" id="enrichNow">enrich now</button>
-    <input type="text" class="urlinput" id="addSourceUrl" placeholder="add a source by url (https only)" autocomplete="off" spellcheck="false">
-    <button type="button" class="btn" id="addSourceBtn">add</button>
-    <button type="button" class="btn" id="replayNyt">replay recorded NYT sample</button>
-    <button type="button" class="btn" id="replayWikipedia">replay recorded Wikipedia sample</button>
+    <button type="button" class="btn ghost" id="stopForget">stop &amp; forget</button>
     <span class="mono" id="controlsStatus" aria-live="polite"></span>
   </div>
 
   ${sourcesConfigBlockHtml()}
 
   <section class="reqlog" id="requestLog" aria-label="Request log">
-    <h2 class="tile-label">request log</h2>
+    <h2 class="tile-label">the worker's own request log</h2>
     <table>
       <thead><tr><th>url</th><th>at</th><th>bytes</th><th>status</th></tr></thead>
       <tbody id="requestLogBody"></tbody>
@@ -247,38 +235,35 @@ ${NEWS_STYLE}
     </div>
     <div class="pills" id="feedPills" aria-label="Filter the feed by key term"></div>
     <div class="feed" id="feed" tabindex="0">
-      <div class="empty" id="feedEmpty">no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.</div>
+      <div class="empty" id="feedEmpty">no news yet — the feed only shows named people, places and events the worker has reported. press start to fetch some.</div>
     </div>
   </section>
 
   <section class="teach" id="teachPanel">
     <h2 class="tile-label">teach the graph</h2>
-    <textarea id="teachText" spellcheck="false" aria-label="Text or fact rows to ingest" placeholder="Paste prose, or drop a .txt/.md/.json/.jsonl file below."></textarea>
+    <textarea id="teachText" spellcheck="false" aria-label="Text or fact rows to ingest" placeholder="Paste prose, or drop a .txt/.md/.jsonl file below."></textarea>
     <div class="teachrow">
       <button type="button" class="btn" id="exampleProse">example: prose</button>
       <button type="button" class="btn" id="exampleJsonl">example: facts (.jsonl)</button>
       <button type="button" class="btn" id="teachBrowse">browse&hellip;</button>
-      <input type="file" id="teachFile" accept=".txt,.md,.json,.jsonl" hidden>
+      <input type="file" id="teachFile" accept=".txt,.md,.jsonl" hidden>
       <button type="button" class="btn primary" id="teachIngest">ingest</button>
       <span class="mono" id="teachStatus" aria-live="polite"></span>
     </div>
   </section>
 
+  <section id="chatMount" aria-label="Chat"></section>
+
   <div class="pagelog" id="pageLog" aria-live="polite"></div>
 </main>
-<script>
-const DIGEST_STRUCTURES = ${digestJson};
-const SEED_STAMP = ${JSON.stringify(seedStamp)};
-const SEED_QUERY = SEED_STAMP ? "?b=" + SEED_STAMP : "";
-const SEED_BYTES = ${Number(seedBytes) || 0};
-</script>
 <!--
   news-browser.bundle.js (built by scripts/build-news-bundle.mjs) publishes
   window.tmct — createNewsSession as tmct.open(), every session verb as
   tmct.session.<verb>(). The inline script below only wires DOM to that
-  surface; it never touches the network, the memory store, or the news
-  engine directly, so every third-party request this page ever makes is
-  traceable to one of the session's own consent-gated methods.
+  surface; it never touches the network directly (createHttpRowBackend
+  inside the session does, over the row service's own routes), so every
+  request this page ever makes is traceable to one of the session's own
+  methods, each reached only from a click this script handles.
 -->
 <script src="./news-browser.bundle.js"></script>
 <script>
@@ -286,11 +271,8 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
   "use strict";
   const el = (id) => document.getElementById(id);
   const esc = ${escapeHtml.toString()};
-  const FACT_PREDICATE_PHRASES = ${factPhrasesJson};
-  ${phraseRendererSource()}
-  const factTripleParts = ${factTripleParts.toString()};
-  const fetchWithProgress = ${fetchWithProgress.toString()};
-  const loadSeedPayload = ${loadSeedPayload.toString()};
+
+  const EMPTY_FEED = { items: [], rankedTerms: [], stats: { graphSize: 0, factsFromNews: 0 }, sourceStatus: [], requestLog: [], builtAt: null };
 
   function appendLog(text) {
     const line = document.createElement("div");
@@ -321,79 +303,90 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     node.querySelector("[data-bars]").innerHTML = microbars(items);
   }
 
-  async function renderRequestLog() {
+  // Every network-facing control disables together the moment the service
+  // stops answering — none of them has anything left to do until it comes
+  // back. Enrich and teach each mint their own session independently of the
+  // "start" press, the same way the old page's add-source-by-url ran its
+  // own preflight regardless of poll consent — pressing any of them first
+  // is exactly what "the page mints the session, at consent" means.
+  function setUnavailable(isUnavailable) {
+    el("serviceUnavailable").classList.toggle("shown", isUnavailable);
+    ["newsStart", "enrichNow", "stopForget", "teachIngest", "teachBrowse"].forEach(function (id) {
+      el(id).disabled = isUnavailable;
+    });
+  }
+
+  function renderRequestLog(feed) {
     const body = el("requestLogBody");
     body.innerHTML = "";
-    for (const row of (window.tmct.session ? window.tmct.session.requestLog : []).slice(0, 50)) {
+    for (const row of (feed.requestLog || [])) {
       const tr = document.createElement("tr");
       tr.innerHTML = "<td>" + esc(row.url) + "</td><td>" + esc(row.at) + "</td><td>" + esc(String(row.bytes)) + "</td><td>" + esc(row.status) + "</td>";
       body.appendChild(tr);
     }
   }
 
-  function renderSourceStatus() {
-    const health = window.tmct.session ? window.tmct.session.health : [];
-    const byId = new Map(health.map((h) => [h.sourceId, h]));
-    const config = window.tmct.session ? window.tmct.session.config : { sources: [] };
-    const enabled = new Set(config.sources);
-    document.querySelectorAll("[data-source-id]").forEach((row) => {
-      const id = row.getAttribute("data-source-id");
-      const h = byId.get(id);
+  function renderSourcesPanel(feed) {
+    const byId = new Map((feed.sourceStatus || []).map(function (h) { return [h.sourceId, h]; }));
+    document.querySelectorAll("[data-source-id]").forEach(function (row) {
+      const health = byId.get(row.getAttribute("data-source-id"));
       const statusEl = row.querySelector("[data-source-status]");
-      let text = "off";
-      if (enabled.has(id)) {
-        if (h && h.autoDisabled) text = "auto-disabled";
-        else if (h && h.browserBlocked) text = "source does not permit browser access";
-        else if (h && h.lastStatus) text = h.lastStatus;
-        else text = "not yet polled";
+      let text = "not yet polled";
+      if (health) {
+        if (health.autoDisabled) text = "auto-disabled";
+        else if (health.browserBlocked) text = "source does not permit browser access";
+        else if (health.lastStatus) text = health.lastStatus;
       }
       statusEl.textContent = text;
     });
-    return { byId, enabled };
+    setTile("tileSourcesLive", (feed.sourceStatus || []).length, "reported in the last cycle");
+    setBars("panelSourcesPerSource", (feed.sourceStatus || []).map(function (h) {
+      return { label: h.sourceId, count: h.consecutiveFailures ? 0 : 1 };
+    }));
   }
 
-  async function factListHtml(factIds) {
-    const rows = await window.tmct.session.factRows(factIds);
-    return rows.map((row) => {
-      const triple = factTripleParts(row);
-      return '<div class="factrow">' + esc(factSentence(row))
-        + '<details><summary>triple</summary><div class="facttriple">'
-        + esc(triple.subject) + " | " + esc(triple.predicate) + " | " + esc(triple.object)
-        + " (" + esc(row.provenance || "") + ", trust " + esc(String(row.trust || 0)) + ")"
-        + '</div></details></div>';
-    }).join("");
+  function cardHtml(item) {
+    const factLines = item.factLines || [];
+    const factsHtml = factLines.map(function (line) { return '<div class="factrow">' + esc(line) + '</div>'; }).join("");
+    const moreCount = (item.factCount || 0) - factLines.length;
+    const moreHtml = moreCount > 0 ? '<div class="factrow factmore">&hellip;and ' + moreCount + ' more</div>' : "";
+    const sourcesText = (item.sources || []).map(function (s) { return esc(s.title || s.url || ""); }).filter(Boolean).join(", ");
+    const background = item.backgroundParagraph
+      ? '<details class="background"><summary>what the graph already knew</summary><p>' + esc(item.backgroundParagraph) + '</p></details>'
+      : "";
+    const newTag = item.newName ? '<span class="newtag">new</span>' : "";
+    return '<div class="item" data-item-id="' + esc(item.id) + '">'
+      + '<span class="hub">' + esc(item.hub) + '</span><span class="tier">' + esc(item.tier || "unranked") + '</span>' + newTag
+      + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
+      + background
+      + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + '</p>' : "")
+      + '<details class="facts"><summary>' + (item.factCount || 0) + ' fact' + (item.factCount === 1 ? "" : "s") + '</summary>' + factsHtml + moreHtml + '</details>'
+      + '</div>';
   }
 
-  // The last built feed and one rendered card per item, so a sort change or a
-  // pill toggle re-orders what is already on screen instead of rebuilding
-  // every card's fact list from the store again.
+  // The last-rendered feed's own items and one built card per item, so a
+  // sort change or a pill toggle re-orders what is already on screen
+  // without asking the server for anything again.
   let feedItems = [];
   const cardsByItemId = new Map();
   const activePillTerms = new Set();
-  // What an empty feed says: this line before a poll, or after one that
-  // reported nothing newsworthy; the purge line once "stop & forget" has
-  // emptied the graph of articles, until the next poll (start or poll once)
-  // puts content back and reverts it — the same "next action that puts
-  // content back" rule the session's own forgotten flag follows.
-  const DEFAULT_EMPTY_FEED_TEXT = "no news yet — the feed only shows named people, places and events from polled sources. press poll once to fetch some.";
+  const DEFAULT_EMPTY_FEED_TEXT = "no news yet — the feed only shows named people, places and events the worker has reported. press start to fetch some.";
   let emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
-
   const MAX_PILLS = 12;
 
   function itemMatchesActivePills(item) {
     if (!activePillTerms.size) return true;
     const haystack = (item.hub + " " + item.paragraph).toLowerCase();
-    for (const term of activePillTerms) {
-      if (item.hub === term || haystack.indexOf(term) !== -1) return true;
-    }
+    for (const term of activePillTerms) { if (item.hub === term || haystack.indexOf(term) !== -1) return true; }
     return false;
   }
 
   function sortedFeedItems() {
     const mode = el("feedSort").value;
     const items = feedItems.slice();
-    if (mode === "facts") items.sort((a, b) => b.factIds.length - a.factIds.length || (a.hub < b.hub ? -1 : 1));
-    else if (mode === "changed") items.sort((a, b) => b.changedCount - a.changedCount || (a.hub < b.hub ? -1 : 1));
+    if (mode === "facts") items.sort((a, b) => (b.factCount - a.factCount) || (a.hub < b.hub ? -1 : 1));
+    else if (mode === "changed") items.sort((a, b) => (b.changedCount - a.changedCount) || (a.hub < b.hub ? -1 : 1));
+    else items.sort((a, b) => (b.observedMs - a.observedMs) || (a.hub < b.hub ? -1 : 1));
     return items;
   }
 
@@ -401,7 +394,7 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
     const pillsEl = el("feedPills");
     const terms = feedItems
       .slice()
-      .sort((a, b) => b.changedCount - a.changedCount || (a.hub < b.hub ? -1 : 1))
+      .sort((a, b) => (b.changedCount - a.changedCount) || (a.hub < b.hub ? -1 : 1))
       .map((it) => it.hub)
       .slice(0, MAX_PILLS);
     for (const term of [...activePillTerms]) if (terms.indexOf(term) === -1) activePillTerms.delete(term);
@@ -439,117 +432,52 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       : (shown.length + " of " + feedItems.length + " articles");
   }
 
-  async function renderFeed() {
-    const feedEl = el("feed");
-    const feed = await window.tmct.session.buildFeed();
-    feedItems = feed.items;
+  function renderFeed(feed) {
+    feedItems = feed.items || [];
     cardsByItemId.clear();
-    feedEl.querySelectorAll(".item").forEach((n) => n.remove());
-    for (const item of feed.items) {
-      // One yield per card keeps the page clickable while a long feed renders.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const card = document.createElement("div");
-      card.className = "item";
-      const seedTag = feed.seedFallback ? '<span class="seedtag">from the seed graph — start to poll live sources</span>' : "";
-      const sourcesText = item.sources.map((s) => esc(s.title || s.url)).join(", ");
-      const facts = await factListHtml(item.factIds);
-      const background = item.backgroundParagraph
-        ? '<details class="background"><summary>what the graph already knew</summary><p>' + esc(item.backgroundParagraph) + '</p></details>'
-        : "";
-      card.innerHTML =
-        '<span class="hub">' + esc(item.hub) + '</span><span class="tier">' + esc(item.tier || "unranked") + '</span>' + seedTag
-        + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
-        + background
-        + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + '</p>' : "")
-        + '<details class="facts"><summary>' + item.factIds.length + ' facts</summary>' + facts + '</details>';
-      cardsByItemId.set(item.id, card);
-      // Each card shows the moment it is built; the paint below re-orders and
-      // filters what is already on screen.
-      if (itemMatchesActivePills(item)) { el("feedEmpty").hidden = true; feedEl.appendChild(card); }
+    for (const item of feedItems) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = cardHtml(item);
+      cardsByItemId.set(item.id, wrapper.firstElementChild);
     }
     renderPills();
     paintFeed();
-    setTile("tileFeedItems", feed.items.length, feed.seedFallback ? "from the seed graph" : "live");
+    setTile("tileFeedItems", feedItems.length, feed.trimmed ? "trimmed to fit — each card's own count says how much" : "");
   }
 
-  async function renderGraphTiles() {
-    const stats = await window.tmct.session.stats();
-    setTile("tileFactsFromNews", stats.factsFromNews, stats.factsFromNews ? "polled, replayed or enriched" : "nothing ingested yet");
-    setTile("tileGraphSize", stats.graphSize, "facts in this session's graph");
-  }
-
-  async function renderRank() {
-    const rows = await window.tmct.session.rank({ limit: 8 });
-    setTile("tileTermsUngrounded", rows.length, rows.length ? "ranked by occurrence" : "none yet");
-    setBars("panelTermsRanked", rows.map((r) => ({
+  function renderAll(feed) {
+    renderFeed(feed);
+    renderSourcesPanel(feed);
+    renderRequestLog(feed);
+    const ranked = feed.rankedTerms || [];
+    setTile("tileTermsUngrounded", ranked.length, ranked.length ? "ranked by occurrence" : "none yet");
+    setBars("panelTermsRanked", ranked.map((r) => ({
       label: r.term + (r.vocabGrounded ? " (parseable but knowledge-free)" : " (unknown word)"),
       count: r.count,
     })));
+    const stats = feed.stats || { graphSize: 0, factsFromNews: 0 };
+    setTile("tileFactsFromNews", stats.factsFromNews, stats.factsFromNews ? "polled or taught" : "nothing ingested yet");
+    setTile("tileGraphSize", stats.graphSize, "facts in this session's graph");
   }
 
-  function renderSourcesPanel() {
-    const { enabled } = renderSourceStatus();
-    const config = window.tmct.session ? window.tmct.session.config : { sources: [] };
-    setTile("tileSourcesLive", enabled.size, config.pollMinutes ? ("every " + config.pollMinutes + " min") : "on demand");
-    const health = window.tmct.session ? window.tmct.session.health : [];
-    setBars("panelSourcesPerSource", health.map((h) => ({ label: h.sourceId, count: h.consecutiveFailures ? 0 : 1 })));
-  }
-
-  async function renderAll() {
-    // Chips and tiles are cheap synchronous text writes; they lead so a
-    // just-finished poll reads back immediately while the feed's own slower,
-    // yielding render catches up behind it.
-    renderSourcesPanel();
-    await Promise.all([renderFeed(), renderRank(), renderRequestLog(), renderGraphTiles()]);
-    renderSourcesPanel();
-    window.tmct.news = Object.assign({}, window.tmct.news, {
-      phase: window.tmct.session.phase,
-      metrics: window.tmct.session.metrics,
-      nextPollAt: window.tmct.session.nextPollAt,
+  function looksLikeFactRows(text) {
+    const lines = String(text || "").split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) return false;
+    return lines.every(function (line) {
+      try {
+        const row = JSON.parse(line);
+        return row && typeof row === "object" && row.subject && row.predicate && row.object;
+      } catch { return false; }
     });
-    appendLog("phase: " + window.tmct.session.phase);
   }
 
   async function boot() {
-    window.tmct.news = { phase: "seeding", metrics: { timeToFirstArticleMs: null, timeToFirstCompletePollMs: null }, nextPollAt: "" };
-    appendLog("phase: seeding");
-    // The wink vendor is what lets ingested prose ground at all — without it
-    // every extract runs lexicon-blind and the whole enrich loop misses.
-    // Loaded alongside the seed, tolerated as absent the same way chat.html
-    // tolerates it, never blocking the page.
-    const winkLoad = (async function () {
-      try {
-        const mod = await Promise.race([
-          import("./vendor/wink.js"),
-          new Promise(function (resolve, reject) { setTimeout(function () { reject(new Error("wink vendor load timed out")); }, 20000); }),
-        ]);
-        window.tmct.page.registerWinkModel(function () { return { winkNLP: mod.winkNLP, model: mod.model }; });
-        appendLog("wink vendor loaded — prose grounding armed");
-      } catch (err) {
-        appendLog("wink vendor unavailable — prose grounding runs lexicon-blind");
-      }
-    })();
-    const outcome = await loadSeedPayload(fetchWithProgress, "./chat-seed.json", SEED_QUERY, function () {});
-    window.tmct.seed = { state: outcome.status.state, facts: outcome.status.facts };
-    await winkLoad;
-    await window.tmct.open({ seedPayload: outcome.payload, vocabSeeded: Boolean(outcome.payload) });
+    const session = await window.tmct.open({});
+    window.tmct.news = { phase: "seeded" };
 
-    // Every control binds before the phase flips to "seeded": the first feed
-    // render is deliberately slow (it yields per card), and a click that
-    // lands in that window must already have its listener.
     const startBtn = el("newsStart");
-    // Read once, here. The first render below takes a while, a visitor can
-    // press start inside it, and that press grants consent — so re-reading
-    // the flag afterwards to decide whether to replay a returning visit's
-    // poll would poll a second time on top of the one already running.
-    const returningVisit = window.tmct.session.consented;
-    startBtn.textContent = returningVisit ? "poll now" : "start polling live sources";
+    startBtn.textContent = session.consented ? "poll now" : "start polling live sources";
 
-    el("feedSort").addEventListener("change", paintFeed);
-
-    // A poll can run for a while, so the button reads back its own state the
-    // moment it is pressed and the status line follows the session's phase
-    // until it settles.
     function markBusy(button, label) {
       button.dataset.idleLabel = button.textContent;
       button.textContent = label;
@@ -561,132 +489,59 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       button.disabled = false;
       button.removeAttribute("aria-busy");
     }
-    // "stop polling" is live whenever there is something to stop: a press
-    // still in flight, a cycle running, or a timer armed for the next one.
-    // The press counter leads the session's own busy flag — a click must be
-    // able to stop the cycle it just started, from the same tick.
-    let pressesInFlight = 0;
-    function syncStopPolling() {
-      const session = window.tmct.session;
-      el("stopPolling").disabled = !(pressesInFlight > 0 || (session && (session.busy || session.nextPollAt)));
-    }
-    function followPhase(label) {
-      el("controlsStatus").textContent = label;
-      const id = setInterval(function () {
-        el("controlsStatus").textContent = window.tmct.session.phase + "…";
-        syncStopPolling();
-      }, 400);
-      return function () { clearInterval(id); el("controlsStatus").textContent = ""; syncStopPolling(); };
-    }
 
-    /** One press that fetches: the button reads back busy at once, the
-     *  status line follows the phase, and everything re-renders after. */
-    async function runFetchingPress(button, busyLabel, idleLabel, work) {
+    /** One press that talks to the service: the button reads back busy at
+     *  once, the status line carries the outcome, and a network failure
+     *  flips the page into the unavailable state rather than leaving the
+     *  button stuck. */
+    async function runPress(button, busyLabel, idleLabelFn, work) {
       markBusy(button, busyLabel);
-      pressesInFlight += 1;
-      syncStopPolling();
-      const stopFollowing = followPhase(busyLabel);
+      el("controlsStatus").textContent = busyLabel;
       try {
-        await work();
+        const feed = await work();
+        setUnavailable(false);
+        renderAll(feed);
+        el("controlsStatus").textContent = "";
+        return feed;
+      } catch (err) {
+        el("controlsStatus").textContent = (err && err.message) ? err.message : String(err);
+        if (session.unavailable) setUnavailable(true);
+        throw err;
       } finally {
-        pressesInFlight -= 1;
-        stopFollowing();
-        markIdle(button, idleLabel);
-        syncStopPolling();
+        markIdle(button, idleLabelFn());
       }
-      await renderAll();
     }
 
     startBtn.addEventListener("click", function () {
       emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
-      return runFetchingPress(startBtn, "polling…", "poll now", function () { return window.tmct.session.start(); });
-    });
-
-    el("pollOnce").addEventListener("click", function () {
-      emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
-      const pollOnceBtn = el("pollOnce");
-      return runFetchingPress(pollOnceBtn, "polling…", "poll once", function () { return window.tmct.session.pollOnce(); });
-    });
-
-    el("stopPolling").addEventListener("click", function () {
-      const result = window.tmct.session.stopPolling();
-      el("controlsStatus").textContent = result.wasRunning ? "stopping…" : "polling stopped";
-      appendLog(result.wasRunning
-        ? "stopping — the running cycle finishes the article it is on and stops there"
-        : "polling stopped — no cycle was running, the next scheduled poll is cancelled");
-      syncStopPolling();
-      renderSourcesPanel();
-    });
-
-    // The button stays busy until the purge is finished on screen as well as
-    // in the store, so "enabled again" really does mean "the articles are
-    // gone" rather than "the store call returned".
-    el("stopForget").addEventListener("click", async function () {
-      const stopForgetBtn = el("stopForget");
-      markBusy(stopForgetBtn, "forgetting…");
-      try {
-        const result = await window.tmct.session.revokeConsent();
-        const removed = (result && result.factsRemoved) || 0;
-        startBtn.textContent = "start polling live sources";
-        feedItems = [];
-        cardsByItemId.clear();
-        activePillTerms.clear();
-        el("feed").querySelectorAll(".item").forEach(function (n) { n.remove(); });
-        emptyFeedText = "the articles are gone — press start or poll once to gather news again.";
-        renderPills();
-        paintFeed();
-        appendLog("stopped and forgot: " + removed + " fact(s) from news dropped, articles cleared, this page reads as first-visit next load");
-        await renderAll();
-      } finally {
-        markIdle(stopForgetBtn, "stop & forget");
-        syncStopPolling();
-      }
-    });
-
-    el("pollInterval").addEventListener("change", function (ev) {
-      const minutes = window.tmct.session.setInterval(Number(ev.target.value));
-      ev.target.value = String(minutes);
-      syncStopPolling();
+      const ids = [].slice.call(document.querySelectorAll("[data-source-toggle]:checked")).map(function (b) { return b.value; });
+      runPress(startBtn, "polling…", function () { return session.consented ? "poll now" : "start polling live sources"; }, function () { return session.start(ids); })
+        .catch(function () {});
     });
 
     el("enrichNow").addEventListener("click", function () {
-      const enrichBtn = el("enrichNow");
-      return runFetchingPress(enrichBtn, "enriching…", "enrich now", function () { return window.tmct.session.enrich(); });
+      runPress(el("enrichNow"), "enriching…", function () { return "enrich now"; }, function () { return session.enrich(); })
+        .catch(function () {});
     });
 
-    document.querySelectorAll("[data-source-toggle]").forEach(function (box) {
-      box.addEventListener("change", function () {
-        const ids = [].slice.call(document.querySelectorAll("[data-source-toggle]:checked")).map(function (b) { return b.value; });
-        window.tmct.session.setSources(ids);
-        renderSourcesPanel();
-      });
+    el("stopForget").addEventListener("click", async function () {
+      const btn = el("stopForget");
+      markBusy(btn, "forgetting…");
+      el("controlsStatus").textContent = "forgetting…";
+      const result = await session.revokeConsent();
+      startBtn.textContent = "start polling live sources";
+      feedItems = [];
+      cardsByItemId.clear();
+      activePillTerms.clear();
+      emptyFeedText = "the articles are gone — press start to fetch news again.";
+      renderAll(EMPTY_FEED);
+      document.querySelectorAll("[data-source-status]").forEach(function (n) { n.textContent = "not yet polled"; });
+      appendLog(result.ok
+        ? "stopped and forgot — this page reads as first-visit on the next load"
+        : "stopped and forgot locally; the server-side purge reported: " + result.error);
+      markIdle(btn, "stop & forget");
+      el("controlsStatus").textContent = "";
     });
-
-    el("addSourceBtn").addEventListener("click", async function () {
-      const url = el("addSourceUrl").value.trim();
-      if (!url) return;
-      el("controlsStatus").textContent = "checking…";
-      const result = await window.tmct.session.addSource(url);
-      el("controlsStatus").textContent = result.ok ? ("added as " + result.format) : ("couldn't add: " + result.reason);
-      if (result.ok) renderSourcesPanel();
-    });
-
-    async function replayFrom(sourceId, fixtureKey) {
-      el("controlsStatus").textContent = "replaying…";
-      try {
-        const res = await fetch("./news-fixtures.json");
-        const bundle = res.ok ? await res.json() : null;
-        const fixture = bundle && bundle[fixtureKey];
-        if (!fixture) { el("controlsStatus").textContent = "fixture unavailable"; return; }
-        await window.tmct.session.replayFixture(sourceId, fixture);
-        el("controlsStatus").textContent = "replayed " + fixtureKey;
-        await renderAll();
-      } catch (err) {
-        el("controlsStatus").textContent = "fixture unavailable";
-      }
-    }
-    el("replayNyt").addEventListener("click", function () { replayFrom("nyt-world", "nyt-world"); });
-    el("replayWikipedia").addEventListener("click", function () { replayFrom("wikimedia-featured", "wikimedia-featured"); });
 
     el("exampleProse").addEventListener("click", function () {
       el("teachText").value = "A ceasefire is a formal agreement to stop fighting. A tariff is a tax on imported goods.";
@@ -703,26 +558,36 @@ const SEED_BYTES = ${Number(seedBytes) || 0};
       if (!file) return;
       el("teachText").value = await file.text();
       el("teachStatus").textContent = "loaded " + file.name + " — press ingest";
-      el("teachFile").dataset.name = file.name;
     });
 
-    window.tmct.news.phase = "seeded";
-    appendLog("phase: seeded");
-    await renderAll();
-    syncStopPolling();
-    if (returningVisit) {
-      await window.tmct.session.start();
-      await renderAll();
-      syncStopPolling();
-    }
     el("teachIngest").addEventListener("click", async function () {
       const text = el("teachText").value;
       if (!text.trim()) return;
-      const name = el("teachFile").dataset.name || "";
-      const result = await window.tmct.session.ingestFile({ name: name, text: text });
-      el("teachStatus").textContent = result.error ? result.error : (result.facts + " fact(s), " + result.vocabAdded + " vocab hint(s)");
-      await renderAll();
+      const btn = el("teachIngest");
+      const graphSizeBefore = Number((el("tileGraphSize").querySelector("[data-value]") || {}).textContent) || 0;
+      await runPress(btn, "ingesting…", function () { return "ingest"; }, async function () {
+        const feed = looksLikeFactRows(text)
+          ? await session.ingestRows(window.tmct.page.parseJsonlRows(text))
+          : await session.ingestText(text);
+        const added = Math.max(0, (feed.stats.graphSize || 0) - graphSizeBefore);
+        el("teachStatus").textContent = added + " fact(s) added to the graph";
+        return feed;
+      }).catch(function (err) { el("teachStatus").textContent = err.message || String(err); });
     });
+
+    if (session.sessionKey) {
+      try {
+        const feed = await session.fetchFeed();
+        renderAll(feed);
+        appendLog("restored the session's last materialized feed");
+      } catch (err) {
+        setUnavailable(true);
+        appendLog("could not load the saved session: " + (err && err.message ? err.message : String(err)));
+      }
+    } else {
+      renderAll(EMPTY_FEED);
+      appendLog("ready — nothing has been requested yet");
+    }
   }
 
   boot().catch(function (err) { appendLog("boot failed: " + (err && err.message ? err.message : String(err))); });
