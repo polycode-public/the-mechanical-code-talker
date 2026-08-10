@@ -31,8 +31,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The latest round, the `named <X>` qualifier,
-  is landed and measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.40.md`); its decision log re-ranks
+  next tuning cycle, each its own measured round. The latest round, the negation-scope filter,
+  is landed and measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.41.md`); its decision log re-ranks
   what is left:
   - [x] relative-embedded chain resolution
   - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
@@ -44,16 +44,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - [x] a `named <X>` qualifier inside a boolean branch — measured in
     `reports/BENCHMARK_CEFR_ENGLISH_5.0.40.md`; both frontier rows compile and C2
     relative-embedded is 25/25 green
-  - [ ] a negation-scope filter
-  - [ ] `g-c1-neg-rel-19` — "modules importing the module that defines fnAlpha but not tested"
-    answers b, c and e; the tested importer b.mjs should be excluded
+  - [x] a negation-scope filter — measured in `reports/BENCHMARK_CEFR_ENGLISH_5.0.41.md`; A2
+    negation goes 1.667 to 1.988 with its four hard fails cleared, and the cell reaches 25/25 green
+  - [x] `g-c1-neg-rel-19` — landed in the same round; a trailing qualifier now restricts the head
+    the sentence gives it, so the tested importer is excluded
   - [ ] C2 pronoun-binding, 13/25 green with 12 frontier — the largest unexamined block; needs a
     diagnosis pass before it can be ranked against the rest
   - [ ] B2 assert-recall, 16/25 green with 9 frontier and a 0.64 performance-vs-production band
     gap, the widest in the pool — the capability answers, something in the production path
     doesn't reach it
-  - [ ] A2 negation's four standing hard fails (`g-a2-neg-3`, `-4`, `-14`, `-24`) — byte-identical
-    across both arms of the 5.0.39 round, so nothing measured so far has touched them
+  - [x] A2 negation's four standing hard fails (`g-a2-neg-3`, `-4`, `-14`, `-24`) — all four clear
+    in the negation-scope round, three of them 0.000 to 2.000
+  - [ ] `g-b1-neg-11`, "which functions are not exported" — the right empty set under a recovery
+    line about commits. The last hard fail the 5.0.41 round's cells carry that is a product line
+    rather than judge noise
   - [ ] `g-b2-coord-4` and `g-c1-presup-4`, the two tier-1 failures the pool has left. Different
     cells, so two small levers rather than one
   - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
@@ -64,13 +68,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note). The 5.0.39 round read the same
   25 answers as 1.288 and 1.282 across two passes for the same reason, and the 5.0.40 round put
   the leftover noise at the same size as a small lever's whole signal — it now gates how small a
-  lever the rig can measure.
+  lever the rig can measure. In the 5.0.41 round a hard fail crossed the line on byte-identical
+  text, so the hard-fail count needs the answer-identity control applied by hand too.
 - [ ] **An empty composition names its emptied branch only for a seed clause plus one qualifier** —
-  the shape a conditional compiles to. An intersection of two clauses, a difference, and a
-  multi-step fold still answer "nothing in the index matches that". Carrying the intermediate
-  through `evalBoolean` instead of re-evaluating the seed covers all of them; it reaches every
-  composite lane and every miss text pinned against them, which is why the 5.0.39 round split it
-  out rather than folding it in (`reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`, decision log item 5).
+  the 5.0.41 round widened it to the negative polarity, so both "and tested" and "but not tested"
+  now name what held. An intersection of two clauses, a difference of two clause sets, and a
+  multi-step fold still answer "nothing in the index matches that", and every miss left in
+  `C1:negation+relative-embedded` is one of those, so the cell's floor is this receipt. Carrying the
+  intermediate through `evalBoolean` instead of re-evaluating the seed covers all of them; it
+  reaches every composite lane and every miss text pinned against them.
 - [ ] **The judge context tells the judge that "touched by 2 commit(s)" is truthful for
   app/lib/a.mjs**, which the graded pool's own `^1 commit\.$` expectation denies — `run.mjs`'s
   `FIXTURE_CONTEXT`. It split `g-b2-count-temp-1`'s two draws between 2 and 0 on a correct answer
